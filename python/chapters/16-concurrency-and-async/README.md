@@ -1,12 +1,12 @@
 # Chapter 16 — Concurrency and Async
 
-> **What you will learn.** The difference between concurrency and parallelism, how to tell I/O-bound work from CPU-bound work, and Python's four main tools for doing several things at once: **threads** (`threading`, locks, `queue.Queue`), **processes** (`multiprocessing`), the high-level **executors** (`concurrent.futures`) and **async/await** (`asyncio`: event loop, coroutines, tasks, `gather`, `TaskGroup`, timeouts, async iteration). You will also learn what the **GIL** is, why it exists, and where the **free-threaded** (no-GIL) CPython stands in 3.13 and 3.14. The chapter ends with a "which tool?" table and the common pitfalls: blocking calls inside async code, race conditions and deadlocks.
+> **What you will learn.** The difference between concurrency and parallelism, how to tell I/O-bound work (time mostly spent waiting on input/output — network, disk, database) from CPU-bound work (time mostly spent computing), and Python's four main tools for doing several things at once: **threads** (`threading`, locks, `queue.Queue`), **processes** (`multiprocessing`), the high-level **executors** (`concurrent.futures`) and **async/await** (`asyncio`: event loop, coroutines, tasks, `gather`, `TaskGroup`, timeouts, async iteration). You will also learn what the **GIL** is, why it exists, and where the **free-threaded** (no-GIL) CPython stands in 3.13 and 3.14. The chapter ends with a "which tool?" table and the common pitfalls: blocking calls inside async code, race conditions and deadlocks.
 >
 > **Prerequisites.** Functions and closures ([Ch 7](../07-functions/README.md)), generators ([Ch 11](../11-iterators-generators-functional/README.md)), context managers ([Ch 12](../12-decorators-context-managers-metaprogramming/README.md)).
 >
 > **Code.** `chapters/16-concurrency-and-async/code/` — `threads_basics.py`, `gil_benchmark.py` (makes the plot in `img/`), `multiprocessing_demo.py`, `futures_demo.py`, `asyncio_demo.py`, `pitfalls_demo.py`. All outputs below come from Python 3.14.7 (default build, GIL on) on a 14-core Mac. Timings will differ on your machine; the *shape* of the results will not.
 >
-> **Java side.** The general theory — memory models, `synchronized`, `ReentrantLock`, semaphores, latches, atomics, concurrent collections, deadlock/livelock/starvation and the classic LLD problems — is in the LLD Handbook, [Chapter 12 — Concurrency concepts](../../../lld/chapters/12-concurrency-concepts/README.md). This chapter covers what is specific to Python.
+> **Java side.** The general theory — memory models (the rules for when one thread's writes become visible to another), `synchronized`, `ReentrantLock`, semaphores, latches, atomics, concurrent collections, deadlock/livelock (threads keep reacting to each other but make no progress)/starvation (a thread never gets its turn) and the classic LLD (low-level design) problems — is in the LLD Handbook, [Chapter 12 — Concurrency concepts](../../../lld/chapters/12-concurrency-concepts/README.md). This chapter covers what is specific to Python.
 
 **Words used everywhere in this chapter (defined once):**
 
@@ -14,13 +14,13 @@
 |---|---|
 | **Process** | A running program with its own memory space. Two processes do not see each other's variables. |
 | **Thread** | A path of execution *inside* a process. Threads of one process share its memory. |
-| **Task (asyncio)** | A coroutine scheduled on an event loop. Many tasks share one thread. |
-| **Blocking call** | A call that makes the caller wait (reading a socket, `time.sleep`, a disk read). |
+| **Task (asyncio)** | A coroutine (a function that can pause and resume) scheduled on an event loop (the scheduler that runs whichever task is ready next). Many tasks share one thread. |
+| **Blocking call** | A call that makes the caller wait (reading a socket — one end of a network connection, `time.sleep`, a disk read). |
 | **Race condition** | A bug where the result depends on the unlucky timing of two threads touching shared data. |
 | **Critical section** | Code that must be run by only one thread at a time. |
-| **Lock / mutex** | An object that lets only one holder into a critical section. |
+| **Lock / mutex** | An object that lets only one holder into a critical section ("mutex" = *mut*ual *ex*clusion). |
 | **Deadlock** | Two or more threads each waiting forever for a lock the other holds. |
-| **GIL** | Global Interpreter Lock: in standard CPython, only one thread runs Python bytecode at a time. |
+| **GIL** | Global Interpreter Lock: in standard CPython (the usual Python interpreter), only one thread runs Python bytecode (the low-level instructions your source is compiled into before the interpreter executes it) at a time. |
 
 ```mermaid
 flowchart TD
@@ -40,13 +40,13 @@ flowchart TD
 ## 16.1 Concurrency vs parallelism
 
 ### What it is
-- **Concurrency** = *dealing with* many things at once: several tasks are in progress and their steps interleave. It can happen on a single CPU core.
+- **Concurrency** = *dealing with* many things at once: several tasks are in progress and their steps interleave. It can happen on a single CPU core (one independent processing unit inside the processor; a modern chip has several).
 - **Parallelism** = *doing* many things at the same instant: tasks literally run simultaneously on different cores.
 
 Analogy: one chef cooking three dishes — putting pasta on to boil, then chopping while it boils — is concurrency. Three chefs each cooking one dish is parallelism. Concurrency is about *structure* (not sitting idle while waiting); parallelism is about *execution* (more hands).
 
 ### Why it matters
-Picking the wrong model wastes effort. Adding threads to a CPU-heavy pure-Python loop in standard CPython does nothing (the GIL allows one thread at a time), while adding threads to a program that spends 95 % of its time waiting on HTTP responses can make it 10–50× faster.
+Picking the wrong model wastes effort. Adding threads to a CPU-heavy pure-Python loop in standard CPython does nothing (the GIL allows one thread at a time), while adding threads to a program that spends 95 % of its time waiting on HTTP responses (replies from web servers) can make it 10–50× faster.
 
 ### How it works
 | | Concurrency | Parallelism |
@@ -110,13 +110,13 @@ Measure first. Waiting → threads or asyncio. Computing → processes, vectoriz
 ## 16.3 Threads with `threading`
 
 ### What it is
-The `threading` module starts extra threads inside your process. All threads share global variables and objects on the heap. Each thread has its own call stack.
+The `threading` module starts extra threads inside your process. All threads share global variables and objects on the heap (the shared memory area where Python objects live). Each thread has its own call stack (its own record of which functions are currently running).
 
 ### How it works
 1. Create: `t = threading.Thread(target=func, args=(...), name="T1")`.
-2. `t.start()` — the OS starts a new thread that calls `func(*args)`.
+2. `t.start()` — the OS (operating system) starts a new thread that calls `func(*args)`.
 3. `t.join()` — the caller waits until `t` finishes (optionally `join(timeout)`).
-4. A **daemon** thread (`daemon=True`) is killed abruptly when the main program exits; a normal thread keeps the program alive until it finishes. Use daemons only for work that can be lost (a heartbeat), never for writing files.
+4. A **daemon** thread (`daemon=True`) is killed abruptly when the main program exits; a normal thread keeps the program alive until it finishes. Use daemons only for work that can be lost (a heartbeat — a periodic "I'm still alive" signal), never for writing files.
 
 ```python
 def worker(name: str, delay: float, results: dict) -> None:
@@ -190,12 +190,12 @@ The unsafe number changes from run to run (other runs printed 2000 and 1031). Th
 Always use locks through `with lock:` — it releases the lock even if an exception is raised. Manual `acquire()`/`release()` is useful only with a timeout: `if lock.acquire(timeout=1): ...`.
 
 ### Common mistakes
-- Believing "the GIL makes my code thread-safe". The GIL protects the *interpreter's* internals (so a `list` is never corrupted), not *your* multi-step logic. `if key not in d: d[key] = compute()` can still run twice.
-- Protecting writes but not reads of a multi-field invariant (reading `balance` while another thread is half-way through a transfer).
+- Believing "the GIL makes my code thread-safe" (correct even when several threads run it at once). The GIL protects the *interpreter's* internals (so a `list` is never corrupted), not *your* multi-step logic. `if key not in d: d[key] = compute()` can still run twice.
+- Protecting writes but not reads of a multi-field invariant (a rule that must always hold across several fields, e.g. total money is constant) (reading `balance` while another thread is half-way through a transfer).
 - Holding a lock while doing slow I/O — other threads queue behind it.
 
 ### In the interview
-**30-second answer:** "A race condition is when the outcome depends on thread timing, usually from an unprotected read-modify-write. Even `x += 1` is several bytecodes, so it's not atomic. I protect shared state with a `threading.Lock` used as a context manager, keep critical sections small, or avoid sharing entirely by passing messages through `queue.Queue`."
+**30-second answer:** "A race condition is when the outcome depends on thread timing, usually from an unprotected read-modify-write. Even `x += 1` is several bytecodes, so it's not atomic (indivisible — guaranteed to happen all at once with nothing in between). I protect shared state with a `threading.Lock` used as a context manager, keep critical sections small, or avoid sharing entirely by passing messages through `queue.Queue`."
 - *Is `list.append` thread-safe?* — A single `append` on a built-in list is safe in CPython (with the GIL, and the free-threaded build uses per-object locks for built-ins), but a sequence of operations is not. Don't rely on it for logic.
 - *Lock vs RLock?* — RLock lets the same thread re-acquire; Lock would deadlock on itself.
 
@@ -215,7 +215,7 @@ Shared mutable state + threads = races. Protect with `Lock` (via `with`), keep c
 **Producer–consumer** splits work into threads that *make* items and threads that *process* them, connected by a queue. `queue.Queue` is a thread-safe FIFO (first in, first out) with all locking done for you.
 
 ### Why it matters
-It removes most manual locking: threads never touch each other's data, they only `put` and `get`. A **bounded** queue (`maxsize=N`) also gives **backpressure** — a fast producer blocks on `put` instead of filling memory.
+It removes most manual locking: threads never touch each other's data, they only `put` and `get`. A **bounded** queue (`maxsize=N`) also gives **backpressure** (a slow consumer automatically slowing down a fast producer) — a fast producer blocks on `put` instead of filling memory. Queues and backpressure are core system-design ideas too: see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md).
 
 ### How it works
 1. `q = queue.Queue(maxsize=5)`.
@@ -253,7 +253,7 @@ consumer squared 10 items, sorted: [0, 1, 4, 9, 16, 25, 36, 49, 64, 81]
 | `queue.LifoQueue` | Stack (last in, first out) |
 | `queue.PriorityQueue` | Smallest item first (put `(priority, item)` tuples) |
 | `queue.SimpleQueue` | Unbounded FIFO, no `task_done`/`join` |
-| `multiprocessing.Queue` | Between processes (items are pickled) |
+| `multiprocessing.Queue` | Between processes (items are pickled — converted to bytes with `pickle`) |
 | `asyncio.Queue` | Between asyncio tasks (not thread-safe) |
 
 ### Real-world examples
@@ -270,7 +270,7 @@ Share a queue, not variables. Bound it for backpressure. Stop with sentinels or 
 In the standard CPython build, the **GIL** is a single lock that a thread must hold to execute Python bytecode. So in one process, **only one thread runs Python code at any instant**, even on a 64-core machine.
 
 ### Why it exists
-CPython manages memory with **reference counts** (every object counts how many references point to it; [Ch 17](../17-performance-memory-internals/README.md)). Updating those counts from several threads at once would need a lock on every object or atomic operations everywhere, which was slower and much harder to get right. One big lock made the interpreter simple, single-threaded code fast, and C extensions easy to write — which is a big reason numpy, and the rest of the scientific stack, exist.
+CPython manages memory with **reference counts** (every object counts how many references point to it; [Ch 17](../17-performance-memory-internals/README.md)). Updating those counts from several threads at once would need a lock on every object or atomic operations (special CPU instructions that update a value indivisibly) everywhere, which was slower and much harder to get right. One big lock made the interpreter simple, single-threaded code fast, and C extensions easy to write — which is a big reason numpy, and the rest of the scientific stack, exist.
 
 ### How it works
 1. A thread holds the GIL while it runs bytecode.
@@ -282,13 +282,13 @@ Consequences (the benchmark in 16.2):
 | Workload | Threads with the GIL |
 |---|---|
 | I/O-bound | Scale well — the GIL is released while waiting |
-| CPU-bound pure Python | No speed-up; can even be slightly slower (switching overhead) |
+| CPU-bound pure Python | No speed-up; can even be slightly slower (switching overhead — extra cost that does no useful work) |
 | CPU-bound in numpy / C that releases the GIL | Can scale across cores |
 
 ### Free-threaded CPython (PEP 703) — status
 - **Python 3.13 (Oct 2024):** an *optional, experimental* build with the GIL disabled ships (installers call it "free-threaded"; the executable is `python3.13t`). PEP 703 is the design.
 - **Python 3.14 (Oct 2025):** per **PEP 779**, the free-threaded build is **officially supported** (no longer experimental) but **still optional — not the default**. `python3.14` still has a GIL; `python3.14t` does not. The docs put the single-threaded slowdown at roughly 5–10 % (depending on platform and compiler), and memory use is higher.
-- **Extensions:** a C extension that is not marked free-threading-compatible makes the interpreter **re-enable the GIL** on import (with a warning). You can also force it: `PYTHON_GIL=1` or `python -X gil=1`. Many major packages (numpy among them) now publish free-threaded wheels, but check before you rely on it.
+- **Extensions:** a C extension that is not marked free-threading-compatible makes the interpreter **re-enable the GIL** on import (with a warning). You can also force it: `PYTHON_GIL=1` or `python -X gil=1`. Many major packages (numpy among them) now publish free-threaded wheels (a wheel is a pre-built, ready-to-install package file, `.whl`), but check before you rely on it.
 - **Check at runtime:**
 
 ```python
@@ -298,12 +298,12 @@ sys._is_gil_enabled()                         # False when running without the G
 ```
 - **What changes for you:** on a free-threaded build, the CPU-bound thread benchmark above can scale across cores — but races become *more* likely, not less, so all the locking rules of 16.4 still apply. Built-in `list`/`dict`/`set` use internal per-object locks so they are not corrupted, but multi-step logic still needs your locks.
 
-Other ways around the GIL: **processes** (each has its own GIL), **subinterpreters** — since 3.12 each interpreter can have its own GIL (PEP 684) and 3.14 adds the `concurrent.interpreters` module and `InterpreterPoolExecutor` (PEP 734) — and native code (numpy, Cython, Rust via PyO3) that releases the GIL.
+Other ways around the GIL: **processes** (each has its own GIL), **subinterpreters** (several independent Python interpreters inside one process) — since 3.12 each interpreter can have its own GIL (PEP 684) and 3.14 adds the `concurrent.interpreters` module and `InterpreterPoolExecutor` (PEP 734) — and native code (code compiled to machine instructions: numpy, Cython — a Python-like language compiled to C, Rust via PyO3) that releases the GIL.
 
 ### Common mistakes
 - "Python can't do concurrency." It does I/O concurrency very well; the GIL limits *parallel Python bytecode*.
 - "The GIL makes code thread-safe." See 16.4.
-- Assuming other implementations behave the same: Jython and IronPython have no GIL; PyPy has one.
+- Assuming other implementations behave the same: Jython (Python on the Java virtual machine) and IronPython (Python on .NET) have no GIL; PyPy (a faster Python with a JIT — just-in-time — compiler) has one.
 
 ### In the interview
 **30-second answer:** "The GIL is a mutex in CPython that allows only one thread to execute Python bytecode at a time. It exists because CPython's reference counting isn't thread-safe without it, and it keeps single-threaded code and C extensions simple. It's released during blocking I/O and by many C extensions, so threads are fine for I/O-bound work; for CPU-bound Python I use multiprocessing or push the work into numpy. Since 3.13 there's an optional free-threaded build, officially supported in 3.14 but not the default."
@@ -334,11 +334,11 @@ One thread runs Python bytecode at a time in standard CPython. I/O releases it; 
 |---|---|---|
 | `spawn` | Fresh interpreter; re-imports your main module; arguments are pickled | Windows, macOS |
 | `fork` | Copies the parent process (fast, but unsafe if the parent has threads) | — (was Linux's default up to 3.13) |
-| `forkserver` | Forks from a clean single-threaded server process | Linux and other POSIX except macOS, from **3.14** |
+| `forkserver` | Forks from a clean single-threaded server process | Linux and other POSIX (Unix-like) systems except macOS, from **3.14** |
 
 Because `spawn`/`forkserver` re-import your script, **always guard the start-up code with `if __name__ == "__main__":`**, or each child would try to start children of its own.
 
-2. **Pickling** — arguments and return values travel between processes by `pickle` (serialization). Lambdas, nested functions and open sockets can't be pickled; use top-level functions.
+2. **Pickling** — arguments and return values travel between processes by `pickle` (serialization — turning an object into bytes that can be sent and rebuilt). Each process has its own pid (process ID, the number the OS uses to identify it). Lambdas, nested functions and open sockets can't be pickled; use top-level functions.
 3. **No shared memory by default** — each process has its own copy of globals.
 
 ```python
@@ -380,7 +380,7 @@ lambda in Pool -> PicklingError
 | Return values / `Queue` / `Pipe` | Message passing (pickled) | Preferred; cost grows with data size |
 | `Value`, `Array` | A C number/array in shared memory | Needs `get_lock()` for read-modify-write |
 | `multiprocessing.shared_memory.SharedMemory` | Raw shared bytes (wrap in a numpy array) | You manage layout, lifetime and `unlink()` |
-| `Manager()` | A server process holding a dict/list proxies talk to | Easy but slow (every access is IPC) |
+| `Manager()` | A server process holding a dict/list that proxies (stand-in objects that forward each operation) talk to | Easy but slow (every access is IPC — inter-process communication, i.e. a message to another process) |
 
 `Pool` methods: `map` (ordered, blocks), `imap`/`imap_unordered` (lazy, stream results), `starmap` (multiple arguments), `apply_async` (one call, returns an `AsyncResult`). The `chunksize` argument batches items per message — large chunks cut overhead for many small tasks.
 
@@ -396,7 +396,7 @@ lambda in Pool -> PicklingError
 - Mixing `fork` with threads → child can inherit a lock held by a thread that no longer exists, and hang.
 
 ### Real-world examples
-Gunicorn and uWSGI run several **worker processes** of a Django/Flask app to use all cores; Celery's default worker pool is "prefork" (processes); PyTorch `DataLoader(num_workers=4)` loads batches in worker processes.
+Gunicorn and uWSGI (production web servers for Python apps) run several **worker processes** of a Django/Flask app to use all cores; Celery's (a background-job system's) default worker pool is "prefork" (processes started in advance); PyTorch `DataLoader(num_workers=4)` loads batches in worker processes.
 
 ### TL;DR
 Processes = real CPU parallelism at the cost of start-up, pickling and no shared memory. Guard `__main__`, use top-level functions, prefer message passing.
@@ -495,7 +495,7 @@ sequenceDiagram
 2. Calling `fetch()` creates a **coroutine object**; nothing runs until it is awaited or wrapped in a task.
 3. `await x` pauses the current coroutine until `x` (a coroutine, Task or Future) is done.
 4. `asyncio.create_task(coro)` schedules a coroutine to run **concurrently**, returning a `Task`.
-5. The loop uses the OS's readiness APIs (epoll/kqueue) to know which sockets and timers are ready and resumes the corresponding tasks.
+5. The loop uses the OS's readiness APIs (epoll on Linux, kqueue on macOS/BSD — system calls that report which of many connections have data waiting) to know which sockets and timers are ready and resumes the corresponding tasks.
 
 ### Core API with real output (`asyncio_demo.py`)
 ```python
@@ -532,6 +532,7 @@ try:
 except* ValueError as eg:                       # except* handles an ExceptionGroup
     print(eg.exceptions, slow.cancelled())
 ```
+(An **`ExceptionGroup`** (3.11+) bundles several exceptions raised together, e.g. by several failed tasks; `except*` lets you handle each kind inside it.)
 ```
 gather with return_exceptions -> ['ok:0.1', ValueError('boom')]
 [0.10s] TaskGroup raised (ValueError('boom'),); slow cancelled=True
@@ -541,7 +542,7 @@ gather with return_exceptions -> ['ok:0.1', ValueError('boom')]
 | On first failure | Raises it, but the **other tasks keep running** unattended | **Cancels** the siblings, waits for them, raises an `ExceptionGroup` |
 | Collect errors as values | `return_exceptions=True` | Catch with `except*` |
 | Results | List in argument order | `task.result()` on each task |
-| Recommended for new code | Simple fan-out | Yes — "structured concurrency": no task outlives its block |
+| Recommended for new code | Simple fan-out (starting many tasks at once and collecting their results) | Yes — "structured concurrency": no task outlives its block |
 
 ### Timeouts, limits and async iteration
 ```python
@@ -593,21 +594,21 @@ await asyncio.gather(bad(), bad())
 One blocking call inside a coroutine freezes the **entire** loop — every other task, every connection. Use async libraries (`httpx`/`aiohttp` instead of `requests`, `asyncpg` instead of `psycopg2` sync, `asyncio.sleep` instead of `time.sleep`), or push sync calls to a thread with `asyncio.to_thread` (3.9+) / `loop.run_in_executor`. CPU-heavy work goes to a `ProcessPoolExecutor` via `run_in_executor`.
 
 ### When to use asyncio
-- **Yes:** many simultaneous network connections — web servers/APIs (FastAPI, Starlette, aiohttp), websockets, chat, crawlers, calling many microservices or LLM APIs concurrently.
+- **Yes:** many simultaneous network connections — web servers/APIs (FastAPI, Starlette, aiohttp), websockets (long-lived two-way browser connections), chat, crawlers, calling many microservices (small independent services that together form one application) or LLM APIs (large-language-model services such as Claude) concurrently.
 - **No:** CPU-bound work (single thread!), a script that makes three HTTP calls (threads are simpler), or a codebase whose key libraries are all synchronous.
 
 ### Common mistakes
 - Forgetting `await`: `fetch()` without `await` just creates a coroutine; Python warns *"coroutine ... was never awaited"*.
-- `create_task` and dropping the reference: the loop keeps only a weak reference, so an unreferenced task can be garbage-collected mid-run. Keep tasks in a set or use a `TaskGroup`.
-- Calling `asyncio.run()` inside an already-running loop (e.g. Jupyter) → `RuntimeError`; in notebooks just `await main()`.
+- `create_task` and dropping the reference: the loop keeps only a weak reference (a reference that does not keep the object alive), so an unreferenced task can be garbage-collected (freed automatically) mid-run. Keep tasks in a set or use a `TaskGroup`.
+- Calling `asyncio.run()` inside an already-running loop (e.g. Jupyter, the interactive notebook tool) → `RuntimeError`; in notebooks just `await main()`.
 - Catching `CancelledError` and not re-raising it — breaks timeouts and TaskGroup cancellation.
 - Sharing an `asyncio.Queue`/`Lock` with other threads — asyncio objects are not thread-safe; use `loop.call_soon_threadsafe` or `asyncio.run_coroutine_threadsafe`.
 
 ### Real-world examples
-FastAPI/Starlette serve async endpoints on the uvicorn server (uvloop, a faster event loop written on libuv, is optional); Discord bots (`discord.py`), Home Assistant, and the official Anthropic and OpenAI Python SDKs ship `Async...` clients for concurrent requests.
+FastAPI/Starlette serve async endpoints on the uvicorn server (uvloop, a faster event loop written on libuv — the C library behind Node.js's event loop — is optional); Discord bots (`discord.py`), Home Assistant, and the official Anthropic and OpenAI Python SDKs ship `Async...` clients for concurrent requests.
 
 ### In the interview
-**30-second answer:** "asyncio is single-threaded cooperative concurrency. Coroutines pause at `await`, and the event loop resumes whichever task's I/O is ready. It scales to thousands of connections cheaply, but anything blocking stalls everything, so I use async libraries or `asyncio.to_thread`. For fan-out I prefer `TaskGroup` over `gather` because a failure cancels the siblings."
+**30-second answer:** "asyncio is single-threaded cooperative concurrency (each task voluntarily gives up control at `await`, instead of being interrupted). Coroutines pause at `await`, and the event loop resumes whichever task's I/O is ready. It scales to thousands of connections cheaply, but anything blocking stalls everything, so I use async libraries or `asyncio.to_thread`. For fan-out I prefer `TaskGroup` over `gather` because a failure cancels the siblings."
 - *Is asyncio parallel?* — No, one thread; concurrency only.
 - *`gather` vs `TaskGroup`?* — `gather` leaves siblings running on error unless you handle it; `TaskGroup` cancels them and raises an `ExceptionGroup`.
 - *How do you call sync code from async?* — `await asyncio.to_thread(fn, *args)`.
@@ -636,14 +637,14 @@ One thread, one loop, many tasks; switch only at `await`. `asyncio.run` once, `T
 | Long-running pipeline stages | Threads/processes + `Queue` | Backpressure, clean shutdown |
 | Async app needs a sync library | `asyncio.to_thread` | Keeps the loop responsive |
 | Async app needs heavy CPU | `loop.run_in_executor(ProcessPoolExecutor(), ...)` | Moves CPU work off the loop |
-| Scale beyond one machine | Celery, RQ, Ray, Dask, Spark | Distributed task queues/clusters |
+| Scale beyond one machine | Celery, RQ, Ray, Dask, Spark | Distributed (spread over many machines) task queues/clusters (groups of machines working as one) |
 
 | | Threads | Processes | asyncio |
 |---|---|---|---|
 | Parallel CPU (GIL build) | No | Yes | No |
 | Memory per unit | ~MB stack (virtual) | Whole interpreter (tens of MB) | ~KB per task |
 | Shared memory | Yes (needs locks) | No (pickle/IPC) | Yes (single thread) |
-| Switching | Pre-emptive (any time) | OS | Cooperative (at `await`) |
+| Switching | Pre-emptive (the OS can interrupt at any time) | OS | Cooperative (at `await`) |
 | Race risk | High | Low | Low |
 | Works with sync libs | Yes | Yes | Needs `to_thread` |
 
@@ -652,7 +653,7 @@ One thread, one loop, many tasks; switch only at `await`. `asyncio.run` once, `T
 ## 16.11 Common pitfalls
 
 ### Blocking calls inside async code
-Shown in 16.9: `time.sleep`, `requests.get`, a sync DB driver, big file reads, or a long CPU loop in a coroutine halts every other task. Diagnose with **debug mode** (`asyncio.run(main(), debug=True)` or `PYTHONASYNCIODEBUG=1`), which logs callbacks slower than 100 ms. Python 3.14 also adds `python -m asyncio ps PID` / `pstree PID` to inspect the tasks of a running process.
+Shown in 16.9: `time.sleep`, `requests.get`, a sync DB driver, big file reads, or a long CPU loop in a coroutine halts every other task. Diagnose with **debug mode** (`asyncio.run(main(), debug=True)` or `PYTHONASYNCIODEBUG=1`), which logs callbacks (functions the loop runs for you) slower than 100 ms. Python 3.14 also adds `python -m asyncio ps PID` / `pstree PID` to inspect the tasks of a running process.
 
 ### Deadlocks
 A **deadlock** happens when thread 1 holds lock A and waits for B, while thread 2 holds B and waits for A. Both wait forever.
@@ -689,14 +690,14 @@ The timeout lets the demo finish; without it both threads would hang. Fixes:
 |---|---|---|
 | Unprotected shared state | Wrong totals, rare | Lock, or message passing |
 | Unhandled exception in a `Thread` | Printed to stderr, thread dies silently | Use executors and call `result()`; or set `threading.excepthook` |
-| Too many threads | Memory, context-switch overhead | Bounded pool |
+| Too many threads | Memory, context-switch overhead (the cost of the CPU saving one thread's state and loading another's) | Bounded pool |
 | Missing `__main__` guard | Recursive spawning / `RuntimeError` | Guard the entry point |
 | Huge arguments to processes | Slow pickling | Shared memory, or load inside the worker |
-| Forgotten `await` / lost task reference | Work silently never runs / vanishes | Linters (ruff), `TaskGroup` |
+| Forgotten `await` / lost task reference | Work silently never runs / vanishes | Linters (code-checking tools such as ruff), `TaskGroup` |
 | `fork` after threads started | Random hangs in child | `spawn`/`forkserver` (defaults on macOS/Windows, and Linux from 3.14) |
 
 ### In the interview
-- *Four conditions for deadlock?* — Mutual exclusion, hold-and-wait, no pre-emption, circular wait. Break any one (lock ordering breaks circular wait). Details: [LLD Ch 12](../../../lld/chapters/12-concurrency-concepts/README.md).
+- *Four conditions for deadlock?* — Mutual exclusion (only one holder per resource), hold-and-wait (holding one lock while waiting for another), no pre-emption (locks can't be taken away), circular wait (A waits for B, B waits for A). Break any one (lock ordering breaks circular wait). Details: [LLD Ch 12](../../../lld/chapters/12-concurrency-concepts/README.md).
 - *How would you find a hung thread?* — `faulthandler.dump_traceback_later()` or `py-spy dump --pid` show every thread's stack.
 
 ---

@@ -1,10 +1,10 @@
 # Chapter 8 — Modules, Packages and Environments
 
-A single file is fine for a script. Real programs are spread across many files, depend on code other people wrote (NumPy, requests, Django), and must run the same way on your laptop, a colleague's machine and a server. This chapter covers the three layers that make that possible:
+A single file is fine for a script. Real programs are spread across many files, depend on code other people wrote (NumPy, requests, Django), and must run the same way on your laptop, a colleague's machine and a server (a computer that runs programs for other machines over a network). This chapter covers the three layers that make that possible:
 
 1. **Modules and packages** — how Python code is split into files and folders and pulled together with `import`.
-2. **The import system** — where Python looks for code, what it caches, and why imports sometimes fail.
-3. **Environments and packaging** — `pip`, virtual environments, `requirements.txt` vs `pyproject.toml`, modern tools (`uv`, Poetry), project layout and publishing to PyPI.
+2. **The import system** — where Python looks for code, what it caches (keeps in memory for reuse), and why imports sometimes fail.
+3. **Environments and packaging** — `pip` (Python's package installer), virtual environments (isolated, per-project package folders, 8.7), `requirements.txt` vs `pyproject.toml`, modern tools (`uv`, Poetry), project layout and publishing to PyPI (the Python Package Index, the public store of packages).
 
 All scripts are in [`code/`](code/); they build their demo packages in temporary folders, so they leave nothing behind. Output shown is real (Python 3.14; code is 3.12-compatible).
 
@@ -27,16 +27,16 @@ All scripts are in [`code/`](code/); they build their demo packages in temporary
 ## 8.1 Modules and `import`
 
 ### What it is
-A **module** is simply a `.py` file of Python code — functions, classes, variables — that other code can load with `import`. The module's name is the file name without `.py` (`pricing.py` → module `pricing`). Modules can also be compiled extensions (`.so`/`.pyd`, e.g. parts of NumPy) or be built into the interpreter (`sys`).
+A **module** is simply a `.py` file of Python code — functions, classes, variables — that other code can load with `import`. The module's name is the file name without `.py` (`pricing.py` → module `pricing`). Modules can also be compiled extensions (modules written in C/C++ and compiled to machine code; `.so`/`.pyd`, e.g. parts of NumPy) or be built into the interpreter (`sys`).
 
-Python ships with a large **standard library** ("batteries included"): `math`, `json`, `pathlib`, `datetime`, `random`, `csv`, `sqlite3`, `http`, `unittest` and a few hundred more — file handling, networking, data formats, testing, concurrency — available with no installation.
+Python ships with a large **standard library** ("stdlib"; "batteries included"): `math`, `json`, `pathlib`, `datetime`, `random`, `csv`, `sqlite3`, `http`, `unittest` and a few hundred more — file handling, networking, data formats, testing, concurrency (doing several things at overlapping times) — available with no installation.
 
 Analogy: modules are the chapters of a manual; `import` is putting a bookmark in one so you can refer to it.
 
 ### Why it matters
 - **Organisation** — big programs become small files with one theme each.
 - **Reuse and sharing** — the same module can serve many programs; the whole PyPI ecosystem is modules.
-- **Namespaces** — each module has its own global namespace, so `json.load` and `pickle.load` never collide.
+- **Namespaces** — each module has its own global namespace (its own table of names), so `json.load` and `pickle.load` (`pickle` saves Python objects as bytes) never collide.
 
 ### How it works — the four import forms
 
@@ -80,9 +80,9 @@ names in math starting with 'is': ['isclose', 'isfinite', 'isinf', 'isnan', 'isq
 - `dir(module)` lists what's inside; `help(module)` shows its documentation.
 - `json` reports `__init__.py` — it's actually a *package* (8.3).
 
-**`from module import *`** copies every public name (or those listed in `__all__`) into your namespace. PEP 8 discourages it outside interactive sessions: readers can't tell where names came from and it can silently overwrite your own names.
+**`from module import *`** copies every public name (one not starting with `_`; or those listed in `__all__`) into your namespace. PEP 8 discourages it outside interactive sessions (the REPL or a notebook): readers can't tell where names came from and it can silently overwrite your own names.
 
-**Style (PEP 8):** imports at the top of the file, one per line, grouped *standard library → third-party → your own code*, separated by blank lines. Tools like `ruff` and `isort` sort them automatically.
+**Style (PEP 8):** imports at the top of the file, one per line, grouped *standard library → third-party → your own code*, separated by blank lines. Tools like `ruff` and `isort` (code linting and import-sorting tools) sort them automatically.
 
 ### Trade-offs
 
@@ -91,15 +91,15 @@ names in math starting with 'is': ['isclose', 'isfinite', 'isinf', 'isnan', 'isq
 | Clarity at call site | `math.sqrt` shows origin | `sqrt` is shorter but origin is hidden |
 | Name clashes | None | Possible |
 | Circular-import safety | Safer (attribute looked up at call time, 8.6) | Riskier |
-| Monkey-patching/mocking | Sees patched attributes | Holds the *old* object |
+| Monkey-patching/mocking (swapping an attribute at run time, e.g. for a fake in tests) | Sees patched attributes | Holds the *old* object |
 
 ### Common mistakes
 - Naming your own file after a module you want to use (`random.py`, `json.py`, `email.py`) — see 8.6.
 - `import math.sqrt` → `ModuleNotFoundError: No module named 'math.sqrt'; 'math' is not a package`. `import` names modules; use `from math import sqrt` for functions.
-- Wildcard imports in production code.
+- Wildcard imports in production code (code that runs for real users).
 
 ### Real-world examples
-Every data-science notebook starts with `import numpy as np`, `import pandas as pd`, `import matplotlib.pyplot as plt` — community-standard aliases. Django projects import from their own apps: `from shop.models import Order`.
+Every data-science notebook (Jupyter page of code cells and output) starts with `import numpy as np`, `import pandas as pd`, `import matplotlib.pyplot as plt` — community-standard aliases. Django projects import from their own apps: `from shop.models import Order`.
 
 ### In the interview
 **30-second answer:** "A module is a `.py` file; `import m` loads it once and binds the name `m`, and `from m import x` binds just `x`. `as` gives an alias. Prefer explicit imports, avoid `import *`, and group imports stdlib/third-party/local."
@@ -123,7 +123,7 @@ Module = file. `import m` / `from m import x` / `as` aliases. Explicit imports, 
 The **import system** is the machinery that turns `import shop.pricing` into a module object. Three pieces matter:
 
 - **`sys.modules`** — a dict cache of every module already loaded, keyed by full name.
-- **Finders and loaders** — *finders* (listed in `sys.meta_path`) locate a module; a *loader* creates and executes it. The built-in chain handles built-in modules, frozen modules and the file system.
+- **Finders and loaders** — *finders* (listed in `sys.meta_path`) locate a module; a *loader* creates and executes it. The built-in chain handles built-in modules, frozen modules (modules baked into the interpreter binary) and the file system.
 - **`sys.path`** — the list of folders the file-system finder searches, in order.
 
 ### How it works
@@ -141,17 +141,17 @@ flowchart TD
     H --> Z
 ```
 
-1. **Check the cache.** If the name is in `sys.modules`, reuse that object — module code runs **only once per process**. (`importlib.reload(m)` forces a re-run; rarely needed outside interactive work.)
+1. **Check the cache.** If the name is in `sys.modules`, reuse that object — module code runs **only once per process** (one running instance of a program). (`importlib.reload(m)` forces a re-run; rarely needed outside interactive work.)
 2. **Import parents first.** `import a.b.c` imports `a`, then `a.b`, then `a.b.c`.
 3. **Find.** Each finder is asked in turn. The path finder walks **`sys.path`**, which is built as:
    1. the folder of the script being run (or the current directory for `python -m` / `python -c` / the REPL),
-   2. folders in the `PYTHONPATH` environment variable,
+   2. folders in the `PYTHONPATH` environment variable (a named setting the operating system hands to programs),
    3. the standard library,
    4. `site-packages` — where `pip` installs third-party packages (the active venv's, if one is active).
 4. **Load.** A new module object is created and put into `sys.modules` **before** its code runs (this is why circular imports give half-built modules, 8.6), then its top-level code executes, filling its namespace.
 5. **Bind** the requested name(s) in the importing namespace.
 
-Compiled bytecode is cached in `__pycache__/*.pyc` files so later imports skip re-parsing; that's why those folders appear. They're safe to delete and belong in `.gitignore`.
+Compiled bytecode (the low-level instructions CPython executes) is cached in `__pycache__/*.pyc` files so later imports skip re-parsing; that's why those folders appear. They're safe to delete and belong in `.gitignore` (the list of files Git, the version-control tool, should ignore).
 
 ```python
 print("'math' in sys.modules:", "math" in sys.modules)
@@ -164,10 +164,10 @@ json_mod = importlib.import_module("json")     # import by string name
 second import returns the same object: True
 json.dumps via import_module: {"a": 1}
 ```
-`importlib.import_module("name")` imports by a string — how plugin systems and frameworks (Django's `INSTALLED_APPS`) load modules chosen in configuration.
+`importlib.import_module("name")` imports by a string — how plugin systems (add-ons loaded by name at run time) and frameworks (Django's `INSTALLED_APPS`) load modules chosen in configuration.
 
 ### Common mistakes
-- Fixing "module not found" with `sys.path.append(...)` hacks scattered through code. Install the project instead (`pip install -e .`, 8.9) or run with `python -m` from the project root.
+- Fixing "module not found" with `sys.path.append(...)` hacks scattered through code. Install the project instead (`pip install -e .`, 8.9) or run with `python -m` from the project root (the project's top-level folder).
 - Expecting edits to a module to show up in a running REPL/notebook without `importlib.reload` (or Jupyter's `%autoreload`).
 
 ### In the interview
@@ -190,10 +190,10 @@ Cache (`sys.modules`) → find (`sys.meta_path`, `sys.path`) → load (register,
 ## 8.3 Packages, `__init__.py`, namespace packages, `__all__`
 
 ### What it is
-A **package** is a folder of modules that can be imported as a unit, giving a hierarchy of dotted names (`shop.pricing`, `sklearn.linear_model`). Technically a package is a module with a `__path__` attribute (the list of folders to search for its submodules).
+A **package** is a folder of modules that can be imported as a unit, giving a hierarchy of dotted names (`shop.pricing`, `sklearn.linear_model` — `sklearn` is scikit-learn, the machine-learning library). Technically a package is a module with a `__path__` attribute (the list of folders to search for its submodules).
 
-- **Regular package**: a folder containing `__init__.py`. That file runs the first time the package (or anything inside it) is imported. It can be empty, or it can define the package's public API by re-exporting names, set `__version__`, etc.
-- **Namespace package** (PEP 420, Python 3.3+): a folder *without* `__init__.py`. Python still imports it; several folders on `sys.path` can even contribute to one namespace (used by big organisations to split one namespace across separately-installed distributions). It has no `__file__`.
+- **Regular package**: a folder containing `__init__.py`. That file runs the first time the package (or anything inside it) is imported. It can be empty, or it can define the package's public API (the names users are meant to rely on) by re-exporting names, set `__version__`, etc.
+- **Namespace package** (PEP 420, Python 3.3+): a folder *without* `__init__.py`. Python still imports it; several folders on `sys.path` can even contribute to one namespace (used by big organisations to split one namespace across separately-installed distributions — installable packages as published on PyPI). It has no `__file__`.
 
 | | Module | Regular package | Namespace package |
 |---|---|---|---|
@@ -246,13 +246,13 @@ from shop import price_with_tax
 == star import only takes names in __all__ ==
   names brought in: ['price_with_tax']
 ```
-The `[running shop/__init__.py…]` line appears once despite two `import shop` statements. Users can write `from shop import price_with_tax` without knowing it lives in `shop/pricing.py` — the `__init__.py` "facade" is how `pandas` lets you write `pd.DataFrame` although `DataFrame` is defined deep in `pandas/core/frame.py`.
+The `[running shop/__init__.py…]` line appears once despite two `import shop` statements. Users can write `from shop import price_with_tax` without knowing it lives in `shop/pricing.py` — the `__init__.py` "facade" (a simple front that hides the internal layout) is how `pandas` lets you write `pd.DataFrame` although `DataFrame` is defined deep in `pandas/core/frame.py`.
 
 ### Trade-offs
 A heavy `__init__.py` that imports every submodule makes `import pkg` slow and raises circular-import risk; an empty one forces users to know the internal layout. Common middle ground: re-export the small public API, keep the rest internal (by convention, `_private` names and modules).
 
 ### When not to use it
-Don't rely on namespace packages for your ordinary project — forgetting `__init__.py` "works" but tools (some test runners, type checkers, packaging configs) handle regular packages more predictably. Use namespace packages deliberately.
+Don't rely on namespace packages for your ordinary project — forgetting `__init__.py` "works" but tools (some test runners, type checkers — programs that check type hints without running code — packaging configs) handle regular packages more predictably. Use namespace packages deliberately.
 
 ### Common mistakes
 - Putting slow work (network calls, loading big files) at top level of `__init__.py`.
@@ -295,7 +295,7 @@ python -m shop.pricing  ->
   pricing run directly: 10 -> 10.8
   stderr: RuntimeWarning: 'shop.pricing' found in sys.modules after import of package 'shop', but prior to execution of 'shop.pricing'; this may result in unpredictable behaviour
 ```
-Running with `python -m shop.pricing` from the project root works because Python imports the package first. The `RuntimeWarning` is a real gotcha worth knowing: `shop/__init__.py` already imported `shop.pricing`, so `-m` then executes a *second* copy of it as `__main__`. The fix is to keep runnable entry points in modules that the package `__init__` doesn't import (such as `__main__.py` or a `cli.py`).
+Running with `python -m shop.pricing` from the project root works because Python imports the package first. The `RuntimeWarning` is a real gotcha worth knowing: `shop/__init__.py` already imported `shop.pricing`, so `-m` then executes a *second* copy of it as `__main__`. The fix is to keep runnable entry points (the modules or functions that start a program) in modules that the package `__init__` doesn't import (such as `__main__.py` or a `cli.py`).
 
 ### Trade-offs
 
@@ -336,7 +336,7 @@ if __name__ == "__main__":
 runs code only when the file is executed, not when it's imported.
 
 ### Why it matters
-It lets one file be both a **reusable module** and a **runnable script**: tests and other modules can import its functions without triggering the script behaviour (starting a server, parsing command-line arguments, printing). It's also required for code using `multiprocessing` on platforms that start workers by re-importing the main module (the `spawn` and `forkserver` start methods: Windows, macOS by default since 3.8, and Linux since 3.14 made `forkserver` its default), otherwise each worker would re-run the script.
+It lets one file be both a **reusable module** and a **runnable script**: tests and other modules can import its functions without triggering the script behaviour (starting a server, parsing command-line arguments — the words typed after the command — printing). It's also required for code using `multiprocessing` (running work in several separate Python processes) on platforms that start workers (helper processes) by re-importing the main module (the `spawn` and `forkserver` start methods — ways of launching a new process: Windows, macOS by default since 3.8, and Linux since 3.14 made `forkserver` its default), otherwise each worker would re-run the script.
 
 ### How it works
 - `python -m package.module` runs a module found via `sys.path` as `__main__` — the right way to run code inside packages, and how many tools are invoked: `python -m pip`, `python -m venv`, `python -m pytest`, `python -m http.server`, `python -m json.tool`.
@@ -381,7 +381,7 @@ Most import problems fall into a handful of patterns. `03_import_errors.py` repr
 
 | Error | Usual cause | Fix |
 |---|---|---|
-| `ModuleNotFoundError` (subclass of `ImportError`) | Typo; package not installed **in the interpreter you're running**; wrong working directory | Check spelling; `python -m pip install x` with the same `python`; install the project or use `-m` |
+| `ModuleNotFoundError` (subclass of `ImportError`) | Typo; package not installed **in the interpreter you're running**; wrong working directory (the folder your shell is in) | Check spelling; `python -m pip install x` with the same `python`; install the project or use `-m` |
 | `ImportError: cannot import name` | Name doesn't exist in that module (typo, removed in a new version) — or a circular import | Check the module's contents / version |
 | `AttributeError: module 'x' has no attribute 'y'` | Your file named `x.py` shadows the real module; or submodule not imported | Rename your file (and delete its `__pycache__`) |
 | `ImportError: attempted relative import …` | Ran a package module as a script | `python -m pkg.mod` |
@@ -409,15 +409,15 @@ Why it breaks: step 4 of 8.2 — a module is registered in `sys.modules` *before
 Fixes, best first:
 1. **Restructure** — move the shared code into a third module both can import (breaks the cycle; usually the right design fix).
 2. **Import the module, not the name** (`import orders` then `orders.get_order(...)` inside functions) — the attribute is looked up at *call* time, after both modules have finished loading (case 4b).
-3. **Deferred import** inside the function that needs it (case 4c) — cheap, local, but hides a dependency.
+3. **Deferred import** inside the function that needs it (case 4c) — cheap, local, but hides a dependency (something your code needs in order to work).
 4. For imports needed only by type hints: `from typing import TYPE_CHECKING` / `if TYPE_CHECKING: from orders import Order` (type checkers see it, runtime doesn't).
 
 ### Common mistakes
-- "`pip install` worked but import fails": pip installed into a different interpreter. Always use `python -m pip ...` with the same `python` that runs your code, and check `which python` / `sys.executable`.
+- "`pip install` worked but import fails": pip installed into a different interpreter. Always use `python -m pip ...` with the same `python` that runs your code, and check `which python` / `sys.executable` (both show which interpreter file is actually running).
 - Naming a file `test.py`, `code.py`, `email.py`, `random.py`, `numpy.py` …
 
 ### Real-world examples
-Django models in different apps that reference each other avoid circular imports by using string references (`models.ForeignKey("customers.Customer", ...)`) — a framework-level version of "look it up later".
+Django models in different apps that reference each other avoid circular imports by using string references (`models.ForeignKey("customers.Customer", ...)` — a *foreign key* is a database link from one record to another) — a framework-level version of "look it up later".
 
 ### In the interview
 **30-second answer:** "A circular import happens because a module is put in `sys.modules` before its body finishes, so the other module sees a half-built object and `from x import y` fails. Fix by moving shared code to a third module, importing the module instead of names so lookup happens at call time, or deferring the import into a function."
@@ -439,13 +439,13 @@ Check spelling, interpreter and shadowing first. Cycles break `from x import y`;
 
 ### What it is
 - **PyPI** (Python Package Index, pypi.org) is the public repository of third-party packages.
-- **`pip`** is the standard installer: it downloads packages (preferably pre-built **wheels**, `.whl`) and their dependencies from PyPI into an environment's `site-packages`.
+- **`pip`** is the standard installer: it downloads packages (preferably pre-built **wheels**, `.whl` — ready-to-install archives) and their dependencies (other packages they need) from PyPI into an environment's `site-packages`.
 - A **virtual environment (venv)** is an isolated folder containing its own `site-packages` and a `python` link to a base interpreter. Packages installed into it don't affect other projects or the system Python.
 
 Analogy: each project gets its own toolbox; you don't throw all tools from all jobs into one drawer.
 
 ### Why it matters
-Project A needs `Django 4.2`, project B needs `Django 5.1` — only one can live in a single `site-packages`. Venvs give each project its own versions, make "works on my machine" reproducible, and keep you from breaking your operating system's Python. Many systems (Homebrew Python, Debian/Ubuntu) now **refuse** a global `pip install` with an `externally-managed-environment` error (PEP 668) precisely to push you into a venv.
+Project A needs `Django 4.2`, project B needs `Django 5.1` — only one can live in a single `site-packages`. Venvs give each project its own versions, make "works on my machine" reproducible, and keep you from breaking your operating system's Python. Many systems (Homebrew Python, Debian/Ubuntu — popular Linux distributions) now **refuse** a global `pip install` with an `externally-managed-environment` error (PEP 668) precisely to push you into a venv.
 
 ### How it works
 
@@ -463,7 +463,7 @@ python -m pip install -r requirements.txt # recreate elsewhere
 deactivate                            # leave the venv
 ```
 
-"Activating" only prepends the venv's `bin/` to your `PATH` so `python` and `pip` refer to the venv's copies — you can also skip activation and call `.venv/bin/python` directly. A venv is **not portable**: don't copy or commit it; commit the dependency list and recreate it. Add `.venv/` to `.gitignore`.
+"Activating" only prepends the venv's `bin/` to your `PATH` (the list of folders your shell searches for commands) so `python` and `pip` refer to the venv's copies — you can also skip activation and call `.venv/bin/python` directly. A venv is **not portable**: don't copy or commit (record a snapshot in Git) it; commit the dependency list and recreate it. Add `.venv/` to `.gitignore`.
 
 Inside a venv, `sys.prefix` (the venv) differs from `sys.base_prefix` (the base install) — that's how code detects one:
 
@@ -497,9 +497,9 @@ The book's own environment has NumPy, but a brand-new venv can't see it — isol
 | Tool | What it isolates | Notes |
 |---|---|---|
 | `venv` (stdlib) | Python packages | Built in; uses an existing Python |
-| `pipx` | Each CLI *tool* in its own venv | For tools like `black`, `httpie`, not project libraries |
-| `conda` | Packages **and** non-Python libraries (CUDA, MKL, compilers), Python itself | Popular in data science; own package channels |
-| Docker | Whole OS userland | Deployment-level isolation, heavier |
+| `pipx` | Each CLI (command-line) *tool* in its own venv | For tools like `black`, `httpie`, not project libraries |
+| `conda` | Packages **and** non-Python libraries (CUDA, MKL — GPU and maths libraries — compilers), Python itself | Popular in data science; own package channels |
+| Docker (bundles an app with its own OS files into a *container*) | Whole OS userland (the OS files outside the kernel) | Deployment-level (production-running) isolation, heavier |
 
 ### When not to use it
 You don't need a venv to run a script that uses only the standard library. Everything else — use one per project.
@@ -508,10 +508,10 @@ You don't need a venv to run a script that uses only the standard library. Every
 - `pip install` running a different Python than your code → always `python -m pip`.
 - `sudo pip install` into the system Python.
 - Committing `.venv/` to git or copying it between machines.
-- Unpinned installs in production (`pip install requests` today and next year give different versions).
+- Unpinned (no exact version fixed) installs in production (`pip install requests` today and next year give different versions).
 
 ### Real-world examples
-CI pipelines (GitHub Actions) create a fresh environment per run and install from a lock/requirements file, so every build is reproducible. Heroku-style platforms and many Docker images do `pip install -r requirements.txt` at build time.
+CI pipelines (continuous integration: automatic build-and-test on every change; GitHub Actions is GitHub's CI service) create a fresh environment per run and install from a lock/requirements file, so every build is reproducible. Heroku-style platforms (hosting services that build and run your app) and many Docker images (container templates) do `pip install -r requirements.txt` at build time.
 
 ### In the interview
 **30-second answer:** "pip installs packages from PyPI into an environment's site-packages. A venv is an isolated environment per project — `python -m venv .venv`, activate, `python -m pip install`. It prevents version conflicts between projects and protects the system Python. Don't commit the venv; commit the dependency list."
@@ -533,8 +533,8 @@ One venv per project. `python -m venv .venv` → activate → `python -m pip ins
 
 ### What it is
 - **`requirements.txt`** — a plain list of packages for pip to install, often with exact pins (`requests==2.32.3`). It describes an *environment*, not a project, and it's pip-specific.
-- **`pyproject.toml`** — the standard project configuration file (TOML format). It declares **build requirements** (PEP 518, `[build-system]`), **project metadata** — name, version, supported Python, dependencies, optional extras, command-line entry points (PEP 621, `[project]`) — and settings for tools (`[tool.ruff]`, `[tool.pytest.ini_options]`, …).
-- A **lock file** (`uv.lock`, `poetry.lock`, or a fully pinned requirements file) records the exact resolved version of *every* package including transitive dependencies, for reproducible installs.
+- **`pyproject.toml`** — the standard project configuration file (TOML format, a simple human-readable settings syntax). It declares **build requirements** (PEP 518, `[build-system]`), **project metadata** (descriptive information) — name, version, supported Python, dependencies, optional extras (named groups of extra dependencies), command-line entry points (PEP 621, `[project]`) — and settings for tools (`[tool.ruff]`, `[tool.pytest.ini_options]`, …).
+- A **lock file** (`uv.lock`, `poetry.lock`, or a fully pinned requirements file) records the exact resolved version of *every* package including transitive dependencies (the dependencies of your dependencies), for reproducible installs.
 
 ### How it works
 A minimal `pyproject.toml` — the script parses this very text with the standard-library `tomllib` (3.11+):
@@ -565,7 +565,7 @@ shop = "shop.cli:main"
   build backend: hatchling.build
 ```
 - `dependencies` uses **ranges** (what your code is compatible with); the lock file holds **exact pins** (what you tested).
-- `pip install -e ".[dev]"` installs the project in **editable** mode plus the `dev` extras.
+- `pip install -e ".[dev]"` installs the project in **editable** mode (the install points at your source folder, so edits take effect without reinstalling) plus the `dev` extras.
 - `[project.scripts]` makes `pip` create a `shop` command that calls `shop.cli:main()`.
 - The **build backend** (hatchling, setuptools, flit-core, poetry-core, uv_build…) turns the project into distributable files (PEP 517).
 
@@ -580,13 +580,13 @@ shop = "shop.cli:main"
 **Version specifiers:** `==2.1.0` exact, `>=2.1` minimum, `<3` upper bound, `~=2.1` "compatible release" (≥2.1, <3.0), `!=2.1.3` exclude.
 
 ### Modern tools: `uv` and Poetry (brief)
-- **uv** (by Astral, written in Rust) — a very fast replacement for pip, venv, pip-tools and pipx in one binary. `uv init` (new project with `pyproject.toml`), `uv add requests` (add dependency + update `uv.lock` + install), `uv sync` (make `.venv` match the lock), `uv run pytest` (run inside the project env), `uv python install 3.12` (manage Python versions), `uv pip install ...` (pip-compatible interface), `uv build` / `uv publish`.
+- **uv** (by Astral, written in Rust, a fast compiled language) — a very fast replacement for pip, venv, pip-tools and pipx in one binary (a single executable program). `uv init` (new project with `pyproject.toml`), `uv add requests` (add dependency + update `uv.lock` + install), `uv sync` (make `.venv` match the lock), `uv run pytest` (run inside the project env), `uv python install 3.12` (manage Python versions), `uv pip install ...` (pip-compatible interface), `uv build` / `uv publish`.
 - **Poetry** — an older, widely used all-in-one tool: `poetry new`, `poetry add`, `poetry install`, `poetry.lock`, `poetry build`, `poetry publish`. Poetry 2.x supports the standard `[project]` table.
 
 Both do the same core job: manage `pyproject.toml`, resolve dependencies, write a lock file, and create the venv for you.
 
 ### When not to use it
-For a one-file script, a venv + `requirements.txt` is enough. Don't mix tools in one project (e.g. Poetry lock + hand-edited requirements) — pick one source of truth.
+For a one-file script, a venv + `requirements.txt` is enough. Don't mix tools in one project (e.g. Poetry lock + hand-edited requirements) — pick one source of truth (the single file everyone treats as authoritative).
 
 ### Common mistakes
 - Pinning exact versions in a **library's** `dependencies` — it makes your library impossible to install alongside others. Libraries use ranges; applications lock.
@@ -638,8 +638,8 @@ With a flat layout, running `pytest` or `python` from the project root puts the 
 ### How it works — publishing to PyPI
 1. Put metadata in `pyproject.toml` (name must be unique on PyPI; bump `version` for every release — PyPI never lets you re-upload a version).
 2. **Build** distributions: `python -m build` (or `uv build`) creates `dist/shop-0.1.0.tar.gz` (**sdist**, source) and `dist/shop-0.1.0-py3-none-any.whl` (**wheel**, ready to install).
-3. **Test** on **TestPyPI** (test.pypi.org), a separate sandbox index.
-4. **Upload**: `python -m twine upload dist/*` (or `uv publish`) with an API token — or, better, **Trusted Publishing** from CI (GitHub Actions authenticates to PyPI via OpenID Connect, no long-lived token stored).
+3. **Test** on **TestPyPI** (test.pypi.org), a separate sandbox (safe practice) index.
+4. **Upload**: `python -m twine upload dist/*` (or `uv publish`) with an API token (a secret key that proves your identity to a service) — or, better, **Trusted Publishing** from CI (GitHub Actions authenticates to PyPI via OpenID Connect — a standard protocol for proving identity between services — no long-lived token stored).
 5. Users run `pip install shop`.
 
 ```mermaid
@@ -665,7 +665,7 @@ flowchart LR
 A small app that's never packaged (a Django site, a notebook project) gains little from src layout or publishing.
 
 ### Common mistakes
-- Uploading secrets: check `dist/` contents before uploading (a wheel is just a zip — `unzip -l`).
+- Uploading secrets (passwords, keys, tokens): check `dist/` contents before uploading (a wheel is just a zip — `unzip -l`).
 - Re-using a version number — PyPI will reject it.
 - Package name on PyPI ≠ import name (e.g. install `scikit-learn`, import `sklearn`; install `Pillow`, import `PIL`) — confusing for users, so keep them aligned for new projects.
 

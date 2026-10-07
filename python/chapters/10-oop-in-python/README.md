@@ -1,10 +1,10 @@
 # Chapter 10 — Object-Oriented Programming in Python
 
-> **What you will learn.** How Python builds objects: classes and instances, `__init__` and `self`, class vs instance attributes, the three kinds of method, and properties. Then the *data model* — the special "dunder" methods (`__repr__`, `__eq__`, `__hash__`, `__lt__`, `__len__`, `__iter__`, `__getitem__`, `__call__`, `__enter__` …) that let your own classes work with `len()`, `for`, `==`, `+`, `with` and `sorted()`. Then reuse: inheritance and `super()`, the method resolution order (MRO) and multiple inheritance, mixins, abstract base classes, duck typing and `Protocol`, and when composition beats inheritance. Finally the modern toolbox — `dataclasses`, `enum`, `__slots__` — encapsulation conventions, and short Pythonic notes on design patterns.
+> **What you will learn.** How Python builds objects: classes and instances, `__init__` and `self`, class vs instance attributes, the three kinds of method, and properties. Then the *data model* — the special "dunder" methods (`__repr__`, `__eq__`, `__hash__`, `__lt__`, `__len__`, `__iter__`, `__getitem__`, `__call__`, `__enter__` …) that let your own classes work with `len()`, `for`, `==`, `+`, `with` and `sorted()`. Then reuse: inheritance (a class reusing and extending another class) and `super()`, the method resolution order (MRO) and multiple inheritance, mixins, abstract base classes, duck typing and `Protocol`, and when composition beats inheritance. Finally the modern toolbox — `dataclasses`, `enum`, `__slots__` — encapsulation (keeping an object's internals behind its methods) conventions, and short Pythonic notes on design patterns (named, reusable solutions to common design problems).
 >
-> **Prerequisites.** Functions, basic types, exceptions. SOLID and the Gang-of-Four patterns are covered language-neutrally in the [LLD Handbook](../../../lld/README.md); this chapter focuses on *how Python does OOP*.
+> **Prerequisites.** Functions, basic types, exceptions. SOLID (five classic object-oriented design principles) and the Gang-of-Four patterns (the 23 design patterns catalogued in the 1994 book *Design Patterns*) are covered language-neutrally in the [LLD Handbook](../../../lld/README.md) (LLD = low-level design); this chapter focuses on *how Python does OOP*.
 >
-> **Code.** Every script is in `chapters/10-oop-in-python/code/` and runs on Python 3.12+ with no dependencies:
+> **Code.** Every script is in `chapters/10-oop-in-python/code/` and runs on Python 3.12+ with no dependencies (no extra packages to install):
 >
 > ```bash
 > python chapters/10-oop-in-python/code/data_model.py
@@ -31,32 +31,32 @@ A **class** is a blueprint: it bundles data (**attributes**) and behaviour (**me
 In Python *everything* is an object — ints, functions, modules, and classes themselves (a class is an instance of `type`).
 
 ### Why it matters
-Classes let you keep related state and the code that changes it together, so invariants ("balance never goes negative") are enforced in one place instead of scattered across the codebase.
+Classes let you keep related state and the code that changes it together, so invariants (rules that must always hold) ("balance never goes negative") are enforced in one place instead of scattered across the codebase.
 
 ### How it works
 1. `class BankAccount: ...` executes the class body once and creates a class object.
-2. Calling the class, `BankAccount("Asha", 100)`, does two steps: `__new__` allocates an empty instance, then `__init__` initialises it. You almost never write `__new__` (it is for immutable types and metaclass tricks).
+2. Calling the class, `BankAccount("Asha", 100)`, does two steps: `__new__` allocates (reserves memory for) an empty instance, then `__init__` initialises it. You almost never write `__new__` (it is for immutable types and metaclass tricks — a *metaclass* is the class of a class, controlling how classes themselves are built).
 3. `__init__(self, ...)` receives the new instance as its first argument. By convention it is named **`self`** — it is just a normal parameter, not a keyword.
-4. `self.owner = owner` stores an **instance attribute** in the instance's own namespace, the dict `obj.__dict__`.
+4. `self.owner = owner` stores an **instance attribute** in the instance's own namespace (name → value table), the dict `obj.__dict__`.
 5. `__init__` must return `None`; it *initialises*, it does not *construct*.
 
 ### Class attributes vs instance attributes
 A **class attribute** is defined in the class body and shared by all instances. An **instance attribute** is set on `self` and belongs to one object.
 
-**Attribute lookup** for `obj.name` (simplified): look in `obj.__dict__` first, then in the class, then in each parent class along the MRO (§10.5). Assigning `obj.name = ...` always writes to the *instance* — it never modifies the class attribute; it *shadows* it.
+**Attribute lookup** for `obj.name` (simplified): look in `obj.__dict__` first, then in the class, then in each parent class along the MRO (§10.5). Assigning `obj.name = ...` always writes to the *instance* — it never modifies the class attribute; it *shadows* (hides) it.
 
 ### The three kinds of method
 
-| Kind | Decorator | First parameter | Typical use |
+| Kind | Decorator (the `@…` line above the `def`) | First parameter | Typical use |
 |---|---|---|---|
 | Instance method | none | `self` (the instance) | Read/modify one object's state |
-| Class method | `@classmethod` | `cls` (the class) | Alternative constructors (`from_csv`, `dict.fromkeys`, `datetime.fromtimestamp`); works correctly for subclasses because `cls` is the subclass |
+| Class method | `@classmethod` | `cls` (the class) | Alternative constructors (other ways to build an instance; `from_csv`, `dict.fromkeys`, `datetime.fromtimestamp`); works correctly for subclasses because `cls` is the subclass |
 | Static method | `@staticmethod` | none | Helper that logically belongs to the class but needs neither instance nor class |
 
-When you write `a.deposit`, Python returns a **bound method**: the function with `self` already filled in. So `a.deposit(5)` is exactly `BankAccount.deposit(a, 5)`. ([Chapter 12](../12-decorators-context-managers-metaprogramming/README.md) explains the mechanism — functions are *descriptors*.)
+When you write `a.deposit`, Python returns a **bound method**: the function with `self` already filled in. So `a.deposit(5)` is exactly `BankAccount.deposit(a, 5)`. ([Chapter 12](../12-decorators-context-managers-metaprogramming/README.md) explains the mechanism — functions are *descriptors*, objects that customise what happens when an attribute is looked up.)
 
 ### Properties
-A **property** makes a method look like an attribute. You start with a plain public attribute; if you later need validation or a computed value, you turn it into a property and **no caller changes**. This is why Python code does not need Java-style `get_x()/set_x()` methods.
+A **property** makes a method look like an attribute. You start with a plain public attribute; if you later need validation or a computed value, you turn it into a property and **no caller changes**. This is why Python code does not need Java-style `get_x()/set_x()` methods (getters/setters — methods whose only job is to read or write one attribute).
 
 ```python
 class BankAccount:
@@ -142,10 +142,10 @@ If you have one function and no state, write a function. If you have data and no
 - Django model fields are declared as class attributes; each instance holds its own values.
 
 ### In the interview
-**30-second answer:** "A class is a blueprint; instances are built by `__new__` then initialised by `__init__`, which gets the instance as `self`. Class attributes live on the class and are shared; instance attributes live in each object's `__dict__`, and lookup checks the instance first, then the class and its parents. Instance methods take `self`, class methods take `cls` and are used for alternative constructors, static methods take neither. Properties let me add validation later without changing the public API."
+**30-second answer:** "A class is a blueprint; instances are built by `__new__` then initialised by `__init__`, which gets the instance as `self`. Class attributes live on the class and are shared; instance attributes live in each object's `__dict__`, and lookup checks the instance first, then the class and its parents. Instance methods take `self`, class methods take `cls` and are used for alternative constructors, static methods take neither. Properties let me add validation later without changing the public API (the part of a class other code is meant to use)."
 
 - *Why is `self` explicit?* — "Explicit is better than implicit": a method is just a function stored on the class; `obj.m()` passes `obj` as the first argument. It also makes instance vs local variables obvious.
-- *Class method or static method for a factory?* — Class method, so `SubClass.from_csv(...)` returns a `SubClass`.
+- *Class method or static method for a factory (a function whose job is to create objects)?* — Class method, so `SubClass.from_csv(...)` returns a `SubClass`.
 - *What's `__new__` for?* — Controlling creation itself: subclassing immutables (`int`, `str`, `tuple`), caching instances, metaclasses.
 
 ### Self-check
@@ -162,7 +162,7 @@ Classes bundle state and behaviour; `__init__` initialises, `self` is the instan
 ## 10.2 The data model: dunder methods
 
 ### What it is
-The **Python data model** is the set of special methods — named with **d**ouble **under**scores, hence "dunder" (e.g. `__len__`) — that the interpreter calls behind the scenes. `len(x)` calls `x.__len__()`, `a + b` calls `a.__add__(b)`, `for` calls `__iter__`, `with` calls `__enter__/__exit__`. Implement them and your objects behave like built-ins. *Fluent Python* calls this Python's "metaobject protocol"; it is why Python code reads consistently.
+The **Python data model** is the set of special methods — named with **d**ouble **under**scores, hence "dunder" (e.g. `__len__`) — that the interpreter calls behind the scenes. `len(x)` calls `x.__len__()`, `a + b` calls `a.__add__(b)`, `for` calls `__iter__`, `with` calls `__enter__/__exit__`. Implement them and your objects behave like built-ins. *Fluent Python* calls this Python's "metaobject protocol" (the rules by which objects plug into the language); it is why Python code reads consistently.
 
 ### Why it matters
 Users of your class get a familiar interface for free: `len(playlist)`, `playlist[0]`, `sorted(vectors)`, `v1 + v2`, `print(v)`. You also plug into the entire standard library (`sorted`, `max`, `set`, `dict`, `random.choice`, `in`) without writing extra methods.
@@ -187,7 +187,7 @@ Users of your class get a familiar interface for free: `len(playlist)`, `playlis
 | `a + b`, `a * b`, `abs(a)`, `-a` | `__add__`, `__mul__`, `__abs__`, `__neg__` | Operator overloading (§10.3) |
 
 ### `__eq__` and `__hash__` — the contract
-A **hash** is an integer that dicts and sets use to find a slot quickly. The rule: **if `a == b` then `hash(a) == hash(b)`** (the reverse need not hold — collisions are allowed).
+A **hash** is an integer that dicts and sets use to find a slot quickly. The rule: **if `a == b` then `hash(a) == hash(b)`** (the reverse need not hold — collisions, different values sharing a hash, are allowed).
 
 1. By default objects compare and hash by identity — always consistent.
 2. If you define `__eq__` but not `__hash__`, Python sets `__hash__ = None`, making instances **unhashable** (you can't put them in a set). This protects you from breaking the rule.
@@ -195,7 +195,7 @@ A **hash** is an integer that dicts and sets use to find a slot quickly. The rul
 4. Only hash **immutable** state. If a key's fields change after insertion into a dict, the dict looks in the wrong slot and "loses" it. That's why `frozen=True` dataclasses (§10.10) are the easy way to get safe hashing.
 
 ### `NotImplemented`
-When a comparison or arithmetic method can't handle the other operand, **return** (don't raise) the singleton `NotImplemented`. Python then tries the reflected method on the other object (`b.__radd__(a)`, or for `==` it tries `b.__eq__(a)`), and raises a clear `TypeError` only if both sides give up.
+When a comparison or arithmetic method can't handle the other operand, **return** (don't raise) the singleton (the one-and-only object of its kind) `NotImplemented`. Python then tries the reflected (right-hand-side) method on the other object (`b.__radd__(a)`, or for `==` it tries `b.__eq__(a)`), and raises a clear `TypeError` only if both sides give up.
 
 ```python
 @total_ordering
@@ -287,7 +287,7 @@ callable: 15 21 calls = 2 | callable(): True
 __hash__ of class defining only __eq__: None
 ```
 
-Notice: `Playlist` has no `__iter__`, yet `for` works through the `__getitem__` fallback, and negative indexes and slices work because we delegate to the inner list. `__match_args__` lets `match v: case Vector(3, y)` destructure positionally. The last line proves the `__eq__`-without-`__hash__` rule.
+Notice: `Playlist` has no `__iter__`, yet `for` works through the `__getitem__` fallback, and negative indexes and slices work because we delegate to the inner list. `__match_args__` lets `match v: case Vector(3, y)` destructure (pull apart into names) positionally. The last line proves the `__eq__`-without-`__hash__` rule.
 
 Note: this teaching `Vector` is mutable *and* hashable — acceptable only if you never mutate a vector used as a dict key. In production, make it immutable (frozen dataclass or read-only properties).
 
@@ -295,10 +295,10 @@ Note: this teaching `Vector` is mutable *and* hashable — acceptable only if yo
 
 | Approach | Pros | Cons |
 |---|---|---|
-| Implement dunders by hand | Full control, any semantics | Boilerplate, easy to get `__eq__`/`__hash__` inconsistent |
+| Implement dunders by hand | Full control, any semantics (behaviour) | Boilerplate (repetitive code), easy to get `__eq__`/`__hash__` inconsistent |
 | `@dataclass` | Generates `__init__`, `__repr__`, `__eq__` (and optionally ordering/hash) | Field-by-field semantics only |
 | Inherit from `collections.abc.Sequence`/`Mapping` | Implement 2–3 abstract methods, get the rest (`index`, `count`, `__contains__`, `__iter__`, `__reversed__`) as mixin methods | Ties you to that ABC |
-| Subclass `list`/`dict` directly | Quick | Built-in C methods often bypass your overrides (e.g. `dict.update` does not call your `__setitem__`); prefer `collections.UserDict`/`UserList` |
+| Subclass `list`/`dict` directly | Quick | Built-in C methods often bypass your overrides (your subclass's replacement methods) (e.g. `dict.update` does not call your `__setitem__`); prefer `collections.UserDict`/`UserList` |
 
 ### When not to use it
 Don't overload operators with surprising meanings (`+` that deletes a file). Don't add `__call__` just to look clever — a named method is clearer unless the object genuinely *is* a function-like thing (a model, a strategy, a validator).
@@ -312,15 +312,15 @@ Don't overload operators with surprising meanings (`+` that deletes a file). Don
 
 ### Real-world examples
 - `pathlib.Path` overloads `/` (`__truediv__`) to join paths: `Path("a") / "b"`.
-- NumPy arrays and pandas DataFrames overload arithmetic, comparison and `__getitem__` (boolean masks, slicing).
+- NumPy arrays and pandas DataFrames overload arithmetic, comparison and `__getitem__` (boolean masks — arrays of True/False that select elements — slicing).
 - `requests.Session`, `open()` files, `threading.Lock`, `sqlite3.Connection` implement `__enter__/__exit__`.
-- PyTorch `nn.Module` implements `__call__`, which runs hooks and then your `forward()` — that's why you write `model(x)`, not `model.forward(x)`.
-- SQLAlchemy overloads `==`, `<` on columns to build SQL expressions (`User.age > 18`).
+- PyTorch `nn.Module` implements `__call__`, which runs hooks (user-registered functions called at set points) and then your `forward()` — that's why you write `model(x)`, not `model.forward(x)`.
+- SQLAlchemy (a library mapping Python classes to database tables) overloads `==`, `<` on columns to build SQL expressions (`User.age > 18`).
 
 ### In the interview
 **30-second answer:** "The data model is Python's protocol of special methods: built-ins and syntax call dunders — `len` calls `__len__`, `+` calls `__add__`, `for` calls `__iter__`. Implementing them makes custom classes behave like built-ins and work with the standard library. Key rules: `__repr__` for developers, `__str__` falls back to it; `__eq__` and `__hash__` must agree and defining `__eq__` alone makes the class unhashable; return `NotImplemented` for unsupported operands."
 
-- *Why must equal objects have equal hashes?* — Dicts/sets use the hash to pick a bucket, then `==` to confirm. Equal objects with different hashes land in different buckets and duplicates appear.
+- *Why must equal objects have equal hashes?* — Dicts/sets use the hash to pick a bucket (a slot in the hash table), then `==` to confirm. Equal objects with different hashes land in different buckets and duplicates appear.
 - *Minimum to make a class iterable?* — `__iter__` returning an iterator, or `__getitem__` accepting 0, 1, 2… and raising `IndexError` at the end.
 - *`__str__` vs `__repr__`?* — `repr` is unambiguous and used in debugging/containers; `str` is user-facing; `str` falls back to `repr`, not vice versa — so always write `__repr__` first.
 
@@ -403,7 +403,7 @@ Operators are dunders. Return `NotImplemented` for unknown types, add `__r…__`
 
 ### How it works
 1. Attribute lookup on a `Manager` instance searches `Manager`, then `Employee`, then `object` (every class ultimately inherits from `object`).
-2. To extend (not replace) a parent method, call it through **`super()`**, which returns a proxy that looks up the *next* class in the MRO.
+2. To extend (not replace) a parent method, call it through **`super()`**, which returns a proxy (a stand-in object that forwards lookups) that looks up the *next* class in the MRO.
 3. If the child defines `__init__`, the parent's `__init__` is **not** called automatically — call `super().__init__(...)` yourself.
 4. `isinstance(obj, Cls)` checks the object's class and its ancestors; `issubclass(A, B)` checks classes. Prefer `isinstance` to `type(x) == Cls`, which ignores subclasses.
 
@@ -430,7 +430,7 @@ Output: `Manager('Mia') pays 120 | isinstance Employee: True | issubclass: True`
 - Forgetting `super().__init__()` → parent attributes are missing → `AttributeError` later.
 - Hard-coding `Employee.__init__(self, ...)` instead of `super()` — breaks cooperative multiple inheritance (§10.5).
 - Deep hierarchies (5+ levels) that nobody can follow — see composition (§10.8).
-- Overriding a method with an incompatible signature — violates the Liskov Substitution Principle (see [LLD Handbook ch. 4](../../../lld/chapters/04-solid-principles/README.md)).
+- Overriding a method with an incompatible signature — violates the Liskov Substitution Principle (a subclass must work anywhere its parent is expected) (see [LLD Handbook ch. 4](../../../lld/chapters/04-solid-principles/README.md)).
 
 ### TL;DR
 Subclass for true is-a relationships; override to specialise; use `super()` to extend parent behaviour and always call `super().__init__`.
@@ -464,7 +464,7 @@ The MRO of a class = the class itself, followed by a **merge** of its parents' M
 
 Worked example for `Child(Left, Right)`:
 - MRO(Left) = [Left, Base, object]; MRO(Right) = [Right, Base, object]; bases = [Left, Right].
-- Merge: take the first head not appearing in the *tail* of any other list.
+- Merge: take the first head (first element) not appearing in the *tail* (everything after the first element) of any other list.
   - `Left` — not in any tail → take it. Remaining: [Base, object], [Right, Base, object], [Right].
   - `Base` — appears in the tail of [Right, Base, object] → skip. Try `Right` → OK, take it.
   - Now `Base` is free → take it, then `object`.
@@ -504,7 +504,7 @@ C3 refuses: Cannot create a consistent method resolution order (MRO) for bases X
 
 | Multiple inheritance | Pros | Cons |
 |---|---|---|
-| Mixins (small, stateless add-ons) | Reuse orthogonal behaviour cheaply | Name clashes, MRO surprises |
+| Mixins (small, stateless add-ons) | Reuse orthogonal (independent) behaviour cheaply | Name clashes, MRO surprises |
 | Several "real" stateful bases | Rarely justified | Conflicting `__init__` signatures, fragile |
 
 ### Common mistakes
@@ -513,8 +513,8 @@ C3 refuses: Cannot create a consistent method resolution order (MRO) for bases X
 - Putting a mixin *after* the base class that already defines the method, so the mixin's version is never reached.
 
 ### Real-world examples
-- Django class-based views: `class MyView(LoginRequiredMixin, ListView)` — the mixin comes first so its `dispatch` runs before `ListView`'s.
-- `socketserver.ThreadingMixIn` + `TCPServer` → `ThreadingTCPServer` in the standard library.
+- Django class-based views (web request handlers written as classes): `class MyView(LoginRequiredMixin, ListView)` — the mixin comes first so its `dispatch` runs before `ListView`'s.
+- `socketserver.ThreadingMixIn` + `TCPServer` (a server speaking TCP, the internet's reliable connection protocol — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) → `ThreadingTCPServer` in the standard library.
 
 ### In the interview
 **30-second answer:** "The MRO is the linear order Python searches for attributes; it's computed by C3 linearization, which keeps children before parents, preserves the order of bases, and is consistent with every parent's MRO — so in a diamond the shared base appears once, last. `super()` delegates to the next class in the MRO of the instance's type, which enables cooperative multiple inheritance where each method runs once."
@@ -534,7 +534,7 @@ MRO = C3 linearization: children first, bases in declared order, consistent with
 ## 10.6 Mixins
 
 ### What it is
-A **mixin** is a small class that provides one focused capability (serialise to JSON, nice `__repr__`, logging) and is meant to be *combined* with other classes, not used alone. It usually has no `__init__` and no state of its own.
+A **mixin** is a small class that provides one focused capability (serialise — convert to a storable text/byte form — to JSON, nice `__repr__`, logging) and is meant to be *combined* with other classes, not used alone. It usually has no `__init__` and no state of its own.
 
 ```python
 class JsonMixin:
@@ -563,7 +563,7 @@ Product MRO: ['Product', 'JsonMixin', 'ReprMixin', 'object']
 If the behaviour needs lots of state or configuration, compose an object instead (§10.8). If a plain function `to_json(obj)` would do, use the function.
 
 ### Real-world examples
-Django `LoginRequiredMixin`, `PermissionRequiredMixin`; `socketserver.ForkingMixIn`/`ThreadingMixIn`; `collections.abc` classes act as mixins by providing concrete methods (e.g. `Sequence.index`).
+Django `LoginRequiredMixin`, `PermissionRequiredMixin`; `socketserver.ForkingMixIn`/`ThreadingMixIn`; `collections.abc` classes act as mixins by providing concrete (fully implemented) methods (e.g. `Sequence.index`).
 
 ### TL;DR
 Mixins = small, stateless, single-purpose classes mixed in via multiple inheritance; place them left of the main base.
@@ -580,10 +580,10 @@ These are three ways to say "this object must be able to do X".
 ### Abstract base classes (ABCs) — what it is
 An **ABC** (module `abc`) declares methods that subclasses **must** implement, marked `@abstractmethod`. Instantiating a class that still has abstract methods raises `TypeError` — the error appears at *creation*, not later at the call. ABCs can also carry shared concrete methods.
 
-`collections.abc` defines the standard ones: `Iterable`, `Iterator`, `Sized`, `Container`, `Sequence`, `Mapping`, `MutableMapping`, `Callable`, `Hashable` … Several of them (`Sized`, `Iterable`, `Hashable`, `Callable`, `Container`, …) implement `__subclasshook__`, so `isinstance(x, Sized)` is `True` for any class with `__len__`, even without inheriting. You can also `Shape.register(SomeClass)` to declare a *virtual subclass*.
+`collections.abc` defines the standard ones: `Iterable`, `Iterator`, `Sized`, `Container`, `Sequence`, `Mapping`, `MutableMapping`, `Callable`, `Hashable` … Several of them (`Sized`, `Iterable`, `Hashable`, `Callable`, `Container`, …) implement `__subclasshook__` (a hook that lets a class decide what counts as its subclass), so `isinstance(x, Sized)` is `True` for any class with `__len__`, even without inheriting. You can also `Shape.register(SomeClass)` to declare a *virtual subclass*.
 
 ### Protocols — what it is
-`typing.Protocol` (PEP 544, Python 3.8) formalises duck typing for **static type checkers** (mypy, pyright): a class matches a Protocol if it has the right methods/attributes — **structural typing** — no inheritance required. Add `@runtime_checkable` to allow `isinstance` checks, which only test that the methods *exist* (not their signatures).
+`typing.Protocol` (PEP 544, Python 3.8) formalises duck typing for **static type checkers** (tools such as mypy and pyright that check types by reading code, without running it): a class matches a Protocol if it has the right methods/attributes — **structural typing** — no inheritance required. Add `@runtime_checkable` to allow `isinstance` checks, which only test that the methods *exist* (not their signatures — parameter lists and types).
 
 ```python
 class Shape(ABC):
@@ -635,7 +635,7 @@ Protocols, generics and type checking are covered in depth in [Chapter 13 §13.8
 | Best for | Small scripts, flexible APIs | Frameworks/plugins you own, enforced contracts | Library APIs, accepting third-party types, typed codebases |
 
 ### When not to use them
-Don't create an ABC for a single implementation "just in case" (YAGNI). Don't rely on `@runtime_checkable` for correctness — it doesn't check signatures or return types.
+Don't create an ABC for a single implementation "just in case" (YAGNI — "You Aren't Gonna Need It": don't build for imagined future needs). Don't rely on `@runtime_checkable` for correctness — it doesn't check signatures or return types.
 
 ### Common mistakes
 - Forgetting to inherit from `ABC` (or use `metaclass=ABCMeta`) — `@abstractmethod` then has no effect.
@@ -656,7 +656,7 @@ Don't create an ABC for a single implementation "just in case" (YAGNI). Don't re
 3. What does `@runtime_checkable` actually check? → Only that the named members exist.
 
 ### TL;DR
-Duck typing = behaviour over type. ABC = nominal, enforced, can share code. Protocol = structural, for type checkers. `collections.abc` has the standard interfaces.
+Duck typing = behaviour over type. ABC = nominal (based on declared inheritance), enforced, can share code. Protocol = structural, for type checkers. `collections.abc` has the standard interfaces.
 
 ---
 
@@ -694,10 +694,10 @@ silent motor started, driving
 | Coupling | Tight (sees parent internals) | Loose (only the part's interface) |
 | Change at run time? | No (class is fixed) | Yes (swap the part) |
 | Code reuse | Automatic | Delegate explicitly (a few one-line methods) |
-| Testing | Hard to replace parent behaviour | Inject a fake |
+| Testing | Hard to replace parent behaviour | Inject a fake (pass it in from outside — *dependency injection*) |
 
 ### When inheritance is right
-Genuine is-a with substitutability (Liskov); framework extension points designed for it (`unittest.TestCase`, `Exception` subclasses, Django `Model`, `nn.Module`); mixins.
+Genuine is-a with substitutability (Liskov); framework extension points (places where a framework expects you to plug in your own code) designed for it (`unittest.TestCase`, `Exception` subclasses, Django `Model`, `nn.Module`); mixins.
 
 ### Common mistakes
 `class Stack(list)` — now callers can `insert(0, x)` and break the stack semantics; wrap a list instead. Inheriting only to reuse one helper method.
@@ -718,7 +718,7 @@ Python has **no private keyword**. Encapsulation is by convention ("we're all co
 | Name | Meaning | Enforced? |
 |---|---|---|
 | `name` | Public API | — |
-| `_name` | Internal; may change without notice. `from module import *` skips it | Only by convention (and linters) |
+| `_name` | Internal; may change without notice. `from module import *` skips it | Only by convention (and linters — tools that flag likely bugs and style problems) |
 | `__name` (no trailing `__`) | **Name mangling**: inside class `Account`, `self.__secret` is rewritten at compile time to `self._Account__secret` | Only to avoid *accidental* clashes in subclasses; still reachable |
 | `__name__` | Dunder: reserved for the language | Don't invent your own |
 | `name_` | Avoids clashing with a keyword (`class_`, `type_`) | — |
@@ -744,7 +744,7 @@ AttributeError: 'SubAccount' object has no attribute '__secret'
 ```
 
 ### Common mistakes
-Using `__x` everywhere to "make it private" — it complicates debugging, pickling and subclass access. *Effective Python* recommends preferring `_protected` and reserving `__private` for avoiding name clashes with subclasses you don't control.
+Using `__x` everywhere to "make it private" — it complicates debugging, pickling (saving objects with the `pickle` module) and subclass access. *Effective Python* recommends preferring `_protected` and reserving `__private` for avoiding name clashes with subclasses you don't control.
 
 ### TL;DR
 `_x` = internal by convention (use this). `__x` = name-mangled to `_Class__x` to avoid subclass clashes. Nothing is truly private. Use properties to control access.
@@ -760,7 +760,7 @@ Using `__x` everywhere to "make it private" — it complicates debugging, pickli
 Most classes are mostly data. Writing `__init__`/`__repr__`/`__eq__` by hand is repetitive and bug-prone (forget a field in `__eq__`, and equality is silently wrong).
 
 ### How it works
-1. Each annotated class attribute becomes a **field**, in declaration order. Un-annotated attributes are ignored; `ClassVar[...]` annotations are ignored too.
+1. Each annotated class attribute becomes a **field**, in declaration order. Un-annotated attributes are ignored; `ClassVar[...]` (marks a true class-level variable) annotations are ignored too.
 2. A default value becomes the `__init__` default. Fields without defaults can't follow fields with defaults (unless `kw_only`).
 3. `field(...)` customises a field: `default_factory=list` (a fresh object per instance), `repr=False`, `compare=False`, `init=False`, `kw_only=True`.
 4. `__post_init__` runs after the generated `__init__` — use it for validation or derived fields.
@@ -829,7 +829,7 @@ Note `Version(1, 4) < Version(1, 10)` is `True` because it compares the tuples `
 | `typing.NamedTuple` | No | None | Tuple-light | Immutable records that should also behave like tuples (unpacking, indexing) |
 | `@dataclass` | Configurable | `__post_init__` | Good; `slots=True` for lean | Default choice for internal data |
 | `attrs` (3rd party) | Configurable | Validators/converters | Good | More features; dataclasses was inspired by it |
-| Pydantic `BaseModel` (3rd party) | Configurable | Full parsing/validation from untrusted input | Heavier | API payloads, config files |
+| Pydantic `BaseModel` (3rd party) | Configurable | Full parsing/validation from untrusted input | Heavier | API payloads (data sent to/from a web service), config files |
 
 ### Common mistakes
 - `tags: list = []` → `ValueError`; use `field(default_factory=list)`.
@@ -839,7 +839,7 @@ Note `Version(1, 4) < Version(1, 10)` is `True` because it compares the tuples `
 - Inheritance with defaults: a base class field with a default followed by a subclass field without one → `TypeError` (fix with `kw_only=True`).
 
 ### Real-world examples
-Widely used for configs, DTOs and events; many ML libraries (e.g. Hugging Face `transformers` `TrainingArguments`) are dataclasses. FastAPI/Pydantic accept dataclasses too.
+Widely used for configs, DTOs (data-transfer objects: plain records passed between parts of a system) and events; many ML libraries (e.g. Hugging Face `transformers` `TrainingArguments`) are dataclasses. FastAPI/Pydantic accept dataclasses too.
 
 ### In the interview
 **30-second answer:** "`@dataclass` generates `__init__`, `__repr__` and `__eq__` from annotated fields. `order=True` adds comparisons by field tuple, `frozen=True` makes it immutable and hashable, `slots=True` saves memory. Use `field(default_factory=list)` for mutable defaults and `__post_init__` for validation. For untrusted input I'd use Pydantic instead because dataclasses don't validate types."
@@ -860,12 +860,12 @@ Dataclasses remove boilerplate for data classes. Know `field(default_factory=…
 An **enumeration** (`enum.Enum`) is a set of named, unique constant members: `Color.RED`. Members are singletons with a `.name` and `.value`, can be iterated, and compare by identity.
 
 ### Why it matters
-Magic strings/ints (`status == 3`, `"acitve"` typo) are bug magnets. Enums give you autocomplete, typo-proof names, a closed set of legal values, and readable reprs.
+Magic strings/ints (unexplained literal values scattered through code: `status == 3`, `"acitve"` typo) are bug magnets. Enums give you autocomplete, typo-proof names, a closed set of legal values, and readable reprs.
 
 | Class | Behaves like | Use for |
 |---|---|---|
 | `Enum` | Its own type; `Color.RED == 1` is `False` | Default |
-| `IntEnum` | Also an `int` | Interop with code expecting ints (`http.HTTPStatus`) |
+| `IntEnum` | Also an `int` | Interop (working together) with code expecting ints (`http.HTTPStatus`) |
 | `StrEnum` (3.11) | Also a `str`; `auto()` gives the lower-case name | Values stored in JSON/DB as strings |
 | `Flag` / `IntFlag` | Bit flags combinable with `\|`, test with `in` | Permissions, options (`re.RegexFlag`) |
 
@@ -919,7 +919,7 @@ class PointSlots:
     __slots__ = ("x", "y")
     def __init__(self, x, y): self.x, self.y = x, y
 ```
-Output (100 000 instances measured with `tracemalloc`, including the list that holds them):
+Output (100 000 instances measured with `tracemalloc`, the standard module that tracks memory allocations, including the list that holds them):
 ```
 100k objects: dict-based 12.8 MB vs slots 8.8 MB
 slots block new attrs: 'PointSlots' object has no attribute 'z' and no __dict__ for setting new attributes
@@ -928,7 +928,7 @@ slots block new attrs: 'PointSlots' object has no attribute 'z' and no __dict__ 
 
 ### Caveats
 - No new attributes beyond those listed; no `__dict__`, so no `vars(obj)`.
-- No weak references unless you add `"__weakref__"` to the slots.
+- No weak references (references that don't keep an object alive) unless you add `"__weakref__"` to the slots.
 - Every class in the hierarchy must declare `__slots__` (use `()` in a subclass with nothing new), otherwise the subclass gets a `__dict__` again and the saving is lost.
 - A slot can't also have a class-attribute default of the same name; dataclasses handle this for you with `@dataclass(slots=True)`.
 - `functools.cached_property` needs `__dict__`, so it doesn't work on slotted classes.
@@ -944,14 +944,14 @@ The full SOLID principles and all 23 GoF patterns are in the LLD Handbook: [SOLI
 
 | Pattern | Classic (Java-style) | Pythonic |
 |---|---|---|
-| Strategy | Interface + one class per strategy | Pass a **function** (functions are objects) |
-| Singleton | Private constructor + `getInstance()` | A **module** (imported once, cached in `sys.modules`) or a `@functools.cache` factory |
-| Command | Command class with `execute()` | A function, `functools.partial`, or a callable object (`__call__`) |
+| Strategy (swap one algorithm for another) | Interface + one class per strategy | Pass a **function** (functions are objects) |
+| Singleton (exactly one instance exists) | Private constructor + `getInstance()` | A **module** (imported once, cached in `sys.modules`) or a `@functools.cache` factory |
+| Command (an action packaged as an object) | Command class with `execute()` | A function, `functools.partial`, or a callable object (`__call__`) |
 | Iterator | Iterator class with `hasNext/next` | A generator function ([Chapter 11](../11-iterators-generators-functional/README.md)) |
-| Decorator | Wrapper class implementing the same interface | `@decorator` functions ([Chapter 12](../12-decorators-context-managers-metaprogramming/README.md)) — or a wrapper class for objects |
-| Factory | Factory class | A `@classmethod` alternative constructor, or a dict mapping names to classes |
-| Template method | Abstract base with hook methods | Same (ABC), or pass hook functions |
-| Observer | Listener interface | A list of callbacks |
+| Decorator (wrap an object to add behaviour) | Wrapper class implementing the same interface | `@decorator` functions ([Chapter 12](../12-decorators-context-managers-metaprogramming/README.md)) — or a wrapper class for objects |
+| Factory (an object that creates other objects) | Factory class | A `@classmethod` alternative constructor, or a dict mapping names to classes |
+| Template method (base class fixes the steps, subclasses fill some in) | Abstract base with hook methods | Same (ABC), or pass hook functions |
+| Observer (notify subscribers when something happens) | Listener interface | A list of callbacks (functions to call later) |
 
 ```python
 def no_discount(total): return total

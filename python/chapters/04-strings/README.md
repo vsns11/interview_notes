@@ -1,6 +1,6 @@
 # Chapter 4 — Strings
 
-Text is everywhere: user names, file paths, log lines, JSON, HTML, SQL, chat messages. In Python all of that text lives in one type, `str`. This chapter takes you from "what is a string" to the things intermediate developers are expected to know cold: immutability, slicing, the formatting mini-language, the most useful methods, how text becomes bytes (Unicode and UTF-8), how to build big strings without slowing to a crawl, and a first working knowledge of regular expressions.
+Text is everywhere: user names, file paths, log lines (a program's running record of what it did), JSON (a text format for structured data), HTML (the markup language of web pages), SQL (the language for querying databases), chat messages. In Python all of that text lives in one type, `str`. This chapter takes you from "what is a string" to the things intermediate developers are expected to know cold: immutability, slicing, the formatting mini-language, the most useful methods, how text becomes bytes (Unicode and UTF-8), how to build big strings without slowing to a crawl, and a first working knowledge of regular expressions.
 
 **What you'll learn**
 
@@ -21,21 +21,21 @@ All runnable code is in [`code/`](code/). Every output shown below was produced 
 ## 4.1 What a string is — creating, indexing, looping
 
 ### What it is
-A **string** (`str`) is an ordered, immutable sequence of Unicode characters. *Ordered* means each character has a position; *immutable* means that once the string exists its characters can never be changed; *sequence* means it supports the same tools as lists and tuples — `len()`, indexing, slicing, `in`, and `for` loops.
+A **string** (`str`) is an ordered, immutable sequence of Unicode characters (Unicode is the worldwide standard that gives every character in every writing system a number — §4.9). *Ordered* means each character has a position; *immutable* means that once the string exists its characters can never be changed; *sequence* means it supports the same tools as lists and tuples — `len()`, indexing, slicing, `in`, and `for` loops.
 
 Analogy: a string is a printed line of text on paper. You can read any letter, photocopy parts of it, or print a new page — but you can't erase a letter on the existing page.
 
 Python has no separate "character" type. A single character is simply a string of length 1: `type("x")` is `str` and `len("x")` is `1`.
 
 ### Why it matters
-Almost every program reads, cleans, or produces text. Knowing the exact rules (zero-based indexes, negative indexes, what raises an error and what doesn't) saves a lot of off-by-one bugs.
+Almost every program reads, cleans, or produces text. Knowing the exact rules (zero-based indexes, negative indexes, what raises an error and what doesn't) saves a lot of off-by-one bugs (indexes wrong by exactly one).
 
 ### How it works
 1. **Create** a string with any of three quote styles — they all produce the same `str` type:
    - `'single'` — the usual choice for short strings; convenient when the text contains a `"`.
    - `"double"` — convenient when the text contains an apostrophe: `"It's raining"`.
-   - `"""triple"""` or `'''triple'''` — can span several lines and freely contain both kinds of quote. Also used for docstrings.
-2. **Index** with `s[i]`. Positions start at `0` on the left. **Negative indexes** count from the right: `-1` is the last character, `-2` the one before it. For a string of length *n*, valid indexes are `0 … n−1` and `−n … −1`; anything else raises `IndexError`.
+   - `"""triple"""` or `'''triple'''` — can span several lines and freely contain both kinds of quote. Also used for docstrings (the documentation string at the top of a function or module, Chapter 1).
+2. **Index** with `s[i]`. Positions start at `0` on the left. **Negative indexes** count from the right: `-1` is the last character, `-2` the one before it. For a string of length *n*, valid indexes are `0 … n−1` and `−n … −1`; anything else raises `IndexError` (Python stops with an error — an *exception* — saying the position doesn't exist).
 3. **Loop** with `for ch in s:` — you get one character per iteration. Use `enumerate(s)` when you also need the position.
 
 ```
@@ -99,14 +99,14 @@ IndexError: string index out of range
 **Immutable** means an object's value cannot change after creation. For strings, `s[0] = "J"` is illegal. Every operation that looks like it changes a string — `upper()`, `replace()`, `+` — actually builds and returns a **new** string.
 
 ### Why it matters
-- **Safety:** you can pass a string to any function and know it will come back unchanged. No defensive copies needed.
-- **Hashability:** because a string's value never changes, its hash never changes, so strings can be dictionary keys and set members (Chapter 6). CPython even caches a string's hash after computing it once.
+- **Safety:** you can pass a string to any function and know it will come back unchanged. No defensive copies (copies made just in case someone else changes the data) needed.
+- **Hashability:** because a string's value never changes, its hash (an integer fingerprint of the value, used for fast lookups) never changes, so strings can be dictionary keys and set members (Chapter 6). CPython even caches a string's hash after computing it once.
 - **Sharing:** the interpreter may reuse one string object in several places (for example, identifiers are *interned* — stored once and shared), which is only safe because nobody can mutate it.
 
 ### How it works
 1. You try item assignment → `TypeError`.
-2. To "update", slice the parts you want to keep and concatenate them with the new text.
-3. Assign the result back to the same name. The **name** now points to a new object; the old object is untouched (and is garbage-collected if nothing else refers to it).
+2. To "update", slice the parts you want to keep and concatenate (join end to end) them with the new text.
+3. Assign the result back to the same name. The **name** now points to a new object; the old object is untouched (and is garbage-collected — its memory reclaimed automatically — if nothing else refers to it).
 
 ```python
 s = "Hello, world!"
@@ -133,6 +133,8 @@ Hello, Python! | same object? False
 | Safe to share / use as dict key | Yes | No |
 | Change one character | O(n) — copy the whole string | O(1) |
 | Build text piece by piece | Use `"".join(parts)` (see 4.8) | Natural |
+
+> **Key term — Big-O notation:** shorthand for how an operation's cost grows with the size of the input *n*. **O(1)** means constant time — the same cost no matter how long the string is; **O(n)** means the cost grows in step with the length (twice as long → about twice the work); **O(n²)** ("quadratic") means doubling *n* roughly quadruples the work. It describes growth, not exact timings.
 
 ### Common mistakes
 - Calling a method and ignoring the result: `name.strip()` on its own line does nothing useful. Write `name = name.strip()`.
@@ -167,7 +169,7 @@ Operators are the symbols Python lets you use directly on strings.
 | `not in` | Negated membership | `"cat" not in "The quick brown fox"` | `True` |
 | `==`, `!=` | Equal / not equal (by value) | `"Python" == "Python"` | `True` |
 | `<`, `>`, `<=`, `>=` | Lexicographic (dictionary-order) comparison | `"apple" < "banana"` | `True` |
-| `%` | printf-style formatting (legacy, see 4.6) | `"%s!" % "hi"` | `'hi!'` |
+| `%` | printf-style (borrowed from C's `printf` function) formatting (legacy — old but still supported, see 4.6) | `"%s!" % "hi"` | `'hi!'` |
 | `[i]`, `[a:b:c]` | Indexing and slicing (see 4.4) | `"abc"[1]` | `'b'` |
 
 ### How it works
@@ -192,7 +194,7 @@ True True True
 ```
 
 ### Common mistakes
-- Sorting user names with plain `<` and being surprised that `"Zoe"` comes before `"adam"`. Sort with `key=str.casefold` for case-insensitive order.
+- Sorting user names with plain `<` and being surprised that `"Zoe"` comes before `"adam"`. Sort with `key=str.casefold` (a *key function* is applied to each item to decide its sort position) for case-insensitive order.
 - Comparing numeric strings: convert with `int()`/`float()` first.
 - Using `is` to compare strings. `is` checks object identity, not equality; it may happen to work for short interned strings and then fail elsewhere. Always use `==`.
 
@@ -258,13 +260,13 @@ Walk-through of `text[::2]`: positions 0, 2, 4, 6, 8, 10, 12 → `H`, `l`, `o`, 
 ### Common mistakes
 - Expecting `stop` to be included: `text[7:12]` is `'Pytho'`, not `'Python'`.
 - Using a negative step with the default bounds swapped in your head: `s[5:1:-1]` walks from 5 **down to** 2; `s[1:5:-1]` is empty.
-- Reversing a string that contains combining characters or emoji with modifiers — `[::-1]` reverses code points, which can detach accents (see 4.9).
+- Reversing a string that contains combining characters (accent marks stored as separate code points) or emoji with modifiers (e.g. skin-tone variants) — `[::-1]` reverses code points, which can detach accents (see 4.9).
 
 ### In the interview
 **30-second answer:** "`s[start:stop:step]` returns a new sequence from `start` up to but not including `stop`. Omitted bounds default to the ends, negatives count from the end, bounds are clipped so it never raises, and `s[::-1]` reverses. It costs O(k) for k items copied."
 
 - *Q: Why is `stop` exclusive?* A: So `s[:k] + s[k:] == s` and `len(s[a:b]) == b - a` — no ±1 corrections.
-- *Q: Is palindrome check `s == s[::-1]` O(n)?* A: Yes — O(n) time and O(n) extra space for the reversed copy; a two-pointer loop does it in O(1) extra space.
+- *Q: Is palindrome (reads the same backwards) check `s == s[::-1]` O(n)?* A: Yes — O(n) time and O(n) extra space for the reversed copy; a two-pointer loop (one index moving in from each end) does it in O(1) extra space.
 
 ### Self-check
 1. `"Hello, Python!"[-5:-1]`? → `'thon'`.
@@ -282,7 +284,7 @@ Walk-through of `text[::2]`: positions 0, 2, 4, 6, 8, 10, 12 → `H`, `l`, `o`, 
 An **escape sequence** is a backslash followed by one or more characters that together stand for a single special character — for example `\n` is one newline character. A **raw string** (prefix `r`) turns escape processing off so every backslash is kept literally.
 
 ### Why it matters
-You need escapes to put newlines, tabs, quotes and arbitrary Unicode characters in string literals. You need raw strings for text that is *full of* backslashes: regular expressions and Windows paths.
+You need escapes to put newlines, tabs, quotes and arbitrary Unicode characters in string literals. You need raw strings for text that is *full of* backslashes: regular expressions (a mini-language for text patterns, §4.10) and Windows paths.
 
 ### How it works
 
@@ -296,8 +298,8 @@ You need escapes to put newlines, tabs, quotes and arbitrary Unicode characters 
 | `\r` | Carriage return (cursor to line start) | `"Hello\rWorld"` | terminal shows `World` |
 | `\b` | Backspace character (code 8) | `"ABC\b"` | terminal may erase `C` visually |
 | `\f` | Form feed (page break for printers) | `"Page\fNext"` | rarely visible |
-| `\ooo` | Octal code (up to 3 digits) | `"\101"` | `A` |
-| `\xhh` | Hex code (exactly 2 digits) | `"\x41"` | `A` |
+| `\ooo` | Octal (base-8) code (up to 3 digits) | `"\101"` | `A` |
+| `\xhh` | Hex (base-16) code (exactly 2 digits) | `"\x41"` | `A` |
 | `\uXXXX` | Unicode code point (4 hex digits) | `"\u00e9"` | `é` |
 | `\UXXXXXXXX` | Unicode code point (8 hex digits) | `"\U0001F600"` | 😀 |
 | `\N{name}` | Unicode character by name | `"\N{GREEK SMALL LETTER PI}"` | `π` |
@@ -322,7 +324,7 @@ C:\new\table 12 10
 Without `r`, `"C:\new\table"` silently contains a newline (`\n`) and a tab (`\t`) — 10 characters instead of 12.
 
 ### Common mistakes
-- Writing Windows paths without `r` (or without doubling backslashes). Better: use forward slashes or `pathlib.Path`, which work on Windows too.
+- Writing Windows paths without `r` (or without doubling backslashes). Better: use forward slashes or `pathlib.Path` (Python's file-path object type), which work on Windows too.
 - Unknown escapes like `"\d"`: Python keeps the backslash but warns (a `SyntaxWarning` since Python 3.12). Write regexes as raw strings: `r"\d+"`.
 - A raw string cannot end in a single backslash: `r"C:\"` is a syntax error (the `\"` still stops the string from ending). Use `"C:\\"`.
 
@@ -345,10 +347,10 @@ Backslash escapes produce special characters; `r"..."` disables them — use it 
 |---|---|---|---|
 | f-string (formatted string literal) | `f"{name} is {age}"` | 3.6 | Default choice |
 | `str.format()` | `"{} is {}".format(name, age)` | 2.6 / 3.0 | Templates stored as data |
-| `%` (printf-style) | `"%s is %d" % (name, age)` | Original | Legacy code, `logging` calls |
+| `%` (printf-style) | `"%s is %d" % (name, age)` | Original | Legacy code, `logging` (standard log-message module) calls |
 | `string.Template` | `Template("$name is $age")` | 2.4 | Templates written by untrusted users |
 
-(Python 3.14 also added **t-strings**, `t"..."`, which produce a `string.templatelib.Template` object (unrelated to `string.Template`) instead of a `str` so that libraries can escape values safely — for example for HTML or SQL. They are new and still niche; f-strings remain the everyday tool.)
+(Python 3.14 also added **t-strings**, `t"..."`, which produce a `string.templatelib.Template` object (unrelated to `string.Template`) instead of a `str` so that libraries can escape values (neutralise characters that have a special meaning) safely — for example for HTML or SQL. They are new and still niche; f-strings remain the everyday tool.)
 
 ### Why it matters
 Formatting is how you print reports, build log lines, show money with two decimals, pad columns in a table, and render numbers in hex or percent. The **format-spec mini-language** after the `:` is shared by f-strings, `str.format()` and the built-in `format()` function, so learning it once pays off everywhere.
@@ -356,9 +358,9 @@ Formatting is how you print reports, build log lines, show money with two decima
 ### How it works — f-strings
 1. Put `f` before the opening quote.
 2. Inside `{ }` write **any expression**: a name, arithmetic, a method call, an index.
-3. Optionally add a **conversion**: `!r` (use `repr()`), `!s` (use `str()`), `!a` (use `ascii()`).
+3. Optionally add a **conversion**: `!r` (use `repr()`, the unambiguous developer-facing form), `!s` (use `str()`), `!a` (use `ascii()`).
 4. Optionally add `:format_spec` to control the look.
-5. `{expr=}` (3.8+) prints the expression text *and* its value — great for debugging.
+5. `{expr=}` (3.8+) prints the expression text *and* its value — great for debugging (finding and fixing bugs).
 6. Write `{{` and `}}` for literal braces.
 
 ```python
@@ -383,7 +385,7 @@ total = 42
 {literal braces}
 ```
 
-Since Python 3.12 (PEP 701) f-strings are parsed by the real grammar, so you may reuse the same quote type inside the braces (`f"{d["key"]}"`), use backslashes, and split long expressions over lines. On 3.11 and earlier, use the other quote type inside.
+Since Python 3.12 (PEP 701) f-strings are parsed by the real grammar (Python's formal syntax rules), so you may reuse the same quote type inside the braces (`f"{d["key"]}"`), use backslashes, and split long expressions over lines. On 3.11 and earlier, use the other quote type inside.
 
 ### How it works — the format-spec mini-language
 The spec has this shape (every part optional):
@@ -402,7 +404,7 @@ The spec has this shape (every part optional):
 | width | integer | Minimum total width |
 | grouping | `,` or `_` | Thousands separator |
 | .precision | integer | Digits after the point (`f`, `%`), significant digits (`g`), or max chars (strings) |
-| type | `s d b o x X c e f g %` | String, decimal int, binary, octal, hex, char, scientific, fixed, general, percent |
+| type | `s d b o x X c e f g %` | String, decimal int, binary, octal, hex, char, scientific (e-notation like `1.2e+06`), fixed, general, percent |
 
 Defaults: strings align left, numbers align right.
 
@@ -431,7 +433,7 @@ Output of `code/02_formatting.py` (spec on the left, value on the right):
 
 Worked example: `f"{pi:10.3f}"` → type `f` (fixed point), precision 3 → `3.142` (5 characters, rounded), width 10 → right-align (numbers default right) with 5 spaces in front → `'     3.142'`.
 
-The last row shows that objects can define their own spec: `date` passes everything after `:` to `strftime`. Your own classes can do the same by implementing `__format__`.
+The last row shows that objects can define their own spec: `date` passes everything after `:` to `strftime` (the date method that formats with codes like `%Y`). Your own classes can do the same by implementing `__format__` (the special method that `format()` and f-strings call).
 
 ### How it works — `str.format()` and `%`
 ```python
@@ -456,7 +458,7 @@ Asha is 31 years, pi~3.14
 ```
 
 - `{}` fills positionally, `{1}` by index, `{name}` by keyword; `**user` unpacks a dict into keywords.
-- `str.format()` shines when the **template is data** (loaded from a file or config) — an f-string must be written in source code.
+- `str.format()` shines when the **template is data** (loaded from a file or config — configuration settings) — an f-string must be written in source code.
 - `%` uses `%s` (str), `%d` (int), `%f` (float), `%x` (hex), `%%` (literal percent). With a single value that is itself a tuple it misbehaves, which is one reason newer styles won.
 
 ### Trade-offs
@@ -469,9 +471,9 @@ Asha is 31 years, pi~3.14
 | Lazy formatting in logging | No | No | Yes (`logger.info("%s", x)`) | No |
 
 ### When not to use it
-- **Logging:** write `logger.info("user %s logged in", user)` rather than an f-string. The `logging` module only formats the message if that level is enabled, and log aggregators can group messages by the unformatted template.
-- **SQL:** never format values into SQL text. Use the driver's parameters (`cursor.execute("... WHERE id = ?", (user_id,))`) to avoid SQL injection.
-- **User-supplied templates:** don't call `user_template.format(**objects)` — the replacement fields can walk attributes (`{config.__class__.__init__.__globals__}`) and leak data. Use `string.Template` or a sandboxed template engine.
+- **Logging:** write `logger.info("user %s logged in", user)` (a *logger* is the object you send log messages through) rather than an f-string. The `logging` module only formats the message if that level is enabled, and log aggregators (services that collect logs from many machines) can group messages by the unformatted template.
+- **SQL:** never format values into SQL text. Use the driver's (the library that talks to the database) parameters (`cursor.execute("... WHERE id = ?", (user_id,))`) to avoid SQL injection (an attack where user input gets executed as part of a database command).
+- **User-supplied templates:** don't call `user_template.format(**objects)` — the replacement fields can walk attributes (`{config.__class__.__init__.__globals__}`) and leak data. Use `string.Template` or a sandboxed template engine (a template library that blocks access to dangerous internals).
 
 ### Common mistakes
 - Forgetting the `f` prefix → the braces print literally.
@@ -481,7 +483,7 @@ Asha is 31 years, pi~3.14
 ### Real-world examples
 - Python's `logging` module merges message arguments with `%`-style (`logger.info("%s", x)`); `style="{"` only changes the syntax of the *Formatter's* layout string, not of the messages.
 - `datetime`, `Decimal` and `ipaddress` objects implement `__format__`, so `f"{now:%H:%M}"` works.
-- Configuration and email templates are typically stored as data and filled with `str.format` or a template engine such as Jinja2.
+- Configuration and email templates are typically stored as data and filled with `str.format` or a template engine (a library that fills placeholders in text) such as Jinja2.
 
 ### In the interview
 **30-second answer:** "Use f-strings by default: readable and fastest. After the colon is the format-spec mini-language — fill, align, sign, width, grouping, precision, type — e.g. `{x:>10,.2f}`. Use `str.format` when the template is stored as data, `%` for logging's lazy formatting, and `string.Template` for untrusted templates."
@@ -507,7 +509,7 @@ f-strings everywhere; learn `[[fill]align][sign][#][0][width][,][.prec][type]`; 
 A **method** is a function attached to an object, called with a dot: `text.upper()`. `str` has about 47 methods. Because strings are immutable, none of them change the original; the transforming ones **return a new string**, and the checking ones return `True`/`False` or a number.
 
 ### Why it matters
-Most text-processing tasks — cleaning CSV fields, validating input, parsing log lines — are a few method calls, and they run in optimised C code, much faster than a hand-written Python loop.
+Most text-processing tasks — cleaning CSV (comma-separated values, a plain-text table format) fields, validating input, parsing log lines — are a few method calls, and they run in optimised C code, much faster than a hand-written Python loop.
 
 ### How it works — the reference table
 
@@ -534,12 +536,12 @@ Most text-processing tasks — cleaning CSV fields, validating input, parsing lo
 
 | Method | What it returns |
 |---|---|
-| `strip(chars)` / `lstrip` / `rstrip` | Remove whitespace (or any of `chars`) from both ends / left / right |
+| `strip(chars)` / `lstrip` / `rstrip` | Remove whitespace (spaces, tabs, newlines) (or any of `chars`) from both ends / left / right |
 | `split(sep=None, maxsplit=-1)` | List of pieces; with no `sep`, splits on runs of whitespace and drops empties |
 | `rsplit(sep, maxsplit)` | Like `split` but counts `maxsplit` from the right |
 | `splitlines()` | List of lines (handles `\n`, `\r\n`, and others) without the line breaks |
 | `partition(sep)` / `rpartition(sep)` | 3-tuple `(before, sep, after)` around the first / last `sep` |
-| `sep.join(iterable)` | One string: the items glued with `sep` (items must be strings) |
+| `sep.join(iterable)` (any loopable object) | One string: the items glued with `sep` (items must be strings) |
 | `removeprefix(p)` / `removesuffix(s)` | The string without that exact prefix/suffix, if present (3.9+) |
 
 **Boolean checks** (all return `False` for the empty string, except `isprintable()` and `isascii()`)
@@ -548,15 +550,15 @@ Most text-processing tasks — cleaning CSV fields, validating input, parsing lo
 |---|---|
 | `isalnum()` | Every character is a letter or a number (in the Unicode sense) |
 | `isalpha()` | Every character is a letter |
-| `isdecimal()` | Every character is a decimal digit 0–9 (in any script, e.g. Arabic-Indic) |
+| `isdecimal()` | Every character is a decimal digit 0–9 (in any script — writing system — e.g. Arabic-Indic) |
 | `isdigit()` | Decimal digits plus digits like superscript `²` |
 | `isnumeric()` | Any numeric character, including fractions like `½` |
 | `islower()` / `isupper()` | All cased characters are lower / upper, and there is at least one |
 | `istitle()` | Title case: upper only after uncased chars, lower only after cased ones |
 | `isspace()` | Only whitespace, at least one character |
-| `isidentifier()` | Valid Python identifier (keywords included — check `keyword.iskeyword` too) |
+| `isidentifier()` | Valid Python identifier (a legal name; keywords included — check `keyword.iskeyword` too) |
 | `isprintable()` | No non-printable characters (`\t`, `\n` count as non-printable); `True` for `""` |
-| `isascii()` | All characters are ASCII (3.7+); `True` for `""` |
+| `isascii()` | All characters are ASCII (the basic 128-character English set; 3.7+); `True` for `""` |
 | `startswith(p)` / `endswith(s)` | Starts / ends with `p` / `s`; accepts a **tuple** of options |
 
 **Find, count, replace, translate**
@@ -682,11 +684,11 @@ h3ll0, l33t c0d3rs
 - Using `find()` in a boolean test: `if s.find("x"):` is **wrong** — `find` returns `0` (falsy) when the match is at the start and `-1` (truthy) when absent. Use `if "x" in s:`.
 - Using `lower()` for case-insensitive comparison of international text — prefer `casefold()`.
 - Expecting `title()` to be smart about apostrophes (`"They'Re"`). For display names, write your own rule or use `string.capwords()`, which splits on whitespace only.
-- Calling `str.join` with non-strings: `",".join([1, 2])` → `TypeError`. Convert with a generator: `",".join(map(str, nums))`.
+- Calling `str.join` with non-strings: `",".join([1, 2])` → `TypeError`. Convert with a generator (a lazily produced sequence, Chapter 7): `",".join(map(str, nums))` (`map` applies `str` to every item).
 
 ### Real-world examples
 - CSV and log parsing: `line.rstrip("\n").split(",")` is the inner loop of countless scripts (use the `csv` module when fields can contain quoted commas).
-- URL/path handling: `url.removeprefix("https://")`, `filename.endswith((".jpg", ".png"))`.
+- URL (web address)/path handling: `url.removeprefix("https://")`, `filename.endswith((".jpg", ".png"))`.
 - Search boxes normalise input with `query.strip().casefold()` before matching.
 
 ### In the interview
@@ -713,14 +715,14 @@ Methods return new strings. Memorise: `strip/split/join/partition`, `startswith(
 When you build a big string from many pieces (a report, an HTML page, a CSV file), *how* you glue them matters. The idiomatic way is to collect the pieces in a list and call `"".join(pieces)` once.
 
 ### The problem it solves
-Because strings are immutable, `s = s + piece` must allocate a new string and copy **all** existing characters every time. After *n* appends of a fixed-size piece that is roughly 1 + 2 + … + n = n(n+1)/2 character copies — **quadratic** time, O(n²). `join` instead measures the total length, allocates once, and copies each piece once — **linear**, O(n).
+Because strings are immutable, `s = s + piece` must allocate (reserve memory for) a new string and copy **all** existing characters every time. After *n* appends of a fixed-size piece that is roughly 1 + 2 + … + n = n(n+1)/2 character copies — **quadratic** time, O(n²). `join` instead measures the total length, allocates once, and copies each piece once — **linear**, O(n).
 
 ### How it works
-1. Append each piece to a list (list append is amortised O(1) — Chapter 5).
-2. Call `sep.join(list)`: pass 1 adds up the lengths; pass 2 copies each piece into a single pre-sized buffer.
-3. Alternative for stream-like code: `io.StringIO` — `write()` pieces, then `getvalue()`.
+1. Append each piece to a list (list append is amortised O(1) — occasionally slow, but constant on average — Chapter 5).
+2. Call `sep.join(list)`: pass 1 adds up the lengths; pass 2 copies each piece into a single pre-sized buffer (block of memory).
+3. Alternative for stream-like code: `io.StringIO` (an in-memory text "file") — `write()` pieces, then `getvalue()`.
 
-CPython has a special trick: if the string on the left of `+=` has **no other references**, it may resize it in place, making the naive loop look fast. This is an implementation detail — PyPy and other interpreters don't do it, and it stops working the moment another name refers to the same string. The benchmark below shows both cases.
+CPython has a special trick: if the string on the left of `+=` has **no other references**, it may resize it in place, making the naive loop look fast. This is an implementation detail — PyPy and other interpreters don't do it, and it stops working the moment another name refers to the same string. The benchmark (a controlled timing measurement) below shows both cases.
 
 ```python
 def plus_equal(n):          # naive, but CPython's in-place trick rescues it
@@ -778,7 +780,7 @@ Don't contort code for two or three concatenations; `first + " " + last` or an f
 ### In the interview
 **30-second answer:** "Repeated `+=` on an immutable string copies everything each time, so it's O(n²). Collect parts in a list and `''.join` once — O(n), because join sizes the result first and copies each part once."
 
-- *Q: But my `+=` benchmark is fast?* A: CPython resizes in place when the string has a single reference; it's not guaranteed and not portable.
+- *Q: But my `+=` benchmark is fast?* A: CPython resizes in place when the string has a single reference; it's not guaranteed and not portable (other Python implementations may behave differently).
 - *Q: Generator or list inside `join`?* A: `join` converts its argument to a sequence anyway, so a list comprehension is usually slightly faster; both are fine.
 
 ### Self-check
@@ -796,19 +798,19 @@ Many pieces → list + `"".join(...)`. A few pieces → `+` or f-string.
 ### What it is
 - A **character** is an abstract symbol: "A", "é", "€", "😀".
 - **Unicode** assigns every character a number called a **code point**, written `U+20AC` (hex) for "€". Python's `str` is a sequence of code points. `ord(ch)` gives the number; `chr(n)` gives the character back.
-- **Bytes** are raw 8-bit values (0–255) — what files, sockets and disks actually hold. Python's `bytes` type is an immutable sequence of such values, written `b"..."`.
+- **Bytes** are raw 8-bit values (0–255) — what files, sockets (network connections) and disks actually hold. Python's `bytes` type is an immutable sequence of such values, written `b"..."`.
 - An **encoding** is the rulebook that turns code points into bytes (`str.encode`) and back (`bytes.decode`).
 - **UTF-8** is the dominant encoding on the web and in Linux/macOS: variable-length, 1 to 4 bytes per code point, and identical to ASCII for the first 128 characters.
 
 Analogy: code points are the words of a message; an encoding is the alphabet you use to write them on paper. If the reader assumes a different alphabet, they read gibberish ("mojibake").
 
 ### Why it matters
-Every time text crosses a boundary — reading a file, calling an HTTP API, writing to a database — it is converted between `str` and `bytes`. Getting the encoding wrong causes crashes (`UnicodeDecodeError`) or, worse, silently corrupted text.
+Every time text crosses a boundary — reading a file, calling an HTTP API (a web service your code talks to over HTTP, the web's request/response protocol), writing to a database — it is converted between `str` and `bytes`. Getting the encoding wrong causes crashes (`UnicodeDecodeError`) or, worse, silently corrupted text.
 
 ### How it works
 1. Inside your program, work with `str` (text).
 2. At the edges, **decode** incoming bytes to `str` as early as possible and **encode** outgoing `str` to bytes as late as possible (the "Unicode sandwich").
-3. Always name the encoding: `open(path, encoding="utf-8")`. Without it, `open()` uses the platform's locale encoding, which differs between machines (Python 3.15, due October 2026, makes UTF-8 the default under PEP 686 — still name it explicitly while you support 3.12–3.14).
+3. Always name the encoding: `open(path, encoding="utf-8")`. Without it, `open()` uses the platform's locale encoding (the default chosen by the operating system's language/region settings), which differs between machines (Python 3.15, due October 2026, makes UTF-8 the default under PEP 686 — still name it explicitly while you support 3.12–3.14).
 4. UTF-8 byte lengths by code point range:
 
 | Code points | Bytes | Example |
@@ -853,8 +855,8 @@ b'caf?' b'caf'
 ```
 
 What to notice:
-- `len("café")` is 4 characters but its UTF-8 form is 5 bytes. Database column limits and HTTP `Content-Length` count **bytes**.
-- Decoding UTF-8 bytes as Latin-1 **doesn't fail** — it produces `cafÃ©`. That's the classic mojibake you see on badly configured websites.
+- `len("café")` is 4 characters but its UTF-8 form is 5 bytes. Database column limits and HTTP `Content-Length` (the header that states the message size) count **bytes**.
+- Decoding UTF-8 bytes as Latin-1 (an old 256-character Western-European encoding) **doesn't fail** — it produces `cafÃ©`. That's the classic mojibake you see on badly configured websites.
 - `errors=` controls failure: `"strict"` (default, raise), `"replace"` (`?` or `�`), `"ignore"` (drop — loses data silently), `"backslashreplace"`, and more.
 - Indexing `bytes` gives an **int**, not a 1-byte string.
 
@@ -875,11 +877,11 @@ print("after NFC:", a == nfc, len(nfc))      # after NFC: True 4
 | Holds | Unicode code points | Raw bytes 0–255 | Raw bytes 0–255 |
 | Mutable | No | No | Yes |
 | Literal | `"héllo"` | `b"hello"` (ASCII only in literal) | `bytearray(b"...")` |
-| Use for | All text logic | Files, network, hashing, crypto | Building/patching binary buffers |
+| Use for | All text logic | Files, network, hashing, crypto (cryptography) | Building/patching binary buffers |
 
 | Encoding | Size per char | ASCII-compatible | Notes |
 |---|---|---|---|
-| UTF-8 | 1–4 bytes | Yes | Default for web, JSON (required by RFC 8259 for data exchanged between systems), Python source files |
+| UTF-8 | 1–4 bytes | Yes | Default for web, JSON (required by RFC 8259 — an internet standards document — for data exchanged between systems), Python source files |
 | UTF-16 | 2 or 4 bytes | No | Used internally by Windows APIs, Java and JavaScript strings |
 | Latin-1 (ISO-8859-1) | 1 byte | Yes | Only 256 characters; never fails to decode, so hides errors |
 | ASCII | 1 byte | — | Only 128 characters |
@@ -887,13 +889,13 @@ print("after NFC:", a == nfc, len(nfc))      # after NFC: True 4
 ### Common mistakes
 - Mixing types: `"abc" + b"def"` → `TypeError`. Python 3 never guesses an encoding for you.
 - Omitting `encoding=` in `open()` — code works on your Mac and breaks on a Windows server.
-- Counting user-visible characters with `len()`. A flag emoji or "👍🏽" is several code points. For "grapheme" counting you need a third-party library such as `grapheme` or `regex` (`\X`).
+- Counting user-visible characters with `len()`. A flag emoji or "👍🏽" is several code points. For "grapheme" (what a reader perceives as one character) counting you need a third-party library such as `grapheme` or `regex` (`\X`).
 - Using `errors="ignore"` to make an error go away — you lose data silently.
 
 ### Real-world examples
-- `requests` exposes both `response.content` (bytes) and `response.text` (decoded `str`, using the declared or guessed encoding).
+- `requests` (the popular HTTP client library) exposes both `response.content` (bytes) and `response.text` (decoded `str`, using the declared or guessed encoding).
 - `json.dumps(..., ensure_ascii=False)` keeps non-ASCII characters readable instead of escaping them as `\u00e9`.
-- The Python source code itself is UTF-8 by default (PEP 3120), which is why `name = "Zoë"` works without a coding comment.
+- The Python source code itself is UTF-8 by default (PEP 3120), which is why `name = "Zoë"` works without a coding comment (a `# -*- coding: … -*-` line declaring the file's encoding).
 
 ### In the interview
 **30-second answer:** "`str` is a sequence of Unicode code points; `bytes` is raw data. Encode text to bytes at the output boundary and decode bytes to text at the input boundary, always naming the encoding — normally UTF-8, which is variable-length (1–4 bytes) and ASCII-compatible."
@@ -916,7 +918,7 @@ Text is `str` (code points); storage and network are `bytes`. Decode early, enco
 ## 4.10 Regular expressions — a practical introduction
 
 ### What it is
-A **regular expression** (regex) is a small pattern language for describing text: "one or more digits", "a word followed by `=`", "a date like 2024-03-09". Python's `re` module compiles a pattern and searches strings with it.
+A **regular expression** (regex) is a small pattern language for describing text: "one or more digits", "a word followed by `=`", "a date like 2024-03-09". Python's `re` module compiles a pattern (turns it into an efficient internal form) and searches strings with it.
 
 ### Why it matters
 String methods handle fixed text; regex handles **shapes** of text. Extracting all emails, validating a postcode, pulling fields from log lines, or collapsing whitespace are one-liners with `re`.
@@ -931,11 +933,11 @@ String methods handle fixed text; regex handles **shapes** of text. Extracting a
 | `[abc]` `[a-z]` `[^0-9]` | One char from a set / range / not in the set |
 | `^` `$` | Start / end of string (or of each line with `re.MULTILINE`); `$` also matches just before a final `\n` |
 | `\b` | Word boundary |
-| `*` `+` `?` | 0 or more, 1 or more, 0 or 1 (greedy) |
+| `*` `+` `?` | 0 or more, 1 or more, 0 or 1 (greedy — take as much as possible) |
 | `{3}` `{2,5}` | Exactly 3, between 2 and 5 |
 | `*?` `+?` | Lazy versions — match as little as possible |
 | `a\|b` | `a` or `b` |
-| `( … )` | Capturing group |
+| `( … )` | Capturing group (its matched text is remembered) |
 | `(?P<name> … )` | Named group |
 | `(?: … )` | Group without capturing |
 
@@ -947,8 +949,8 @@ String methods handle fixed text; regex handles **shapes** of text. Extracting a
 | `re.match(p, s)` | Match only at the **start** → `Match` or `None` |
 | `re.fullmatch(p, s)` | The **whole string** must match |
 | `re.findall(p, s)` | List of all matches (strings, or tuples if the pattern has several groups) |
-| `re.finditer(p, s)` | Iterator of `Match` objects (positions + groups) |
-| `re.sub(p, repl, s)` | Replace matches; `repl` can use `\1` or be a function |
+| `re.finditer(p, s)` | Iterator (yields items one at a time) of `Match` objects (positions + groups) |
+| `re.sub(p, repl, s)` | Replace matches; `repl` can use `\1` (a *backreference*: the text group 1 captured) or be a function |
 | `re.split(p, s)` | Split on a pattern |
 | `re.compile(p)` | Pre-compile into a `Pattern` object with the same methods |
 
@@ -1024,7 +1026,7 @@ Step by step for the date rewrite: the pattern captures year, month and day into
 | Fixed substring test | `in`, `startswith`, `endswith` — faster and clearer |
 | Split on one fixed separator | `str.split` |
 | Variable shapes, extraction, validation | `re` |
-| HTML / XML | A real parser (`html.parser`, `lxml`, BeautifulSoup) — regex can't handle nesting |
+| HTML / XML | A real parser (a program that reads the format by its grammar; `html.parser`, `lxml`, BeautifulSoup) — regex can't handle nesting |
 | Emails / URLs strict validation | A dedicated library or `urllib.parse`; "perfect" regexes are unreadable |
 
 ### When not to use it
@@ -1034,13 +1036,13 @@ When a string method does the job, or when the input is a nested format (HTML, J
 - **Forgetting `r"..."`**: `"\b"` is a backspace, not a word boundary.
 - **`match` vs `search`**: `match` only checks the beginning; for validation use `fullmatch`.
 - **Greedy `.*`** swallowing too much — use `.*?` or a negated class like `[^<]*`.
-- **Catastrophic backtracking:** Python's engine backtracks, so patterns with nested quantifiers such as `(a+)+$` can take exponential time on inputs that almost match, and even simpler ones (`.*.*=.*`, or `\s+$` on a long run of spaces) can go quadratic. This is the basis of ReDoS (regular-expression denial-of-service) attacks.
-- Calling `m.group()` without checking `m is not None` → `AttributeError`.
+- **Catastrophic backtracking:** Python's engine backtracks (when one way of matching fails, it goes back and tries another), so patterns with nested quantifiers (repeat counts such as `*`, `+`, `{m,n}`) such as `(a+)+$` can take exponential time (roughly doubling with each extra character) on inputs that almost match, and even simpler ones (`.*.*=.*`, or `\s+$` on a long run of spaces) can go quadratic. This is the basis of ReDoS (regular-expression denial-of-service) attacks.
+- Calling `m.group()` without checking `m is not None` → `AttributeError` (`None` has no `.group` attribute).
 
 ### Real-world examples
-- On 2 July 2019 a single new WAF (web application firewall) rule containing `.*(?:.*=.*)` backtracked so heavily that it pinned CPUs across Cloudflare's network, causing a global outage of about 27 minutes (per Cloudflare's public post-mortem).
+- On 2 July 2019 a single new WAF (web application firewall) rule containing `.*(?:.*=.*)` backtracked so heavily that it pinned CPUs (kept the processors 100 % busy) across Cloudflare's network, causing a global outage of about 27 minutes (per Cloudflare's public post-mortem — an after-the-incident write-up of what went wrong).
 - On 20 July 2016 Stack Overflow was down for 34 minutes: a whitespace-trimming regex (`[\s\u200c]+$`) hit a post with about 20,000 consecutive whitespace characters and backtracked quadratically — O(n²), roughly 200 million steps for one string (per their post-mortem).
-- Django can route URLs with regex patterns via `re_path()` (before Django 2.0, regex routes through `url()` were the only option), and log shippers such as Logstash's grok filter are built on named regex patterns.
+- Django can route URLs (map web addresses to the functions that handle them) with regex patterns via `re_path()` (before Django 2.0, regex routes through `url()` were the only option), and log shippers (tools that collect and forward log files) such as Logstash's grok filter are built on named regex patterns.
 
 ### In the interview
 **30-second answer:** "`re.search` finds the first match anywhere, `match` only at the start, `fullmatch` the whole string. `findall` returns strings or tuples of groups, `finditer` gives Match objects, `sub` replaces with backrefs or a function. Use raw strings, lazy quantifiers when needed, named groups for readability, and beware catastrophic backtracking."

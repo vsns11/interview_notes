@@ -12,6 +12,8 @@
 > pytest -q                      # 31 passed, 1 skipped, 1 xfailed
 > python debugging_demo.py
 > ```
+>
+> ("xfailed" means a test that was *expected* to fail did fail — see §15.4.5.)
 
 ```mermaid
 flowchart LR
@@ -42,10 +44,10 @@ An **automated test** is code that runs your code with known inputs and checks t
 | **Arrange–Act–Assert** | the usual three-part shape of a test: set up, do the thing, check the outcome |
 
 ### Why it matters
-1. **Confidence to change code.** Refactoring without tests is guessing. With a good suite, you change code and learn in seconds whether anything broke.
-2. **Bugs are cheaper earlier.** A failing test on your laptop costs minutes; the same bug in production costs incidents, data fixes and trust.
+1. **Confidence to change code.** Refactoring (restructuring code without changing its behaviour) without tests is guessing. With a good suite, you change code and learn in seconds whether anything broke.
+2. **Bugs are cheaper earlier.** A failing test on your laptop costs minutes; the same bug in production (the live system real users rely on) costs incidents (outages or failures that someone has to respond to), data fixes and trust.
 3. **Tests are executable documentation** — they show exactly how the code is meant to be used.
-4. **Better design.** Code that is hard to test is usually too coupled; writing tests pushes you toward small functions with explicit inputs.
+4. **Better design.** Code that is hard to test is usually too coupled (its parts depend too tightly on each other's internals); writing tests pushes you toward small functions with explicit inputs.
 5. In Python specifically, there is **no compiler** to catch a typo in a rarely-run branch — only running the code finds it (type checkers help, [Chapter 13](../13-type-hints/README.md)).
 
 ### How it works — the test pyramid
@@ -54,7 +56,7 @@ flowchart TB
     E["Few E2E tests: slow, realistic, brittle"] --> I["Some integration tests"]
     I --> U["Many unit tests: fast, precise, cheap"]
 ```
-Most tests should be fast unit tests; fewer integration tests; a handful of end-to-end tests for the critical paths. Tests run automatically in **CI** (continuous integration — e.g. GitHub Actions runs `pytest` on every push/pull request).
+Most tests should be fast unit tests; fewer integration tests; a handful of end-to-end tests for the critical paths. Tests run automatically in **CI** (continuous integration — e.g. GitHub Actions runs `pytest` on every push/pull request — a *push* uploads your commits to the shared repository; a *pull request* asks for your changes to be reviewed and merged).
 
 ### What makes a good test
 - **Fast** (milliseconds), **isolated** (no dependence on other tests or their order), **repeatable** (same result every time — no real clock, network, or unseeded randomness), **self-checking** (pass/fail, no human reading output), and **focused** (one behaviour; the name says which).
@@ -64,7 +66,7 @@ Most tests should be fast unit tests; fewer integration tests; a handful of end-
 CPython's own suite (`python -m test`) is written with `unittest`; NumPy, pandas, pip and most modern projects use pytest; Django ships a `unittest`-based runner. Pull requests on these projects are merged only when CI is green.
 
 ### TL;DR
-Tests let you change code safely. Many fast unit tests, fewer integration and E2E tests, all run in CI. Test behaviour, keep tests isolated and deterministic.
+Tests let you change code safely. Many fast unit tests, fewer integration and E2E tests, all run in CI. Test behaviour, keep tests isolated and deterministic (same input → same result, every run).
 
 ---
 
@@ -120,22 +122,22 @@ def price_in(currency: str, usd: float, client: RateClient) -> float:
     return round(usd * rate, 2)
 ```
 
-Note the design choice in `price_in`: the rate service is **passed in** (dependency injection) instead of created inside. That single decision makes it trivial to test with a fake (§15.5).
+Note the design choice in `price_in`: the rate service is **passed in** (dependency injection — handing a function the objects it depends on, rather than letting it build them itself) instead of created inside. That single decision makes it trivial to test with a fake (§15.5).
 
 ---
 
 ## 15.3 `unittest` basics
 
 ### What it is
-`unittest` is the standard library's test framework, modelled on Java's JUnit (the "xUnit" family). Tests are methods of a class that inherits `unittest.TestCase`.
+`unittest` is the standard library's test framework, modelled on Java's JUnit (the "xUnit" family — the common design shared by test frameworks in many languages). Tests are methods of a class that inherits `unittest.TestCase`.
 
 ### How it works
 1. Create `class TestX(unittest.TestCase)`.
 2. Each method whose name starts with `test` is one test.
 3. `setUp()` runs before **each** test, `tearDown()` after each; `setUpClass`/`tearDownClass` (class methods) run once per class.
-4. Check results with assertion methods: `assertEqual`, `assertTrue`, `assertIn`, `assertIsNone`, `assertAlmostEqual` (floats, 7 decimal places by default), `assertRaises` (as a context manager), `assertLogs`.
+4. Check results with assertion methods (an **assertion** is a check that must be true, or the test fails): `assertEqual`, `assertTrue`, `assertIn`, `assertIsNone`, `assertAlmostEqual` (floats, 7 decimal places by default), `assertRaises` (as a context manager), `assertLogs`.
 5. Skip with `@unittest.skip(reason)` / `skipIf(cond, reason)`; `@unittest.expectedFailure` for known bugs.
-6. Run: `python -m unittest` (auto-discovers `test*.py` files), `python -m unittest -v test_inventory_unittest`, or `unittest.main()` inside the file.
+6. Run: `python -m unittest` (auto-discovers — finds by naming convention, without you listing them — `test*.py` files), `python -m unittest -v test_inventory_unittest`, or `unittest.main()` inside the file.
 
 ```python
 class TestInventory(unittest.TestCase):
@@ -181,7 +183,7 @@ OK (skipped=1)
 | Setup | `setUp`/`tearDown` | fixtures (reusable, composable, scoped) |
 | Data-driven tests | `self.subTest(...)` loop | `@pytest.mark.parametrize` |
 | Failure messages | from the assert method | rewritten `assert` shows values and diffs |
-| Plugins | few | large ecosystem (coverage, xdist, asyncio, django…) |
+| Plugins (add-on packages that extend a tool) | few | large ecosystem (coverage, xdist — runs tests in parallel, asyncio, django…) |
 | Runs the other's tests | — | yes, pytest runs `unittest` tests unchanged |
 
 ### When to use it
@@ -217,8 +219,8 @@ When you can't add dependencies (stdlib-only tools, CPython itself), or in an ex
 3. Settings live in `pyproject.toml` under `[tool.pytest.ini_options]` (e.g. `testpaths = ["tests"]`, `markers = ["slow: ..."]`, `addopts = "-q"`).
 
 ### 15.4.1 Plain `assert` and assertion rewriting
-pytest rewrites `assert` statements in test files so that on failure it prints the values involved. You write `assert result == expected`, and get a diff for free (see §15.8 for a real one). Helpers:
-- `pytest.raises(Exc, match="regex")` — the block must raise `Exc` with a message matching the regex.
+pytest rewrites `assert` statements in test files so that on failure it prints the values involved. You write `assert result == expected`, and get a diff (a side-by-side listing of what differs) for free (see §15.8 for a real one). Helpers:
+- `pytest.raises(Exc, match="regex")` — the block must raise `Exc` with a message matching the regex (regular expression — a text pattern, see [Chapter 14](../14-standard-library-tour/README.md) §14.3).
 - `pytest.approx(x)` — float comparison with tolerance (relative 1e-6 by default): `0.1 + 0.2 == pytest.approx(0.3)`.
 - `pytest.warns(Warning)` — the block must emit a warning.
 
@@ -250,7 +252,7 @@ def test_remove_too_many_raises(inv):
 
 Rules:
 1. **Fresh per test by default** (`scope="function"`): `test_remove_reduces_stock` modifies its `inv`, and the next test still gets the original — tests stay isolated.
-2. **Scopes**: `function` (default), `class`, `module`, `package`, `session`. Use wider scopes for expensive, read-only resources (e.g. one database engine per session).
+2. **Scopes** (how long one fixture value lives and is shared): `function` (default), `class`, `module`, `package`, `session` (one whole `pytest` run). Use wider scopes for expensive, read-only resources (e.g. one database engine per session).
 3. **Teardown with `yield`**: code after `yield` runs after the test, even if it fails:
    ```python
    @pytest.fixture
@@ -261,7 +263,7 @@ Rules:
    ```
 4. Fixtures can use other fixtures (`audit_log` uses `tmp_path`).
 5. `autouse=True` applies a fixture to every test in its scope without naming it — use sparingly.
-6. Useful **built-in fixtures**: `tmp_path` (a unique temporary directory as a `Path`), `monkeypatch` (temporarily set attributes, env vars, dict items; undone automatically), `capsys` (capture stdout/stderr), `caplog` (capture log records), `request` (info about the requesting test).
+6. Useful **built-in fixtures**: `tmp_path` (a unique temporary directory as a `Path`), `monkeypatch` (temporarily set attributes, env vars — environment variables, the named text settings a process receives from the operating system — dict items; undone automatically), `capsys` (capture stdout/stderr — the program's normal output and error-output streams), `caplog` (capture log records), `request` (info about the requesting test).
 
 ### 15.4.3 `tmp_path` — real files, safely
 ```python
@@ -290,7 +292,7 @@ def test_discount(price, percent, expected):
 def test_slugify(raw, slug):
     assert slugify(raw) == slug
 ```
-Each tuple becomes a **separate test** with its own ID, so one failing case doesn't hide the others. Include edge cases: empty input, zero, boundaries (0 and 100), negative numbers, Unicode.
+Each tuple becomes a **separate test** with its own ID, so one failing case doesn't hide the others. Include edge cases (unusual inputs at the extremes, where bugs hide): empty input, zero, boundaries (0 and 100), negative numbers, Unicode (non-English and special characters such as `é`, `中`, emoji).
 
 ### 15.4.5 Marks
 A **mark** is a label on a test that changes how it's selected or run.
@@ -317,7 +319,7 @@ def test_known_bug():
 The xfail documents a genuine float issue: the literal `2.675` is stored in binary as slightly less than 2.675, so `round(2.675, 2)` gives `2.67`. The fix would be `decimal.Decimal`.
 
 ### 15.4.6 `conftest.py`
-`conftest.py` is a special file that pytest loads automatically. Fixtures and hooks defined there are available to every test in that directory and below — **no import needed**. Nested folders can have their own `conftest.py`. Ours defines the `inv` fixture and registers the `slow` marker:
+`conftest.py` is a special file that pytest loads automatically. Fixtures and hooks (functions with special names that pytest calls at certain moments, such as `pytest_configure`) defined there are available to every test in that directory and below — **no import needed**. Nested folders can have their own `conftest.py`. Ours defines the `inv` fixture and registers the `slow` marker:
 
 ```python
 def pytest_configure(config):
@@ -381,12 +383,12 @@ pytest = functions + `assert`. Fixtures (scoped, `yield` teardown, in `conftest.
 ## 15.5 Test doubles and `unittest.mock`
 
 ### What it is
-A **test double** is a stand-in for a real dependency (a network API, a payment gateway, the clock) during a test — like a stunt double in a film. The standard names (from Gerard Meszaros' *xUnit Test Patterns*, popularised by Martin Fowler):
+A **test double** is a stand-in for a real dependency (a network API, a payment gateway — the service that actually charges cards, the clock) during a test — like a stunt double in a film. The standard names (from Gerard Meszaros' *xUnit Test Patterns*, popularised by Martin Fowler):
 
 | Double | What it does | Example |
 |---|---|---|
 | **Dummy** | passed but never used | `None` for an unused logger argument |
-| **Stub** | returns canned answers | `get_rate` always returns 83.5 |
+| **Stub** | returns canned (fixed, prepared in advance) answers | `get_rate` always returns 83.5 |
 | **Spy** | records how it was called, checked afterwards | a list that collects sent emails |
 | **Mock** | pre-programmed with expectations about calls, which the test verifies | "`get_rate` must be called once with `'INR'`" |
 | **Fake** | a working, simplified implementation | an in-memory dict instead of a database |
@@ -394,14 +396,14 @@ A **test double** is a stand-in for a real dependency (a network API, a payment 
 `unittest.mock.Mock` can play stub, spy and mock roles at once.
 
 ### Why it matters
-Real dependencies make tests **slow** (network), **flaky** (service down), **costly** (paid APIs) or **dangerous** (sending real emails, charging cards). They also make some cases hard to reach — how do you make a real service time out on demand?
+Real dependencies make tests **slow** (network), **flaky** (sometimes pass, sometimes fail with no code change — e.g. service down), **costly** (paid APIs) or **dangerous** (sending real emails, charging cards). They also make some cases hard to reach — how do you make a real service time out on demand?
 
 ### How it works — `Mock`
 1. `m = Mock()` — any attribute access returns another `Mock`, and calling it records the call.
 2. `m.get_rate.return_value = 83.5` — **stub** the result.
 3. `m.get_rate.side_effect = ...` — dynamic behaviour: an **exception** (raised when called), an **iterable** (one value per call), or a **function** (called with the same arguments).
 4. Verify: `assert_called_once_with(...)`, `assert_called_with`, `assert_not_called`, `call_count`, `call_args`, `call_args_list`.
-5. `MagicMock` also supports magic methods (`__len__`, `__iter__`, `__enter__`…); `AsyncMock` (3.8+) for `async def` functions.
+5. `MagicMock` also supports magic methods (the double-underscore "dunder" methods Python calls for operators and built-ins: `__len__`, `__iter__`, `__enter__`…); `AsyncMock` (3.8+) for `async def` functions.
 6. **Autospec** — `create_autospec(RealClass, instance=True)` or `patch(..., autospec=True)` builds a mock that only has the real object's attributes and signatures. A plain `Mock` happily accepts misspelled methods, so a test can pass while the real code would crash.
 
 ```python
@@ -478,7 +480,7 @@ test_mocking.py::test_monkeypatch_env PASSED                             [100%]
 ### When not to mock
 - Don't mock what you own and can run cheaply (pure functions, dataclasses, files in `tmp_path`, in-memory SQLite).
 - Don't mock the thing you are testing.
-- Don't assert every internal call — you'll lock in the implementation. Mock at the **boundary** (network, clock, randomness, third-party SDKs), and prefer checking outcomes over interactions.
+- Don't assert every internal call — you'll lock in the implementation. Mock at the **boundary** (where your code meets the outside world: network, clock, randomness, third-party SDKs — software development kits, i.e. vendor client libraries), and prefer checking outcomes over interactions.
 
 ### Common mistakes
 - Patching the wrong path (where defined instead of where used).
@@ -487,7 +489,7 @@ test_mocking.py::test_monkeypatch_env PASSED                             [100%]
 - Tests that only prove the mock returns what you told it to.
 
 ### Real-world examples
-Libraries exist for common boundaries: `responses` / `respx` fake HTTP for requests / httpx, `freezegun` / `time-machine` freeze the clock, `moto` fakes AWS services, `fakeredis` fakes Redis.
+Libraries exist for common boundaries: `responses` / `respx` fake HTTP for requests / httpx, `freezegun` / `time-machine` freeze the clock, `moto` fakes AWS (Amazon Web Services, the cloud platform) services, `fakeredis` fakes Redis (a popular in-memory key-value store often used as a cache).
 
 ### In the interview
 "I prefer dependency injection so I can pass a fake. At external boundaries I use `unittest.mock` with autospec: `return_value` to stub, `side_effect` for errors or sequences, and `assert_called_once_with` only when the interaction itself matters. With `patch` I patch where the name is looked up."
@@ -497,7 +499,7 @@ Libraries exist for common boundaries: `responses` / `respx` fake HTTP for reque
 ### Self-check
 1. `side_effect = [1, 2]` — what do three calls do? → Return 1, then 2, then raise `StopIteration`.
 2. `shop.py` has `from requests import get`. What do you patch? → `"shop.get"`.
-3. What's a fake? → A simplified working implementation, e.g. an in-memory repository.
+3. What's a fake? → A simplified working implementation, e.g. an in-memory repository (here: an object that stores and fetches records, normally backed by a database).
 
 ### TL;DR
 Doubles replace slow/external dependencies: dummy, stub, spy, mock, fake. `Mock` + `return_value`/`side_effect` + `assert_called_*`; `patch` where used; autospec to stay honest; mock only at boundaries.
@@ -527,12 +529,12 @@ inventory.py      48      7     10      2    84%   48, 81-86
 ----------------------------------------------------------
 TOTAL             48      7     10      2    84%
 ```
-Reading it: 48 statements, 7 never ran; 10 branch points, 2 partially taken. `Missing` lists the lines: **48** is `raise ValueError("qty must be positive")` in `Inventory.add` — no test ever passes a non-positive quantity, so that validation is untested. **81-86** is the `if __name__ == "__main__":` demo block (fine to exclude with a `# pragma: no cover` comment or config).
+Reading it: 48 statements, 7 never ran; 10 branch points, 2 partially taken. `Missing` lists the lines: **48** is `raise ValueError("qty must be positive")` in `Inventory.add` — no test ever passes a non-positive quantity, so that validation is untested. **81-86** is the `if __name__ == "__main__":` demo block (fine to exclude with a `# pragma: no cover` comment — a special comment that tools read as an instruction — or config).
 
 ### Trade-offs / how to use the number
 - Coverage shows what is **not** tested. It does **not** show that tested code is **correct** — a test that runs a line without asserting anything still "covers" it.
-- Many teams require a threshold in CI (`--cov-fail-under=85`). 100% is rarely worth the effort except in small critical libraries; aim for high coverage of business logic and error paths.
-- Watch the *missing* list during code review more than the percentage.
+- Many teams require a threshold in CI (`--cov-fail-under=85`). 100% is rarely worth the effort except in small critical libraries; aim for high coverage of business logic (the rules that are the point of the program) and error paths.
+- Watch the *missing* list during code review (teammates reading a change before it is merged) more than the percentage.
 - **Mutation testing** (e.g. `mutmut`) goes further: it changes your code (`<` to `<=`) and checks that some test fails.
 
 ### TL;DR
@@ -543,7 +545,7 @@ Reading it: 48 statements, 7 never ran; 10 branch points, 2 partially taken. `Mi
 ## 15.7 doctest — examples that are tests
 
 ### What it is
-`doctest` finds text in docstrings that looks like an interactive session (`>>> expr` followed by the expected output) and checks that running it produces that output.
+`doctest` finds text in docstrings that looks like an interactive session (typing into the Python prompt, the REPL — read-eval-print loop: `>>> expr` followed by the expected output) and checks that running it produces that output.
 
 ```python
 def slugify(name: str) -> str:
@@ -556,7 +558,7 @@ def slugify(name: str) -> str:
 
 ### How it works
 - `python -m doctest inventory.py -v`, or inside the module `doctest.testmod()`, or with pytest: `pytest --doctest-modules`.
-- Output is compared as **text**, so it must match `repr` exactly.
+- Output is compared as **text**, so it must match `repr` (the developer-facing string form of an object, what the REPL echoes) exactly.
 
 Output of `python inventory.py` and `pytest --doctest-modules inventory.py`:
 ```
@@ -593,7 +595,7 @@ stateDiagram-v2
 3. **Refactor** — improve names and structure; the tests guard you.
 
 ### How it works — a real cycle
-Feature: `Inventory.low_stock(threshold)` → SKUs whose quantity is **at or below** the threshold, sorted.
+Feature: `Inventory.low_stock(threshold)` → SKUs (stock-keeping units — a shop's ID code for each product) whose quantity is **at or below** the threshold, sorted.
 
 **Red.** Tests first (`test_tdd_low_stock.py`):
 ```python
@@ -639,8 +641,8 @@ Whole suite: `31 passed, 1 skipped, 1 xfailed`.
 | Pros | Cons |
 |---|---|
 | Every line has a reason (a test) | Slower start; feels unnatural at first |
-| Forces small, testable design | Hard when exploring an unknown problem/API (spike first, then test) |
-| Instant regression safety | Can over-fit tests to one design if cycles are too big |
+| Forces small, testable design | Hard when exploring an unknown problem/API (spike — a quick throw-away experiment — first, then test) |
+| Instant regression safety | Can over-fit (tie too closely) tests to one design if cycles are too big |
 
 Many teams use TDD for bug fixes at least: **first write a test that reproduces the bug**, see it fail, then fix — the bug can never silently return.
 
@@ -652,7 +654,7 @@ Red (failing test) → Green (simplest fix) → Refactor. At minimum, reproduce 
 ## 15.9 Property-based testing with Hypothesis (brief)
 
 ### What it is
-In an **example-based** test you pick inputs. In a **property-based** test you state a rule that must hold for *all* inputs of some kind, and a library generates hundreds of inputs — including nasty ones (empty strings, huge numbers, Unicode, NaN) — trying to break it. **Hypothesis** is Python's main library for this (the idea comes from Haskell's QuickCheck).
+In an **example-based** test you pick inputs. In a **property-based** test you state a rule that must hold for *all* inputs of some kind, and a library generates hundreds of inputs — including nasty ones (empty strings, huge numbers, Unicode, NaN — "not a number", the special float produced by e.g. `0 * inf`) — trying to break it. **Hypothesis** is Python's main library for this (the idea comes from QuickCheck, a library for the functional language Haskell).
 
 When it finds a failing input it **shrinks** it to the smallest, simplest failing example, and stores it in a local database (`.hypothesis/`) so it's retried first next time.
 
@@ -691,13 +693,13 @@ E       )
 ```
 Out of all the random strings it tried, Hypothesis reduced the failure to the single character `':'`.
 
-Common properties to test: **round-trip** (`load(save(x)) == x`, `decode(encode(x)) == x`), **idempotence** (`f(f(x)) == f(x)`), **invariants** (stock never negative, output sorted, length preserved), **oracle** (fast version equals a slow obviously-correct version).
+Common properties to test: **round-trip** (`load(save(x)) == x`, `decode(encode(x)) == x`), **idempotence** (doing it twice gives the same result as once: `f(f(x)) == f(x)`), **invariants** (facts that must always stay true: stock never negative, output sorted, length preserved), **oracle** (a trusted reference answer: fast version equals a slow obviously-correct version).
 
 ### When not to use it
 When you can't state a general rule, or when inputs are expensive to create. Use it alongside example tests, not instead of them.
 
 ### TL;DR
-State properties, let Hypothesis generate and shrink counter-examples. Great for parsers, serializers and invariants.
+State properties, let Hypothesis generate and shrink counter-examples. Great for parsers (code that reads text into structured data), serializers (code that turns objects into text/bytes) and invariants.
 
 ---
 
@@ -708,7 +710,7 @@ A **traceback** is Python's report of an uncaught exception: the chain of functi
 
 ### How it works — read it bottom-up
 1. **Last line first**: the exception type and message — `ValueError: invalid literal for int() with base 10: 'two'`.
-2. **The frame just above it**: the file, line and function where it happened. Since 3.11, `~~~^^^` markers point at the exact sub-expression (PEP 657).
+2. **The frame just above it** (each entry in the traceback is a *frame* — one function call in progress): the file, line and function where it happened. Since 3.11, `~~~^^^` markers point at the exact sub-expression (PEP 657).
 3. **Walk upward** until you reach *your* code (skip library frames) — often the bug is where your code passed bad data in.
 4. **Chained exceptions**: "The above exception was the direct cause of the following exception" means the lower exception was raised with `raise NewError(...) from original`. "During handling of the above exception, another exception occurred" means a new error happened *inside* an `except` block (implicit chaining).
 
@@ -744,8 +746,8 @@ The final error tells *which input* was bad (line 2); the cause above it tells *
 | `TypeError: ... takes 2 positional arguments but 3 were given` | forgot `self`, or wrong call |
 | `KeyError` / `IndexError` | missing dict key / off-by-one |
 | `UnboundLocalError` | assigning to a name inside a function makes it local (use `nonlocal`/`global` or rename) |
-| `ModuleNotFoundError` | wrong virtual environment, or a local file shadows the module (e.g. your own `random.py`) |
-| `RecursionError` | missing or unreachable base case |
+| `ModuleNotFoundError` | wrong virtual environment (an isolated folder of installed packages for one project; "venv"), or a local file shadows (hides, by having the same name) the module (e.g. your own `random.py`) |
+| `RecursionError` | missing or unreachable base case (the condition where a recursive function stops calling itself) |
 
 ### TL;DR
 Read bottom-up: message, failing line, then up to your code. "Direct cause" = explicit `from`; "during handling" = error inside `except`.
@@ -762,10 +764,10 @@ Read bottom-up: message, failing line, then up to your code. "Direct cause" = ex
 |---|---|
 | Put `breakpoint()` in the code | pause at a specific spot |
 | `python -m pdb script.py` | start the whole script under the debugger |
-| `pdb.pm()` after a crash (in the REPL) or `python -m pdb` (it enters post-mortem on an uncaught exception) | inspect the frame where it died |
+| `pdb.pm()` after a crash (in the REPL) or `python -m pdb` (it enters post-mortem — "after death": inspecting the program's state at the moment it crashed — on an uncaught exception) | inspect the frame where it died |
 | `pytest --pdb` | debugger at the failing assertion |
 | `pytest --trace` | debugger at the start of each test |
-| IDE (VS Code, PyCharm) breakpoints | same ideas, with a GUI |
+| IDE (integrated development environment: VS Code, PyCharm) breakpoints | same ideas, with a GUI (graphical user interface — windows and buttons) |
 
 The environment variable `PYTHONBREAKPOINT` controls what `breakpoint()` does: `PYTHONBREAKPOINT=0` disables all of them (safety net in CI), `PYTHONBREAKPOINT=ipdb.set_trace` switches to another debugger.
 
@@ -821,12 +823,12 @@ Stepping shows the loop body is skipped and `len(orders)` is 0 at the return —
 1. **Reproduce** reliably — ideally as a failing test.
 2. **Read** the traceback and the relevant code; state a hypothesis.
 3. **Observe**: `breakpoint()`, logging, or `p` in pdb to check the hypothesis.
-4. **Narrow down**: halve the input, comment out half the code, or use `git bisect` to find the commit that introduced the bug.
+4. **Narrow down**: halve the input, comment out half the code, or use `git bisect` (a git command that binary-searches your history) to find the commit (one saved snapshot of changes in git) that introduced the bug.
 5. **Fix** the cause, not the symptom; keep the test so it can't regress.
-6. Explaining the code line by line to someone (or a rubber duck) surprisingly often reveals the bug.
+6. Explaining the code line by line to someone (or a rubber duck — "rubber-duck debugging" is the well-known trick of explaining code to an object) surprisingly often reveals the bug.
 
 ### Common mistakes
-- Committing a `breakpoint()` (CI hangs waiting for input — set `PYTHONBREAKPOINT=0` there, and use a linter rule such as Ruff's `T100`).
+- Committing a `breakpoint()` (CI hangs waiting for input — set `PYTHONBREAKPOINT=0` there, and use a linter rule such as Ruff's `T100` — a linter is a tool that scans code for mistakes and style problems without running it).
 - Changing several things at once while debugging.
 
 ### TL;DR
@@ -843,7 +845,7 @@ Stepping shows the loop body is skipped and `len(orders)` is 0 at the return —
 |---|---|---|
 | Levels / filtering | no | DEBUG…CRITICAL, per module |
 | Timestamp, module, line | manual | via formatter |
-| Destination | stdout | console, files, syslog, log services |
+| Destination | stdout | console, files, syslog (the operating system's central log), log services |
 | Safe to leave in code | no | yes (DEBUG off in production) |
 | In tests | captured by pytest (`-s` shows) | `caplog` fixture lets tests assert on logs |
 
@@ -851,7 +853,7 @@ Stepping shows the loop body is skipped and `len(orders)` is 0 at the return —
 log = logging.getLogger(__name__)
 log.debug("pricing order=%s rate=%s", order_id, rate)    # visible only at DEBUG
 ```
-Tips: temporarily raise one module's level (`logging.getLogger("shop.pricing").setLevel(logging.DEBUG)`); f-string `=` specifier for quick prints — `print(f"{total=}")` prints `total=0.0`; `python -X dev` enables extra runtime checks and warnings; `faulthandler` (`python -X faulthandler`) dumps tracebacks on hard crashes or hangs.
+Tips: temporarily raise one module's level (`logging.getLogger("shop.pricing").setLevel(logging.DEBUG)`); f-string `=` specifier for quick prints — `print(f"{total=}")` prints `total=0.0`; `python -X dev` enables extra runtime checks and warnings; `faulthandler` (`python -X faulthandler`) dumps tracebacks on hard crashes (the interpreter itself dying, e.g. a segmentation fault in C code) or hangs.
 
 ### TL;DR
 `print` for a quick look, then delete it; logging for anything that stays. Test logs with `caplog`.
@@ -868,7 +870,7 @@ Run through this list when something "can't possibly be wrong":
 | 2 | Late-binding closures | `[lambda: i for i in range(3)]` all return 2 | `lambda i=i: i` |
 | 3 | Aliasing / shallow copies | `grid = [[0]*3]*3` — one row shared three times | `[[0]*3 for _ in range(3)]`, `copy.deepcopy` |
 | 4 | Modifying a list while iterating | removing items inside `for x in xs` skips items | iterate over a copy or build a new list |
-| 5 | `is` vs `==` | `x is 1000` depends on object identity | `==` for values; `is` only for `None`, sentinels |
+| 5 | `is` vs `==` | `x is 1000` depends on object identity | `==` for values; `is` only for `None`, sentinels (unique marker objects) |
 | 6 | Float equality | `0.1 + 0.2 == 0.3` is False | `math.isclose`, `pytest.approx`, `Decimal` for money |
 | 7 | Integer vs float division | `7 / 2 == 3.5`, `7 // 2 == 3`, `-7 // 2 == -4` | pick the right operator |
 | 8 | Methods returning `None` | `xs = xs.sort()` makes `xs` None | `xs.sort()` or `xs = sorted(xs)` |
@@ -880,8 +882,8 @@ Run through this list when something "can't possibly be wrong":
 | 14 | Wrong environment | `ModuleNotFoundError` though "it's installed" | check `sys.executable`, activate the venv, `python -m pip` |
 | 15 | Module name shadowing | your `random.py` or `test.py` hides the stdlib | rename the file |
 | 16 | Global/shared state between tests | tests pass alone, fail together | fresh fixtures, no module-level mutable state |
-| 17 | Encoding | `UnicodeDecodeError` reading files | `open(p, encoding="utf-8")` |
-| 18 | Unseeded randomness / real clock in tests | flaky tests | seed, inject the clock, freeze time |
+| 17 | Encoding | `UnicodeDecodeError` reading files | `open(p, encoding="utf-8")` (UTF-8 is the standard way to store text as bytes) |
+| 18 | Unseeded randomness / real clock in tests | flaky tests | seed (fix the random starting value), inject the clock, freeze time |
 
 ### TL;DR
 Most Python bugs are a handful of classics: mutable defaults, aliasing, `None` returns, float equality, swallowed exceptions, wrong venv. Check the list before a long debugging session.

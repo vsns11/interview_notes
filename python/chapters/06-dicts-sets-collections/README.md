@@ -1,6 +1,8 @@
 # Chapter 6 — Dictionaries, Sets and the `collections` Toolbox
 
-Lists and tuples find things by **position**. Dictionaries and sets find things by **value** — and they do it in constant time on average, whether they hold ten items or ten million. That single property makes them the workhorses of real Python code: caches, indexes, counters, configuration, JSON, de-duplication, graph algorithms. This chapter explains how they work (hashing), how to use every method, and which specialised container from `collections`, `heapq` and `bisect` to reach for when a plain dict, set or list isn't quite right.
+Lists and tuples find things by **position**. Dictionaries and sets find things by **value** — and they do it in constant time on average, whether they hold ten items or ten million. That single property makes them the workhorses of real Python code: caches (stores of already-computed results, reused to save time — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)), indexes (lookup tables pointing to where data lives), counters, configuration (a program's settings), JSON (the text data format web APIs use), de-duplication (removing repeats), graph algorithms (algorithms over networks of connected points, such as route finding). This chapter explains how they work (hashing — turning a value into an integer that says where to store it), how to use every method, and which specialised container from `collections`, `heapq` and `bisect` to reach for when a plain dict, set or list isn't quite right.
+
+> **Key term — Big-O notation:** this chapter measures costs with Big-O, which describes how the work grows as the number of items *n* grows. **O(1)** ("constant time") means the cost does not depend on size; **O(n)** ("linear") means it grows in proportion to size; **O(log n)** grows very slowly (doubling *n* adds just one step). It describes the trend, not exact timings.
 
 **What you'll learn**
 
@@ -13,9 +15,9 @@ Lists and tuples find things by **position**. Dictionaries and sets find things 
 7. Set operations (union, intersection, difference, symmetric difference) and every set method.
 8. `frozenset`.
 9. `collections`: `Counter`, `defaultdict`, `OrderedDict`, `deque`, `ChainMap`, `namedtuple`.
-10. `heapq` (priority queues) and `bisect` (binary search), and a when-to-use table for everything.
+10. `heapq` (priority queues — the most urgent item always comes out first) and `bisect` (binary search — finding a position by repeatedly halving a sorted list), and a when-to-use table for everything.
 
-All runnable code is in [`code/`](code/). Outputs are real (Python 3.14; code runs on 3.12+). Where a set of **strings** is printed, its order can differ between runs — string hashes are randomised per process (explained in 6.2).
+All runnable code is in [`code/`](code/). Outputs are real (Python 3.14; code runs on 3.12+). Where a set of **strings** is printed, its order can differ between runs — string hashes are randomised per process (a *process* is one running instance of a program; explained in 6.2).
 
 ---
 
@@ -27,12 +29,12 @@ A **dictionary** (`dict`) stores **key–value pairs**. You look up a value by i
 - Written with braces and colons: `{"Alice": 22, "Bob": 25}`.
 - **Mutable:** add, change and delete pairs at any time.
 - **Keys must be hashable** (roughly: immutable — strings, numbers, tuples of hashables, `None`, `frozenset`). Lists, dicts and sets can't be keys. See 6.2.
-- **Insertion-ordered:** iteration returns keys in the order they were first inserted. This is a language guarantee since **Python 3.7** (it was an implementation detail in CPython 3.6). Older tutorials that call dicts "unordered" are out of date — but dicts are still not *indexable* by position (`d[0]` looks up the key `0`).
+- **Insertion-ordered:** iteration returns keys in the order they were first inserted. This is a language guarantee since **Python 3.7** (it was an implementation detail — true of CPython, but not promised by the language — in CPython 3.6). Older tutorials that call dicts "unordered" are out of date — but dicts are still not *indexable* by position (`d[0]` looks up the key `0`).
 
 Analogy: a real dictionary — you jump straight to a word and read its definition; you don't scan page by page.
 
 ### Why it matters
-Whenever you'd otherwise search a list for "the item whose name is X", a dict does it in one step. Python itself runs on dicts: module globals, object attributes (`obj.__dict__`), keyword arguments and class namespaces are all dicts.
+Whenever you'd otherwise search a list for "the item whose name is X", a dict does it in one step. Python itself runs on dicts: module globals (a file's top-level variables), object attributes (`obj.__dict__`), keyword arguments and class namespaces (tables mapping names to objects) are all dicts.
 
 ### How it works — define and access
 
@@ -151,15 +153,15 @@ dict_keys(['Alice', 'Charlie', 'New'])
 `23 in d` is `False` because `in` checks **keys**. To search values, use `in d.values()` — but that's an O(n) scan.
 
 ### Common mistakes
-- **Changing a dict's size while looping over it** → `RuntimeError: dictionary changed size during iteration`. Loop over a snapshot: `for k in list(d): ...`, or build a new dict with a comprehension.
+- **Changing a dict's size while looping over it** → `RuntimeError: dictionary changed size during iteration`. Loop over a snapshot (a frozen copy taken now): `for k in list(d): ...`, or build a new dict with a comprehension.
 - Using `d[k]` for optional keys and crashing on `KeyError`.
 - Expecting `d.copy()` to copy nested lists/dicts.
-- Relying on `d.keys()[0]` — views aren't indexable; use `next(iter(d))`.
+- Relying on `d.keys()[0]` — views (the live windows `keys()`/`values()`/`items()` return, 6.4) aren't indexable; use `next(iter(d))`.
 
 ### Real-world examples
 - JSON objects map straight to dicts (`json.loads`), so every web API response you parse is a dict.
-- Caches: `functools.lru_cache` and hand-written memo tables are dicts from arguments to results.
-- Django/Flask pass template context and request data as dicts (or dict-like objects).
+- Caches: `functools.lru_cache` (a decorator that remembers a function's results) and hand-written memo tables (tables of already-computed answers) are dicts from arguments to results.
+- Django/Flask pass template context (the variables an HTML template can use) and request data as dicts (or dict-like objects).
 
 ### In the interview
 **30-second answer:** "A dict maps hashable keys to values with average O(1) get, set, delete and membership, using a hash table. Since 3.7 it preserves insertion order. `d[k]` raises KeyError, `get` returns a default, `|` merges (3.9+), and `copy()` is shallow."
@@ -184,17 +186,17 @@ Key → value, O(1) average, insertion-ordered (3.7+), hashable keys, `[]` raise
 ### What it is
 A **hash** is an integer computed from a value by `hash(x)`. A **hash table** is an array of slots; the hash decides which slot a key goes into. Dicts and sets are hash tables. An object is **hashable** if it has a hash that never changes during its lifetime and can be compared with `==`.
 
-The contract (from the Python data model): **if `a == b` then `hash(a) == hash(b)`**. The reverse need not hold — different values may share a hash (a **collision**).
+The contract (from the Python data model — the rules defining how objects plug into the language): **if `a == b` then `hash(a) == hash(b)`**. The reverse need not hold — different values may share a hash (a **collision**).
 
 ### Why it matters
 Hashing explains everything about dicts and sets: why lookups are O(1), why keys must be immutable, why `1` and `1.0` are the same key, and why sets have no order.
 
 ### How it works — a lookup, step by step
 1. Compute `h = hash(key)`.
-2. Take some low bits of `h` to choose a slot in the table (table size is a power of two).
+2. Take some low bits (the last few binary digits) of `h` to choose a slot in the table (table size is a power of two).
 3. If the slot is empty → key absent (for lookup) or put it here (for insert).
 4. If the slot holds an entry, compare: same hash **and** (`is` or `==`) → found.
-5. Otherwise it's a collision: CPython uses **open addressing** — it computes the next slot to try with a pseudo-random probe sequence (mixing in more bits of the hash), and repeats from step 3.
+5. Otherwise it's a collision: CPython uses **open addressing** — it computes the next slot to try with a pseudo-random probe sequence (a scrambled but repeatable order of slots) (mixing in more bits of the hash), and repeats from step 3.
 6. The table is kept at most about **2/3 full**. When it gets fuller, CPython allocates a larger table and re-inserts everything (**resize**). Like list growth, this is rare enough that insertion is **amortised O(1)**.
 
 ```mermaid
@@ -209,7 +211,7 @@ flowchart LR
   P --> Q
 ```
 
-Since Python 3.6, CPython's dict is a **compact dict**: a small sparse *index* table (the slots) pointing into a dense *entries* array that stores `(hash, key, value)` in insertion order. That's where insertion order comes from, and it also made dicts 20–25% smaller. Sets use a simpler, non-compact table, so they have no ordering.
+Since Python 3.6, CPython's dict is a **compact dict**: a small sparse (mostly empty) *index* table (the slots) pointing into a dense (tightly packed) *entries* array that stores `(hash, key, value)` in insertion order. That's where insertion order comes from, and it also made dicts 20–25% smaller. Sets use a simpler, non-compact table, so they have no ordering.
 
 Growth you can observe with `sys.getsizeof` (a table of 8 slots holds 5 entries, 16 holds 10, 32 holds 21, 64 holds 42 — the 2/3 rule):
 
@@ -242,7 +244,7 @@ True             hashable    hash=1
 |---|---|
 | `int`, `float`, `complex`, `bool`, `str`, `bytes`, `None`, `frozenset`, `range` | `list`, `dict`, `set`, `bytearray` |
 | `tuple` / `namedtuple` **if every item is hashable** | A tuple containing a list |
-| Instances of your classes (by default hashed by identity) | Classes that define `__eq__` without `__hash__` (Python sets `__hash__ = None`) |
+| Instances of your classes (by default hashed by identity) | Classes that define `__eq__` (the method behind `==`) without `__hash__` (the method behind `hash()`; Python sets `__hash__ = None`) |
 | Frozen dataclasses (`@dataclass(frozen=True)`) | Regular dataclasses with `eq=True` (the default) |
 
 **Equal values are the same key.** `1 == 1.0 == True` and they hash equal, so:
@@ -254,7 +256,7 @@ d[True] = "bool true"
 print(d)          # {1: 'bool true'}  — one key; the first key object is kept, value replaced
 ```
 
-**String hashes are randomised.** For security (to stop attackers crafting many colliding keys — a "hash-flooding" denial of service), `str` and `bytes` hashes are salted with a random per-process seed (default since Python 3.3; controlled by `PYTHONHASHSEED`). That's why the order of a set of strings can change between runs. Small ints hash to themselves (`hash(12345) == 12345`; `hash(-1)` is `-2` because `-1` is reserved as an error signal in C).
+**String hashes are randomised.** For security (to stop attackers crafting many colliding keys — a "hash-flooding" denial of service), `str` and `bytes` hashes are salted with a random per-process seed (default since Python 3.3; controlled by the `PYTHONHASHSEED` environment variable — a setting handed to a program by the operating system). That's why the order of a set of strings can change between runs. Small ints hash to themselves (`hash(12345) == 12345`; `hash(-1)` is `-2` because `-1` is reserved as an error signal in C).
 
 **Mutating a key breaks the table.** If a key's hash depends on mutable state and you change it while it's in a dict, the entry sits in the slot for the *old* hash:
 
@@ -295,7 +297,7 @@ The payoff, measured (`code/08_lookup_benchmark.py`, looking for the last elemen
 
 ![Membership test time: list grows linearly, set and dict stay flat](img/list_vs_set_lookup.png)
 
-*Figure — on a log–log plot the list line rises with slope 1 (linear); set and dict stay flat at ~30 ns. At a million items the set is ~180,000× faster.*
+*Figure — on a log–log plot the list line rises with slope 1 (linear); set and dict stay flat at ~30 ns (nanoseconds, billionths of a second). At a million items the set is ~180,000× faster.*
 
 ### Trade-offs
 - **Memory:** a hash table keeps spare slots (up to 1/3 empty) plus stored hashes — much more memory than a list of the same items.
@@ -328,7 +330,7 @@ hash → slot → compare; ≤ 2/3 full; O(1) average. Hashable = hash never cha
 ## 6.3 Nested dictionaries
 
 ### What it is
-A **nested dictionary** is a dict whose values are themselves dicts (or lists of dicts). It models **hierarchical** data: a family tree, a config file, a JSON API response.
+A **nested dictionary** is a dict whose values are themselves dicts (or lists of dicts). It models **hierarchical** (levels within levels) data: a family tree, a config file, a JSON API response.
 
 ### How it works
 1. **Read** by chaining keys: `family["children"]["Alice"]["age"]`.
@@ -375,7 +377,7 @@ def deep_get(d, *keys, default=None):
 print(deep_get(family, "children", "Bob", "age"), deep_get(family, "x", "y", default=-1))  # 8 -1
 ```
 
-**JSON round trip** — nested dicts are exactly what `json` reads and writes:
+**JSON round trip** (convert to text and back) — nested dicts are exactly what `json` reads and writes:
 
 ```python
 text = json.dumps(family, indent=2)
@@ -387,14 +389,14 @@ print(json.loads('{"1": [1, 2]}'), json.dumps({1: (1, 2)}))       # {'1': [1, 2]
 JSON object keys are always strings and JSON has no tuples — so int keys come back as strings and tuples come back as lists.
 
 ### Trade-offs
-| Nested dicts | Dataclasses / Pydantic models |
+| Nested dicts | Dataclasses / Pydantic models (classes from the Pydantic library that validate data) |
 |---|---|
 | Zero setup, matches JSON exactly | Named, typed fields, validation, IDE autocomplete |
 | Typos in keys fail only at run time | Typos caught by type checker |
-| Good for ad-hoc/dynamic data | Good for stable, well-known schemas |
+| Good for ad-hoc/dynamic data | Good for stable, well-known schemas (agreed shapes of the data) |
 
 ### When not to use it
-For deeply nested, well-defined data used throughout a codebase, convert to dataclasses or Pydantic models at the boundary; pass typed objects inside the program.
+For deeply nested, well-defined data used throughout a codebase, convert to dataclasses or Pydantic models at the boundary (where data enters or leaves your program); pass typed objects inside the program.
 
 ### Common mistakes
 - `KeyError` halfway down a chain — use `get(..., {})` chains, a helper like `deep_get`, or `try/except KeyError`.
@@ -402,7 +404,7 @@ For deeply nested, well-defined data used throughout a codebase, convert to data
 - Building nested structures by hand with many `if key not in d: d[key] = {}` checks — use `setdefault` or `defaultdict` (6.9).
 
 ### Real-world examples
-API responses (GitHub, Stripe) and config formats (JSON, YAML, TOML via `tomllib`) all load as nested dicts; pandas' `json_normalize` flattens them into tables.
+API responses (GitHub, Stripe) and config formats (JSON, YAML, TOML — human-friendly settings-file formats — via `tomllib`) all load as nested dicts; pandas' `json_normalize` flattens them into tables.
 
 ### Self-check
 1. How do you read Bob's gender? → `family["children"]["Bob"]["gender"]`.
@@ -424,7 +426,7 @@ Chain keys to read and write; guard missing levels with `get(..., {})`; nested d
 | `d.setdefault(k, default=None)` | Return `d[k]`; if missing, first insert `k: default` | O(1) |
 | `d.update(other, **kw)` | Merge pairs from a dict / iterable of pairs / keywords, overwriting | O(len(other)) |
 | `d.pop(k[, default])` | Remove `k`, return its value; `KeyError` if absent and no default | O(1) |
-| `d.popitem()` | Remove and return the **last inserted** `(k, v)` (LIFO); `KeyError` if empty | O(1) |
+| `d.popitem()` | Remove and return the **last inserted** `(k, v)` (LIFO — last in, first out); `KeyError` if empty | O(1) |
 | `d.clear()` | Remove everything | O(n) |
 | `d.copy()` | Shallow copy | O(n) |
 | `dict.fromkeys(keys, value=None)` | **Class method**: new dict with every key mapped to the **same** `value` | O(n) |
@@ -589,7 +591,7 @@ Analogy: a bag of distinct marbles. You can ask "is the red one in the bag?" ins
 
 ### Why it matters
 - **De-duplication** in one step: `set(emails)`.
-- **Fast membership** (O(1) average, 6.2): "have I seen this before?" in crawlers, graph searches, validation.
+- **Fast membership** (O(1) average, 6.2): "have I seen this before?" in crawlers (programs that visit web pages by following links), graph searches, validation.
 - **Set algebra** answers questions like "which users are in both groups?" in one operator (6.7).
 
 ### How it works — define, add, update, remove, copy, loop
@@ -724,7 +726,7 @@ Operators are shorter and make you convert inputs explicitly (catching type mist
 ### Real-world examples
 - Permissions: `required <= user_permissions`.
 - Diffing: `new_ids - old_ids` (added), `old_ids - new_ids` (removed) when syncing records.
-- Recommendations: "people who liked X also liked" via intersections; Jaccard similarity = `len(a & b) / len(a | b)`, used in near-duplicate detection.
+- Recommendations: "people who liked X also liked" via intersections; Jaccard similarity (shared items ÷ all distinct items) = `len(a & b) / len(a | b)`, used in near-duplicate detection.
 
 ### In the interview
 **30-second answer:** "`|` union, `&` intersection, `-` difference, `^` symmetric difference, `<=`/`>=` subset/superset, `isdisjoint`. Operators need sets; methods accept any iterable. Intersection costs O(min(len a, len b)) because it iterates the smaller set and probes the larger."
@@ -781,7 +783,7 @@ Output:
 |= : {8, 100}
 ```
 
-Each `_update` method has an augmented-operator twin (`&=`, `-=`, `^=`, `|=`); the operator forms require sets on both sides, the methods accept any iterables.
+Each `_update` method has an augmented-operator (operation plus assignment, like `+=`) twin (`&=`, `-=`, `^=`, `|=`); the operator forms require sets on both sides, the methods accept any iterables.
 
 ### `frozenset` — the immutable set
 
@@ -818,7 +820,7 @@ The lookup works with the members in a different order because sets compare (and
 ### Self-check
 1. Which returns `None`: `intersection` or `intersection_update`? → `intersection_update`.
 2. Can a set contain another set? → Only a `frozenset`.
-3. Key for an undirected edge `{u, v}`? → `frozenset((u, v))`.
+3. Key for an undirected edge (a connection between two points with no direction) `{u, v}`? → `frozenset((u, v))`.
 
 ### TL;DR
 Plain methods return new sets, `_update` methods mutate; `frozenset` = immutable, hashable set for keys and nested sets.
@@ -831,7 +833,7 @@ The standard library's `collections` module supplies specialised containers that
 
 ### `Counter` — counting hashable things
 
-**What it is:** a dict subclass mapping item → count. Missing items count as `0` (no `KeyError`).
+**What it is:** a dict subclass (a specialised version of `dict`) mapping item → count. Missing items count as `0` (no `KeyError`).
 
 ```python
 words = "the cat and the hat and the bat".split()
@@ -859,11 +861,11 @@ Counter({'b': 4, 'a': 3, 'c': 3}) | Counter({'b': 2, 'a': 1}) | Counter({'a': 1,
 - `+` / `-` add/subtract and **drop** results ≤ 0; `&` takes the minimum per key, `|` the maximum.
 - `total()` sums all counts (3.10+).
 
-**Real-world:** word frequencies, log-level tallies, top-k error messages, the "bag of words" step in text classification.
+**Real-world:** word frequencies, log-level tallies, top-k error messages, the "bag of words" (text represented as word counts) step in text classification (sorting documents into categories).
 
 ### `defaultdict` — dict with automatic defaults
 
-**What it is:** a dict subclass that calls a **factory** (`list`, `int`, `set`, any zero-argument callable) to create a value the first time a missing key is **accessed with `[]`**.
+**What it is:** a dict subclass that calls a **factory** (a function that builds new values: `list`, `int`, `set`, any zero-argument callable — anything you can call with `()`) to create a value the first time a missing key is **accessed with `[]`**.
 
 ```python
 groups = defaultdict(list)
@@ -891,13 +893,13 @@ after groups['meat']: {'fruit': ['apple', 'fig'], 'veg': ['kale'], 'meat': []}
 
 Watch out: **just reading** `d[missing]` inserts an empty value — a common source of mysterious extra keys. Use `in` or `.get()` for read-only checks.
 
-**Real-world:** adjacency lists for graphs (`defaultdict(list)`), inverted indexes (`defaultdict(set)` word → document ids), grouping rows by a column.
+**Real-world:** adjacency lists (for each node, the list of its neighbours) for graphs (`defaultdict(list)`), inverted indexes (word → the documents containing it, as in search engines; `defaultdict(set)` word → document ids), grouping rows by a column.
 
 ### `OrderedDict` — a dict with reordering tools
 
 **What it is:** the pre-3.7 way to get an ordered dict. Plain dicts are now ordered too, so `OrderedDict` matters only for its extras:
 - `move_to_end(key, last=True)` — O(1) move to the end (or front with `last=False`).
-- `popitem(last=False)` — pop from the **front** (FIFO); plain `dict.popitem()` only pops the end.
+- `popitem(last=False)` — pop from the **front** (FIFO — first in, first out); plain `dict.popitem()` only pops the end.
 - **Order-sensitive equality**: two `OrderedDict`s are equal only if the order matches too.
 
 ```python
@@ -931,11 +933,11 @@ cache.put("a", 1); cache.put("b", 2); cache.get("a"); cache.put("c", 3)
 print("LRU keeps:", list(cache.data))         # LRU keeps: ['a', 'c']
 ```
 
-Reading `"a"` made it recent, so adding `"c"` evicted `"b"`. For caching function results, prefer the built-in `@functools.lru_cache`.
+Reading `"a"` made it recent, so adding `"c"` evicted (removed to make room for) `"b"`. For caching function results, prefer the built-in `@functools.lru_cache`.
 
 ### `deque` — double-ended queue
 
-**What it is:** a sequence with **O(1)** `append`/`pop` at **both** ends (a list is O(n) at the front). Implemented as a doubly-linked list of fixed-size blocks, so indexing in the middle is O(n).
+**What it is:** a sequence with **O(1)** `append`/`pop` at **both** ends (a list is O(n) at the front). Implemented as a doubly-linked list (a chain where each block links to the next and the previous) of fixed-size blocks, so indexing in the middle is O(n).
 
 ```python
 q = deque([1, 2, 3])
@@ -958,10 +960,10 @@ rotate(1): deque([3, 1, 2])
 maxlen=3: deque([3, 4, 5], maxlen=3)
 ```
 
-- `maxlen` gives a bounded buffer — perfect for "last N lines/events" (like `tail -n`).
-- `append` and `popleft` are thread-safe in CPython, which is why deques back simple producer/consumer queues (`queue.Queue` adds blocking and locking on top).
+- `maxlen` gives a bounded buffer (a holding area with a fixed maximum size) — perfect for "last N lines/events" (like `tail -n`, the Unix command that shows a file's last lines).
+- `append` and `popleft` are thread-safe (safe to call from several threads at once) in CPython, which is why deques back simple producer/consumer queues (one part of a program adds work, another takes it) (`queue.Queue` adds blocking — waiting until an item arrives — and locking on top).
 
-**Real-world:** BFS queues in graph search, sliding-window algorithms, undo history with a cap, rate limiters that keep recent timestamps.
+**Real-world:** BFS (breadth-first search: exploring a graph level by level) queues in graph search, sliding-window algorithms (working over a moving range of the most recent items), undo history with a cap, rate limiters (which cap how many requests are allowed per time period) that keep recent timestamps.
 
 ### `ChainMap` — layered lookups
 
@@ -986,7 +988,7 @@ red admin True
 tmp admin
 ```
 
-**Real-world:** configuration precedence (command-line > environment > defaults), nested scopes in interpreters/template engines (`new_child()` pushes a scope). The standard library's `string.Template.substitute` uses a `ChainMap` internally to combine a mapping with keyword arguments.
+**Real-world:** configuration precedence (which source wins: command-line > environment variables > defaults), nested scopes (regions where names are visible) in interpreters/template engines (`new_child()` pushes a scope). The standard library's `string.Template.substitute` uses a `ChainMap` internally to combine a mapping with keyword arguments.
 
 ### `namedtuple` — tuple with field names
 Covered fully in Chapter 5 (5.13): `Card = namedtuple("Card", "rank suit")` → `Card("A", "spades").rank == "A"`, with `_fields`, `_asdict()`, `_replace()`.
@@ -996,7 +998,7 @@ A Card(rank='10', suit='hearts') ('rank', 'suit')
 ```
 
 ### Common mistakes (collections)
-- Using `Counter.update` expecting replacement semantics.
+- Using `Counter.update` expecting replacement semantics (behaviour).
 - Accidentally creating keys in a `defaultdict` by reading.
 - Using `list.pop(0)` instead of `deque.popleft()` for queues.
 - Using `OrderedDict` just for ordering on Python 3.7+ — a plain dict already does it.
@@ -1025,14 +1027,14 @@ Counter = counts; defaultdict = auto-values; OrderedDict = reordering + FIFO pop
 A **binary min-heap** is a list arranged so that `heap[k] <= heap[2k+1]` and `heap[k] <= heap[2k+2]` for every `k`. The smallest item is always at `heap[0]`. The `heapq` module provides functions that keep a normal list in heap order.
 
 ### Why it matters
-Whenever you repeatedly need "the smallest (or most urgent) item next" — task schedulers, Dijkstra's shortest path, merging sorted streams, top-k — a heap does it in O(log n) per operation instead of re-sorting.
+Whenever you repeatedly need "the smallest (or most urgent) item next" — task schedulers, Dijkstra's shortest path (the classic algorithm for the cheapest route through a weighted network), merging sorted streams, top-k (the k best items) — a heap does it in O(log n) per operation instead of re-sorting.
 
 ### How it works
 
 | Function | Does | Cost |
 |---|---|---|
 | `heapify(list)` | Rearrange a list into a heap in place | O(n) |
-| `heappush(h, x)` | Add `x` (sift up) | O(log n) |
+| `heappush(h, x)` | Add `x` (sift up — move it up until heap order holds) | O(log n) |
 | `heappop(h)` | Remove and return the smallest (sift down) | O(log n) |
 | `h[0]` | Peek at the smallest | O(1) |
 | `heappushpop(h, x)` / `heapreplace(h, x)` | Push then pop / pop then push, efficiently | O(log n) |
@@ -1085,7 +1087,7 @@ Output:
   p3: refactor
 ```
 
-Tuples compare element by element, so priority decides first; the increasing counter breaks ties in insertion order **and** stops Python from ever comparing the payloads (which might not be comparable).
+Tuples compare element by element, so priority decides first; the increasing counter breaks ties in insertion order **and** stops Python from ever comparing the payloads (the actual data carried — here the task names; they might not be comparable).
 
 `heapq.merge([1, 4, 9], [2, 3, 10], [5])` → `[1, 2, 3, 4, 5, 9, 10]` — the core of external sorting (merging sorted files too big for memory).
 
@@ -1099,7 +1101,7 @@ Tuples compare element by element, so priority decides first; the increasing cou
 | Sorted order at all times with lookups | `bisect` on a list, or a sorted-container library |
 
 ### Real-world examples
-`asyncio`'s event loop keeps scheduled callbacks (`call_later`) in a heap; the `sched` module and `queue.PriorityQueue` are built on `heapq`; Dijkstra/A* implementations in Python almost always use it.
+`asyncio`'s event loop (the scheduler that runs asynchronous tasks) keeps scheduled callbacks (functions to be called later; `call_later`) in a heap; the `sched` module and `queue.PriorityQueue` are built on `heapq`; Dijkstra/A* (a faster shortest-path search guided by a distance estimate) implementations in Python almost always use it.
 
 ### Self-check
 1. Where's the smallest item in a heap? → `h[0]`.
@@ -1156,11 +1158,11 @@ first person aged >= 30: ('Bob', 31)
 The grading function is the classic example from the Python docs: `bisect` turns a table of cutoffs into a lookup — a score of exactly 60 lands to the **right** of the 60 cutoff, i.e. "D".
 
 ### Trade-offs
-- Searching is O(log n), but `insort` is O(n) because the list must shift. For many inserts plus lookups on big data, a set/dict (if you don't need order) or a balanced tree/`sortedcontainers.SortedList` (third-party) is better.
+- Searching is O(log n), but `insort` is O(n) because the list must shift. For many inserts plus lookups on big data, a set/dict (if you don't need order) or a balanced tree (a self-adjusting sorted tree with O(log n) inserts)/`sortedcontainers.SortedList` (third-party) is better.
 - The list **must** be sorted by the same key you search with — bisect doesn't check.
 
 ### Real-world examples
-`random.choices` uses `bisect` on cumulative weights to pick weighted samples; time-series code uses it to find the first event after a timestamp; percentile/bucket lookups (tax brackets, grade cutoffs) are one call.
+`random.choices` uses `bisect` on cumulative weights (running totals of the weights) to pick weighted samples; time-series (data points ordered by time) code uses it to find the first event after a timestamp; percentile/bucket lookups (tax brackets, grade cutoffs) are one call.
 
 ### Self-check
 1. `bisect_left([1, 2, 2, 3], 2)`? → `1`. `bisect_right`? → `3`.

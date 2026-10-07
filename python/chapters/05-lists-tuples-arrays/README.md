@@ -1,6 +1,6 @@
 # Chapter 5 — Lists, Tuples and Arrays
 
-Python gives you several ways to keep items **in order**: the all-purpose `list`, the immutable `tuple`, the compact numeric `array.array`, and — from the scientific world — NumPy's `ndarray`. They look alike (all support indexing, slicing, `len`, `in`, and `for`) but behave very differently in mutability, memory, speed and safety. This chapter explains each one, how it works under the hood, and how to choose.
+Python gives you several ways to keep items **in order**: the all-purpose `list`, the immutable (cannot be changed once created) `tuple`, the compact numeric `array.array`, and — from the scientific world — NumPy's `ndarray` (NumPy is the standard third-party library for fast numeric arrays). They look alike (all support indexing, slicing, `len`, `in`, and `for`) but behave very differently in mutability, memory, speed and safety. This chapter explains each one, how it works under the hood, and how to choose.
 
 **What you'll learn**
 
@@ -22,30 +22,30 @@ All runnable code is in [`code/`](code/). Outputs below are real, produced with 
 ## 5.1 The `array` module — typed, compact arrays
 
 ### What it is
-An **array** (from the standard-library `array` module) is a mutable sequence in which **every element has the same C numeric type** — all 32-bit ints, or all 64-bit floats, and so on. The values are stored as raw machine numbers side by side in one block of memory (**contiguous** storage), rather than as separate Python objects.
+An **array** (from the standard-library — shipped with Python — `array` module) is a mutable sequence in which **every element has the same C numeric type** (a fixed-size number format from the C language) — all 32-bit ints, or all 64-bit floats, and so on. The values are stored as raw machine numbers side by side in one block of memory (**contiguous** storage), rather than as separate Python objects.
 
 Analogy: a list is a shelf of labelled boxes, each box holding any object; an `array` is an egg carton — every slot is the same size and holds one kind of thing, so it packs far more densely.
 
 ### Why it matters
-For large volumes of plain numbers — sensor readings, audio samples, pixel values, binary file formats — an `array` uses a fraction of a list's memory and can be written to or read from files and sockets directly as bytes.
+For large volumes of plain numbers — sensor readings, audio samples (individual measurements of a sound wave), pixel values, binary file formats (files of raw bytes rather than text) — an `array` uses a fraction of a list's memory and can be written to or read from files and sockets (network connections) directly as bytes.
 
 ### How it works
 1. `import array` and create one with a **type code** that fixes the element type: `array.array("i", [10, 20, 30])`.
-2. Every value you store is checked and converted to that C type; wrong types raise `TypeError`, out-of-range numbers raise `OverflowError`.
+2. Every value you store is checked and converted to that C type; wrong types raise `TypeError`, out-of-range numbers raise `OverflowError` (the number is too big or small for that type).
 3. Indexing (positive and negative), slicing, `len`, `in` and `for` work exactly as with lists.
 
 **Type codes** (sizes are the minimum the C standard guarantees; `itemsize` tells you the real size on your machine)
 
 | Code | C type | Python type | Min bytes | Typical on 64-bit macOS/Linux |
 |---|---|---|---|---|
-| `'b'` / `'B'` | signed / unsigned char | int | 1 | 1 (range −128…127 / 0…255) |
+| `'b'` / `'B'` | signed (allows negatives) / unsigned (zero and up) char | int | 1 | 1 (range −128…127 / 0…255) |
 | `'h'` / `'H'` | signed / unsigned short | int | 2 | 2 |
 | `'i'` / `'I'` | signed / unsigned int | int | 2 | 4 |
 | `'l'` / `'L'` | signed / unsigned long | int | 4 | 8 (4 on Windows) |
 | `'q'` / `'Q'` | signed / unsigned long long | int | 8 | 8 |
 | `'f'` | float | float | 4 | 4 |
 | `'d'` | double | float | 8 | 8 |
-| `'u'` | wchar_t (Unicode char) | str | 2 | 4 — **deprecated** since 3.3, slated for removal |
+| `'u'` | wchar_t (Unicode char) | str | 2 | 4 — **deprecated** (still works, but discouraged) since 3.3, slated for removal |
 | `'w'` | Py_UCS4 (Unicode char) | str | 4 | 4 — added in 3.13 as the replacement for `'u'` |
 
 ```python
@@ -75,6 +75,8 @@ OverflowError: signed char is greater than maximum
 
 ### The four basic operations: insert, delete, search, update
 
+> **Key term — Big-O notation:** the "Cost" column uses Big-O, a shorthand for how the work grows with the number of elements *n*. **O(1)** = constant: the same cost for 10 or 10 million items. **O(n)** = linear: twice the items, about twice the work. **O(k)** is the same idea for *k*, the size of the extra input. It describes growth, not seconds.
+
 | Operation | Code | Effect | Cost |
 |---|---|---|---|
 | Traverse | `for x in a` | Visit each element | O(n) |
@@ -87,8 +89,8 @@ OverflowError: signed char is greater than maximum
 
 | Method | What it does | Cost |
 |---|---|---|
-| `append(x)` | Add `x` at the end | O(1) amortised |
-| `extend(iterable)` | Append every item of an iterable (same type required) | O(k) |
+| `append(x)` | Add `x` at the end | O(1) amortised (constant on average) |
+| `extend(iterable)` | Append every item of an iterable (anything you can loop over; same type required) | O(k) |
 | `insert(i, x)` | Insert before position `i` | O(n) |
 | `pop([i])` | Remove and return item `i` (default last) | O(1) last, O(n) otherwise |
 | `remove(x)` | Delete the first occurrence of `x` | O(n) |
@@ -100,7 +102,7 @@ OverflowError: signed char is greater than maximum
 | `tobytes()` / `frombytes(b)` | Raw machine bytes out / in | O(n) |
 | `tofile(f)` / `fromfile(f, n)` | Write / read raw values to a binary file | O(n) |
 | `byteswap()` | Swap byte order (endianness) of every item | O(n) |
-| `buffer_info()` | `(address, length)` of the underlying memory | O(1) |
+| `buffer_info()` | `(address, length)` of the underlying memory (address = the numeric location in RAM) | O(1) |
 
 Two things arrays **don't** have: a `.sort()` method and a `.copy()` method. Sort with the built-in `sorted(a)` — which returns a **list** — and convert back with `array.array(code, sorted(a))`. Copy with `a[:]`, `array.array(a.typecode, a)` or `copy.copy(a)`.
 
@@ -150,12 +152,12 @@ list of 1,000,000 ints :   36.0 MB (pointers + int objects)
 array('i')          :    4.1 MB (raw 4-byte ints)
 ```
 
-A list stores an 8-byte pointer per slot **plus** a separate int object (28 bytes each for small ints on 64-bit CPython) — about 9× more memory here.
+A list stores an 8-byte pointer (a memory address referring to an object) per slot **plus** a separate int object (28 bytes each for small ints on 64-bit CPython) — about 9× more memory here.
 
 ### Trade-offs, mistakes, and when not to use it
 - **Not faster for arithmetic.** Each time you read an element, Python must create an `int`/`float` object for it ("boxing"), so looping over an array is often *slower* than over a list (see 5.15). For fast maths, use NumPy.
 - **Choose the type code carefully:** `'b'` overflows at 128; `'l'` is 4 bytes on Windows but 8 on Linux/macOS — use `'q'` when you need 64 bits everywhere.
-- Use arrays for **compact storage and binary I/O**; use lists for general work; use NumPy for numerical computing.
+- Use arrays for **compact storage and binary I/O** (input/output of raw bytes); use lists for general work; use NumPy for numerical computing.
 
 ### Self-check
 1. What does the type code decide? → The C type, hence size and allowed values, of every element.
@@ -163,7 +165,7 @@ A list stores an 8-byte pointer per slot **plus** a separate int object (28 byte
 3. Why does an array of a million ints use ~4 MB while a list uses ~36 MB? → The array stores raw 4-byte values; the list stores pointers to full Python int objects.
 
 ### TL;DR
-`array.array(code, data)` = homogeneous, compact, mutable numbers. Same indexing and most list methods; no `sort`/`copy` methods; `clear()` only from 3.13. Great for memory and binary I/O, not for speed.
+`array.array(code, data)` = homogeneous (all one type), compact, mutable numbers. Same indexing and most list methods; no `sort`/`copy` methods; `clear()` only from 3.13. Great for memory and binary I/O, not for speed.
 
 ---
 
@@ -175,7 +177,7 @@ A **list** is an ordered, **mutable** collection that can hold objects of **any 
 Analogy: a to-do list on a whiteboard — you can read any line, rewrite it, add lines, erase lines, and reorder them.
 
 ### Why it matters
-It's the default container in Python. Function results, rows from a file, items from an API, stacks, queues of work — you'll reach for a list first in most programs.
+It's the default container in Python. Function results, rows from a file, items from an API (a web service your code calls), stacks (last-in-first-out piles), queues (first-in-first-out lines) of work — you'll reach for a list first in most programs.
 
 ### How it works — create, access, update
 
@@ -263,7 +265,7 @@ True True 3 1 6
 3. `full[-8:-3]` on `list(range(10))`? → `[2, 3, 4, 5, 6]`.
 
 ### TL;DR
-Lists are ordered, mutable, heterogeneous. Index, slice, update in place; `+` makes new lists, `extend`/`+=` modify.
+Lists are ordered, mutable, heterogeneous (items may be of mixed types). Index, slice, update in place; `+` makes new lists, `extend`/`+=` modify.
 
 ---
 
@@ -315,7 +317,7 @@ Measured capacity while appending (from `code/06_list_internals.py`, using `sys.
 
 Worked amortised example: appending the 17th item finds the list full at 16, so CPython allocates 24 slots and copies 16 pointers. The next 7 appends are free. Spread over those 8 appends, that's 2 copies each — and as lists grow, the steps get larger in absolute terms, so the average copy cost per append stays bounded by a constant.
 
-Timing the difference between the end and the front (µs per push-then-pop pair):
+Timing the difference between the end and the front (µs — microseconds, millionths of a second — per push-then-pop pair):
 
 ```
         n   append()+pop()   insert(0)+pop(0)   (µs per pair)
@@ -346,16 +348,16 @@ End operations stay flat as *n* grows ×100; front operations grow ×100 — the
 | Min / max / sum | `min(a)` | O(n) |
 | Copy | `a.copy()`, `a[:]` | O(n) |
 | Reverse | `a.reverse()` | O(n) |
-| Sort | `a.sort()`, `sorted(a)` | O(n log n) worst, O(n) if already sorted |
+| Sort | `a.sort()`, `sorted(a)` | O(n log n) (a bit more than linear — the norm for good sorts) worst, O(n) if already sorted |
 | Iterate | `for x in a` | O(n) |
 
 ### Trade-offs
 | Need | Best structure | Why |
 |---|---|---|
 | Append/pop at the end (stack) | `list` | O(1) |
-| Add/remove at both ends (queue) | `collections.deque` (Chapter 6) | O(1) at both ends; list's `pop(0)` is O(n) |
+| Add/remove at both ends (queue) | `collections.deque` (double-ended queue; Chapter 6) | O(1) at both ends; list's `pop(0)` is O(n) |
 | Frequent membership tests | `set` / `dict` | O(1) average instead of O(n) |
-| Keep sorted while inserting | `bisect` on a list (Chapter 6) or a sorted container library | O(log n) search, O(n) insert |
+| Keep sorted while inserting | `bisect` (binary-search helpers) on a list (Chapter 6) or a sorted container library | O(log n) (grows very slowly: doubling n adds one step) search, O(n) insert |
 
 ### Common mistakes
 - Using `list.pop(0)` as a queue — quadratic for large queues. Use `deque.popleft()`.
@@ -365,7 +367,7 @@ End operations stay flat as *n* grows ×100; front operations grow ×100 — the
 **30-second answer:** "A Python list is a dynamic array of pointers. Indexing and append are O(1) (append amortised, thanks to proportional over-allocation of about 12.5%), but inserting or deleting anywhere except the end shifts elements and is O(n), and membership tests are O(n)."
 
 - *Q: Why amortised?* A: Occasional resizes copy everything, but they happen rarely enough that the total copying over n appends is O(n).
-- *Q: Linked list vs Python list?* A: Python has no built-in linked list; `deque` is a doubly-linked list of fixed-size blocks, giving O(1) at both ends but O(n) indexing in the middle.
+- *Q: Linked list (a chain of nodes, each pointing to the next) vs Python list?* A: Python has no built-in linked list; `deque` is a doubly-linked list (each node points both forward and back) of fixed-size blocks, giving O(1) at both ends but O(n) indexing in the middle.
 - *Q: Why is `x in lst` slow?* A: It compares against each element in turn — linear scan.
 
 ### Self-check
@@ -386,7 +388,7 @@ Methods and statements that change a list's contents.
 | Goal | Use | Returns | Error when |
 |---|---|---|---|
 | Add one item at the end | `append(x)` | `None` | — |
-| Add one item at position i | `insert(i, x)` | `None` | — (i beyond ends is clamped) |
+| Add one item at position i | `insert(i, x)` | `None` | — (i beyond ends is clamped — moved to the nearest end) |
 | Add all items of an iterable | `extend(iterable)` / `+=` | `None` | Not iterable |
 | Remove first item equal to x | `remove(x)` | `None` | `ValueError` if absent |
 | Remove by position and get it | `pop(i=-1)` | The item | `IndexError` on empty/out of range |
@@ -457,7 +459,7 @@ ValueError: list.remove(x): x not in list
 | `clear()` | Remove all items | O(n) (drops each reference) |
 | `index(x[, start[, end]])` | First index of `x` | O(n) |
 | `count(x)` | Number of items equal to `x` | O(n) |
-| `sort(*, key=None, reverse=False)` | Sort in place (stable) | O(n log n) |
+| `sort(*, key=None, reverse=False)` | Sort in place (stable — equal items keep their order, §5.7) | O(n log n) |
 | `reverse()` | Reverse in place | O(n) |
 | `copy()` | Shallow copy | O(n) |
 
@@ -551,7 +553,7 @@ A **list comprehension** builds a new list from an iterable in one expression:
 - **if condition** — optional filter; items that fail it are skipped.
 
 ### The problem it solves
-The traditional pattern — create an empty list, loop, `append` — takes three or four lines to say one thing, and the repeated `.append` attribute lookup and method call cost time. A comprehension says it in one readable line and runs as specialised bytecode.
+The traditional pattern — create an empty list, loop, `append` — takes three or four lines to say one thing, and the repeated `.append` attribute lookup (finding the method on the object each time) and method call cost time. A comprehension says it in one readable line and runs as specialised bytecode (the low-level instructions CPython's interpreter executes).
 
 ### How it works
 1. Python creates an empty list.
@@ -598,24 +600,24 @@ Note the two different `if` positions:
 The speed gain is real but modest (1.2× here). Choose comprehensions for **clarity**; the speed is a bonus.
 
 ### Trade-offs
-| | Comprehension | `for` loop + `append` | Generator expression `( … )` | `map`/`filter` |
+| | Comprehension | `for` loop + `append` | Generator expression `( … )` (yields items lazily, one at a time) | `map`/`filter` (apply a function / keep matching items) |
 |---|---|---|---|---|
 | Readability for simple transforms | Best | OK | Best | OK with named functions |
 | Memory | Whole list | Whole list | One item at a time | Lazy iterator |
 | Complex logic, try/except, prints | Poor | Best | Poor | Poor |
 
 ### When not to use it
-- When the body needs several statements, error handling or side effects — write a loop.
+- When the body needs several statements, error handling or side effects (actions beyond producing a value, such as printing or writing files) — write a loop.
 - When you only iterate once (e.g. feeding `sum`, `any`, `max`, `"".join`) — use a **generator expression** with round brackets to avoid building a list.
 - More than two `for` clauses, or nested comprehensions deeper than one level, usually hurt readability (*Effective Python* recommends no more than two control subexpressions).
 - For side effects only (`[print(x) for x in xs]`) — that builds a useless list of `None`s.
 
 ### Common mistakes
 - Reversing the order of nested `for`s: `[x for x in row for row in matrix]` fails (`row` not defined yet).
-- Expecting the loop variable to leak: in Python 3 comprehension variables are local to the comprehension.
+- Expecting the loop variable to leak: in Python 3 comprehension variables are local to the comprehension (visible only inside it).
 
 ### Real-world examples
-Data-cleaning code in pandas/ETL scripts (`[c.strip().lower() for c in columns]`), building SQL parameter lists, and flattening API pages (`[item for page in pages for item in page["results"]]`).
+Data-cleaning code in pandas/ETL (extract–transform–load data jobs) scripts (`[c.strip().lower() for c in columns]`), building SQL parameter lists, and flattening API pages (results a web service returns in chunks; `[item for page in pages for item in page["results"]]`).
 
 ### In the interview
 **30-second answer:** "`[expr for x in it if cond]` builds a list in one expression; it's clearer and a bit faster than loop-and-append. Use a generator expression when you only need to iterate once, and a normal loop when the logic gets complicated."
@@ -625,7 +627,7 @@ Data-cleaning code in pandas/ETL scripts (`[c.strip().lower() for c in columns]`
 
 ### Self-check
 1. `[c.upper() for c in "abc" if c != "b"]`? → `['A', 'C']`.
-2. How do you avoid materialising a list in `sum(...)`? → Use a generator expression: `sum(x*x for x in xs)`.
+2. How do you avoid materialising (actually building in memory) a list in `sum(...)`? → Use a generator expression: `sum(x*x for x in xs)`.
 3. Flatten `[[1],[2,3]]`? → `[x for sub in lst for x in sub]` → `[1, 2, 3]`.
 
 ### TL;DR
@@ -642,12 +644,12 @@ Data-cleaning code in pandas/ETL scripts (`[c.strip().lower() for c in columns]`
 Both accept `key=` (a function that computes the value to sort by) and `reverse=True`.
 
 ### Why it matters
-Sorting underlies reports, rankings, deduplication, binary search and "top-k" queries. Knowing `key` functions and **stability** lets you express almost any ordering in one line.
+Sorting underlies reports, rankings, deduplication (removing repeats), binary search (finding an item by repeatedly halving a sorted list) and "top-k" (the k biggest or smallest) queries. Knowing `key` functions and **stability** lets you express almost any ordering in one line.
 
 ### How it works
 1. If `key` is given, Python calls it **once per element** and sorts by those results (decorate–sort–undecorate done for you).
 2. Elements (or keys) are compared with `<`. Mixed types that can't be compared raise `TypeError`.
-3. The algorithm is **Timsort** (since Python 2.3; 3.11 swapped in the "powersort" merge policy). It finds already-ordered runs and merges them: **O(n log n)** worst case, **O(n)** on already-sorted data.
+3. The algorithm is **Timsort** (since Python 2.3; 3.11 swapped in the "powersort" merge policy). It finds already-ordered runs (stretches already in order) and merges them: **O(n log n)** worst case, **O(n)** on already-sorted data.
 4. It is **stable**: items with equal keys keep their original relative order. That lets you sort by several keys in multiple passes — secondary key first, primary key last.
 
 ```python
@@ -713,17 +715,17 @@ A **tuple key** compares field by field; negating a number flips its direction. 
 - `lst = lst.sort()` → `lst` becomes `None`.
 - Sorting mixed types (`[3, "a"]`) → `TypeError: '<' not supported between instances of 'str' and 'int'`.
 - Sorting numeric strings as strings (`"10" < "9"`) — use `key=int`.
-- Writing a `lambda` when `operator.itemgetter`/`attrgetter` or `str.casefold` already exists (clearer, slightly faster).
+- Writing a `lambda` (a one-line anonymous function) when `operator.itemgetter`/`attrgetter` (ready-made "get item/attribute" key functions) or `str.casefold` already exists (clearer, slightly faster).
 
 ### Real-world examples
-Timsort, designed by Tim Peters for CPython, was adopted for object sorting in Java (`Arrays.sort` on objects, Java 7), on Android, and in V8 (Chrome/Node.js) since 2018. Leaderboards, "sort by price then rating" filters on shopping sites, SQL's `ORDER BY a, b DESC` and pandas' `df.sort_values(["a", "b"], ascending=[True, False])` all map to key-based stable sorts.
+Timsort, designed by Tim Peters for CPython, was adopted for object sorting in Java (`Arrays.sort` on objects, Java 7), on Android, and in V8 (the JavaScript engine in Chrome and Node.js) since 2018. Leaderboards, "sort by price then rating" filters on shopping sites, SQL's `ORDER BY a, b DESC` and pandas' `df.sort_values(["a", "b"], ascending=[True, False])` all map to key-based stable sorts.
 
 ### In the interview
 **30-second answer:** "`sort` sorts a list in place and returns None; `sorted` returns a new list from any iterable. Both take `key` and `reverse`. Python uses Timsort — stable, O(n log n), O(n) on nearly sorted data — and stability lets you do multi-key sorts with a tuple key or successive passes."
 
 - *Q: Why is stability useful?* A: Equal elements keep prior order, enabling multi-pass sorts (e.g. by name, then by department).
 - *Q: How many times is `key` called?* A: Once per element.
-- *Q: Top 3 of a million items?* A: `heapq.nlargest(3, items)` — O(n log k) instead of sorting everything (Chapter 6).
+- *Q: Top 3 of a million items?* A: `heapq.nlargest(3, items)` (using a *heap*, a structure that keeps the smallest item on top) — O(n log k) instead of sorting everything (Chapter 6).
 
 ### Self-check
 1. What does `sorted("cab")` return? → `['a', 'b', 'c']` (a list).
@@ -740,7 +742,7 @@ Timsort, designed by Tim Peters for CPython, was adopted for object sorting in J
 ### What it is
 - **Aliasing**: two names referring to the **same** object. `b = a` never copies.
 - **Shallow copy**: a new outer container whose slots point to the **same** inner objects. Made by `a.copy()`, `list(a)`, `a[:]`, `copy.copy(a)`.
-- **Deep copy**: a new outer container **and** recursive copies of everything inside. Made by `copy.deepcopy(a)`.
+- **Deep copy**: a new outer container **and** recursive copies (copies of copies, all the way down) of everything inside. Made by `copy.deepcopy(a)`.
 
 Analogy: aliasing is giving a house a second address; a shallow copy is building a new house but sharing the same furniture; a deep copy duplicates the house and every piece of furniture.
 
@@ -788,7 +790,7 @@ True False
 
 The shallow copy did **not** get `[5]` (its outer list is separate) but **did** see `99` (the inner list is shared).
 
-Passing a list to a function also passes a reference — the function can mutate your list:
+Passing a list to a function also passes a reference (a pointer to the same object) — the function can mutate your list:
 ```
 [1, 2, 3, 4, 'x']        # after add_item(a) appended 'x'
 ```
@@ -831,10 +833,10 @@ print(good_append(1), good_append(2))  # [1] [2]
 | Cost | O(1) | O(n) | O(total size of everything) |
 | Independent outer list | No | Yes | Yes |
 | Independent nested objects | No | No | Yes |
-| Handles cycles | — | — | Yes (keeps a memo) |
+| Handles cycles (objects that contain each other) | — | — | Yes (keeps a memo — a record of what's already copied) |
 
 ### When not to use it
-Don't `deepcopy` by reflex — it's slow and copies things you may want shared (caches, connections). If data is flat or contains only immutable items, a shallow copy is a full copy in practice. Consider immutable structures (tuples, frozen dataclasses) so copying isn't needed.
+Don't `deepcopy` by reflex — it's slow and copies things you may want shared (caches — stored results reused later; connections — open links to databases or servers). If data is flat or contains only immutable items, a shallow copy is a full copy in practice. Consider immutable structures (tuples, frozen dataclasses — dataclass objects whose fields can't be changed, Chapter 10) so copying isn't needed.
 
 ### Common mistakes
 - `grid = [[None] * cols] * rows` — use a comprehension.
@@ -867,8 +869,8 @@ Analogy: a list is a shopping list you keep editing; a tuple is a printed receip
 ### Why it matters
 - **Integrity:** data that shouldn't change (coordinates, RGB colours, database rows, function return bundles) can't be changed by accident.
 - **Hashable** (if all its items are hashable) → can be a dict key or set element: `{(59.9, 10.7): "Oslo"}`.
-- **Lighter** than lists: fixed size, no spare capacity. A 3-item tuple is 72 bytes vs 88 for a list on this build. CPython can also build tuples of constants at compile time.
-- **Thread safety by construction:** an object nobody can mutate can be shared between threads without locks (the objects inside may still be mutable, see below).
+- **Lighter** than lists: fixed size, no spare capacity. A 3-item tuple is 72 bytes vs 88 for a list on this build. CPython can also build tuples of constants at compile time (when source is turned into bytecode, before the program runs).
+- **Thread safety by construction:** an object nobody can mutate can be shared between threads (independent lines of execution in one program) without locks (mechanisms that let only one thread touch data at a time) (the objects inside may still be mutable, see below).
 
 ### How it works — define, access, "update", loop, operators, slice
 
@@ -987,7 +989,7 @@ Lima: -12.0, -77.0
 tar.gz
 ```
 
-Wrapping risky unpacking in `try/except ValueError` (as above) lets a program report bad input (say, a malformed CSV row) instead of crashing.
+Wrapping risky unpacking in `try/except ValueError` (as above) lets a program report bad input (say, a malformed CSV — comma-separated values — row) instead of crashing.
 
 The swap `x, y = y, x` works because the right side builds the tuple `(2, 1)` **before** any assignment happens.
 
@@ -995,7 +997,7 @@ The swap `x, y = y, x` works because the right side builds the tuple `(2, 1)` **
 
 | Syntax | Meaning | Example |
 |---|---|---|
-| `f(*seq)` | Spread items as positional arguments | `print(*[1, 2, 3])` → `1 2 3` |
+| `f(*seq)` | Spread items as positional arguments (arguments matched by position) | `print(*[1, 2, 3])` → `1 2 3` |
 | `[*a, *b]` | Build a list from several iterables | `[*(1, 2), *[3]]` → `[1, 2, 3]` |
 | `(*a, x)` | Build a tuple | `(*t, 99)` |
 | `def f(*args)` | Collect extra positional arguments into a tuple | Chapter on functions |
@@ -1008,7 +1010,7 @@ The swap `x, y = y, x` works because the right side builds the tuple `(2, 1)` **
 ### In the interview
 **30-second answer:** "Unpacking binds items of any iterable to names; the count must match or you get ValueError. `first, *rest = seq` gathers the leftovers into a list. It powers multiple return values, swaps without a temp, and clean loops like `for k, v in d.items()`."
 
-- *Q: Is `a, b = b, a` atomic?* A: It's evaluated as build tuple, then assign — no temp variable needed, but it isn't a thread-atomic operation.
+- *Q: Is `a, b = b, a` atomic?* A: It's evaluated as build tuple, then assign — no temp variable needed, but it isn't a thread-atomic operation (one indivisible step that other threads cannot interrupt).
 - *Q: What does `*_` do?* A: Discards any number of items: `first, *_ = row`.
 
 ### Self-check
@@ -1097,10 +1099,10 @@ Output:
 ## 5.13 `namedtuple` and `typing.NamedTuple` — tuples with field names
 
 ### What it is
-`collections.namedtuple` creates a **tuple subclass** whose positions also have names: `p.x` instead of `p[0]`. `typing.NamedTuple` is the same thing written as a class with type hints and defaults.
+`collections.namedtuple` creates a **tuple subclass** (a specialised type built on `tuple`) whose positions also have names: `p.x` instead of `p[0]`. `typing.NamedTuple` is the same thing written as a class with type hints (optional type annotations) and defaults.
 
 ### The problem it solves
-`emp[2]` says nothing; `emp.salary` says everything. Named tuples keep all tuple benefits (immutable, hashable, unpackable, as small as a tuple — no per-instance `__dict__`) while making code self-documenting.
+`emp[2]` says nothing; `emp.salary` says everything. Named tuples keep all tuple benefits (immutable, hashable, unpackable, as small as a tuple — no per-instance `__dict__`, the dictionary ordinary objects use to store their attributes) while making code self-documenting.
 
 ### How it works
 
@@ -1127,7 +1129,7 @@ Employee(name='Ann', dept='HR', salary=0) 0
 Useful extras: `_asdict()` (to a dict, e.g. for JSON), `_replace(**changes)` (a modified **copy**), `_fields` (field names), `_make(iterable)` (build from a row).
 
 ### Trade-offs
-| | tuple | namedtuple / NamedTuple | `@dataclass` | dict |
+| | tuple | namedtuple / NamedTuple | `@dataclass` (auto-generated class, Chapter 10) | dict |
 |---|---|---|---|---|
 | Access by name | No | Yes | Yes | Yes (`d["k"]`) |
 | Immutable | Yes | Yes | Optional (`frozen=True`) | No |
@@ -1140,7 +1142,7 @@ Useful extras: `_asdict()` (to a dict, e.g. for JSON), `_replace(**changes)` (a 
 When records need mutation, validation or methods, prefer `@dataclass`. When equality with plain tuples would be a bug, prefer a dataclass too.
 
 ### Real-world examples
-The standard library returns named tuples from many functions: `urllib.parse.urlparse()` → `ParseResult(scheme=..., netloc=...)` (a namedtuple subclass). `sys.version_info` (`sys.version_info.major`), `time.struct_time` and `os.stat_result` are *struct sequences* — the C-level cousin with the same "tuple plus named fields" behaviour. Database drivers use them for rows too (e.g. psycopg 3's `namedtuple_row` row factory).
+The standard library returns named tuples from many functions: `urllib.parse.urlparse()` → `ParseResult(scheme=..., netloc=...)` (a namedtuple subclass). `sys.version_info` (`sys.version_info.major`), `time.struct_time` and `os.stat_result` are *struct sequences* — the C-level cousin with the same "tuple plus named fields" behaviour. Database drivers use them for rows too (e.g. psycopg 3's — a PostgreSQL database driver — `namedtuple_row` row factory).
 
 ### In the interview
 **30-second answer:** "A namedtuple is a tuple subclass with named fields — immutable, lightweight, unpackable, with `_asdict` and `_replace`. I use it (or `typing.NamedTuple` for type hints) for simple immutable records and switch to dataclasses when I need mutability, validation or methods."
@@ -1177,7 +1179,7 @@ numpy              8.0MB       0.6ms
 | | `list` | `tuple` | `array.array` | `numpy.ndarray` |
 |---|---|---|---|---|
 | Mutable | Yes | No | Yes | Yes (fixed size) |
-| Element types | Any, mixed | Any, mixed | One C numeric type | One dtype (numeric, bool, fixed strings, objects) |
+| Element types | Any, mixed | Any, mixed | One C numeric type | One dtype (element data type: numeric, bool, fixed strings, objects) |
 | Memory for numbers | High | High | Low | Low |
 | Hashable | No | Yes (if items are) | No | No |
 | Fast element-wise maths | No | No | No | Yes (vectorised) |
@@ -1188,8 +1190,8 @@ numpy              8.0MB       0.6ms
 ### When to use which
 - **list** — default for general collections that change.
 - **tuple** — fixed records, dict keys, return values, constants.
-- **array.array** — lots of numbers kept compactly with no dependency; binary file/network formats.
-- **NumPy** — any numerical computing: statistics, images, ML features, linear algebra. It's the foundation under pandas, scikit-learn, SciPy and matplotlib.
+- **array.array** — lots of numbers kept compactly with no dependency (no extra package to install); binary file/network formats.
+- **NumPy** — any numerical computing: statistics, images, ML features (the numeric inputs to a machine-learning model), linear algebra (vector and matrix maths). It's the foundation under pandas (tables), scikit-learn (machine learning), SciPy (scientific routines) and matplotlib (charts).
 
 ### Common mistakes
 - Looping over a NumPy array in Python (`for x in arr: ...`) — you lose the speed. Use vectorised expressions (`arr * 2`, `arr[arr > 0]`).

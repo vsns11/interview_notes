@@ -1,8 +1,8 @@
 # Chapter 19 — Python for Coding Interviews
 
-Coding interviews (the "LeetCode-style" rounds at most tech companies) test two things at once: whether you know the classic **data-structure and algorithm (DSA) patterns**, and whether you can express them cleanly in a language. Python is the most popular interview language because it is short: a heap, a hash map, a queue and a binary search are each one import away. But that shortness hides costs — `list.pop(0)` looks innocent and is O(n), `[[0]*n]*m` looks like a grid and is a bug.
+Coding interviews (the "LeetCode-style" rounds at most tech companies — LeetCode is the best-known website of practice problems, and the online "judges" that run your code against hidden tests) test two things at once: whether you know the classic **data-structure and algorithm (DSA) patterns**, and whether you can express them cleanly in a language. Python is the most popular interview language because it is short: a heap (a structure that always gives you the smallest item fast, §19.5), a hash map (key → value lookup table, i.e. a `dict`, §19.3), a queue (first in, first out, §19.4) and a binary search (finding an item in sorted data by repeatedly halving the range, §19.6) are each one import away. But that shortness hides costs — `list.pop(0)` looks innocent and is O(n), `[[0]*n]*m` looks like a grid and is a bug.
 
-This chapter is the Python toolkit for DSA. For each pattern you get the idea, the Python tools that implement it, a tiny runnable example with `assert` tests, its complexity, and the mistakes people make. It assumes Chapters 5–7 (lists, dicts, functions) and 11 (iterators). All scripts are in [`code/`](code/); they were run with Python 3.14 (everything is 3.12-compatible) and the output shown is real.
+This chapter is the Python toolkit for DSA. For each pattern you get the idea, the Python tools that implement it, a tiny runnable example with `assert` tests, its complexity (how its running time and memory grow with input size), and the mistakes people make. It assumes Chapters 5–7 (lists, dicts, functions) and 11 (iterators). All scripts are in [`code/`](code/); they were run with Python 3.14 (everything is 3.12-compatible) and the output shown is real.
 
 **What you'll learn**
 
@@ -60,7 +60,7 @@ flowchart TD
 Interviewers always ask "what's the complexity?", and Python hides loops inside innocent-looking calls: `x in my_list` scans, `my_list.insert(0, x)` shifts every element, `s = s + ch` copies the string.
 
 ### How it works — the cheat table
-CPython's `list` is a dynamic array of pointers; `dict` and `set` are hash tables; `collections.deque` is a doubly-linked list of fixed-size blocks; `heapq` works on a plain list arranged as a binary heap. The costs follow from those designs (average case; hash tables can degrade to O(n) with pathological collisions):
+CPython's `list` is a dynamic array (a block of memory that is reallocated bigger when it fills up) of pointers (memory addresses of the actual objects); `dict` and `set` are hash tables (§19.3); `collections.deque` is a doubly-linked list (each block points to both the previous and the next) of fixed-size blocks; `heapq` works on a plain list arranged as a binary heap (§19.5). The costs follow from those designs (average case; hash tables can degrade to O(n) with pathological collisions — many keys deliberately or unluckily landing in the same slot):
 
 | Structure | Operation | Cost | Note |
 |---|---|---|---|
@@ -69,11 +69,11 @@ CPython's `list` is a dynamic array of pointers; `dict` and `set` are hash table
 | | `a.insert(i, x)`, `a.pop(i)`, `del a[i]` | O(n) | shifts the tail; `pop(0)` is the trap |
 | | `x in a`, `a.index(x)`, `a.count(x)`, `min/max/sum` | O(n) | linear scan |
 | | `a[i:j]`, `a.copy()`, `a + b` | O(k) | slicing **copies** k elements |
-| | `a.sort()`, `sorted(a)` | O(n log n) | Timsort, stable; O(n) if already sorted |
+| | `a.sort()`, `sorted(a)` | O(n log n) | Timsort (Python's built-in sort), stable (equal items keep their order); O(n) if already sorted |
 | | `a.reverse()`, `a[::-1]` | O(n) | |
 | `deque` | `append`, `appendleft`, `pop`, `popleft` | O(1) | the right queue type |
 | | `dq[i]` in the middle | O(n) | O(1) at either end |
-| `dict` | `d[k]`, `d[k] = v`, `del d[k]`, `k in d`, `d.get` | O(1) avg | keys must be hashable |
+| `dict` | `d[k]`, `d[k] = v`, `del d[k]`, `k in d`, `d.get` | O(1) avg | keys must be hashable (have a fixed hash — immutable types) |
 | | iterate over keys/values/items | O(n) | insertion-ordered (3.7+) |
 | `set` | `add`, `remove`, `discard`, `x in s` | O(1) avg | |
 | | `s \| t`, `s - t` | O(len s + len t) / O(len s) | |
@@ -126,7 +126,7 @@ Output (your machine's numbers will differ; the shape will not):
 - Building a string with `+=` in a loop (CPython sometimes optimises it in place, but you cannot rely on it) — collect pieces and `"".join` once.
 
 ### In the interview
-**30-second answer:** "Lists are dynamic arrays — O(1) index and append, O(n) insert/delete at the front and membership. Dicts and sets are hash tables with O(1) average lookup. For a queue I use `deque`, for a priority queue `heapq`, and sorting is O(n log n) Timsort."
+**30-second answer:** "Lists are dynamic arrays — O(1) index and append, O(n) insert/delete at the front and membership. Dicts and sets are hash tables with O(1) average lookup. For a queue I use `deque`, for a priority queue (always hands out the most urgent item next) `heapq`, and sorting is O(n log n) Timsort."
 
 - *Why is `append` amortised O(1)?* → The array over-allocates; when full it grows by a proportion of its size and copies, so the total copying over n appends is O(n).
 - *Worst case for a dict lookup?* → O(n) if many keys collide; in practice with good hashes it's O(1).
@@ -136,10 +136,10 @@ Output (your machine's numbers will differ; the shape will not):
 
 ## 19.2 Arrays and strings: two pointers, sliding window, prefix sums
 
-These three patterns turn many "check every pair/subarray" O(n²) problems into O(n).
+These three patterns turn many "check every pair/subarray" (a subarray is a contiguous — unbroken — run of elements; a substring is the same for strings) O(n²) problems into O(n).
 
 ### What it is
-- **Two pointers** — two indices move through the data, usually from both ends toward each other (sorted pair sum, palindrome) or both forward at different speeds (a *slow* "write" pointer and a *fast* "read" pointer for in-place filtering).
+- **Two pointers** — two indices move through the data, usually from both ends toward each other (sorted pair sum, palindrome — text that reads the same backwards) or both forward at different speeds (a *slow* "write" pointer and a *fast* "read" pointer for in-place filtering — changing the existing list rather than building a new one).
 - **Sliding window** — indices `left` and `right` bound a contiguous window, like a caterpillar: `right` grows it one step at a time, `left` shrinks it when a rule is broken. Each index only moves forward, so the total work is O(n).
 - **Prefix sums** — precompute `prefix[k] = sum of the first k elements`. Then the sum of any range `nums[i:j]` is `prefix[j] − prefix[i]` in O(1).
 
@@ -207,7 +207,7 @@ assert RangeSum([3, -1, 4, 1, 5]).query(1, 4) == 4
 assert count_subarrays_sum_k([1, 1, 1], 2) == 2
 ```
 
-The script also has `is_palindrome` (two pointers from both ends, skipping non-alphanumerics) and `remove_duplicates_sorted` (slow/fast pointers, in place). Output:
+("Half-open `[i, j)`" in `RangeSum` means i is included and j is not, like Python slices.) The script also has `is_palindrome` (two pointers from both ends, skipping non-alphanumerics — anything that isn't a letter or digit) and `remove_duplicates_sorted` (slow/fast pointers, in place). Output:
 
 ```
 prefix: [0, 3, 2, 6, 7, 12]
@@ -234,11 +234,11 @@ all asserts passed
 |---|---|---|---|
 | Two pointers (pair sum) | sorted input | O(n) (+ O(n log n) to sort) | O(1) |
 | Hash map (pair sum, 19.3) | nothing | O(n) | O(n) |
-| Sliding window | a condition that stays monotonic as the window grows/shrinks (e.g. positive numbers) | O(n) | O(1)–O(alphabet) |
+| Sliding window | a condition that stays monotonic (only ever moves in one direction) as the window grows/shrinks (e.g. positive numbers) | O(n) | O(1)–O(alphabet) |
 | Prefix sums | static array | O(n) build, O(1) query | O(n) |
 
 ### When not to use it
-A shrinking window relies on "adding makes it bigger, removing makes it smaller". With **negative numbers** that breaks (shrinking may *increase* the sum) — use prefix sums + hash map instead, as in `count_subarrays_sum_k`. If the array changes between queries, prefix sums must be rebuilt; use a Fenwick/segment tree.
+A shrinking window relies on "adding makes it bigger, removing makes it smaller". With **negative numbers** that breaks (shrinking may *increase* the sum) — use prefix sums + hash map instead, as in `count_subarrays_sum_k`. If the array changes between queries, prefix sums must be rebuilt; use a Fenwick/segment tree (tree structures that support both updates and range sums in O(log n)).
 
 ### Common mistakes
 - Off-by-one in window length (it is `right − left + 1`); forgetting `seen[0] = 1` (misses subarrays starting at index 0).
@@ -260,7 +260,7 @@ A shrinking window relies on "adding makes it bigger, removing makes it smaller"
 A **hash table** stores items in buckets chosen by a **hash** of the key, giving O(1) average insert and lookup. Python's four flavours: `dict` (key → value), `set` (keys only), `collections.Counter` (a dict subclass that counts; missing keys read as 0) and `collections.defaultdict(factory)` (creates `list()`, `int()`, `set()`… the first time a missing key is accessed). Only **hashable** objects can be keys — `int`, `str`, `tuple` of hashables, `frozenset`; convert a list to a `tuple` first.
 
 ### Why it matters
-A large share of easy/medium problems are "trade O(n) memory for O(1) lookup": two-sum, anagrams, duplicates, frequency counting, "have I seen this before?".
+A large share of easy/medium problems are "trade O(n) memory for O(1) lookup": two-sum, anagrams (words made of the same letters, like "listen"/"silent"), duplicates, frequency counting, "have I seen this before?".
 
 ### How it works
 ```python
@@ -335,7 +335,7 @@ Hashing costs O(n) extra memory and loses order-based tricks. If the input is so
 - Mutating a dict while iterating over it (`RuntimeError: dictionary changed size during iteration`) — iterate over `list(d)`.
 
 ### In the interview
-**30-second answer:** "I use a dict when I need to remember something about values I've already seen — index, count, group — which turns an O(n²) pair search into O(n). Keys must be hashable, so I use tuples for composite keys. `Counter` and `defaultdict` remove boilerplate."
+**30-second answer:** "I use a dict when I need to remember something about values I've already seen — index, count, group — which turns an O(n²) pair search into O(n). Keys must be hashable, so I use tuples for composite keys. `Counter` and `defaultdict` remove boilerplate (repetitive set-up code)."
 
 - *How would you make a dict key from a list of counts?* → `tuple(counts)`.
 - *`Counter.most_common()` with no argument?* → All items sorted by count, O(n log n); with k it uses a heap, O(n log k).
@@ -393,7 +393,7 @@ assert next_greater([2, 1, 2, 4, 3]) == [4, 2, 4, -1, -1]
 assert sliding_window_max([1, 3, -1, -3, 5, 3, 6, 7], 3) == [3, 3, 5, 5, 6, 7]
 ```
 
-The script also has `daily_temperatures` (same monotonic idea, storing distances), a `MinStack` (each entry stores `(value, min_so_far)` so `get_min` is O(1)), and `eval_rpn` for Reverse Polish Notation. Note the division there: `int(a / b)` truncates toward zero as the problem requires, while `a // b` floors (−7 // 2 = −4). Deque tour output:
+The script also has `daily_temperatures` (same monotonic idea, storing distances), a `MinStack` (each entry stores `(value, min_so_far)` so `get_min` is O(1)), and `eval_rpn` for Reverse Polish Notation (writing operators after their operands, `3 4 +`, evaluated with a stack). Note the division there: `int(a / b)` truncates toward zero as the problem requires, while `a // b` floors (−7 // 2 = −4). Deque tour output:
 
 ```
 deque: [0, 1, 2, 3, 4]
@@ -407,7 +407,7 @@ all asserts passed
 `deque(maxlen=k)` silently drops from the opposite end when full — a ready-made "last k items" buffer.
 
 ### Common mistakes
-- `stack.pop()` or `stack[-1]` on an empty list raises `IndexError` — check `if stack` first (the `not stack or ...` short-circuit above).
+- `stack.pop()` or `stack[-1]` on an empty list raises `IndexError` — check `if stack` first (the `not stack or ...` short-circuit above — `or` stops as soon as the left side is true, so `stack.pop()` never runs on an empty stack).
 - Storing values instead of indices in a monotonic stack when you later need distances or window positions.
 
 ### In the interview
@@ -423,10 +423,10 @@ all asserts passed
 ## 19.5 Heaps with `heapq`
 
 ### What it is
-A **binary heap** is a complete binary tree stored in an array where every parent is ≤ its children (a **min-heap**), so the smallest item is at index 0. `heapq` provides functions that treat a plain `list` as a min-heap — there is no heap class. A heap is the standard **priority queue** (always serve the most urgent item next).
+A **binary heap** is a complete binary tree (every level full except possibly the last, which fills from the left) stored in an array where every parent is ≤ its children (a **min-heap**), so the smallest item is at index 0. `heapq` provides functions that treat a plain `list` as a min-heap — there is no heap class. A heap is the standard **priority queue** (always serve the most urgent item next).
 
 ### How it works
-- Children of index i live at 2i+1 and 2i+2. `heappush` appends and "sifts up"; `heappop` moves the last item to the root and "sifts down" — both O(log n).
+- Children of index i live at 2i+1 and 2i+2. `heappush` appends and "sifts up" (swaps the item with its parent while it is smaller); `heappop` moves the last item to the root and "sifts down" (swaps it with its smaller child while it is bigger) — both O(log n).
 - **Max-heap trick:** `heapq` only does min-heaps, so push `-x` and negate on the way out. (Python 3.14 adds public `heapq.heappush_max`/`heappop_max`/`heapify_max`, but most interview platforms run older versions, so the negation trick is the portable answer.)
 - **Tuples as entries:** `(priority, item)` compares by priority first. If priorities tie, Python compares the next field — add a unique counter `(priority, count, item)` when items themselves aren't comparable.
 - **Top-k pattern:** to find the k largest of n items, keep a **min-heap of size k**; whenever it exceeds k, pop the smallest. The root is then the k-th largest. O(n log k) time, O(k) space.
@@ -483,7 +483,7 @@ max capital (k=2): 4
 all asserts passed
 ```
 
-Notice `heapified` is **not** sorted — only `h[0]` is guaranteed smallest. Popping repeatedly gives sorted order (that's heapsort).
+Notice `heapified` is **not** sorted — only `h[0]` is guaranteed smallest. Popping repeatedly gives sorted order (that's heapsort, the sorting algorithm built on a heap).
 
 ### The two-heaps pattern
 Use **two heaps facing each other** when you must repeatedly split data into a "smaller" group and a "larger" group, and you need the boundary between them fast.
@@ -497,7 +497,7 @@ Use **two heaps facing each other** when you must repeatedly split data into a "
 | 1 | {1, 5} | {15} | 5 |
 | 3 | {1, 3} | {5, 15} | (3 + 5) / 2 = 4 |
 
-- **Maximise capital** (`max_capital` in the script): you may do at most k projects; each needs `cost` capital to start and returns `profit`. One heap holds **locked** projects by cost (min-heap); the other holds **affordable** ones by profit (max-heap). Each round, move every project you can now afford from the first heap to the second, then take the most profitable. It is a greedy choice (19.14) that heaps make O(n log n).
+- **Maximise capital** (`max_capital` in the script): you may do at most k projects; each needs `cost` capital to start and returns `profit`. One heap holds **locked** projects by cost (min-heap); the other holds **affordable** ones by profit (max-heap). Each round, move every project you can now afford from the first heap to the second, then take the most profitable. It is a greedy choice (always taking the best-looking option now, 19.14) that heaps make O(n log n).
 - **Sliding-window median** is the hard follow-up: same two heaps, but values also leave the window. Heaps cannot delete from the middle cheaply, so you use **lazy deletion** — remember "remove x later" in a `Counter` and discard x when it reaches a top.
 
 ### Trade-offs
@@ -505,7 +505,7 @@ Use **two heaps facing each other** when you must repeatedly split data into a "
 |---|---|---|
 | k largest once, small k | `heapq.nlargest(k, xs)` | O(n log k) |
 | k close to n | `sorted(xs)[-k:]` | O(n log n) |
-| k-th element, average fast | quickselect | O(n) average, O(n²) worst |
+| k-th element, average fast | quickselect (partition-based selection, 19.17) | O(n) average, O(n²) worst |
 | repeated "give me the min" with inserts | heap | O(log n) each |
 | delete arbitrary item | heap + "lazy deletion" (mark, skip when popped) | amortised |
 
@@ -527,7 +527,7 @@ Use **two heaps facing each other** when you must repeatedly split data into a "
 
 ### What it is
 - `sorted(iterable, key=..., reverse=...)` returns a new list; `list.sort(...)` sorts in place and returns `None`. Both use **Timsort** — O(n log n) worst case, O(n) on already-sorted input, and **stable** (equal keys keep their original order).
-- A **key function** maps each item to the value to compare (`key=len`, `key=str.lower`). Tuples compare element by element, so a tuple key gives multi-level sorting; negate a numeric field for "descending on this field only". `functools.cmp_to_key` adapts a pairwise comparator for the rare problems where order depends on the *pair* (e.g. "largest number").
+- A **key function** maps each item to the value to compare (`key=len`, `key=str.lower`). Tuples compare element by element, so a tuple key gives multi-level sorting; negate a numeric field for "descending on this field only". `functools.cmp_to_key` adapts a pairwise comparator (a function `cmp(a, b)` returning negative, zero or positive) for the rare problems where order depends on the *pair* (e.g. "largest number").
 - **Binary search** halves a sorted range each step: O(log n). `bisect_left(a, x)` = first index with `a[i] >= x`; `bisect_right(a, x)` = first index with `a[i] > x`; `insort` inserts keeping order. Since 3.10 they accept `key=`.
 
 ### How it works
@@ -593,7 +593,7 @@ all asserts passed
 The script also contains `largest_number` (uses `cmp_to_key`: put `a` before `b` if `a+b > b+a` as strings) and `search_rotated` (binary search in a rotated sorted array: one half is always sorted, check whether the target lies in it).
 
 ### Weighted random selection
-**Problem:** given weights `w = [1, 3, 2]`, return index i with probability `w[i] / sum(w)` (1/6, 3/6, 2/6). Used for load balancing across servers of different sizes and for sampling.
+**Problem:** given weights `w = [1, 3, 2]`, return index i with probability `w[i] / sum(w)` (1/6, 3/6, 2/6). Used for load balancing (spreading requests across several servers — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) across servers of different sizes and for sampling.
 
 **Idea:** lay the weights end to end on a number line using **prefix sums**: `[1, 4, 6]` means index 0 owns [0, 1), index 1 owns [1, 4), index 2 owns [4, 6). Draw a random integer r in [0, 6) and find which slot it falls in — the first prefix value **greater than** r, which is exactly `bisect_right`. Building is O(n), each pick O(log n).
 
@@ -634,12 +634,12 @@ Pick one template and use it every time; most binary-search bugs come from mixin
 ## 19.7 Linked lists and trees in Python
 
 ### What it is
-Python has no built-in linked list or tree for interviews; you define tiny node classes. A **singly linked list** node has `val` and `next`; a **binary tree** node has `val`, `left`, `right`. A **binary search tree (BST)** additionally keeps every left-subtree value < node < every right-subtree value. `@dataclass` (Chapter 10) writes the `__init__` for you; `from __future__ import annotations` lets a class mention itself in type hints.
+Python has no built-in linked list or tree for interviews; you define tiny node classes. A **singly linked list** node has `val` and `next`; a **binary tree** node has `val`, `left`, `right`. A **binary search tree (BST)** additionally keeps every left-subtree (the node's left child plus everything below it) value < node < every right-subtree value. `@dataclass` (Chapter 10) writes the `__init__` for you; `from __future__ import annotations` lets a class mention itself in type hints.
 
 ### How it works — linked lists
 - **Dummy head:** start with a fake node so you never special-case "the list is empty" when building or merging.
 - **Reversal:** walk with `prev`; point each node back at `prev`. Python's tuple assignment evaluates the whole right side first, so `head.next, prev, head = prev, head, head.next` is a correct one-liner.
-- **Fast/slow pointers (Floyd):** `slow` moves 1, `fast` moves 2. When `fast` reaches the end, `slow` is at the middle; if there is a cycle, they eventually meet. Compare nodes with `is` (identity).
+- **Fast/slow pointers (Floyd, after the computer scientist Robert Floyd):** `slow` moves 1, `fast` moves 2. When `fast` reaches the end, `slow` is at the middle; if there is a cycle, they eventually meet. Compare nodes with `is` (identity).
 
 ```python
 @dataclass
@@ -677,7 +677,7 @@ def merge_two(a, b):
 - **DFS traversals:** pre-order (node, left, right), in-order (left, node, right — gives sorted order for a BST), post-order (left, right, node). Recursive versions are 3 lines; iterative versions use an explicit stack.
 - **BFS / level order:** a `deque`; process `len(q)` nodes per outer loop to separate levels.
 - **Validate a BST:** pass down the allowed `(lo, hi)` range — checking only parent vs child is a classic bug.
-- **Lowest common ancestor:** recurse; if both sides return something, the current node is the LCA.
+- **Lowest common ancestor (LCA — the deepest node that has both target nodes below it):** recurse; if both sides return something, the current node is the LCA.
 
 ```python
 @dataclass
@@ -767,7 +767,7 @@ def deserialize(data):
 Both are O(n) time and space; for a tree with n nodes the string has 2n + 1 tokens (n values + n + 1 `#`). The script checks the round trip `deserialize(serialize(t)) == t`. The recursive `build` has the usual depth limit — for very deep trees use the level-order format that `build_tree` reads instead.
 
 ### Complexity
-All traversals are O(n) time. Space is O(h) for DFS (h = tree height: log n if balanced, n if a degenerate "linked-list" tree) and O(w) for BFS (w = widest level, up to n/2).
+All traversals are O(n) time. Space is O(h) for DFS (h = tree height: log n if balanced — both sides of every node roughly equal in size — n if a degenerate "linked-list" tree) and O(w) for BFS (w = widest level, up to n/2).
 
 ### Common mistakes
 - A mutable default like `def f(node, path=[])` in tree recursion (19.19).
@@ -801,9 +801,9 @@ A **graph** is a set of **nodes** (vertices) joined by **edges**, which may be *
 3. For each edge `u → v` with weight w: if `d + w < dist[v]`, update and push `(d + w, v)`.
 4. Complexity O((V + E) log V).
 
-**Topological sort, Kahn's algorithm:** count in-degrees; start with all nodes of in-degree 0; pop one, append it to the order, decrement its neighbours' in-degrees and enqueue any that reach 0. If the order has fewer than V nodes, there is a cycle.
+**Topological sort, Kahn's algorithm:** count in-degrees (the number of edges pointing *into* each node); start with all nodes of in-degree 0; pop one, append it to the order, decrement its neighbours' in-degrees and enqueue any that reach 0. If the order has fewer than V nodes, there is a cycle.
 
-**Topological sort, DFS:** three colours — white (unvisited), grey (on the current path), black (finished). Meeting a grey node means a back edge = cycle. Append each node when it finishes (post-order) and reverse at the end.
+**Topological sort, DFS:** three colours — white (unvisited), grey (on the current path), black (finished). Meeting a grey node means a back edge (an edge pointing back to a node still on the current path) = cycle. Append each node when it finishes (post-order) and reverse at the end.
 
 ```python
 def bfs_shortest_path(g, start, goal):
@@ -871,9 +871,9 @@ all asserts passed
 Both topological orders are valid — a DAG usually has several.
 
 ### The recursion limit
-CPython refuses to nest calls deeper than `sys.getrecursionlimit()` (1000 by default) and raises `RecursionError`. Python has **no tail-call optimisation**, so even tail-recursive code counts. Options:
+CPython refuses to nest calls deeper than `sys.getrecursionlimit()` (1000 by default) and raises `RecursionError`. Python has **no tail-call optimisation** (some languages reuse the current stack frame when a function's very last action is calling itself; Python doesn't), so even tail-recursive code counts. Options:
 1. Prefer the **iterative** version (explicit stack/deque) for graphs/trees that may be deep — safest.
-2. `sys.setrecursionlimit(10**6)` — accepted on many judges, but very deep recursion can still crash the interpreter by exhausting the real C stack in some situations, so treat it as a workaround, not a fix.
+2. `sys.setrecursionlimit(10**6)` — accepted on many judges, but very deep recursion can still crash the interpreter by exhausting the real C stack (the memory the interpreter itself uses for nested calls) in some situations, so treat it as a workaround, not a fix.
 
 ### Grid template
 ```python
@@ -890,13 +890,13 @@ Python's chained comparison `0 <= nr < rows` keeps bounds checks readable.
 | Shortest path, unweighted | BFS | O(V + E) |
 | Shortest path, weights 0/1 | 0-1 BFS (deque, `appendleft` for 0-edges) | O(V + E) |
 | Shortest path, non-negative weights | Dijkstra | O((V + E) log V) |
-| Negative weights | Bellman–Ford | O(V·E) |
-| All pairs, small V | Floyd–Warshall | O(V³) |
+| Negative weights | Bellman–Ford (relaxes every edge V−1 times) | O(V·E) |
+| All pairs, small V | Floyd–Warshall (DP over intermediate nodes) | O(V³) |
 | Order with dependencies | Topological sort | O(V + E) |
-| Connected components, dynamic unions | Union-Find (19.9) | ~O(α(n)) per op |
+| Connected components (groups of nodes reachable from each other), dynamic unions | Union-Find (19.9) | ~O(α(n)) per op (effectively constant, see 19.9) |
 
 ### Common mistakes
-- Marking visited on pop in BFS (duplicates in the queue, sometimes TLE); a list instead of a set for `visited`.
+- Marking visited on pop in BFS (duplicates in the queue, sometimes TLE — "time limit exceeded", the judge's verdict when code is too slow); a list instead of a set for `visited`.
 - Using Dijkstra with negative edges (wrong answers).
 - Forgetting isolated nodes that never appear in an edge list (loop over `range(n)`, not just over `g`).
 
@@ -961,7 +961,7 @@ Output: `parent: [0, 0, 0, 3, 3, 5] components: 3` then `all asserts passed`. Th
 Union-Find cannot **split** groups and cannot give you paths — use BFS/DFS for those. For a one-off "count components" on a static graph, BFS/DFS is equally good.
 
 ### In the interview
-**30-second answer:** "Union-Find tracks groups under merging. `find` with path compression and `union` by size give near-constant amortised time. I use it for connected components, cycle detection in undirected graphs, Kruskal's MST, and 'accounts merge'-type problems."
+**30-second answer:** "Union-Find tracks groups under merging. `find` with path compression and `union` by size give near-constant amortised time. I use it for connected components, cycle detection in undirected graphs, Kruskal's MST (minimum spanning tree — the cheapest set of edges that connects every node), and 'accounts merge'-type problems."
 
 - *Why union by size?* → Keeps trees shallow (height O(log n) even without compression).
 - *Kruskal's complexity?* → O(E log E) for the sort; the DSU part is near-linear.
@@ -972,7 +972,7 @@ Union-Find cannot **split** groups and cannot give you paths — use BFS/DFS for
 
 ### What it is
 **Dynamic programming (DP)** combines answers to smaller **overlapping subproblems**, computing each once. It applies when the problem has **optimal substructure** (the best answer is built from best answers to subproblems).
-- **Top-down (memoisation):** write the natural recursion, then cache it with `functools.cache` (3.9+) or `lru_cache(maxsize=None)`.
+- **Top-down (memoisation — caching each result by its arguments):** write the natural recursion, then cache it with `functools.cache` (3.9+) or `lru_cache(maxsize=None)`.
 - **Bottom-up (tabulation):** fill an array from the smallest subproblems upward with loops; no recursion, and you can often keep only the last row.
 
 ### How it works — the recipe
@@ -1048,17 +1048,17 @@ The script also includes `house_robber` (O(1)-space DP with two variables), `uni
 ### Common DP families
 | Family | State | Examples |
 |---|---|---|
-| 1-D sequence | `dp[i]` | climbing stairs, house robber, decode ways, LIS |
+| 1-D sequence | `dp[i]` | climbing stairs, house robber, decode ways, LIS (longest increasing subsequence) |
 | Unbounded choice | `dp[amount]` | coin change, combination sum count |
-| 0/1 knapsack | `dp[capacity]` iterated backwards | subset sum, partition equal subset |
-| Two strings | `dp[i][j]` | LCS, edit distance, regex/wildcard matching |
+| 0/1 knapsack (pick items, each at most once, to maximise value within a weight limit) | `dp[capacity]` iterated backwards | subset sum, partition equal subset |
+| Two strings | `dp[i][j]` | LCS (longest common subsequence), edit distance (fewest single-letter edits to turn one string into another), regex/wildcard matching |
 | Grid | `dp[r][c]` | unique paths, minimum path sum |
 | Intervals | `dp[i][j]` over lengths | burst balloons, palindrome partitioning |
 
 ### Top-down vs bottom-up
 | | `@cache` recursion | Tabulation |
 |---|---|---|
-| Writing it | closest to the recurrence; quick | must choose iteration order |
+| Writing it | closest to the recurrence (the formula expressing a state in terms of smaller states); quick | must choose iteration order |
 | Computes | only reachable states | all states |
 | Limits | recursion limit; function-call overhead | none |
 | Memory tricks | hard | easy to keep one row (O(n) instead of O(n·m)) |
@@ -1166,7 +1166,7 @@ Exponential by nature: subsets O(2ⁿ·n), permutations O(n!·n). Pruning shrink
 ## 19.12 Bit tricks and math
 
 ### What it is
-Python `int`s are arbitrary-precision and behave like infinite **two's-complement** numbers for bitwise operators: `&` (and), `|` (or), `^` (xor), `~` (not: `~x == -x - 1`), `<<`, `>>` (arithmetic shift, floors for negatives). The `math` module and built-in `pow` cover interview number theory.
+Python `int`s are arbitrary-precision and behave like infinite **two's-complement** numbers (the standard binary encoding of negative integers, where −x is "flip all bits, then add 1") for bitwise operators: `&` (and), `|` (or), `^` (xor — exclusive or: 1 when exactly one bit is 1), `~` (not: `~x == -x - 1`), `<<`, `>>` (arithmetic shift — shifting while keeping the sign; floors for negatives). The `math` module and built-in `pow` cover interview number theory (properties of whole numbers: divisibility, primes, remainders).
 
 ### Bit cheat table (x = 180 = 0b10110100, from the real output)
 | Trick | Expression | Result |
@@ -1182,14 +1182,14 @@ Python `int`s are arbitrary-precision and behave like infinite **two's-complemen
 | bits needed | `x.bit_length()` | 8 |
 | format | `f"{x:08b}"`, `bin(x)`, `int("1011", 2)` | |
 
-XOR identities power "single number": `a ^ a = 0`, `a ^ 0 = a`, order doesn't matter. A bitmask `mask` from `0` to `2ⁿ − 1` enumerates all subsets (bit i set ⇒ item i chosen) — the basis of bitmask DP.
+XOR identities power "single number": `a ^ a = 0`, `a ^ 0 = a`, order doesn't matter. A bitmask (an integer whose bits are used as a row of on/off flags) `mask` from `0` to `2ⁿ − 1` enumerates all subsets (bit i set ⇒ item i chosen) — the basis of bitmask DP.
 
 ### Math toolkit
 | Need | Python |
 |---|---|
 | gcd / lcm | `math.gcd(a, b)`, `math.lcm(a, b)` (3.9+, both accept many args) |
 | modular power | `pow(b, e, m)` — fast square-and-multiply, O(log e) |
-| modular inverse (m prime or gcd = 1) | `pow(a, -1, m)` (3.8+) |
+| modular inverse (the x with a·x ≡ 1 mod m; m prime or gcd = 1) | `pow(a, -1, m)` (3.8+) |
 | integer square root | `math.isqrt(n)` — exact, no float error |
 | combinations | `math.comb(n, k)`, `math.perm(n, k)`, `math.factorial(n)` |
 | floor/ceil division | `a // b`, `-(-a // b)` or `math.ceil(a / b)` (float — careful with huge ints) |
@@ -1211,7 +1211,7 @@ primes <= 30: [2, 3, 5, 7, 11, 13, 17, 19, 23, 29]
 divmod(-7, 2) = (-4, 1) | math.fmod(-7, 2) = -1.0
 ```
 
-The script also writes `fast_pow` by hand (square-and-multiply: square the base each step and multiply it into the result when the current exponent bit is 1) and a Sieve of Eratosthenes (cross out multiples starting at i², O(n log log n)).
+The script also writes `fast_pow` by hand (square-and-multiply: square the base each step and multiply it into the result when the current exponent bit is 1) and a Sieve of Eratosthenes (the classic way to list all primes up to n: cross out multiples starting at i², O(n log log n)).
 
 ### Common mistakes
 - Expecting 32-bit overflow: problems that say "return the 32-bit result" need masking, e.g. `x & 0xFFFFFFFF` and converting back if the top bit is set.
@@ -1367,7 +1367,7 @@ all asserts passed
 A **greedy algorithm** builds the answer one step at a time and at each step takes the choice that looks best **right now**, never going back. It is correct only when you can argue that the local best choice never blocks the global best — typically with an **exchange argument**: "take any optimal answer; swapping its first choice for the greedy choice keeps it optimal."
 
 ### The problem it solves
-Many optimisation problems look like they need DP (19.10) over every combination. When a greedy rule is provably safe, the answer drops to a single pass, O(n) or O(n log n) after sorting, with O(1) extra space.
+Many optimisation problems (find the best — max or min — answer) look like they need DP (19.10) over every combination. When a greedy rule is provably safe, the answer drops to a single pass, O(n) or O(n log n) after sorting, with O(1) extra space.
 
 ### How it works
 There is no single template; look for "keep only the best thing seen so far" or "sort, then take whatever still fits". Four classics:
@@ -1675,7 +1675,7 @@ all asserts passed
 |---|---|---|---|---|
 | `sorted` (Timsort) | O(n log n) / O(n log n) | O(n) | yes | always, in real code |
 | quicksort | O(n log n) / O(n²) | O(log n) stack | no | asked to implement in place |
-| merge sort | O(n log n) / O(n log n) | O(n) array, O(log n) list | yes | linked lists; external sorting of huge files |
+| merge sort | O(n log n) / O(n log n) | O(n) array, O(log n) list | yes | linked lists; external sorting (sorting data too big for memory, in chunks on disk) of huge files |
 | quickselect | O(n) / O(n²) | O(1) | — | one k-th element, input may be reordered |
 | heap top-k | O(n log k) | O(k) | — | streaming data, or k ≪ n |
 | Dutch flag | O(n) | O(1) | no | exactly three key values |
@@ -1689,7 +1689,7 @@ all asserts passed
 ### In the interview
 **30-second answer:** "Partition puts a pivot in its final place with smaller items left and larger right. Quicksort recurses on both sides — O(n log n) average; quickselect only follows the side containing index n−k — O(n) average; random pivots avoid the worst case. Three distinct values: Dutch flag, one pass with low/mid/high. Linked lists: merge sort, splitting with fast/slow pointers."
 
-- *Guaranteed O(n) selection?* → Median of medians, O(n) worst case but slower in practice; mention it, don't code it.
+- *Guaranteed O(n) selection?* → Median of medians (a pivot-choosing scheme that guarantees a reasonably central pivot), O(n) worst case but slower in practice; mention it, don't code it.
 - *Quickselect vs heap for top-k?* → Quickselect is O(n) average but needs all data in memory and reorders it; a size-k heap works on a stream in O(k) memory.
 
 ---
@@ -1852,7 +1852,7 @@ flowchart LR
 
 ### Python-specific tips
 - Using `Counter`, `heapq`, `bisect`, `itertools` is expected — but know each call's complexity and be ready to hand-write it ("could you do this without `Counter`?").
-- Type hints in the signature (`def solve(nums: list[int]) -> int:`) read well; don't golf — a clear four-line loop beats a one-liner you can't explain.
+- Type hints in the signature (`def solve(nums: list[int]) -> int:`) read well; don't golf ("code golf" = squeezing code into as few characters as possible) — a clear four-line loop beats a one-liner you can't explain.
 - Know which Python version the platform runs; newer helpers (`itertools.pairwise`/`math.lcm` need 3.9–3.10, `itertools.batched` 3.12, `heapq.heappush_max` 3.14) may not exist there.
 
 ---

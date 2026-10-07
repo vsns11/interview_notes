@@ -1,10 +1,10 @@
 # Chapter 13 — Type Hints and Static Typing
 
-> **What you will learn.** Why a dynamic language added optional types, and how to write them: annotation syntax, built-in generics such as `list[int]`, `Optional` / `Union` / `X | None`, `Any`, generics with `TypeVar` and the new 3.12 bracket syntax, `Callable` and `ParamSpec`, structural typing with `Protocol`, and the special forms `TypedDict`, `Literal`, `Final` and `NewType`. Then how types meet `dataclasses`, how to name types with aliases and the 3.12 `type` statement, how to run **mypy** and **pyright** and read their errors, what types do (and do not do) at runtime, and how **pydantic** turns hints into runtime validation.
+> **What you will learn.** Why a dynamic language added optional types, and how to write them: annotation syntax, built-in generics such as `list[int]`, `Optional` / `Union` / `X | None`, `Any`, generics with `TypeVar` and the new 3.12 bracket syntax, `Callable` and `ParamSpec`, structural typing with `Protocol`, and the special forms `TypedDict`, `Literal`, `Final` and `NewType`. Then how types meet `dataclasses`, how to name types with aliases and the 3.12 `type` statement, how to run **mypy** and **pyright** and read their errors, what types do (and do not do) at runtime (while the program is actually executing, as opposed to when the source is being read or checked), and how **pydantic** turns hints into runtime validation.
 >
 > **Prerequisites.** Functions ([Chapter 7](../07-functions/README.md)), classes and dataclasses ([Chapter 10](../10-oop-in-python/README.md)), decorators ([Chapter 12](../12-decorators-context-managers-metaprogramming/README.md)).
 >
-> **Code.** Every script is in `chapters/13-type-hints/code/` and runs on Python 3.12+. Script `04_run_mypy.py` needs `pip install mypy`:
+> **Code.** Every script is in `chapters/13-type-hints/code/` and runs on Python 3.12+. Script `04_run_mypy.py` needs `pip install mypy` (`pip` is Python's package installer; it downloads third-party libraries from PyPI, the Python Package Index):
 >
 > ```bash
 > python chapters/13-type-hints/code/02_generics_protocols.py
@@ -32,22 +32,22 @@ A **type hint** (or *annotation*) is a note attached to a variable, parameter or
 
 Two words you will see everywhere:
 - **Dynamic typing** — types belong to *values*, and are checked while the program runs (`"a" + 1` fails only when that line executes). Python is dynamically typed.
-- **Static typing** — types are checked *before* the program runs, from the source text. Java, Go and Rust do this in the compiler.
+- **Static typing** — types are checked *before* the program runs, from the source text. Java, Go and Rust do this in the compiler (the program that translates source code into something the machine can run, rejecting it first if the types don't fit).
 
 Python's type hints give you **gradual typing**: you can add types to as much or as little of the code as you like, and un-annotated code is treated leniently.
 
-Analogy: hints are road signs. The car (the interpreter) does not stop you from ignoring them; the type checker is the driving instructor who reads the route beforehand and says "this turn is a dead end".
+Analogy: hints are road signs. The car (the interpreter — the program that reads and runs your Python code line by line) does not stop you from ignoring them; the type checker is the driving instructor who reads the route beforehand and says "this turn is a dead end".
 
 ### Why it matters
-1. **Bugs found early.** Passing `None` where a `str` is expected, misspelled attribute names, wrong argument order — caught before tests, before production.
+1. **Bugs found early.** Passing `None` where a `str` is expected, misspelled attribute names, wrong argument order — caught before tests, before production (the live system real users depend on).
 2. **Documentation that cannot go stale.** A signature like `def fetch(ids: list[int]) -> dict[int, User]` explains itself, and the checker complains if the code drifts from it.
 3. **Editor power.** Autocomplete, go-to-definition and safe renames all work much better when the editor knows the types (VS Code's Pylance is built on pyright).
-4. **Safer refactoring** in large codebases: change a function's signature and the checker lists every caller that must change.
+4. **Safer refactoring** (restructuring code without changing what it does) in large codebases (the whole body of source code for a project): change a function's signature and the checker lists every caller that must change.
 
 ### How it works
-1. Annotations were added in Python 3.0 (PEP 3107) as free-form metadata; PEP 484 (Python 3.5) gave them standard meaning and created the `typing` module.
+1. Annotations were added in Python 3.0 (PEP 3107) as free-form metadata (data that describes other data — here, extra information attached to a function); PEP 484 (Python 3.5) gave them standard meaning and created the `typing` module.
 2. At runtime, annotations are stored on the object (`func.__annotations__`) and otherwise ignored.
-3. A checker parses your code, infers the type of every expression, and compares it with what each annotation promises.
+3. A checker parses your code (reads the text and turns it into a structured tree), infers (works out on its own, without being told) the type of every expression, and compares it with what each annotation promises.
 4. Un-annotated code is treated as `Any` (see §13.5), which is why you can adopt typing one file at a time.
 
 ### Trade-offs
@@ -55,19 +55,19 @@ Analogy: hints are road signs. The car (the interpreter) does not stop you from 
 | Benefit | Cost |
 |---|---|
 | Catches whole classes of bugs before running | Extra syntax to learn and write |
-| Self-documenting APIs, better IDE support | Some dynamic patterns are awkward to type |
+| Self-documenting APIs, better IDE (integrated development environment, e.g. VS Code or PyCharm) support | Some dynamic patterns are awkward to type |
 | Refactoring confidence at scale | False sense of safety if `Any` leaks everywhere |
 | Zero runtime cost (hints are not checked) | …which also means no runtime protection |
 
 ### When not to use it
-Throw-away scripts, notebooks exploring data, and tiny programs gain little. Types pay off in code that lives long, is shared by several people, or is a library others call.
+Throw-away scripts, notebooks (interactive documents such as Jupyter that mix code cells, output and notes) exploring data, and tiny programs gain little. Types pay off in code that lives long, is shared by several people, or is a library others call.
 
 ### Real-world examples
-Dropbox type-checked about 4 million lines of Python with mypy (Guido van Rossum worked on mypy there). Instagram and Meta built the Pyre checker; Microsoft built pyright. **FastAPI** and **pydantic** read type hints at runtime to validate requests and generate API docs. The standard library's type information lives in the **typeshed** project, which every checker uses.
+Dropbox type-checked about 4 million lines of Python with mypy (Guido van Rossum worked on mypy there). Instagram and Meta built the Pyre checker; Microsoft built pyright. **FastAPI** (a web framework) and **pydantic** (a data-validation library) read type hints at runtime to validate requests and generate API docs (documentation of the URLs a service offers and the data each expects). The standard library's type information lives in the **typeshed** project (a shared collection of type descriptions for the standard library and popular packages), which every checker uses.
 
 ### In the interview
 "Python is dynamically typed, but since PEP 484 we can add optional type hints. They're ignored at runtime; a static checker like mypy or pyright verifies them before the code runs. It's gradual, so you can type a codebase incrementally. I use them on anything long-lived because they catch `None` bugs and make refactors safe."
-- *Do hints make code faster?* No. CPython ignores them. (Tools like mypyc can compile typed code to C extensions, but that is a separate compiler.)
+- *Do hints make code faster?* No. CPython (the standard Python interpreter, written in C — the one you get from python.org) ignores them. (Tools like mypyc can compile typed code to C extensions — compiled modules Python can import like normal ones — but that is a separate compiler.)
 - *Does `x: int = "a"` raise?* No, it runs fine. Only the checker complains.
 
 ### Self-check
@@ -99,12 +99,12 @@ class User:
 ```
 
 ### How it works
-1. `param: Type` annotates a parameter; with a default it is `param: Type = default` (spaces around `=`, unlike the un-annotated `param=default` — PEP 8).
+1. `param: Type` annotates a parameter; with a default it is `param: Type = default` (spaces around `=`, unlike the un-annotated `param=default` — PEP 8, Python's official style guide).
 2. `-> Type` annotates the return. A function that returns nothing is `-> None`.
 3. `name: Type = value` annotates a variable (PEP 526). A bare `name: Type` creates **no** variable — reading `total` above raises `NameError`.
-4. Annotations are stored in `__annotations__`; `typing.get_type_hints(obj)` returns them fully resolved (turning string forward references into real classes).
+4. Annotations are stored in `__annotations__`; `typing.get_type_hints(obj)` returns them fully resolved (turning string forward references — names of types written before those types are defined — into real classes).
 5. **Forward references.** If a type is not defined yet (a class referring to itself), write it as a string: `def clone(self) -> "Node":`. Since 3.11 you can also use `typing.Self` for "the current class".
-6. **When are annotations evaluated?** Up to 3.13, annotations are evaluated when the `def` runs (unless the module has `from __future__ import annotations`, which stores them as strings). **Python 3.14** (PEP 649/749) makes evaluation *lazy* by default: annotations are computed only when someone asks for them, so forward references usually work without quotes. The new `annotationlib` module exposes the details.
+6. **When are annotations evaluated?** Up to 3.13, annotations are evaluated when the `def` runs (unless the module has `from __future__ import annotations` — a `__future__` import switches on a newer language behaviour early — which stores them as strings). **Python 3.14** (PEP 649/749) makes evaluation *lazy* by default: annotations are computed only when someone asks for them, so forward references usually work without quotes. The new `annotationlib` module exposes the details.
 
 Script `01_annotations_basics.py`:
 
@@ -144,7 +144,7 @@ The last line proves the point: Python happily ran `greet(123, 2)`. Running mypy
 ## 13.3 Built-in generics and the abstract collection types
 
 ### What it is
-A **generic type** is a container type with a *parameter* saying what it holds: `list[int]` is "a list of ints". Since Python 3.9 (PEP 585) the built-in classes accept brackets directly — you no longer need `typing.List`, `typing.Dict`, etc. (they still work but are deprecated aliases).
+A **generic type** is a container type with a *parameter* saying what it holds: `list[int]` is "a list of ints". Since Python 3.9 (PEP 585) the built-in classes accept brackets directly — you no longer need `typing.List`, `typing.Dict`, etc. (they still work but are deprecated — still supported but discouraged and may be removed later — aliases, i.e. alternative names for the same thing).
 
 | Type | Meaning |
 |---|---|
@@ -157,7 +157,7 @@ A **generic type** is a container type with a *parameter* saying what it holds: 
 | `type[User]` | the class `User` itself (or a subclass), not an instance |
 
 ### Accept abstract, return concrete
-`collections.abc` defines *abstract* collection types you can also parameterise:
+`collections.abc` defines *abstract* collection types (types that describe what operations a collection supports rather than how it is built) you can also parameterise:
 
 | Abstract type | What it promises | Accepts |
 |---|---|---|
@@ -205,7 +205,7 @@ def find_user(user_id: int) -> str | None:
 ```
 
 ### Why it matters
-`None` bugs ("`'NoneType' object has no attribute 'upper'`") are among the most common production errors in Python. Tony Hoare called null references his "billion-dollar mistake". Marking the possibility in the type forces every caller to handle it.
+`None` bugs ("`'NoneType' object has no attribute 'upper'`") are among the most common production errors in Python. Tony Hoare (who invented null references — a "points to nothing" value, Python's `None`) called them his "billion-dollar mistake". Marking the possibility in the type forces every caller to handle it.
 
 ### How it works — narrowing
 The checker tracks **narrowing**: after a check, it knows a more specific type in that branch.
@@ -229,7 +229,7 @@ note: Revealed type is "int"
 note: Revealed type is "str"
 ```
 
-Things that narrow: `is None` / `is not None`, `isinstance`, truthiness (`if x:` — careful, it also removes `""` and `0`), `==` against a literal, `match` patterns, early `return`/`raise`, and your own functions returning `TypeGuard[T]` or (3.13+) `TypeIs[T]`.
+Things that narrow: `is None` / `is not None`, `isinstance`, truthiness (`if x:` — careful, it also removes `""` and `0`), `==` against a literal (a value written directly in the code, like `"r"` or `3`), `match` patterns, early `return`/`raise`, and your own functions returning `TypeGuard[T]` or (3.13+) `TypeIs[T]`.
 
 Unions also work at runtime in `isinstance`: `isinstance(5, int | str)` → `True`.
 
@@ -270,8 +270,8 @@ def show(x: object) -> None:
 ```
 
 ### When to use it
-- Truly dynamic data at a boundary (a parsed JSON blob before validation), or a third-party library without types.
-- Temporarily during migration.
+- Truly dynamic data at a boundary (the edge where data enters your program; e.g. a parsed JSON — JavaScript Object Notation, the common text format for structured data — blob before validation), or a third-party library without types.
+- Temporarily during migration (moving an existing untyped codebase to typed code step by step).
 
 ### Common mistakes
 `Any` is **contagious**: `y = raw.field` is also `Any`, and so is everything computed from it. A few `Any`s at the edges can silently disable checking deep inside. Prefer `object` when you just mean "I accept anything"; validate and convert `Any` data into real types as early as possible (§13.14). `mypy --strict` includes flags that warn about `Any` leaking from untyped code.
@@ -318,7 +318,7 @@ class Stack[T]:
 ```
 
 1. At each call, the checker **solves** `T` from the arguments: `first("xyz")` → `T = str` → returns `str`.
-2. **Bound**: `[T: Hashable]` (old: `TypeVar("T", bound=Hashable)`) means "T can be any subtype of Hashable".
+2. **Bound**: `[T: Hashable]` (old: `TypeVar("T", bound=Hashable)`) means "T can be any subtype (a type that can be used wherever the parent type is expected, e.g. a subclass) of Hashable — i.e. usable as a dict key or set member".
 3. **Constraints**: `[N: (int, float)]` means "`N` is solved to exactly `int` or exactly `float`, never a subclass or a mix". So `biggest(2, 7)` returns `int`, and `biggest(2, 7.0)` returns `float` (the `int` is accepted as a `float`, see *numeric promotion* in §13.3). The classic example is `AnyStr = (str, bytes)`: `concat("a", b"b")` is rejected because no single choice fits both.
 4. **Generic class**: `Stack[int]()` or `s: Stack[int] = Stack()` fixes `T` for that instance; `s.push("a")` is then an error.
 5. Old-style generic classes inherit `Generic[T]`: `class Stack(Generic[T]): ...`.
@@ -378,8 +378,8 @@ def apply_all(fn: Callable[[int], int], xs: Iterable[int]) -> list[int]:
 ```
 
 - `Callable[..., int]` — any arguments, returns int (loose).
-- `Callable[[], None]` — no arguments, returns nothing (a callback).
-- For keyword arguments, overloads or default values, `Callable` cannot express the signature; define a `Protocol` with a `__call__` method instead (§13.8).
+- `Callable[[], None]` — no arguments, returns nothing (a callback — a function handed to other code to be called later).
+- For keyword arguments, overloads (several alternative signatures for one function) or default values, `Callable` cannot express the signature; define a `Protocol` with a `__call__` method instead (§13.8).
 
 ### ParamSpec — typing decorators (brief)
 A decorator that wraps *any* function should keep that function's exact parameters. Before `ParamSpec` (3.10, PEP 612) people wrote `Callable[..., Any]` and lost all checking of the decorated function's arguments.
@@ -425,11 +425,11 @@ add(2, 3) ->
 ## 13.8 `Protocol` — structural typing
 
 ### What it is
-**Nominal typing** means "B is a subtype of A because B *inherits* from A". **Structural typing** means "B is compatible with A because it *has the right methods*", whatever its ancestry. A `Protocol` (PEP 544, 3.8) declares such a shape. It is duck typing — "if it walks like a duck…" — made checkable.
+**Nominal typing** means "B is a subtype of A because B *inherits* from A". **Structural typing** means "B is compatible with A because it *has the right methods*", whatever its ancestry. A `Protocol` (PEP 544, 3.8) declares such a shape. It is duck typing — "if it walks like a duck…", i.e. judging an object by what it can do rather than what class it is — made checkable.
 
 ### Why it matters
 - You can type code against objects you do not control (a third-party class cannot be made to inherit your ABC, but it may already have a `close()` method).
-- It decouples modules: the consumer defines the tiny interface it needs; producers need not import it.
+- It decouples modules (lets them change independently): the consumer defines the tiny interface (the set of methods a piece of code relies on) it needs; producers need not import it.
 
 ### How it works
 
@@ -468,7 +468,7 @@ isinstance(42, SupportsClose)            : False
 | | `Protocol` | `abc.ABC` |
 |---|---|---|
 | Relationship | structural (shape) | nominal (must inherit / register) |
-| Checked | by the type checker | at instantiation (`TypeError` if abstract methods missing) |
+| Checked | by the type checker | at instantiation (creating an object; `TypeError` if abstract methods missing) |
 | Shares implementation | not intended | yes, concrete helper methods |
 | Works with third-party classes | yes | only with `register()` |
 
@@ -480,7 +480,7 @@ isinstance(42, SupportsClose)            : False
 `typing.SupportsIndex`, `collections.abc.Iterable` and typeshed's `SupportsRead[str]` (used for "anything with a `.read()` method", e.g. in `json.load`) are all structural.
 
 ### In the interview
-"A Protocol is a statically checked duck type: any class with matching methods satisfies it, with no inheritance. I use it to define the minimal interface a function needs, for example `SupportsClose`, which also makes testing with fakes easy."
+"A Protocol is a statically checked duck type: any class with matching methods satisfies it, with no inheritance. I use it to define the minimal interface a function needs, for example `SupportsClose`, which also makes testing with fakes (simple stand-in objects used in tests instead of real databases or services) easy."
 - *Protocol or ABC?* ABC when you want to share code and force subclasses to implement methods; Protocol when you only describe a shape.
 
 ### TL;DR
@@ -522,7 +522,7 @@ Movie keys       : frozenset({'title', 'year'}) frozenset({'rating'})
 | Runtime object | plain `dict` | instance of your class |
 | Access | `m["title"]` | `m.title` |
 | Methods | none | yes |
-| Best for | JSON in/out, `**kwargs` typing (`Unpack[Opts]`) | domain objects in your code |
+| Best for | JSON in/out, `**kwargs` typing (`Unpack[Opts]`) | domain objects (objects modelling your problem's concepts, like `Order`) in your code |
 
 ### TL;DR
 TypedDict types dict-shaped data (JSON). It's static only — a normal dict at runtime.
@@ -537,7 +537,7 @@ Mode = Literal["r", "w", "a"]
 def open_log(path: str, mode: Mode = "r") -> str: ...
 open_log("app.log", "x")      # error: expected "Literal['r', 'w', 'a']"
 ```
-Good for string/int "flags" when an `Enum` feels heavy. `typing.get_args(Mode)` returns `('r', 'w', 'a')` at runtime, which you can use for validation. `match`/`==` against a literal narrows it. Standard library example: `open()`'s `mode` is typed with literals in typeshed so the checker knows `open(p, "rb")` returns a binary file.
+Good for string/int "flags" when an `Enum` (a class defining a fixed set of named constants) feels heavy. `typing.get_args(Mode)` returns `('r', 'w', 'a')` at runtime, which you can use for validation. `match`/`==` against a literal narrows it. Standard library example: `open()`'s `mode` is typed with literals in typeshed so the checker knows `open(p, "rb")` returns a binary file.
 
 ### `Final` — must not be reassigned
 ```python
@@ -575,12 +575,12 @@ NewType          : user#7 | UserId(7) is int: True
 | Form | Meaning | Example |
 |---|---|---|
 | `Annotated[T, meta]` (3.9) | Type `T` plus extra metadata the checker ignores but libraries read | FastAPI/pydantic: `age: Annotated[int, Field(gt=0)]` |
-| `Self` (3.11) | "An instance of the current class" — for fluent methods and alternative constructors | `def with_name(self, n: str) -> Self:` |
+| `Self` (3.11) | "An instance of the current class" — for fluent methods (methods that return the object so calls can be chained) and alternative constructors | `def with_name(self, n: str) -> Self:` |
 | `NoReturn` / `Never` (3.11) | The function never returns normally (always raises or exits) | `def fail(msg: str) -> NoReturn: raise SystemExit(msg)` |
 | `ClassVar[T]` | A class-level attribute, not a per-instance field | `count: ClassVar[int] = 0` |
 | `@overload` | Several signatures for one function, when the return type depends on the arguments | `open(p, "rb")` → binary file, `open(p, "r")` → text file |
 | `TypeGuard[T]` / `TypeIs[T]` (3.10 / 3.13) | A user function that narrows its argument when it returns `True` | `def is_str_list(x: list[object]) -> TypeIs[list[str]]:` |
-| `LiteralString` (3.11) | Only strings written in the source code, not user input | SQL query builders defending against injection |
+| `LiteralString` (3.11) | Only strings written in the source code, not user input | SQL query builders defending against injection (an attack where user input is smuggled into a query as code) |
 | `Unpack[TD]` (3.11/3.12) | Type `**kwargs` with a `TypedDict` | `def f(**kw: Unpack[Opts]):` |
 
 ### TL;DR
@@ -610,7 +610,7 @@ class Cart:
 1. Each annotated class attribute becomes a field; the generated `__init__` has typed parameters, so checkers verify `Point("a", 2)`.
 2. Attributes annotated `ClassVar[int]` are **not** fields; `InitVar[str]` is an `__init__`-only parameter passed to `__post_init__`.
 3. Mutable defaults need `field(default_factory=list)` — a plain `= []` raises `ValueError` at class creation.
-4. `frozen=True` makes instances immutable (checkers flag `p.x = 5`; at runtime it raises `FrozenInstanceError`).
+4. `frozen=True` makes instances immutable (unchangeable after creation) (checkers flag `p.x = 5`; at runtime it raises `FrozenInstanceError`).
 5. `Point(x="oops", y=2)` **runs** — dataclasses do not check types.
 
 Output:
@@ -669,7 +669,7 @@ Name complicated types with `type Name = ...` (3.12+) or `Name = ...` (older). A
 ## 13.13 Running mypy and pyright; common errors
 
 ### What it is
-**mypy** is the original checker (reference implementation of PEP 484, written in Python and compiled with mypyc). **pyright** (Microsoft, written in TypeScript) is faster and powers VS Code's Pylance; it also infers more aggressively in un-annotated code. Both read the same annotations and typeshed stubs; they occasionally disagree on edge cases.
+**mypy** is the original checker (reference implementation of PEP 484, written in Python and compiled with mypyc). **pyright** (Microsoft, written in TypeScript — a typed version of JavaScript) is faster and powers VS Code's Pylance; it also infers more aggressively in un-annotated code. Both read the same annotations and typeshed stubs (type-only descriptions of a library, see the `.pyi` note below); they occasionally disagree on edge cases.
 
 ### How it works — using mypy
 ```bash
@@ -677,7 +677,7 @@ pip install mypy
 mypy src/                         # check a package
 mypy --strict src/                # turn on all optional strictness flags
 ```
-Configure once in `pyproject.toml`:
+Configure once in `pyproject.toml` (the standard project configuration file at the root of a Python project):
 
 ```toml
 [tool.mypy]
@@ -690,10 +690,10 @@ module = ["legacy.*"]
 ignore_errors = true              # old code: switch off per module while migrating
 ```
 
-pyright equivalent: `pip install pyright` (or `npm i -g pyright`), then `pyright src/`, configured in `[tool.pyright]` with `typeCheckingMode = "strict"`.
+pyright equivalent: `pip install pyright` (or `npm i -g pyright` — npm is the JavaScript package manager), then `pyright src/`, configured in `[tool.pyright]` with `typeCheckingMode = "strict"`.
 
 **Gradual adoption plan** (what Dropbox and others describe):
-1. Run the checker in CI with default settings on everything; fix or silence the first errors.
+1. Run the checker in CI (continuous integration — a server that automatically runs tests and checks on every code change) with default settings on everything; fix or silence the first errors.
 2. Annotate the most-used modules and public functions first.
 3. Turn on `strict` per module as it becomes fully typed.
 4. Forbid new untyped functions (`disallow_untyped_defs`).
@@ -744,7 +744,7 @@ Each line is `file:line: error: message [error-code]`. The code in brackets is w
 ### Escape hatches (use sparingly)
 - `# type: ignore[arg-type]` on one line — always include the code, so unrelated errors are not hidden; `warn_unused_ignores` finds stale ones.
 - `typing.cast(T, value)` — tells the checker "trust me"; does nothing at runtime.
-- `if TYPE_CHECKING:` — import only for the checker (avoids import cycles).
+- `if TYPE_CHECKING:` — import only for the checker (avoids import cycles — two modules that import each other, which can fail at runtime).
 - `.pyi` **stub files** — type information kept separate from code (how typeshed works).
 - `@overload` — several precise signatures for one function whose return type depends on arguments.
 
@@ -754,7 +754,7 @@ Each line is `file:line: error: message [error-code]`. The code in brackets is w
 - Using `cast` instead of real validation on external data.
 
 ### In the interview
-"I run mypy or pyright in CI and pre-commit, strict for new code and per-module overrides for legacy code. Most errors are unhandled `None`, empty containers needing annotations, and missing stubs. I use `reveal_type` to debug inference and always put an error code on `type: ignore`."
+"I run mypy or pyright in CI and pre-commit (hooks that run checks automatically before each git commit), strict for new code and per-module overrides for legacy code (older existing code). Most errors are unhandled `None`, empty containers needing annotations, and missing stubs. I use `reveal_type` to debug inference and always put an error code on `type: ignore`."
 
 ### Self-check
 1. How do you see what mypy inferred? → `reveal_type(expr)`.
@@ -771,9 +771,9 @@ Each line is `file:line: error: message [error-code]`. The code in brackets is w
 
 ### What it is
 - **Static** checking (mypy/pyright) reasons about your **code** before it runs. It knows nothing about the actual data that arrives at runtime.
-- **Runtime validation** checks the **data** while the program runs — essential for anything from outside: HTTP requests, files, environment variables, user input, LLM output.
+- **Runtime validation** checks the **data** while the program runs — essential for anything from outside: HTTP requests (messages sent to a web server), files, environment variables (named settings the operating system passes to a program, like `PATH`), user input, LLM output (text produced by a large language model such as Claude).
 
-A program fully typed with mypy can still crash if a JSON payload has `"age": "thirty"`, because `json.loads` returns `Any`.
+A program fully typed with mypy can still crash if a JSON payload (the data body of a message) has `"age": "thirty"`, because `json.loads` returns `Any`.
 
 ```mermaid
 flowchart LR
@@ -820,7 +820,7 @@ rejected: tags=['ok', 5] is not list[str] | None
 (The `bool` special case exists because `bool` is a subclass of `int` — `isinstance(True, int)` is `True`.)
 
 ### pydantic (brief, real-world)
-**pydantic** is the most widely used runtime-validation library; version 2's core is written in Rust (`pydantic-core`). You declare a model with ordinary hints and it validates, converts and serialises data. (Needs `pip install pydantic` — not run here.)
+**pydantic** is the most widely used runtime-validation library; version 2's core is written in Rust (a fast compiled systems language; `pydantic-core`). You declare a model with ordinary hints and it validates, converts and serialises (turns objects into a storable/sendable format such as JSON) data. (Needs `pip install pydantic` — not run here.)
 
 ```python
 from pydantic import BaseModel, ValidationError
@@ -845,8 +845,8 @@ s2 = Signup.model_validate_json('{"email": "c@x.io", "age": 41}')
 Key facts:
 1. By default pydantic is **lax**: it converts compatible input (`"30"` → `30`). `strict=True` (per model or field) rejects such conversions.
 2. Errors are collected together in one `ValidationError` with the location of each problem.
-3. `model_dump()` / `model_dump_json()` serialise; `model_json_schema()` produces JSON Schema.
-4. Where it is used: **FastAPI** validates request bodies and generates OpenAPI docs from pydantic models; `pydantic-settings` loads typed config from environment variables; LLM SDKs (including Anthropic's and OpenAI's Python SDKs) use pydantic models for responses, and "structured output" tools validate model output against pydantic schemas.
+3. `model_dump()` / `model_dump_json()` serialise; `model_json_schema()` produces JSON Schema (a standard, machine-readable description of what valid JSON looks like).
+4. Where it is used: **FastAPI** validates request bodies and generates OpenAPI docs (OpenAPI is a standard format for describing a web API) from pydantic models; `pydantic-settings` loads typed config from environment variables; LLM SDKs (software development kits — client libraries; including Anthropic's and OpenAI's Python SDKs) use pydantic models for responses, and "structured output" tools validate model output against pydantic schemas.
 5. Alternatives: `attrs` + `cattrs`, `msgspec` (very fast), `marshmallow` (schema objects separate from classes), `typeguard`/`beartype` (check function hints at call time).
 
 ### When not to use it

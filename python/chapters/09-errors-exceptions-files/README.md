@@ -1,6 +1,6 @@
 # Chapter 9 — Errors, Exceptions and Files
 
-Programs meet bad input, missing files, full disks and broken networks. Python reports these situations with **exceptions** — objects that interrupt normal flow and travel up the call stack until some code handles them. Most of the time the thing that fails is I/O, so this chapter pairs error handling with working on files: reading and writing text and bytes, paths, CSV, JSON, pickle, temporary files and whole-folder operations.
+Programs meet bad input, missing files, full disks and broken networks. Python reports these situations with **exceptions** — objects that interrupt normal flow and travel up the call stack (the pile of function calls currently in progress) until some code handles them. Most of the time the thing that fails is I/O (input/output: reading and writing files, networks, devices), so this chapter pairs error handling with working on files: reading and writing text and bytes, paths, CSV, JSON, pickle (three data file formats, §9.11), temporary files and whole-folder operations.
 
 Scripts are in [`code/`](code/); every file operation happens inside a temporary directory that is removed afterwards. Output is real (Python 3.14; code is 3.12-compatible).
 
@@ -37,13 +37,13 @@ ValueError: invalid literal for int() with base 10: '12a'
 ```
 
 Two kinds of problems are distinct:
-- **Syntax errors** are found when Python *compiles* the file (`SyntaxError`, `IndentationError`) — nothing runs.
+- **Syntax errors** are found when Python *compiles* the file (translates it to bytecode before running) (`SyntaxError`, `IndentationError`) — nothing runs.
 - **Exceptions** happen while the code *runs* (`ZeroDivisionError`, `KeyError`, …) and can be handled.
 
 Analogy: an exception is a fire alarm. Whoever is nearest and equipped (a matching `except`) deals with it; if nobody does, the building (program) is evacuated.
 
 ### How it works — the class hierarchy
-Every exception is an instance of a class deriving from **`BaseException`**. Handlers match by class *and all its subclasses*, so the tree decides what an `except` catches.
+Every exception is an instance (an object made from a class) of a class deriving from (being a subclass of) **`BaseException`**. Handlers match by class *and all its subclasses*, so the tree decides what an `except` catches.
 
 ```
 == part of the built-in hierarchy ==
@@ -72,7 +72,7 @@ Every exception is an instance of a class deriving from **`BaseException`**. Han
 
 | Class | Raised when | Example |
 |---|---|---|
-| `SystemExit`, `KeyboardInterrupt`, `GeneratorExit` | Program exit, Ctrl-C, generator closing | Deliberately **not** under `Exception` so `except Exception` doesn't swallow them |
+| `SystemExit`, `KeyboardInterrupt`, `GeneratorExit` | Program exit, Ctrl-C, generator (a function that yields values one at a time) closing | Deliberately **not** under `Exception` so `except Exception` doesn't swallow (catch and hide) them |
 | `ValueError` | Right type, bad value | `int("abc")` |
 | `TypeError` | Wrong type / wrong call | `"a" + 1`, too many arguments |
 | `KeyError` / `IndexError` (both `LookupError`) | Missing key / index out of range | `{}["x"]`, `[][0]` |
@@ -83,9 +83,9 @@ Every exception is an instance of a class deriving from **`BaseException`**. Han
 | `ImportError` (→ `ModuleNotFoundError`) | Import failures | [Chapter 8](../08-modules-packages-environments/README.md) |
 | `StopIteration` | Iterator exhausted | used by `for` internally |
 | `RecursionError` (`RuntimeError`) | Too-deep recursion | [Chapter 7](../07-functions/README.md) |
-| `NotImplementedError` (`RuntimeError`) | Abstract method not overridden | |
+| `NotImplementedError` (`RuntimeError`) | Abstract method (declared by a base class for subclasses to fill in) not overridden | |
 | `AssertionError` | `assert` failed | 9.7 |
-| `UnicodeDecodeError` (→ `ValueError`) | Bytes aren't valid in the codec | 9.9 |
+| `UnicodeDecodeError` (→ `ValueError`) | Bytes aren't valid in the codec (the encoder/decoder for a text encoding) | 9.9 |
 
 ### In the interview
 **30-second answer:** "An exception is an object raised on error; it unwinds the stack until an `except` clause whose class matches (including subclasses) handles it, otherwise the program ends with a traceback. All exceptions derive from `BaseException`; application errors derive from `Exception`, while `SystemExit`, `KeyboardInterrupt` and `GeneratorExit` sit directly under `BaseException` so generic handlers don't catch them."
@@ -123,7 +123,7 @@ finally:                    # runs ALWAYS: success, handled, unhandled, return, 
 1. Run the `try` block.
 2. If an exception occurs, skip the rest of `try` and check `except` clauses **top to bottom**; the **first** matching one runs. `except (A, B) as e:` catches either.
 3. If nothing was raised, run `else`.
-4. Run `finally` in every case — even if an exception is propagating, or the block `return`s.
+4. Run `finally` in every case — even if an exception is propagating (still travelling up the call stack), or the block `return`s.
 5. If no clause matched, the exception continues up the stack (after `finally`).
 
 ```mermaid
@@ -177,14 +177,14 @@ Don't use exceptions for ordinary control flow when a simple check or API alread
 
 ### Common mistakes
 - `except Exception as e: pass` — the bug disappears and resurfaces far away.
-- Referencing `e` after the `except` block — Python **deletes** the `as` name at the end of the handler (to break reference cycles), so it's a `NameError` later. Save it to another variable if needed.
+- Referencing `e` after the `except` block — Python **deletes** the `as` name at the end of the handler (to break reference cycles — objects that refer to each other in a loop and so can't be freed promptly), so it's a `NameError` later. Save it to another variable if needed.
 - Catching `Exception` around code that includes your own bugs (`TypeError` from a typo) and reporting "invalid input".
 
 ### Real-world examples
-- **Logging instead of hiding**: at the top level, `logging.exception("msg")` (inside an `except`) logs the message *plus* the full traceback; the `traceback` module (`traceback.print_exc()`, `traceback.format_exc()`) gives you the same text as a string or on stderr. See [Chapter 14](../14-standard-library-tour/README.md).
-- **Warnings are not exceptions**: `warnings.warn("old_api() is deprecated", DeprecationWarning)` prints a message but lets the program continue. Libraries use this for deprecations; `python -W error` (or pytest's `-W error`) turns warnings into exceptions so you catch them in CI.
-- Web frameworks (Django, Flask, FastAPI) wrap every request in a top-level handler that turns uncaught exceptions into a 500 response and a log entry, so one bad request doesn't crash the server.
-- `requests`: `resp.raise_for_status()` raises `requests.HTTPError` for 4xx/5xx; all its errors derive from `requests.RequestException`, so callers can catch one base class.
+- **Logging instead of hiding**: at the top level, `logging.exception("msg")` (inside an `except`) logs the message *plus* the full traceback; the `traceback` module (`traceback.print_exc()`, `traceback.format_exc()`) gives you the same text as a string or on stderr (the separate error-output stream). See [Chapter 14](../14-standard-library-tour/README.md).
+- **Warnings are not exceptions**: `warnings.warn("old_api() is deprecated", DeprecationWarning)` prints a message but lets the program continue. Libraries use this for deprecations (features scheduled for removal); `python -W error` (or pytest's `-W error`) turns warnings into exceptions so you catch them in CI (continuous integration: automated checks on every code change).
+- Web frameworks (Django, Flask, FastAPI) wrap every request in a top-level handler that turns uncaught exceptions into a 500 response (the HTTP "internal server error" status; HTTP basics are in [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) and a log entry, so one bad request doesn't crash the server.
+- `requests`: `resp.raise_for_status()` raises `requests.HTTPError` for 4xx/5xx (HTTP error statuses: 4xx = the client's fault, 5xx = the server's); all its errors derive from `requests.RequestException`, so callers can catch one base class.
 
 ### In the interview
 **30-second answer:** "`try` runs risky code; the first matching `except` handles; `else` runs only if nothing was raised, which keeps the `try` minimal; `finally` always runs for cleanup. Catch specific exceptions, order specific to general, never a bare `except`."
@@ -206,13 +206,13 @@ Don't use exceptions for ordinary control flow when a simple check or API alread
 ## 9.3 Raising, re-raising and custom exceptions
 
 ### What it is
-- **`raise SomeError("message")`** signals an error yourself — typically when inputs violate your function's contract.
+- **`raise SomeError("message")`** signals an error yourself — typically when inputs violate your function's contract (the promises it makes about valid inputs and outputs).
 - **Re-raising**: inside an `except`, a bare **`raise`** re-throws the current exception with its original traceback, after you've logged or cleaned up.
 - **Custom exceptions** are classes you define (subclassing `Exception`) so callers can catch *your* errors precisely.
 
 ### How it works
 1. Pick the right built-in when one fits: bad value → `ValueError`, wrong type → `TypeError`, missing key-like thing → `KeyError`/`LookupError`, unsupported operation → `NotImplementedError`.
-2. For domain errors, define a **base class** for your library/module and specific subclasses. Callers can catch all your errors (`except PaymentError`) or one (`except CardDeclined`).
+2. For domain errors (errors that mean something in your problem area, such as payments), define a **base class** for your library/module and specific subclasses. Callers can catch all your errors (`except PaymentError`) or one (`except CardDeclined`).
 3. Name them with an `Error` suffix (PEP 8). Add attributes for data the handler needs.
 
 ```python
@@ -253,7 +253,7 @@ def reraise_after_logging(x):
   logging the error, then re-raising
   caller still sees: ZeroDivisionError('division by zero')
 ```
-Pass the message to `super().__init__` so `str(exc)` and tracebacks show it.
+Pass the message to `super().__init__` (the parent class's initialiser) so `str(exc)` and tracebacks show it.
 
 ### Trade-offs
 Too few custom exceptions → callers parse message strings to distinguish errors (fragile). Too many → a zoo nobody remembers. A module base class plus a handful of meaningful subclasses is the usual sweet spot. Many libraries also inherit from a matching built-in too (`class InvalidAmount(PaymentError, ValueError)`) so generic `except ValueError` code keeps working.
@@ -299,7 +299,7 @@ When you catch a low-level error and raise a higher-level one, Python remembers 
 **`exc.add_note("…")`** (3.11+) attaches extra context lines that appear under the message in the traceback — handy for "which row/file/request was this?".
 
 ### Why it matters
-Translating errors keeps your API clean (callers catch `ConfigError`, not whatever `KeyError`/`ValueError` your internals produced) *without* losing the root cause needed for debugging.
+Translating errors keeps your API (the interface your code offers its callers) clean (callers catch `ConfigError`, not whatever `KeyError`/`ValueError` your internals produced) *without* losing the root cause (the original underlying failure) needed for debugging.
 
 ### How it works
 
@@ -360,7 +360,7 @@ Two styles for dealing with things that might not be there:
 Both terms are in the official Python glossary, which calls EAFP the common Python style.
 
 ### Why it matters
-EAFP avoids **race conditions** — the time-of-check-to-time-of-use (TOCTOU) gap. `if os.path.exists(p): open(p)` can still fail if another process deletes the file between the check and the open; `try: open(p) except FileNotFoundError:` has no such gap. EAFP also avoids doing work twice (the check *and* the lookup) and plays well with duck typing (just call the method rather than checking the type).
+EAFP avoids **race conditions** — the time-of-check-to-time-of-use (TOCTOU) gap. `if os.path.exists(p): open(p)` can still fail if another process (another running program) deletes the file between the check and the open; `try: open(p) except FileNotFoundError:` has no such gap. EAFP also avoids doing work twice (the check *and* the lookup) and plays well with duck typing (caring what an object can do, not what type it is — just call the method rather than checking the type).
 
 ```python
 stock = {"apple": 3}
@@ -403,7 +403,7 @@ Python prefers EAFP (try/except) — race-free and fast when errors are rare; us
 ## 9.6 `ExceptionGroup` and `except*` (Python 3.11+)
 
 ### What it is
-Sometimes **several** independent errors happen at once — concurrent tasks, validating many fields, running many cleanup callbacks. An **`ExceptionGroup`** (PEP 654) wraps a list of exceptions into one raisable object. **`except*`** handles the matching *part* of a group: each `except*` clause receives a sub-group of the matching exceptions, and anything unhandled is re-raised in a new group.
+Sometimes **several** independent errors happen at once — concurrent tasks (tasks running at overlapping times), validating many fields, running many cleanup callbacks. An **`ExceptionGroup`** (PEP 654) wraps a list of exceptions into one raisable object. **`except*`** handles the matching *part* of a group: each `except*` clause receives a sub-group of the matching exceptions, and anything unhandled is re-raised in a new group.
 
 ### How it works
 
@@ -437,7 +437,7 @@ Unlike plain `except`, **more than one** `except*` clause can run for one group.
 Rules: `except` and `except*` can't be mixed in the same `try`; `eg` is always a group (use `eg.exceptions`); `ExceptionGroup` holds `Exception` subclasses, `BaseExceptionGroup` can hold any.
 
 ### Real-world examples
-- `asyncio.TaskGroup` (3.11+) raises an `ExceptionGroup` when child tasks fail.
+- `asyncio.TaskGroup` (3.11+; `asyncio` is Python's library for asynchronous code, and a TaskGroup runs several tasks together) raises an `ExceptionGroup` when child tasks fail.
 - The Trio async library pioneered this model and was a key motivation for PEP 654.
 
 ### When not to use it
@@ -471,7 +471,7 @@ def mean(xs):
 ```
 
 ### The crucial caveat
-Running Python with **`-O`** (optimise) sets `__debug__` to `False` and **removes all `assert` statements**. So never use `assert` for input validation, security checks or anything that must happen in production — raise a real exception (`ValueError`) instead.
+Running Python with **`-O`** (optimise) sets `__debug__` to `False` and **removes all `assert` statements**. So never use `assert` for input validation, security checks or anything that must happen in production (the live system real users depend on) — raise a real exception (`ValueError`) instead.
 
 ### Common mistakes
 - `assert (x > 0, "msg")` — a non-empty tuple is always truthy, so this never fails (CPython warns: "assertion is always true").
@@ -481,7 +481,7 @@ Running Python with **`-O`** (optimise) sets `__debug__` to `False` and **remove
 **pytest** is built on plain `assert` statements — it rewrites them to show detailed failure messages (`assert result == 5` → shows both sides).
 
 ### In the interview
-**30-second answer:** "`assert` checks internal invariants and raises `AssertionError`; it's stripped under `python -O`, so use it for debugging and tests, never for validating input."
+**30-second answer:** "`assert` checks internal invariants (conditions that should always hold) and raises `AssertionError`; it's stripped under `python -O`, so use it for debugging and tests, never for validating input."
 
 ### Self-check
 1. What does `python -O` do to asserts? → Removes them.
@@ -495,7 +495,7 @@ Running Python with **`-O`** (optimise) sets `__debug__` to `False` and **remove
 ## 9.8 Context managers and `with`
 
 ### What it is
-A **context manager** is an object that sets something up on entering a `with` block and **guarantees** teardown on leaving it — normally, by `return`/`break`, or by exception. Files, locks, database transactions, temporary directories and timers are typical.
+A **context manager** is an object that sets something up on entering a `with` block and **guarantees** teardown (the clean-up step) on leaving it — normally, by `return`/`break`, or by exception. Files, locks (which let only one thread use a resource at a time), database transactions (groups of changes that succeed or fail together), temporary directories and timers are typical.
 
 ```python
 with open("data.txt", encoding="utf-8") as f:   # file opened
@@ -504,7 +504,7 @@ with open("data.txt", encoding="utf-8") as f:   # file opened
 ```
 
 ### How it works — the protocol
-`with EXPR as NAME: BODY` does roughly:
+A *protocol* here means the set of special methods an object must provide. `with EXPR as NAME: BODY` does roughly:
 1. Evaluate `EXPR` to get the manager `m`.
 2. Call `m.__enter__()`; bind its return value to `NAME`.
 3. Run `BODY`.
@@ -537,7 +537,7 @@ class Timer:
   exception still reached caller: KeyError('boom')
 ```
 
-**`@contextlib.contextmanager`** writes one as a generator: code before `yield` = enter, the yielded value = `as` target, code after = exit. Wrap the `yield` in `try` to react to errors:
+**`@contextlib.contextmanager`** writes one as a generator (a function that pauses at `yield`): code before `yield` = enter, the yielded value = `as` target, code after = exit. Wrap the `yield` in `try` to react to errors:
 
 ```python
 @contextlib.contextmanager
@@ -568,16 +568,16 @@ Other `contextlib` helpers used in the script:
 Class-based managers are best when the object has other methods too (a connection). `@contextmanager` is shortest for one-off setup/teardown. `ExitStack` when the number of resources is only known at runtime.
 
 ### Common mistakes
-- Opening files without `with` and forgetting `close()` — leaks file handles, and buffered writes may not reach disk.
+- Opening files without `with` and forgetting `close()` — leaks file handles (the OS resources behind open files), and buffered writes (data held in memory before it is written out) may not reach disk.
 - In a `@contextmanager` generator, forgetting `try/finally` around `yield` — the cleanup won't run if the body raises.
 - Returning `True` from `__exit__` by accident → silently swallows every exception.
 
 ### Real-world examples
 - `threading.Lock()`: `with lock:` acquires and always releases.
-- `sqlite3` connection: `with conn:` commits on success and rolls back on exception (it does **not** close the connection).
+- `sqlite3` connection: `with conn:` commits (makes the changes permanent) on success and rolls back (undoes them) on exception (it does **not** close the connection).
 - PyTorch `with torch.no_grad():`, `unittest.mock.patch(...)`, `decimal.localcontext()`, `tempfile.TemporaryDirectory()`.
 
-Decorators and context managers get a deeper treatment (async managers, reentrancy) in [Chapter 12](../12-decorators-context-managers-metaprogramming/README.md).
+Decorators and context managers get a deeper treatment (async managers, reentrancy — entering the same manager again while it is already active) in [Chapter 12](../12-decorators-context-managers-metaprogramming/README.md).
 
 ### In the interview
 **30-second answer:** "A context manager implements `__enter__` and `__exit__`; `with` calls enter, runs the block, and always calls exit with any exception info — exit returning true suppresses it. It's a reusable try/finally for resources like files and locks. `contextlib.contextmanager` builds one from a generator; `ExitStack` handles a dynamic set."
@@ -603,7 +603,7 @@ Decorators and context managers get a deeper treatment (async managers, reentran
 | Mode | Meaning | If file exists | If missing |
 |---|---|---|---|
 | `"r"` (default) | read | read from start | `FileNotFoundError` |
-| `"w"` | write | **truncates** to empty | creates |
+| `"w"` | write | **truncates** (cuts) to empty | creates |
 | `"a"` | append | writes go to the end | creates |
 | `"x"` | exclusive create | `FileExistsError` | creates |
 | `"+"` added (`"r+"`, `"w+"`) | read and write | | |
@@ -657,10 +657,10 @@ Reading methods:
 | `f.seek(pos)`, `f.tell()` | move / report position | — |
 
 Key facts:
-1. **Always pass `encoding="utf-8"`** in text mode. Without it Python uses the platform's locale encoding, which differs between machines (historically cp1252 on many Windows systems) — the file you wrote on macOS may not read on Windows. PEP 686 plans to make UTF-8 the default in Python 3.15; until then, be explicit (or run with `-X utf8`).
-2. The wrong codec either fails (`UnicodeDecodeError`) or, worse, silently produces **mojibake** (`cafÃ©`). `errors="replace"` / `"ignore"` trade errors for data loss — last resorts.
+1. **Always pass `encoding="utf-8"`** in text mode. Without it Python uses the platform's locale encoding (the default picked by the operating system's language/region settings), which differs between machines (historically cp1252 on many Windows systems) — the file you wrote on macOS may not read on Windows. PEP 686 plans to make UTF-8 the default in Python 3.15; until then, be explicit (or run with `-X utf8`).
+2. The wrong codec either fails (`UnicodeDecodeError`) or, worse, silently produces **mojibake** (garbled text from decoding with the wrong encoding: `cafÃ©`). `errors="replace"` / `"ignore"` trade errors for data loss — last resorts.
 3. Text mode translates newlines: on reading, `\r\n` and `\r` become `\n` ("universal newlines"); on writing, `\n` becomes the platform's separator. Binary mode never changes bytes.
-4. Writes are **buffered**; data is guaranteed on disk after `close()` (or `flush()` + `os.fsync()` for durability).
+4. Writes are **buffered**; data is guaranteed on disk after `close()` (or `flush()` + `os.fsync()` for durability — surviving a crash or power cut).
 5. Images, zip files, pickles and anything non-text → binary mode.
 6. **File-like objects**: anything with `read()`/`write()` can stand in for a file. `io.StringIO("text")` is an in-memory text file and `io.BytesIO(b"...")` an in-memory binary file — handy in tests and for libraries that expect a file (`csv.reader(io.StringIO(data))`, `pd.read_csv(io.StringIO(...))`).
 
@@ -671,7 +671,7 @@ Key facts:
 - Building paths with string `+` (`folder + "/" + name`) — use `pathlib`.
 
 ### Real-world examples
-Log processors stream files line by line; `pandas.read_csv(..., encoding="utf-8")` exposes the same encoding choice; almost every "garbled characters" bug report in data pipelines is an encoding mismatch.
+Log processors stream files line by line; `pandas.read_csv(..., encoding="utf-8")` exposes the same encoding choice; almost every "garbled characters" bug report in data pipelines (chains of automated data-processing steps) is an encoding mismatch.
 
 ### In the interview
 **30-second answer:** "`open` returns a file object; use it in a `with` block. Text mode works with `str` and needs an encoding — always pass `utf-8` explicitly; binary mode works with `bytes`. `w` truncates, `a` appends, `x` fails if the file exists. Iterate over the file for large inputs."
@@ -692,7 +692,7 @@ Log processors stream files line by line; `pandas.read_csv(..., encoding="utf-8"
 ## 9.10 `pathlib`, `shutil`, `tempfile`
 
 ### What it is
-- **`pathlib.Path`** — an object-oriented path. Join with `/`, inspect parts, and read/write/list without juggling strings or `os.path` functions. Works across Windows and POSIX.
+- **`pathlib.Path`** — an object-oriented path (a path stored as an object with its own methods). Join with `/`, inspect parts, and read/write/list without juggling strings or `os.path` functions. Works across Windows and POSIX (the Unix standard that Linux and macOS follow).
 - **`shutil`** ("shell utilities") — high-level operations on files and whole trees: copy, move, delete trees, make archives.
 - **`tempfile`** — safely creates temporary files and directories with unique names, cleaned up automatically.
 
@@ -721,14 +721,14 @@ base.rglob("*.md")
 |---|---|---|
 | Join | `base / "a" / "b.txt"` | `os.path.join(base, "a", "b.txt")` |
 | Current dir / home | `Path.cwd()`, `Path.home()` | `os.getcwd()`, `os.path.expanduser("~")` |
-| Absolute, symlinks resolved | `p.resolve()` | `os.path.realpath(p)` |
+| Absolute, symlinks (shortcut files pointing to another path) resolved | `p.resolve()` | `os.path.realpath(p)` |
 | Parts | `p.name`, `.stem`, `.suffix`, `.parent` | `os.path.basename`, `splitext`, `dirname` |
 | Exists / type | `p.exists()`, `.is_file()`, `.is_dir()` | `os.path.exists` … |
 | Read / write whole file | `p.read_text()`, `p.write_bytes(b)` | `open(...)` |
 | Make dirs | `p.mkdir(parents=True, exist_ok=True)` | `os.makedirs(p, exist_ok=True)` |
 | Delete file / empty dir | `p.unlink(missing_ok=True)`, `p.rmdir()` | `os.remove`, `os.rmdir` |
 | Rename / replace | `p.rename(t)`, `p.replace(t)` | `os.rename`, `os.replace` |
-| List / search | `p.iterdir()`, `p.glob("*.py")`, `p.rglob("*.py")`, `p.walk()` (3.12+) | `os.listdir`, `glob.glob`, `os.walk` |
+| List / search (glob = match names with wildcards like `*`) | `p.iterdir()`, `p.glob("*.py")`, `p.rglob("*.py")`, `p.walk()` (3.12+) | `os.listdir`, `glob.glob`, `os.walk` |
 
 `open()` and nearly every library accept `Path` objects directly.
 
@@ -754,9 +754,9 @@ temp dir removed: True
 
 | `shutil` function | Does |
 |---|---|
-| `copy(src, dst)` / `copy2` | Copy a file (+ permission bits / + timestamps and other metadata) |
+| `copy(src, dst)` / `copy2` | Copy a file (+ permission bits — who may read/write/run it / + timestamps and other metadata, i.e. information about the file) |
 | `copytree(src, dst)` | Copy a whole folder tree |
-| `move(src, dst)` | Move/rename, across filesystems if needed |
+| `move(src, dst)` | Move/rename, across filesystems (separate disks or partitions) if needed |
 | `rmtree(path)` | Delete a folder **and everything in it** — permanent, no recycle bin |
 | `make_archive(base, "zip", root_dir)` / `unpack_archive` | Create/extract zip, tar, gztar… |
 | `which("git")`, `disk_usage(path)` | Find an executable on `PATH`; total/used/free bytes |
@@ -768,10 +768,10 @@ temp dir removed: True
 | `TemporaryFile()` | Anonymous file — may have no visible name at all |
 | `mkstemp()` / `mkdtemp()` | Low-level: create and return path; **you** delete it |
 
-**Atomic replace pattern**: write the new content to a temp file *in the same directory*, then `os.replace(tmp, target)`. The rename is atomic on the same filesystem, so readers see either the old or the new file — never a half-written one. Tools that save config and state files commonly use this.
+**Atomic replace pattern**: write the new content to a temp file *in the same directory*, then `os.replace(tmp, target)`. The rename is atomic (happens all at once or not at all) on the same filesystem, so readers see either the old or the new file — never a half-written one. Tools that save config and state files commonly use this.
 
 ### Trade-offs
-`pathlib` is the modern default; `os`/`os.path` remain for low-level calls (`os.replace`, `os.fsync`, file descriptors) and older code. `shutil` operations are convenient but not transactional — a `copytree` interrupted halfway leaves a partial copy.
+`pathlib` is the modern default; `os`/`os.path` remain for low-level calls (`os.replace`, `os.fsync`, file descriptors — the OS's integer handles for open files) and older code. `shutil` operations are convenient but not transactional (all-or-nothing) — a `copytree` interrupted halfway leaves a partial copy.
 
 ### Common mistakes
 - Hard-coding `"/tmp/myfile"` — predictable names are a security risk and not portable; use `tempfile`.
@@ -780,7 +780,7 @@ temp dir removed: True
 - `Path("a").glob("**/*.py")` vs `rglob("*.py")` — equivalent; `rglob` is shorter.
 
 ### Real-world examples
-pytest's `tmp_path` fixture hands each test a fresh `pathlib.Path` temp directory. Build tools use `shutil.copytree`/`make_archive` for packaging; `shutil.which` is how scripts check that `git` or `ffmpeg` is installed.
+pytest's `tmp_path` fixture (a helper object pytest passes into tests) hands each test a fresh `pathlib.Path` temp directory. Build tools use `shutil.copytree`/`make_archive` for packaging; `shutil.which` is how scripts check that `git` or `ffmpeg` is installed.
 
 ### In the interview
 **30-second answer:** "`pathlib.Path` is the object-oriented way to build and inspect paths and to read, write, list and glob; `shutil` does high-level file and tree operations like copy, move, rmtree and archives; `tempfile` creates unique temp files and directories that clean themselves up. For safe file updates, write a temp file in the same folder and `os.replace` it."
@@ -804,7 +804,7 @@ Three standard ways to store structured data in files:
 |---|---|---|---|---|---|
 | **CSV** — comma-separated values | `csv` | Text table | Rows of **strings** | Yes (Excel, databases) | Yes |
 | **JSON** — JavaScript Object Notation | `json` | Text | dict, list, str, int, float, bool, None | Yes (the web's lingua franca) | Yes |
-| **pickle** | `pickle` | Binary | Almost any Python object | **No** — Python only | **NO** — can run arbitrary code |
+| **pickle** | `pickle` | Binary | Almost any Python object | **No** — Python only | **NO** — can run arbitrary (any, attacker-chosen) code |
 
 ### CSV
 Use the `csv` module, not `line.split(",")` — real CSV has quoted fields containing commas, quotes and even newlines.
@@ -831,7 +831,7 @@ with open(path, newline="", encoding="utf-8") as f:
 - The writer quoted `"Ana, Inc."` and doubled the inner quotes in `"Bob ""B"" Ltd"` automatically.
 - **Everything reads back as `str`** — convert types yourself.
 - Open with **`newline=""`** (the docs require it) so the `csv` module handles line endings itself; otherwise you can get blank lines between rows on Windows or broken quoted newlines.
-- `csv.reader`/`csv.writer` work with lists; `DictReader`/`DictWriter` with dicts keyed by the header; `delimiter="\t"` for TSV; `csv.Sniffer` guesses a dialect.
+- `csv.reader`/`csv.writer` work with lists; `DictReader`/`DictWriter` with dicts keyed by the header; `delimiter="\t"` for TSV (tab-separated values); `csv.Sniffer` guesses a dialect (the file's CSV variant: delimiter, quoting rules).
 - For analysis-sized data, `pandas.read_csv` is usually the better tool.
 
 ### JSON
@@ -868,14 +868,14 @@ back = json.loads(text)
   without default=: Object of type date is not JSON serializable
   JSONDecodeError: Expecting property name enclosed in double quotes at pos 1
 ```
-- Types JSON doesn't know (`date`, `Decimal`, `set`, your classes) need a `default=` function (or pre-conversion, e.g. `dataclasses.asdict`); they come back as plain strings/lists — the round trip is **lossy** for types.
+- Types JSON doesn't know (`date`, `Decimal`, `set`, your classes) need a `default=` function (or pre-conversion, e.g. `dataclasses.asdict`); they come back as plain strings/lists — the round trip is **lossy** (information is lost) for types.
 - Tuples become lists; non-string keys become strings.
 - JSON requires double quotes; `'single'` quotes (a Python repr) are invalid → `json.JSONDecodeError` (a `ValueError` subclass).
 - `indent=2` pretty-prints; `ensure_ascii=False` keeps "é" readable instead of the escape `\u00e9`; `sort_keys=True` gives stable output. `python -m json.tool file.json` pretty-prints from the shell.
 - By default `json.dumps(float("nan"))` writes `NaN`, which is **not** valid JSON for strict parsers; pass `allow_nan=False` to get an error instead.
 
 ### pickle
-`pickle` serialises almost any Python object graph (custom classes, dates, nested references) to bytes and back.
+`pickle` serialises (turns into bytes) almost any Python object graph (an object plus everything it references) (custom classes, dates, nested references) to bytes and back.
 
 ```python
 blob = pickle.dumps(orders)
@@ -888,7 +888,7 @@ with open(base / "orders.pkl", "wb") as f:                 # binary mode!
   load() from file: 2 orders
 ```
 
-**Security caveat — never unpickle data you don't fully trust.** The pickle format lets an object specify, via `__reduce__`, a function to *call* when it's loaded. The script demonstrates with a harmless `print`; an attacker would use `os.system` or similar:
+**Security caveat — never unpickle data you don't fully trust.** The pickle format lets an object specify, via `__reduce__`, a function to *call* when it's loaded. The script demonstrates with a harmless `print`; an attacker would use `os.system` (runs any shell command) or similar:
 
 ```python
 class Sneaky:
@@ -908,9 +908,9 @@ Other pickle limits: Python-only; tied to your class definitions (rename a class
 
 ### Trade-offs / when to use which
 - **Config, APIs, data exchange** → JSON (or TOML for human-edited config, which Python reads with `tomllib`).
-- **Tabular data for spreadsheets/other tools** → CSV (or Parquet via pandas for big data).
+- **Tabular data for spreadsheets/other tools** → CSV (or Parquet — a compressed, column-oriented data file format — via pandas for big data).
 - **Short-lived caching of Python objects you created yourself** (e.g. between steps of your own pipeline, `multiprocessing` internals) → pickle.
-- **Never** pickle for data crossing a trust boundary (uploads, network, downloaded files).
+- **Never** pickle for data crossing a trust boundary (the line between data you control and data from outside) (uploads, network, downloaded files).
 
 ### Common mistakes
 - Opening pickle files in text mode (`"w"`) → `TypeError`; always `"wb"`/`"rb"`.
@@ -919,9 +919,9 @@ Other pickle limits: Python-only; tied to your class definitions (rename a class
 - Loading downloaded model files with plain `pickle.load`.
 
 ### Real-world examples
-- **PyTorch** checkpoints (`torch.save`) use pickle; since PyTorch 2.6, `torch.load` defaults to `weights_only=True` to block arbitrary code during loading, and Hugging Face created the **safetensors** format as a pickle-free way to share model weights.
-- scikit-learn documents pickle/joblib for model persistence with the same security warning, and points to the `skops` format as a safer option.
-- REST APIs (GitHub, Stripe) speak JSON; spreadsheet exports are CSV.
+- **PyTorch** checkpoints (saved snapshots of a model; `torch.save`) use pickle; since PyTorch 2.6, `torch.load` defaults to `weights_only=True` to block arbitrary code during loading, and Hugging Face created the **safetensors** format as a pickle-free way to share model weights (the learned numbers inside an ML model).
+- scikit-learn documents pickle/joblib for model persistence (saving to disk to reload later) with the same security warning, and points to the `skops` format as a safer option.
+- REST APIs (web APIs built from plain HTTP requests to URLs; GitHub, Stripe) speak JSON; spreadsheet exports are CSV.
 
 ### In the interview
 **30-second answer:** "CSV is text rows of strings — use the `csv` module with `newline=''` because of quoting. JSON maps to dict/list/str/number/bool/None, is language-neutral and safe; other types need a `default=` hook and come back as plain values. Pickle stores arbitrary Python objects in binary but is Python-only and unsafe: loading can execute code via `__reduce__`, so never unpickle untrusted data."

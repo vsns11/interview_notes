@@ -1,6 +1,6 @@
 # Chapter 20 — Pythonic Idioms, Gotchas and Interview Q&A
 
-**Pythonic** code is code that uses the language the way its designers intended: readable, short without being clever, and leaning on built-in protocols (iteration, context managers, unpacking) instead of re-implementing them. Reviewers and interviewers notice it immediately — `for i in range(len(xs))` or `if x == None` marks someone who learned Python from another language. The flip side is a handful of **gotchas**: behaviours that surprise even experienced developers (mutable default arguments, late-binding closures, shallow copies).
+**Pythonic** code is code that uses the language the way its designers intended: readable, short without being clever, and leaning on built-in protocols (agreed sets of special methods that Python's syntax calls — iteration, context managers, unpacking) instead of re-implementing them. Reviewers and interviewers notice it immediately — `for i in range(len(xs))` or `if x == None` marks someone who learned Python from another language. The flip side is a handful of **gotchas**: behaviours that surprise even experienced developers (mutable default arguments, late-binding closures, shallow copies).
 
 This chapter pulls the whole book together for review: first the idioms, then the gotchas (each with a demo and a fix), then about 45 classic Python interview questions with short, correct answers that point back to the chapter where the topic is taught in depth. Scripts live in [`code/`](code/) and were run with Python 3.14 (all 3.12-compatible); outputs are real.
 
@@ -12,7 +12,7 @@ This chapter pulls the whole book together for review: first the idioms, then th
 | 20.2 | 13 gotchas, each demonstrated and fixed | `02_gotchas.py` |
 | 20.3 | Interview Q&A: language basics, data structures, functions, OOP, internals and memory, concurrency, typing/tooling | `03_interview_qa.py` |
 
-> The Zen of Python (`import this`, PEP 20) summarises the taste behind the idioms: *explicit is better than implicit, simple is better than complex, readability counts, errors should never pass silently, there should be one obvious way to do it.* PEP 8 is the style guide (4-space indents, `snake_case` functions, `CapWords` classes, lines ≲ 79–99 chars); tools such as `ruff` and `black` enforce it automatically.
+> The Zen of Python (`import this`, PEP 20 — PEPs, *Python Enhancement Proposals*, are the numbered documents that define the language and its conventions) summarises the taste behind the idioms: *explicit is better than implicit, simple is better than complex, readability counts, errors should never pass silently, there should be one obvious way to do it.* PEP 8 is the style guide (4-space indents, `snake_case` — lower case with underscores — functions, `CapWords` — each word capitalised — classes, lines ≲ 79–99 chars); tools such as `ruff` (a linter: it flags mistakes and style problems) and `black` (a formatter: it rewrites layout for you) enforce it automatically.
 
 ---
 
@@ -45,11 +45,11 @@ An **idiom** is the conventional way a community expresses a common task. In Pyt
 
 ### EAFP vs LBYL
 **LBYL** ("look before you leap") checks conditions first: `if "port" in config: ...`. **EAFP** ("easier to ask forgiveness than permission") just tries and handles the failure: `try: port = int(config["port"]) except (KeyError, ValueError): port = 80`. Python favours EAFP because:
-1. It avoids **race conditions** — between "check the file exists" and "open it", another process can delete it; opening inside `try` has no gap.
+1. It avoids **race conditions** (bugs where the result depends on the timing of two things happening at once) — between "check the file exists" and "open it", another process can delete it; opening inside `try` has no gap.
 2. One `try` can cover several failure modes (missing key *and* bad number above).
-3. It keeps the happy path unindented and readable.
+3. It keeps the happy path (the normal, no-errors flow) unindented and readable.
 
-Use LBYL when failure is common and cheap to check (then exceptions would be slow and noisy), or when the check has no side effects to race with. For "ignore this particular error", `contextlib.suppress(FileNotFoundError)` is a tidy EAFP shortcut. Never write a bare `except:` (see gotcha 11).
+Use LBYL when failure is common and cheap to check (then exceptions would be slow and noisy), or when the check has no side effects (effects beyond returning a value, like changing a file) to race with. For "ignore this particular error", `contextlib.suppress(FileNotFoundError)` is a tidy EAFP shortcut. Never write a bare `except:` (see gotcha 11).
 
 ### Unpacking
 Any iterable can be unpacked into names; `*name` collects "the rest" into a list; `**` unpacks mappings.
@@ -110,10 +110,10 @@ Every object has a truth value. **Falsy**: `None`, `False`, zero of any numeric 
 
 The trap: `if count:` is also false when `count == 0`. When `0` (or `""`) is a valid value and you mean "was it provided?", write `if count is not None:`.
 
-`and`/`or` return one of their **operands**, not a bool: `name or "anonymous"` gives a default for any falsy name.
+`and`/`or` return one of their **operands** (the values on either side of the operator), not a bool: `name or "anonymous"` gives a default for any falsy name.
 
 ### f-strings
-f-strings (3.6+) evaluate expressions inside `{}` and apply the **format mini-language** after a colon:
+f-strings (3.6+) evaluate expressions inside `{}` and apply the **format mini-language** (a compact code for width, alignment and number style) after a colon:
 
 ```python
 print(f"{name:<8}|{price:>12,.2f}|{ratio:.1%}|{42:05d}|{255:#x}|{255:b}")
@@ -125,7 +125,7 @@ Widget  |    1,234.57|45.7%|00042|0xff|11111111
 price=1234.5678
 ```
 
-`<`/`>`/`^` align, the number is the width, `,` adds thousands separators, `.2f` fixes decimals, `%` multiplies by 100, `x`/`b` are hex/binary. `!r` uses `repr()`. For logging, pass arguments lazily instead (`log.info("user %s", uid)`) so formatting only happens if the message is emitted.
+`<`/`>`/`^` align, the number is the width, `,` adds thousands separators, `.2f` fixes decimals, `%` multiplies by 100, `x`/`b` are hex/binary (base 16 / base 2). `!r` uses `repr()`. For logging, pass arguments lazily instead (`log.info("user %s", uid)`) so formatting only happens if the message is emitted.
 
 ### Context managers and `with open`
 A **context manager** is an object whose `__enter__` runs at the start of a `with` block and whose `__exit__` runs at the end — **even if an exception is raised** (Chapter 12). Files, locks, database transactions, temporary directories and timers all use it, so cleanup can't be forgotten.
@@ -146,7 +146,7 @@ def timer(label):
         print(f"{label}: done")
 ```
 
-Always pass `encoding="utf-8"` for text files: the default comes from the platform's locale (for example, often cp1252 on Windows), which causes "works on my machine" bugs. Several managers can share one `with`: `with open(a) as src, open(b, "w") as dst:`.
+Always pass `encoding="utf-8"` for text files: the default comes from the platform's locale (the operating system's language and region settings; for example, often cp1252 — an old Western-European character encoding — on Windows), which causes "works on my machine" bugs. Several managers can share one `with`: `with open(a) as src, open(b, "w") as dst:`.
 
 ### `pathlib`
 `pathlib.Path` (Chapter 9) represents file-system paths as objects: `/` joins, and methods replace scattered `os.path` functions.
@@ -230,7 +230,7 @@ fns = [lambda i=i: i for i in range(3)]     # [0, 1, 2]
 a == b: True | a is b: False
 x is None: True (the right way to test for None)
 ```
-**Why:** `==` calls `__eq__` and compares **values**; `is` compares **identity** (same object in memory, `id(a) == id(b)`). **Fix:** use `==` for values; use `is` only for singletons — `None`, `True`/`False` in rare cases, and your own sentinel objects (`_MISSING = object()`).
+**Why:** `==` calls `__eq__` and compares **values**; `is` compares **identity** (same object in memory, `id(a) == id(b)`). **Fix:** use `==` for values; use `is` only for singletons — `None`, `True`/`False` in rare cases, and your own sentinel objects (unique marker values meaning "nothing was passed", e.g. `_MISSING = object()`).
 
 ### 4. Integer caching
 ```
@@ -290,7 +290,7 @@ Fraction(1, 10) + Fraction(2, 10) = 3/10
 round(2.675, 2) = 2.67 | round(0.5), round(1.5) = 0 2
 float('nan') == float('nan'): False
 ```
-**Why:** `float` is IEEE-754 binary64; most decimal fractions (0.1, 2.675) have no exact binary representation, so they are stored as the nearest representable value. `round` uses **round-half-to-even** ("banker's rounding"), and `2.675` is really `2.67499999…`. `NaN` is unequal to everything, including itself. **Fix:** compare with `math.isclose` (or an explicit tolerance); use `decimal.Decimal` **constructed from strings** for money; `fractions.Fraction` for exact rationals; integers of cents for currency; `math.isnan` to test NaN.
+**Why:** `float` is IEEE-754 binary64 (the international standard 64-bit binary floating-point format every modern CPU uses); most decimal fractions (0.1, 2.675) have no exact binary representation, so they are stored as the nearest representable value. `round` uses **round-half-to-even** ("banker's rounding"), and `2.675` is really `2.67499999…`. `NaN` is unequal to everything, including itself. **Fix:** compare with `math.isclose` (or an explicit tolerance); use `decimal.Decimal` **constructed from strings** for money; `fractions.Fraction` for exact rationals (numbers written as one integer over another, like 1/3); integers of cents for currency; `math.isnan` to test NaN.
 
 ### 11. Bare `except:`
 ```
@@ -351,7 +351,7 @@ Short, correct answers you can say out loud in 20–40 seconds. "→ Ch N" point
 ### A. Language basics
 
 **Q1. Is Python compiled or interpreted?**
-Both, in stages. CPython (the reference implementation, written in C) **compiles** source to **bytecode** (cached as `.pyc` files in `__pycache__`), then its virtual machine **interprets** the bytecode. There is no ahead-of-time compilation to machine code by default (CPython 3.13+ ships an experimental JIT that is off by default). `dis` shows the bytecode:
+Both, in stages. CPython (the reference implementation, written in C) **compiles** source to **bytecode** (a compact list of low-level instructions for Python's own virtual machine; cached as `.pyc` files in `__pycache__`), then its virtual machine (a program that executes those instructions one by one) **interprets** the bytecode. There is no ahead-of-time compilation to machine code (instructions the CPU runs directly) by default (CPython 3.13+ ships an experimental JIT — just-in-time compiler, which turns hot code into machine code while the program runs — that is off by default). `dis` shows the bytecode:
 ```
 == bytecode: CPython compiles to bytecode, then interprets it
 167           RESUME                   0
@@ -360,10 +360,10 @@ Both, in stages. CPython (the reference implementation, written in C) **compiles
               BINARY_OP                0 (+)
               RETURN_VALUE
 ```
-(Exact opcodes change between versions.) Other implementations: **PyPy** (tracing JIT, often much faster for pure-Python loops), MicroPython (microcontrollers), and historically Jython/IronPython. → Ch 1, 17
+(Exact opcodes — the individual instruction names — change between versions.) Other implementations: **PyPy** (tracing JIT, often much faster for pure-Python loops), MicroPython (microcontrollers — tiny single-chip computers in devices), and historically Jython/IronPython. → Ch 1, 17
 
 **Q2. Python is dynamically and strongly typed — what does that mean?**
-*Dynamic*: types belong to objects, not variables; a name can be rebound to any type and types are checked at runtime. *Strong*: Python won't silently convert between unrelated types — `"1" + 1` raises `TypeError` (unlike JavaScript). → Ch 2
+*Dynamic*: types belong to objects, not variables; a name can be rebound to any type and types are checked at runtime. *Strong*: Python won't silently convert between unrelated types — `"1" + 1` raises `TypeError` (unlike JavaScript, the browser language, which would give `"11"`). → Ch 2
 
 **Q3. Mutable vs immutable types?**
 Immutable objects can't change after creation: `int`, `float`, `bool`, `str`, `tuple`, `frozenset`, `bytes`. Mutable: `list`, `dict`, `set`, `bytearray`, most user classes. "Changing" an immutable value (`s += "x"`) creates a new object and rebinds the name. Only immutables (whose contents are hashable) can be dict keys or set members. Note a tuple *containing* a list is immutable itself but its list can change — and then it isn't hashable:
@@ -387,16 +387,16 @@ Neither exactly: **by object reference** ("call by sharing"). The function's par
 `==` compares values via `__eq__`; `is` compares identity (same object). Use `is` only for `None` and sentinels. See gotchas 3–4. → Ch 2
 
 **Q6. What does `if __name__ == "__main__":` do?**
-Every module has `__name__`; it's `"__main__"` when the file is run directly and the module's import name when imported. The guard runs code only in the first case — so a file can be both an importable module and a script, and multiprocessing child processes (which re-import the main module on spawn) don't re-run your program. → Ch 8
+Every module has `__name__`; it's `"__main__"` when the file is run directly and the module's import name when imported. The guard runs code only in the first case — so a file can be both an importable module and a script, and multiprocessing child processes (which re-import the main module on spawn — the start method that launches a fresh interpreter) don't re-run your program. → Ch 8
 
 **Q7. Module vs package; what is `__init__.py`?**
-A **module** is one `.py` file. A **package** is a directory of modules; a *regular* package has an `__init__.py` (run on first import, often used to expose a public API); without it you get a *namespace package*. Imports are cached in `sys.modules`, so a module body runs once per process. → Ch 8
+A **module** is one `.py` file. A **package** is a directory of modules; a *regular* package has an `__init__.py` (run on first import, often used to expose a public API); without it you get a *namespace package* (a package that can be split across several directories). Imports are cached in `sys.modules`, so a module body runs once per process. → Ch 8
 
 **Q8. What is a virtual environment and why use one?**
-An isolated directory with its own interpreter link and `site-packages`, created with `python -m venv .venv`. It lets each project pin its own dependency versions without conflicts or touching the system Python. Tools: `pip` + `requirements.txt`, or `uv`/`poetry` with `pyproject.toml` and lock files. → Ch 8
+An isolated directory with its own interpreter link and `site-packages` (the folder where installed third-party packages live), created with `python -m venv .venv`. It lets each project pin (fix to exact numbers) its own dependency (third-party package the project needs) versions without conflicts or touching the system Python. Tools: `pip` + `requirements.txt`, or `uv`/`poetry` with `pyproject.toml` and lock files (files recording the exact version of every installed package so installs are reproducible). → Ch 8
 
 **Q9. What's new that interviewers like to hear about?**
-`match` statement (structural pattern matching, 3.10), `X | Y` union types (3.10), exception groups and `except*` (3.11), big speed-ups from the "Faster CPython" work (3.11+), type-parameter syntax `def f[T](x: T)` (3.12), an optional free-threaded (no-GIL) build (experimental in 3.13, officially supported in 3.14), and template strings (t-strings, 3.14). → Ch 1, 3, 13, 16
+`match` statement (structural pattern matching — branching on the *shape* of data, 3.10), `X | Y` union types (3.10), exception groups and `except*` (3.11), big speed-ups from the "Faster CPython" work (3.11+), type-parameter syntax `def f[T](x: T)` (3.12), an optional free-threaded (no-GIL) build (experimental in 3.13, officially supported in 3.14), and template strings (t-strings, 3.14 — like f-strings but they produce a template object that code can inspect and process safely before turning it into text). → Ch 1, 3, 13, 16
 
 ### B. Data structures
 
@@ -410,10 +410,10 @@ An isolated directory with its own interpreter link and `site-packages`, created
 Tuples also signal intent: "this won't change". → Ch 5
 
 **Q11. How is a list implemented?**
-A dynamic array of pointers to objects. Index access is O(1); `append` is amortised O(1) because the array over-allocates and occasionally grows and copies; insert/delete at the front is O(n). → Ch 5, 19
+A dynamic array (a block of memory that is reallocated bigger when full) of pointers (memory addresses) to objects. Index access is O(1) (constant time, regardless of size); `append` is amortised O(1) (occasionally slow, but constant on average over many calls) because the array over-allocates and occasionally grows and copies; insert/delete at the front is O(n). → Ch 5, 19
 
 **Q12. How does a dict work internally?**
-A **hash table**. `hash(key)` picks a slot; collisions are resolved by **open addressing** (probing other slots in a pseudo-random sequence). Since CPython 3.6 the layout is *compact*: a small index table points into a dense array of entries, which saves memory and preserves **insertion order** — guaranteed by the language since 3.7. The table resizes when it gets about two-thirds full, so operations stay O(1) on average (O(n) worst case with many collisions). Keys must be hashable, and objects that compare equal must have equal hashes. → Ch 6
+A **hash table**. `hash(key)` picks a slot; collisions (two keys wanting the same slot) are resolved by **open addressing** (probing other slots in a pseudo-random sequence). Since CPython 3.6 the layout is *compact*: a small index table points into a dense array of entries, which saves memory and preserves **insertion order** — guaranteed by the language since 3.7. The table resizes when it gets about two-thirds full, so operations stay O(1) on average (O(n) worst case with many collisions). Keys must be hashable, and objects that compare equal must have equal hashes. → Ch 6
 
 **Q13. What makes an object hashable? What if I define `__eq__`?**
 It needs `__hash__` returning an int that never changes during its lifetime, and consistent `__eq__` (equal ⇒ same hash). If a class defines `__eq__` but not `__hash__`, Python sets `__hash__ = None` → instances become unhashable. A `@dataclass(frozen=True)` generates both. → Ch 6, 10
@@ -433,12 +433,12 @@ Classes can customise with `__copy__`/`__deepcopy__`. → Ch 5, gotcha 6
 `list` holds pointers to arbitrary objects. `array.array` stores raw C numbers of one type compactly. A **NumPy `ndarray`** stores a typed, contiguous block *and* provides vectorised operations implemented in C — orders of magnitude faster for numeric work. → Ch 5, 18
 
 **Q17. What's in `collections`?**
-`Counter` (counting), `defaultdict` (auto-default values), `deque` (O(1) both ends), `namedtuple` (tuple with named fields), `OrderedDict` (order-aware equality, `move_to_end` — handy for LRU caches), `ChainMap` (layered lookups). → Ch 6
+`Counter` (counting), `defaultdict` (auto-default values), `deque` (O(1) both ends), `namedtuple` (tuple with named fields), `OrderedDict` (order-aware equality, `move_to_end` — handy for LRU caches, which evict the least recently used entry), `ChainMap` (layered lookups). → Ch 6
 
 ### C. Functions
 
 **Q18. What are `*args` and `**kwargs`?**
-In a definition, `*args` collects extra positional arguments into a **tuple**, `**kwargs` extra keyword arguments into a **dict** (the names are convention). At a call site, `*` and `**` **unpack** an iterable / mapping into arguments. Order in a signature: positional-only (before `/`), normal, `*args`, keyword-only, `**kwargs`.
+In a definition, `*args` collects extra positional arguments into a **tuple**, `**kwargs` extra keyword arguments into a **dict** (the names are convention). At a call site, `*` and `**` **unpack** an iterable / mapping into arguments. Order in a signature (the parameter list): positional-only (before `/`; can't be passed by name), normal, `*args`, keyword-only (must be passed as `name=value`), `**kwargs`.
 ```
 == *args / **kwargs
    show(1, 2, a=3) -> ((1, 2), {'a': 3}) | show(*[1, 2], **{'b': 4}) -> ((1, 2), {'b': 4})
@@ -446,7 +446,7 @@ In a definition, `*args` collects extra positional arguments into a **tuple**, `
 Typical use: wrappers/decorators that forward arguments unchanged. → Ch 7
 
 **Q19. What is a closure?**
-A function that remembers variables from the enclosing function's scope even after that function has returned. The variables live in *cells* (`f.__closure__`). Use `nonlocal` to rebind them. Closures bind late (gotcha 2). → Ch 7
+A function that remembers variables from the enclosing function's scope even after that function has returned. The variables live in *cells* (small containers CPython uses to share a variable between functions; `f.__closure__`). Use `nonlocal` to rebind them. Closures bind late (gotcha 2). → Ch 7
 
 **Q20. Explain LEGB and `global`/`nonlocal`.**
 Name lookup order: **L**ocal, **E**nclosing functions, **G**lobal (module), **B**uilt-ins. Assigning to a name anywhere in a function makes it local for the whole function (hence `UnboundLocalError` if read first). `global x` rebinds the module variable; `nonlocal x` rebinds the nearest enclosing function's variable. → Ch 7
@@ -485,7 +485,7 @@ An **iterable** has `__iter__` returning an iterator (lists, dicts, files). An *
 The second pass is empty — iterators are exhausted once consumed. The generator's size doesn't depend on how many items it will produce. → Ch 11
 
 **Q23. `yield` vs `return`; what is `yield from`?**
-`return` ends the function with one value. `yield` produces a value and **pauses**, resuming on the next `next()`. `yield from sub` delegates to a sub-iterator (re-yielding all its values and passing `send()`/`throw()` through). Generators also support `send(value)` to push values in — the historical basis of coroutines. → Ch 11
+`return` ends the function with one value. `yield` produces a value and **pauses**, resuming on the next `next()`. `yield from sub` delegates to a sub-iterator (re-yielding all its values and passing `send()`/`throw()` through). Generators also support `send(value)` to push values in — the historical basis of coroutines (functions that can pause and resume, used by `async`). → Ch 11
 
 **Q24. What is a lambda and when shouldn't you use it?**
 An anonymous single-expression function: `lambda x: x * 2`. Good for short `key=` arguments. Don't assign it to a name (`f = lambda ...` — use `def`, which gives a proper name in tracebacks), and don't cram logic into it. → Ch 7
@@ -496,7 +496,7 @@ Both are lazy in Python 3 (`map`/`filter` return iterators). Comprehensions are 
 ### D. Object-oriented programming
 
 **Q26. `__init__` vs `__new__`?**
-`__new__(cls, …)` is a static method that **creates** and returns the instance; `__init__(self, …)` **initialises** an already-created instance and returns `None`. You override `__new__` only for immutable types (subclassing `int`, `str`, `tuple`), singletons/instance caching, or metaclass work. Note `__init__` still runs on every call:
+`__new__(cls, …)` is a static method (a method that receives no automatic `self`) that **creates** and returns the instance; `__init__(self, …)` **initialises** an already-created instance and returns `None`. You override `__new__` only for immutable types (subclassing `int`, `str`, `tuple`), singletons (classes allowed only one instance)/instance caching, or metaclass (the class that creates classes, see Q35) work. Note `__init__` still runs on every call:
 ```
 == __new__ vs __init__
    __new__: creating the object
@@ -522,7 +522,7 @@ Both are lazy in Python 3 (`map`/`filter` return iterators). Comprehensions are 
 Turns a method into a computed attribute, with optional setter/deleter — so you can start with a plain attribute and later add validation without changing callers (`t.celsius = -300` → `ValueError: below absolute zero` above). Python has no need for Java-style getters/setters. → Ch 10
 
 **Q29. What is the MRO and how does `super()` work?**
-The **Method Resolution Order** is the order Python searches classes for an attribute, computed with the **C3 linearisation**: children before parents, and the left-to-right order of bases is preserved. `super()` means "the next class in the MRO of the *instance's* class", not "my parent" — which makes cooperative multiple inheritance (diamonds) call each class once:
+The **Method Resolution Order** is the order Python searches classes for an attribute, computed with the **C3 linearisation** (the algorithm that merges all parent orders into one consistent list): children before parents, and the left-to-right order of bases is preserved. `super()` means "the next class in the MRO of the *instance's* class", not "my parent" — which makes cooperative multiple inheritance (several parents, each calling `super()`; "diamonds" are when two parents share a common grandparent) call each class once:
 ```
 == MRO / super()
    D.__mro__: ['D', 'B', 'C', 'A', 'object'] | D().hello(): D>B>C>A
@@ -530,7 +530,7 @@ The **Method Resolution Order** is the order Python searches classes for an attr
 `B`'s `super()` went to `C`, not `A`, because the instance is a `D`. → Ch 10
 
 **Q30. `__str__` vs `__repr__`?**
-`__repr__` is for developers — unambiguous, ideally valid code to recreate the object (`Temperature(100.0)`); used by the REPL, debuggers and inside containers. `__str__` is for end users (`print`, `str()`, f-strings); if missing, it falls back to `__repr__`. Always define `__repr__` first. → Ch 10
+`__repr__` is for developers — unambiguous, ideally valid code to recreate the object (`Temperature(100.0)`); used by the REPL (the interactive `>>>` prompt), debuggers and inside containers. `__str__` is for end users (`print`, `str()`, f-strings); if missing, it falls back to `__repr__`. Always define `__repr__` first. → Ch 10
 
 **Q31. What are dunder (magic) methods?**
 Special methods named `__x__` that Python calls for syntax and built-ins — the **data model**: `len(x)` → `__len__`, `a + b` → `__add__`, `x[i]` → `__getitem__`, `for` → `__iter__`, `with` → `__enter__`/`__exit__`, `==` → `__eq__`, `bool(x)` → `__bool__`, calling → `__call__`. Implementing them makes your classes behave like built-ins. → Ch 10
@@ -543,13 +543,13 @@ Declares a fixed set of attribute names, so instances store them in a compact ar
 `@dataclass(slots=True)` (3.10+) generates it. → Ch 10, 17
 
 **Q33. Abstract base classes vs duck typing vs `Protocol`?**
-**Duck typing**: if it has the method you call, it works — no inheritance needed. An **ABC** (`abc.ABC` + `@abstractmethod`) enforces at instantiation time that subclasses implement methods (nominal: you must inherit). A **`typing.Protocol`** describes the required methods structurally, checked by static type checkers without inheritance — "duck typing that mypy can verify" (`Square` satisfies `HasArea` above without inheriting it). → Ch 10, 13
+**Duck typing**: if it has the method you call, it works — no inheritance needed. An **ABC** (abstract base class: `abc.ABC` + `@abstractmethod`) enforces at instantiation time (when an object is created) that subclasses implement methods (nominal: you must inherit). A **`typing.Protocol`** describes the required methods structurally, checked by static type checkers without inheritance — "duck typing that mypy can verify" (`Square` satisfies `HasArea` above without inheriting it). → Ch 10, 13
 
 **Q34. What is a dataclass?**
 `@dataclass` generates `__init__`, `__repr__` and `__eq__` from annotated fields; options add ordering (`order=True`), immutability + hashing (`frozen=True`), `slots=True`, and `field(default_factory=list)` for mutable defaults. Use it for plain data records; use Pydantic when you need runtime validation/parsing. → Ch 10
 
 **Q35. What are descriptors and metaclasses (briefly)?**
-A **descriptor** is an object with `__get__`/`__set__`/`__delete__` stored as a class attribute; attribute access on instances is routed through it. `property`, methods (functions bind `self` via `__get__`), `classmethod` and `staticmethod` are all descriptors. A **metaclass** is the class of a class (default `type`); it controls class *creation*. ORMs (Django models), `abc.ABCMeta` and `enum.EnumMeta`/`EnumType` use metaclasses; for most needs, a class decorator or `__init_subclass__` is simpler. → Ch 12
+A **descriptor** is an object with `__get__`/`__set__`/`__delete__` stored as a class attribute; attribute access on instances is routed through it. `property`, methods (functions bind `self` via `__get__`), `classmethod` and `staticmethod` are all descriptors. A **metaclass** is the class of a class (default `type`); it controls class *creation*. ORMs (object-relational mappers, which map database tables to classes — e.g. Django models), `abc.ABCMeta` and `enum.EnumMeta`/`EnumType` use metaclasses; for most needs, a class decorator or `__init_subclass__` is simpler. → Ch 12
 
 ### E. Errors, resources, memory and internals
 
@@ -562,7 +562,7 @@ A **descriptor** is an object with `__get__`/`__set__`/`__delete__` stored as a 
 **Q38. How does Python manage memory?**
 1. **Reference counting**: every object counts references to it; when the count reaches zero it is freed **immediately** (deterministic cleanup).
 2. A **cyclic garbage collector** (`gc` module, generational) periodically finds groups of objects that only reference each other and frees them.
-3. Small objects come from CPython's own allocator (**pymalloc**) that pools memory to avoid many small `malloc` calls.
+3. Small objects come from CPython's own allocator (**pymalloc**) that pools memory to avoid many small `malloc` calls (`malloc` is C's general-purpose "give me some memory" function).
 ```
 == memory: reference counting + cycle collector
    refcount (includes getrefcount's own arg): 2
@@ -573,13 +573,13 @@ A **descriptor** is an object with `__get__`/`__set__`/`__delete__` stored as a 
 Memory "leaks" in Python are usually lingering references: growing global caches/lists, unbounded `lru_cache`s, or closures holding big objects. Diagnose with `tracemalloc`. → Ch 17
 
 **Q39. What is pickling? Is it safe?**
-`pickle` **serialises** Python objects to bytes (`dumps`/`dump`) and back (`loads`/`load`); used by `multiprocessing` to send data between processes, and to save scikit-learn models (joblib builds on it). Functions and classes are pickled *by reference* (module + name), so lambdas and locally defined functions can't be pickled:
+`pickle` **serialises** Python objects to bytes (`dumps`/`dump`) and back (`loads`/`load`); used by `multiprocessing` to send data between processes, and to save scikit-learn (machine-learning library) models (joblib — a helper library for saving objects and parallel jobs — builds on it). Functions and classes are pickled *by reference* (module + name), so lambdas and locally defined functions can't be pickled:
 ```
 == pickling
    round trip: {'model': 'v1', 'weights': [0.1, 0.2]} | 61 bytes
    pickle a lambda: PicklingError
 ```
-**Never unpickle untrusted data** — loading a pickle can execute arbitrary code. For data exchange use JSON (or formats like Parquet/`safetensors` for arrays). → Ch 9
+**Never unpickle untrusted data** — loading a pickle can execute arbitrary code. For data exchange use JSON (or formats like Parquet — a compressed columnar table format — / `safetensors` — a safe format for storing model weights — for arrays). → Ch 9
 
 **Q40. How do you find and fix slow Python code?**
 Measure first: `cProfile`/`pstats` (which functions take time), `timeit` (micro-benchmarks), `tracemalloc` (memory). Then: better algorithms/data structures (sets for membership, deque for queues), move loops into built-ins or NumPy vectorised operations, cache (`functools.cache`), avoid repeated attribute lookups in hot loops, and only then consider PyPy, Cython/Rust extensions, or processes for parallelism. → Ch 17
@@ -587,10 +587,10 @@ Measure first: `cProfile`/`pstats` (which functions take time), `timeit` (micro-
 ### F. Concurrency
 
 **Q41. What is the GIL?**
-The **Global Interpreter Lock** is a mutex in CPython that lets only one thread execute Python bytecode at a time. It keeps reference counting and the interpreter's internals simple and fast in single-threaded code. Consequences:
+The **Global Interpreter Lock** is a mutex (a lock that only one thread can hold at a time) in CPython that lets only one thread execute Python bytecode at a time. It keeps reference counting and the interpreter's internals simple and fast in single-threaded code. Consequences:
 - **CPU-bound** pure-Python code does **not** speed up with threads — use `multiprocessing`/`ProcessPoolExecutor` (separate processes, separate GILs) or C extensions that release the GIL (NumPy does for many operations).
 - **I/O-bound** code *does* benefit from threads, because the GIL is released while a thread waits on I/O.
-- The GIL does not make your own code thread-safe: `counter += 1` is several bytecodes and can still race — use `threading.Lock`.
+- The GIL does not make your own code thread-safe (correct when run by several threads at once): `counter += 1` is several bytecodes and can still race — use `threading.Lock`.
 ```
 == GIL: threads vs processes on CPU-bound work
    GIL enabled: True
@@ -608,7 +608,7 @@ The **Global Interpreter Lock** is a mutex in CPython that lets only one thread 
 → Ch 16
 
 **Q43. How does `asyncio` work?**
-A single-threaded **event loop** runs **coroutines** (`async def`). At each `await` on something not ready (network, timer), the coroutine yields control back to the loop, which runs another ready task — **cooperative multitasking**. `asyncio.gather` runs many concurrently:
+A single-threaded **event loop** runs **coroutines** (`async def`). At each `await` on something not ready (network, timer), the coroutine yields control back to the loop, which runs another ready task — **cooperative multitasking** (tasks voluntarily hand over control, rather than being interrupted). `asyncio.gather` runs many concurrently:
 ```
 == asyncio: many waits overlap on one thread
    10 x 0.2s waits concurrently -> 0.20s, ['req0', 'req1', 'req2']...
@@ -624,10 +624,10 @@ No. Annotations are stored (`__annotations__`) but the interpreter ignores them 
    double('ab') runs anyway: abab
    total_area: 13
 ```
-Static checkers (**mypy**, **pyright**) and IDEs use them to catch bugs before running; libraries like **Pydantic** and **FastAPI** read them to validate data at runtime. Key vocabulary: `list[int]`, `dict[str, float]`, `X | None` (= `Optional[X]`), `Callable[[int], str]`, `TypeVar`/generics (`def first[T](xs: list[T]) -> T`, 3.12), `Protocol`, `TypedDict`, `Literal`, `Any`. → Ch 13
+Static checkers (**mypy**, **pyright**) and IDEs (code editors such as VS Code or PyCharm) use them to catch bugs before running; libraries like **Pydantic** and **FastAPI** read them to validate data at runtime. Key vocabulary: `list[int]`, `dict[str, float]`, `X | None` (= `Optional[X]`), `Callable[[int], str]`, `TypeVar`/generics (`def first[T](xs: list[T]) -> T`, 3.12), `Protocol`, `TypedDict`, `Literal`, `Any`. → Ch 13
 
 **Q45. How do you test Python code?**
-`pytest` is the de-facto standard: plain `assert` statements, fixtures for setup, `@pytest.mark.parametrize` for many cases; `unittest` is the standard-library xUnit style. Use `unittest.mock` (`patch`, `Mock`) to replace external dependencies, `coverage` to measure what ran, and `hypothesis` for property-based tests. → Ch 15
+`pytest` is the de-facto (in practice, though not official) standard: plain `assert` statements, fixtures for setup, `@pytest.mark.parametrize` for many cases; `unittest` is the standard-library xUnit style (the class-based test design shared with Java's JUnit). Use `unittest.mock` (`patch`, `Mock`) to replace external dependencies, `coverage` to measure what ran, and `hypothesis` for property-based tests (tests that state a rule and let the library generate many random inputs to try to break it). → Ch 15
 
 **Q46. What is monkey patching?**
 Replacing an attribute of a module or class at runtime (`module.func = fake`). Useful in tests — `unittest.mock.patch("pkg.mod.name")` does it safely and restores the original afterwards — but dangerous in production code because it changes behaviour globally and invisibly. Patch where the name is **looked up**, not where it's defined. → Ch 15

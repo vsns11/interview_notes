@@ -2,7 +2,7 @@
 
 > **What you will learn.** The protocol behind every `for` loop (iterable vs iterator, `iter()` and `next()`), how generator functions and generator expressions produce values lazily, `yield from`, the basics of `send()`/`close()`, why laziness saves memory and time, the `itertools` toolkit (`count`, `cycle`, `chain`, `islice`, `groupby`, `product`, `permutations`, `combinations`, `accumulate`, `pairwise`, `batched` and friends), comprehension best practices, `map`/`filter`/`reduce` vs comprehensions, `any`/`all`, and `zip(strict=True)`.
 >
-> **Prerequisites.** [Chapter 10](../10-oop-in-python/README.md)'s data-model idea: syntax calls dunder methods.
+> **Prerequisites.** [Chapter 10](../10-oop-in-python/README.md)'s data-model idea: syntax calls dunder methods ("double underscore" methods such as `__iter__` and `__len__` that Python calls for you behind the scenes).
 >
 > **Code.** `chapters/11-iterators-generators-functional/code/` — `iter_protocol.py`, `generators.py`, `itertools_tour.py`, `comprehensions_functional.py`, `lazy_memory.py` (makes the plot in `img/`). Python 3.12+ (`itertools.batched`).
 
@@ -20,8 +20,8 @@ flowchart LR
 ## 11.1 Iterable vs iterator: the iteration protocol
 
 ### What it is
-- An **iterable** is anything you can loop over: it has `__iter__()` that returns an iterator (or, as a legacy fallback, a `__getitem__` that accepts 0, 1, 2 …). Lists, tuples, strings, dicts, sets, `range`, files.
-- An **iterator** is the object that actually walks through the items. It has `__next__()` (return the next item or raise `StopIteration`) **and** `__iter__()` that returns **itself**.
+- An **iterable** is anything you can loop over: it has `__iter__()` that returns an iterator (or, as a legacy fallback — an older mechanism still supported for backward compatibility — a `__getitem__` that accepts 0, 1, 2 …). Lists, tuples, strings, dicts, sets, `range`, files.
+- An **iterator** is the object that actually walks through the items. It has `__next__()` (return the next item or raise `StopIteration`, a built-in exception that simply means "no more items") **and** `__iter__()` that returns **itself**.
 
 Analogy: a book is an *iterable*; a bookmark is an *iterator*. Many readers can each have their own bookmark in the same book; a bookmark only moves forward and, once at the end, is used up.
 
@@ -67,7 +67,7 @@ first pass: [0, 1, 4] | second pass: []
 iter(callable, sentinel): ['a', 'b']
 RuntimeError: dictionary changed size during iteration
 ```
-What it shows: `Countdown` is re-iterable because each `for` gets a new iterator; `next(it, default)` returns the default instead of raising; an iterator's `iter()` is itself; a generator (an iterator) is **exhausted after one pass**; `iter(callable, sentinel)` keeps calling a function until it returns the sentinel (handy for `iter(lambda: f.read(4096), b"")`); and changing a dict's size while iterating over it raises.
+What it shows: `Countdown` is re-iterable because each `for` gets a new iterator; `next(it, default)` returns the default instead of raising; an iterator's `iter()` is itself; a generator (an iterator) is **exhausted after one pass**; `iter(callable, sentinel)` keeps calling a function until it returns the sentinel (a special marker value that means "stop here") (handy for `iter(lambda: f.read(4096), b"")`); and changing a dict's size while iterating over it raises.
 
 | | Iterable | Iterator |
 |---|---|---|
@@ -80,13 +80,13 @@ What it shows: `Countdown` is re-iterable because each `for` gets a new iterator
 Note: `range` is a lazy **sequence** (iterable, supports `len` and indexing), not an iterator: `next(range(3))` is a `TypeError`.
 
 ### Common mistakes
-- Looping twice over a generator/`map`/`zip`/file and getting nothing the second time. Materialise with `list()` if you need two passes, or make a re-iterable class.
+- Looping twice over a generator/`map`/`zip`/file and getting nothing the second time. Materialise (turn the lazy stream into a real, stored collection) with `list()` if you need two passes, or make a re-iterable class.
 - Writing a class whose `__iter__` returns `self` *and* expecting it to be re-iterable.
 - Modifying a list/dict while iterating over it — iterate over a copy (`for k in list(d):`) or build a new collection.
-- Raising `StopIteration` inside a **generator** to stop it: since Python 3.7 (PEP 479) that becomes a `RuntimeError`. Use `return`.
+- Raising `StopIteration` inside a **generator** to stop it: since Python 3.7 (PEP 479 — a PEP, *Python Enhancement Proposal*, is the numbered design document that introduces a language change) that becomes a `RuntimeError`. Use `return`.
 
 ### Real-world examples
-File objects iterate line by line without loading the whole file; `csv.reader` and `os.scandir` return iterators; database cursors (DB-API) are iterable over result rows; PyTorch's `DataLoader` is an iterable that yields batches each epoch.
+File objects iterate line by line without loading the whole file; `csv.reader` and `os.scandir` return iterators; database cursors (a cursor is the object that walks through a query's result rows; DB-API is Python's standard interface for database drivers, PEP 249) are iterable over result rows; PyTorch's `DataLoader` (PyTorch is a deep-learning library) is an iterable that yields batches (small groups of training examples) each epoch (one full pass over the training data).
 
 ### In the interview
 **30-second answer:** "An iterable has `__iter__` that returns an iterator; an iterator has `__next__`, which returns items or raises `StopIteration`, and its `__iter__` returns itself. A `for` loop calls `iter()` once then `next()` until `StopIteration`. Iterables like lists can be looped many times; iterators like generators are single-pass."
@@ -113,11 +113,11 @@ Analogy: a normal function is a vending machine that dumps all items at once; a 
 ### Why it matters
 - **Memory:** values are produced one at a time — you can process a 50 GB log or an infinite stream in constant memory.
 - **Simplicity:** writing an iterator as a generator takes a few lines instead of a class with `__iter__`/`__next__` and manual state.
-- **Pipelines:** generators chain like Unix pipes: read → filter → parse → aggregate, each stage lazy.
+- **Pipelines:** generators chain like Unix pipes (the shell's `cmd1 | cmd2` feature, where one program's output streams straight into the next program's input): read → filter → parse → aggregate, each stage lazy.
 
 ### How it works
 1. `g = countdown(3)` — creates the generator; nothing in the body runs yet.
-2. `next(g)` — runs from the top to the first `yield n`; returns 3 and freezes the frame.
+2. `next(g)` — runs from the top to the first `yield n`; returns 3 and freezes the frame (the frame is the function's live execution state: its local variables and the line it's on).
 3. Next `next(g)` — resumes right after the `yield`, loops, yields 2.
 4. When the body ends (or hits `return`), `StopIteration` is raised; `for`/`list()` handle it.
 
@@ -188,7 +188,7 @@ When you need the data more than once, need `len()`/random access, or the data i
 - Holding resources (open files) inside a generator that is never finished — wrap in `with` inside the generator, and/or close it (`gen.close()` or `contextlib.closing`).
 
 ### Real-world examples
-`os.walk` is a generator; Scrapy spiders `yield` scraped items and requests; pytest fixtures use `yield` to separate setup from teardown; web frameworks stream responses from generators (Flask `Response(generator)`, FastAPI/Starlette `StreamingResponse`); `pandas.read_csv(..., chunksize=N)` returns an iterator over chunks for files too large for memory.
+`os.walk` is a generator; Scrapy (a web-scraping framework) spiders `yield` scraped items and requests; pytest fixtures (reusable test-preparation functions) use `yield` to separate setup (preparing resources before a test) from teardown (cleaning them up afterwards); web frameworks stream responses (send the reply to the browser piece by piece instead of all at once) from generators (Flask `Response(generator)`, FastAPI/Starlette `StreamingResponse`); `pandas.read_csv(..., chunksize=N)` returns an iterator over chunks for files too large for memory.
 
 ### In the interview
 **30-second answer:** "A generator function uses `yield`; calling it returns a generator object — an iterator — without running the body. Each `next()` runs to the next `yield`, returns that value and suspends with its local state intact. That gives lazy, constant-memory iteration, infinite sequences, and composable pipelines. Generator expressions are the inline form with parentheses."
@@ -233,7 +233,7 @@ Output:
 flatten: [1, 2, 3, 4, 5]
 outer: [1, 2, "got 'inner-done'"]
 ```
-(`yield from` also forwards `send()`/`throw()`/`close()` to the sub-generator — that property made it the foundation of pre-`async` coroutines.)
+(`yield from` also forwards `send()`/`throw()`/`close()` to the sub-generator — that property made it the foundation of pre-`async` coroutines — a **coroutine** is a function that can pause in the middle and be resumed later, which lets one thread juggle many tasks.)
 
 ### `send()`, `throw()`, `close()` — two-way generators
 A `yield` is also an **expression**: `value = yield out` hands `out` to the caller and receives whatever the caller passes with `gen.send(value)`.
@@ -241,7 +241,7 @@ A `yield` is also an **expression**: `value = yield out` hands `out` to the call
 1. **Prime** the generator first with `next(gen)` (or `gen.send(None)`) so it runs to the first `yield`. Sending a non-`None` value to a just-started generator is a `TypeError`.
 2. `gen.send(v)` resumes it; the paused `yield` evaluates to `v`; runs to the next `yield` and returns that yielded value.
 3. `gen.throw(exc)` raises an exception at the paused `yield`.
-4. `gen.close()` raises `GeneratorExit` at the paused `yield` so the generator can clean up (`finally`/`except GeneratorExit` then re-raise or return). Generators are also closed when garbage-collected.
+4. `gen.close()` raises `GeneratorExit` at the paused `yield` so the generator can clean up (`finally`/`except GeneratorExit` then re-raise or return). Generators are also closed when garbage-collected (automatically freed by Python once nothing refers to them any more).
 
 ```python
 def running_average():
@@ -263,7 +263,7 @@ Output:
   send 60 -> 30.0
   closing running_average (cleanup here)
 ```
-In modern code, **`async def`/`await` coroutines** (asyncio) replace generator-based coroutines; `send` is mostly seen in libraries and interviews. `contextlib.contextmanager` ([Chapter 12](../12-decorators-context-managers-metaprogramming/README.md)) relies on the same generator machinery.
+In modern code, **`async def`/`await` coroutines** (asyncio — the standard library's framework for running many waiting tasks concurrently on one thread, see [Chapter 16](../16-concurrency-and-async/README.md)) replace generator-based coroutines; `send` is mostly seen in libraries and interviews. `contextlib.contextmanager` ([Chapter 12](../12-decorators-context-managers-metaprogramming/README.md)) relies on the same generator machinery.
 
 ### TL;DR
 `yield from` delegates to a sub-iterable and returns a sub-generator's return value. `send` pushes a value into a paused generator (prime with `next` first), `throw` raises inside it, `close` triggers `GeneratorExit` for cleanup.
@@ -291,16 +291,16 @@ any() list comp built all 1,000,000 items; gen stopped at item 12 -> gen faster:
 ![Peak memory of list comprehension vs generator expression as n grows](img/list_vs_generator_memory.png)
 *Figure — Peak memory grows linearly with n for the list (≈40 bytes per item: an 8-byte pointer plus a ~32-byte int object) but stays flat for the generator.*
 
-How to read the numbers: `sys.getsizeof(list)` counts only the list's array of 8-byte pointers (1,000,000 × 8 ≈ 8 MB); the int objects themselves add ~32 MB more, which `tracemalloc` sees. Exact sizes vary by Python version and platform.
+How to read the numbers: `sys.getsizeof(list)` counts only the list's array of 8-byte pointers (1,000,000 × 8 ≈ 8 MB); the int objects themselves add ~32 MB more, which `tracemalloc` (a standard-library module that records every memory allocation Python makes) sees. Exact sizes vary by Python version and platform.
 
 Two benefits of laziness:
-1. **Memory** — O(1) instead of O(n) for single-pass work.
+1. **Memory** — O(1) instead of O(n) for single-pass work. (Big-O notation describes how cost grows with input size *n*: O(1) means constant no matter how big *n* gets, O(n) means it grows in proportion to *n*.)
 2. **Early exit** — `any`, `next`, `islice`, `takewhile` stop pulling as soon as they have the answer, so the rest is never computed.
 
 ### Common mistakes
 - Wrapping everything in `list(...)` "to be safe" — loses both benefits.
 - Assuming laziness in Python 2 tutorials (`map` returned lists there).
-- Lazy code capturing a variable that changes before evaluation (closures bind late — see §11.7).
+- Lazy code capturing a variable that changes before evaluation (closures — functions that remember variables from the code around them — bind late; see §11.7).
 
 ### TL;DR
 Lazy = compute on demand. Use generators and iterator tools for big/streaming/infinite data and early-exit searches; use lists when you need reuse or random access.
@@ -310,7 +310,7 @@ Lazy = compute on demand. Use generators and iterator tools for big/streaming/in
 ## 11.5 `itertools` — the iterator toolkit
 
 ### What it is
-`itertools` is a standard-library module of fast (C-implemented), memory-efficient building blocks that take iterables and return **lazy iterators**. Think of them as Lego for loops.
+`itertools` is a standard-library module of fast (C-implemented — written in the C language inside the interpreter, so far quicker than equivalent Python loops), memory-efficient building blocks that take iterables and return **lazy iterators**. Think of them as Lego for loops.
 
 ### Infinite iterators
 
@@ -327,10 +327,10 @@ Lazy = compute on demand. Use generators and iterator tools for big/streaming/in
 | `chain(a, b, …)` | Concatenate iterables lazily | `[1, 2, 3, 'a', 'b']` |
 | `chain.from_iterable(x)` | Flatten one level | `[1, 2, 3]` |
 | `islice(it, start, stop, step)` | Slice any iterator (no negatives) | `islice(range(10), 2, 8, 2)` → `[2, 4, 6]` |
-| `takewhile(pred, it)` | Yield while predicate is true, then stop | `[1, 3]` |
+| `takewhile(pred, it)` | Yield while predicate (a function returning True/False) is true, then stop | `[1, 3]` |
 | `dropwhile(pred, it)` | Skip while predicate is true, then yield the rest | `[6, 2]` |
 | `filterfalse(pred, it)` | Items where predicate is false | `[1, 3, 5]` |
-| `compress(data, selectors)` | Keep items whose selector is truthy | `['A', 'C']` |
+| `compress(data, selectors)` | Keep items whose selector is truthy (counts as true in an `if`) | `['A', 'C']` |
 | `starmap(f, it)` | `f(*args)` for each args tuple | `[8, 9]` |
 | `zip_longest(*its, fillvalue)` | Like `zip` but pads the shorter ones | `[('a', 1), ('b', 2), ('-', 3)]` |
 | `tee(it, n=2)` | Split one iterator into n independent ones (buffers in memory) | `[1, 2, 3] [1, 2, 3]` |
@@ -357,7 +357,7 @@ Also: each group `g` is a lazy view that becomes invalid once you advance to the
 
 | Function | Meaning | Count for n items, pick r | `"abc"`, r=2 |
 |---|---|---|---|
-| `product(A, B)` / `product(A, repeat=r)` | Cartesian product (nested loops) | nʳ | `aa ab ac ba …` (9) |
+| `product(A, B)` / `product(A, repeat=r)` | Cartesian product (every pairing; nested loops) | nʳ | `aa ab ac ba …` (9) |
 | `permutations(it, r)` | Ordered arrangements, no repeats | n!/(n−r)! = 6 | `ab ac ba bc ca cb` |
 | `combinations(it, r)` | Unordered selections, no repeats | n!/(r!(n−r)!) = 3 | `ab ac bc` |
 | `combinations_with_replacement(it, r)` | Unordered, repeats allowed | (n+r−1)!/(r!(n−1)!) = 6 | `aa ab ac bb bc cc` |
@@ -376,7 +376,7 @@ differences via pairwise: [3, 5, 7]
 Combinatorial output grows explosively (`permutations(range(12))` is 479,001,600 items) — iterate lazily, never `list()` it blindly.
 
 ### Real-world examples
-`product` for hyperparameter grids (scikit-learn's `ParameterGrid` iterates the Cartesian product of parameter lists); `batched` to send API/database writes in chunks of 100; `pairwise` for deltas between consecutive timestamps; `accumulate` for running balances or cumulative sums; `chain.from_iterable` to flatten pages of API results; `islice` for "first N" of any stream. The `more-itertools` package adds many more recipes (`chunked`, `windowed`, …).
+`product` for hyperparameter grids (hyperparameters are the settings you choose *before* training a machine-learning model, like learning rate; a grid tries every combination; scikit-learn's `ParameterGrid` iterates the Cartesian product of parameter lists); `batched` to send API (Application Programming Interface — the set of requests another program or service accepts) /database writes in chunks of 100; `pairwise` for deltas between consecutive timestamps; `accumulate` for running balances or cumulative sums; `chain.from_iterable` to flatten pages of API results; `islice` for "first N" of any stream. The `more-itertools` package adds many more recipes (`chunked`, `windowed`, …).
 
 ### In the interview
 **30-second answer:** "itertools provides lazy, C-speed building blocks: infinite ones like `count` and `cycle`; selectors like `islice`, `takewhile`, `compress`; combiners like `chain` and `zip_longest`; aggregators like `accumulate`, `groupby`, `pairwise`, `batched`; and combinatorics — `product`, `permutations`, `combinations`. The classic trap is that `groupby` only groups consecutive equal keys, so you sort first."
@@ -434,9 +434,9 @@ invert: {3: 'apple', 2: 'pear'}
 
 ### Best practices
 1. **Keep it to one line of logic**: at most two `for` clauses or one `for` + one condition (*Effective Python*'s guideline). Beyond that, write a normal loop or a generator function with a name.
-2. **Don't use comprehensions for side effects** — `[print(x) for x in xs]` builds a useless list of `None`s. Use a `for` loop.
+2. **Don't use comprehensions for side effects** (anything a piece of code does besides returning a value — printing, writing a file, changing a global) — `[print(x) for x in xs]` builds a useless list of `None`s. Use a `for` loop.
 3. **Use a generator expression** when the result is consumed once by `sum`, `max`, `any`, `"".join`, etc.
-4. **Loop variables don't leak**: in Python 3 each comprehension has its own scope (since 3.12, PEP 709 inlines them for speed without changing this).
+4. **Loop variables don't leak**: in Python 3 each comprehension has its own scope (the region of code where a variable name is visible) (since 3.12, PEP 709 inlines them for speed without changing this).
 5. **Use the walrus operator `:=`** (3.8) to avoid computing an expensive value twice (filter and output).
 6. **Prefer `dict`/`set` comprehensions** over `dict([(k, v) for …])`.
 
@@ -453,11 +453,11 @@ Comprehensions are the idiomatic way to map + filter into a new collection. Keep
 ## 11.7 `map`/`filter`/`reduce`, `any`/`all`, `zip(strict=True)` — the functional toolbox
 
 ### What it is
-**Functional programming** favours pure functions (no side effects) and passing functions as values. Python supports this partially with first-class functions, `lambda`, and a few helpers:
+**Functional programming** favours pure functions (no side effects) and passing functions as values. Python supports this partially with first-class functions (functions are ordinary values you can store in variables and pass to or return from other functions), `lambda`, and a few helpers:
 - `map(f, it, ...)` — lazily applies `f` to every item (or to items from several iterables in parallel).
 - `filter(pred, it)` — lazily keeps items where `pred(item)` is truthy; `filter(None, it)` keeps truthy items.
-- `functools.reduce(f, it, initial)` — folds a sequence into one value: `f(f(f(init, a), b), c)`. (Moved out of built-ins in Python 3.)
-- `any(it)` / `all(it)` — short-circuiting "is at least one / are all truthy".
+- `functools.reduce(f, it, initial)` — folds (repeatedly combines, left to right) a sequence into one value: `f(f(f(init, a), b), c)`. (Moved out of built-ins in Python 3.)
+- `any(it)` / `all(it)` — short-circuiting (stop as soon as the answer is known) "is at least one / are all truthy".
 - `zip(*its, strict=False)` — pairs items up; stops at the shortest. `strict=True` (3.10, PEP 618) raises `ValueError` on unequal lengths.
 
 (`lambda` and higher-order functions are introduced in [Chapter 7 §7.5](../07-functions/README.md).)
@@ -476,7 +476,7 @@ Guido van Rossum's own advice (and *Effective Python*'s) is to prefer comprehens
 
 ### `any` / `all` details
 - Both short-circuit: `any` stops at the first truthy item, `all` at the first falsy one — pass a **generator expression**, not a list, so the unneeded items are never computed.
-- Empty input: `all([])` is `True` (vacuous truth), `any([])` is `False`.
+- Empty input: `all([])` is `True` (vacuous truth: "every item passes" is trivially true when there are no items), `any([])` is `False`.
 
 ### `zip` details
 - Default `zip` silently truncates to the shortest input — a classic data bug when two lists are expected to align. Use `strict=True` for that case.
@@ -529,7 +529,7 @@ A closure (a function that uses a variable from an enclosing scope) looks the va
 - `any([expensive(x) for x in xs])` — the list computes everything; drop the brackets.
 
 ### Real-world examples
-`sorted(records, key=itemgetter("created_at"))` is everywhere in data code; `all(field in payload for field in REQUIRED)` for request validation; `dict(zip(header, row))` when reading CSVs; PySpark and pandas expose `map`/`filter`/`reduce`-style APIs (`rdd.map`, `Series.map`) that come straight from this functional vocabulary.
+`sorted(records, key=itemgetter("created_at"))` is everywhere in data code; `all(field in payload for field in REQUIRED)` for request validation; `dict(zip(header, row))` when reading CSVs; PySpark (Python interface to Apache Spark, a system for processing data spread across many machines) and pandas (the table-manipulation library, see [Chapter 18](../18-data-stack/README.md)) expose `map`/`filter`/`reduce`-style APIs (`rdd.map`, `Series.map`) that come straight from this functional vocabulary.
 
 ### In the interview
 **30-second answer:** "`map` and `filter` are lazy in Python 3; I prefer comprehensions when I'd otherwise need a lambda, and built-ins like `sum`, `max`, `any`, `all` over `reduce`. `any`/`all` short-circuit, so I pass generator expressions. `zip` truncates silently, so for data that must align I use `strict=True`. And closures bind late — capture loop variables with a default argument or `partial`."

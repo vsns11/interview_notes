@@ -1,6 +1,6 @@
 # Chapter 3 — Control Flow: Decisions and Loops
 
-So far every program ran top to bottom, once. **Control flow** is how a program chooses *which* statements run (`if`, `match`) and *how many times* (`for`, `while`). With the truthiness rules from Chapter 2 and the constructs here you can express any algorithm.
+So far every program ran top to bottom, once. **Control flow** is how a program chooses *which* statements run (`if`, `match`) and *how many times* (`for`, `while`). With the truthiness rules from Chapter 2 (how Python decides whether any value counts as true or false — empty and zero values count as false) and the constructs here you can express any algorithm (a step-by-step recipe for solving a problem).
 
 **What you'll learn**
 
@@ -10,12 +10,12 @@ So far every program ran top to bottom, once. **Control flow** is how a program 
 | 3.2 | `if` / `elif` / `else` | syntax, order of tests, nesting vs guard clauses |
 | 3.3 | Conditional expressions | `a if cond else b` |
 | 3.4 | `match` / `case` | literal, OR, capture, wildcard, sequence, mapping, class patterns, guards, `as` |
-| 3.5 | Loops — overview and the iteration protocol | iterables, iterators, `for` vs `while` |
+| 3.5 | Loops — overview and the iteration protocol | iterables (objects you can loop over), iterators, `for` vs `while` |
 | 3.6 | `for` loops | lists, strings, dicts, nested loops, `range`, `enumerate`, `zip` |
-| 3.7 | `while` loops | condition-driven repetition, infinite loops, sentinels |
+| 3.7 | `while` loops | condition-driven repetition, infinite loops, sentinels (special "stop here" values) |
 | 3.8 | Loop control | `break`, `continue`, `pass` |
 | 3.9 | `for-else` / `while-else` | "no break happened" |
-| 3.10 | Loop idioms | `sum`/`any`/`all`, comprehensions, counting, safe modification |
+| 3.10 | Loop idioms | `sum`/`any`/`all`, comprehensions (one-line collection builders), counting, safe modification |
 
 Code: [`code/conditionals.py`](code/conditionals.py), [`code/pattern_matching.py`](code/pattern_matching.py), [`code/loops.py`](code/loops.py) — outputs are real (CPython 3.14).
 
@@ -28,7 +28,7 @@ A **conditional statement** evaluates a **condition** — any expression, interp
 
 Python offers two decision constructs:
 - `if` / `elif` / `else` — test conditions one after another.
-- `match` / `case` (Python 3.10+) — compare one value against **patterns** describing its shape; a far more powerful cousin of `switch` in C/Java.
+- `match` / `case` (Python 3.10+) — compare one value against **patterns** describing its shape; a far more powerful cousin of `switch` in C/Java (a statement that jumps to the branch labelled with a matching value).
 
 ### Why it matters — real-world uses
 | Domain | Decision |
@@ -37,7 +37,7 @@ Python offers two decision constructs:
 | App navigation | Logged in → dashboard; otherwise → login screen. |
 | Games | Health ≤ 0 → game over; score above threshold → next level; difficulty tuned by player behaviour. |
 | Healthcare software | Heart rate outside safe range → alert staff; lab values → suggested treatment protocol. |
-| Web back-ends | Route by HTTP method and path; return 404 if not found. |
+| Web back-ends | Route (send each request to the right handler) by HTTP method (GET to read, POST to submit…) and path; return 404 (the "not found" status code) if not found. |
 
 ### TL;DR
 Conditionals choose which code runs; `if` tests conditions in order, `match` compares a value against patterns.
@@ -56,7 +56,7 @@ else:
     ...            # runs if every condition above was falsy
 ```
 - `if` is required; `elif` ("else if") may appear any number of times; `else` is optional and must come last.
-- Each header ends with `:` and its block is indented (Chapter 1).
+- Each header (the line that introduces a block) ends with `:` and its block is indented (Chapter 1).
 - **At most one** branch runs: the first whose condition is truthy. The rest are skipped without being evaluated.
 
 ### How it works
@@ -153,7 +153,7 @@ good weather for a walk
 | Approach | Good for | Weak at |
 |---|---|---|
 | `if/elif/else` | Arbitrary boolean conditions, ranges, few branches | Many equality tests on one value get repetitive |
-| `match/case` | One value, many shapes/values; destructuring | Plain boolean conditions (use `if`) |
+| `match/case` | One value, many shapes/values; destructuring (pulling parts out into names) | Plain boolean conditions (use `if`) |
 | dict lookup `{"a": f, "b": g}[key]()` | Many constant keys → action (a *dispatch table*) | Conditions that aren't exact keys |
 
 ### Common mistakes
@@ -165,9 +165,9 @@ good weather for a walk
 - Overlapping ranges in the wrong order (see grading example).
 
 ### Real-world examples
-- Django views: `if request.method == "POST": … else: …` is the classic form-handling pattern.
-- Feature flags: `if flags.is_enabled("new_checkout", user): …`.
-- Input validation in CLI tools before converting types.
+- Django views (functions that handle one web request): `if request.method == "POST": … else: …` is the classic form-handling pattern.
+- Feature flags (switches that turn a feature on for some users without redeploying): `if flags.is_enabled("new_checkout", user): …`.
+- Input validation in CLI tools (command-line interface programs, used by typing commands in a terminal) before converting types.
 
 ### In the interview
 **30-second answer:** "`if` evaluates conditions top-down by truthiness and runs only the first matching branch; `elif` chains alternatives and `else` catches the rest. I order conditions from most specific to most general, use guard clauses to avoid deep nesting, and `is None` when zero or empty values are legitimate."
@@ -178,7 +178,7 @@ good weather for a walk
 1. With `x = 20`, which branch of `describe` runs? → The `elif`: `20 > 20` is false, `20 > 10` is true → "x is greater than 10 but not more than 20".
 2. Can you have `elif` without `if`? → No.
 3. How do you express "between 1 and 10 inclusive"? → `1 <= n <= 10`.
-4. What's a guard clause? → An early `return`/`raise` that handles an edge case so the main logic isn't nested.
+4. What's a guard clause? → An early `return`/`raise` (`raise` signals an error — an *exception*, Chapter 9) that handles an edge case (an unusual or boundary input) so the main logic isn't nested.
 
 ### TL;DR
 First truthy branch wins; order from specific to general; prefer flat guard clauses; use `in`, chained comparisons and truthiness for readable conditions.
@@ -188,7 +188,7 @@ First truthy branch wins; order from specific to general; prefer flat guard clau
 ## 3.3 Conditional expressions (the "ternary")
 
 ### What it is
-An **expression** (produces a value) version of `if/else`:
+An **expression** (produces a value) version of `if/else` — nicknamed the "ternary" because it has three parts:
 ```python
 value_if_true if condition else value_if_false
 ```
@@ -196,10 +196,10 @@ value_if_true if condition else value_if_false
 parity = "even" if n % 2 == 0 else "odd"          # 7 is odd
 print("Access granted." if has_access else "Access denied.")
 ```
-Only the chosen branch is evaluated. It has very low precedence (just above `lambda`), so wrap it in parentheses inside bigger expressions.
+Only the chosen branch is evaluated. It has very low precedence (just above `lambda`, the one-line anonymous function), so wrap it in parentheses inside bigger expressions.
 
 ### When not to use it
-- When branches are long or have side effects — use a normal `if` statement.
+- When branches are long or have side effects (effects beyond producing a value, such as printing or changing data) — use a normal `if` statement.
 - Nested ternaries (`a if x else b if y else c`) are legal but hard to read.
 - For defaults, `x or default` is shorter — but only when falsy values of `x` should be replaced.
 
@@ -228,7 +228,7 @@ match subject:
     case _:
         ...          # wildcard: the default
 ```
-`match` and `case` are **soft keywords** — you can still name a variable `match`.
+`match` and `case` are **soft keywords** (special only in this position) — you can still name a variable `match`.
 
 ### How it works
 ```mermaid
@@ -247,7 +247,7 @@ flowchart TD
     B3 --> E
     N --> E
 ```
-There is **no fall-through**: unlike C's `switch`, you never write `break`.
+There is **no fall-through** (in C, a case without `break` keeps running into the next case's code): unlike C's `switch`, you never write `break`.
 
 ### The pattern kinds
 | Pattern | Looks like | Matches when… | Binds |
@@ -260,7 +260,7 @@ There is **no fall-through**: unlike C's `switch`, you never write `break`.
 | **AS** | `pattern as name` | pattern matches | whole matched part → `name` |
 | **Sequence** | `[a, b]`, `(a, b)`, `[first, *rest]` | subject is a sequence (list, tuple, …, **not** `str`/`bytes`) of matching length and items | items |
 | **Mapping** | `{"type": "click", "pos": p}` | subject is a mapping containing those keys with matching values; **extra keys are ignored** | values; `**rest` collects the other items |
-| **Class** | `Point(x=0, y=0)`, `Point(x, 0)`, `int(n)`, `str()` | `isinstance(subject, Point)` and the listed attributes match | attributes |
+| **Class** | `Point(x=0, y=0)`, `Point(x, 0)`, `int(n)`, `str()` | `isinstance(subject, Point)` and the listed attributes (values stored on the object) match | attributes |
 | **Guard** | `case p if cond:` | pattern matches **and** `cond` is truthy | (uses pattern's bindings) |
 
 ### Literal and OR patterns
@@ -361,7 +361,7 @@ Adult Engineer aged 25 | Engineer aged 19
 ```
 
 ### Mapping patterns
-Ideal for JSON-like dicts, e.g. events or API payloads:
+Ideal for JSON-like dicts (JSON is the text data format most web services exchange), e.g. events or API payloads (the data body sent to or from a web service):
 ```python
 match event:
     case {"type": "click", "pos": (x, y)}:          # nested sequence pattern
@@ -385,7 +385,9 @@ match event:
 The first event has an extra `"button"` key and still matches — mapping patterns check only the keys you list.
 
 ### Class patterns
-`ClassName(...)` first checks `isinstance`, then matches attributes. Keyword form `Point(x=0)` matches attribute `x`. Positional form `Point(a, b)` needs the class to define `__match_args__` — a tuple naming which attributes the positions map to. `@dataclass` generates it automatically (`('x', 'y')`). Built-in types like `int`, `str`, `float` accept one positional sub-pattern that matches the whole subject.
+> **Key term — class:** a *class* is a blueprint for creating objects of your own type (Chapter 10); `Point` below is a class and `Point(1, 2)` is one object (an *instance*) of it. `isinstance(obj, Point)` asks "was `obj` made from `Point` (or a subclass)?".
+
+`ClassName(...)` first checks `isinstance`, then matches attributes. Keyword form `Point(x=0)` matches attribute `x`. Positional form `Point(a, b)` needs the class to define `__match_args__` — a tuple naming which attributes the positions map to. `@dataclass` (a decorator — a line starting with `@` that adds behaviour to the definition below it — that auto-writes common class code) generates it automatically (`('x', 'y')`). Built-in types like `int`, `str`, `float` accept one positional sub-pattern that matches the whole subject.
 ```python
 @dataclass
 class Point:
@@ -429,7 +431,7 @@ A **bare name** in a pattern is a *capture*, never a comparison. With `RED = "re
 matched?! blue
 SyntaxError: name capture 'RED' makes remaining patterns unreachable
 ```
-Python refuses to compile such a capture if more cases follow it. To compare against a constant, use a **dotted name** (value pattern) such as an `Enum` member:
+Python refuses to compile such a capture if more cases follow it. To compare against a constant, use a **dotted name** (value pattern) such as an `Enum` member (a named constant inside an *enumeration* class):
 ```python
 class Color(Enum):
     RED = "red"
@@ -452,7 +454,7 @@ stop go
 | Checks structure (length, keys, type) and extracts parts at once | ✅ | Manual `isinstance`, `len`, indexing |
 | Arbitrary boolean conditions | Via guards only | ✅ natural |
 | Python version | 3.10+ | All |
-| Performance | Similar — cases are tried in order, not a jump table | Similar |
+| Performance | Similar — cases are tried in order, not a jump table (a direct lookup of the matching branch) | Similar |
 
 ### When not to use it
 - For one or two simple boolean tests — `if` is clearer.
@@ -468,15 +470,15 @@ stop go
 
 ### Real-world examples
 - Command-line and chat-bot command parsers (like `command()` above).
-- Handling JSON messages from WebSockets or message queues by their `type` field.
-- Compilers/interpreters walking an AST: `case BinOp(left, Add(), right):` — the `ast` module's node classes define `__match_args__` for exactly this.
+- Handling JSON messages from WebSockets (always-open, two-way browser–server connections) or message queues (services that hold messages until a worker processes them; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) by their `type` field.
+- Compilers/interpreters walking an AST (Abstract Syntax Tree, the tree structure a compiler builds from source code): `case BinOp(left, Add(), right):` — the `ast` module's node classes define `__match_args__` for exactly this.
 - Handling HTTP status codes and redirect families.
 
 ### In the interview
 **30-second answer:** "`match` evaluates a subject once and tries case patterns top to bottom, with no fall-through. Patterns can be literals, captures, the `_` wildcard, dotted-name constants, OR-patterns, sequences with `*rest`, mappings that ignore extra keys, and class patterns that check `isinstance` and attributes via `__match_args__`. Guards add an `if` condition. The main trap is that a bare name captures instead of comparing."
 - *How do you match a constant?* → Use a dotted name (enum member, module constant), a literal, or a guard.
 - *Do mapping patterns require exact keys?* → No, extra keys are ignored; use `**rest` to capture them.
-- *What makes positional class patterns work?* → The class's `__match_args__`, auto-generated by `dataclass` and `namedtuple`.
+- *What makes positional class patterns work?* → The class's `__match_args__`, auto-generated by `dataclass` and `namedtuple` (a tuple whose fields also have names).
 
 ### Self-check
 1. Does `case {"a": 1}:` match `{"a": 1, "b": 2}`? → Yes.
@@ -502,17 +504,17 @@ A **loop** repeats a block of code. Python has two:
 **Loop control statements** change the normal flow: `break` (leave the loop), `continue` (skip to the next iteration), `pass` (do nothing — a placeholder). Visiting every item of a collection is called **traversal**.
 
 ### How `for` really works — the iteration protocol
-An **iterable** is any object that can hand out its items one at a time: lists, tuples, strings, dicts, sets, ranges, files, generators… An **iterator** is the object that keeps track of the position.
+An **iterable** is any object that can hand out its items one at a time: lists, tuples, strings, dicts, sets, ranges, files, generators (objects that produce values one at a time, on demand)… An **iterator** is the object that keeps track of the position.
 1. `for x in obj:` calls `iter(obj)` to get an iterator.
 2. Each round, it calls `next(iterator)` and binds the result to `x`.
-3. When `next` raises `StopIteration`, the loop ends (quietly).
+3. When `next` raises (signals) the `StopIteration` exception, the loop ends (quietly).
 ```python
 it = iter(["a", "b"])
 next(it)   # 'a'
 next(it)   # 'b'
 next(it)   # raises StopIteration
 ```
-That is why one `for` statement works for every container, and why lazy objects like `range` and file handles can be looped over without loading everything into memory.
+That is why one `for` statement works for every container, and why lazy (compute each item only when asked) objects like `range` and file handles (the objects `open()` returns) can be looped over without loading everything into memory.
 
 ### TL;DR
 `for` = "for each item", driven by `iter()`/`next()`; `while` = "while condition". Control them with `break`, `continue`, `pass`.
@@ -539,10 +541,10 @@ for ch in "hey":
 apple banana cherry
 HEY
 ```
-No index bookkeeping, so no off-by-one errors. The loop variable **survives** after the loop with its last value (a quirk to remember).
+No index bookkeeping, so no off-by-one errors (being wrong by exactly one, e.g. stopping an item early). The loop variable **survives** after the loop with its last value (a quirk to remember).
 
 ### Looping through dictionaries
-Iterating a dict directly yields its **keys** (in insertion order). Use views for the rest:
+Iterating a dict directly yields its **keys** (in insertion order). Use views (live, read-only windows onto the dict's keys, values or pairs) for the rest:
 | You need | Write |
 |---|---|
 | keys | `for k in d:` (or `d.keys()`) |
@@ -575,7 +577,7 @@ for row in matrix:
 1 2 3
 4 5 6
 ```
-Nested loops multiply work: two loops over n items is O(n²). If the inner loop only searches for something, a set or dict lookup often removes it.
+Nested loops multiply work: two loops over n items is O(n²) (Big-O notation: the work grows with the square of the size — 10× the data means 100× the work). If the inner loop only searches for something, a set or dict lookup often removes it.
 
 ### `range()` — counting loops
 `range` produces integers lazily, stop **exclusive**:
@@ -620,9 +622,9 @@ plain zip stops at the shortest: [(1, 'a'), (2, 'b')]
 - Silent truncation with plain `zip` on mismatched data.
 
 ### Real-world examples
-- Processing rows from `csv.reader(f)` or lines of a file: `for line in f:` streams the file lazily.
-- `for i, batch in enumerate(dataloader):` is the standard PyTorch training loop.
-- `zip(features, labels)` pairs data in ML pipelines.
+- Processing rows from `csv.reader(f)` (CSV = comma-separated values, a plain-text table format) or lines of a file: `for line in f:` streams the file lazily.
+- `for i, batch in enumerate(dataloader):` is the standard PyTorch training loop (the `dataloader` hands out the training data in small groups called *batches*).
+- `zip(features, labels)` (inputs and their correct answers) pairs data in ML pipelines (chains of machine-learning processing steps).
 
 ### In the interview
 **30-second answer:** "A `for` loop calls `iter()` on the iterable and `next()` until `StopIteration`, so it works on anything iterable. I iterate items directly, use `enumerate` when I need the index, `zip(strict=True)` for parallel sequences, `.items()` for dicts, and `range` for counts."
@@ -648,7 +650,7 @@ plain zip stops at the shortest: [(1, 'a'), (2, 'b')]
 while condition:
     ...   # repeats while condition is truthy; re-checked before every iteration
 ```
-Use `while` when the number of iterations isn't known up front: reading until the user types "quit", retrying until success, iterating until a value converges.
+Use `while` when the number of iterations isn't known up front: reading until the user types "quit", retrying until success, iterating until a value converges (settles on a final value).
 
 ### How it works
 ```mermaid
@@ -685,7 +687,7 @@ halvings until < 1: 7
 (100 → 50 → 25 → 12.5 → 6.25 → 3.125 → 1.5625 → 0.78125.)
 
 ### Infinite loops on purpose
-`while True:` with a `break` inside is the idiomatic "loop and a half" — e.g. a menu or a server loop:
+`while True:` with a `break` inside is the idiomatic "loop and a half" — e.g. a menu or a server loop (a loop that waits for and answers requests forever):
 ```python
 while True:
     answer = input("> ")
@@ -700,7 +702,7 @@ With the walrus operator this can be `while (answer := input("> ")) != "quit": h
 |---|---|---|
 | Termination | Automatic when the iterable is exhausted | Your responsibility |
 | Typical bug | Off-by-one in `range` | Infinite loop (forgot to update) |
-| Use for | Collections, fixed counts | Unknown counts, event loops, retries, convergence |
+| Use for | Collections, fixed counts | Unknown counts, event loops (wait for events, handle them, repeat), retries, convergence |
 
 ### Common mistakes
 - Forgetting to update the loop variable → infinite loop (stop it with Ctrl-C, which raises `KeyboardInterrupt`).
@@ -709,8 +711,8 @@ With the walrus operator this can be `while (answer := input("> ")) != "quit": h
 
 ### Real-world examples
 - Game loops: `while running: handle_events(); update(); draw()` (Pygame).
-- Retry with back-off: `while attempts < 5 and not ok: …`.
-- Reading a socket or file in chunks: `while (chunk := f.read(8192)): …`.
+- Retry with back-off (waiting longer before each new attempt): `while attempts < 5 and not ok: …`.
+- Reading a socket (one end of a network connection) or file in chunks: `while (chunk := f.read(8192)): …`.
 
 ### In the interview
 **30-second answer:** "`while` re-checks its condition before each iteration and is for when the iteration count is unknown. The body must make progress toward the condition becoming false; for intentional infinite loops I use `while True` with a clear `break`."
@@ -757,7 +759,7 @@ Number 4 found, stopping loop.
 continue kept odds: [1, 3, 5]
 1 2 3
 ```
-`pass` is **not** `continue`: after `pass`, the rest of the body still executes. Use `pass` for empty stubs — `def todo(): pass`, `class MyError(Exception): pass` — or `...` (Ellipsis), which works the same way in bodies.
+`pass` is **not** `continue`: after `pass`, the rest of the body still executes. Use `pass` for empty stubs (placeholders to be filled in later) — `def todo(): pass`, `class MyError(Exception): pass` — or `...` (Ellipsis), which works the same way in bodies.
 
 **`break` exits only one level:**
 ```python
@@ -770,7 +772,7 @@ for i in range(3):
 ```text
 (0,0) (1,0) (2,0)
 ```
-To exit several levels, move the loops into a function and `return`, or use a flag.
+To exit several levels, move the loops into a function and `return`, or use a flag (a boolean variable that records that something happened).
 
 ### Common mistakes
 - Expecting `break` to leave all nested loops.
@@ -779,7 +781,7 @@ To exit several levels, move the loops into a function and `return`, or use a fl
 - Over-using `continue` for filtering when a comprehension (`[x for x in xs if cond]`) is clearer.
 
 ### In the interview
-**30-second answer:** "`break` leaves the innermost loop, `continue` jumps to the next iteration, `pass` is a no-op placeholder. To break out of nested loops I refactor into a function and `return`."
+**30-second answer:** "`break` leaves the innermost loop, `continue` jumps to the next iteration, `pass` is a no-op placeholder. To break out of nested loops I refactor (restructure without changing behaviour) into a function and `return`."
 
 ### Self-check
 1. Does `pass` skip the rest of the loop body? → No.
@@ -847,7 +849,7 @@ Breaking at count 2.
 ```
 Without any `break` statement in the body, the `else` always runs — e.g. "All numbers processed." after a plain processing loop — which is legal but pointless (just put the code after the loop).
 
-A practical search — primality by trial division:
+A practical search — primality by trial division (testing whether n is prime by trying every possible divisor up to √n):
 ```python
 def is_prime(n: int) -> bool:
     if n < 2:
@@ -860,7 +862,7 @@ def is_prime(n: int) -> bool:
 ```text
 is 29 prime? True | is 21 prime? False
 ```
-(Inside a function, `return` plays the role of `break`, and the final `return True` plays the role of `else`. At module level or when you need to continue afterwards, `for-else` is the flag-free equivalent.)
+(Inside a function, `return` plays the role of `break`, and the final `return True` plays the role of `else`. At module level (the top level of a file, outside any function) or when you need to continue afterwards, `for-else` is the flag-free equivalent.)
 
 ### Trade-offs / when not to use it
 Many developers misread `else` as "if the loop didn't run". If your team finds it confusing, a helper function with `return`, or `any()`/`next()` (§3.10), is often clearer. Always add a comment like `# no break` when you use it.
@@ -940,15 +942,15 @@ Fixes: build a new list (`[x for x in data if x != 2]`), or iterate over a copy 
 | parallel indexing `a[i], b[i]` | `for x, y in zip(a, b, strict=True):` |
 | `for k in d: v = d[k]` | `for k, v in d.items():` |
 | looping backwards with indices | `for x in reversed(xs):` |
-| accumulator loop for total | `sum(xs)` |
+| accumulator loop (keeps a running total) for total | `sum(xs)` |
 | flag + loop to test a condition | `any(...)` / `all(...)` |
 | loop with `append` to transform | list comprehension |
 | `while` loop reading chunks | `while (chunk := f.read(n)):` |
 
 ### Real-world examples
 - Log analysis scripts: `for line in open(path): if "ERROR" in line: …`.
-- ETL jobs aggregating per-key totals with dicts before loading to a database.
-- Validation: `if not all(field in payload for field in REQUIRED): return 400`.
+- ETL jobs (Extract–Transform–Load: batch jobs that pull data, reshape it and load it elsewhere) aggregating per-key totals with dicts before loading to a database.
+- Validation: `if not all(field in payload for field in REQUIRED): return 400` (the HTTP "bad request" status).
 
 ### In the interview
 **30-second answer:** "I replace hand-written loops with built-ins where possible — `sum`, `any`, `all`, `min`/`max`, `sorted`, comprehensions, `next` with a default — because they're clearer and run in C. I never mutate a list or dict while iterating it; I build a new one or iterate a copy."

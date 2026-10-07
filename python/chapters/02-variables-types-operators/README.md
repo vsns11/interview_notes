@@ -1,16 +1,16 @@
 # Chapter 2 — Variables, Data Types and Operators
 
-Every program stores data and computes with it. This chapter explains how Python stores data (names pointing at objects), which kinds of data exist (the built-in types), how numbers really behave (including why `0.1 + 0.2 != 0.3`), how to convert between types, and every operator family with its precedence. The mental model from §2.1 — *names are labels on objects* — is the single most important idea in the whole book: most "weird" Python behaviour stops being weird once you have it.
+Every program stores data and computes with it. This chapter explains how Python stores data (names pointing at objects), which kinds of data exist (the built-in types — those available without any `import`), how numbers really behave (including why `0.1 + 0.2 != 0.3`), how to convert between types, and every operator family with its precedence (the rules for which operator is applied first). The mental model from §2.1 — *names are labels on objects* — is the single most important idea in the whole book: most "weird" Python behaviour stops being weird once you have it.
 
 **What you'll learn**
 
 | # | Topic | Key ideas |
 |---|---|---|
 | 2.1 | Variables | creating, printing, deleting, case sensitivity, multiple assignment, naming rules and conventions, names vs objects |
-| 2.2 | Identity, equality, mutability | `is` vs `==`, `id()`, mutable vs immutable, aliasing |
+| 2.2 | Identity, equality, mutability | `is` vs `==`, `id()`, mutable (changeable) vs immutable (unchangeable), aliasing (two names for one object) |
 | 2.3 | Dynamic vs strong typing | why `x` can change type but `"3" + 4` fails |
 | 2.4 | Built-in data types | text, numeric, sequence, mapping, set, boolean, binary, `None` |
-| 2.5 | Numbers | arbitrary-precision `int`, `float` pitfalls, `Decimal`, `Fraction`, `complex`, `random` |
+| 2.5 | Numbers | arbitrary-precision (unlimited-size) `int`, `float` pitfalls, `Decimal`, `Fraction`, `complex`, `random` |
 | 2.6 | Booleans and truthiness | `True`/`False`, falsy values, `bool` is an `int` |
 | 2.7 | Type conversion | implicit widening, explicit `int()`/`float()`/`str()`…, failure cases |
 | 2.8 | Operators | arithmetic, comparison, assignment/augmented, logical, bitwise, membership, identity, walrus `:=`, chained comparisons, precedence |
@@ -22,7 +22,7 @@ Code: [`code/`](code/) — every output below is real, from CPython 3.14.
 ## 2.1 Variables
 
 ### What it is
-A **variable** in Python is a **name that refers to an object**. An **object** is a chunk of memory holding a value, its **type**, and a reference count. The name itself stores no data — it is a label tied to an object. Analogy: objects are parcels in a warehouse; names are sticky labels. You can stick several labels on one parcel, move a label to a different parcel, or peel a label off — the parcel itself is unaffected.
+A **variable** in Python is a **name that refers to an object**. An **object** is a chunk of memory holding a value, its **type**, and a reference count (how many names and containers currently point at it). The name itself stores no data — it is a label tied to an object. Analogy: objects are parcels in a warehouse; names are sticky labels. You can stick several labels on one parcel, move a label to a different parcel, or peel a label off — the parcel itself is unaffected.
 
 There is no declaration step: a variable comes into existence the first time you **assign** to it with `=`.
 
@@ -69,7 +69,7 @@ John 30 5.11
 swap: 2 1 | chained: 0 0 0
 head: 10 rest: [20, 30, 40]
 ```
-Unpacking needs matching counts: `x, y = 1, 2, 3` raises `ValueError: too many values to unpack`. Beware `a = b = []` — both names share **one** list (see §2.2).
+Unpacking (spreading the items of a sequence into several names — here a *tuple*, Python's fixed, unchangeable sequence written with commas) needs matching counts: `x, y = 1, 2, 3` raises `ValueError: too many values to unpack` (`ValueError` = a value of the right type but unusable content). Beware `a = b = []` — both names share **one** list (see §2.2).
 
 ### Deleting variables — `del`
 `del name` removes the **name** from the namespace. The object is destroyed only when no references to it remain (CPython frees it immediately when its reference count hits zero).
@@ -86,7 +86,7 @@ UnboundLocalError (a NameError subclass, inside a function): cannot access local
 object still reachable via alias: 120
 NameError at module level: name 'player' is not defined
 ```
-Using a deleted name **always** raises `NameError` (inside a function you see its subclass `UnboundLocalError`). If an online code playground seems to print nothing instead, it is simply not displaying the error stream — run the file locally and you will see the traceback. You rarely need `del` for plain variables; it's more common for removing dictionary keys (`del d["k"]`) or list items (`del items[0]`).
+Using a deleted name **always** raises `NameError` (inside a function you see its subclass `UnboundLocalError` — a *subclass* is a more specific type built on top of a parent type). If an online code playground seems to print nothing instead, it is simply not displaying the error stream (*stderr*, the separate output channel for error messages) — run the file locally and you will see the traceback (Python's report of which lines led to the error). You rarely need `del` for plain variables; it's more common for removing dictionary (key → value lookup table, §2.4) keys (`del d["k"]`) or list items (`del items[0]`).
 
 ### Case sensitivity
 `Age`, `age` and `AGE` are three unrelated names:
@@ -102,14 +102,14 @@ Age/age/AGE: 25 30 35
 | Not a keyword (`class`, `if`, `None`…) | `UPPER_SNAKE_CASE` for constants: `MAX_USERS = 100` |
 | Case-sensitive | Descriptive: `age` not `a`, `username` not `usrnm` |
 | | Leading `_` = internal/private by convention |
-| | Don't shadow built-ins: never name a variable `list`, `str`, `sum`, `id`, `input` |
+| | Don't shadow (reuse and thereby hide) built-ins: never name a variable `list`, `str`, `sum`, `id`, `input` |
 
 Valid: `username`, `_user_id`, `user2name`. Invalid: `2user` (starts with a digit), `user-name` (hyphen is minus), `class` (keyword).
 
-Shadowing is legal but harmful: after `list = [1, 2]`, calling `list("abc")` fails with `TypeError: 'list' object is not callable`.
+Shadowing is legal but harmful: after `list = [1, 2]`, calling `list("abc")` fails with `TypeError: 'list' object is not callable` (*callable* = something you can call with `()`).
 
 ### Common mistakes
-- Assuming `b = a` copies a list. It doesn't; use `a.copy()`, `list(a)` or `a[:]` (shallow copy), or `copy.deepcopy(a)` for nested data.
+- Assuming `b = a` copies a list. It doesn't; use `a.copy()`, `list(a)` or `a[:]` (shallow copy — a new outer list whose items are still shared), or `copy.deepcopy(a)` (copies every nested level) for nested data.
 - Shadowing built-ins (`list`, `dict`, `sum`, `max`, `id`, `type`).
 - Using a variable before assigning it → `NameError`.
 
@@ -123,7 +123,7 @@ Shadowing is legal but harmful: after `list = [1, 2]`, calling `list("abc")` fai
 1. After `a = [1]; b = a; b.append(2)`, what is `a`? → `[1, 2]`.
 2. Is `_total2` a valid name? `2_total`? → Yes; no.
 3. What exception do you get using a deleted name? → `NameError`.
-4. Why is naming a variable `str` a bad idea? → It hides the built-in `str` type in that scope.
+4. Why is naming a variable `str` a bad idea? → It hides the built-in `str` type in that scope (the region of code where a name is visible).
 
 ### TL;DR
 Variables are labels on objects; `=` binds, never copies; `del` removes a label; names are case-sensitive, snake_case, and must not be keywords or shadow built-ins.
@@ -140,7 +140,7 @@ Every object has three things:
 | **Type** | *What kind* of object? | `type(obj)` | No (in normal code) |
 | **Value** | *What* does it contain? | `==`, `print` | Only if the type is **mutable** |
 
-- `a == b` — **equality**: do they have the same value? (calls `a.__eq__(b)`)
+- `a == b` — **equality**: do they have the same value? (calls `a.__eq__(b)` — a *dunder* (double-underscore) method, the hook Python calls behind an operator)
 - `a is b` — **identity**: are they the very same object? (compares `id`s; cannot be overridden)
 
 ### How it works
@@ -154,7 +154,7 @@ a == b: True | a is b: False | a is c: True
 id(a) == id(c): True
 ```
 
-**Mutable** types can change their value in place: `list`, `dict`, `set`, `bytearray`, most user-defined classes. **Immutable** types cannot: `int`, `float`, `complex`, `bool`, `str`, `tuple`, `frozenset`, `bytes`, `None`. "Changing" an immutable value really creates a new object and rebinds the name:
+**Mutable** types can change their value in place (the same object is modified, so every alias — any other name bound to it — sees the change): `list`, `dict`, `set`, `bytearray`, most user-defined classes. **Immutable** types cannot: `int`, `float`, `complex`, `bool`, `str`, `tuple`, `frozenset`, `bytes`, `None`. "Changing" an immutable value really creates a new object and rebinds the name:
 ```python
 n = 10
 m = n
@@ -170,15 +170,15 @@ The last line is the subtle one: a tuple is immutable — it will always contain
 
 ### Why it matters
 - Passing a list to a function passes a reference: the function can mutate the caller's list. That is powerful and a common bug source.
-- Only immutable (more precisely, **hashable**) objects can be dictionary keys or set members, because their hash must never change.
+- Only immutable (more precisely, **hashable** — able to produce a fixed *hash*, an integer fingerprint of the value used for fast lookup) objects can be dictionary keys or set members, because their hash must never change.
 
 ### When to use `is`
-Use `is` only for **singletons** — objects of which exactly one exists: `None`, `True`, `False`, `Ellipsis`, and sentinel objects you create. `if x is None:` is correct; `if x == None:` works but can be fooled by classes that override `__eq__`.
+Use `is` only for **singletons** — objects of which exactly one exists: `None`, `True`, `False`, `Ellipsis`, and sentinel objects you create (unique placeholder objects meaning, say, "no value given"). `if x is None:` is correct; `if x == None:` works but can be fooled by classes that override `__eq__`.
 
 ### Common mistakes
-- `if x is 5:` or `if name is "bob":` — works "by accident" sometimes because CPython caches small integers (−5 to 256) and some strings. That caching is an implementation detail; Python 3.8+ emits `SyntaxWarning: "is" with 'int' literal`. Use `==`.
+- `if x is 5:` or `if name is "bob":` — works "by accident" sometimes because CPython caches small integers (−5 to 256) and some strings. That caching is an implementation detail (how CPython happens to work, not a promise of the language); Python 3.8+ emits `SyntaxWarning: "is" with 'int' literal`. Use `==`.
 - `grid = [[0] * 3] * 3` creates **three references to one row**; changing `grid[0][0]` changes all rows. Use `[[0] * 3 for _ in range(3)]`.
-- Mutable default arguments (`def f(items=[])`) — the one list is shared across calls (covered in the functions chapter).
+- Mutable default arguments (the value a parameter takes when the caller passes nothing; `def f(items=[])`) — the one list is shared across calls (covered in the functions chapter).
 
 ### In the interview
 **30-second answer:** "`==` compares values via `__eq__`; `is` compares identity — whether two names point to the same object. I use `is` only for singletons like `None`. Mutable objects like lists and dicts can change in place, so aliases see the change; immutable ones like ints, strings and tuples can't, so 'modifying' them rebinds the name to a new object."
@@ -216,19 +216,19 @@ Output of that part of the script:
 int -> str
 TypeError: can only concatenate str (not "int") to str
 ```
-Compare JavaScript (dynamic **and** weak): `"Age: " + 30` gives `"Age: 30"` and `"5" - 2` gives `3`. C is static but fairly weak (implicit int/pointer conversions). Java is static and strong.
+Compare JavaScript (dynamic **and** weak): `"Age: " + 30` gives `"Age: 30"` and `"5" - 2` gives `3`. C is static but fairly weak (implicit — automatic — int/pointer conversions; a *pointer* is a variable holding a memory address). Java is static and strong.
 
-Python *does* widen numbers automatically (`1 + 2.5` → `3.5`), because int, float and complex form a numeric tower where no information is surprising — see §2.7.
+Python *does* widen numbers automatically (`1 + 2.5` → `3.5`), because int, float and complex form a numeric tower (the widening order bool → int → float → complex) where no information is surprising — see §2.7.
 
 ### Type hints
-You can annotate types: `def area(w: float, h: float) -> float:` (function annotations, Python 3.0+; the `typing` module arrived in 3.5) and `age: int = 30` (variable annotations, 3.6+). The interpreter **ignores** hints at run time; tools such as mypy, Pyright and IDEs use them to catch mistakes before you run. Large codebases (Dropbox, where mypy was developed, and Instagram) adopted hints to keep dynamic code safe at scale.
+You can annotate (label) types: `def area(w: float, h: float) -> float:` (function annotations, Python 3.0+; the `typing` module arrived in 3.5) and `age: int = 30` (variable annotations, 3.6+). The interpreter **ignores** hints at run time; tools such as mypy, Pyright (static type checkers — they read code without running it) and IDEs use them to catch mistakes before you run. Large codebases (a project's whole body of source code) (Dropbox, where mypy was developed, and Instagram) adopted hints to keep dynamic code safe at scale.
 
 ### Trade-offs
 | Dynamic typing gives | Dynamic typing costs |
 |---|---|
-| Less boilerplate; fast prototyping | Type errors appear at run time |
+| Less boilerplate (repetitive set-up code); fast prototyping | Type errors appear at run time |
 | Duck typing: "if it has `.read()`, treat it as a file" | IDEs know less without hints |
-| Generic code for free | Slower execution (type checks on every operation) |
+| Generic code (code that works for many types) for free | Slower execution (type checks on every operation) |
 
 ### Self-check
 1. Is Python statically typed? → No, dynamically; optional hints are checked by external tools only.
@@ -236,7 +236,7 @@ You can annotate types: `def area(w: float, h: float) -> float:` (function annot
 3. Does `x: int = "hi"` raise an error? → No, hints aren't enforced at run time; mypy would flag it.
 
 ### TL;DR
-Dynamic = names can re-point to any type; strong = no silent cross-type coercion (except numeric widening). Add type hints + mypy for static checking.
+Dynamic = names can re-point to any type; strong = no silent cross-type coercion (automatic conversion) (except numeric widening). Add type hints + mypy for static checking.
 
 ---
 
@@ -245,7 +245,7 @@ Dynamic = names can re-point to any type; strong = no silent cross-type coercion
 ### What it is
 A **data type** defines what values an object can hold and which operations make sense (you can divide numbers, not dictionaries). Python's built-ins fall into eight categories:
 
-| Category | Types | Mutable? | Literal / constructor example |
+| Category | Types | Mutable? | Literal (value typed directly) / constructor example |
 |---|---|---|---|
 | Text | `str` | No | `"hi"`, `'hi'`, `"""hi"""` |
 | Numeric | `int`, `float`, `complex` | No | `10`, `10.5`, `2 + 3j` |
@@ -253,7 +253,7 @@ A **data type** defines what values an object can hold and which operations make
 | Mapping | `dict` | Yes | `{"name": "Alice"}` |
 | Set | `set`, `frozenset` | set: yes; frozenset: no | `{1, 2}`, `frozenset([1, 2])` |
 | Boolean | `bool` | No | `True`, `False` |
-| Binary | `bytes`, `bytearray`, `memoryview` | bytearray: yes; bytes: no; memoryview: reflects its buffer | `b"abc"`, `bytearray(b"abc")`, `memoryview(b"abc")` |
+| Binary | `bytes`, `bytearray`, `memoryview` | bytearray: yes; bytes: no; memoryview: reflects its buffer (underlying raw memory) | `b"abc"`, `bytearray(b"abc")`, `memoryview(b"abc")` |
 | None | `NoneType` | No | `None` |
 
 From [`code/data_types_tour.py`](code/data_types_tour.py), which prints `type(obj).__name__` for one sample of each:
@@ -286,7 +286,7 @@ Strings, lists, tuples, dictionaries and sets get full chapters later; here is w
 int + 5: 15 | float + 0.5: 11.0 | complex: (3+1j)
 ```
 
-**Sequence types** keep items in order and support indexing `s[i]`, slicing `s[i:j]`, `len()`, `in`:
+**Sequence types** keep items in order and support indexing `s[i]` (get the item at position `i`, counting from 0), slicing `s[i:j]` (get a sub-range), `len()`, `in`:
 - `list` — mutable, the everyday container: `sports = ["soccer", "basketball", "tennis"]`.
 - `tuple` — immutable; use for fixed records (`("red", "green", "blue")`, coordinates) and as dict keys. Slightly smaller and faster to create than lists.
 - `range` — an immutable, **lazy** sequence of integers: it stores only start, stop and step, so `range(10**12)` uses almost no memory. `range(5)` is 0, 1, 2, 3, 4 (start inclusive, stop exclusive).
@@ -294,7 +294,9 @@ int + 5: 15 | float + 0.5: 11.0 | complex: (3+1j)
 range(5) as list: [0, 1, 2, 3, 4] | 3 in r: True
 ```
 
-**Mapping — `dict`:** key → value pairs with fast (average O(1)) lookup by key. Keys must be hashable. Since Python 3.7, dicts remember insertion order.
+**Mapping — `dict`:** key → value pairs with fast (average O(1)) lookup by key.
+
+> **Key term — Big-O notation:** a way of saying how an operation's running time grows as the data grows. **O(1)** ("constant time") means the cost stays the same whether the collection has 10 or 10 million items; **O(n)** ("linear time") means the cost grows in proportion to the number of items *n*. It describes the trend, not exact seconds. Keys must be hashable. Since Python 3.7, dicts remember insertion order.
 ```python
 user = {"name": "Alice", "age": 25}
 user["age"] += 1                 # modify
@@ -313,7 +315,7 @@ frozenset usable as dict key: palette
 
 **Boolean — `bool`:** `True` / `False`; see §2.6.
 
-**Binary types** handle raw bytes (file contents, network packets, images):
+**Binary types** handle raw bytes (a *byte* is 8 bits, a number 0–255; file contents, network packets — chunks of data sent over a network — images):
 - `bytes` — immutable sequence of integers 0–255: `bytes([50, 100, 150])`, `b"abc"`.
 - `bytearray` — mutable version; you can assign `data[1] = 105`.
 - `memoryview` — a zero-copy *window* onto another buffer; slicing it doesn't copy, and it reflects later changes to the underlying data.
@@ -328,7 +330,7 @@ bytes: [50, 100, 150] | bytearray: [50, 105, 200] | view: [105, 200]
 bytes range 0-255: bytes must be in range(0, 256)
 text <-> bytes: b'caf\xc3\xa9' café
 ```
-The view shows `200` — proof that it shares memory. Text ↔ bytes conversion goes through an **encoding**: `"café".encode("utf-8")` and `b"...".decode("utf-8")`.
+The view shows `200` — proof that it shares memory. Text ↔ bytes conversion goes through an **encoding** (a rule for turning characters into bytes; UTF-8 is the standard one): `"café".encode("utf-8")` and `b"...".decode("utf-8")`.
 
 **None — `NoneType`:** the single object `None` means "no value here": a missing optional argument, a not-yet-computed result, a function that returns nothing (functions without `return` return `None`). Test it with `is None`.
 ```text
@@ -343,13 +345,13 @@ function without return gives: None
 - `type(x) == int` rejects subclasses; prefer `isinstance(x, int)`.
 
 ### Real-world examples
-- JSON from a web API maps directly onto `dict`, `list`, `str`, `int`/`float`, `bool`, `None` (`json.loads`).
-- `bytes`/`memoryview` are used by `asyncio` streams and by NumPy's buffer protocol to share memory without copies.
-- `frozenset` keys appear in caches keyed by a set of options.
+- JSON (a text format for structured data) from a web API (a service your code calls over the network) maps directly onto `dict`, `list`, `str`, `int`/`float`, `bool`, `None` (`json.loads`).
+- `bytes`/`memoryview` are used by `asyncio` (Python's library for handling many network connections concurrently) streams and by NumPy's buffer protocol (a standard way for objects to share raw memory) to share memory without copies.
+- `frozenset` keys appear in caches (stores of already-computed results, reused to save time — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) keyed by a set of options.
 
 ### In the interview
 **30-second answer:** "Python's built-ins are str; int/float/complex; list/tuple/range; dict; set/frozenset; bool; bytes/bytearray/memoryview; and None. The key split is mutable — list, dict, set, bytearray — versus immutable; only hashable, typically immutable, objects can be dict keys or set members."
-- *List vs tuple?* → List mutable, for homogeneous collections that change; tuple immutable, for fixed records, hashable if its items are.
+- *List vs tuple?* → List mutable, for homogeneous (all items of the same kind) collections that change; tuple immutable, for fixed records, hashable if its items are.
 - *Why is `range(10**9)` cheap?* → It's lazy; it computes values on demand from start/stop/step.
 - *What's memoryview for?* → Slicing large binary buffers without copying.
 
@@ -370,7 +372,7 @@ Eight categories; memorise which are mutable (list, dict, set, bytearray). `rang
 Python has three built-in numeric types — `int`, `float`, `complex` — plus two exact types in the standard library — `decimal.Decimal` and `fractions.Fraction`.
 
 ### `int` — arbitrary precision
-Integers have **no fixed size**: they grow to use as much memory as needed. There is no overflow like C's 32/64-bit wraparound.
+Integers have **no fixed size**: they grow to use as much memory as needed. There is no overflow (a number outgrowing its fixed storage and wrapping round to a wrong value) like C's 32/64-bit (a *bit* is one binary digit, 0 or 1) wraparound.
 From [`code/numbers_demo.py`](code/numbers_demo.py):
 ```text
 sum: 13
@@ -381,10 +383,10 @@ int->str digit limit (CPython 3.11+): 4300
 ```
 - **How:** CPython stores an int as an array of 30-bit "digits"; small ints fit in one digit, big ones use more. Arithmetic on huge ints is slower, but correct.
 - **Literals:** `1_000_000` (underscores for readability), `0xFF` (hex), `0b101` (binary), `0o17` (octal).
-- **Limit worth knowing:** since 3.11, converting an int with more than 4 300 decimal digits to/from `str` raises `ValueError` by default, to stop denial-of-service attacks via huge numeric strings. Raise it with `sys.set_int_max_str_digits()` if you really need to.
+- **Limit worth knowing:** since 3.11, converting an int with more than 4 300 decimal digits to/from `str` raises `ValueError` by default, to stop denial-of-service attacks (swamping a server with so much work it cannot serve real users) via huge numeric strings. Raise it with `sys.set_int_max_str_digits()` if you really need to.
 
 ### `float` — IEEE-754 double precision
-A `float` is a 64-bit **binary** floating-point number: 1 sign bit, 11 exponent bits, 52 fraction bits. It gives about **15–17 significant decimal digits** (`sys.float_info.dig` is 15) and a range up to about 1.8 × 10³⁰⁸.
+A `float` is a 64-bit **binary** floating-point number (stored as significant digits × a power of two, so the point "floats"; IEEE-754 is the international standard for this format): 1 sign bit, 11 exponent bits, 52 fraction bits. It gives about **15–17 significant decimal digits** (`sys.float_info.dig` is 15) and a range up to about 1.8 × 10³⁰⁸.
 
 **The famous pitfall:** most decimal fractions cannot be represented exactly in binary, just as 1/3 cannot be written exactly in decimal. `0.1` is stored as the nearest binary fraction:
 ```text
@@ -399,16 +401,16 @@ round(2.5), round(3.5): 2 4 | round(2.675, 2): 2.67
 sum([0.1]*10) (3.12+ uses compensated summation): 1.0 | math.fsum: 1.0
 ```
 What each line teaches:
-1. **Never compare floats with `==`.** Use `math.isclose(a, b)` (relative tolerance 1e-9 by default) or `abs(a - b) < tol`.
-2. **Errors accumulate** with repeated operations (`0.1` added ten times ≠ `1.0`). `math.fsum` — and, since Python 3.12, the built-in `sum()` for floats — use compensated summation to reduce this.
+1. **Never compare floats with `==`.** Use `math.isclose(a, b)` (relative tolerance — allowed difference as a fraction of the values' size — 1e-9 by default) or `abs(a - b) < tol`.
+2. **Errors accumulate** with repeated operations (`0.1` added ten times ≠ `1.0`). `math.fsum` — and, since Python 3.12, the built-in `sum()` for floats — use compensated summation (an algorithm that tracks and corrects each addition's tiny rounding error) to reduce this.
 3. **Integers above 2⁵³ lose precision** as floats: `float(2**53 + 1)` drops the `+ 1`. Keep IDs and money-in-cents as `int`.
 4. **`round()` uses "round half to even"** (banker's rounding): `round(2.5) == 2`, `round(3.5) == 4`. And `round(2.675, 2)` gives `2.67` because 2.675 is actually stored as 2.67499999…
-5. `float("inf")`, `float("-inf")` and `float("nan")` exist; **NaN is not equal to anything, including itself**.
+5. `float("inf")`, `float("-inf")` and `float("nan")` exist; **NaN ("Not a Number", the result of undefined maths such as `inf - inf`) is not equal to anything, including itself**.
 
 The gap between neighbouring floats grows with magnitude — floats are dense near zero and sparse for big numbers:
 
 ![Gap between adjacent floats, math.ulp(x), grows linearly with x; at 2**53 it reaches 2](img/float_spacing.png)
-*Figure — `math.ulp(x)` (unit in the last place) on log-log axes: at 1.0 the gap is 2.2e-16; beyond 2⁵³ ≈ 9×10¹⁵ consecutive floats are 2 apart, so odd integers can't be represented.*
+*Figure — `math.ulp(x)` (unit in the last place) on log-log axes (both axes on logarithmic scales, each step ×10): at 1.0 the gap is 2.2e-16; beyond 2⁵³ ≈ 9×10¹⁵ consecutive floats are 2 apart, so odd integers can't be represented.*
 
 ### `Decimal` — exact base-10 arithmetic
 `decimal.Decimal` stores numbers in base 10 with user-controllable precision (28 significant digits by default) and rounding. Use it for **money** and anything where "what a human would compute on paper" is the requirement.
@@ -422,14 +424,14 @@ round half up 2.675 -> 2.68
 - Cost: much slower than float (still fine for business logic).
 
 ### `Fraction` — exact rationals
-`fractions.Fraction(1, 3)` stores numerator and denominator as ints, so `1/3 + 1/6` is exactly `1/2`. Good for exact geometry, probability, music ratios; slow for heavy numeric work because numerators/denominators can grow.
+A *rational* is any number that can be written as one integer divided by another. `fractions.Fraction(1, 3)` stores numerator and denominator as ints, so `1/3 + 1/6` is exactly `1/2`. Good for exact geometry, probability, music ratios; slow for heavy numeric work because numerators/denominators can grow.
 
 ### `complex`
 Written `a + bj` (engineers' `j`, not `i`). Attributes `.real`, `.imag` (both floats), method `.conjugate()`, `abs(z)` gives the magnitude. The `cmath` module has complex versions of `sqrt`, `exp`, `phase`, etc.
 ```text
 z.real: 1.0 z.imag: 2.0 |z|: 5.0 conjugate: (1-2j)
 ```
-Used in signal processing (FFT), electrical engineering (impedance), quantum computing simulators.
+Used in signal processing (FFT — Fast Fourier Transform, which splits a signal into its frequencies), electrical engineering (impedance), quantum computing simulators.
 
 ### The division family
 ```text
@@ -444,7 +446,7 @@ int(-2.7) truncates: -2 | math.floor(-2.7): -3
 - Division by zero raises `ZeroDivisionError` for ints and floats alike.
 
 ### Random numbers
-The `random` module generates **pseudo-random** numbers (Mersenne Twister): deterministic given a seed. Call `random.seed(42)` for reproducible tests and experiments.
+The `random` module generates **pseudo-random** numbers (produced by a formula, so they only look random; the formula is the Mersenne Twister): deterministic (always the same) given a seed (the starting value). Call `random.seed(42)` for reproducible tests and experiments.
 ```python
 random.seed(42)
 random.randint(1, 10)          # int in [1, 10], BOTH ends inclusive
@@ -454,7 +456,7 @@ random.choice(["red", "green", "blue"])
 ```text
 randint(1,10): 2 | random(): 0.025 | choice: green
 ```
-Other useful functions: `uniform(a, b)`, `shuffle(list)`, `sample(pop, k)`, `gauss(mu, sigma)`. **Never** use `random` for passwords, tokens or anything security-related — use the `secrets` module, which draws from the OS's cryptographic generator.
+Other useful functions: `uniform(a, b)`, `shuffle(list)`, `sample(pop, k)`, `gauss(mu, sigma)`. **Never** use `random` for passwords, tokens (secret strings that prove identity, such as API keys or password-reset links) or anything security-related — use the `secrets` module, which draws from the OS's cryptographic generator (randomness strong enough that attackers cannot predict it).
 
 ### Trade-offs
 | Type | Exact? | Speed | Use for |
@@ -474,9 +476,9 @@ Other useful functions: `uniform(a, b)`, `shuffle(list)`, `sample(pop, k)`, `gau
 - Using `random` for security tokens.
 
 ### Real-world examples
-- Python's big ints power cryptography libraries and RSA teaching code — no special bignum library needed.
-- Financial and e-commerce back-ends store amounts as `Decimal` (Django's `DecimalField` returns `Decimal` objects).
-- NumPy and PyTorch use float32/float64 arrays; ML training even uses 16-bit floats because a little precision loss is acceptable for speed.
+- Python's big ints power cryptography libraries and RSA (a widely used public-key encryption algorithm) teaching code — no special bignum (big-number) library needed.
+- Financial and e-commerce back-ends (the server-side part of an application) store amounts as `Decimal` (Django's `DecimalField` returns `Decimal` objects).
+- NumPy and PyTorch use float32/float64 (32- and 64-bit float) arrays; ML training even uses 16-bit floats because a little precision loss is acceptable for speed.
 
 ### In the interview
 **30-second answer:** "Python ints are arbitrary precision, so they never overflow. Floats are IEEE-754 doubles, so decimal fractions like 0.1 are approximations — compare them with `math.isclose`, and use `Decimal` built from strings for money. `//` floors toward negative infinity and `%` takes the divisor's sign."
@@ -552,7 +554,7 @@ Falsy = `None`, `False`, zeros, empties. Everything else is truthy. `bool` is an
 ## 2.7 Type conversion
 
 ### What it is
-**Type conversion** (casting) produces a new object of a different type from an existing value. It happens **implicitly** (Python does it for you) or **explicitly** (you call a constructor such as `int()`).
+**Type conversion** (casting) produces a new object of a different type from an existing value. It happens **implicitly** (Python does it for you) or **explicitly** (you call a constructor — the type itself, called like a function to build a new object — such as `int()`).
 
 ### Implicit conversion
 Python only converts implicitly **within the numeric tower**, widening to the more general type: `bool → int → float → complex`.
@@ -590,10 +592,10 @@ ord('A'), chr(66)                -> (65, 'B')
 | `str(x)` | anything → readable text | `repr(x)` gives the unambiguous developer form (`'hi\n'`) |
 | `bool(x)` | anything → truthiness | See §2.6 |
 | `complex(re, im)` | numbers or string → complex | `complex("2+3j")` works |
-| `list()`, `tuple()`, `set()` | any iterable → that collection | `set` removes duplicates and loses order |
+| `list()`, `tuple()`, `set()` | any iterable (anything you can loop over) → that collection | `set` removes duplicates and loses order |
 | `dict()` | iterable of key/value pairs (or keyword args) → dict | `dict(a=1)` |
 | `bin()`, `hex()`, `oct()` | int → prefixed string | Reverse with `int(s, 0)` |
-| `ord()`, `chr()` | character ↔ Unicode code point | |
+| `ord()`, `chr()` | character ↔ Unicode code point (the number assigned to a character) | |
 
 ### When conversion fails
 ```text
@@ -605,17 +607,17 @@ bool("False") = True | bool("") = False
 ```
 - `ValueError` = right type, bad content. `TypeError` = wrong type altogether.
 - To parse `"3.5"` as an int, go through float: `int(float("3.5"))` → 3 (decide first whether truncation is what you want).
-- For user input, wrap conversions in `try/except ValueError` (the exceptions chapter shows the pattern).
+- For user input, wrap conversions in `try/except ValueError` (Python's error-catching statement) (the exceptions chapter shows the pattern).
 - Parse booleans from text explicitly: `text.strip().lower() in {"true", "1", "yes"}`.
 
 ### Building strings from numbers
-`"Age: " + str(age)` works, but **f-strings** (3.6+) are clearer and handle formatting: `f"Age: {age}"`, `f"pi ~ {3.14159:.2f}"` → `pi ~ 3.14`.
+`"Age: " + str(age)` works, but **f-strings** (3.6+; string literals prefixed with `f` that embed `{expressions}`) are clearer and handle formatting: `f"Age: {age}"`, `f"pi ~ {3.14159:.2f}"` → `pi ~ 3.14`.
 
 ### Common mistakes
 - Forgetting `input()` returns `str`: `age = input(); age + 1` → `TypeError`.
 - `int(2.999)` is 2, not 3 — truncation, not rounding.
 - `bool("False")` is `True`.
-- Locale formats: `float("1,5")` fails; `float("1,000")` fails.
+- Locale formats (country-specific number styles, e.g. a comma as decimal point): `float("1,5")` fails; `float("1,000")` fails.
 
 ### In the interview
 **30-second answer:** "Python only converts implicitly up the numeric tower — bool, int, float, complex. Everything else is explicit via constructors like `int()`, `float()`, `str()`, `list()`. Bad content raises `ValueError`, a wrong type raises `TypeError`. `int()` truncates toward zero."
@@ -650,7 +652,7 @@ All examples below come from [`code/operators_demo.py`](code/operators_demo.py) 
 | `%` | modulus (remainder) | 1 |
 | `**` | exponentiation | 1000 |
 | `//` | floor division | 3 |
-| `@` | matrix multiplication (used by NumPy; no built-in type implements it) | — |
+| `@` | matrix (2-D grid of numbers) multiplication (used by NumPy; no built-in type implements it) | — |
 
 Operators also work on other types: `"ab" * 3 == "ababab"`, `[1] + [2] == [1, 2]`.
 
@@ -659,7 +661,7 @@ Operators also work on other types: `"ab" * 3 == "ababab"`, `[1] + [2] == [1, 2]
 ```text
 compare: False True True False True False
 ```
-Strings compare lexicographically by code point (`"Z" < "a"` is True because uppercase letters come first). Comparing unrelated types with `<` raises `TypeError` (`1 < "2"`); `==` between them just returns `False`.
+Strings compare lexicographically (dictionary-style, character by character) by code point (`"Z" < "a"` is True because uppercase letters come first). Comparing unrelated types with `<` raises `TypeError` (`1 < "2"`); `==` between them just returns `False`.
 
 **Chained comparisons:** `18 <= age < 65` means `18 <= age and age < 65`, with `age` evaluated only once — just like maths notation.
 ```text
@@ -667,7 +669,7 @@ Strings compare lexicographically by code point (`"Z" < "a"` is True because upp
 ```
 
 ### Assignment and augmented assignment
-`=` binds a name. **Augmented** operators combine an operation with rebinding: `x += 3` means roughly `x = x + 3`. Every arithmetic and bitwise operator has one. Walking one variable through all of them:
+`=` binds a name. **Augmented** operators combine an operation with rebinding: `x += 3` means roughly `x = x + 3`. Every arithmetic and bitwise (acting on individual bits; see below) operator has one. Walking one variable through all of them:
 ```text
 v += 3  -> 13
 v -= 2  -> 11
@@ -698,7 +700,7 @@ Python has no `++` or `--`; `x++` is a `SyntaxError` and `++x` is just `+(+x)`.
 | `not x` | `True` if `x` is falsy, else `False` (always a bool) |
 
 Two important properties:
-1. **Short-circuit evaluation:** the right operand is evaluated only if needed. `0 and 1/0` returns `0` without dividing by zero.
+1. **Short-circuit evaluation** (stopping as soon as the answer is known)**:** the right operand is evaluated only if needed. `0 and 1/0` returns `0` without dividing by zero.
 2. **They return an operand, not necessarily a bool:** `"" or "guest"` → `"guest"`. That is the idiom for defaults.
 ```text
 True and False: False | True or False: True | not True: False
@@ -713,13 +715,13 @@ Work on the binary representation of integers.
 | `&` | AND — 1 where both bits are 1 | 2 (`0010`) |
 | `\|` | OR — 1 where either is 1 | 3 (`0011`) |
 | `^` | XOR — 1 where bits differ | 1 (`0001`) |
-| `~` | NOT — flips every bit; `~x == -x - 1` (two's complement) | `~2 == -3` |
+| `~` | NOT — flips every bit; `~x == -x - 1` (two's complement, the usual binary form of negative numbers) | `~2 == -3` |
 | `<<` | shift left n bits = multiply by 2ⁿ | `2 << 1 == 4` |
 | `>>` | shift right n bits = floor-divide by 2ⁿ | `2 >> 1 == 1` |
 ```text
 bitwise: 2 3 1 -3 4 1 | 0010 & 0011 = 0010
 ```
-Real uses: permission flags (`READ | WRITE`, test with `perms & WRITE`), `enum.Flag`, network masks, hashing, compact storage. On `set`s the same symbols mean union `|`, intersection `&`, difference `-`, symmetric difference `^`; on dicts (3.9+) `|` merges.
+Real uses: permission flags (on/off switches packed into one integer: `READ | WRITE`, test with `perms & WRITE`), `enum.Flag`, network masks (bit patterns that select part of an IP address), hashing, compact storage. On `set`s the same symbols mean union `|`, intersection `&`, difference `-`, symmetric difference `^`; on dicts (3.9+) `|` merges.
 
 ### Membership: `in`, `not in`
 Test whether a value is contained in a container: list, tuple, string (substring test), dict (checks **keys**), set.
@@ -747,18 +749,18 @@ if (count := len(data)) > 2:
 walrus captured: disk full
 walrus: 3 items
 ```
-Parentheses are usually required. Classic uses: `while (chunk := f.read(8192)):` and filtering in comprehensions `[y for x in data if (y := f(x)) > 0]`. Don't use it where a normal assignment on its own line reads better.
+Parentheses are usually required. Classic uses: `while (chunk := f.read(8192)):` and filtering in comprehensions (compact `[expr for x in data]` collection builders, Chapter 5) `[y for x in data if (y := f(x)) > 0]`. Don't use it where a normal assignment on its own line reads better.
 
 ### Operator precedence
 **Precedence** decides which operator binds first when there are no parentheses; **associativity** decides the order among equal-precedence operators (left-to-right for almost all; `**` is right-to-left). From highest to lowest, per the Python language reference:
 
 | # | Operators | Notes |
 |---|---|---|
-| 1 | `(…)`, `[…]`, `{…}` | parenthesised expressions and displays |
-| 2 | `x[i]`, `x[i:j]`, `f(…)`, `x.attr` | subscription, slicing, call, attribute |
-| 3 | `await x` | |
+| 1 | `(…)`, `[…]`, `{…}` | parenthesised expressions and displays (list/dict/set literals) |
+| 2 | `x[i]`, `x[i:j]`, `f(…)`, `x.attr` | subscription (indexing), slicing, call, attribute |
+| 3 | `await x` | waits for an async operation (asyncio) |
 | 4 | `**` | right-associative: `2 ** 3 ** 2 == 2 ** 9 == 512` |
-| 5 | `+x`, `-x`, `~x` | unary; binds *less* tightly than `**` on its right, so `-2 ** 2 == -4` |
+| 5 | `+x`, `-x`, `~x` | unary (one operand); binds *less* tightly than `**` on its right, so `-2 ** 2 == -4` |
 | 6 | `*`, `@`, `/`, `//`, `%` | |
 | 7 | `+`, `-` | |
 | 8 | `<<`, `>>` | |
@@ -770,10 +772,10 @@ Parentheses are usually required. Classic uses: `while (chunk := f.read(8192)):`
 | 14 | `and` | |
 | 15 | `or` | |
 | 16 | `x if c else y` | conditional expression |
-| 17 | `lambda` | |
+| 17 | `lambda` | tiny anonymous function (Chapter 7) |
 | 18 | `:=` | assignment expression |
 
-Two consequences beginners hit: `&`, `^`, `|` bind **tighter** than comparisons (so in pandas you must write `(df.a > 1) & (df.b < 2)` with parentheses), and `and` binds tighter than `or`.
+Two consequences beginners hit: `&`, `^`, `|` bind **tighter** than comparisons (so in pandas — the table-processing library — you must write `(df.a > 1) & (df.b < 2)` with parentheses), and `and` binds tighter than `or`.
 
 **Worked example** (`a, b, c = 10, 20, 30`):
 ```python
@@ -807,7 +809,7 @@ The second value (`True`) is the same expression fully parenthesised — identic
 
 ### Real-world examples
 - `or` defaults: `timeout = config.get("timeout") or 30`.
-- Walrus in stream reading: `while (chunk := sock.recv(4096)):` in network code.
+- Walrus in stream reading: `while (chunk := sock.recv(4096)):` in network code (`sock` is a *socket*, one end of a network connection).
 - Bit flags: `os.open(path, os.O_WRONLY | os.O_CREAT)`, `re.IGNORECASE | re.MULTILINE`.
 - `@` for matrix products in NumPy/PyTorch: `y = X @ w`.
 
@@ -816,7 +818,7 @@ The second value (`True`) is the same expression fully parenthesised — identic
 - *Output of `-3 ** 2`?* → `-9`.
 - *Why does `if x == 1 or 2` always pass?* → It parses as `(x == 1) or 2`, and `2` is truthy.
 - *Difference between `a += [1]` and `a = a + [1]` for lists?* → The first mutates the list in place (aliases see it); the second creates a new list.
-- *What's the complexity of `in` for list vs set?* → O(n) vs average O(1).
+- *What's the complexity (how the cost grows with size) of `in` for list vs set?* → O(n) vs average O(1).
 
 ### Self-check
 1. `10 // 4`, `10 % 4`, `10 / 4`? → `2`, `2`, `2.5`.

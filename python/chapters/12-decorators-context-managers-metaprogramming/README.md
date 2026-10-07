@@ -23,7 +23,7 @@ flowchart LR
 ## 12.1 Decorators
 
 ### What it is
-A **decorator** is a callable that takes a function (or class) and returns a replacement — usually a **wrapper** that adds behaviour before/after calling the original. The `@` syntax is shorthand:
+A **decorator** is a callable (anything you can call with `()` — a function, a class, or an object with `__call__`) that takes a function (or class) and returns a replacement — usually a **wrapper** that adds behaviour before/after calling the original. The `@` syntax is shorthand:
 
 ```python
 @timed
@@ -41,12 +41,12 @@ Two building blocks make this possible:
 (Closures and a first look at decorators are in [Chapter 7 §7.4–7.6](../07-functions/README.md); this chapter goes deeper.)
 
 ### Why it matters
-Decorators separate **cross-cutting concerns** — logging, timing, caching, retries, authentication, registration — from business logic, and apply them with one line. This is Python's native form of the Decorator pattern (see [LLD Handbook ch. 9](../../../lld/chapters/09-patterns-structural/README.md)) and of aspect-oriented programming.
+Decorators separate **cross-cutting concerns** (needs that show up in many unrelated functions) — logging, timing, caching (keeping results so they can be reused), retries, authentication (checking who the caller is), registration — from business logic (the code that does the actual job the program exists for), and apply them with one line. This is Python's native form of the Decorator pattern (see [LLD Handbook ch. 9](../../../lld/chapters/09-patterns-structural/README.md)) and of aspect-oriented programming (a style where such shared concerns are written once and "woven" around many functions).
 
 ### How it works
-1. At **definition time** (usually import time) Python creates the function, then calls `decorator(func)` and binds the name to the result.
+1. At **definition time** (usually import time — the moment a module is first loaded by an `import` statement) Python creates the function, then calls `decorator(func)` and binds the name to the result.
 2. At **call time**, callers actually call the wrapper, which calls the original via the closure.
-3. The wrapper should accept `*args, **kwargs` and **return** the original's result, so it works for any signature.
+3. The wrapper should accept `*args, **kwargs` and **return** the original's result, so it works for any signature (the list of parameters a function accepts).
 
 ```python
 def timed(func):
@@ -75,7 +75,7 @@ slow_add: 5 | name: slow_add | doc: Add slowly. | original: slow_add
 ```
 
 ### `functools.wraps`
-Without it, the decorated function's `__name__` is `"wrapper"` and its docstring is gone — which breaks debugging, logs, `help()`, documentation tools and frameworks that look up functions by name (e.g. Flask endpoints). `@functools.wraps(func)` copies `__module__`, `__name__`, `__qualname__`, `__doc__`, `__annotations__` (and more), merges `__dict__`, and sets `wrapper.__wrapped__ = func` so tools (and you) can reach the original. **Always use it.**
+Without it, the decorated function's `__name__` is `"wrapper"` and its docstring (the descriptive string literal written as the first line of a function body) is gone — which breaks debugging, logs, `help()`, documentation tools and frameworks that look up functions by name (e.g. Flask endpoints — Flask is a small web framework, and an endpoint is a URL path the server answers). `@functools.wraps(func)` copies `__module__`, `__name__`, `__qualname__`, `__doc__`, `__annotations__` (and more), merges `__dict__`, and sets `wrapper.__wrapped__ = func` so tools (and you) can reach the original. **Always use it.**
 
 ### Decorators with arguments — three levels
 `@retry(times=3)` first *calls* `retry(times=3)`, which must *return* the real decorator. So there are three nested functions: factory → decorator → wrapper.
@@ -104,7 +104,7 @@ Output:
   [retry] attempt 2 failed: timeout
 flaky_fetch -> data
 ```
-(Real retry code should also wait between attempts with exponential backoff and jitter — libraries such as `tenacity` do this.)
+(Real retry code should also wait between attempts with exponential backoff (doubling the wait after each failure: 1 s, 2 s, 4 s …) and jitter (a small random amount added so many clients don't all retry at the same instant) — libraries such as `tenacity` do this.)
 
 ### Stacking
 ```python
@@ -179,7 +179,7 @@ When the "cross-cutting" logic is used once; when it changes the function's sign
 - Wrong stacking order (e.g. caching outside an auth check caches responses across users).
 
 ### Real-world examples
-Flask `@app.route("/")` and FastAPI `@app.get("/")` register view functions; pytest `@pytest.fixture` and `@pytest.mark.parametrize`; Click `@click.command()`/`@click.option()`; Celery `@app.task`; Django `@login_required`; `@functools.singledispatch` (function overloading by argument type); `@contextlib.contextmanager`; `@unittest.mock.patch`.
+Flask `@app.route("/")` and FastAPI `@app.get("/")` register view functions (the functions that handle a web request for a URL); pytest `@pytest.fixture` and `@pytest.mark.parametrize`; Click (a library for building CLIs — command-line interfaces) `@click.command()`/`@click.option()`; Celery (a background-job queue) `@app.task`; Django (a large web framework) `@login_required`; `@functools.singledispatch` (function overloading by argument type); `@contextlib.contextmanager`; `@unittest.mock.patch`.
 
 ### In the interview
 **30-second answer:** "A decorator is a callable that takes a function and returns a replacement, usually a closure wrapper that runs code around the original; `@d` above `def f` is `f = d(f)` at definition time. I always use `functools.wraps` to keep the name, docstring and `__wrapped__`. A decorator with arguments is a factory returning a decorator — three levels. Stacked decorators apply bottom-up and run top-down."
@@ -205,14 +205,14 @@ Decorator = function in, function out, applied at definition time. Use `*args, *
 | `@property` (+ `.setter`, `.deleter`) | Method accessed like an attribute; implemented as a descriptor | [Ch. 10](../10-oop-in-python/README.md) §10.1, §12.4 |
 | `@classmethod` | Passes the class as `cls` (alternative constructors) | [Ch. 10](../10-oop-in-python/README.md) §10.1 |
 | `@staticmethod` | No implicit first argument | [Ch. 10](../10-oop-in-python/README.md) §10.1 |
-| `@abstractmethod` | Marks methods an ABC subclass must implement | [Ch. 10](../10-oop-in-python/README.md) §10.7 |
+| `@abstractmethod` | Marks methods an ABC (abstract base class — a class meant only to be inherited from) subclass must implement | [Ch. 10](../10-oop-in-python/README.md) §10.7 |
 | `@dataclass` | Class decorator generating `__init__`/`__repr__`/`__eq__` … | [Ch. 10](../10-oop-in-python/README.md) §10.10 |
 | `@functools.total_ordering` | Class decorator filling in comparison methods | [Ch. 10](../10-oop-in-python/README.md) §10.2 |
 | `@functools.lru_cache(maxsize=128)` / `@functools.cache` | Memoisation (below) | here |
 | `@functools.cached_property` | Compute once per instance, store in the instance | §12.4 |
 | `@functools.wraps` | Copies metadata onto wrappers | §12.1 |
 | `@contextlib.contextmanager` | Generator → context manager | §12.3 |
-| `@typing.override` (3.12) | Marks a method as overriding a parent's, so type checkers can flag typos | — |
+| `@typing.override` (3.12) | Marks a method as overriding a parent's, so type checkers (tools like mypy that verify type hints without running the code) can flag typos | — |
 
 ### `@lru_cache` and `@cache` — memoisation
 **Memoisation** stores the result of a function call keyed by its arguments, so a repeated call returns instantly. `lru_cache(maxsize=N)` keeps the N most recently used results and evicts the **least recently used** (LRU) when full; `maxsize=None` or `@functools.cache` (3.9) is unbounded. Default `maxsize` is 128.
@@ -231,13 +231,13 @@ unhashable arg: unhashable type: 'list'
 Worked numbers: plain recursive `fib(25)` makes 242,785 calls (exponential); cached, each `fib(k)` for k = 0…25 is computed once → **26 misses**, and each of `fib(3)…fib(25)` finds its second sub-call `fib(k−2)` already cached → **23 hits**.
 
 Rules and caveats:
-1. Arguments must be **hashable** (the cache is a dict) — no lists/dicts.
+1. Arguments must be **hashable** (have a fixed hash value, which in practice means immutable — numbers, strings, tuples; the cache is a dict, and dict keys must be hashable) — no lists/dicts.
 2. Only for **pure** functions (same input → same output, no side effects). Don't cache `now()` or database reads that must be fresh.
 3. Returned objects are shared — mutating a cached list corrupts the cache.
-4. On **methods**, the cache holds a reference to `self`, keeping instances alive (a memory leak) and sharing one cache across instances; prefer `cached_property` or a per-instance cache.
+4. On **methods**, the cache holds a reference to `self`, keeping instances alive (a memory leak — memory that is never freed because something still references it) and sharing one cache across instances; prefer `cached_property` or a per-instance cache.
 5. `fib.cache_clear()` empties it; `typed=True` caches `f(3)` and `f(3.0)` separately.
 
-**Real world:** caching parsed config, compiled regexes (`re` keeps its own internal cache), expensive pure computations, dynamic-programming solutions in interviews.
+**Real world:** caching parsed config, compiled regexes (regular expressions — text-matching patterns; `re` keeps its own internal cache), expensive pure computations, dynamic-programming solutions in interviews (dynamic programming solves a problem by reusing answers to smaller overlapping sub-problems).
 
 ---
 
@@ -249,14 +249,14 @@ A **context manager** is an object that sets something up at the start of a `wit
 Analogy: a hotel key card — you get it on check-in (`__enter__`), and checkout (`__exit__`) happens no matter how your stay ends.
 
 ### Why it matters
-Resource leaks (files, sockets, locks, DB transactions, temporary state) are a top source of bugs. `with` replaces fragile `try/finally` boilerplate and makes clean-up impossible to forget.
+Resource leaks (files, sockets — open network connections, locks — objects that let only one thread into a section of code at a time, DB transactions — a group of database changes that must all succeed or all be undone, temporary state) are a top source of bugs. `with` replaces fragile `try/finally` boilerplate (repetitive code you have to write every time) and makes clean-up impossible to forget.
 
 ### How it works — `with EXPR as VAR: BODY`
 1. Evaluate `EXPR` to get the manager `m`.
 2. Call `m.__enter__()`; bind its **return value** to `VAR` (it doesn't have to be `m` — `open()` returns the file itself, a lock returns `True`).
 3. Run `BODY`.
-4. Always call `m.__exit__(exc_type, exc_value, traceback)` — all three `None` if no exception.
-5. If `__exit__` returns a **truthy** value, the exception is **suppressed**; otherwise it propagates. Return `False`/`None` unless suppressing is the whole point.
+4. Always call `m.__exit__(exc_type, exc_value, traceback)` — all three `None` if no exception. (A traceback is the record of which function calls were active when the error happened.)
+5. If `__exit__` returns a **truthy** value, the exception is **suppressed**; otherwise it propagates (keeps travelling up to the calling code). Return `False`/`None` unless suppressing is the whole point.
 
 ```mermaid
 sequenceDiagram
@@ -316,7 +316,7 @@ def transaction(log):
 ```
 
 ### `ExitStack` — a dynamic number of managers
-`contextlib.ExitStack` lets you enter an unknown number of context managers (e.g. open N files from a list) and registers arbitrary clean-up callbacks. On exit it unwinds them in **reverse (LIFO)** order, and if entering the k-th one fails, the k−1 already entered are still closed. `stack.pop_all()` transfers ownership out if setup succeeded (useful in constructors).
+`contextlib.ExitStack` lets you enter an unknown number of context managers (e.g. open N files from a list) and registers arbitrary clean-up callbacks (functions you hand over to be called later). On exit it unwinds them in **reverse (LIFO — last in, first out, like a stack of plates)** order, and if entering the k-th one fails, the k−1 already entered are still closed. `stack.pop_all()` transfers ownership out if setup succeeded (useful in constructors).
 
 ```python
 with contextlib.ExitStack() as stack:
@@ -353,9 +353,9 @@ two managers: ['open r1', 'open r2', 'close r2', 'close r1']
 
 Several managers in one statement: `with A() as a, B() as b:` — or, since 3.10, parenthesised across lines. They are exited in reverse order (see "two managers" above).
 
-**Async context managers.** In `async def` code ([Chapter 16](../16-concurrency-and-async/README.md)) the statement is `async with`, and the protocol methods are the coroutines `__aenter__` / `__aexit__`, so setup and clean-up can `await` I/O (opening a network connection, releasing a pooled DB connection). `@contextlib.asynccontextmanager` builds one from an `async def` generator exactly like `@contextmanager`. Examples: `async with aiohttp.ClientSession() as s:`, `async with asyncio.TaskGroup() as tg:`, `async with lock:` for an `asyncio.Lock`.
+**Async context managers.** In `async def` code ([Chapter 16](../16-concurrency-and-async/README.md)) the statement is `async with`, and the protocol methods are the coroutines `__aenter__` / `__aexit__`, so setup and clean-up can `await` I/O (input/output — reading or writing files, network or databases; e.g. opening a network connection, releasing a pooled DB connection — one borrowed from a shared, reusable set of open connections). `@contextlib.asynccontextmanager` builds one from an `async def` generator exactly like `@contextmanager`. Examples: `async with aiohttp.ClientSession() as s:`, `async with asyncio.TaskGroup() as tg:`, `async with lock:` for an `asyncio.Lock`.
 
-**Reusable and reentrant managers.** A *single-use* manager (a `@contextmanager` object, an open file) can be entered only once. A *reusable* one can be entered again after it exits. A *reentrant* one can even be entered again **while it is already active** (nested `with m:` inside `with m:`) — `threading.RLock` and `contextlib.redirect_stdout` are reentrant; a plain `threading.Lock` is not (re-acquiring it from the same thread deadlocks).
+**Reusable and reentrant managers.** A *single-use* manager (a `@contextmanager` object, an open file) can be entered only once. A *reusable* one can be entered again after it exits. A *reentrant* one can even be entered again **while it is already active** (nested `with m:` inside `with m:`) — `threading.RLock` and `contextlib.redirect_stdout` are reentrant; a plain `threading.Lock` is not (re-acquiring it from the same thread deadlocks — the thread waits forever for a lock that it itself holds).
 
 ### Trade-offs
 
@@ -407,10 +407,10 @@ Two kinds:
 - **Non-data descriptor** — only `__get__`. Plain functions and `functools.cached_property` are.
 
 ### Why it matters
-Descriptors are the mechanism behind `property`, `classmethod`, `staticmethod`, bound methods, `__slots__`, and ORM fields (Django/SQLAlchemy model columns). Writing your own gives **reusable** attribute logic — one `Positive` validator used for many fields, instead of copy-pasted property pairs.
+Descriptors are the mechanism behind `property`, `classmethod`, `staticmethod`, bound methods, `__slots__`, and ORM fields (an ORM — object-relational mapper — maps database tables to Python classes; e.g. Django/SQLAlchemy model columns). Writing your own gives **reusable** attribute logic — one `Positive` validator used for many fields, instead of copy-pasted property pairs.
 
 ### How it works — attribute lookup precedence for `obj.attr`
-1. Find `attr` on `type(obj)` along the MRO. If it's a **data descriptor**, call its `__get__` — it **wins over the instance dict**.
+1. Find `attr` on `type(obj)` along the MRO (method resolution order — the fixed order in which a class and its parents are searched). If it's a **data descriptor**, call its `__get__` — it **wins over the instance dict**.
 2. Else, if `attr` is in `obj.__dict__`, return that.
 3. Else, if the class attribute is a **non-data descriptor**, call its `__get__`; if it's a plain class attribute, return it.
 4. Else call `__getattr__` if defined; otherwise raise `AttributeError`.
@@ -472,7 +472,7 @@ data descriptor? True | cached_property has __set__? False
 - Forgetting the `obj is None` case (class access).
 
 ### In the interview
-**30-second answer:** "A descriptor is a class attribute with `__get__`, and optionally `__set__`/`__delete__`. Data descriptors (with `__set__`) take priority over the instance dict; non-data ones don't. `property`, `classmethod`, `staticmethod` and even bound methods are built on this — a function's `__get__` returns a bound method. I'd write one for reusable validation across fields, like ORMs do for columns."
+**30-second answer:** "A descriptor is a class attribute with `__get__`, and optionally `__set__`/`__delete__`. Data descriptors (with `__set__`) take priority over the instance dict; non-data ones don't. `property`, `classmethod`, `staticmethod` and even bound methods are built on this — a function's `__get__` returns a bound method (a method with its `self` already filled in). I'd write one for reusable validation across fields, like ORMs do for columns."
 - *Why can `cached_property` be overwritten by the instance?* — It's a non-data descriptor, so the instance dict wins.
 
 ### TL;DR
@@ -485,7 +485,7 @@ Descriptors = class attributes that intercept get/set/delete. Data descriptors b
 ### What it is
 | Hook | Called when | Typical use |
 |---|---|---|
-| `__getattr__(self, name)` | Only when **normal lookup fails** (would raise `AttributeError`) | Delegation/proxies, lazy attributes, friendly defaults, deprecation shims |
+| `__getattr__(self, name)` | Only when **normal lookup fails** (would raise `AttributeError`) | Delegation/proxies (objects that stand in for another and forward requests to it), lazy attributes, friendly defaults, deprecation shims (thin layers that keep old names working while warning they'll be removed) |
 | `__getattribute__(self, name)` | On **every** attribute access (it *is* normal lookup) | Rare: tracing, access control, very special proxies |
 | `__setattr__` / `__delattr__` | Every assignment / deletion | Validation, immutability, change tracking |
 | Module-level `__getattr__(name)` (PEP 562, 3.7) | Missing attribute on a *module* | Lazy imports, deprecation warnings |
@@ -517,12 +517,12 @@ value: 1
 
 ### Common mistakes
 - Inside `__getattribute__`, writing `self.anything` → calls `__getattribute__` again → infinite recursion. Use `super().__getattribute__(name)` or `object.__getattribute__(self, name)`.
-- In `__getattr__`, accessing an attribute that may not exist yet (e.g. `self._target` before `__init__` has set it, as during unpickling or copying) → infinite recursion. Guard or raise `AttributeError`.
+- In `__getattr__`, accessing an attribute that may not exist yet (e.g. `self._target` before `__init__` has set it, as during unpickling — rebuilding an object from bytes saved with `pickle` — or copying) → infinite recursion. Guard or raise `AttributeError`.
 - Returning `None` for unknown names instead of raising `AttributeError` → breaks `hasattr`, `getattr(obj, n, default)` and copy/pickle.
 - Implicit special-method lookup (`len(p)`, `p + 1`) **bypasses** both hooks — Python looks up dunders on the type directly. A proxy must define those dunders explicitly.
 
 ### Real-world examples
-`unittest.mock.Mock` uses `__getattr__` to create child mocks on the fly; RPC/SDK clients build dynamic endpoints (`client.users.list`); pandas lets you access columns as attributes (`df.price`) via `__getattr__`; lazy-loading packages use module `__getattr__`.
+`unittest.mock.Mock` uses `__getattr__` to create child mocks on the fly; RPC/SDK clients (RPC = remote procedure call, calling a function on another machine; SDK = software development kit, a ready-made library for a service) build dynamic endpoints (`client.users.list`); pandas lets you access columns as attributes (`df.price`) via `__getattr__`; lazy-loading packages use module `__getattr__`.
 
 ### TL;DR
 `__getattr__` = fallback for missing attributes (safe, common). `__getattribute__` = intercepts everything (rare, recursion-prone). Dunders used by syntax skip both.
@@ -540,13 +540,13 @@ Dog = type("Dog", (object,), {"name": "Rex", "speak": speak})   # a class, built
 ```
 
 ### How a class is created
-1. Python collects the class body into a namespace dict (by executing it).
+1. Python collects the class body into a namespace dict (a mapping from names to the objects they refer to) by executing it.
 2. It determines the metaclass (explicit `metaclass=`, or the most derived metaclass of the bases, default `type`).
 3. It calls `Meta(name, bases, namespace)` → `Meta.__new__` builds the class object, `Meta.__init__` initialises it.
 4. While the class object is being built (inside `type.__new__`, so before `Meta.__init__`), descriptors' `__set_name__` hooks run, then the parent's `__init_subclass__`.
 5. Class decorators run last, on the finished class.
 
-A custom metaclass subclasses `type` and overrides `__new__`/`__init__` (or `__call__`, to control **instance** creation — e.g. a Singleton metaclass).
+A custom metaclass subclasses `type` and overrides `__new__`/`__init__` (or `__call__`, to control **instance** creation — e.g. a Singleton metaclass, which ensures a class can only ever have one instance).
 
 ### `__init_subclass__` — the simpler hook
 PEP 487 (Python 3.6) added `__init_subclass__(cls, **kwargs)`: a classmethod on a parent that runs **every time a subclass is created**, receiving any keyword arguments from the class line (`class Home(Handler, route="/")`). It covers the most common metaclass uses — registries, validation, configuration — with ordinary inheritance and no metaclass conflicts.
@@ -596,13 +596,13 @@ Note `type(CsvExporter)` is `RegistryMeta` — the metaclass is inherited by eve
 | Add/modify methods of one class | Class decorator |
 | Reusable attribute behaviour | Descriptor |
 | React to / register / validate every subclass | `__init_subclass__` |
-| Control the class namespace itself, customise `isinstance`, change how instances are created, or build framework-level DSLs | Metaclass |
+| Control the class namespace itself, customise `isinstance`, change how instances are created, or build framework-level DSLs (domain-specific languages — mini-languages tailored to one job) | Metaclass |
 
 Python core developer Tim Peters famously remarked that metaclasses are deeper magic than 99% of users should worry about — and since 3.6, `__init_subclass__` and `__set_name__` have removed most remaining reasons.
 
 ### Common mistakes
 - **Metaclass conflict:** combining two base classes with unrelated metaclasses → `TypeError: metaclass conflict`. (One reason to avoid custom metaclasses in libraries.)
-- Forgetting `super().__init_subclass__(**kwargs)` — breaks cooperative inheritance.
+- Forgetting `super().__init_subclass__(**kwargs)` — breaks cooperative inheritance (every class in a hierarchy calling `super()` so that each parent gets its turn).
 - Using a metaclass for something a decorator could do.
 
 ### Real-world examples
@@ -632,19 +632,19 @@ Patching a class affects **every existing instance** too, because methods are lo
 
 ### Legitimate uses
 - **Tests** — replacing slow or external dependencies (network, time, randomness). Use `unittest.mock.patch` or pytest's `monkeypatch` fixture, which **undo the change automatically**.
-- **Hot-fixing a third-party bug** until an upstream fix ships (document it and pin the version).
-- Framework-level instrumentation, e.g. gevent's `monkey.patch_all()` makes the standard library cooperative, and APM/tracing agents (OpenTelemetry auto-instrumentation) wrap library functions.
+- **Hot-fixing a third-party bug** until an upstream fix (a fix made in the library's own source by its maintainers) ships (document it and pin the version — fix the dependency to one exact version).
+- Framework-level instrumentation, e.g. gevent's `monkey.patch_all()` makes the standard library cooperative (blocking calls yield control to other tasks), and APM/tracing agents (APM = application performance monitoring; tracing records how long each step of a request takes; OpenTelemetry auto-instrumentation) wrap library functions.
 
 ### Caveats
 1. **Global and invisible**: every user of the module/class sees the change, including other libraries and other threads.
 2. **Patch where it's looked up, not where it's defined**: if `app.py` did `from utils import send_email`, you must patch `app.send_email`; patching `utils.send_email` doesn't affect the name already bound in `app`.
 3. **Order-dependent**: code that imported or cached the original before the patch keeps it.
 4. **Fragile across upgrades**: private internals you patch may change without notice.
-5. **Always restore** (try/finally, or tools that do it for you), otherwise test pollution causes failures in unrelated tests.
+5. **Always restore** (try/finally, or tools that do it for you), otherwise test pollution (one test leaving changed state behind that affects others) causes failures in unrelated tests.
 6. Built-in types implemented in C (`str`, `int`, `list`) can't be patched: `str.upper = ...` raises `TypeError`.
 
 ### In the interview
-"Monkey patching is modifying classes or modules at run time. It's fine in tests via `mock.patch` or pytest's `monkeypatch`, which restore automatically and must target the name where it's used. In production I avoid it — it's global, order-dependent and breaks on upgrades — and prefer dependency injection, subclassing or a wrapper."
+"Monkey patching is modifying classes or modules at run time. It's fine in tests via `mock.patch` or pytest's `monkeypatch`, which restore automatically and must target the name where it's used. In production I avoid it — it's global, order-dependent and breaks on upgrades — and prefer dependency injection, subclassing or a wrapper." (**Dependency injection** means passing the collaborators a piece of code needs — a database client, a clock — in as arguments, instead of having the code reach out and create them itself, so they are easy to swap.)
 
 ### TL;DR
 Monkey patching is powerful and global. Use it in tests with auto-restoring tools, patch where the name is looked up, and prefer dependency injection in production.
@@ -662,7 +662,7 @@ Monkey patching is powerful and global. Use it in tests with auto-restoring tool
 | `type(x)`, `isinstance`, `issubclass`, `callable` | Types and capabilities | |
 | `inspect.signature(f)` | Parameter names, defaults, annotations | FastAPI and pytest read signatures to inject arguments/fixtures |
 | `inspect.getsource(f)`, `inspect.getmembers(obj)` | Source text; all members | Documentation tools |
-| `eval(expr)`, `exec(code)` | Run a string as Python | Almost never needed; **never on untrusted input** — it can run any code |
+| `eval(expr)`, `exec(code)` | Run a string as Python | Almost never needed; **never on untrusted input** (anything an outsider can influence) — it can run any code |
 | `ast.literal_eval(s)` | Safely parse a literal (`"[1, 2, {'a': 3}]"`) | The safe replacement for `eval` on data |
 
 Rule of thumb: `getattr`-style introspection is normal Python; `eval`/`exec` on anything a user can influence is a security hole (the same class of bug as unpickling untrusted data, [Chapter 9](../09-errors-exceptions-files/README.md)).

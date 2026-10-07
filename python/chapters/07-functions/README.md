@@ -1,8 +1,8 @@
 # Chapter 7 — Functions
 
-A **function** is a named, reusable block of code that takes some inputs, does one job, and (usually) hands back a result. Almost everything you write in Python beyond a ten-line script is built out of functions, and many "advanced" features — decorators, callbacks, `sorted(key=...)`, caching — are just functions being passed around like ordinary values.
+A **function** is a named, reusable block of code that takes some inputs, does one job, and (usually) hands back a result. Almost everything you write in Python beyond a ten-line script is built out of functions, and many "advanced" features — decorators (functions that wrap other functions to add behaviour, 7.6), callbacks (functions you hand to other code so it can call them later), `sorted(key=...)`, caching (remembering results so they needn't be recomputed) — are just functions being passed around like ordinary values.
 
-This chapter goes from `def` to closures, decorators and recursion. Every script lives in [`code/`](code/) and was run with Python 3.14 (all code is 3.12-compatible); the output shown is real.
+This chapter goes from `def` to closures (functions that remember variables from where they were created), decorators and recursion (a function calling itself). Every script lives in [`code/`](code/) and was run with Python 3.14 (all code is 3.12-compatible); the output shown is real.
 
 **What you'll learn**
 
@@ -37,12 +37,12 @@ Functions give you four things at once:
 4. **Readability and teamwork** — a well-named function (`send_invoice(order)`) documents intent, and different people can own different functions.
 
 ### How it works
-1. Python executes the `def` statement: it compiles the body, creates a *function object*, evaluates any default values (important later), and binds the object to the name.
+1. Python executes the `def` statement: it compiles the body (translates it into bytecode, the interpreter's low-level instructions), creates a *function object*, evaluates any default values (important later), and binds the object to the name.
 2. At a call, Python creates a fresh **frame** (a workspace holding the local variables), binds each parameter to its argument, and runs the body.
 3. `return value` ends the call immediately and gives `value` back to the caller. If the body finishes without `return` — or with a bare `return` — the call gives back `None`.
 4. The frame is thrown away (unless a closure keeps some of it alive, 7.4).
 
-`pass` is a statement that does nothing. Python forbids an empty block, so `pass` is the placeholder when you want to define a function (or class, or `if` branch) now and fill it in later. `...` (Ellipsis) is often used the same way in stubs.
+`pass` is a statement that does nothing. Python forbids an empty block, so `pass` is the placeholder when you want to define a function (or class, or `if` branch) now and fill it in later. `...` (Ellipsis) is often used the same way in stubs (placeholder functions to be filled in later).
 
 ```python
 def say_hi():
@@ -78,17 +78,17 @@ Notice that `say_hi()` printed twice: once for the plain call and once inside th
 | | `print(...)` inside the function | `return ...` |
 |---|---|---|
 | Result usable by caller | No — it goes to the screen | Yes — can be stored, tested, combined |
-| Testable | Only by capturing stdout | Directly (`assert cube(3) == 27`) |
-| Good for | Debugging, CLI output at the edges | Almost all real logic |
+| Testable | Only by capturing stdout (standard output, the console stream) | Directly (`assert cube(3) == 27` — `assert` raises an error if the condition is false) |
+| Good for | Debugging, CLI (command-line program) output at the edges | Almost all real logic |
 
 ### Common mistakes
 - **Forgetting the parentheses**: `result = cube` stores the *function*, not a result. `result = cube(3)` calls it.
 - **Printing instead of returning**, then wondering why `x = f()` is `None`.
 - **Code after `return`** in the same block never runs.
-- **Calling before defining** at module level: the `def` must have executed before the call runs (inside other functions this is fine, because the lookup happens at call time).
+- **Calling before defining** at module level (the top level of a file, outside any function): the `def` must have executed before the call runs (inside other functions this is fine, because the lookup happens at call time).
 
 ### Real-world examples
-Every library you'll touch is a collection of functions: `len`, `print`, `open`, `json.dumps`, `requests.get`, `numpy.mean`. Web frameworks such as Flask and FastAPI map each URL to a plain Python function ("view" or "endpoint") that returns the response.
+Every library you'll touch is a collection of functions: `len`, `print`, `open`, `json.dumps`, `requests.get`, `numpy.mean`. Web frameworks such as Flask and FastAPI map each URL (web address) to a plain Python function ("view" or "endpoint" — the code that answers that address) that returns the response.
 
 ### In the interview
 **30-second answer:** "A function is defined with `def`; defining creates a function object bound to a name, and calling it creates a new frame with its own local variables. `return` sends a value back; with no `return` the result is `None`. Functions give modularity, reuse and a private scope."
@@ -111,7 +111,7 @@ Every library you'll touch is a collection of functions: `len`, `print`, `open`,
 ## 7.2 Function arguments — every kind
 
 ### What it is
-Python gives you several ways to feed values into a function. At the **call site** you can pass arguments **positionally** (matched by order) or **by keyword** (matched by name). In the **definition** you can add **defaults**, collect extras with `*args` / `**kwargs`, and force a style with `/` (positional-only) and `*` (keyword-only).
+Python gives you several ways to feed values into a function. At the **call site** (the place in the code where the function is called) you can pass arguments **positionally** (matched by order) or **by keyword** (matched by name). In the **definition** you can add **defaults**, collect extras with `*args` / `**kwargs`, and force a style with `/` (positional-only) and `*` (keyword-only).
 
 The full shape of a parameter list, in the only order Python allows:
 
@@ -133,7 +133,7 @@ def f(pos_only, /, pos_or_kw, *args, kw_only, **kwargs): ...
 | Keyword-only | `def f(*, a, b)` or after `*args` | `f(a=1, b=2)` only | Can be required (no default) |
 
 ### Why it matters
-Good argument design makes calls **self-documenting and hard to misuse**. `connect("db", 5432, True, False)` is a riddle; `connect("db", port=5432, ssl=True, retry=False)` explains itself. Defaults keep simple calls simple, `*args`/`**kwargs` let you write flexible wrappers, and `/`/`*` let a library author keep freedom to rename parameters later.
+Good argument design makes calls **self-documenting and hard to misuse**. `connect("db", 5432, True, False)` is a riddle; `connect("db", port=5432, ssl=True, retry=False)` explains itself. Defaults keep simple calls simple, `*args`/`**kwargs` let you write flexible wrappers (functions that call another function and add something around it), and `/`/`*` let a library author keep freedom to rename parameters later.
 
 ### How it works — binding arguments to parameters
 When you call a function, Python:
@@ -176,7 +176,7 @@ SFO->JFK [economy, meal=vegan]
 
 ### Positional-only (`/`) and keyword-only (`*`)
 - Everything **before `/`** must be passed by position. Their names become an internal detail, so the author may rename them later without breaking anyone, and a name like `value` can't collide with a `**kwargs` key. Many built-ins work this way: `len(obj, /)`, `abs(x, /)`, `divmod(x, y, /)` — try `len(obj=[1])` and you get a `TypeError`.
-- Everything **after `*`** (or after `*args`) must be passed by name. Use it for flags and options whose meaning isn't obvious from position: `sorted(iterable, /, *, key=None, reverse=False)` — you can't write `sorted(xs, None, True)`. Keyword-only parameters may still be *required* (no default).
+- Everything **after `*`** (or after `*args`) must be passed by name. Use it for flags (on/off options) and options whose meaning isn't obvious from position: `sorted(iterable, /, *, key=None, reverse=False)` — you can't write `sorted(xs, None, True)`. Keyword-only parameters may still be *required* (no default).
 
 ```python
 def clamp(value, low, high, /):
@@ -246,7 +246,7 @@ lo, hi, avg = result
 raw result: (3, 9, 6.0) tuple
 lo=3 hi=9 avg=6.0
 ```
-For more than ~3 values, return a `dataclass` or `typing.NamedTuple` instead, so callers use names (`stats.mean`) not positions.
+For more than ~3 values, return a `dataclass` or `typing.NamedTuple` (lightweight record classes with named fields, Chapters 5 and 10) instead, so callers use names (`stats.mean`) not positions.
 
 ### The mutable-default pitfall
 **Default values are evaluated once — when `def` runs — not on each call.** If the default is a mutable object (list, dict, set), every call that uses the default shares *the same object*, and changes pile up.
@@ -271,17 +271,17 @@ print(append_good("a"), append_good("b"))
 default is now: (['a', 'b'],)
 ['a'] ['b']
 ```
-Both `append_bad` calls returned the *same* list, and `__defaults__` shows the stored default has been mutated. The fix is the **`None` sentinel** idiom: default to `None` and create a new object inside. (The same "evaluated once" rule means `def log(msg, when=datetime.now())` freezes the time at definition.) `dataclasses` refuses a bare mutable default for exactly this reason and asks for `field(default_factory=list)`.
+Both `append_bad` calls returned the *same* list, and `__defaults__` shows the stored default has been mutated. The fix is the **`None` sentinel** (a special placeholder value meaning "nothing was passed") idiom: default to `None` and create a new object inside. (The same "evaluated once" rule means `def log(msg, when=datetime.now())` freezes the time at definition.) `dataclasses` refuses a bare mutable default for exactly this reason and asks for `field(default_factory=list)`.
 
 ### Trade-offs
 
 | Choice | Benefit | Cost |
 |---|---|---|
 | Positional | Short calls | Order-dependent, easy to swap by mistake |
-| Keyword | Readable, order-free | Longer calls; parameter names become public API |
+| Keyword | Readable, order-free | Longer calls; parameter names become public API (part of what other people's code relies on) |
 | Keyword-only (`*`) | Forces clarity for flags/options | Slightly more typing for callers |
 | Positional-only (`/`) | Freedom to rename; no clash with `**kwargs` | Callers can't use names for clarity |
-| `*args`/`**kwargs` | Flexible wrappers, forwarding | Hides the real signature from readers, IDEs and type checkers |
+| `*args`/`**kwargs` | Flexible wrappers, forwarding | Hides the real signature (the function's parameter list) from readers, IDEs and type checkers (tools that check type hints without running code) |
 
 ### When not to use it
 - Don't reach for `**kwargs` when you know the options — explicit keyword parameters give errors on typos (`timout=5`) and IDE help; `**kwargs` silently swallows the typo.
@@ -297,7 +297,7 @@ Both `append_bad` calls returned the *same* list, and `__defaults__` shows the s
 ### Real-world examples
 - `print(*objects, sep=" ", end="\n", file=None, flush=False)` — `*objects` plus keyword-only options.
 - `requests.get(url, params=None, **kwargs)` forwards options such as `timeout=` and `headers=` through `**kwargs`.
-- Matplotlib plotting calls accept `**kwargs` and pass them on to the underlying line/patch objects (`color=`, `linewidth=`).
+- Matplotlib (the standard plotting library) plotting calls accept `**kwargs` and pass them on to the underlying line/patch objects (`color=`, `linewidth=`).
 - `dataclasses.field(default_factory=list)` exists because of the mutable-default trap.
 
 ### In the interview
@@ -353,7 +353,7 @@ Analogy: looking for scissors — first your own desk (local), then the room you
 Scope is what makes functions safe to combine: a `total` inside one function can't clobber a `total` inside another. Misunderstanding it causes one of Python's most confusing errors, `UnboundLocalError`.
 
 ### How it works — the key rule
-**Whether a name is local is decided at compile time, for the whole function body: if the function *assigns* to a name anywhere (`=`, `+=`, `for x in`, `import x`, `def x`), that name is local everywhere in the function** — unless declared `global` or `nonlocal`. Merely *reading* a name doesn't make it local, so reading a global works without any declaration.
+**Whether a name is local is decided at compile time (when Python translates the function, before it runs), for the whole function body: if the function *assigns* to a name anywhere (`=`, `+=`, `for x in`, `import x`, `def x`), that name is local everywhere in the function** — unless declared `global` or `nonlocal`. Merely *reading* a name doesn't make it local, so reading a global works without any declaration.
 
 1. `global name` → assignments to `name` in this function rebind the **module-level** variable.
 2. `nonlocal name` → assignments rebind the variable in the **nearest enclosing function** scope (it must already exist there; module globals don't count). Added in Python 3.
@@ -404,8 +404,8 @@ def global_increment():
 
 | Approach to shared state | Good | Bad |
 |---|---|---|
-| Pass in / return values | Explicit, testable, thread-friendly | More parameters |
-| `global` | Quick for scripts | Hidden coupling; any function can change it; hard to test |
+| Pass in / return values | Explicit, testable, thread-friendly (safe when several threads run at once) | More parameters |
+| `global` | Quick for scripts | Hidden coupling (functions secretly depending on each other); any function can change it; hard to test |
 | `nonlocal` / closure | State private to one function family | Can be less obvious than a class |
 | A class with attributes | Clear home for state + behaviour | More code |
 
@@ -415,11 +415,11 @@ Avoid `global` for anything except true module-level configuration or caches in 
 ### Common mistakes
 - `UnboundLocalError` from `x += 1` on a global — add `global x`, or better, return the new value.
 - **Shadowing built-ins**: naming a variable `list`, `dict`, `id`, `input`, `sum` or `type` hides the built-in in that scope. The script shows `list = [1, 2]` followed by `list('xy')` → `'list' object is not callable`.
-- Expecting a class body to be an enclosing scope for its methods — it isn't; methods must use `self.x` or `ClassName.x`.
+- Expecting a class body to be an enclosing scope for its methods — it isn't; methods must use `self.x` (`self` is the object the method was called on, Chapter 10) or `ClassName.x`.
 - Expecting the loop variable of a **comprehension** to leak — it doesn't (comprehensions have their own scope), while a plain `for` loop's variable does remain after the loop.
 
 ### Real-world examples
-- `logging.getLogger(__name__)` is conventionally stored as a module-level (global) `logger` and only *read* inside functions.
+- `logging.getLogger(__name__)` is conventionally stored as a module-level (global) `logger` (the object you send log messages through) and only *read* inside functions.
 - Configuration constants (`MAX_RETRIES = 3`) live at module level in UPPER_CASE by PEP 8 convention: global, but treated as read-only.
 
 ### In the interview
@@ -504,7 +504,7 @@ The `i=i` trick works *because* defaults are evaluated at definition time (7.2).
 | Inspectability | State hidden in cells | Attributes visible, easy to debug |
 
 ### When not to use it
-When the "function" needs several operations (increment, reset, read), or other people must inspect/serialise its state, write a small class instead. Closures also can't be pickled by the standard `pickle` module.
+When the "function" needs several operations (increment, reset, read), or other people must inspect/serialise (convert to bytes or text for saving or sending) its state, write a small class instead. Closures also can't be pickled by the standard `pickle` module (Python's built-in object-serialisation tool).
 
 ### Common mistakes
 - Late binding in loops (above).
@@ -512,7 +512,7 @@ When the "function" needs several operations (increment, reset, read), or other 
 
 ### Real-world examples
 - Every decorator (`@functools.lru_cache`, Flask's `@app.route("/")`) returns a closure wrapping your function.
-- Event callbacks in GUI toolkits (Tkinter `command=`) often use closures or `partial` to carry the context of which button was pressed.
+- Event callbacks in GUI toolkits (libraries for windows and buttons; Tkinter `command=`) often use closures or `partial` to carry the context of which button was pressed.
 
 ### In the interview
 **30-second answer:** "A closure is a nested function that keeps references to variables of its enclosing scope after that scope has returned. It captures variables, not values, so lambdas in a loop all see the last value unless you bind with a default argument or `partial`. `nonlocal` lets it rebind the captured variable."
@@ -553,7 +553,7 @@ list(filter(lambda n: n > 0, nums))   # [5, 8, 3]
 [n * n for n in nums if n > 0]        # [25, 64, 9]
 ```
 
-- `map(fn, iterable)` applies `fn` to each item; `filter(pred, iterable)` keeps items where `pred(item)` is truthy. Both return **lazy iterators** in Python 3 (the script prints `map`) — wrap in `list()` to see values, and they can be consumed only once.
+- `map(fn, iterable)` applies `fn` to each item; `filter(pred, iterable)` keeps items where `pred(item)` (a *predicate* — a function answering yes/no) is truthy. Both return **lazy iterators** (objects that produce each value only when asked) in Python 3 (the script prints `map`) — wrap in `list()` to see values, and they can be consumed only once.
 - `sorted(iterable, key=fn, reverse=False)` returns a **new list**; `list.sort()` sorts in place and returns `None`. `min`, `max`, `heapq.nlargest` and `itertools.groupby` accept `key=` too.
 - `key` is called **once per element**; the elements are then compared by their key. Python's sort is **stable**: equal keys keep their original order — which is how multi-level sorting works.
 - `operator.itemgetter(1)`, `operator.attrgetter("age")` and `str.lower` are ready-made, faster alternatives to many lambdas.
@@ -580,7 +580,7 @@ Returning a **tuple** from `key` sorts by the first element, then the second, an
 |---|---|---|
 | Comprehension | Transform + filter in one readable line | Builds a whole list (use a generator expression `( … )` for laziness) |
 | `map`/`filter` with a named function | `map(str.strip, lines)` | With a lambda it's usually less readable than a comprehension |
-| `lambda` | Tiny one-off `key=` functions | No statements, name `<lambda>` in tracebacks, PEP 8 says don't assign one to a name — use `def` |
+| `lambda` | Tiny one-off `key=` functions | No statements, name `<lambda>` in tracebacks (the error report listing the chain of calls), PEP 8 says don't assign one to a name — use `def` |
 
 ### When not to use it
 Don't write `f = lambda x: x + 1` — use `def f(x): return x + 1` (better name in tracebacks, can have a docstring). Don't nest `map(lambda..., filter(lambda..., ...))` when a comprehension reads plainly.
@@ -591,9 +591,9 @@ Don't write `f = lambda x: x + 1` — use `def f(x): return x + 1` (better name 
 - `key=len()` (calling it) instead of `key=len` (passing it).
 
 ### Real-world examples
-- pandas: `df["name"].map(str.title)`, `df.sort_values(key=...)`, `df.apply(fn)`.
-- `sorted(files, key=os.path.getmtime)` — "newest file" scripts.
-- Callbacks: `threading.Thread(target=worker)`, `concurrent.futures` `executor.map(fetch, urls)`.
+- pandas (the table-processing library): `df["name"].map(str.title)`, `df.sort_values(key=...)`, `df.apply(fn)`.
+- `sorted(files, key=os.path.getmtime)` (a file's last-modified time) — "newest file" scripts.
+- Callbacks: `threading.Thread(target=worker)` (runs `worker` in a new thread), `concurrent.futures` `executor.map(fetch, urls)` (an *executor* is a pool of workers that runs calls in parallel).
 
 ### In the interview
 **30-second answer:** "Functions are objects, so they can be passed, stored and returned; a higher-order function takes or returns one. `lambda` makes a one-expression anonymous function, mostly for `key=`. `map`/`filter` return lazy iterators; comprehensions are usually preferred. `sorted` with `key` computes the key once per element and is stable, so tuple keys give multi-level sorts."
@@ -628,7 +628,7 @@ slow_sum = timed(slow_sum)
 The standard-library module **`functools`** collects tools for working with functions: `wraps`, `partial`, `reduce`, `lru_cache`, `cache`, `cached_property`, `singledispatch`, `total_ordering`.
 
 ### Why it matters
-Decorators add cross-cutting behaviour — timing, logging, caching, auth checks, retries, route registration — without editing each function. `functools` gives you battle-tested versions so you don't write them yourself.
+Decorators add cross-cutting behaviour (concerns that apply to many functions) — timing, logging, caching, auth checks (is this user logged in and allowed?), retries, route registration (linking a URL to its handler) — without editing each function. `functools` gives you battle-tested versions so you don't write them yourself.
 
 ### How it works
 
@@ -671,9 +671,9 @@ int_from_binary = functools.partial(int, base=2)
 int_from_binary("1011")   # 11
 ```
 
-**`functools.reduce(fn, iterable[, initial])`** folds a sequence into one value: `reduce(mul, [1,2,3,4,5])` computes ((((1·2)·3)·4)·5) = 120. Give an `initial` value or an empty input raises `TypeError`. For sums, products, max/min, `any`/`all` and joins, the dedicated built-ins (`sum`, `math.prod`, `max`, `"".join`) are clearer.
+**`functools.reduce(fn, iterable[, initial])`** folds (combines pairwise, left to right) a sequence into one value: `reduce(mul, [1,2,3,4,5])` computes ((((1·2)·3)·4)·5) = 120. Give an `initial` value or an empty input raises `TypeError`. For sums, products, max/min, `any`/`all` and joins, the dedicated built-ins (`sum`, `math.prod`, `max`, `"".join`) are clearer.
 
-**`functools.lru_cache(maxsize=128)`** memoizes: it stores results keyed by the arguments and returns the stored result for repeat calls. When more than `maxsize` distinct keys are stored, the **least recently used** entry is evicted. **`functools.cache`** (3.9+) is `lru_cache(maxsize=None)` — unbounded, slightly faster.
+**`functools.lru_cache(maxsize=128)`** memoizes (caches results per argument combination): it stores results keyed by the arguments and returns the stored result for repeat calls. When more than `maxsize` distinct keys are stored, the **least recently used** entry is evicted (thrown out to make room). **`functools.cache`** (3.9+) is `lru_cache(maxsize=None)` — unbounded, slightly faster.
 
 ```python
 @functools.lru_cache(maxsize=128)
@@ -695,14 +695,14 @@ Calls with 4, 4, 5, 4 → misses on the first 4 and on 5, hits on the two repeat
 
 | Tool | Win | Cost / caveat |
 |---|---|---|
-| `lru_cache(maxsize=N)` | Bounded memory | Bookkeeping overhead; stale results if data changes |
-| `cache` | Fastest, simplest | Grows forever — a memory leak for unbounded inputs |
-| `partial` | Picklable, introspectable (`.func`, `.args`) | Only pre-fills; can't reorder arguments |
+| `lru_cache(maxsize=N)` | Bounded memory | Bookkeeping overhead; stale (out-of-date) results if data changes |
+| `cache` | Fastest, simplest | Grows forever — a memory leak (memory that is never released) for unbounded inputs |
+| `partial` | Picklable, introspectable (can be examined at run time: `.func`, `.args`) | Only pre-fills; can't reorder arguments |
 | `reduce` | General fold | Often less readable than a loop or built-in |
 
 ### When not to use it
-- Don't cache functions with side effects (sending email) or whose result depends on time, randomness or mutable global state.
-- `lru_cache` on an **instance method** keys on `self` and keeps every instance alive for the cache's lifetime; prefer `functools.cached_property` for per-instance values, or a module-level cached function.
+- Don't cache functions with side effects (actions beyond returning a value, e.g. sending email) or whose result depends on time, randomness or mutable global state.
+- `lru_cache` on an **instance method** (a function defined in a class and called on an object) keys on `self` and keeps every instance alive for the cache's lifetime; prefer `functools.cached_property` for per-instance values, or a module-level cached function.
 
 ### Common mistakes
 - Forgetting `return result` in the wrapper → the decorated function returns `None`.
@@ -711,14 +711,14 @@ Calls with 4, 4, 5, 4 → misses on the first 4 and on 5, hits on the two repeat
 
 ### Real-world examples
 - Flask/FastAPI: `@app.get("/items")` registers the function as a route handler.
-- pytest: `@pytest.fixture`, `@pytest.mark.parametrize(...)`.
+- pytest (the most popular Python test framework): `@pytest.fixture`, `@pytest.mark.parametrize(...)`.
 - Standard library: `@property`, `@staticmethod`, `@classmethod`, `@dataclass`, `@contextlib.contextmanager`.
 - The `re` module keeps an internal cache of compiled patterns so repeated `re.match(pattern, s)` doesn't recompile.
 
 ### In the interview
-**30-second answer:** "A decorator is a callable that takes a function and returns a replacement; `@d` above `def f` means `f = d(f)`. Inside you define a `wrapper(*args, **kwargs)` closure and use `functools.wraps` to keep the original's name and docstring. `functools` also gives `partial` to pre-fill arguments, `reduce` to fold, and `lru_cache`/`cache` to memoize pure functions with hashable arguments."
+**30-second answer:** "A decorator is a callable that takes a function and returns a replacement; `@d` above `def f` means `f = d(f)`. Inside you define a `wrapper(*args, **kwargs)` closure and use `functools.wraps` to keep the original's name and docstring. `functools` also gives `partial` to pre-fill arguments, `reduce` to fold, and `lru_cache`/`cache` to memoize pure functions (whose output depends only on their inputs, with no side effects) with hashable arguments."
 
-- *What does `wraps` do?* → Copies metadata (`__name__`, `__doc__`, …) and sets `__wrapped__`.
+- *What does `wraps` do?* → Copies metadata (descriptive information about the function) (`__name__`, `__doc__`, …) and sets `__wrapped__`.
 - *How do you write a decorator that takes arguments, like `@retry(3)`?* → An outer function taking `3` returns the actual decorator, which returns the wrapper.
 - *When is `lru_cache` wrong?* → Impure functions, unhashable args, unbounded key spaces with `maxsize=None`, instance methods.
 
@@ -744,7 +744,7 @@ A **recursive function** calls itself to solve a smaller version of the same pro
 Analogy: Russian nesting dolls — open one, find a smaller one, repeat until the tiny solid doll (base case).
 
 ### Why it matters
-Recursion is the natural fit for **self-similar data and problems**: nested lists/JSON, folder trees, parse trees, tree and graph traversal, merge sort and quicksort, backtracking (permutations, sudoku). Interviews use it constantly.
+Recursion is the natural fit for **self-similar data and problems**: nested lists/JSON, folder trees, parse trees (the tree a parser builds from text), tree and graph traversal (visiting every node), merge sort and quicksort (classic fast sorting algorithms), backtracking (try an option, undo it if it fails; permutations, sudoku). Interviews use it constantly.
 
 ### How it works — the call stack
 Each call gets its own frame on the **call stack** (a last-in-first-out pile of active calls). Calls pile up until the base case, then results flow back as frames are popped. Factorial: n! = n × (n−1)!, with 0! = 1! = 1.
@@ -781,14 +781,14 @@ sequenceDiagram
 ```
 
 ### The recursion limit
-CPython has **no tail-call optimisation**, so every level costs a frame. To protect the interpreter from running out of stack, it caps the depth: `sys.getrecursionlimit()` is **1000** by default. Exceed it and you get `RecursionError` (a subclass of `RuntimeError`).
+CPython has **no tail-call optimisation** (TCO — reusing the current frame when a function's very last step is calling itself), so every level costs a frame. To protect the interpreter from running out of stack, it caps the depth: `sys.getrecursionlimit()` is **1000** by default. Exceed it and you get `RecursionError` (a subclass of `RuntimeError`).
 
 ```
 sys.getrecursionlimit() = 1000
 depth_of(500) = 500
 RecursionError: maximum recursion depth exceeded
 ```
-`sys.setrecursionlimit(n)` can raise it, but deep recursion still costs memory and can crash the process if pushed too far — for depths in the thousands or more, **rewrite it as a loop** (with an explicit stack list for tree walks).
+`sys.setrecursionlimit(n)` can raise it, but deep recursion still costs memory and can crash the process (the running program) if pushed too far — for depths in the thousands or more, **rewrite it as a loop** (with an explicit stack list for tree walks).
 
 ### Memoization — fixing exponential recursion
 Fibonacci: F(0)=0, F(1)=1, F(n)=F(n−1)+F(n−2), so F(7) = 13. The naive version recomputes the same values over and over: F(5) calls F(4) and F(3), F(4) calls F(3) *again*, and so on. The number of calls grows roughly like 1.6ⁿ. **Memoization** — remembering results of earlier calls — makes each F(k) computed once, so the work becomes linear.
@@ -815,7 +815,7 @@ fib_iter(90) = 2880067194370816120
 For n = 25 the naive version makes 242,785 calls; the memoized one computes 26 distinct values (misses) and answers 23 repeats from the cache.
 
 ![Naive vs memoized Fibonacci call counts on a log scale](img/fib_calls.png)
-*Figure — Function calls needed for fib(n): naive recursion grows exponentially (a straight line on a log axis), memoization grows linearly.*
+*Figure — Function calls needed for fib(n): naive recursion grows exponentially (multiplying by a constant factor at each step — a straight line on a log axis), memoization grows linearly.*
 
 ### Recursion over nested data
 ```python
@@ -830,7 +830,7 @@ def flatten(nested):
 
 flatten([1, [2, [3, [4]], 5], [], 6])   # [1, 2, 3, 4, 5, 6]
 ```
-The same shape walks directories (`os.walk` / `Path.iterdir`), JSON documents and trees.
+The same shape walks directories (folders; `os.walk` / `Path.iterdir`), JSON documents and trees.
 
 ### Trade-offs
 
@@ -843,26 +843,26 @@ The same shape walks directories (`os.walk` / `Path.iterdir`), JSON documents an
 | Speed in CPython | Function-call overhead per level | Usually faster |
 
 ### When not to use it
-Linear problems (sum a list, count down, walk a linked list of 100k nodes) — use a loop. Anything whose depth depends on untrusted input size.
+Linear problems (sum a list, count down, walk a linked list — a chain of nodes each pointing to the next — of 100k nodes) — use a loop. Anything whose depth depends on untrusted input size.
 
 ### Common mistakes
 - **Missing or unreachable base case.** A factorial with base case `n == 1` recurses forever on `factorial(0)` (0 → −1 → −2 …) until `RecursionError`; `n <= 1` fixes it.
 - Not shrinking the input (`f(n)` calling `f(n)`).
 - Forgetting to `return` the recursive result (`factorial(n - 1)` without `return` gives `None`).
-- Using naive recursion for overlapping sub-problems (Fibonacci, grid paths) — memoize.
+- Using naive recursion for overlapping sub-problems (the same smaller problems solved again and again) (Fibonacci, grid paths) — memoize.
 - Mutable default accumulators in recursive helpers (`def walk(node, seen=set())`).
 
 ### Real-world examples
 - `os.walk`, `shutil.copytree`, `json` encoding of nested structures all process nested data (CPython's `json` encoder is recursive and can raise `RecursionError` for extremely deep input).
 - `copy.deepcopy` recursively copies nested objects.
-- Recursive-descent parsers (Python's own grammar tooling, many config/expression parsers).
+- Recursive-descent parsers (parsers with one function per grammar rule, calling each other; Python's own grammar tooling, many config/expression parsers).
 
 ### In the interview
 **30-second answer:** "Recursion is a function calling itself on a smaller input until a base case. Each call uses a stack frame; CPython doesn't optimise tail calls and limits depth to about 1000, raising `RecursionError`. Overlapping sub-problems like Fibonacci are exponential unless memoized with `functools.cache`, which makes them linear. For very deep or linear problems, convert to a loop."
 
-- *Complexity of naive vs memoized Fibonacci?* → O(φⁿ) ≈ O(1.6ⁿ) time vs O(n) time and O(n) space.
+- *Complexity of naive vs memoized Fibonacci?* → O(φⁿ) (φ is the golden ratio ≈ 1.618) ≈ O(1.6ⁿ) time vs O(n) time and O(n) space.
 - *Does Python do tail-call optimisation?* → No, by design (keeps tracebacks complete).
-- *How do you convert recursive DFS to iterative?* → Keep an explicit stack list: pop a node, process, push its children.
+- *How do you convert recursive DFS (depth-first search: go as deep as possible before backing up) to iterative?* → Keep an explicit stack list: pop a node, process, push its children.
 
 ### Self-check
 1. What two parts does every recursive function need? → Base case and recursive case that progresses toward it.
@@ -878,11 +878,11 @@ Base case + shrinking recursive case. Stack frames pile up; limit ≈ 1000; no T
 ## 7.8 Docstrings and annotations
 
 ### What it is
-- A **docstring** is a string literal placed as the **first statement** of a function, class or module. Python stores it in `__doc__`, and `help()`, IDEs and documentation generators (Sphinx) show it. Conventions are in PEP 257: a one-line summary, a blank line, then details.
-- **Annotations** (type hints) attach expected types to parameters and the return value: `def f(x: int) -> str`. They are **not enforced** at runtime — Python stores them and moves on. Tools such as **mypy**, **pyright** and IDEs read them to catch bugs before you run the code; libraries such as **FastAPI** and **Pydantic** read them at runtime to validate data.
+- A **docstring** is a string literal placed as the **first statement** of a function, class or module. Python stores it in `__doc__`, and `help()`, IDEs and documentation generators (tools that build reference web pages from docstrings, e.g. Sphinx) show it. Conventions are in PEP 257: a one-line summary, a blank line, then details.
+- **Annotations** (type hints) attach expected types to parameters and the return value: `def f(x: int) -> str`. They are **not enforced** at runtime — Python stores them and moves on. Tools such as **mypy**, **pyright** (static type checkers) and IDEs read them to catch bugs before you run the code; libraries such as **FastAPI** (a web framework) and **Pydantic** (a data-validation library) read them at runtime to validate data.
 
 ### Why it matters
-Docstrings explain *what and why*; annotations make the contract checkable. Together they make functions usable without reading their bodies — and let a type checker catch `average("abc")`-style mistakes in CI.
+Docstrings explain *what and why*; annotations make the contract checkable. Together they make functions usable without reading their bodies — and let a type checker catch `average("abc")`-style mistakes in CI (continuous integration: automated checks that run on every code change).
 
 ### How it works
 
@@ -931,10 +931,10 @@ Key syntax, by version:
 | Syntax | Meaning | Since |
 |---|---|---|
 | `x: int`, `-> str` | Parameter / return annotation | 3.0 (PEP 3107); typing semantics 3.5 (PEP 484) |
-| `list[int]`, `dict[str, float]` | Built-in generics | 3.9 |
-| `int \| None` | Union (instead of `Optional[int]`) | 3.10 |
+| `list[int]`, `dict[str, float]` | Built-in generics (container types with a type parameter) | 3.9 |
+| `int \| None` | Union ("either type"; instead of `Optional[int]`) | 3.10 |
 | `type Alias = ...`, `def f[T](x: T) -> T` | Type alias / generic syntax | 3.12 (PEP 695) |
-| Lazy evaluation of annotations | Forward references work without quotes | 3.14 (PEP 649) |
+| Lazy evaluation of annotations | Forward references (naming a type defined later in the file) work without quotes | 3.14 (PEP 649) |
 
 `inspect.signature(fn)` reads parameters, defaults and annotations at runtime. The `>>>` lines in the docstring are a **doctest**: `doctest.testmod()` runs them and compares the output.
 
@@ -950,7 +950,7 @@ Tiny throwaway scripts don't need full annotations. Don't restate the obvious in
 - Docstring not the *first* statement → `__doc__` is `None`.
 
 ### Real-world examples
-- FastAPI builds request validation and OpenAPI docs from function annotations.
+- FastAPI builds request validation and OpenAPI docs (a standard machine-readable description of a web API) from function annotations.
 - NumPy/Google docstring styles are rendered by Sphinx on docs sites such as numpy.org.
 - Large companies with big Python codebases (Dropbox is a well-known example) run mypy in CI to type-check millions of lines.
 

@@ -6568,3 +6568,471 @@ def top_k(matrix: np.ndarray, q: np.ndarray, k: int) -> np.ndarray:
 
 ### TL;DR
 Start with vectorised exact search as ground truth, then build and tune HNSW, measure recall against latency honestly, and add filtering — the core of every vector database.
+
+## Appendix: Concepts you need
+
+Every technical term, acronym, library and tool named in the 40 project briefs above is listed here alphabetically, with a short plain-English definition and the projects that use it. Networking, storage and distributed-systems ideas (HTTP, caching, queues, replication, idempotency) are explained in depth in [System Design Fundamentals](../../system-design-patterns/modules/00-system-design-fundamentals/README.md). Where this book teaches a concept, a chapter link points you to it.
+
+### A
+
+- **ACID** — The four guarantees of a database transaction: Atomic (all or nothing), Consistent (rules hold), Isolated (concurrent transactions don't see each other's half-done work) and Durable (committed data survives a crash). Used in project 9. ([Ch 14](../chapters/14-standard-library-tour/README.md))
+- **Advisory lock** — A lock in PostgreSQL that means whatever your application decides (`pg_advisory_lock(key)`), used for example to let only one process run migrations at a time. Used in project 25.
+- **Alembic** — The standard migration tool for SQLAlchemy projects: versioned Python scripts that change a database schema step by step. Used in projects 12, 25.
+- **Amdahl's law** — The part of a program that must run serially limits the total speed-up, no matter how many cores you add. Used in project 30.
+- **Analyzer (search)** — The text pipeline a search engine applies to documents and queries alike: normalise, lower-case, split into tokens, drop stop words, maybe stem. Used in project 23.
+- **Anki** — Popular open-source flashcard app that uses spaced repetition. Used in projects 6, 23.
+- **ANN (approximate nearest neighbours)** — Finding vectors that are *probably* the closest to a query, much faster than checking every vector; k-NN is the exact version. Used in project 40.
+- **Apache Arrow** — A standard columnar in-memory data format that lets libraries such as polars, pandas and pyarrow share tables without copying. Used in project 31.
+- **API (application programming interface)** — The set of functions, classes or URLs a program offers so other code can use it; a web API returns data (often JSON) instead of web pages. Used in projects 3, 8, 12, 14, 16, 17, 18, 19, 20, 22, 24, 26, 27, 29, 31, 32, 35, 36, 37, 38, 40. ([Ch 14](../chapters/14-standard-library-tour/README.md))
+- **Append-only log** — A file where records are only ever added at the end; updates and deletes are written as new records, which makes writes fast and crash-safe. Used in projects 2, 23, 36, 39.
+- **argparse** — Standard-library module that parses command-line options and sub-commands and generates `--help` text. Used in projects 1, 2, 3, 9, 15, 25. ([Ch 14](../chapters/14-standard-library-tour/README.md))
+- **array (module)** — Standard-library compact array of numbers of one C type, using far less memory than a list of Python ints. Used in project 23. ([Ch 5](../chapters/05-lists-tuples-arrays/README.md))
+- **Artifact (build)** — A file a build produces for distribution, such as a wheel or sdist. Used in project 16.
+- **ASGI** — Asynchronous Server Gateway Interface: the standard contract between async Python web servers (Uvicorn) and apps — an async callable taking `scope`, `receive` and `send`. Used in projects 11, 12, 38.
+- **Assertion rewriting** — Changing `assert` statements at import time (as pytest does) so a failure can show the values of each part of the expression. Used in project 34. ([Ch 15](../chapters/15-testing-and-debugging/README.md))
+- **Associativity** — How repeated operators group: `1 - 2 - 3` means `(1 - 2) - 3` (left-associative), while `**` and assignment group right. Used in project 28. ([Ch 2](../chapters/02-variables-types-operators/README.md))
+- **AST (abstract syntax tree)** — The tree form of parsed source code, where each node is a construct such as a function call or an `if`; Python exposes it through the `ast` module. Used in projects 28, 33, 34. ([Ch 1](../chapters/01-getting-started/README.md))
+- **asyncio** — Python's standard library for single-threaded concurrency: coroutines pause at `await` while waiting for I/O and an event loop runs other tasks meanwhile. Used in projects 8, 11, 17, 18, 20, 22, 23, 24, 26, 29, 32, 37, 38, 39. ([Ch 16](../chapters/16-concurrency-and-async/README.md))
+- **At-least-once delivery** — A guarantee that every message or job is processed one or more times, so duplicates can happen and handlers must be idempotent. Used in projects 24, 26.
+- **Atomic write** — Writing a new file next to the old one and swapping it in with `os.replace`, so readers always see a complete old or new file, never half of one. Used in projects 1, 2, 6, 8, 9, 10, 12, 18, 21, 22, 23, 30, 31, 36. ([Ch 9](../chapters/09-errors-exceptions-files/README.md))
+- **Autoescaping** — A template engine automatically turning characters such as `<` into `&lt;` in inserted data, so data cannot inject HTML. Used in projects 13, 19.
+- **Autovacuum / table bloat** — PostgreSQL keeps old row versions after updates (bloat); the background vacuum process cleans them up. Used in project 26.
+
+### B
+
+- **Backpressure** — Making a fast producer wait when the consumer falls behind, usually with a bounded queue, so memory can't grow without limit. Used in projects 11, 18, 30, 39. ([Ch 16](../chapters/16-concurrency-and-async/README.md))
+- **Bank profile / config** — A small configuration describing one source's format (columns, date format, separators) so one tool can read many inputs. Used in project 4.
+- **Benchmark** — A repeatable measurement of speed or memory, used to compare designs or catch regressions. Used in projects 5, 19, 20, 22, 23, 29, 30, 35, 36, 37, 38, 40. ([Ch 17](../chapters/17-performance-memory-internals/README.md))
+- **Best-first search** — Graph search that always expands the most promising candidate next, using a priority queue (heap). Used in project 40. ([Ch 19](../chapters/19-python-for-coding-interviews/README.md))
+- **Biased reference counting** — The free-threaded build's cheaper refcounting: the thread that owns an object updates its count without atomic instructions; other threads use atomic ones. Used in project 30.
+- **Bitcask** — A simple storage design: an append-only data file plus an in-memory hash index (the keydir) from each key to its latest record's position. Used in project 36.
+- **BLAKE2b** — A fast cryptographic hash function in `hashlib`, a good choice for file fingerprints. Used in project 7. ([Ch 14](../chapters/14-standard-library-tour/README.md))
+- **Blob** — A chunk of raw bytes stored as one object; in Git, the object that holds a file's contents, named by their hash. Used in projects 10, 21.
+- **Bloom filter** — A compact bit-array structure that answers "definitely not present" or "maybe present"; it can give false positives but never false negatives. Used in projects 7, 11, 36.
+- **BM25** — The standard formula for ranking search results by relevance, based on how often query terms appear in a document (with saturation) and how rare they are overall. Used in projects 23, 40.
+- **BOM (byte-order mark)** — Invisible bytes some programs (e.g. Excel) put at the start of a UTF-8 file; open with `encoding="utf-8-sig"` to strip them. Used in project 4. ([Ch 4](../chapters/04-strings/README.md))
+- **Bound logger** — A logger object that carries fixed key/value fields; `bind()` returns a new logger with extra fields. Used in project 20.
+- **Bounded queue** — A queue with a maximum size; `put` waits (or fails) when it is full, which provides backpressure. Used in projects 11, 18, 22, 30, 39. ([Ch 16](../chapters/16-concurrency-and-async/README.md))
+- **Branch / ref (Git)** — A branch is a small file (a ref) containing the id of a commit; moving the branch means rewriting that id. Used in project 21.
+- **Broadcast** — Sending one message to many receivers at once (e.g. every member of a chat room). Used in projects 18, 39, 40.
+- **Build backend** — The tool named in `pyproject.toml` (hatchling, setuptools, uv_build…) that turns source code into an sdist and a wheel. Used in project 16. ([Ch 8](../chapters/08-modules-packages-environments/README.md))
+
+### C
+
+- **Cache** — A fast store of results kept so repeated requests don't redo slow work; it must be kept small and fresh. Used in projects 2, 5, 7, 8, 11, 12, 13, 14, 21, 22, 30, 33, 34, 36, 38. ([Ch 7](../chapters/07-functions/README.md))
+- **Cache invalidation** — Removing or refreshing cached entries when the underlying data changes. Used in project 22.
+- **Cache stampede** — See *thundering herd*. Used in project 22.
+- **Causal delivery** — Applying an operation only after every operation it depends on has been applied. Used in project 39.
+- **Checksum** — A short value computed from data (CRC32, SHA-256) and stored with it, so later corruption or edits can be detected. Used in projects 7, 10, 25, 31, 36.
+- **Chunking (content-defined)** — Splitting files at boundaries chosen by a rolling hash of the content, so a small edit changes only nearby chunks and the rest can be de-duplicated. Used in projects 5, 7, 10, 30, 31, 38.
+- **CI (continuous integration)** — A service that automatically runs tests, linters and builds on every push or pull request (e.g. GitHub Actions). Used in projects 16, 19, 25, 34. ([Ch 15](../chapters/15-testing-and-debugging/README.md))
+- **Circuit breaker** — A wrapper that stops calling a failing service for a while (open), then tries again carefully (half-open), so callers fail fast instead of piling up. Used in project 17.
+- **CLI (command-line interface)** — A program you run by typing a command with options in a terminal, such as `todo add "Buy milk"`. Used in projects 1, 2, 3, 5, 7, 8, 9, 14, 15, 21, 25, 26, 32, 33, 34, 37. ([Ch 14](../chapters/14-standard-library-tour/README.md))
+- **Closure** — A function that remembers variables from the scope where it was defined. Used in projects 17, 22, 28, 32, 33. ([Ch 7](../chapters/07-functions/README.md))
+- **cloudpickle** — Third-party extension of `pickle` that can also serialise lambdas and closures, often used to ship functions to remote workers. Used in project 32.
+- **Code object** — Compiled bytecode for one function or module, plus constants, names and a line table. Used in projects 29, 37. ([Ch 17](../chapters/17-performance-memory-internals/README.md))
+- **Collision (hash)** — Two different inputs producing the same hash value. Used in projects 7, 21. ([Ch 6](../chapters/06-dicts-sets-collections/README.md))
+- **Columnar format** — Storing a table column by column instead of row by row, so reading a few columns of many rows is fast and compresses well (Parquet, Arrow). Used in projects 31, 40.
+- **Combined Log Format** — The standard text format of web-server access logs: client IP, time, request line, status, bytes, referrer and user agent. Used in project 5.
+- **Command injection** — An attack where user input is interpreted by a shell as extra commands; prevented by passing argument lists and avoiding `shell=True`. Used in project 19. ([Ch 14](../chapters/14-standard-library-tour/README.md))
+- **Commit (Git)** — A Git object recording a snapshot tree, its parent commits, author and message. Used in project 21.
+- **CommonMark** — A precise, unambiguous specification of Markdown syntax. Used in project 13.
+- **Compaction** — Rewriting storage files to drop overwritten values and deletion markers, reclaiming disk space. Used in project 36.
+- **Compression level** — A setting that trades CPU time for smaller output; higher levels compress more but run slower. Used in project 10.
+- **Concurrency** — Making progress on several tasks by interleaving them; not necessarily running them at the same instant. Used in projects 1, 9, 11, 12, 17, 18, 20, 21, 22, 24, 25, 26, 29, 30, 32, 35, 36, 38, 39. ([Ch 16](../chapters/16-concurrency-and-async/README.md))
+- **Connection pool** — A set of open database or HTTP connections reused across requests, because opening a new one each time is slow. Used in projects 7, 8, 10, 11, 12, 13, 20, 26, 32, 33, 35, 38.
+- **Constant-time comparison** — Comparing secrets in a way that takes the same time wherever they differ (`hmac.compare_digest`), so attackers can't learn them from timing. Used in project 24.
+- **Constraint (database)** — A rule the database enforces, such as `UNIQUE`, `NOT NULL` or `FOREIGN KEY`; breaking it raises an error. Used in projects 3, 9, 12, 24, 26.
+- **Content-addressed storage** — Storing each piece of data under the hash of its content, which gives de-duplication and integrity checks for free (Git, backup tools). Used in projects 10, 21.
+- **Contention** — Threads waiting on the same lock or memory, which stops a program from getting faster as threads are added. Used in project 30.
+- **Context manager** — An object used with `with` that guarantees setup and cleanup (closing files, committing transactions). Used in projects 9, 15, 17, 20, 22, 24, 25, 26, 27, 29, 33, 34, 37, 38. ([Ch 12](../chapters/12-decorators-context-managers-metaprogramming/README.md))
+- **Context propagation** — Carrying values such as a request id automatically through all the code that handles one request, even across `await` and threads. Used in project 20.
+- **contextvars** — Standard-library module for variables whose value is local to an execution context, so each asyncio task can have its own request id. Used in project 20. ([Ch 16](../chapters/16-concurrency-and-async/README.md))
+- **Convergence** — All copies (replicas) of shared data ending in the same state once they have seen the same operations. Used in project 39.
+- **Cooperative scheduling** — Tasks give up control only at explicit points (`await` in asyncio), so code between them runs without interruption. Used in project 18. ([Ch 16](../chapters/16-concurrency-and-async/README.md))
+- **Copy-on-write** — Sharing data until someone modifies it, then copying; pandas 3 uses it so derived DataFrames behave like independent copies. Used in project 31. ([Ch 18](../chapters/18-data-stack/README.md))
+- **Coroutine** — The object an `async def` function returns; the event loop runs it, pausing at each `await`. Used in projects 11, 17, 37, 38. ([Ch 16](../chapters/16-concurrency-and-async/README.md))
+- **Correlation id** — An id attached to every log line of one request so you can follow it across functions and services. Used in project 20.
+- **Cosine similarity** — The cosine of the angle between two vectors: 1 for the same direction, 0 for unrelated; equal to the dot product when vectors have length 1. Used in project 40.
+- **Counter** — `collections` dict subclass for counting things; `most_common(k)` gives the top k. Used in projects 1, 4, 5, 11, 20, 28, 29, 30, 34, 39. ([Ch 6](../chapters/06-dicts-sets-collections/README.md))
+- **cProfile** — Built-in tracing profiler that reports call counts and time per function. Used in projects 5, 29. ([Ch 17](../chapters/17-performance-memory-internals/README.md))
+- **CPU-bound** — Work limited by computation speed rather than by waiting for I/O. Used in projects 5, 11, 13, 29, 30, 32, 33, 35. ([Ch 16](../chapters/16-concurrency-and-async/README.md))
+- **Crawler** — A program that starts from some URLs, downloads pages, extracts links and keeps following them within limits. Used in project 11.
+- **CRC32** — A fast, non-cryptographic checksum good for detecting accidental corruption, not tampering. Used in projects 7, 36.
+- **CRDT (conflict-free replicated data type)** — A data structure whose operations can be applied in any order on any copy and still end in the same state — the basis of offline-friendly collaborative editing. Used in project 39.
+- **CRUD** — Create, Read, Update, Delete — the four basic operations on stored records. Used in projects 12, 27.
+- **CSPRNG** — Cryptographically secure pseudo-random number generator: its output can't be predicted even after seeing earlier output; Python's `secrets` uses the OS's one. Used in project 3. ([Ch 14](../chapters/14-standard-library-tour/README.md))
+- **CSS** — The language that styles web pages (colours, layout, fonts). Used in project 19.
+- **CSV** — Comma-separated values: a plain-text table with one row per line; read it with the `csv` module. Used in projects 4, 6, 9, 14, 31, 38. ([Ch 9](../chapters/09-errors-exceptions-files/README.md))
+- **Cursor (keyset) pagination** — Fetching the next page as "rows after this last seen key" instead of `OFFSET`, so every page costs the same with an index. Used in project 12.
+
+### D
+
+- **DAG (directed acyclic graph)** — A graph of tasks connected by one-way dependencies with no cycles, so there is always a valid order to run them. Used in project 32. ([Ch 19](../chapters/19-python-for-coding-interviews/README.md))
+- **Data descriptor** — A descriptor that defines `__set__` or `__delete__`; it takes priority over the instance's own `__dict__`. Used in project 27. ([Ch 12](../chapters/12-decorators-context-managers-metaprogramming/README.md))
+- **Data locality** — Running a task on the machine that already holds its input, to avoid moving data over the network. Used in project 32.
+- **Data race** — Two threads touching the same data at the same time, at least one writing, with no synchronisation — the result is unpredictable. Used in project 30. ([Ch 16](../chapters/16-concurrency-and-async/README.md))
+- **dataclass** — `@dataclass` generates `__init__`, `__repr__` and `__eq__` from annotated fields; `frozen=True` makes instances immutable. Used in projects 3, 6, 8, 9, 10, 15, 28, 38. ([Ch 10](../chapters/10-oop-in-python/README.md))
+- **DataFrame** — A 2-D labelled table in pandas or polars: named columns, each holding one type. Used in project 31. ([Ch 18](../chapters/18-data-stack/README.md))
+- **datetime** — Standard-library types for dates, times and durations; "aware" datetimes carry a time zone. Used in projects 1, 2, 4, 5, 6, 8, 9, 10, 13, 20. ([Ch 14](../chapters/14-standard-library-tour/README.md))
+- **DDL (data definition language)** — The SQL statements that change a database's structure: `CREATE`, `ALTER`, `DROP`. Used in projects 9, 25, 27.
+- **Dead-letter queue** — Where jobs or events go after failing every retry, so humans can inspect and replay them. Used in projects 24, 26.
+- **Debounce** — Waiting for a short pause in a burst of events (like keystrokes) before acting once. Used in project 33.
+- **Decimal** — Exact base-10 number type from the `decimal` module, used for money; build it from strings. Used in project 4. ([Ch 14](../chapters/14-standard-library-tour/README.md))
+- **Decorator** — A function that wraps another function (or class) to add behaviour, applied with `@name` above the definition. Used in projects 9, 15, 17, 20, 22, 24, 25, 26, 27, 29, 33, 34, 37, 38. ([Ch 12](../chapters/12-decorators-context-managers-metaprogramming/README.md))
+- **Deferred / lazy annotations** — In Python 3.14, type annotations are evaluated only when first read (PEP 649/749), so forward references no longer fail; read them with `annotationlib`. Used in projects 15, 27, 38. ([Ch 13](../chapters/13-type-hints/README.md))
+- **Dependency graph** — A record of which outputs depend on which inputs, used to rebuild only what changed. Used in projects 13, 25, 34.
+- **Dependency injection** — Passing a piece of code the things it needs (clock, database, client) instead of letting it create them, so tests can supply fakes. Used in projects 5, 6, 12, 19, 20, 21, 38, 39. ([Ch 15](../chapters/15-testing-and-debugging/README.md))
+- **deque** — Double-ended queue from `collections` with O(1) appends and pops at both ends; `maxlen` makes it a ring buffer. Used in project 18. ([Ch 6](../chapters/06-dicts-sets-collections/README.md))
+- **Descriptor** — An object with `__get__`/`__set__`/`__delete__` stored on a class that controls how an attribute is read or written; `property` is one. Used in projects 18, 27. ([Ch 12](../chapters/12-decorators-context-managers-metaprogramming/README.md))
+- **Deterministic** — Always producing the same output from the same input — essential for tests, caches and diffs. Used in projects 3, 4, 6, 8, 13, 14, 29, 39.
+- **Diff** — The list of differences between two versions of a text or file (lines added, removed, changed). Used in projects 1, 10, 13, 21, 25, 34.
+- **DNS** — The internet's phone book: turns host names like `example.com` into IP addresses. Used in project 8.
+- **Docker / container** — A container packages a program with its dependencies so it runs the same anywhere; Docker is the common tool. Tests often start a throwaway database in one. Used in projects 12, 25, 26, 27, 30, 35.
+- **Dry run** — Showing what a command *would* do without changing anything. Used in projects 2, 7, 25.
+- **DST (daylight saving time)** — The seasonal clock shift that makes some local times repeat or not exist; store timestamps in UTC to avoid it. Used in project 31. ([Ch 14](../chapters/14-standard-library-tour/README.md))
+- **Durable / durability** — Data that survives crashes and power loss once the system says it is saved (written and `fsync`ed). Used in projects 24, 36, 39.
+
+### E
+
+- **Eager vs lazy execution** — Eager runs each step immediately (pandas); lazy records the steps and runs an optimised plan only when results are requested (polars `.collect()`). Used in project 31. ([Ch 11](../chapters/11-iterators-generators-functional/README.md))
+- **Ease factor** — In SM-2 spaced repetition, a per-card multiplier (starting at 2.5) that sets how fast review intervals grow. Used in project 6.
+- **Embedding** — A list of numbers (a vector) produced by a machine-learning model to represent the meaning of text or images; similar things get similar vectors. Used in projects 23, 40.
+- **Endpoint** — One URL plus HTTP method that a web API handles, such as `GET /links/42`. Used in projects 5, 8, 11, 12, 20, 24, 30, 32, 38.
+- **Entropy (password)** — A measure in bits of how hard a secret is to guess; each extra bit doubles the number of guesses an attacker needs. Used in project 3.
+- **Entry point (packaging)** — A named object a package advertises in its `pyproject.toml` metadata so other programs can discover it as a plugin with `importlib.metadata.entry_points()`. Used in projects 13, 14, 16, 34, 40. ([Ch 8](../chapters/08-modules-packages-environments/README.md))
+- **Environment variable** — A named setting the operating system passes to a process (`os.environ["HOME"]`), often used for configuration and secrets. Used in projects 15, 37. ([Ch 14](../chapters/14-standard-library-tour/README.md))
+- **Escaping** — Converting special characters so data can't change the meaning of the surrounding language (HTML, SQL, shell). Used in projects 8, 13, 18, 19, 28, 35, 38. ([Ch 4](../chapters/04-strings/README.md))
+- **ETL (extract, transform, load)** — A data pipeline that reads raw data, cleans and reshapes it, and writes it somewhere useful. Used in project 31.
+- **Event loop** — The asyncio scheduler that runs one coroutine at a time and switches to another whenever one waits on I/O. Used in projects 11, 12, 18, 29, 38. ([Ch 16](../chapters/16-concurrency-and-async/README.md))
+- **Eviction policy** — The rule a full cache uses to decide what to throw out, such as least recently used (LRU). Used in project 22.
+- **Exception** — An object signalling an error; it travels up the call stack until some `except` handles it. Used in projects 1, 2, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 18, 20, 21, 22, 24, 25, 26, 28, 32, 34, 35, 36, 37, 38. ([Ch 9](../chapters/09-errors-exceptions-files/README.md))
+- **ExceptionGroup** — An exception bundling several errors at once (3.11+), handled with `except*`; `TaskGroup` raises one. Used in projects 11, 15, 18. ([Ch 9](../chapters/09-errors-exceptions-files/README.md))
+- **Executor** — A pool (`ThreadPoolExecutor`, `ProcessPoolExecutor`, `InterpreterPoolExecutor`) that runs functions on workers and returns futures. Used in projects 2, 5, 7, 20, 23, 26, 30, 32, 33, 34, 35. ([Ch 16](../chapters/16-concurrency-and-async/README.md))
+- **Exit code** — The number a process returns when it ends: 0 means success, anything else means failure. Used in project 1. ([Ch 14](../chapters/14-standard-library-tour/README.md))
+- **ExitStack** — `contextlib` tool that collects cleanup actions and runs them in reverse order, even if an error occurs; `AsyncExitStack` is the async version. Used in projects 34, 38. ([Ch 12](../chapters/12-decorators-context-managers-metaprogramming/README.md))
+- **Expand and contract** — Changing a database schema safely: add the new structure, move code and data over, then remove the old structure in a later release. Used in project 25.
+- **Exponential backoff** — Waiting longer after each failed retry (1 s, 2 s, 4 s…), usually up to a cap. Used in projects 8, 11, 17, 24, 26.
+
+### F
+
+- **Fail fast** — Detecting problems as early as possible (e.g. validating all config at start-up) and stopping with a clear error. Used in projects 15, 17.
+- **FAISS / hnswlib** — Fast C++ libraries (with Python bindings) for vector similarity search, used as baselines in project 40. Used in project 40.
+- **Fake** — A test double with a simple working implementation, such as an in-memory database or a fake clock. Used in projects 2, 6, 7, 8, 11, 12, 14, 17, 18, 22. ([Ch 15](../chapters/15-testing-and-debugging/README.md))
+- **Fan-out** — Delivering one message or job to many receivers. Used in projects 18, 26, 39.
+- **Fast-forward (Git)** — When one branch already contains the other, a merge just moves the branch pointer forward with no merge commit. Used in project 21.
+- **FastAPI** — Python web framework that uses type hints to validate requests and generate API docs; runs on ASGI servers like Uvicorn. Used in projects 9, 12, 24, 38, 40. ([Ch 13](../chapters/13-type-hints/README.md))
+- **Fixture (pytest)** — A function that prepares something a test needs (temp folder, database) and cleans it up afterwards; tests receive it by naming it as a parameter. Used in projects 1, 4, 5, 7, 8, 10, 12, 13, 31, 33, 34. ([Ch 15](../chapters/15-testing-and-debugging/README.md))
+- **Flame graph** — A chart of profiled call stacks: each box is a function, its width shows how much time was spent there, callees stacked above callers. Used in project 29.
+- **Framing** — How a continuous byte stream (like TCP) is split into separate messages, e.g. one per line or a length prefix before each. Used in projects 18, 32, 33.
+- **Free-threaded build** — An optional CPython build (`python3.14t`) without the GIL, so threads can run Python code truly in parallel. Used in projects 16, 20, 22, 29, 30, 32, 35, 38, 40. ([Ch 16](../chapters/16-concurrency-and-async/README.md))
+- **Front matter** — A metadata block (title, date, tags) at the top of a Markdown file. Used in project 13.
+- **fsync** — An OS call that forces buffered data all the way to disk, so a power cut can't lose it. Used in projects 1, 36.
+- **Full-text search** — Searching documents by the words they contain, with ranking — what search engines and PostgreSQL's `tsvector` do. Used in projects 12, 23.
+- **Functional / non-functional requirements** — What a system must do (features) versus how well it must do it (speed, reliability, security). Used in projects 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40.
+- **Future** — An object standing for a result that will be available later; `.result()` waits for it. Used in projects 1, 3, 22, 30, 32, 35. ([Ch 16](../chapters/16-concurrency-and-async/README.md))
+
+### G
+
+- **Generator** — A function containing `yield` that produces values lazily, one at a time, keeping memory flat. Used in projects 2, 3, 4, 5, 7, 11, 13, 23, 30, 34, 37, 38. ([Ch 11](../chapters/11-iterators-generators-functional/README.md))
+- **Geocoding** — Turning a place name or address into latitude and longitude. Used in project 8.
+- **GET / POST / PUT / PATCH / DELETE** — HTTP methods: read, create, replace, partially update and remove a resource. Used in projects 12, 16, 17, 24.
+- **GIL (global interpreter lock)** — A lock in standard CPython that lets only one thread run Python bytecode at a time; I/O and some C code release it. Used in projects 5, 6, 7, 22, 29, 30, 32, 35. ([Ch 16](../chapters/16-concurrency-and-async/README.md))
+- **GIN index / tsvector** — PostgreSQL's full-text search pieces: `tsvector` is a pre-processed list of a document's words, and a GIN index makes searching it fast. Used in project 12.
+- **Git** — The most widely used version-control system: it records snapshots of a project's files as commits. Used in projects 1, 10, 13, 16, 21.
+- **GitHub / GitHub Actions** — GitHub is a website that hosts Git repositories; GitHub Actions is its built-in CI service that runs tests, builds and releases on each push. Used in projects 16, 24, 30, 33.
+- **Glob pattern** — Shell-style wildcard such as `*.pdf` or `**/*.py` for matching file names. Used in projects 2, 7. ([Ch 9](../chapters/09-errors-exceptions-files/README.md))
+- **Golden-file test** — Comparing generated output with a saved, reviewed "expected" file. Used in projects 4, 13, 28.
+- **Graceful shutdown** — Stopping cleanly: stop accepting new work, finish or cancel what's running, close connections and save state. Used in projects 15, 18, 26.
+- **gzip / zlib** — Standard compression formats and modules; zlib is the algorithm underneath gzip and Git objects. Used in projects 5, 21, 36, 38.
+
+### H
+
+- **Hard link** — A second directory entry pointing at the same file data (inode); the data is freed only when the last link is removed. Used in project 7.
+- **Hash function** — Turns any data into a fixed-size value; cryptographic ones (SHA-256, BLAKE2b) make finding two inputs with the same output infeasible. Used in projects 2, 3, 6, 7, 8, 10, 12, 13, 21, 22, 24, 25, 33, 36, 39. ([Ch 14](../chapters/14-standard-library-tour/README.md))
+- **HEAD (Git)** — The pointer to what is currently checked out — usually a branch name, or a commit id when "detached". Used in project 21.
+- **Heap / heapq** — A tree stored in a list that always keeps the smallest item at the front; `heapq` gives O(log n) push/pop and `nlargest` for top-k. Used in projects 5, 22, 23, 36, 40. ([Ch 6](../chapters/06-dicts-sets-collections/README.md))
+- **Heartbeat** — A periodic "I'm alive" message; when heartbeats stop, the sender is presumed dead. Used in projects 26, 32.
+- **Hit rate** — The share of cache lookups that find a stored value: hits / (hits + misses). Used in projects 22, 36.
+- **HMAC** — A keyed hash of a message using a shared secret; it proves the sender knows the secret and the message wasn't changed. Used in project 24. ([Ch 14](../chapters/14-standard-library-tour/README.md))
+- **HNSW** — Hierarchical navigable small world: a layered graph of vectors that is searched greedily from a sparse top layer down, giving fast approximate nearest-neighbour search. Used in project 40.
+- **HTML** — The markup language of web pages. Used in projects 5, 11, 13, 18, 19, 29, 38.
+- **HTTP** — The request/response protocol of the web: a client sends a method and URL, the server answers with a status code, headers and a body. Used in projects 5, 8, 11, 12, 17, 24, 32, 38, 40. ([Ch 14](../chapters/14-standard-library-tour/README.md))
+- **HTTP status codes** — Three-digit results of an HTTP request: 2xx success, 4xx client error (404 not found, 422 invalid, 429 too many requests), 5xx server error. Used in projects 2, 5, 8, 11, 12, 16, 17, 23, 24, 25, 38.
+- **httpx** — Third-party HTTP client library with both sync and async APIs, timeouts and connection pooling. Used in projects 8, 11, 12, 16, 17, 38. ([Ch 14](../chapters/14-standard-library-tour/README.md))
+- **Hypothesis** — Library for property-based testing: it generates many random inputs and shrinks any failing one to a minimal example. Used in projects 3, 19, 22, 39. ([Ch 15](../chapters/15-testing-and-debugging/README.md))
+
+### I
+
+- **I/O-bound** — Work that spends most of its time waiting for disk, network or other input/output. Used in projects 1, 7, 11, 12, 20, 26, 29, 30, 36, 38. ([Ch 16](../chapters/16-concurrency-and-async/README.md))
+- **Idempotency key** — A unique id sent with a request so the server can recognise and ignore duplicate retries. Used in project 17.
+- **Idempotent** — Doing it twice has the same effect as doing it once — what makes retries safe. Used in projects 12, 17, 24, 26, 31, 39.
+- **Identity map** — An ORM pattern keeping exactly one Python object per database row in a session. Used in project 27.
+- **Import hook** — An object registered on `sys.meta_path` that takes part in finding and loading modules, e.g. to rewrite code as it is imported. Used in project 34. ([Ch 8](../chapters/08-modules-packages-environments/README.md))
+- **importlib** — Standard-library package exposing the import system: load modules by path, read package metadata (`importlib.metadata`). Used in projects 14, 16, 25, 34. ([Ch 8](../chapters/08-modules-packages-environments/README.md))
+- **Inbox pattern** — Storing each incoming event durably before acknowledging it, then processing it separately, so nothing is lost if processing fails. Used in project 24.
+- **Incremental** — Doing only the work for what changed since last time (incremental backups, builds). Used in projects 10, 13, 23, 31, 33.
+- **Index** — An extra lookup structure that finds things without scanning everything: an index on a database column, a search engine's inverted index, or a storage engine's key → file-position map. Used in projects 1, 6, 7, 12, 13, 16, 21, 23, 25, 26, 27, 36, 37, 39, 40.
+- **Index (Git staging area)** — The list of files, with their content ids, that the next commit will record. Used in project 21.
+- **Inode** — The filesystem record of a file's data and metadata; several names (hard links) can point at one inode. Used in projects 5, 7, 21.
+- **inspect** — Standard-library module for examining live objects, e.g. `inspect.signature` reads a function's parameters. Used in projects 6, 15, 17, 20, 24, 26, 34, 37, 38. ([Ch 12](../chapters/12-decorators-context-managers-metaprogramming/README.md))
+- **Integration test** — A test that checks several real pieces working together (e.g. code plus a real database). Used in projects 12, 24, 25, 26. ([Ch 15](../chapters/15-testing-and-debugging/README.md))
+- **Interpreter** — A program that runs code by reading and executing it directly, rather than compiling it to machine code first. Used in projects 14, 28, 29, 30, 35, 37. ([Ch 1](../chapters/01-getting-started/README.md))
+- **Inverted index** — A map from each word to the list of documents (and positions) containing it — the core of full-text search. Used in project 23.
+- **IP address** — The numeric address of a machine on a network (e.g. `203.0.113.7`). Used in project 5.
+- **ISO 8601** — The standard text format for dates and times, such as `2026-10-03T09:00:00+00:00`; it sorts correctly as a string. Used in projects 1, 9. ([Ch 14](../chapters/14-standard-library-tour/README.md))
+- **Isolation vs sandbox** — Separating program state (isolation) is not the same as stopping code from harming the system (a security sandbox). Used in projects 14, 35.
+
+### J
+
+- **Jinja** — A popular Python template engine for generating HTML or text, with template inheritance and autoescaping. Used in projects 13, 19.
+- **Jitter** — Random variation added to retry delays so many clients don't all retry at the same instant. Used in projects 11, 17, 22, 29.
+- **Job queue** — A system where application code enqueues work and separate worker processes pick it up and run it in the background. Used in projects 11, 26.
+- **Join (data)** — Combining two tables by matching key columns; duplicate keys can unexpectedly multiply rows (a "join explosion"). Used in projects 27, 31. ([Ch 18](../chapters/18-data-stack/README.md))
+- **JSON** — JavaScript Object Notation: a text format for nested data made of objects, arrays, strings, numbers, booleans and null. Used in projects 1, 2, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 20, 23, 24, 26, 30, 33, 38, 39, 40. ([Ch 9](../chapters/09-errors-exceptions-files/README.md))
+- **JSON Lines (JSONL)** — A file with one JSON object per line, easy to append to and stream. Used in projects 2, 11, 20, 23.
+- **JSON-RPC** — A simple protocol for remote procedure calls where requests and responses are JSON messages; LSP uses it. Used in project 33.
+- **JUnit XML** — A test-result file format that CI systems read to display passes and failures. Used in project 34.
+- **JWT (JSON Web Token)** — A signed token carrying claims such as a user id, used for stateless authentication. Used in project 12.
+
+### K
+
+- **Key-value store** — A database that maps keys to values with simple `get`/`put`/`delete` operations. Used in projects 11, 36.
+
+### L
+
+- **Language server (LSP)** — A background program that gives editors diagnostics, completion and fixes over the Language Server Protocol (JSON-RPC messages). Used in project 33.
+- **Latency** — How long one request takes from start to finish; often reported as percentiles (p50, p95, p99). Used in projects 5, 12, 18, 23, 24, 26, 30, 35, 36, 39, 40.
+- **Lazy loading** — Delaying work (like importing a plugin) until it is first needed, keeping start-up fast. Used in projects 2, 5, 14, 15, 17, 19, 23, 27, 33, 35.
+- **Lease** — Time-limited ownership: a worker owns a job until its lease expires, so a crashed worker's job can be reclaimed. Used in project 26.
+- **LEGB** — Python's name lookup order: Local, Enclosing function, Global, Built-in. Used in project 33. ([Ch 7](../chapters/07-functions/README.md))
+- **Lexer** — The first stage of an interpreter or compiler: turns source characters into tokens (names, numbers, operators). Used in projects 23, 28, 33. ([Ch 1](../chapters/01-getting-started/README.md))
+- **Lifespan (ASGI)** — Startup and shutdown messages an ASGI server sends so the app can open and close shared resources like connection pools. Used in project 38.
+- **Lineage** — The record of how each result was computed, so a lost result can be recomputed. Used in project 32.
+- **Linter** — A tool that flags likely bugs and style problems without running the code (Ruff, Pyflakes). Used in projects 7, 16, 25, 33. ([Ch 1](../chapters/01-getting-started/README.md))
+- **LISTEN / NOTIFY** — PostgreSQL's built-in publish/subscribe: one session `NOTIFY`s a channel and listening sessions wake up immediately. Used in projects 15, 20, 26, 37.
+- **Load test** — Running a system under heavy simulated traffic to find its limits (e.g. with Locust). Used in projects 12, 18, 24, 26, 38.
+- **Lock** — A synchronisation object letting only one thread or task into a section of code at a time. Used in projects 1, 11, 12, 16, 17, 18, 21, 22, 23, 25, 26, 30, 38, 39. ([Ch 16](../chapters/16-concurrency-and-async/README.md))
+- **Lock file** — A file pinning the exact version of every dependency (e.g. `uv.lock`) so installs are reproducible. Used in projects 1, 16, 21. ([Ch 8](../chapters/08-modules-packages-environments/README.md))
+- **logging** — Standard-library module for leveled log messages, with loggers, handlers and formatters. Used in projects 2, 9, 12, 17, 19, 20, 36. ([Ch 14](../chapters/14-standard-library-tour/README.md))
+- **Lost update** — Two writers both read the same data, both change it, and the second write silently erases the first. Used in project 1.
+- **LRU (least recently used)** — Cache eviction rule: when full, remove the entry that has gone unused the longest. Used in projects 8, 22. ([Ch 6](../chapters/06-dicts-sets-collections/README.md))
+- **LSM tree (log-structured merge tree)** — Storage design that buffers writes in memory, flushes them as sorted immutable files and merges those files in the background — great for write-heavy loads. Used in projects 23, 36.
+
+### M
+
+- **Manifest** — A file listing what a snapshot, package or build contains (paths, sizes, hashes). Used in projects 10, 36.
+- **Markdown** — A lightweight text format where `# Heading`, `*emphasis*` and `- lists` are turned into HTML. Used in projects 4, 13, 16, 23.
+- **Memtable** — The in-memory sorted table of recent writes in an LSM tree, flushed to disk when full. Used in project 36.
+- **Merge base** — The nearest common ancestor of two branches, the reference point for a three-way merge. Used in project 21.
+- **Mersenne Twister** — The pseudo-random algorithm behind Python's `random`: fine for simulations, but predictable, so never for passwords. Used in project 3.
+- **Metaclass** — The class of a class (`type` by default); it can customise how classes are created. Used in project 27. ([Ch 12](../chapters/12-decorators-context-managers-metaprogramming/README.md))
+- **Middleware** — Code that wraps every request and response of a web app (logging, auth, CORS) like layers of an onion. Used in projects 20, 38.
+- **Migration (schema)** — A versioned, ordered script that changes a database's structure, with an `up` step and optionally a `down` step. Used in projects 1, 9, 12, 19, 25, 27.
+- **Mock / mocking** — A test double that records how it was called and returns configured values, often installed with `unittest.mock.patch`. Used in projects 11, 17. ([Ch 15](../chapters/15-testing-and-debugging/README.md))
+- **Modulo bias** — Turning random numbers into a range with `% n` makes some results more likely unless the source range is a multiple of n. Used in project 3.
+- **Monotonic clock** — A clock that never goes backwards (`time.monotonic`), correct for timeouts and measuring durations. Used in projects 1, 17, 22. ([Ch 14](../chapters/14-standard-library-tour/README.md))
+- **msgpack** — A compact binary serialisation format, like a faster, smaller JSON. Used in projects 32, 35.
+- **multiprocessing** — Running work in separate processes, each with its own interpreter and GIL, for CPU-bound parallelism. Used in projects 5, 30, 32, 33, 34, 35. ([Ch 16](../chapters/16-concurrency-and-async/README.md))
+- **Myers diff** — The classic algorithm for finding the shortest set of insertions and deletions turning one sequence into another; used by Git. Used in project 21.
+- **mypy / pyright** — Static type checkers that read type hints and report mismatches without running the code. Used in projects 14, 15, 16, 19, 27. ([Ch 13](../chapters/13-type-hints/README.md))
+- **MySQL** — A widely used open-source relational database. Used in project 25.
+
+### N
+
+- **N+1 queries** — Running one query for a list and then one more query per item — a common, slow ORM mistake. Used in project 27.
+- **Namespace (argparse)** — The object `parse_args()` returns, holding one attribute per command-line option. Used in projects 1, 14, 27. ([Ch 8](../chapters/08-modules-packages-environments/README.md))
+- **NATS / Redis / RabbitMQ / Kafka** — Popular message brokers and data stores used to pass messages between processes; Redis is also an in-memory cache. Used in projects 8, 11, 17, 18, 22, 24, 26, 36.
+- **Normalisation (Unicode)** — Converting equivalent character sequences (e.g. `é` as one or two code points) to one standard form with `unicodedata.normalize`. Used in projects 4, 11, 23, 40. ([Ch 4](../chapters/04-strings/README.md))
+- **NumPy** — The core library for fast numeric arrays and vectorised maths in Python. Used in projects 30, 40. ([Ch 18](../chapters/18-data-stack/README.md))
+
+### O
+
+- **O(n), O(log n)…** — Big-O notation: how an operation's cost grows with input size n, ignoring constant factors. Used in projects 1, 2, 5, 7, 8, 20, 21, 22, 23, 32, 36, 40. ([Ch 17](../chapters/17-performance-memory-internals/README.md))
+- **OIDC (OpenID Connect)** — A standard identity protocol; with Trusted Publishing, CI proves who it is to PyPI with a short-lived OIDC token. Used in project 16.
+- **OpenAPI** — A standard machine-readable description of an HTTP API, which FastAPI generates automatically. Used in projects 12, 38.
+- **OpenTelemetry** — An open standard and toolkit for collecting traces, metrics and logs from applications. Used in projects 17, 20.
+- **Operator overloading** — Defining dunder methods like `__add__` or `__ge__` so operators work on your own objects. Used in projects 12, 27. ([Ch 10](../chapters/10-oop-in-python/README.md))
+- **ORM (object-relational mapper)** — A library that maps database rows to Python objects and builds SQL from Python code (SQLAlchemy, Django ORM). Used in project 27.
+- **OS (operating system)** — The software that manages the hardware and runs programs (Linux, macOS, Windows). Used in projects 3, 11, 16, 18, 29, 35, 36, 37.
+- **OT (operational transformation)** — An older approach to collaborative editing in which a central server adjusts concurrent edits against each other. Used in project 39.
+
+### P
+
+- **Pagination** — Returning a long list of results in pages (e.g. 20 at a time) instead of all at once. Used in projects 12, 23.
+- **pandas** — The standard Python library for labelled tables (DataFrames): loading, cleaning, grouping and joining data. Used in projects 4, 31. ([Ch 18](../chapters/18-data-stack/README.md))
+- **Parameterised query** — SQL with placeholders (`?` or `%s`) whose values are sent separately, which prevents SQL injection. Used in projects 9, 15, 19, 27, 33. ([Ch 14](../chapters/14-standard-library-tour/README.md))
+- **Parquet** — A compressed, column-oriented file format that stores data types with the data; fast for analytics. Used in project 31. ([Ch 18](../chapters/18-data-stack/README.md))
+- **Parser** — The stage that turns tokens into a structured tree (an AST) following a grammar. Used in projects 1, 2, 4, 5, 11, 18, 23, 28, 30.
+- **Partitioning** — Splitting data into separate folders or tables by a key such as date, so parts can be read or rewritten on their own. Used in projects 24, 31.
+- **pathlib** — Standard-library object-oriented file paths: `Path("data") / "file.txt"`, `.read_text()`, `.glob()`. Used in projects 1, 2, 5, 7, 8, 10, 18, 20, 21, 23, 25. ([Ch 9](../chapters/09-errors-exceptions-files/README.md))
+- **Percentile (p50/p95/p99)** — The value below which that percentage of measurements fall; p95 latency is what the slowest 5% of users exceed. Used in projects 5, 12, 20, 23, 40.
+- **pickle** — Standard-library serialisation of almost any Python object to bytes; never load pickles from untrusted sources — loading can run code. Used in projects 23, 30, 32, 34, 35. ([Ch 9](../chapters/09-errors-exceptions-files/README.md))
+- **Pipeline** — A chain of stages where each stage's output feeds the next one. Used in projects 2, 5, 13, 16, 20, 23, 28, 30, 31. ([Ch 11](../chapters/11-iterators-generators-functional/README.md))
+- **Plugin** — An optional add-on, often a separately installed package, that extends a host program through an agreed interface. Used in projects 13, 14, 16, 33, 34, 35.
+- **polars** — A fast DataFrame library written in Rust with an optional lazy, query-optimised API. Used in projects 4, 31.
+- **Pool (worker)** — A fixed set of reusable workers (threads, processes, interpreters, connections) that take jobs from a queue. Used in projects 7, 10, 11, 12, 13, 20, 26, 32, 33, 35, 38. ([Ch 16](../chapters/16-concurrency-and-async/README.md))
+- **Post-mortem debugging** — Inspecting the frames and variables of a program after it has crashed with an exception. Used in project 37. ([Ch 15](../chapters/15-testing-and-debugging/README.md))
+- **PostgreSQL** — A powerful open-source relational database with strong concurrency, constraints and full-text search. Used in projects 9, 12, 18, 23, 24, 25, 26, 27, 36, 39.
+- **Precision / recall** — Precision: share of returned results that are relevant. Recall: share of all relevant items that were returned. Used in projects 23, 40.
+- **Predicate / projection pushdown** — Moving filters (predicates) and column selection (projections) into the file scan so less data is read. Used in project 31.
+- **Process** — A running program with its own memory; processes don't share Python objects, so data is sent between them by pickling. Used in projects 1, 2, 5, 8, 9, 11, 13, 14, 17, 18, 21, 22, 24, 25, 26, 27, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38. ([Ch 16](../chapters/16-concurrency-and-async/README.md))
+- **Product quantisation** — Compressing vectors into short codes to save memory, at some cost in accuracy. Used in project 40.
+- **Profiler** — A tool that measures where a program spends time or memory; tracing profilers record every call, sampling profilers take periodic snapshots. Used in projects 4, 5, 23, 29, 30, 37, 40. ([Ch 17](../chapters/17-performance-memory-internals/README.md))
+- **Property-based testing** — Testing a general rule (e.g. "decode(encode(x)) == x") against many generated inputs instead of a few hand-picked examples. Used in projects 3, 15, 17, 19, 21, 23, 27, 32, 39, 40. ([Ch 15](../chapters/15-testing-and-debugging/README.md))
+- **Protocol (typing)** — A structural interface for type checkers: any object with the right methods matches, without inheriting. Used in projects 5, 11, 14, 18, 31, 33, 35, 36, 37, 38. ([Ch 13](../chapters/13-type-hints/README.md))
+- **Provenance** — A record of where each value came from (which config layer, which source file). Used in projects 15, 16.
+- **psycopg** — The standard PostgreSQL driver for Python; version 3 adds async support. Used in projects 12, 25, 26, 27.
+- **Pub/sub (publish/subscribe)** — Messaging where senders publish to a topic or channel and every subscriber receives a copy. Used in projects 18, 26, 39.
+- **Pure function** — A function whose result depends only on its arguments and that has no side effects — easy to test and safe to cache. Used in projects 2, 6, 9, 16, 17, 22, 30, 33, 36, 40. ([Ch 7](../chapters/07-functions/README.md))
+- **py-spy** — A sampling profiler that inspects a running Python process from outside with very low overhead. Used in project 29. ([Ch 17](../chapters/17-performance-memory-internals/README.md))
+- **Pydantic** — Library that validates and converts data (e.g. JSON request bodies) into typed Python objects using type hints. Used in projects 12, 15, 38. ([Ch 13](../chapters/13-type-hints/README.md))
+- **PyPI** — The Python Package Index, the public repository `pip install` downloads packages from. Used in projects 2, 13, 16, 17, 22, 29, 33, 37, 38, 40. ([Ch 8](../chapters/08-modules-packages-environments/README.md))
+- **pyproject.toml** — The standard file describing a Python project: metadata, dependencies, build backend and tool settings. Used in projects 14, 16, 33. ([Ch 8](../chapters/08-modules-packages-environments/README.md))
+- **pytest** — The most widely used Python testing framework: plain `assert`, fixtures, parametrisation and plugins. Used in projects 1, 12, 14, 16, 26, 28, 31, 34. ([Ch 15](../chapters/15-testing-and-debugging/README.md))
+
+### Q
+
+- **Quarantine** — Setting bad records aside with a reason instead of crashing or silently dropping them. Used in projects 7, 31.
+- **Queue** — A first-in-first-out line of items; `queue.Queue` (threads) and `asyncio.Queue` (tasks) are safe for producers and consumers. Used in projects 6, 11, 12, 18, 20, 24, 26, 30, 32, 35, 39. ([Ch 16](../chapters/16-concurrency-and-async/README.md))
+
+### R
+
+- **Race condition** — A bug where the result depends on the timing of concurrent threads, processes or tasks. Used in projects 2, 9, 12, 20, 30, 35, 38. ([Ch 16](../chapters/16-concurrency-and-async/README.md))
+- **Rate limiter** — Code that caps how many requests are made per second, e.g. with a token bucket. Used in projects 12, 17, 26.
+- **Recursive descent** — A parser built from one function per grammar rule that call each other; operator precedence follows the call order. Used in project 28.
+- **Redaction** — Hiding sensitive values (passwords, tokens) before they are logged or shown. Used in project 20.
+- **Regular expression (regex)** — A pattern language for matching text, e.g. `r"\d{4}-\d{2}"`; Python's `re` module. Named groups `(?P<name>…)` label parts of a match. Used in projects 4, 5, 20, 23, 33, 38. ([Ch 4](../chapters/04-strings/README.md))
+- **Rejection sampling** — Generating random candidates and discarding those that break a rule, which keeps accepted results uniformly random. Used in project 3.
+- **REPL** — Read–eval–print loop: an interactive prompt that runs each line as you type it. Used in projects 28, 37. ([Ch 1](../chapters/01-getting-started/README.md))
+- **Replay attack** — Re-sending a captured valid request; blocked by signed timestamps or one-time ids. Used in projects 6, 18, 24, 36.
+- **Replica** — One copy of shared data, kept on a different machine or client. Used in projects 12, 32, 39.
+- **Repository pattern** — A class that hides all database queries behind simple methods, returning plain objects to the rest of the code. Used in projects 1, 9, 12.
+- **REST** — A style of web API where URLs name resources and HTTP methods name actions (GET reads, POST creates…). Used in projects 8, 12.
+- **Retry** — Trying a failed operation again, usually after a delay; only safe when the operation is idempotent. Used in projects 8, 11, 17, 22, 24, 26, 32.
+- **Retry amplification** — Retries at several layers multiplying the load on a struggling service during an outage. Used in projects 17, 36.
+- **robots.txt** — A file on a website telling crawlers which paths they may fetch; read with `urllib.robotparser`. Used in project 11.
+- **Rolling deploy** — Upgrading servers a few at a time, so old and new code versions run side by side for a while. Used in projects 15, 25.
+- **Router** — The part of a web framework that maps a request's method and path to the function that handles it. Used in projects 12, 26, 38.
+- **Ruff** — A very fast linter and formatter for Python, written in Rust. Used in projects 16, 33. ([Ch 1](../chapters/01-getting-started/README.md))
+
+### S
+
+- **Sampling** — Keeping only a fraction of events (logging) or periodically recording state (sampling profiler) to limit cost. Used in projects 20, 29.
+- **Scheduler** — The component that decides which task runs next and where (spaced-repetition dates, workers in a cluster). Used in projects 2, 6, 9, 11, 18, 24, 26, 29, 31, 32.
+- **Schema** — The structure of stored data: tables, columns, types and constraints (or the expected shape of a config/JSON document). Used in projects 1, 9, 12, 15, 25, 27, 31, 38.
+- **sdist / wheel** — A source distribution (`.tar.gz`, built on install) and a pre-built `.whl` archive that installs by unpacking. Used in project 16. ([Ch 8](../chapters/08-modules-packages-environments/README.md))
+- **secrets** — Standard-library module for cryptographically secure random values: tokens, passwords, `randbelow`. Used in projects 3, 15, 16, 20. ([Ch 14](../chapters/14-standard-library-tour/README.md))
+- **Segment (search)** — An immutable mini-index file; new documents create new segments, which are merged later. Used in project 23.
+- **Semantic versioning** — MAJOR.MINOR.PATCH version numbers: bump MAJOR for breaking changes, MINOR for new features, PATCH for fixes. Used in project 16.
+- **Semaphore** — A counter-based lock letting at most N holders in at once, e.g. at most 5 requests per host. Used in project 11. ([Ch 16](../chapters/16-concurrency-and-async/README.md))
+- **Serialisation** — Turning objects into bytes or text for storage or sending (JSON, pickle, msgpack); deserialisation turns them back. Used in projects 1, 15, 20, 24, 25, 26, 32, 35. ([Ch 9](../chapters/09-errors-exceptions-files/README.md))
+- **Session** — A period of interaction that keeps its own state: an ORM's unit of work with the database, one client's chat connection, or one whole test run. Used in projects 6, 12, 18, 25, 27, 34, 37, 39.
+- **SHA-256 / SHA-1** — Cryptographic hash functions producing 256-bit / 160-bit fingerprints; Git historically names objects by SHA-1. Used in projects 3, 6, 7, 10, 21, 24, 25, 26. ([Ch 14](../chapters/14-standard-library-tour/README.md))
+- **Shard / sharding** — Splitting data across several machines or files by key so each holds only part of it. Used in projects 11, 18, 40.
+- **Signature** — Either a function's parameter list (read with `inspect.signature`) or a cryptographic proof, such as an HMAC sent with a webhook, that a message is genuine. Used in projects 14, 24, 34, 38.
+- **Single-flight** — When many callers request the same missing value, only the first computes it and the rest wait for that result. Used in project 22.
+- **Skip list** — A sorted linked structure with extra "express lane" links, giving O(log n) search and insert on average. Used in projects 23, 36.
+- **SKIP LOCKED** — PostgreSQL clause (`SELECT … FOR UPDATE SKIP LOCKED`) that locks chosen rows and skips rows other transactions already locked — ideal for job queues. Used in projects 24, 26.
+- **Slug** — A URL-friendly version of a title, e.g. `hello-world` for "Hello, World!". Used in projects 13, 16.
+- **SM-2** — The SuperMemo 2 spaced-repetition algorithm: review intervals of 1 day, 6 days, then the previous interval times an ease factor. Used in project 6.
+- **Snapshot** — A saved, read-only picture of data at one moment (a backup, a document state). Used in projects 2, 10, 11, 15, 21, 29, 34, 36, 37, 39.
+- **Socket** — An operating-system endpoint for sending and receiving data over a network connection. Used in projects 8, 11, 14, 18, 20, 32, 35, 37, 38, 39.
+- **Spaced repetition** — Reviewing a fact just before you would forget it, with gaps that grow as you remember it better. Used in project 6.
+- **Spilling** — Writing data from memory to disk when memory runs low. Used in projects 6, 11, 32.
+- **SQL** — Structured Query Language: the language for querying and changing relational databases (`SELECT`, `INSERT`, `UPDATE`). Used in projects 9, 12, 19, 23, 25, 26, 27, 31, 33. ([Ch 14](../chapters/14-standard-library-tour/README.md))
+- **SQL injection** — An attack where user input becomes part of a SQL statement and changes its meaning; prevented by parameterised queries. Used in projects 9, 19, 27. ([Ch 14](../chapters/14-standard-library-tour/README.md))
+- **SQLite** — A full SQL database stored in a single file and built into Python as `sqlite3`. Used in projects 1, 4, 6, 9, 18, 19, 23, 24, 25, 27, 36, 39. ([Ch 14](../chapters/14-standard-library-tour/README.md))
+- **SSTable** — Sorted string table: an immutable on-disk file of key-value pairs in key order, used by LSM trees. Used in project 36.
+- **Stale-while-revalidate / stale-if-error** — Cache strategies: serve an expired value while refreshing it in the background, or when the source is failing. Used in projects 8, 13, 22, 27, 33.
+- **Starlette** — Lightweight ASGI web toolkit that FastAPI is built on. Used in projects 24, 38.
+- **State machine** — A model where an object is always in one of a few named states and moves between them on defined events (e.g. closed → open → half-open). Used in projects 6, 17, 32, 37.
+- **Static site** — A website made of plain pre-built files, served without any server-side code or database. Used in project 13.
+- **Stemming** — Cutting words down to a root form (`running` → `run`) so searches match variants. Used in project 23.
+- **Streaming** — Processing data piece by piece as it arrives instead of loading it all into memory first. Used in projects 4, 5, 8, 10, 14, 16, 18, 23, 27, 28, 31, 32, 38. ([Ch 11](../chapters/11-iterators-generators-functional/README.md))
+- **struct** — Standard-library module that packs numbers into fixed-layout bytes and unpacks them, for binary file formats. Used in projects 3, 23, 32, 36.
+- **Structural pattern matching** — `match`/`case` statements that test a value's shape and pull out its parts (3.10+). Used in projects 1, 2, 28. ([Ch 3](../chapters/03-control-flow/README.md))
+- **Structured concurrency** — Tasks started inside a scope must all finish (or be cancelled) before the scope exits, as with `asyncio.TaskGroup`. Used in projects 11, 18, 26. ([Ch 16](../chapters/16-concurrency-and-async/README.md))
+- **Structured logging** — Logging events as key/value fields (often JSON) instead of free text, so tools can search and aggregate them. Used in projects 17, 20. ([Ch 14](../chapters/14-standard-library-tour/README.md))
+- **Subinterpreter** — A separate Python interpreter inside the same process with its own modules and (since 3.12) its own GIL; 3.14 exposes them via `concurrent.interpreters`. Used in projects 14, 30, 35. ([Ch 16](../chapters/16-concurrency-and-async/README.md))
+- **subprocess** — Standard-library module for running other programs and capturing their output. Used in projects 16, 34, 37. ([Ch 14](../chapters/14-standard-library-tour/README.md))
+- **Symlink** — A small file that points to another path; following it can create loops when walking directories. Used in project 7.
+- **sys.monitoring** — Python 3.12+ API (PEP 669) that lets debuggers and profilers receive low-overhead events such as line, call and return. Used in projects 29, 34, 37.
+
+### T
+
+- **t-string (template string)** — A Python 3.14 literal `t"…"` that produces a `Template` object keeping literal text and inserted values separate, so a library can escape values safely. Used in projects 19, 20, 33. ([Ch 4](../chapters/04-strings/README.md))
+- **TCP** — The network protocol that delivers a reliable, ordered stream of bytes between two machines; it has no built-in message boundaries. Used in projects 18, 32.
+- **Template engine** — A library (e.g. Jinja) that fills placeholders in a text template with data to produce HTML or other text. Used in projects 13, 19, 28.
+- **TF-IDF** — Term frequency (how often a word appears in a document) times inverse document frequency (how rare it is overall) — a classic relevance score. Used in projects 23, 30.
+- **Thread** — A separate flow of execution inside a process; threads share memory, so shared data needs locks. Used in projects 5, 7, 10, 11, 12, 13, 15, 16, 17, 18, 20, 22, 26, 29, 30, 31, 32, 35, 37, 38, 40. ([Ch 16](../chapters/16-concurrency-and-async/README.md))
+- **Thread safety** — Code that behaves correctly when called from several threads at once. Used in projects 16, 17, 20, 22, 30.
+- **Thread-local** — Storage where each thread sees its own value; wrong for asyncio, where many tasks share one thread. Used in projects 20, 30.
+- **ThreadPoolExecutor** — `concurrent.futures` pool that runs functions on a fixed set of threads and returns futures. Used in projects 7, 20, 30. ([Ch 16](../chapters/16-concurrency-and-async/README.md))
+- **Three-way merge** — Merging two versions by comparing each with their common ancestor: one-sided changes are kept, overlapping different changes conflict. Used in project 21.
+- **Throughput** — How much work a system completes per unit of time (requests per second, MB per second). Used in projects 5, 12, 26, 30, 32, 35, 36.
+- **Thundering herd** — Many callers missing the same cache key or waking at once and all hitting the backend together. Used in project 22.
+- **Time zone (UTC, zoneinfo)** — UTC is the global reference time with no daylight saving; `zoneinfo` converts to local zones such as `Europe/Lisbon`. Used in projects 1, 8, 31. ([Ch 14](../chapters/14-standard-library-tour/README.md))
+- **Timeout** — The maximum time to wait for an operation before giving up with an error. Used in projects 8, 11, 17, 18, 24, 26, 32, 35. ([Ch 16](../chapters/16-concurrency-and-async/README.md))
+- **Timing attack** — Learning a secret by measuring how long comparisons take; prevented by constant-time comparison. Used in project 24.
+- **TOCTOU (time-of-check to time-of-use)** — A race where something changes between checking a condition and acting on it (e.g. a file appears after `exists()` returned False). Used in project 2.
+- **Token bucket** — A rate limiter: tokens refill at a steady rate up to a cap, and each request spends one token. Used in project 17.
+- **Tombstone** — A marker record meaning "deleted", kept because older copies of the data may still contain the item. Used in projects 36, 39.
+- **TOML / tomllib** — A simple configuration format (`key = "value"`, `[sections]`) and the read-only standard-library parser for it (3.11+). Used in projects 2, 8, 13, 15, 33. ([Ch 9](../chapters/09-errors-exceptions-files/README.md))
+- **Top-k** — Finding the k best items, typically with a heap in O(n log k) (`heapq.nlargest`) instead of sorting everything. Used in projects 5, 23, 40. ([Ch 19](../chapters/19-python-for-coding-interviews/README.md))
+- **Torn write** — A record only partly written because the process or power died mid-write; detected with checksums or length fields. Used in projects 1, 34, 36.
+- **Tracing profiler** — A profiler that records every function call and return — exact counts, but slows the program down (the observer effect). Used in project 29.
+- **Transaction** — A group of database changes that are applied all together or not at all (commit or roll back). Used in projects 1, 4, 6, 9, 12, 24, 25, 26, 27, 36. ([Ch 14](../chapters/14-standard-library-tour/README.md))
+- **Transient failure** — An error that may succeed if retried, such as a timeout, a reset connection or HTTP 503. Used in projects 11, 17.
+- **Tree (Git)** — A Git object listing a directory's entries (name, mode, object id); sub-directories are trees too. Used in project 21.
+- **Tree-walking interpreter** — An interpreter that executes a program by visiting its AST nodes directly, instead of compiling to bytecode first. Used in project 28.
+- **Trusted Publishing** — Publishing to PyPI from CI using short-lived OIDC credentials instead of a stored API token. Used in project 16. ([Ch 8](../chapters/08-modules-packages-environments/README.md))
+- **TTL (time to live)** — How long a cached item or record stays valid before it expires. Used in projects 8, 22.
+- **Type hints** — Annotations describing expected types (`def f(x: int) -> str`); checked by tools like mypy, not enforced at run time. Used in projects 12, 14, 15, 16, 19, 27, 31, 33, 38, 40. ([Ch 13](../chapters/13-type-hints/README.md))
+- **Typed config** — Configuration loaded into a typed object (e.g. a dataclass) so wrong values are caught early. Used in projects 12, 15, 16.
+
+### U
+
+- **Unicode / UTF-8** — Unicode assigns a number to every character; UTF-8 is the standard way to store those numbers as 1–4 bytes each. Used in projects 4, 8, 23, 33. ([Ch 4](../chapters/04-strings/README.md))
+- **Uniform distribution** — Every possible outcome is equally likely. Used in projects 3, 17.
+- **Unit test** — A fast test of one small piece of code in isolation. Used in projects 6, 8, 9, 11, 12, 13, 16, 22, 28, 31. ([Ch 15](../chapters/15-testing-and-debugging/README.md))
+- **URL** — A web address such as `https://example.com/path?q=1`; the part after `?` is the query string. Used in projects 3, 8, 11, 12, 13, 16, 19, 20, 24. ([Ch 14](../chapters/14-standard-library-tour/README.md))
+- **URL normalisation** — Rewriting equivalent URLs into one canonical form (lower-case host, no fragment, sorted query) so duplicates are spotted. Used in project 11.
+- **uuid** — Standard-library module for universally unique ids; `uuid7` (3.14) ids are also ordered by time. Used in project 39. ([Ch 14](../chapters/14-standard-library-tour/README.md))
+- **uv** — A very fast tool that manages Python versions, virtual environments, dependencies, lock files, builds and publishing. Used in project 16. ([Ch 8](../chapters/08-modules-packages-environments/README.md))
+- **Uvicorn** — A fast ASGI web server commonly used to run FastAPI and Starlette apps. Used in projects 12, 38.
+
+### V
+
+- **Validation** — Checking that input has the expected shape and values before using it. Used in projects 1, 2, 3, 4, 12, 13, 14, 15, 16, 19, 22, 24, 27, 29, 31, 34, 38, 39, 40. ([Ch 13](../chapters/13-type-hints/README.md))
+- **Vector** — An ordered list of numbers; in project 40, an embedding representing an item's meaning. Used in project 40.
+- **Vectorisation** — Doing maths on whole arrays in compiled code (NumPy) instead of looping in Python. Used in projects 4, 40. ([Ch 18](../chapters/18-data-stack/README.md))
+- **Version control** — Software that records the history of changes to files so you can compare, undo and merge (Git). Used in projects 1, 21.
+- **Virtual environment (venv)** — An isolated folder holding one project's Python packages, so projects don't conflict. Used in project 16. ([Ch 8](../chapters/08-modules-packages-environments/README.md))
+- **VM (virtual machine, bytecode)** — An interpreter loop that executes compiled bytecode instructions, as CPython does. Used in project 28.
+- **VS Code / Neovim** — Popular code editors that talk to language servers for diagnostics. Used in projects 33, 37.
+
+### W
+
+- **WAL (write-ahead log)** — Logging every change durably before applying it, so the change can be replayed after a crash; SQLite's WAL mode also lets readers work during writes. Used in projects 9, 36.
+- **Watchdog** — A supervisor that notices stuck or dead workers (e.g. missed deadlines) and restarts them. Used in project 35.
+- **Watchpoint** — A debugger feature that stops the program when a variable's value changes. Used in project 37.
+- **Webhook** — An HTTP POST request one service sends to another service's URL when an event happens (e.g. "payment succeeded"). Used in project 24.
+- **WebSocket** — A long-lived two-way connection between browser and server, used for live updates such as chat. Used in projects 18, 38, 39.
+- **Work stealing** — Idle workers taking queued tasks from busy workers to balance load. Used in project 32.
+- **Worker** — A thread, process or machine that takes jobs from a queue and runs them. Used in projects 5, 7, 11, 12, 20, 24, 26, 30, 32, 34, 35, 38. ([Ch 16](../chapters/16-concurrency-and-async/README.md))
+- **Write amplification** — Extra bytes a storage engine writes for each byte the user writes (because of logs and compaction); read and space amplification are the matching costs for reads and disk space. Used in projects 17, 36.
+
+### X
+
+- **xfail** — A pytest mark for a test that is expected to fail; if it passes unexpectedly that is an "xpass". Used in project 34. ([Ch 15](../chapters/15-testing-and-debugging/README.md))
+- **XML** — A markup format of nested tags, used for data exchange such as JUnit test reports. Used in project 34.
+- **XSS (cross-site scripting)** — An attack where user data inserted into a web page runs as a script in other visitors' browsers; prevented by escaping. Used in projects 13, 19.
+
+### Y
+
+- **YAML** — A configuration format based on indentation, more flexible (and more error-prone) than TOML. Used in projects 2, 13, 14.
+
+### Z
+
+- **Zstandard (zstd)** — A fast modern compression algorithm with tunable levels; Python 3.14 adds `compression.zstd`. Used in projects 10, 23, 32, 36.
