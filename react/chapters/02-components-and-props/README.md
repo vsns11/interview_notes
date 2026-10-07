@@ -16,18 +16,18 @@ Components are React's unit of reuse, and **props** are how data flows into them
 | 2.8 | Lists and keys | render arrays with `map`/`filter` and pick correct keys |
 | 2.9 | Putting it together | read a complete small UI built from these parts |
 
-Code: [`code/`](code/) (React 19.3, run in jsdom with Testing Library — see [Chapter 1 §1.5](../01-why-react-and-setup/README.md)).
+Code: [`code/`](code/) (React 19.3, run in jsdom — a browser-like DOM that runs inside Node.js — with Testing Library, a helper for clicking and reading the screen like a user — see [Chapter 1 §1.5](../01-why-react-and-setup/README.md)).
 
 ---
 
 ## 2.1 Function components
 
 ### What it is
-A **function component** is a plain JavaScript function that takes one argument (the **props** object) and returns JSX. Its name **must start with a capital letter**. React calls it whenever it needs to know what that part of the screen should look like.
+A **function component** is a plain JavaScript function that takes one argument (the **props** object) and returns JSX (the HTML-like syntax that compiles to JavaScript, Chapter 1 §1.8). Its name **must start with a capital letter**. React calls it whenever it needs to know what that part of the screen should look like.
 
 Analogy: a component is a *recipe card*. The recipe (function) is written once; each `<Profile />` in your JSX is one dish cooked from it. Props (next section) are the ingredients you hand over for that particular dish.
 
-> Older React code uses **class components** (`class X extends React.Component` with `render()` and lifecycle methods). They still work but are legacy; everything new — Hooks, Server Components, the React Compiler — targets function components. You only need to *read* classes when maintaining old code (and for error boundaries, Chapter 14).
+> Older React code uses **class components** (`class X extends React.Component` with `render()` and **lifecycle methods** — methods React calls at fixed moments, such as after the component first appears or just before it is removed). They still work but are legacy; everything new — Hooks (functions starting with `use` that give components React features), Server Components (components that run only on the server), the React Compiler (a build tool that adds memoization automatically) — targets function components. You only need to *read* classes when maintaining old code (and for **error boundaries** — components that catch a crash in their children and show a fallback UI instead — Chapter 14).
 
 ### How it works
 `code/01_function_components.jsx`:
@@ -67,7 +67,7 @@ Step by step:
 4. When only strings (`'section'`, `'img'`) remain, React creates the DOM nodes.
 5. `<profile />` became the *string* `'profile'`, so React created a meaningless `<profile>` tag and warned.
 
-Notice the components themselves (`Gallery`, `Profile`) do **not** appear in the HTML — only what they return does. The component tree exists in React (visible in React DevTools); the DOM tree contains only host elements.
+Notice the components themselves (`Gallery`, `Profile`) do **not** appear in the HTML — only what they return does. The component tree exists in React (visible in React DevTools, the browser extension for inspecting components); the DOM tree contains only **host elements** (the built-in platform tags such as `<section>` and `<img>`).
 
 ### Rules recap (from [Chapter 1 §1.7](../01-why-react-and-setup/README.md))
 - Capitalised name; returns JSX, a string/number, an array, or `null`.
@@ -91,9 +91,9 @@ Without props every `Profile` would show the same person. Props make one compone
 
 ### How it works
 1. **Pass** props in JSX: strings in quotes, anything else in braces. A bare attribute (`admin`) means `true`.
-2. **Read** them: the function receives `props`; usually you **destructure** in the parameter list: `function Avatar({ person, size })`.
+2. **Read** them: the function receives `props`; usually you **destructure** (unpack named fields of an object into separate variables) in the parameter list: `function Avatar({ person, size })`.
 3. **Default** a prop with destructuring defaults: `{ size = 100 }`. The default applies only when the prop is missing or `undefined` (not for `null` or `0`).
-4. **Forward** props you do not use yourself with the rest/spread syntax: `function Button({ variant, ...rest }) { return <button {...rest} /> }`.
+4. **Forward** props you do not use yourself with the rest/spread syntax (`...rest` collects "all the remaining fields" into one object; `{...rest}` in JSX spreads them back out as individual props): `function Button({ variant, ...rest }) { return <button {...rest} /> }`.
 
 `code/02_props.jsx`:
 ```jsx
@@ -149,10 +149,10 @@ What to notice:
 - The second `Avatar` had no `size`, so the default `100` was used.
 - `children` ("Save") was forwarded by `{...rest}` too, because `children` is just another prop.
 - `admin` with no value became `true`.
-- Assigning to a prop threw: in development React **freezes** the props object. In production it is not frozen, but mutating props is still a bug — the parent owns that data.
+- Assigning to a prop threw: in development React **freezes** the props object (makes it read-only with `Object.freeze`). In **production** (the optimised build that real users run) it is not frozen, but mutating props is still a bug — the parent owns that data.
 
 ### Props are a snapshot, and change only from above
-Each render receives a fresh props object. When a parent re-renders with different values, the child is called again with the new props — you never "update" your own props. If a component needs to change something over time in response to the user, that is **state** ([Chapter 3](../03-state-and-events/README.md)).
+Each render receives a fresh props object. When a parent re-renders with different values, the child is called again with the new props — you never "update" your own props. If a component needs to change something over time in response to the user, that is **state** (data a component remembers between renders and can update) ([Chapter 3](../03-state-and-events/README.md)).
 
 | | Props | State |
 |---|---|---|
@@ -166,14 +166,14 @@ Each render receives a fresh props object. When a parent re-renders with differe
 |---|---|
 | `key` | Used by React to identify list items (§2.8). **Not** passed to your component: `props.key` is `undefined`. |
 | `children` | Whatever you nest between the tags (§2.3). |
-| `ref` | In React 19 a normal prop for function components (`forwardRef` is no longer needed and will be deprecated) — see Chapter 5. |
+| `ref` | A handle to a DOM node or value (Chapter 5). In React 19 a normal prop for function components (`forwardRef`, the old wrapper for this, is no longer needed and will be **deprecated** — marked as on its way out) — see Chapter 5. |
 
-React 19 removed `propTypes` checks and `defaultProps` for function components; use destructuring defaults, and TypeScript for type checking ([Chapter 11](../11-typescript-with-react/README.md)).
+React 19 removed `propTypes` checks (runtime warnings when a prop had the wrong type) and `defaultProps` (an old way to declare default prop values) for function components; use destructuring defaults, and TypeScript (JavaScript with type annotations checked before running) for type checking ([Chapter 11](../11-typescript-with-react/README.md)).
 
 ### Trade-offs — spreading props
 | `{...props}` forwarding | Listing props explicitly |
 |---|---|
-| Short; wrappers pass through any native attribute (`aria-*`, `onClick`) | Clear which props the component supports |
+| Short; wrappers pass through any native attribute (`aria-*` = accessibility hints for screen readers, `onClick`) | Clear which props the component supports |
 | Can accidentally pass unknown props to the DOM (React warns) or override your own ones (order matters: later wins) | More typing when wrapping native elements |
 
 Rule of thumb: spread in thin wrappers around a native element (`Button`, `Input`); list explicitly in feature components.
@@ -185,9 +185,9 @@ Rule of thumb: spread in thin wrappers around a native element (`Button`, `Input
 - Using `defaultProps` on a function component in React 19 — it is ignored.
 
 ### In the interview
-**30-second answer:** "Props are the read-only inputs a parent passes to a child, collected into one object. They make components reusable and implement one-way data flow: data goes down via props, and events go up via callback props. A component never mutates its props; if it needs changing data it uses state."
+**30-second answer:** "Props are the read-only inputs a parent passes to a child, collected into one object. They make components reusable and implement one-way data flow: data goes down via props, and events go up via **callback props** (functions the parent passes down for the child to call). A component never mutates its props; if it needs changing data it uses state."
 
-- *Why are props read-only?* — The parent owns the data. If a child mutated it, the parent and siblings would show stale or inconsistent values and React could not know a re-render is needed.
+- *Why are props read-only?* — The parent owns the data. If a child mutated it, the parent and siblings would show **stale** (out-of-date) or inconsistent values and React could not know a re-render is needed.
 - *How do you give a prop a default?* — Destructuring default `({ size = 100 })`; `defaultProps` is gone for function components in React 19.
 - *Is `key` a prop?* — It is written like one but React consumes it; the component cannot read it.
 
@@ -205,7 +205,7 @@ Props = one read-only object from the parent. Destructure with defaults, spread 
 ## 2.3 The `children` prop
 
 ### What it is
-Whatever you put *between* a component's opening and closing tags arrives as `props.children`. This lets you write **wrapper** components — cards, panels, modals, layouts — that do not need to know what they contain.
+Whatever you put *between* a component's opening and closing tags arrives as `props.children`. This lets you write **wrapper** components — cards, panels, **modals** (dialog boxes shown on top of the page), layouts — that do not need to know what they contain.
 
 Analogy: a picture frame. The frame (component) provides border and glass; the picture (children) can be anything.
 
@@ -233,7 +233,7 @@ array  : <span>[ab]</span>
 none   : <span>[]</span>
 ```
 
-`children` may be a string, one element, an array of elements, or `undefined`. Render it with `{children}` and let React deal with the shape. (There is a `Children` utility in `react` for counting or mapping over children, but react.dev files it under *legacy APIs* because it is fragile; prefer passing data as props.)
+`children` may be a string, one element, an array of elements, or `undefined`. Render it with `{children}` and let React deal with the shape. (There is a `Children` utility in `react` for counting or mapping over children, but react.dev files it under *legacy APIs* (old functions kept only for compatibility) because it is fragile; prefer passing data as props.)
 
 ### TL;DR
 Nested JSX arrives as `props.children`; render it with `{children}` to build generic wrappers.
@@ -243,7 +243,7 @@ Nested JSX arrives as `props.children`; render it with `{children}` to build gen
 ## 2.4 Composition
 
 ### What it is
-**Composition** means building complex UIs by *combining* components — passing components into other components — instead of creating special versions through inheritance. React has no component inheritance; composition covers all its use cases.
+**Composition** means building complex UIs by *combining* components — passing components into other components — instead of creating special versions through **inheritance** (the object-oriented technique where a class extends a parent class and overrides parts of it). React has no component inheritance; composition covers all its use cases.
 
 ### How it works — slots
 When a layout has several "holes", pass JSX through **named props** (often called *slots*) as well as `children`:
@@ -311,23 +311,23 @@ flowchart TD
 ### Why it matters — composition beats prop drilling
 **Prop drilling** is passing a prop through several components that do not use it, only to reach a deep child. Example: `App → Page → Sidebar → UserMenu → Avatar`, where only `Avatar` needs `user`. Two fixes:
 1. **Composition (try first):** let `App` create `<Avatar user={user} />` itself and pass it down as `children` or a slot. The middle components just place `{children}` and never see `user`.
-2. **Context** (Chapter 6) when many distant components need the same data (theme, current user, locale).
+2. **Context** (Chapter 6) — React's built-in way for a component to provide a value that any descendant can read without passing props — when many distant components need the same data (theme, current user, **locale** = the user's language and regional formats).
 
 ### Composition vs inheritance
-| Need | OOP inheritance idea | React composition |
+| Need | OOP (object-oriented programming) inheritance idea | React composition |
 |---|---|---|
 | A special kind of dialog | `class WelcomeDialog extends Dialog` | `<Dialog title="Welcome">…</Dialog>` — configure via props |
-| Shared behaviour | Base class methods | A custom Hook (Chapter 7) or a wrapper component |
+| Shared behaviour | Base class methods | A custom Hook (your own reusable `use…` function, Chapter 7) or a wrapper component |
 | Varying inner content | Override a method | `children` or a slot prop |
 
 ### Real-world examples
-- UI libraries (MUI, Chakra, Radix/shadcn) expose `Card`, `Dialog`, `Tabs` that accept `children` and slot props such as `title`, `actions`, `icon`.
-- App shells: a `Layout` with header/sidebar/content slots wrapping every page; routers render the current page into an outlet slot (Chapter 9).
+- UI libraries (MUI, Chakra, Radix/shadcn — ready-made component kits) expose `Card`, `Dialog`, `Tabs` that accept `children` and slot props such as `title`, `actions`, `icon`.
+- App shells (the frame shared by every page): a `Layout` with header/sidebar/content slots wrapping every page; routers (libraries that pick the page for the current URL) render the current page into an **outlet** slot — a placeholder where the matched child page appears (Chapter 9).
 
 ### In the interview
 **30-second answer:** "Composition means building UIs by nesting components and passing JSX as `children` or slot props. React recommends it over inheritance. It also solves most prop drilling: the top component creates the deep child itself and passes it through as children, so intermediate components never touch the data."
 
-- *When would you use context instead?* — When many components at different depths need the same value (theme, auth, locale) and passing it through children would be awkward.
+- *When would you use context instead?* — When many components at different depths need the same value (theme, auth — who is logged in and what they may do, locale) and passing it through children would be awkward.
 - *Can a prop be a component?* — Yes: either an element (`icon={<Star />}`) or a component type (`as={Link}`), rendered as `<Icon />` after capitalising the variable.
 
 ### TL;DR
@@ -338,15 +338,15 @@ Combine small components; pass JSX via `children` and slot props. Composition re
 ## 2.5 Pure components
 
 ### What it is
-In mathematics a **pure function** (1) always returns the same result for the same inputs and (2) changes nothing outside itself (no **side effects**). React assumes every component is pure **during rendering**: given the same props, state and context, it returns the same JSX and does not modify pre-existing variables or objects, the DOM, or anything else.
+In mathematics a **pure function** (1) always returns the same result for the same inputs and (2) changes nothing outside itself (no **side effects**). React assumes every component is pure **during rendering**: given the same props, state and context (values read from a Context provider above it), it returns the same JSX and does not modify pre-existing variables or objects, the DOM, or anything else.
 
 Analogy: a calculator's `2 + 3` always shows 5 and does not change the number on your neighbour's calculator.
 
 ### Why it matters
-React may call your component **more than once, in any order, or throw a render away** (for concurrent rendering, Suspense — React's way of showing a fallback while part of the UI waits, Chapter 9 — StrictMode checks, server rendering). If rendering has side effects, those extra calls produce wrong results. Purity also enables caching: if inputs are unchanged, React (and the React Compiler) can skip the call.
+React may call your component **more than once, in any order, or throw a render away** (for concurrent rendering — React pausing and resuming render work, Suspense — React's way of showing a fallback while part of the UI waits, Chapter 9 — StrictMode checks, server rendering). If rendering has side effects, those extra calls produce wrong results. Purity also enables **caching** (reusing a saved result instead of recomputing it): if inputs are unchanged, React (and the React Compiler) can skip the call.
 
 ### How it works — StrictMode exposes impurity
-`<StrictMode>` (development only) renders each component **twice** and keeps the second result. A pure component produces identical output both times; an impure one shows the bug.
+`<StrictMode>` (a development-only wrapper that adds extra checks) renders each component **twice** and keeps the second result. A pure component produces identical output both times; an impure one shows the bug.
 
 `code/04_purity.jsx`:
 ```jsx
@@ -383,18 +383,18 @@ Without StrictMode the impure version *looks* right — which is exactly why the
 |---|---|---|
 | Reading props, state, context | Changing variables/objects that existed before the render | Local variables, or state |
 | Creating and mutating **local** variables/arrays | Mutating props or state objects | Create new objects (Chapter 3 §3.6) |
-| Calculating derived values | DOM manipulation, `fetch`, timers, subscriptions, logging analytics | **Event handlers** (first choice) or **Effects** `useEffect` (Chapter 5) |
-| | `Math.random()`, `Date.now()` for output (non-deterministic) | Compute once in state initialiser, handler, or Effect |
+| Calculating derived values (computed from props/state) | DOM manipulation, `fetch` (network request), timers, subscriptions (listening to an outside source), logging analytics | **Event handlers** (first choice) or **Effects** `useEffect` — code React runs after rendering (Chapter 5) |
+| | `Math.random()`, `Date.now()` for output (non-deterministic) | Compute once in state initialiser (the starting-value function of `useState`), handler, or Effect |
 
 Event handlers do not need to be pure: they run in response to a user action, not during rendering.
 
 ### Common mistakes
 - "Removing StrictMode fixes my doubled logs." It hides the symptom; fix the impurity.
-- Sorting a prop array in place: `items.sort()` mutates the parent's array. Use `items.toSorted()` or `[...items].sort()`.
-- Pushing to a module-level array during render (a render counter, a cache) — works once, breaks under re-render.
+- Sorting a prop array **in place** (changing the original array instead of making a new one): `items.sort()` mutates the parent's array. Use `items.toSorted()` or `[...items].sort()`.
+- Pushing to a **module-level** array (one declared at the top of the file, outside any component, so it is shared by every render) during render (a render counter, a cache) — works once, breaks under re-render.
 
 ### In the interview
-**30-second answer:** "A React component must be pure while rendering: same props, state and context in, same JSX out, and no mutation of anything that existed before the render. React relies on this because it may render a component several times or discard a render. Side effects go in event handlers, or in Effects when they must sync with an external system. StrictMode double-renders in development to catch violations."
+**30-second answer:** "A React component must be pure while rendering: same props, state and context in, same JSX out, and no mutation of anything that existed before the render. React relies on this because it may render a component several times or discard a render. Side effects go in event handlers, or in Effects when they must sync with an **external system** (anything React does not control: the network, a timer, a browser API, a third-party widget). StrictMode double-renders in development to catch violations."
 
 - *Is `console.log` in render impure?* — Technically a side effect but harmless; React DevTools shows the second StrictMode log dimmed so you can tell them apart. Avoid anything that changes app data.
 - *Can a component mutate a local array?* — Yes — "local mutation" of values created during the same render is fine.
@@ -434,7 +434,7 @@ A guideline, not a rule: each component should have **one clear job**. When a co
 |---|---|
 | Hard to read, test, and reuse; many reasons to change | Many files; you jump around to understand one screen; props passed through many thin layers |
 
-A useful split: **presentational** components (take props, render UI — `Price`, `Badge`) versus **feature** components (know the data and wire things together — `Catalog`). Chapter 14 covers container/presentational patterns further.
+A useful split: **presentational** components (take props, render UI — `Price`, `Badge`) versus **feature** components (know the data and wire things together — `Catalog`). Chapter 14 covers container/presentational patterns further (a *container* is a component that loads data and passes it to presentational ones).
 
 ### TL;DR
 One job per component. Extract when JSX has a name, repeats, carries its own logic, or needs its own state — its free variables become props.
@@ -444,7 +444,7 @@ One job per component. Extract when JSX has a name, repeats, carries its own log
 ## 2.7 Conditional rendering
 
 ### What it is
-Showing different JSX depending on props or state. Because JSX is JavaScript, you use ordinary JavaScript: `if`, the ternary `? :`, logical `&&`, and variables.
+Showing different JSX depending on props or state. Because JSX is JavaScript, you use ordinary JavaScript: `if`, the ternary `? :` (`cond ? a : b` picks `a` when `cond` is true, else `b`), logical `&&` (`a && b` gives `b` only when `a` is truthy), and variables.
 
 ### How it works — four techniques
 `code/05_conditional_rendering.jsx`:
@@ -500,9 +500,9 @@ fixed     : <p></p>
 | Variable (`let content`) | Several conditions building one piece | Slightly more lines |
 | `return null` | Component decides to hide itself | The *parent* often should decide instead |
 
-Why `0` shows: `a && b` returns `a` when `a` is falsy. `false`, `null`, `undefined` render nothing, but `0` is a number, and numbers render. (`''` renders an empty text node — invisible.)
+Why `0` shows: `a && b` returns `a` when `a` is **falsy** (one of the values JavaScript treats as false in a condition: `false`, `0`, `NaN` — "Not a Number" — `''`, `null`, `undefined`). `false`, `null`, `undefined` render nothing, but `0` is a number, and numbers render. (`''` renders an empty text node — invisible.)
 
-A note on identity: `isPacked ? <del>{name}</del> : name` produces different *types* at the same position, so React replaces the DOM there (Chapter 1 §1.3). When both branches are the same component (`cond ? <Counter a /> : <Counter b />`), React keeps the same instance and its state — Chapter 3 §3.10 shows this and how `key` changes it.
+A note on identity: `isPacked ? <del>{name}</del> : name` produces different *types* at the same position, so React replaces the DOM there (Chapter 1 §1.3). When both branches are the same component (`cond ? <Counter a /> : <Counter b />`), React keeps the same **instance** (that particular copy of the component on screen, with its own state) and its state — Chapter 3 §3.10 shows this and how `key` changes it.
 
 ### In the interview
 - *Why does `{count && <Badge />}` show "0"?* — `&&` returns its falsy left operand; 0 is renderable. Use `count > 0 &&`.
@@ -549,12 +549,12 @@ Output:
 warning: Each child in a list should have a unique "key" prop. See https://react.dev/link/warning-keys for more information.
 ```
 
-Arrow function reminder: `p => <li>…</li>` returns implicitly; with a body `p => { return <li>…</li>; }` you must write `return`, or the list is empty.
+Arrow function reminder (an **arrow function** is the short `(args) => result` function syntax): `p => <li>…</li>` returns implicitly; with a body `p => { return <li>…</li>; }` you must write `return`, or the list is empty.
 
 ### Why keys matter
-On re-render React must match old list items to new ones (reconciliation, Chapter 1 §1.3). The key is how it matches. With a stable ID React knows "the Bread row moved down one place"; with the **array index** as key, it thinks "row 0 changed its text from Bread to Eggs", and any **state** in the row (DOM input text, component state, focus, animations) stays at the old position.
+On re-render React must match old list items to new ones (reconciliation, Chapter 1 §1.3). The key is how it matches. With a stable ID React knows "the Bread row moved down one place"; with the **array index** as key, it thinks "row 0 changed its text from Bread to Eggs", and any **state** in the row (DOM input text, component state, **focus** — which element receives keyboard input — animations) stays at the old position.
 
-The program renders a list of rows, each with an uncontrolled `<input>`, types *wholegrain* into Bread's input, then inserts Eggs at the top:
+The program renders a list of rows, each with an **uncontrolled** `<input>` (one whose typed value lives in the DOM, not in React state), types *wholegrain* into Bread's input, then inserts Eggs at the top:
 ```jsx
 function NoteList({ items, useIndexKey }) {
   return (
@@ -594,7 +594,7 @@ flowchart LR
 
 ### Rules for keys
 1. **Unique among siblings** (not globally). Two different lists can reuse the same keys.
-2. **Stable**: the same item gets the same key on every render. Use IDs from your data (database IDs, UUIDs created *when the item is created*).
+2. **Stable**: the same item gets the same key on every render. Use IDs from your data (database IDs, **UUIDs** — Universally Unique Identifiers, long random strings practically guaranteed never to repeat — created *when the item is created*).
 3. **Never generate during render**: `key={Math.random()}` or `key={crypto.randomUUID()}` in JSX creates new keys each render → every item is destroyed and recreated (slow, loses input focus and state).
 4. **Index is acceptable only** when the list is static: never reordered, filtered, or inserted into (except at the end), and items have no state.
 5. Put the key on the **outermost element returned from `map`** — on `<ProductCard key=… />`, not on the `<li>` inside `ProductCard`.
@@ -612,11 +612,11 @@ flowchart LR
 
 ### Real-world examples
 - A chat app keys messages by message ID so new messages at the bottom don't re-create older ones.
-- A Kanban board keys cards by card ID so dragging a card between positions keeps its state.
+- A Kanban board (columns of task cards you drag between stages) keys cards by card ID so dragging a card between positions keeps its state.
 - Keys also work outside lists to **reset** a component: `<Profile key={userId} />` gives each user a fresh instance (Chapter 3 §3.10).
 
 ### In the interview
-**30-second answer:** "`map` data to elements and give each a key that is stable and unique among siblings, usually the item's ID. React uses keys to match items between renders, so it can move DOM nodes and keep state with the right item. Index keys break when the list is reordered, filtered or prepended — state stays at the position instead of following the item. Random keys are worse: everything remounts every render."
+**30-second answer:** "`map` data to elements and give each a key that is stable and unique among siblings, usually the item's ID. React uses keys to match items between renders, so it can move DOM nodes and keep state with the right item. Index keys break when the list is reordered, filtered or prepended — state stays at the position instead of following the item. Random keys are worse: everything **remounts** (is destroyed and created again from scratch) every render."
 
 - *When is index as key fine?* — Static lists that never change order and have no per-item state (e.g. a fixed footer menu).
 - *Do keys need to be globally unique?* — No, only among siblings of the same parent.
@@ -690,7 +690,7 @@ export function Catalog({ products, minRating = 0 }) {
 }
 ```
 
-`code/07_product_catalog.jsx` renders it and reads the screen the way a user (or a test) would — by roles such as `article`, `heading` and `button`:
+`code/07_product_catalog.jsx` renders it and reads the screen the way a user (or a test) would — by **roles** (the accessibility category of an element, what a screen reader announces it as) such as `article`, `heading` and `button`:
 ```jsx
 const { rerender } = render(<Catalog products={PRODUCTS} />);
 // ... print each card's heading, price, badges and button

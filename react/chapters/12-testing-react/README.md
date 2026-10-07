@@ -2,7 +2,7 @@
 
 A test is a small program that uses your code and checks the result, so that a computer — not you, clicking around — notices when something breaks. For React components the most useful tests **render the component, interact with it the way a user would, and check what the user would see**. That is the idea behind **React Testing Library** (RTL), the standard tool for component tests, and it's what this chapter teaches.
 
-General testing ideas — what a test is, `node:test`, assertions, test doubles and mocking — are covered in the JavaScript Handbook ([Chapter 16](../../../javascript/chapters/16-testing-and-typescript/README.md)). Here we apply them to React.
+General testing ideas — what a test is, `node:test` (the test runner built into Node.js), assertions (checks that fail the test if a condition is false), test doubles and mocking (stand-in fakes that replace real parts of the system during a test) — are covered in the JavaScript Handbook ([Chapter 16](../../../javascript/chapters/16-testing-and-typescript/README.md)). Here we apply them to React.
 
 **What you'll learn**
 
@@ -19,7 +19,7 @@ General testing ideas — what a test is, `node:test`, assertions, test doubles 
 | 12.9 | Setting up Vitest or Jest in a real project | configure jsdom, jest-dom matchers and scripts |
 | 12.10 | Good tests, bad tests, and the bigger picture | avoid brittle tests; where E2E and other tests fit |
 
-Code: [`code/`](code/). Every file is a **runnable test file**: React 19.3, React Testing Library 16.3, `@testing-library/user-event` 14.6 and jsdom, executed by Node's built-in test runner (`node:test`) with `node:assert/strict` for assertions. The output shown is Node's `spec` reporter (`node --test-reporter=spec file.mjs`); times in parentheses vary per run, and the summary lines for suites, cancelled, skipped and todo (all 0) are left out. Real projects usually run the same tests with Vitest or Jest — §12.9 shows that setup (not run here).
+Code: [`code/`](code/). Every file is a **runnable test file**: React 19.3, React Testing Library 16.3, `@testing-library/user-event` 14.6 and jsdom (a pure-JavaScript imitation of the browser's DOM — the Document Object Model, the tree of elements that makes up a page — that runs in Node.js, the program that runs JavaScript outside a browser), executed by Node's built-in test runner (`node:test`) with `node:assert/strict` for assertions. The output shown is Node's `spec` reporter (a reporter is the part of the test runner that formats the results; `node --test-reporter=spec file.mjs`); times in parentheses vary per run, and the summary lines for suites (named groups of related tests), cancelled, skipped and todo (all 0) are left out. Real projects usually run the same tests with Vitest or Jest (the two most popular JavaScript test runners: programs that find test files, run them and report the results) — §12.9 shows that setup (not run here).
 
 ---
 
@@ -30,28 +30,28 @@ React Testing Library is a small set of helpers built on **DOM Testing Library**
 
 In practice that means:
 
-| Test this (what users experience) | Not this (implementation details) |
+| Test this (what users experience) | Not this (implementation details — how the code works inside) |
 |---|---|
 | The heading shows "Ada Lovelace" after loading | The component's `user` state variable |
 | Clicking **Add to cart** updates the badge to 2 | That `dispatch` was called with `{ type: 'add' }` |
 | The **Submit** button is disabled until terms are accepted | Which Hook or CSS class name is used |
-| An error message appears when the server returns 404 | The number of re-renders |
+| An error message appears when the server returns 404 (the HTTP "not found" status) | The number of re-renders |
 
-Analogy: a restaurant inspector who orders food and tastes it, rather than reading the chef's recipe cards. If the chef reorganises the kitchen (a refactor) but the food is the same, the inspection still passes — and it fails exactly when the food gets worse.
+Analogy: a restaurant inspector who orders food and tastes it, rather than reading the chef's recipe cards. If the chef reorganises the kitchen (a refactor — restructuring code without changing what it does) but the food is the same, the inspection still passes — and it fails exactly when the food gets worse.
 
 ### Why it matters
 - **Refactor-proof**: tests that don't touch internals keep passing when you rename state, split components, switch from `useState` to `useReducer`, or enable React Compiler ([Chapter 10](../10-performance/README.md)).
-- **Accessibility for free**: finding elements by role and accessible name only works if the UI is accessible (you'll see a test catch an unlabelled icon button in §12.3).
-- **Confidence**: a test that clicks the real button through the real event system catches wiring bugs that a unit test of a handler function would miss.
+- **Accessibility for free** (accessibility means the UI works for everyone, including people using a screen reader — software that reads the page aloud — or only a keyboard): finding elements by role and accessible name only works if the UI is accessible (you'll see a test catch an unlabelled icon button in §12.3).
+- **Confidence**: a test that clicks the real button through the real event system catches wiring bugs (mistakes in how the pieces are connected, e.g. a handler never attached to the button) that a unit test of a handler function would miss.
 
 ### Where component tests sit
 | Kind | Checks | Tools | Speed |
 |---|---|---|---|
 | **Unit** | one function (a reducer, a formatter) | `node:test`, Vitest, Jest | fastest |
 | **Component / integration** | one component or a feature of several, in a simulated DOM | RTL + jsdom (this chapter) | fast |
-| **End-to-end (E2E)** | the whole app in a real browser against a real or staged backend | Playwright, Cypress | slowest |
+| **End-to-end (E2E)** | the whole app in a real browser against a real or staged backend (a test copy of the server) | Playwright, Cypress (tools that drive a real browser) | slowest |
 
-A common strategy (sometimes called the "testing trophy") puts most effort into **integration-style component tests**, a few E2E tests for critical flows (sign-up, checkout), and unit tests for tricky pure logic — plus static checks (TypeScript, [Chapter 11](../11-typescript-with-react/README.md); ESLint) that catch whole classes of mistakes without running anything.
+A common strategy (sometimes called the "testing trophy") puts most effort into **integration-style component tests**, a few E2E tests for critical flows (sign-up, checkout), and unit tests for tricky pure logic (code whose output depends only on its inputs, with no side effects such as network calls) — plus static checks (checks that read the code without running it: TypeScript, [Chapter 11](../11-typescript-with-react/README.md); ESLint, a linter that flags likely bugs and bad patterns) that catch whole classes of mistakes without running anything.
 
 ### TL;DR
 Render, find like a user, act like a user, assert on what a user sees. Don't test state, props, or which functions were called internally.
@@ -61,10 +61,10 @@ Render, find like a user, act like a user, assert on what a user sees. Don't tes
 ## 12.2 Your first component test
 
 ### How it works
-1. **Arrange** — `render(<Counter />)` mounts the component into `document.body` (jsdom provides the DOM in Node).
+1. **Arrange** — `render(<Counter />)` mounts the component (creates its DOM and attaches it to the page) into `document.body` (jsdom provides the DOM in Node).
 2. **Act** — find an element with a query (`screen.getByRole('button', { name: 'Increment' })`) and interact (`fireEvent.click(...)` or `user-event`, §12.4).
 3. **Assert** — check the DOM: text, disabled state, presence or absence of elements.
-4. **Clean up** — unmount after each test so tests don't see each other's DOM. With Jest or Vitest (with `globals: true`) RTL does this automatically; with `node:test` you register `afterEach(cleanup)` yourself.
+4. **Clean up** — unmount (remove the component and its DOM) after each test so tests don't see each other's DOM. With Jest or Vitest (with `globals: true`) RTL does this automatically; with `node:test` you register `afterEach(cleanup)` yourself.
 
 `screen` is an object with every query bound to `document.body`, so you don't need to keep the return value of `render`.
 
@@ -124,10 +124,10 @@ Output:
 ```
 
 ### What about `act()`?
-React batches updates and runs effects asynchronously. `act(() => { ... })` tells React "apply everything this callback caused before I look at the DOM". RTL's `render`, `fireEvent`, `user-event` actions and async utilities already wrap themselves in `act`, so in component tests you rarely write it. You do need it when you trigger state updates **directly**, e.g. calling a Hook's function in `renderHook` (§12.7) or advancing fake timers. The warning *"An update to X inside a test was not wrapped in act(...)"* usually means something finished **after** your assertions — await it with `findBy`/`waitFor` (§12.5).
+React batches updates (groups several state changes into one re-render) and runs effects (code in `useEffect` that runs after rendering) asynchronously (a little later, not in the same step). `act(() => { ... })` tells React "apply everything this callback caused before I look at the DOM". RTL's `render`, `fireEvent`, `user-event` actions and async utilities already wrap themselves in `act`, so in component tests you rarely write it. You do need it when you trigger state updates **directly**, e.g. calling a Hook's function in `renderHook` (§12.7) or advancing fake timers. The warning *"An update to X inside a test was not wrapped in act(...)"* usually means something finished **after** your assertions — await it with `findBy`/`waitFor` (§12.5).
 
 ### With jest-dom (in Vitest/Jest)
-Projects usually add **`@testing-library/jest-dom`**, which gives readable matchers with good failure messages: `expect(reset).toBeDisabled()`, `expect(el).toHaveTextContent('Count: 20')`, `expect(el).toBeInTheDocument()`. This book's runner uses plain `assert`, which checks the same DOM properties (`.disabled`, `.textContent`).
+Projects usually add **`@testing-library/jest-dom`**, which gives readable matchers (assertion helpers such as `toBeDisabled()`) with good failure messages: `expect(reset).toBeDisabled()`, `expect(el).toHaveTextContent('Count: 20')`, `expect(el).toBeInTheDocument()`. This book's runner uses plain `assert`, which checks the same DOM properties (`.disabled`, `.textContent`).
 
 ### TL;DR
 `render` → `screen.getByRole(...)` → interact → assert on the DOM; `cleanup` after each test (automatic in Jest/Vitest).
@@ -148,11 +148,13 @@ Every query comes in six forms. The prefix decides **what happens when zero or s
 | `queryAllBy…` | `[]` | array | array | no | count, possibly zero |
 | `findAllBy…` | rejects | array | array | **yes** | wait for several |
 
+`findBy…` returns a **Promise** — an object standing for a result that arrives later. It *resolves* with the element when found, or *rejects* with an error after the timeout, so you `await` it.
+
 ### Which query to use (priority order)
 Testing Library recommends choosing queries in this order — the higher, the closer to how people (including screen-reader users) find things:
 
 1. **Accessible to everyone**
-   1. `ByRole` — elements by their ARIA role (button, link, heading, textbox, checkbox, list, …) and **accessible name** (`{ name: 'Save' }`). Use this for almost everything.
+   1. `ByRole` — elements by their ARIA role (ARIA, Accessible Rich Internet Applications, is the set of attributes that tell assistive tools what an element is; its *role* is the kind of thing it is: button, link, heading, textbox, checkbox, list, …) and **accessible name** (`{ name: 'Save' }`). Use this for almost everything.
    2. `ByLabelText` — form fields by their `<label>`.
    3. `ByPlaceholderText` — only if a field truly has no label (a placeholder is not a label).
    4. `ByText` — non-interactive text (paragraphs, spans, divs).
@@ -162,7 +164,7 @@ Testing Library recommends choosing queries in this order — the higher, the cl
    2. `ByTitle` — the `title` attribute (not reliably announced by screen readers).
 3. **Test IDs**: `ByTestId` — `data-testid="…"`, only when nothing user-visible identifies the element.
 
-The **accessible name** is what assistive technology announces: a button's text, an input's label, an `aria-label` or `aria-labelledby`, an image's `alt`. Text matchers can be exact strings (`'Save'`), case-insensitive regexes (`/save/i`), or functions.
+The **accessible name** is what assistive technology (screen readers, voice control and similar tools) announces: a button's text, an input's label, an `aria-label` or `aria-labelledby`, an image's `alt`. Text matchers can be exact strings (`'Save'`), case-insensitive regexes (regular expressions, patterns for matching text: `/save/i`), or functions.
 
 `code/02_queries.jsx` (component and key tests):
 ```jsx
@@ -275,7 +277,7 @@ Prefer `getByRole(role, { name })`; then label, placeholder, text, display value
 ## 12.4 `user-event` — interacting like a user
 
 ### What it is
-`fireEvent` dispatches **one** DOM event. A real user typing "hi" produces focus, click, and for each key `keydown`, `keypress`, `input`, `keyup` — and a real click on a disabled button does nothing, a real Tab moves focus in document order. **`@testing-library/user-event`** simulates those full interactions, so your tests exercise the same paths as real users (including bugs that only appear with the full sequence, like a handler on `keydown`).
+`fireEvent` dispatches (sends) **one** DOM event. A real user typing "hi" produces focus (the event when an element becomes the one receiving keyboard input), click, and for each key `keydown`, `keypress`, `input`, `keyup` — and a real click on a disabled button does nothing, a real Tab moves focus in document order. **`@testing-library/user-event`** simulates those full interactions, so your tests exercise the same paths as real users (including bugs that only appear with the full sequence, like a handler on `keydown`).
 
 ```js
 import userEvent from '@testing-library/user-event';
@@ -290,7 +292,7 @@ await user.upload(fileInput, file);
 await user.hover(element);
 ```
 
-All methods are **async** — always `await` them.
+All methods are **async** (they return a Promise and finish later) — always `await` them.
 
 `code/03_user_event.jsx`:
 ```jsx
@@ -394,14 +396,14 @@ The keyboard test is also an accessibility check: it proves the form is usable w
 ## 12.5 Async tests
 
 ### The problem it solves
-Real components load data, wait for timers and animate. Right after `render` the data isn't there yet, so a `getBy` fails. You must **wait for the UI**, not for a fixed amount of time (`await sleep(500)` is slow and flaky — it passes on your machine and fails on a busy CI server).
+Real components load data, wait for timers and animate. Right after `render` the data isn't there yet, so a `getBy` fails. You must **wait for the UI**, not for a fixed amount of time (`await sleep(500)` is slow and flaky — a flaky test sometimes passes and sometimes fails with no code change; it passes on your machine and fails on a busy CI server, the continuous-integration machine that runs tests automatically on every push).
 
 ### Tools
 | Tool | Waits for | Typical use |
 |---|---|---|
 | `await screen.findByRole(...)` | an element to appear (retries a `getBy` query) | data loaded, dialog opened |
 | `await waitFor(() => { ...assertions... })` | a callback to stop throwing | anything that isn't "an element appears": a text change, a mock being called |
-| `await waitForElementToBeRemoved(() => screen.queryByText('Loading…'))` | an element to disappear | spinners, closing dialogs |
+| `await waitForElementToBeRemoved(() => screen.queryByText('Loading…'))` | an element to disappear | spinners (animated loading indicators), closing dialogs |
 
 All of them retry every 50 ms (default) until success or a timeout (default 1000 ms), and wrap updates in `act` for you.
 
@@ -481,7 +483,7 @@ Output:
 
 ### Common mistakes
 - Forgetting `await` before `findBy`/`waitFor`/`user.*` — the test finishes before the UI updates, passes by accident, and prints an `act(...)` warning.
-- Arbitrary `sleep`s. Wait for a **condition** instead. (For code that genuinely depends on time — debounce, polling — use fake timers, §12.7.)
+- Arbitrary `sleep`s. Wait for a **condition** instead. (For code that genuinely depends on time — debounce (wait until input has stopped for a moment, then act once), polling (asking the server again every few seconds) — use fake timers, §12.7.)
 
 ### TL;DR
 `await findBy…` for appearing elements, `waitForElementToBeRemoved` for disappearing ones, `waitFor(() => assertion)` for anything else. Never sleep.
@@ -491,9 +493,9 @@ Output:
 ## 12.6 Mocking `fetch` (and when to use MSW)
 
 ### What it is
-A **mock** replaces a real dependency with a controllable fake. Components that call `fetch` shouldn't hit a real server in tests: it's slow, needs a network, and returns different data over time. Mocking `fetch` lets each test choose the response — success, an HTTP error, a network failure, a slow reply — and check the UI for each.
+A **mock** replaces a real dependency (something your code relies on, such as the network or another module) with a controllable fake. Components that call `fetch` shouldn't hit a real server in tests: it's slow, needs a network, and returns different data over time. Mocking `fetch` lets each test choose the response — success, an HTTP error (HTTP is the request/response protocol browsers and servers use; an error is a response with a 4xx/5xx status code — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)), a network failure, a slow reply — and check the UI for each.
 
-With `node:test`, `mock.method(globalThis, 'fetch', impl)` replaces the global `fetch` and records every call; `mock.restoreAll()` puts the original back. (Vitest: `vi.spyOn(globalThis, 'fetch').mockResolvedValue(...)`; Jest: `jest.spyOn(global, 'fetch')`.) Node 18+ has `Response` built in, so the fake can return a real `Response` object.
+With `node:test`, `mock.method(globalThis, 'fetch', impl)` replaces the global (available everywhere, attached to `globalThis`) `fetch` and records every call; `mock.restoreAll()` puts the original back. (Vitest: `vi.spyOn(globalThis, 'fetch').mockResolvedValue(...)`; Jest: `jest.spyOn(global, 'fetch')`.) Node 18+ has `Response` built in, so the fake can return a real `Response` object.
 
 `code/05_mocking_fetch.jsx`:
 ```jsx
@@ -565,7 +567,7 @@ Output:
 ℹ fail 0
 ```
 
-**Does the race test really test something?** A test that can't fail is worthless. Removing the `controller.abort()` cleanup from `UserProfile` (a temporary copy of the file) makes it fail:
+**Does the race test really test something?** (A **race condition** is a bug where the result depends on which of two overlapping operations finishes first — here, two requests.) A test that can't fail is worthless. Removing the `controller.abort()` cleanup (the function an Effect returns, run before the next Effect or on unmount; `abort()` cancels the request still in flight) from `UserProfile` (a temporary copy of the file) makes it fail:
 ```
 ✖ a slow old response cannot overwrite a newer one (race condition) (168.159708ms)
   + actual - expected
@@ -577,7 +579,7 @@ Checking that a test fails when the code is broken is a good habit for any test 
 The last test shows the preferred style: mock **only the network boundary**, then drive the real UI with `user-event`.
 
 ### Mock Service Worker (MSW) — the usual choice in real projects
-**MSW** intercepts requests at the network level instead of replacing `fetch`, so it works for `fetch`, `axios`, TanStack Query, and anything else, and the same handlers can power the dev server in the browser. Sketch (MSW 2 — not run here):
+**MSW** intercepts requests at the network level (in the browser through a Service Worker, a background script that sits between the page and the network) instead of replacing `fetch`, so it works for `fetch`, `axios` (a popular HTTP client library), TanStack Query (a library that fetches and caches server data), and anything else, and the same handlers (functions that decide the fake response for a URL) can power the dev server (the local server you run while developing) in the browser. Sketch (MSW 2 — not run here):
 
 ```js
 // test/server.js
@@ -596,10 +598,10 @@ afterAll(() => server.close());
 | Approach | Good for | Drawback |
 |---|---|---|
 | Replace `fetch` (`mock.method`, `vi.spyOn`) | small projects, a few tests, no extra dependency | tied to `fetch`; each test repeats response setup |
-| MSW | real apps; any HTTP client; shared handlers for tests, Storybook and dev | one more library and setup file |
+| MSW | real apps; any HTTP client; shared handlers for tests, Storybook (a tool for viewing components in isolation) and dev | one more library and setup file |
 | Mock your own API module (`vi.mock('./api')`) | quick isolation | skips your fetch/parse/error code — lower confidence |
 
-Components using **TanStack Query** also need a `QueryClientProvider` in the test wrapper — create a **new** `QueryClient` per test with `retry: false`, so tests don't share cache and failures appear immediately ([Chapter 9](../09-routing-and-data-fetching/README.md); providers in §12.8).
+Components using **TanStack Query** also need a `QueryClientProvider` in the test wrapper — create a **new** `QueryClient` per test with `retry: false`, so tests don't share cache (stored results of earlier requests that get reused) and failures appear immediately ([Chapter 9](../09-routing-and-data-fetching/README.md); providers in §12.8).
 
 ### TL;DR
 Mock at the network boundary, return real `Response` objects, test success, HTTP error (`res.ok` false), network error and races; restore mocks after each test. In real projects use MSW.
@@ -622,7 +624,7 @@ Hooks can't be called outside a component ([Chapter 7](../07-custom-hooks-and-ho
 - For Hooks that need context, pass `wrapper` exactly as in §12.8.
 
 ### Fake timers
-Time-based Hooks (debounce, throttle, polling, timeouts) should not make tests actually wait. **Fake timers** replace `setTimeout` & co. with versions you advance manually. In `node:test`: `mock.timers.enable({ apis: ['setTimeout'] })` and `mock.timers.tick(ms)`; in Vitest `vi.useFakeTimers()` / `vi.advanceTimersByTime(ms)`; in Jest `jest.useFakeTimers()` / `jest.advanceTimersByTime(ms)`. Advance timers inside `act` so React processes the resulting updates.
+Time-based Hooks (debounce, throttle — run at most once per time interval — polling, timeouts) should not make tests actually wait. **Fake timers** replace `setTimeout` & co. with versions you advance manually. In `node:test`: `mock.timers.enable({ apis: ['setTimeout'] })` and `mock.timers.tick(ms)`; in Vitest `vi.useFakeTimers()` / `vi.advanceTimersByTime(ms)`; in Jest `jest.useFakeTimers()` / `jest.advanceTimersByTime(ms)`. Advance timers inside `act` so React processes the resulting updates.
 
 `code/06_testing_hooks.jsx`:
 ```jsx
@@ -717,7 +719,7 @@ Test Hooks through a component when you can; otherwise `renderHook` + `act` + `r
 ## 12.8 Providers, routers and custom render
 
 ### The problem it solves
-Real components depend on providers: context (theme, auth, cart), a router, a TanStack Query client, a Redux store. Rendering such a component alone crashes. Repeating the provider tree in every test is noisy, so projects write one **custom `render`** that wraps the UI in everything the app needs, using RTL's `wrapper` option.
+Real components depend on providers (components that supply a shared value to everything inside them): context (theme, auth, cart), a router (the library that maps URLs to screens), a TanStack Query client, a Redux store (Redux is a state-management library that keeps app state in one central "store" object). Rendering such a component alone crashes. Repeating the provider tree in every test is noisy, so projects write one **custom `render`** that wraps the UI in everything the app needs, using RTL's `wrapper` option.
 
 `code/07_providers_and_router.jsx`:
 ```jsx
@@ -787,9 +789,9 @@ Output:
 
 ### How it works
 1. `render(ui, { wrapper: Wrapper })` renders `<Wrapper>{ui}</Wrapper>`; `rerender` keeps the wrapper.
-2. `MemoryRouter` (from `react-router`) keeps navigation history in memory instead of the address bar; `initialEntries` sets the starting URL. For apps built with data routers (`createBrowserRouter`, loaders/actions), use `createMemoryRouter(routes, { initialEntries })` + `<RouterProvider>` in tests.
+2. `MemoryRouter` (from `react-router`) keeps navigation history in memory instead of the address bar; `initialEntries` sets the starting URL. For apps built with data routers (`createBrowserRouter`, loaders/actions — functions a route runs to load data before rendering, or to handle a form submission), use `createMemoryRouter(routes, { initialEntries })` + `<RouterProvider>` in tests.
 3. Options such as `route` and `cart` let each test start from a specific state **through the public API** (props of the providers), not by poking internal state.
-4. Put `renderWithProviders` in a shared `test-utils` file and import it instead of RTL's `render`. With Redux Toolkit, create a **fresh store per test** in the wrapper; with TanStack Query, a **fresh `QueryClient`** — shared instances leak state between tests.
+4. Put `renderWithProviders` in a shared `test-utils` file and import it instead of RTL's `render`. With Redux Toolkit (the official, simpler way to write Redux), create a **fresh store per test** in the wrapper; with TanStack Query, a **fresh `QueryClient`** — shared instances leak state between tests.
 
 ### Unit tests still have a place
 The reducer is a pure function, so it gets a plain, very fast unit test — no rendering. Test pure logic (reducers, formatters, validation schemas) directly, and test **components** through the UI.
@@ -861,20 +863,20 @@ import '@testing-library/jest-dom';
 // babel.config.js
 module.exports = { presets: ['@babel/preset-env', ['@babel/preset-react', { runtime: 'automatic' }]] };
 ```
-TypeScript with Jest uses `ts-jest` or Babel's TypeScript preset. Vitest needs none of this because it reuses Vite's transform pipeline — one reason new Vite projects usually choose it.
+TypeScript with Jest uses `ts-jest` or Babel's TypeScript preset (Babel is a tool that translates JSX, TypeScript and modern JavaScript into plain JavaScript). Vitest needs none of this because it reuses Vite's transform pipeline (the chain of steps Vite already uses to turn your source files into runnable JavaScript) — one reason new Vite projects usually choose it.
 
 ### Useful extras
 | Tool | For |
 |---|---|
 | `@testing-library/jest-dom` | readable DOM matchers |
 | MSW | network mocking (§12.6) |
-| `vitest --coverage` / `jest --coverage` | which lines ran — a guide to untested code, not a goal in itself |
-| `eslint-plugin-testing-library`, `eslint-plugin-jest-dom` | lint rules that catch misuse (e.g. `getBy` inside `waitFor`, missing `await`) |
+| `vitest --coverage` / `jest --coverage` | coverage: which lines ran — a guide to untested code, not a goal in itself |
+| `eslint-plugin-testing-library`, `eslint-plugin-jest-dom` | lint rules (automatic code checks) that catch misuse (e.g. `getBy` inside `waitFor`, missing `await`) |
 | Vitest Browser Mode, Playwright component testing | running component tests in a real browser when jsdom isn't enough (layout, real CSS, canvas) |
 | Playwright / Cypress | end-to-end tests |
 
 ### What jsdom can't do
-jsdom implements the DOM and events but **no layout or painting**: sizes and positions are 0, `scrollTop` changes only when you set it (as in [Chapter 10](../10-performance/README.md)'s virtualization demo), CSS media queries don't apply, `IntersectionObserver`, `ResizeObserver` and `matchMedia` aren't there by default and must be mocked. Anything that depends on real rendering belongs in browser-based or E2E tests.
+jsdom implements the DOM and events but **no layout or painting** (the browser's work of calculating sizes and positions, then drawing pixels): sizes and positions are 0, `scrollTop` changes only when you set it (as in [Chapter 10](../10-performance/README.md)'s virtualization demo — rendering only the visible rows of a long list), CSS media queries (styles that apply only at certain screen sizes) don't apply, `IntersectionObserver` (reports when an element scrolls into view), `ResizeObserver` (reports size changes) and `matchMedia` (checks a media query from JavaScript) aren't there by default and must be mocked. Anything that depends on real rendering belongs in browser-based or E2E tests.
 
 ### TL;DR
 Vitest: `environment: 'jsdom'`, `globals: true`, a setup file importing jest-dom. Jest: `jest-environment-jsdom`, Babel/TS transform, `setupFilesAfterEnv`. Same RTL tests either way.
@@ -888,29 +890,31 @@ Vitest: `environment: 'jsdom'`, `globals: true`, a setup file importing jest-dom
 2. **Arrange–act–assert**, one behaviour per test (several `assert`s are fine if they describe one behaviour).
 3. **Uses the public interface**: props in, DOM out, user events in between, network mocked at the boundary.
 4. **Independent**: no shared DOM, mocks, stores or caches between tests; any order works.
-5. **Deterministic**: no real network, no real time, no randomness (or seeded); waits for conditions, never sleeps.
+5. **Deterministic** (same result every run): no real network, no real time, no randomness (or seeded, i.e. random numbers from a fixed starting value so they repeat); waits for conditions, never sleeps.
 6. **Fails for the right reason**: break the feature and the test goes red with a clear message (§12.6's race test).
 
 ### Brittle tests to avoid
+A **brittle** test breaks when the code changes in harmless ways, even though the feature still works.
+
 | Brittle | Why | Instead |
 |---|---|---|
 | Asserting on state, props, or Hook internals | breaks on refactor, passes when UI is broken | assert on rendered output |
 | `container.querySelector('.css-1x2y3z')` | class names are implementation details | role/label/text queries |
-| Large **snapshot** tests of whole components | any markup change fails; reviewers approve new snapshots without reading them | explicit assertions on what matters; small inline snapshots at most |
+| Large **snapshot** tests (saved copy of the rendered output; fails on any change) of whole components | any markup change fails; reviewers approve new snapshots without reading them | explicit assertions on what matters; small inline snapshots at most |
 | Mocking child components | the test no longer checks real integration | render the real tree; mock only the network or truly heavy leaf modules |
 | Asserting that a handler was called with internal arguments | couples to wiring | assert the visible effect of the handler |
-| Testing third-party libraries | not your code | test your usage of them via the UI |
+| Testing third-party libraries (code written by others that you install) | not your code | test your usage of them via the UI |
 
 ### Real-world examples
-- A checkout form: tests for "button disabled until valid", "shows field errors", "submits the right payload" (checked at the mocked network), "shows server error", plus one E2E test of the full purchase in a real browser.
-- A design-system `Dialog`: role `dialog`, labelled by its title, focus moves inside on open, Escape closes, focus returns to the trigger — all testable with RTL + user-event, and each one is also an accessibility requirement ([Chapter 14](../14-patterns-and-architecture/README.md)).
+- A checkout form: tests for "button disabled until valid", "shows field errors", "submits the right payload" (the data sent in the request; checked at the mocked network), "shows server error", plus one E2E test of the full purchase in a real browser.
+- A design-system `Dialog`: role `dialog`, labelled by its title, focus moves inside on open, Escape closes, focus returns to the trigger (the button that opened it) — all testable with RTL + user-event, and each one is also an accessibility requirement ([Chapter 14](../14-patterns-and-architecture/README.md)).
 
 ### In the interview
 **30-second answer:** "I use React Testing Library with Vitest or Jest. Tests render the component, find elements the way users do — by role and accessible name first — interact with user-event, and assert on the DOM, not on state or internals. Async UI is awaited with `findBy` or `waitFor`, never sleeps. The network is mocked at the boundary, ideally with MSW, covering success, errors and races. Hooks are tested through components or `renderHook` with `act`, and components that need providers use a custom render with a wrapper. E2E with Playwright covers the few critical flows."
 
 - *`getBy` vs `queryBy` vs `findBy`?* — `getBy` throws if missing (must exist now), `queryBy` returns `null` (to assert absence), `findBy` returns a promise that retries (for async appearance).
 - *Why prefer `getByRole`?* — It matches how users and assistive technology find elements, doubles as an accessibility check, and survives markup refactors.
-- *What does `act` do and when do you need it?* — It flushes React updates and effects before assertions; RTL wraps its helpers in it, so you need it only for direct updates such as `renderHook` calls or advancing fake timers.
+- *What does `act` do and when do you need it?* — It flushes (applies right away) React updates and effects before assertions; RTL wraps its helpers in it, so you need it only for direct updates such as `renderHook` calls or advancing fake timers.
 - *How do you test a component that fetches?* — Mock the network (MSW or a `fetch` spy), `await findBy…` the loaded UI, and test error and loading states too.
 
 ### Self-check

@@ -1,6 +1,6 @@
 # Chapter 14 — Patterns and Architecture
 
-You now know every React building block. This chapter is about **arranging** them: the reusable patterns you'll meet in every codebase and component library (compound components, render props, higher-order components, custom Hooks, portals, error boundaries), how to make components **accessible**, how to organise **folders** so a project stays navigable as it grows, and how a **design system** ties it all together.
+You now know every React building block. This chapter is about **arranging** them: the reusable patterns you'll meet in every codebase (a project's whole body of source code) and component library (a package of ready-made components) — compound components, render props, higher-order components, custom Hooks, portals, error boundaries, each defined in its own section below — how to make components **accessible** (usable by everyone, including people who use a screen reader, which reads the page aloud, or only a keyboard), how to organise **folders** so a project stays navigable as it grows, and how a **design system** (a company's shared set of UI components, styles and usage rules) ties it all together.
 
 Each pattern answers one question — "how do I share *this* kind of thing?" — so for each one you'll see the problem, a runnable implementation, and when a simpler tool is better. The short version, which the chapter justifies: **composition and custom Hooks cover most needs**; the other patterns are for specific jobs.
 
@@ -22,7 +22,7 @@ Each pattern answers one question — "how do I share *this* kind of thing?" —
 | 14.12 | Design systems | tokens, primitives, headless libraries and a `Button` with variants |
 | 14.13 | Client architecture patterns | compare MVC, MVP, MVVM, VIPER and unidirectional flow, and explain where React fits |
 
-Code: [`code/`](code/) — React 19.3 in jsdom with Testing Library; every numbered file prints what a user (or a screen reader) would get. Reusable modules: `Tabs.jsx`, `Dialog.jsx`, `ErrorBoundary.jsx`, `Button.jsx`. The screenshots come from `ds_demo.html` in headless Chrome. Background: composition and `children` ([Chapter 2](../02-components-and-props/README.md) §2.4), Context ([Chapter 6](../06-state-management/README.md)), custom Hooks and `useId` ([Chapter 7](../07-custom-hooks-and-hook-rules/README.md)), refs ([Chapter 5](../05-effects-and-refs/README.md)), Testing Library queries ([Chapter 12](../12-testing-react/README.md) §12.3). Accessibility fundamentals (landmarks, ARIA, WCAG) are in the HTML & CSS book's [Chapter 3](../../../html-css/chapters/03-semantic-html-and-accessibility/README.md); general design patterns (decorator, observer, strategy) in the LLD book's [structural](../../../lld/chapters/09-patterns-structural/README.md) and [behavioural](../../../lld/chapters/10-patterns-behavioral-1/README.md) pattern chapters.
+Code: [`code/`](code/) — React 19.3 in jsdom (a JavaScript imitation of the browser's DOM that runs in Node.js) with Testing Library; every numbered file prints what a user (or a screen reader) would get. Reusable modules: `Tabs.jsx`, `Dialog.jsx`, `ErrorBoundary.jsx`, `Button.jsx`. The screenshots come from `ds_demo.html` in headless Chrome (Chrome run by a script, without a window). Background: composition and `children` ([Chapter 2](../02-components-and-props/README.md) §2.4), Context ([Chapter 6](../06-state-management/README.md)), custom Hooks and `useId` ([Chapter 7](../07-custom-hooks-and-hook-rules/README.md)), refs ([Chapter 5](../05-effects-and-refs/README.md)), Testing Library queries ([Chapter 12](../12-testing-react/README.md) §12.3). Accessibility fundamentals (landmarks — page regions such as `<nav>` and `<main>`; ARIA — attributes that describe elements to assistive tools; WCAG — the Web Content Accessibility Guidelines, the standard checklist) are in the HTML & CSS book's [Chapter 3](../../../html-css/chapters/03-semantic-html-and-accessibility/README.md); general design patterns (named, reusable solutions to common design problems, such as decorator, observer, strategy) in the LLD (low-level design) book's [structural](../../../lld/chapters/09-patterns-structural/README.md) and [behavioural](../../../lld/chapters/10-patterns-behavioral-1/README.md) pattern chapters.
 
 ---
 
@@ -56,7 +56,7 @@ The composed version exposes **structure** and lets callers fill it:
 1. Use **`children`** for the main content and **slot props** (`header={…}`, `actions={…}`) for secondary areas.
 2. Make **specialised components by wrapping**, not by flags: `function DangerDialog(props) { return <Dialog {...props} tone="danger" icon={<WarningIcon/>} />; }`.
 3. When parts need **shared state** (which tab is selected), move to compound components (§14.4).
-4. Pass elements down instead of data to avoid prop drilling (Chapter 2 §2.4) — the middle layers just render `{children}`.
+4. Pass elements down instead of data to avoid prop drilling (passing a prop through many layers that don't use it, just to reach a deep child; Chapter 2 §2.4) — the middle layers just render `{children}`.
 
 ### When not to use it
 For tiny, fixed components (a `Price` that formats a number) a couple of plain props are simpler. Composition pays off when callers genuinely need different layouts.
@@ -70,14 +70,14 @@ Prefer `children` and slots over growing lists of boolean props. Specialise by w
 
 ### What it is
 A split of one feature into two components:
-- **Presentational** ("view") component — receives everything as props and returns markup. No fetching, no global state, no Effects. Easy to reuse, test and show in Storybook.
-- **Container** component — knows *where data comes from*: fetches, reads context or a store, handles events, and renders the presentational component with props.
+- **Presentational** ("view") component — receives everything as props and returns markup. No fetching, no global state (state shared by the whole app), no Effects (code in `useEffect` that runs after rendering). Easy to reuse, test and show in Storybook (a tool that displays each component on its own, in all its states).
+- **Container** component — knows *where data comes from*: fetches, reads context or a store (a central object that holds app state outside components), handles events, and renders the presentational component with props.
 
 Analogy: the presentational component is an actor who reads whatever script they're handed; the container is the director who decides which script.
 
 ### History and today
-The pattern became popular in 2015 (class components, Redux `connect`). Once Hooks arrived, its best-known advocate (Dan Abramov) added a note saying he no longer recommends splitting components this way *by rule*, because a custom Hook now does the container's job without an extra component. The idea is still valuable in three places:
-1. **Design-system and shared UI** — visual components should stay data-agnostic.
+The pattern became popular in 2015 (class components — the older way of writing components as JavaScript classes — and Redux `connect`, the function that linked a component to the Redux state library). Once Hooks arrived, its best-known advocate (Dan Abramov) added a note saying he no longer recommends splitting components this way *by rule*, because a custom Hook now does the container's job without an extra component. The idea is still valuable in three places:
+1. **Design-system and shared UI** — visual components should stay data-agnostic (not care where their data comes from).
 2. **Testing and Storybook** — you can render every visual state (loading, empty, error) by passing props.
 3. **Server Components** ([Chapter 13](../13-server-rendering-and-frameworks/README.md) §13.7) — a Server Component "container" fetches data and renders a Client Component "view". The split is now an architectural boundary.
 
@@ -95,17 +95,17 @@ Keep visual components props-in/markup-out; put data access in a Hook or a conta
 ## 14.3 Extracting custom Hooks
 
 ### What it is
-Moving stateful logic (state + Effects + derived values) out of a component into a **custom Hook** (a function whose name starts with `use` and which calls other Hooks — [Chapter 7](../07-custom-hooks-and-hook-rules/README.md)). The component keeps only what it renders.
+Moving stateful logic (state + Effects + derived values — values computed from state rather than stored) out of a component into a **custom Hook** (a function whose name starts with `use` and which calls other Hooks — [Chapter 7](../07-custom-hooks-and-hook-rules/README.md)). The component keeps only what it renders.
 
 ### Why it matters
 - The component becomes readable — markup only.
 - The logic becomes **reusable** (another screen can call `useProductSearch`) and **testable on its own** with `renderHook`.
-- The view becomes testable **without** mocking the network.
+- The view becomes testable **without** mocking (replacing with a fake) the network.
 
 ### How to do it (recipe)
 1. Find a group of state + Effects that work together (here: query → loading → results).
 2. Move them into `function useX(inputs)` and **return only what the UI needs** (`{ status, results }`), not setters for internal details.
-3. Pass dependencies in as parameters (the `search` function) so tests can substitute them.
+3. Pass dependencies in as parameters (the `search` function) so tests can substitute them. This is **dependency injection**: the code receives the things it relies on instead of importing them directly, so a test can hand in a fake.
 4. Make the component call the Hook and render. Optionally split the markup into a presentational component (§14.2).
 5. Check the behaviour didn't change (same test before and after).
 
@@ -178,7 +178,7 @@ hook, "mug"       : {"status":"done","results":["mug result"]}
 view in loading   : Searching… (no API needed)
 ```
 
-The behaviour is identical, and now the Hook can be tested with a fake search function and the view's loading state rendered directly. In a real app the Hook would typically wrap TanStack Query ([Chapter 9](../09-routing-and-data-fetching/README.md)) and add debouncing (`useDebounce`, Chapter 7 §7.5).
+The behaviour is identical, and now the Hook can be tested with a fake search function and the view's loading state rendered directly. In a real app the Hook would typically wrap TanStack Query ([Chapter 9](../09-routing-and-data-fetching/README.md)) and add debouncing (waiting until the user stops typing for a moment before searching; `useDebounce`, Chapter 7 §7.5).
 
 ### Common mistakes
 - A Hook that returns 12 values including internal setters — the caller now depends on internals. Return a small, intention-revealing API.
@@ -205,8 +205,8 @@ A single `<Tabs tabs={[{ label, content }]}>` component with an array prop can't
 1. The root (`Tabs`) holds the state (`selected`) and puts it plus a `select` function in a **context**.
 2. Each part (`Tab`, `Panel`) reads the context with a small Hook that **throws a clear error** when used outside the root.
 3. Parts are attached as properties (`Tabs.Tab = Tab`) so one import gives the whole family.
-4. The root supports **uncontrolled** (`defaultValue`) and **controlled** (`value` + `onValueChange`) use — the same convention as `<input>` ([Chapter 3](../03-state-and-events/README.md) §3.9).
-5. The component owns accessibility: roles, `aria-selected`, `aria-controls`, keyboard navigation.
+4. The root supports **uncontrolled** (`defaultValue` — the component keeps its own state) and **controlled** (`value` + `onValueChange` — the parent owns the value and is told about changes) use — the same convention as `<input>` ([Chapter 3](../03-state-and-events/README.md) §3.9).
+5. The component owns accessibility: roles (what kind of element a screen reader announces it as), `aria-selected`, `aria-controls`, keyboard navigation.
 
 `code/Tabs.jsx` (key parts):
 
@@ -290,14 +290,14 @@ misuse       : <Tabs.Tab> must be used inside <Tabs>
 ```
 
 What it shows:
-1. Selection, arrow keys (with wrap-around), `End` — the keyboard behaviour the WAI-ARIA Authoring Practices "Tabs" pattern describes.
+1. Selection, arrow keys (with wrap-around), `End` — the keyboard behaviour the WAI-ARIA Authoring Practices (the W3C web-standards body's guide to how accessible widgets should behave) "Tabs" pattern describes.
 2. **Roving tabindex** (`tab stops: -1,-1,0`): only the selected tab is in the Tab-key order; arrows move within the list. The whole widget is one Tab stop.
 3. The panel is findable by its **accessible name**, which comes from its tab via `aria-labelledby`.
 4. The same component works **controlled** by a parent.
 5. Misuse fails loudly with a helpful message.
 
 ![A design-system page with buttons and the compound Tabs, Reviews tab selected](img/ds_demo.png)
-*Figure 14.1 — The compound `Tabs` (and the `Button` from §14.12) rendered in Chrome with design tokens (`code/ds_demo.html`).*
+*Figure 14.1 — The compound `Tabs` (and the `Button` from §14.12) rendered in Chrome with design tokens — named values for colours, spacing and so on, explained in §14.12 (`code/ds_demo.html`).*
 
 ### Trade-offs
 
@@ -309,17 +309,17 @@ What it shows:
 | Implementation | Simple | Context + part Hooks |
 
 ### Real-world examples
-Radix UI (`<Tabs.Root>`, `<Tabs.List>`, `<Tabs.Trigger>`, `<Tabs.Content>`), React Aria Components, Headless UI, Reach UI — and native HTML's `<select>`/`<option>`, `<table>`/`<tr>`, `<details>`/`<summary>`.
+Radix UI (`<Tabs.Root>`, `<Tabs.List>`, `<Tabs.Trigger>`, `<Tabs.Content>`), React Aria Components, Headless UI, Reach UI (all libraries of accessible, mostly unstyled components) — and native HTML's `<select>`/`<option>`, `<table>`/`<tr>`, `<details>`/`<summary>`.
 
 ### Common mistakes
-- Relying on `React.Children.map` + `cloneElement` to inject props — breaks as soon as a caller wraps a part in a `<div>` or another component. Context works at any depth.
+- Relying on `React.Children.map` + `cloneElement` (which copies an element with some props changed) to inject props — breaks as soon as a caller wraps a part in a `<div>` or another component. Context works at any depth.
 - Forgetting the error Hook — parts used outside the root then fail silently with `undefined` state.
-- Rebuilding the context value object every render in a large tree (a perf consideration — [Chapter 6](../06-state-management/README.md) §6.4; React Compiler handles it).
+- Rebuilding the context value object every render in a large tree (a perf — performance — consideration — [Chapter 6](../06-state-management/README.md) §6.4; React Compiler handles it).
 
 ### In the interview
 **30-second answer:** "Compound components are a family like `Tabs`, `Tabs.List`, `Tabs.Tab`, `Tabs.Panel` that share state through a private context. The root owns the selected value — controlled or uncontrolled — and the parts read it, so callers control layout while the component controls behaviour and accessibility. I use context rather than `cloneElement` so parts can be nested at any depth, and I throw a clear error if a part is used outside its root."
 
-- *Why not `cloneElement`?* — It only reaches direct children and silently breaks with wrappers; it's also listed as a legacy API on react.dev.
+- *Why not `cloneElement`?* — It only reaches direct children and silently breaks with wrappers; it's also listed as a legacy API (old, kept for compatibility, not recommended) on react.dev.
 - *How do you support both controlled and uncontrolled?* — Keep internal state for `defaultValue`, but prefer the `value` prop when it's defined, and always call `onValueChange`.
 
 ### Self-check
@@ -338,7 +338,7 @@ Root owns state in context; parts read it; callers arrange the parts. Support co
 A **render prop** is a prop whose value is a **function that returns JSX**. The component owns some behaviour or data and **calls your function** to decide what to render. When the function is passed as `children`, it's called "function as children".
 
 ### The problem it solves
-Sharing behaviour while letting each caller choose the markup — before Hooks this was the main way to reuse stateful logic (e.g. React Router v4's `<Route render>`, Formik's `<Formik>{(form) => …}</Formik>`, Downshift). Today it's still the right tool when a component must **control *where* and *how often*** your markup is rendered: lists (`renderItem`), virtualized rows, tables (`cell` renderers), and empty/loading slots.
+Sharing behaviour while letting each caller choose the markup — before Hooks this was the main way to reuse stateful logic (e.g. React Router v4's `<Route render>`, Formik's `<Formik>{(form) => …}</Formik>` (a forms library), Downshift (an autocomplete library)). Today it's still the right tool when a component must **control *where* and *how often*** your markup is rendered: lists (`renderItem`), virtualized rows (only the rows currently visible are rendered), tables (`cell` renderers), and empty/loading slots.
 
 ### Seeing it
 `code/02_render_props.jsx`:
@@ -384,13 +384,13 @@ same thing via Hook : <button aria-expanded="true">Shipping details</button><p>S
 ### Trade-offs
 - ✔ Explicit: you see exactly which values the caller receives.
 - ✔ Works in class components and anywhere JSX is allowed.
-- ✘ Nesting several render-prop components creates "callback pyramids".
-- ✘ A new function every render can defeat `memo` on the component (React Compiler usually handles it).
+- ✘ Nesting several render-prop components creates "callback pyramids" (functions inside functions inside functions, drifting right).
+- ✘ A new function every render can defeat `memo` (which skips re-rendering when props are unchanged) on the component (React Compiler usually handles it).
 - For **sharing stateful logic** only, a custom Hook is simpler (last line of the output).
 
 ### Common mistakes
 - Using a render prop just to pass data one level down — a normal prop or `children` is enough.
-- Calling Hooks inside the render function — it's a plain callback, not a component, so the Rules of Hooks forbid it (the linter flags it) and it breaks as soon as the call becomes conditional. Put stateful parts in a component.
+- Calling Hooks inside the render function — it's a plain callback, not a component, so the Rules of Hooks (call Hooks only at the top level of a component or custom Hook, never in loops, conditions or plain callbacks) forbid it (the linter — the automatic code checker — flags it) and it breaks as soon as the call becomes conditional. Put stateful parts in a component.
 
 ### TL;DR
 A render prop is "give me a function and I'll call it to render". Reach for it when the component decides placement and repetition of caller markup (lists, tables, slots); share plain logic with a Hook.
@@ -400,10 +400,10 @@ A render prop is "give me a function and I'll call it to render". Reach for it w
 ## 14.6 Higher-order components (HOCs)
 
 ### What it is
-A **higher-order component** is a function that **takes a component and returns a new component** that renders the original with extra props or behaviour: `const Enhanced = withSomething(Component)`. The name mirrors higher-order functions ([JavaScript book, Chapter 4](../../../javascript/chapters/04-functions-scope-and-closures/README.md)); the idea is the **decorator pattern** from OOP ([LLD Chapter 9](../../../lld/chapters/09-patterns-structural/README.md)).
+A **higher-order component** is a function that **takes a component and returns a new component** that renders the original with extra props or behaviour: `const Enhanced = withSomething(Component)`. The name mirrors higher-order functions ([JavaScript book, Chapter 4](../../../javascript/chapters/04-functions-scope-and-closures/README.md)); the idea is the **decorator pattern** (wrapping an object to add behaviour without changing it) from OOP (object-oriented programming) ([LLD Chapter 9](../../../lld/chapters/09-patterns-structural/README.md)).
 
 ### Where you still meet them
-Older code and some libraries: Redux's `connect(mapState)(Component)`, React Router v5's `withRouter`, `React.memo(Component)` (technically a HOC-like wrapper), analytics/feature-flag wrappers, and auth guards. New code usually uses Hooks instead, but you must be able to read and maintain HOCs.
+Older code and some libraries: Redux's `connect(mapState)(Component)`, React Router v5's `withRouter`, `React.memo(Component)` (technically a HOC-like wrapper), analytics/feature-flag wrappers (a feature flag is a switch that turns a feature on or off without redeploying), and auth guards (wrappers that show their content only to signed-in users). New code usually uses Hooks instead, but you must be able to read and maintain HOCs.
 
 ### Seeing it
 `code/03_hoc.jsx`:
@@ -444,23 +444,23 @@ HOC inside render : count 2 -> after parent re-render: count 0
 ```
 
 What it shows:
-1. HOCs **compose** from the inside out, and `displayName` makes the wrapper chain readable in React DevTools.
+1. HOCs **compose** from the inside out, and `displayName` makes the wrapper chain readable in React DevTools (the browser extension for inspecting components, props and state).
 2. Props flow through (`limit`), and the HOC injects its own (`user`).
-3. **Never create a HOC during render.** Each call returns a *new component type*, so React unmounts the old one and mounts a fresh one — state (`count 2`) is lost ([Chapter 3](../03-state-and-events/README.md) §3.10).
+3. **Never create a HOC during render.** Each call returns a *new component type*, so React unmounts (removes) the old one and mounts (creates and inserts) a fresh one — state (`count 2`) is lost ([Chapter 3](../03-state-and-events/README.md) §3.10).
 
 ### Common mistakes (the classic HOC problems)
 
 | Problem | What happens | Fix |
 |---|---|---|
 | HOC applied inside render | Remount every render, state lost | Apply at module level |
-| Prop name collisions | Two HOCs both inject `data`; one silently wins | Namespacing, or use Hooks |
+| Prop name collisions | Two HOCs both inject `data`; one silently wins | Namespacing (prefixing names so they can't clash), or use Hooks |
 | "Wrapper hell" | Deep trees of anonymous wrappers in DevTools | `displayName`; Hooks |
-| Static methods lost | `Enhanced.someStatic` is undefined | Copy them (`hoist-non-react-statics`) |
+| Static methods (functions attached to the component itself) lost | `Enhanced.someStatic` is undefined | Copy them (`hoist-non-react-statics`) |
 | Refs | Before React 19, `ref` didn't pass through without `forwardRef` | React 19: `ref` is a normal prop for function components; spread it through |
 | Hidden dependencies | Reader can't see where `user` came from | A Hook call inside the component is explicit |
 
 ### In the interview
-**30-second answer:** "A HOC is a function that takes a component and returns a wrapped one, used for cross-cutting concerns like auth guards, logging or injecting store data — Redux's `connect` is the famous example. They compose but have downsides: prop collisions, implicit props, wrapper nesting, and they must be created at module level or the component remounts every render. For new code I'd use a custom Hook; I'd still write a HOC when I need to wrap *rendering* itself, like an auth guard around many route components."
+**30-second answer:** "A HOC is a function that takes a component and returns a wrapped one, used for cross-cutting concerns (needs that cut across many unrelated parts of an app) like auth guards, logging or injecting store data — Redux's `connect` is the famous example. They compose but have downsides: prop collisions, implicit props, wrapper nesting, and they must be created at module level or the component remounts every render. For new code I'd use a custom Hook; I'd still write a HOC when I need to wrap *rendering* itself, like an auth guard around many route components."
 
 ### TL;DR
 `withX(Component)` → new component with extra props/behaviour. Apply once at module level, pass props through, set `displayName`. Prefer Hooks for new logic reuse.
@@ -473,7 +473,7 @@ What it shows:
 |---|---|---|
 | Share **stateful logic** (fetching, form state, subscriptions) | **Custom Hook** | No extra components, explicit, composable |
 | Share **UI structure** with flexible content | **Composition** (`children`, slots) | Simplest; no new concepts |
-| A family of parts sharing **implicit state** (tabs, accordion, menu, select) | **Compound components** | Callers arrange parts; component owns behaviour + a11y |
+| A family of parts sharing **implicit state** (tabs, accordion, menu, select) | **Compound components** | Callers arrange parts; component owns behaviour + a11y (accessibility) |
 | Component controls **where/how often** caller markup renders (lists, tables, virtualized rows) | **Render prop** (`renderItem`) | The component decides placement, the caller decides content |
 | Wrap **many components** with the same guard/behaviour, or legacy code | **HOC** | Works on components you don't own; decorator style |
 | Render **outside** the parent's DOM box (modal, tooltip, toast) | **Portal** | Escapes `overflow`/`z-index` while staying in the React tree |
@@ -497,14 +497,14 @@ flowchart TD
 ## 14.8 Portals
 
 ### What it is
-**`createPortal(children, domNode)`** (from `react-dom`) renders `children` into a **different DOM node** — usually `document.body` — while they stay in the **same place in the React tree**. So the DOM location changes, but props, context, state and event bubbling behave as if the content were still inside its parent.
+**`createPortal(children, domNode)`** (from `react-dom`) renders `children` into a **different DOM node** — usually `document.body` — while they stay in the **same place in the React tree**. So the DOM location changes, but props, context, state and event bubbling (an event travelling up from the clicked element through its ancestors) behave as if the content were still inside its parent.
 
 ### The problem it solves
-Modals, dropdowns, tooltips and toasts must visually sit **on top of everything**. If rendered inside a card with `overflow: hidden` or inside a stacking context (`transform`, `z-index`), they get clipped or covered — CSS can't escape its ancestors. Rendering them at the end of `<body>` fixes that.
+Modals (dialog boxes over the page), dropdowns, tooltips (small hint boxes on hover) and toasts (brief pop-up messages) must visually sit **on top of everything**. If rendered inside a card with `overflow: hidden` or inside a stacking context (a CSS layering group created by `transform`, `z-index` and similar — `z-index` only compares elements within the same group), they get clipped or covered — CSS can't escape its ancestors. Rendering them at the end of `<body>` fixes that.
 
 ### How it works
 1. React renders the portal's children as usual (they're part of the parent component's tree).
-2. At commit, it inserts their DOM nodes into `domNode` instead of the parent's DOM node.
+2. At commit (the phase where React applies its changes to the real DOM), it inserts their DOM nodes into `domNode` instead of the parent's DOM node.
 3. **Context** flows through (the React tree is unchanged).
 4. **React events bubble through the React tree**, not the DOM tree: a click inside the portal triggers `onClick` handlers on React ancestors, even though in the DOM they aren't ancestors.
 
@@ -579,14 +579,14 @@ focus back on trigger    : true
 Reading the output:
 1. The dialog's DOM lives under `<body>`, outside `.card` — so `overflow: hidden` can't clip it.
 2. Context from above the card still reaches `ThemedText` inside the portal.
-3. The click **inside the dialog** incremented the card's counter: React bubbling follows the component tree. This surprises people — e.g. a "click outside to close" handler on a parent fires for clicks inside the portal. Check `e.target`, or stop propagation deliberately.
-4. Focus moves in on open and returns to the trigger on close; Escape closes it — the minimum keyboard behaviour for a modal. (This small version doesn't trap Tab inside; the modal build in [Chapter 15 §15.13](../15-react-interview-and-machine-coding/README.md) adds that.) `useEffectEvent` (stable since React 19.2, [Chapter 5](../05-effects-and-refs/README.md)) lets the Escape listener call the latest `onClose` without re-running the Effect — otherwise a parent passing a new arrow function each render would bounce focus back and forth.
+3. The click **inside the dialog** incremented the card's counter: React bubbling follows the component tree. This surprises people — e.g. a "click outside to close" handler on a parent fires for clicks inside the portal. Check `e.target`, or stop propagation (call `e.stopPropagation()` so the event doesn't bubble further) deliberately.
+4. Focus moves in on open and returns to the trigger on close; Escape closes it — the minimum keyboard behaviour for a modal. (This small version doesn't trap Tab inside — keep keyboard focus cycling within the dialog; the modal build in [Chapter 15 §15.13](../15-react-interview-and-machine-coding/README.md) adds that.) `useEffectEvent` (stable since React 19.2, [Chapter 5](../05-effects-and-refs/README.md)) lets the Escape listener call the latest `onClose` without re-running the Effect — otherwise a parent passing a new arrow function each render would bounce focus back and forth.
 
 ### The native `<dialog>` alternative
-HTML's `<dialog>` element with `dialog.showModal()` (call it from an Effect via a ref) renders in the browser's **top layer** — above everything without a portal — and gives you Escape-to-close, an inert background, focus moved into the dialog on open and **returned to the previously focused element on close** (specified in the HTML standard and implemented in all major browsers) for free. It's supported in all modern browsers and is often the simplest correct modal ([HTML & CSS book, Chapter 3](../../../html-css/chapters/03-semantic-html-and-accessibility/README.md)). Portals are still the tool for tooltips, popovers in older setups, toasts, and rendering into other containers (e.g. an iframe or a widget root). The Popover API (`popover` attribute) is another native option for non-modal pop-ups.
+HTML's `<dialog>` element with `dialog.showModal()` (call it from an Effect via a ref) renders in the browser's **top layer** — above everything without a portal — and gives you Escape-to-close, an inert background (one that can't be clicked or focused), focus moved into the dialog on open and **returned to the previously focused element on close** (specified in the HTML standard and implemented in all major browsers) for free. It's supported in all modern browsers and is often the simplest correct modal ([HTML & CSS book, Chapter 3](../../../html-css/chapters/03-semantic-html-and-accessibility/README.md)). Portals are still the tool for tooltips, popovers (small floating panels anchored to an element) in older setups, toasts, and rendering into other containers (e.g. an iframe — a page embedded inside another page — or a widget root). The Popover API (`popover` attribute) is another native option for non-modal pop-ups.
 
 ### Common mistakes
-- A home-made modal without focus management — keyboard and screen-reader users end up "behind" the dialog. Move focus in, trap it (or make the background `inert`), return it on close. Use a library (Radix Dialog, React Aria) or `<dialog>` for production.
+- A home-made modal without focus management (deciding in code which element has keyboard focus) — keyboard and screen-reader users end up "behind" the dialog. Move focus in, trap it (or make the background `inert`), return it on close. Use a library (Radix Dialog, React Aria) or `<dialog>` for production.
 - Forgetting portal content still counts as a child for events (point 3 above).
 - Rendering a portal during SSR: `document` doesn't exist on the server. Render portals only after mount (or use `<dialog>`).
 
@@ -601,9 +601,9 @@ Portal = DOM elsewhere, React tree unchanged: context and events follow the comp
 ## 14.9 Error boundaries
 
 ### What it is
-An **error boundary** is a component that catches errors thrown **while rendering** its descendants (including in lifecycle methods and Effects' setup during commit) and shows a **fallback UI** instead of letting the whole app disappear. Without any boundary, React 19 **unmounts the entire root** on an uncaught render error — a blank page.
+An **error boundary** is a component that catches errors thrown **while rendering** its descendants (the components below it; including in lifecycle methods — class methods React calls at moments like mount and update — and Effects' setup during commit) and shows a **fallback UI** (replacement content) instead of letting the whole app disappear. Without any boundary, React 19 **unmounts the entire root** (the top of the app created with `createRoot`) on an uncaught render error — a blank page.
 
-Error boundaries must still be **class components** — there's no Hook equivalent of the two methods involved. You write one once (or use the `react-error-boundary` package) and use it everywhere. (Route-level boundaries in React Router are covered in [Chapter 9](../09-routing-and-data-fetching/README.md); lazy-chunk failures in [Chapter 10](../10-performance/README.md) §10.8.)
+Error boundaries must still be **class components** — there's no Hook equivalent of the two methods involved. You write one once (or use the `react-error-boundary` package) and use it everywhere. (Route-level boundaries in React Router are covered in [Chapter 9](../09-routing-and-data-fetching/README.md); lazy-chunk failures (code loaded on demand with `lazy()` failing to download) in [Chapter 10](../10-performance/README.md) §10.8.)
 
 ### How it works
 1. A descendant throws during render.
@@ -704,7 +704,7 @@ Reading it:
 - Expecting a boundary to catch `onClick` errors.
 - A fallback that can itself throw (e.g. reads the same broken data).
 - A "Try again" that doesn't change anything — reset together with a refetch or new input (reset keys).
-- Swallowing errors without logging: always report in `componentDidCatch` or `onCaughtError`.
+- Swallowing errors (catching them and silently ignoring them) without logging: always report in `componentDidCatch` or `onCaughtError`.
 
 ### In the interview
 **30-second answer:** "Error boundaries are class components with `getDerivedStateFromError` to show a fallback and `componentDidCatch` to log. They catch errors thrown while rendering their subtree — including `use()` rejections and lazy-loading failures — but not event handlers, async callbacks, SSR, or their own errors. Without one, React 19 unmounts the whole root. I place one at the top, per route and around risky widgets, reset them with reset keys, and in React 19 I report centrally via `createRoot`'s `onCaughtError`/`onUncaughtError`."
@@ -716,7 +716,7 @@ Reading it:
 1. Why did "Try again" in step 3 fail? → The data was still `null`; reset re-rendered the same failing input.
 2. Which error in the demo did no boundary catch? → The `JSON.parse` error in the event handler.
 3. What happens without any boundary in React 19? → The whole root unmounts; `onUncaughtError` is called.
-4. What's the difference between `getDerivedStateFromError` and `componentDidCatch`? → The first runs during render to choose the fallback (pure); the second runs after commit for side effects like logging.
+4. What's the difference between `getDerivedStateFromError` and `componentDidCatch`? → The first runs during render to choose the fallback (pure); the second runs after commit for side effects (work beyond computing a result, such as logging or network calls) like logging.
 
 ### TL;DR
 Class component with `getDerivedStateFromError` + `componentDidCatch`; catches render-time errors below it only. Handle event/async errors yourself (or re-throw via state). Place at root, per route, per risky widget; reset with keys; report via `onCaughtError`.
@@ -726,7 +726,7 @@ Class component with `getDerivedStateFromError` + `componentDidCatch`; catches r
 ## 14.10 Accessibility in React
 
 ### What it is
-**Accessibility (a11y)** means people can use your UI regardless of how they perceive or operate it: screen readers, keyboard only, voice control, zoom, reduced motion. React doesn't make a page accessible or inaccessible by itself — it renders the HTML you write. What React adds is (a) a few JSX spellings, (b) state-driven ARIA attributes, and (c) **focus management** in single-page apps, where there are no full page loads. The fundamentals (landmarks, headings, ARIA rules, WCAG 2.2) are in the HTML & CSS book's [Chapter 3](../../../html-css/chapters/03-semantic-html-and-accessibility/README.md); this section is the React-specific layer.
+**Accessibility (a11y)** means people can use your UI regardless of how they perceive or operate it: screen readers, keyboard only, voice control, zoom, reduced motion (a user setting asking for fewer animations). React doesn't make a page accessible or inaccessible by itself — it renders the HTML you write. What React adds is (a) a few JSX spellings, (b) state-driven ARIA attributes, and (c) **focus management** in single-page apps (SPAs — apps that load one page and redraw it with JavaScript), where there are no full page loads. The fundamentals (landmarks, headings, ARIA rules, WCAG 2.2) are in the HTML & CSS book's [Chapter 3](../../../html-css/chapters/03-semantic-html-and-accessibility/README.md); this section is the React-specific layer.
 
 ### React-specific rules
 
@@ -734,13 +734,13 @@ Class component with `getDerivedStateFromError` + `componentDidCatch`; catches r
 |---|---|
 | Labels | `<label htmlFor={id}>` (`for` is a JS keyword); generate ids with `useId()`, never hard-code them in reusable components |
 | ARIA attributes | Stay hyphenated and lower-case: `aria-label`, `aria-expanded={open}`; booleans render as `"true"`/`"false"` |
-| Semantic elements first | `<button>`, `<a href>`, `<nav>`, `<main>`, `<h1>`–`<h6>`, `<ul>`: they come with roles, keyboard support and focusability for free |
-| Fragments | Use `<>…</>` instead of wrapper `<div>`s that break list/table semantics (`<ul>` must contain `<li>`) |
+| Semantic elements (tags whose name says what they are) first | `<button>`, `<a href>`, `<nav>`, `<main>`, `<h1>`–`<h6>`, `<ul>`: they come with roles, keyboard support and focusability for free |
+| Fragments (group children without adding a DOM element) | Use `<>…</>` instead of wrapper `<div>`s that break list/table semantics (`<ul>` must contain `<li>`) |
 | Focus management | Use refs to move focus when UI changes: into dialogs, to a new page heading after client-side navigation, back to the trigger after closing |
 | Announcements | Status messages in a live region: `role="status"` (polite) or `role="alert"` (urgent), present in the DOM before the text changes |
 | Icon-only buttons | Give an accessible name: `aria-label="Remove item"`, and hide the icon with `aria-hidden="true"` |
 | Linting | `eslint-plugin-jsx-a11y` flags missing alt text, click handlers on non-interactive elements, invalid ARIA |
-| Automated audits | axe-core (browser extension, `vitest-axe`/`jest-axe`, Playwright's axe integration), Lighthouse |
+| Automated audits | axe-core (an automatic accessibility checker: browser extension, `vitest-axe`/`jest-axe`, Playwright's axe integration), Lighthouse (Chrome's built-in page-quality report) |
 
 ### Checking it with role queries
 Testing Library's `getByRole` finds elements the way assistive technology does — by **role** and **accessible name**. If a test can't find your button by role, a screen-reader user can't either ([Chapter 12](../12-testing-react/README.md) §12.3). `code/07_a11y_checks.jsx` audits the same checkout written badly and well:
@@ -804,11 +804,11 @@ What the audit shows:
 4. The `role="status"` live region announces "Order placed" to screen readers without moving focus.
 
 ### Focus after client-side navigation
-In an SPA, clicking a link swaps content without a page load, so screen readers may not announce the new page and focus stays on the old link. Common fixes: move focus to the new page's `<h1>` (with `tabIndex={-1}`) in an Effect keyed on the location, and update `document.title` (in React 19 you can render `<title>` in any component). Frameworks help: Next.js announces route changes; React Router offers scroll restoration and you add focus handling.
+In an SPA, clicking a link swaps content without a page load, so screen readers may not announce the new page and focus stays on the old link. Common fixes: move focus to the new page's `<h1>` (with `tabIndex={-1}`) in an Effect keyed on the location, and update `document.title` (in React 19 you can render `<title>` in any component). Frameworks help: Next.js announces route changes; React Router offers scroll restoration (returning to the previous scroll position) and you add focus handling.
 
 ### Common mistakes
 - `<div onClick>` instead of `<button>` — no keyboard, no role, no focus. If you truly must, you need `role="button"`, `tabIndex={0}` and Enter/Space handlers — just use `<button>`.
-- Removing focus outlines (`outline: none`) without a visible replacement — use `:focus-visible` styles.
+- Removing focus outlines (`outline: none`) without a visible replacement — use `:focus-visible` styles (a CSS selector that matches when focus should be shown, e.g. after keyboard use).
 - ARIA overuse: `role="button"` on a `<button>`, or `aria-label` that contradicts visible text. The first rule of ARIA: use native elements when they exist.
 - Conditional rendering that removes the live region itself — screen readers only announce changes to a region that already exists.
 - Testing only with a mouse. Tab through every new screen at least once.
@@ -873,9 +873,9 @@ src/features/..., src/shared/...  (or inside app/ in private _folders)
 ### Rules that keep it healthy
 1. **Dependency direction:** `app → features → shared`. Shared code never imports features; features never import the app shell.
 2. **Public APIs:** each feature exposes an `index.js`; others import `features/cart`, never `features/cart/store.js`. Internals can then change freely.
-3. **Enforce, don't hope:** ESLint `no-restricted-imports` or `eslint-plugin-boundaries`, or path rules in your monorepo tool.
-4. **Path aliases** (`@/features/cart`) instead of `../../../`: configure in `tsconfig`/`jsconfig` `paths` and your bundler.
-5. **Be careful with barrel files** (`index.js` re-exporting everything): one per feature is fine; giant barrels that re-export a whole library slow dev servers and tests and can hurt tree-shaking and create import cycles.
+3. **Enforce, don't hope:** ESLint `no-restricted-imports` or `eslint-plugin-boundaries`, or path rules in your monorepo tool (a monorepo is one repository holding several apps or packages).
+4. **Path aliases** (short import names mapped to folders, e.g. `@/features/cart`) instead of `../../../`: configure in `tsconfig`/`jsconfig` `paths` and your bundler.
+5. **Be careful with barrel files** (`index.js` re-exporting everything): one per feature is fine; giant barrels that re-export a whole library slow dev servers and tests and can hurt tree-shaking (the bundler dropping code nobody imports) and create import cycles (file A imports B, which imports A).
 
 ### Seeing a boundary check
 `code/08_import_boundaries.mjs` scans the sample project in `code/feature-app/` and applies rules 1–2 — a miniature version of what a lint rule does:
@@ -953,10 +953,10 @@ A **design system** is the shared set of decisions, components and documentation
 | **Patterns and docs** | How to combine them, when to use which, usage rules | "Destructive actions use `variant="danger"` and a confirm dialog" |
 
 ### Why it matters
-Consistency (one Button, not 14), speed (teams assemble instead of rebuilding), accessibility solved once (focus, ARIA, keyboard in every `Menu`), and themeability (change tokens → rebrand or dark mode — [Chapter 8](../08-styling/README.md) §8.8).
+Consistency (one Button, not 14), speed (teams assemble instead of rebuilding), accessibility solved once (focus, ARIA, keyboard in every `Menu`), and themeability (changing the whole look in one place) (change tokens → rebrand or dark mode — [Chapter 8](../08-styling/README.md) §8.8).
 
 ### Tokens in practice
-`code/ds.css` defines tokens as CSS custom properties and components use only tokens:
+`code/ds.css` defines tokens as CSS custom properties (CSS variables named `--something`, read with `var(--something)`) and components use only tokens:
 
 ```css
 :root {
@@ -1007,16 +1007,16 @@ Design choices worth copying:
 4. **`ref` is a normal prop in React 19** — no `forwardRef` needed, so focus management and popover positioning work ([Chapter 5](../05-effects-and-refs/README.md) §5.10).
 
 ### Build or adopt?
-Few teams should build complex widgets (menus, comboboxes, date pickers) from scratch — the keyboard and ARIA details take a long time to get right. Common approaches:
+Few teams should build complex widgets (menus, comboboxes — text inputs with a suggestion list — date pickers) from scratch — the keyboard and ARIA details take a long time to get right. Common approaches:
 
 | Approach | Examples | You get | You still do |
 |---|---|---|---|
 | **Headless / unstyled primitives** | Radix UI Primitives, React Aria (Adobe), Headless UI, Base UI | Behaviour, keyboard, ARIA, focus — no styles | All the visual design (with your tokens) |
-| **Copy-in components** | shadcn/ui (source copied into your repo, built on headless primitives + Tailwind) | Styled, editable source you own | Maintenance of the copied code |
+| **Copy-in components** | shadcn/ui (source copied into your repo — your project's version-controlled folder — built on headless primitives + Tailwind, a CSS framework of small utility classes) | Styled, editable source you own | Maintenance of the copied code |
 | **Full component libraries** | MUI, Chakra UI, Mantine, Ant Design | Styled, themed, many components | Theming to your brand; accept their look/API |
 | **Build your own** | Large companies' internal systems | Full control | Everything, including accessibility and docs |
 
-A common modern stack: tokens (CSS variables or Tailwind theme) + headless primitives + your own styled wrappers (`Button`, `Dialog`) exported from `shared/ui`, documented in **Storybook** (a workshop app that renders each component in isolation with its states), and tested with Testing Library plus visual-regression tests.
+A common modern stack: tokens (CSS variables or Tailwind theme) + headless primitives + your own styled wrappers (`Button`, `Dialog`) exported from `shared/ui`, documented in **Storybook** (a workshop app that renders each component in isolation with its states), and tested with Testing Library plus visual-regression tests (screenshots compared before and after a change to catch unintended visual differences).
 
 ### API conventions for design-system components
 - **Controlled + uncontrolled** (`value`/`defaultValue`/`onValueChange`) like the Tabs in §14.4.
@@ -1041,12 +1041,12 @@ Tokens → accessible primitives → documented patterns. Closed variants, safe 
 ## 14.13 Client architecture patterns: MVC, MVP, MVVM, VIPER — and where React fits
 
 ### What it is
-Sections 14.1–14.12 organised *components*. One level up, every UI codebase — web, iOS, Android, desktop — must answer the same question: **where does the logic live** between the data and the pixels? The classic answers have three-letter names. They all split a screen into a **Model** (data and business rules, no UI), a **View** (what the user sees) and a third part that connects them; they differ in **who talks to whom** and **how much the view knows**. You will hear these names in mobile interviews, in Angular/Vue/SwiftUI/Android codebases, and in "how does React compare?" questions.
+Sections 14.1–14.12 organised *components*. One level up, every UI codebase — web, iOS, Android, desktop — must answer the same question: **where does the logic live** between the data and the pixels? The classic answers have three-letter names. They all split a screen into a **Model** (data and business rules — the real-world rules of the product, like "a cart total includes tax" — no UI), a **View** (what the user sees) and a third part that connects them; they differ in **who talks to whom** and **how much the view knows**. You will hear these names in mobile interviews, in Angular/Vue/SwiftUI/Android codebases (other UI frameworks for web and mobile), and in "how does React compare?" questions.
 
 Analogy: a restaurant. The **model** is the kitchen and its recipes, the **view** is the table the guest sees. In **MVC** a head waiter takes orders and the table watches the kitchen's pass directly; in **MVP** a waiter carries every plate and arranges it (the table is passive); in **MVVM** the table has a display board that updates itself whenever the kitchen's state changes.
 
 ### The problem it solves
-Without a pattern, screens become "massive view controllers": network calls, formatting, validation, navigation and drawing in one class that only a UI test can exercise. Each pattern moves logic **out of the view** into something you can test with plain function calls, and makes each piece replaceable.
+Without a pattern, screens become "massive view controllers" (on iOS a view controller is the class that runs one screen): network calls, formatting, validation, navigation and drawing in one class that only a UI test can exercise. Each pattern moves logic **out of the view** into something you can test with plain function calls, and makes each piece replaceable.
 
 ### How it works — the four classics
 
@@ -1072,17 +1072,17 @@ flowchart LR
 | | **MVC** (Smalltalk, 1979) | **MVP** (1990s; Android before 2017) | **MVVM** (Microsoft WPF, 2005; Android Jetpack, SwiftUI, Vue, Angular) | **VIPER** (iOS, 2014) |
 |---|---|---|---|---|
 | Parts | Model, View, Controller | Model, **passive** View, Presenter | Model, View, ViewModel | **V**iew, **I**nteractor, **P**resenter, **E**ntity, **R**outer |
-| Who updates the view | the view observes the model (or, in web/iOS variants, the controller pushes) | the presenter calls methods on a view interface | the view **binds** to observable ViewModel state; the ViewModel never references the view | presenter → view |
+| Who updates the view | the view observes (subscribes to change notifications from) the model (or, in web/iOS variants, the controller pushes) | the presenter calls methods on a view interface | the view **binds** to observable ViewModel state; the ViewModel never references the view | presenter → view |
 | Business logic | model / controller | presenter + model | ViewModel + model | **Interactor** (use cases); presenter only formats; **Router** owns navigation |
 | Testing without UI | controller and model | presenter, with a fake view | ViewModel, with no view at all | every part separately |
-| Weak spot | controllers grow huge ("Massive View Controller" on iOS) | lots of view-interface boilerplate | binding "magic"; ViewModels can grow huge too | many files per screen; heavy for small apps |
+| Weak spot | controllers grow huge ("Massive View Controller" on iOS) | lots of view-interface boilerplate (repetitive set-up code) | binding "magic"; ViewModels can grow huge too | many files per screen; heavy for small apps |
 
-**MVC** was invented for Smalltalk-80 (Trygve Reenskaug); server frameworks (Rails, Spring MVC, ASP.NET MVC) reused the name for request → controller → model → rendered template, which is related but not the same thing. **MVP** makes the view as dumb as possible so the presenter can be unit-tested against a fake view. **MVVM** replaces the presenter's explicit `view.show(...)` calls with **data binding**: the view declares "this label shows `vm.total`", and the framework re-renders when it changes. **VIPER** is Clean Architecture applied to one iOS screen: use-case logic in the interactor, plain data entities, and a router for screen-to-screen navigation.
+**MVC** was invented for Smalltalk-80 (Trygve Reenskaug); server frameworks (Rails, Spring MVC, ASP.NET MVC — web frameworks for Ruby, Java and C#) reused the name for request → controller → model → rendered template (an HTML file with placeholders filled in), which is related but not the same thing. **MVP** makes the view as dumb as possible so the presenter can be unit-tested against a fake view. **MVVM** replaces the presenter's explicit `view.show(...)` calls with **data binding**: the view declares "this label shows `vm.total`", and the framework re-renders when it changes. **VIPER** is Clean Architecture (a layering style where business rules never depend on the UI or the database) applied to one iOS screen: use-case logic in the interactor, plain data entities, and a router for screen-to-screen navigation.
 
 Two newer patterns matter even more for React:
 
-- **Unidirectional data flow** (Facebook's **Flux**, 2014; **Redux**; the **Elm Architecture**): the view dispatches an **action**, a pure **reducer** computes the next state, and the view re-renders from state. Data moves in one direction only, so every change is traceable and replayable ([Chapter 6](../06-state-management/README.md) — `useReducer`, Redux Toolkit, Zustand).
-- **MVI** (Model–View–Intent, Android/Kotlin): MVVM with a single immutable state object and reducer-style updates — essentially Redux on mobile.
+- **Unidirectional data flow** (Facebook's **Flux**, 2014; **Redux**; the **Elm Architecture**): the view dispatches an **action**, a pure **reducer** computes the next state, and the view re-renders from state. Data moves in one direction only, so every change is traceable and replayable (you can re-run the same actions to reproduce a state) ([Chapter 6](../06-state-management/README.md) — `useReducer`, Redux Toolkit, Zustand, a small state-management library).
+- **MVI** (Model–View–Intent, Android/Kotlin): MVVM with a single immutable (never changed in place — each update makes a new copy) state object and reducer-style updates — essentially Redux on mobile.
 
 ### How React fits
 React began as "the V in MVC", but the way it is used today maps onto these patterns without their names:
@@ -1091,7 +1091,7 @@ React began as "the V in MVC", but the way it is used today maps onto these patt
 |---|---|
 | View | function components returning JSX — ideally presentational, props in ([14.2](#142-container--presentational)) |
 | ViewModel / Presenter | a **custom Hook** that owns state and exposes display-ready values plus commands ([14.3](#143-extracting-custom-hooks)): `const { lines, totalText, add } = useCartViewModel()` |
-| Binding | React re-renders from state — it is one-way binding with the view as a function of state, `UI = f(state)` |
+| Binding | React re-renders from state — it is one-way binding (data flows only from state to the screen) with the view as a function of state, `UI = f(state)` |
 | Model / store | server state in TanStack Query or a loader ([Chapter 9](../09-routing-and-data-fetching/README.md)); client state in `useReducer`, Context or an external store read with `useSyncExternalStore` |
 | Controller / Interactor | event handlers, reducers and service modules; with Server Components and Server Actions ([Chapter 13](../13-server-rendering-and-frameworks/README.md)) some of it moves to the server |
 | Router | React Router / Next.js routing |
@@ -1116,14 +1116,14 @@ The presenter is tested with a fake view object, the ViewModel Hook with `render
 
 ### When not to use it
 - Don't bolt VIPER-style layering onto a five-screen app; a component + custom Hook per feature is enough.
-- Don't copy MVP into React with imperative `view.show()` calls everywhere; React's state-driven rendering already gives you the binding MVP was simulating (the demo does it only for comparison).
+- Don't copy MVP into React with imperative (step-by-step "do this now") `view.show()` calls everywhere; React's state-driven rendering already gives you the binding MVP was simulating (the demo does it only for comparison).
 - Don't put everything in one global store "because Redux"; keep server state in a query cache and local state local ([Chapter 6](../06-state-management/README.md)).
 
 ### Common mistakes
 - **Saying React "is MVC"** → it is a view library; the patterns describe how you arrange state and logic around it.
 - **ViewModels that know about the view** (DOM nodes, component refs) → they must expose state and commands only.
-- **Fat views** → formatting (`$8.50`), validation and derived values belong in the Hook/presenter/selector, not inline JSX.
-- **Two-way binding everywhere** → hard to trace who changed what; prefer one-way flow with explicit events.
+- **Fat views** → formatting (`$8.50`), validation and derived values belong in the Hook/presenter/selector (a function that derives a value from stored state), not inline JSX.
+- **Two-way binding everywhere** (screen and data update each other automatically) → hard to trace who changed what; prefer one-way flow with explicit events.
 
 ### In the interview
 **30-second answer:** "All of them separate Model and View and differ in the middle piece. In MVC a controller handles input and updates the model, and the view observes the model. In MVP a presenter does all the work and pushes formatted data into a passive view through an interface, so it is easy to unit-test. In MVVM the view binds to observable state on a ViewModel, which never references the view. VIPER splits an iOS screen into View, Interactor, Presenter, Entity and Router. React is a view library with one-way data flow: components are views, custom Hooks act as ViewModels, and reducers or stores give Flux-style unidirectional updates."

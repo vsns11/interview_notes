@@ -1,6 +1,6 @@
 # Chapter 8 — Styling React Apps
 
-React has no built-in styling system. It renders HTML elements, and you style those with CSS — the question is only *how you write, scope and ship* that CSS. This chapter compares the approaches you will meet in real codebases, shows each one running, and helps you choose. It assumes you know CSS itself (selectors, the cascade, specificity, custom properties); if not, read the HTML & CSS book first — [CSS fundamentals](../../../html-css/chapters/06-css-fundamentals/README.md) and [modern CSS & architecture](../../../html-css/chapters/13-modern-css-and-architecture/README.md).
+React has no built-in styling system. It renders HTML elements, and you style those with CSS — the question is only *how you write, **scope** (limit which elements a rule can affect) and ship* that CSS. This chapter compares the approaches you will meet in real codebases, shows each one running, and helps you choose. It assumes you know CSS itself (selectors — patterns that pick elements; the cascade — the rules for which conflicting declaration wins; specificity — how "strong" a selector is; custom properties — CSS variables such as `--accent`); if not, read the HTML & CSS book first — [CSS fundamentals](../../../html-css/chapters/06-css-fundamentals/README.md) and [modern CSS & architecture](../../../html-css/chapters/13-modern-css-and-architecture/README.md).
 
 **What you'll learn**
 
@@ -17,14 +17,14 @@ React has no built-in styling system. It renders HTML elements, and you style th
 | 8.9 | Component libraries | choose between styled kits, headless libraries and copy-in components |
 | 8.10 | Choosing an approach | pick a strategy for a new project |
 
-Code: [`code/`](code/). Node programs print what React puts in the DOM; the visual results are screenshots of real pages in headless Chrome (bundled with esbuild; Tailwind compiled with the Tailwind v4.3 CLI).
+Code: [`code/`](code/). Node programs print what React puts in the DOM; the visual results are screenshots of real pages in **headless** Chrome (a real browser running without a window, driven by a script) (bundled with esbuild, a fast JavaScript bundler; Tailwind compiled with the Tailwind v4.3 **CLI** — command-line interface, a program you run in the terminal).
 
 ---
 
 ## 8.1 The styling landscape
 
 ### The problem every approach solves
-CSS was designed for documents: every rule is **global**, and conflicts are settled by the **cascade** (origin, specificity, order). In a large app built from hundreds of components, that causes three recurring pains:
+CSS was designed for documents: every rule is **global**, and conflicts are settled by the **cascade** (origin — browser default vs your stylesheet, specificity, order). In a large app built from hundreds of components, that causes three recurring pains:
 
 1. **Name collisions** — two teams both write `.title`; whichever file loads last wins.
 2. **Dead CSS** — nobody dares delete a rule because they can't tell which components still use it.
@@ -32,9 +32,9 @@ CSS was designed for documents: every rule is **global**, and conflicts are sett
 
 Every approach below is a different answer to these three problems.
 
-| Family | How you write styles | Scoping | Runtime cost | Typical tools |
+| Family | How you write styles | Scoping | Runtime cost (extra work done in the browser while the app runs) | Typical tools |
 |---|---|---|---|---|
-| Global CSS files | `.css` files, `className="card"` | Naming conventions (BEM) | None | Plain CSS, Sass |
+| Global CSS files | `.css` files, `className="card"` | Naming conventions (BEM, §8.2) | None | Plain CSS, Sass (a CSS preprocessor adding variables, nesting and mixins) |
 | Inline styles | `style={{ color: 'red' }}` | Per element | Tiny | Built into React |
 | CSS Modules | `.module.css`, `className={styles.card}` | Automatic, per file | None | Vite, Next.js, webpack |
 | Utility-first CSS | `className="p-4 rounded-xl bg-white"` | Nothing to scope — classes are single-purpose | None | **Tailwind CSS**, UnoCSS |
@@ -43,14 +43,14 @@ Every approach below is a different answer to these three problems.
 The same card, styled five ways (`code/gallery.html`, components in `code/cards.jsx`):
 
 ![Five near-identical profile cards for Grace Hopper, each with a Follow button, captioned Global CSS + BEM, CSS Module, Inline style, Tailwind, and CSS-in-JS idea; the Tailwind card's heading is bolder and the CSS-in-JS card is yellow with a dashed border](img/styling-approaches.png)
-*Figure 8.1 — One component, five styling approaches. The output is ordinary HTML + CSS in every case; they differ in how the CSS is authored, scoped and delivered. (The Tailwind heading uses an explicit `font-bold` — Tailwind's reset, "Preflight", removes default heading styles on the whole page, which is why the other headings look lighter than browser defaults.)*
+*Figure 8.1 — One component, five styling approaches. The output is ordinary HTML + CSS in every case; they differ in how the CSS is authored, scoped and delivered. (The Tailwind heading uses an explicit `font-bold` — Tailwind's **reset** (a stylesheet that wipes the browser's default styles), "Preflight", removes default heading styles on the whole page, which is why the other headings look lighter than browser defaults.)*
 
 ---
 
 ## 8.2 Plain CSS files
 
 ### What it is
-The oldest approach: write rules in a `.css` file and apply them with the **`className`** prop (JSX uses `className` because `class` is a reserved word in JavaScript — see [Chapter 1](../01-why-react-and-setup/README.md)). With a bundler such as Vite you can `import './Card.css'` from a component file; the bundler adds the file to the page's stylesheet.
+The oldest approach: write rules in a `.css` file and apply them with the **`className`** prop (JSX uses `className` because `class` is a reserved word in JavaScript — see [Chapter 1](../01-why-react-and-setup/README.md)). With a **bundler** (a build tool that combines your source files and their imports into files the browser loads) such as Vite you can `import './Card.css'` from a component file; the bundler adds the file to the page's stylesheet.
 
 ```jsx
 // cards.jsx
@@ -77,21 +77,21 @@ export function GlobalCssCard({ name, role }) {
 ```
 
 ### How it works
-1. `import './global.css'` is **not** JavaScript — it's a bundler feature. The bundler collects every imported CSS file into the page (a `<link>` in production, injected `<style>` in dev).
+1. `import './global.css'` is **not** JavaScript — it's a bundler feature. The bundler collects every imported CSS file into the page (a `<link>` in production — the optimised build users get, injected `<style>` in dev).
 2. **Importing CSS in a component does not scope it.** Once loaded, the rules apply to the *whole page*, even to components that never imported the file.
 3. To avoid collisions, teams use naming conventions such as **BEM** (Block__Element--Modifier): `profile-card` (block), `profile-card__name` (element), `profile-card__button--following` (modifier).
 
 ### Trade-offs
 | ✅ Strengths | ❌ Weaknesses |
 |---|---|
-| Zero tooling, zero runtime, full CSS power (`:hover`, media/container queries, animations, nesting, `@layer`) | Global by default — scoping is only as good as your discipline |
+| Zero tooling, zero runtime, full CSS power (`:hover`, media/container queries — rules that apply only at certain screen or container sizes, animations, nesting, `@layer`) | Global by default — scoping is only as good as your discipline |
 | Easy for designers and CSS experts | Hard to know if a rule is still used; dead CSS accumulates |
-| Browser caches the stylesheet separately from JS | Dynamic values need CSS variables or inline styles |
+| Browser caches (keeps a downloaded copy of) the stylesheet separately from JS | Dynamic values need CSS variables or inline styles |
 
 Modern CSS removed much of the old pain: **native nesting**, **cascade layers** (`@layer` — decide which group of rules wins regardless of specificity) and **custom properties** all work in current browsers (HTML & CSS book, [Chapter 13](../../../html-css/chapters/13-modern-css-and-architecture/README.md)). Sass is still common but no longer necessary for variables or nesting.
 
 ### React 19: stylesheets as components
-React 19 can manage stylesheets for you: render `<link rel="stylesheet" href="/card.css" precedence="default" />` anywhere in the tree and React moves it into `<head>`, loads it once even if many components render it, orders it by `precedence`, and — inside a Suspense boundary — waits for it to load before revealing the content. This is mostly used by frameworks and libraries; in a Vite app you normally just `import` CSS.
+React 19 can manage stylesheets for you: render `<link rel="stylesheet" href="/card.css" precedence="default" />` anywhere in the tree and React moves it into `<head>`, loads it once even if many components render it, orders it by `precedence`, and — inside a Suspense boundary (a `<Suspense>` wrapper that shows a fallback while its content is not ready) — waits for it to load before revealing the content. This is mostly used by frameworks and libraries; in a Vite app you normally just `import` CSS.
 
 ### TL;DR
 `className` + CSS file. Imports are global — use a naming convention or move to CSS Modules.
@@ -101,7 +101,7 @@ React 19 can manage stylesheets for you: render `<link rel="stylesheet" href="/c
 ## 8.3 Inline styles — the `style` prop
 
 ### What it is
-Every HTML element accepts a **`style` prop**: a JavaScript object whose keys are CSS properties in **camelCase** (`backgroundColor`, not `background-color`). React writes it to the element's `style` attribute. The double braces in `style={{ … }}` are a JSX expression (outer) containing an object literal (inner).
+Every HTML element accepts a **`style` prop**: a JavaScript object whose keys are CSS properties in **camelCase** (words joined with each new word capitalised) (`backgroundColor`, not `background-color`). React writes it to the element's `style` attribute. The double braces in `style={{ … }}` are a JSX expression (outer) containing an object literal (inner).
 
 `code/01_inline_styles.jsx`:
 ```jsx
@@ -139,13 +139,13 @@ Unsupported style property @media (max-width: 600px). Did you mean @media (maxWi
 ### How it works — the rules the output shows
 1. **Numbers get `px`** for length properties (`borderRadius: 4` → `4px`), but **unitless properties** (`lineHeight`, `zIndex`, `opacity`, `flexGrow`, …) stay plain numbers. For other units pass a string: `'50%'`, `'2rem'`.
 2. **Custom properties** (`'--accent'`) are passed through unchanged — the cleanest way to feed a dynamic value into a stylesheet.
-3. **Vendor prefixes** start with a capital (`WebkitLineClamp`), except `ms` (`msTransform`). (jsdom, like modern browsers, dropped the obsolete `-ms-transform`.)
-4. **Pseudo-classes, pseudo-elements, media queries, keyframes are impossible**: a `style` attribute can't hold selectors or at-rules. The last `<p>` got no style at all, and React warned.
+3. **Vendor prefixes** (browser-specific property prefixes such as `-webkit-`, from the days when features were experimental) start with a capital (`WebkitLineClamp`), except `ms` (`msTransform`). (jsdom — the browser-like DOM used in these Node scripts — like modern browsers, dropped the obsolete `-ms-transform`.)
+4. **Pseudo-classes (state selectors like `:hover`), pseudo-elements (`::before`), media queries, keyframes (animation steps) are impossible**: a `style` attribute can't hold selectors or at-rules (CSS statements starting with `@`). The last `<p>` got no style at all, and React warned.
 
 ### When to use it (and when not)
 | Use inline styles for | Don't use them for |
 |---|---|
-| Values computed at runtime: progress width, drag position, a user-chosen colour | Whole-component styling (no hover/focus/responsive; hard to override) |
+| Values computed at runtime: progress width, drag position, a user-chosen colour | Whole-component styling (no hover/focus/responsive — adapting to screen size; hard to override) |
 | Passing a value to CSS: `style={{ '--progress': `${p}%` }}` with the rest in a stylesheet | Anything a designer will want to theme |
 | Quick prototypes | Large lists where every row repeats the same object (use a class) |
 
@@ -223,7 +223,7 @@ Output:
 ```
 
 ### How it works
-1. The tool parses the file and renames each class selector: `.card` → `.Card_card` (esbuild's scheme; Vite and webpack add a short hash, e.g. `_card_1x9ab_1`, so names are unique even across files with the same name).
+1. The tool parses the file and renames each class selector: `.card` → `.Card_card` (esbuild's scheme; Vite and webpack add a short **hash** — a short code computed from the content, e.g. `_card_1x9ab_1`, so names are unique even across files with the same name).
 2. `import styles from …` returns the mapping; `styles.card` is the generated string.
 3. **`composes: button`** makes `styles.primary` equal *both* class names — `"Card_button Card_primary"` — reuse without duplicating rules.
 4. **`:global(.sr-only)`** opts a selector out of renaming, for the rare global class you need.
@@ -233,8 +233,8 @@ Output:
 | ✅ | ❌ |
 |---|---|
 | Real CSS: hover, media/container queries, animations, nesting | Styles live in a second file (some like this, some don't) |
-| Zero runtime, works with Server Components | Dynamic values still need CSS variables or inline styles |
-| Unused-class detection with TypeScript plugins / linters | Class names with dashes need bracket access: `styles['is-active']` (or configure camelCase conversion) |
+| Zero runtime, works with Server Components (React components that run only on the server, Chapter 13) | Dynamic values still need CSS variables or inline styles |
+| Unused-class detection with TypeScript plugins / linters (tools that scan code for mistakes) | Class names with dashes need bracket access: `styles['is-active']` (or configure camelCase conversion) |
 | Easy migration from plain CSS | Theming across modules relies on CSS variables (§8.8) |
 
 ### Common mistakes
@@ -294,7 +294,7 @@ concatenated: "btn false undefined"
 The last line is the bug `clsx` prevents: naive concatenation leaks `"false"` and `"undefined"` into the DOM.
 
 ### Patterns worth knowing
-- **Always accept and merge a `className` prop** in reusable components, so parents can add spacing or layout (`ml-auto`) without forking the component.
+- **Always accept and merge a `className` prop** in reusable components, so parents can add spacing or layout (`ml-auto`) without **forking** the component (copying it to make a modified version).
 - **Variant maps** beat nested ternaries: `const VARIANTS = { primary: '…', danger: '…' }` then `VARIANTS[variant]`. Libraries like **`cva`** (class-variance-authority) formalise this for Tailwind.
 - **With CSS Modules**: `cx(styles.btn, styles[variant], loading && styles.loading)`.
 - **With Tailwind**, conflicting utilities (`px-2` from the component, `px-4` from the parent) are *not* resolved by order in the string; use **`tailwind-merge`** (`twMerge(clsx(...))`) so the last one wins (§8.6).
@@ -309,7 +309,7 @@ Build class strings with `clsx`/`cx`; accept a `className` prop; use variant map
 ## 8.6 Tailwind CSS
 
 ### What it is
-**Tailwind CSS** is a **utility-first** CSS framework: instead of inventing class names (`.profile-card`) and writing rules for them, you compose many tiny single-purpose classes directly in your markup — `p-4` (padding), `rounded-xl`, `bg-white`, `text-gray-500`, `hover:bg-blue-700`. A build step scans your source files and generates CSS for **only the classes you actually use**. The current major version is **v4** (released January 2025; v4.3 at the time of writing), which is configured in CSS rather than a JavaScript config file.
+**Tailwind CSS** is a **utility-first** CSS framework: instead of inventing class names (`.profile-card`) and writing rules for them, you compose many tiny single-purpose classes directly in your **markup** (the HTML/JSX) — `p-4` (padding), `rounded-xl`, `bg-white`, `text-gray-500`, `hover:bg-blue-700`. A build step scans your source files and generates CSS for **only the classes you actually use**. The current major version is **v4** (released January 2025; v4.3 at the time of writing), which is configured in CSS rather than a JavaScript config file.
 
 The Tailwind card from Figure 8.1:
 ```jsx
@@ -327,7 +327,7 @@ export function TailwindCard({ name, role }) {
 ### How it works
 1. You add one line to your main CSS file: `@import "tailwindcss";` (it brings in the default **theme** — colours, spacing, fonts as CSS variables — **Preflight**, a CSS reset, and the **utilities** layer).
 2. The build tool (the Vite plugin or the CLI) scans your project's source files for anything that looks like a class name. `@source "./path"` adds places it would not find by itself.
-3. For each class it recognises, it generates one rule. Variants are prefixes: `hover:`, `focus-visible:`, `md:` (screen ≥ 48rem = 768px), `dark:`, `disabled:`, `group-hover:` …
+3. For each class it recognises, it generates one rule. Variants are prefixes: `hover:`, `focus-visible:`, `md:` (screen ≥ 48rem = 768px; `rem` is a unit relative to the root font size, usually 16px), `dark:`, `disabled:`, `group-hover:` …
 4. Values come from the theme (`px-2` = 2 × `--spacing`), or you can use an **arbitrary value** in brackets: `w-[37px]`, `grid-cols-[1fr_2fr]`.
 
 `code/05_tailwind_build.mjs` runs the real Tailwind CLI on a one-line component:
@@ -402,13 +402,13 @@ Long class lists are repeated in one place only if you make a **component** (`<B
 | `` className={`bg-${color}-500`} `` | The scanner reads source *text*; it never sees `bg-red-500`, so no CSS is generated | Map to complete class names: `{ red: 'bg-red-500', green: 'bg-green-500' }[color]` |
 | `className="px-2 px-4"` expecting px-4 to win | Winner is decided by order *in the generated CSS*, not in the attribute | Don't pass conflicting classes; merge with `tailwind-merge` |
 | Forgetting Preflight resets headings, lists, buttons | `<h1>` looks like body text | Style explicitly (`text-3xl font-bold`) — intended |
-| Huge unreadable class strings | Hard to review | Extract components; order with the official Prettier plugin |
+| Huge unreadable class strings | Hard to review | Extract components; order with the official Prettier plugin (Prettier is an automatic code formatter) |
 
 ### Trade-offs
 | ✅ | ❌ |
 |---|---|
 | No naming, no switching files, no dead CSS (unused classes are never generated) | Markup gets long and noisy |
-| Consistent design tokens (spacing and colour scales) out of the box | A new vocabulary to learn; team must agree to use it |
+| Consistent design tokens (named design values such as colours and spacing; §8.8) out of the box | A new vocabulary to learn; team must agree to use it |
 | Tiny production CSS that stops growing with the app | Dynamic values need arbitrary values or CSS variables |
 | Zero runtime; works with Server Components | Styles are coupled to markup — harder to restyle a whole app by editing one stylesheet (use theme variables) |
 
@@ -426,7 +426,7 @@ Utilities in JSX, CSS generated from what you use. Write complete class names, r
 ## 8.7 CSS-in-JS
 
 ### What it is
-**CSS-in-JS** means writing styles in JavaScript files, usually colocated with the component, often with access to props:
+**CSS-in-JS** means writing styles in JavaScript files, usually **colocated** (kept in the same file or folder) with the component, often with access to props:
 
 ```jsx
 // styled-components / Emotion style (not run — not installed)
@@ -444,11 +444,11 @@ There are two very different kinds:
 
 | Kind | How it works | Examples |
 |---|---|---|
-| **Runtime** | In the browser, the library turns the template into CSS, hashes it into a class name, and injects a `<style>` tag while rendering | styled-components, Emotion |
+| **Runtime** | In the browser, the library turns the template (the backtick **tagged template literal** after `styled.button`) into CSS, hashes it into a class name, and injects a `<style>` tag while rendering | styled-components, Emotion |
 | **Zero-runtime** (build-time) | A compiler extracts the styles into static `.css` files during the build; only class names remain in JS | vanilla-extract, Linaria, Panda CSS, StyleX (Meta) |
 
 ### How runtime CSS-in-JS works — a tiny version
-`code/cards.jsx` contains a 5-line imitation, using a React 19 feature: a `<style>` element with `href` and `precedence` is **hoisted into `<head>` and de-duplicated** by React, however many components render it.
+`code/cards.jsx` contains a 5-line imitation, using a React 19 feature: a `<style>` element with `href` and `precedence` is **hoisted** (moved up) **into `<head>` and de-duplicated** (inserted only once) by React, however many components render it.
 
 ```jsx
 function css(strings) { /* hash the text into a class name, replace & with .className */ }
@@ -466,19 +466,19 @@ export function CssInJsCard({ name, role }) {
 }
 ```
 
-That is the yellow card in Figure 8.1. Real libraries add prop interpolation, theming, vendor prefixing and server-side extraction — and they must insert styles *before* layout effects read the DOM, which is why React has a dedicated Hook for library authors, `useInsertionEffect`.
+That is the yellow card in Figure 8.1. Real libraries add prop interpolation, theming, vendor prefixing and server-side extraction — and they must insert styles *before* layout effects (Effects that run after DOM changes but before paint; Chapter 5) read the DOM, which is why React has a dedicated Hook for library authors, `useInsertionEffect`.
 
 ### Why the trend moved away from runtime CSS-in-JS
-1. **Runtime cost**: serialising and hashing styles during render adds work to every render, and injecting new rules forces the browser to recalculate styles.
-2. **Server Components** ([Chapter 13](../13-server-rendering-and-frameworks/README.md)): runtime libraries rely on React context and client-side rendering, so styled components must live in `'use client'` files.
-3. **Streaming SSR** needs extra setup to collect styles per request.
+1. **Runtime cost**: **serialising** (turning style objects into CSS text) and hashing styles during render adds work to every render, and injecting new rules forces the browser to recalculate styles.
+2. **Server Components** ([Chapter 13](../13-server-rendering-and-frameworks/README.md)): runtime libraries rely on React context and client-side rendering (rendering in the browser), so styled components must live in `'use client'` files (files marked to run in the browser).
+3. **Streaming SSR** (server-side rendering that sends HTML in chunks as it is ready) needs extra setup to collect styles per request.
 
-In **March 2025 styled-components entered maintenance mode**; its maintainer advised against adopting it for new projects. Existing apps keep working, and Emotion remains widely used (e.g. inside MUI). New projects mostly choose CSS Modules, Tailwind, or a **zero-runtime** library that keeps the colocated, typed authoring style without the runtime.
+In **March 2025 styled-components entered maintenance mode** (bug and security fixes only, no new features); its maintainer advised against adopting it for new projects. Existing apps keep working, and Emotion remains widely used (e.g. inside MUI). New projects mostly choose CSS Modules, Tailwind, or a **zero-runtime** library that keeps the colocated, typed authoring style without the runtime.
 
 ### Trade-offs
 | ✅ | ❌ |
 |---|---|
-| Styles next to the component; dynamic styles from props | Runtime libs: slower renders, bigger bundles, RSC friction |
+| Styles next to the component; dynamic styles from props | Runtime libs: slower renders, bigger bundles, RSC (React Server Components) friction |
 | Automatic scoping; dead styles die with the component | Another abstraction to learn; debugging generated class names |
 | Zero-runtime libs: type-safe tokens, static CSS output | Zero-runtime libs need build-tool plugins |
 
@@ -494,9 +494,9 @@ Runtime CSS-in-JS (styled-components, Emotion) is convenient but costs render ti
 
 ### How it works
 1. Define tokens on `:root`; override them under an attribute selector such as `[data-theme="dark"]`.
-2. A small React **provider** stores the user's choice (`light` / `dark` / `system`), resolves `system` using the OS preference (the `prefers-color-scheme` media query), and writes the result to `<html data-theme="…">`.
+2. A small React **provider** (a component that supplies a value to everything below it through context) stores the user's choice (`light` / `dark` / `system`), resolves `system` using the OS preference (the `prefers-color-scheme` media query), and writes the result to `<html data-theme="…">`.
 3. CSS does the rest — no component re-renders are needed to recolour the page.
-4. Save the choice in `localStorage`, and apply it with a tiny inline script **before** the page paints to avoid a **flash of the wrong theme**.
+4. Save the choice in `localStorage` (the browser's small key-value storage), and apply it with a tiny inline script **before** the page **paints** (draws pixels) to avoid a **flash of the wrong theme**.
 5. Set the CSS `color-scheme` property so browser-drawn parts (form controls, scrollbars) match.
 
 `code/theme.css` (tokens):
@@ -514,7 +514,7 @@ body  { background: var(--bg); color: var(--text); }
 .cta  { background: var(--accent); color: var(--accent-text); }
 ```
 
-`code/theme.jsx` (the provider — the OS setting is an external store, so it uses `useSyncExternalStore` from [Chapter 7](../07-custom-hooks-and-hook-rules/README.md)):
+`code/theme.jsx` (the provider — the OS setting is an external store (data living outside React that can change by itself), so it uses `useSyncExternalStore` from [Chapter 7](../07-custom-hooks-and-hook-rules/README.md)):
 ```jsx
 const ThemeContext = createContext(null);
 const QUERY = '(prefers-color-scheme: dark)';
@@ -573,11 +573,11 @@ React runs after the HTML and CSS have been parsed, so if the theme is only appl
   } catch {}
 </script>
 ```
-Frameworks with SSR need the same trick (packages like `next-themes` inject it for you); a cookie lets the server render the right theme directly.
+Frameworks with SSR need the same trick (packages like `next-themes` inject it for you); a **cookie** (a small value the browser sends to the server with every request) lets the server render the right theme directly.
 
 ### Alternatives and extras
 - **CSS only**: if you don't need a manual toggle, `@media (prefers-color-scheme: dark) { :root { … } }` is enough — no JavaScript.
-- **`light-dark()`**: with `color-scheme: light dark` set, `color: light-dark(#111, #eee)` picks a value per scheme in one declaration (Baseline since 2024).
+- **`light-dark()`**: with `color-scheme: light dark` set, `color: light-dark(#111, #eee)` picks a value per scheme in one declaration (Baseline since 2024 — "Baseline" means supported in all major current browsers).
 - **Tailwind**: `dark:` variants follow the OS by default; `@custom-variant dark (&:where(.dark, .dark *))` or a `[data-theme=dark]` selector makes them follow your toggle.
 - **Component libraries** expose a `ThemeProvider` that fills the same role (§8.9).
 - **Why not pass colours through React context?** You can, but every theme change then re-renders every consumer; CSS variables recolour without rendering.
@@ -585,7 +585,7 @@ Frameworks with SSR need the same trick (packages like `next-themes` inject it f
 ### Common mistakes
 - Hard-coded colours in components (`color: '#333'`) that don't respond to the theme — always use tokens.
 - Reading `localStorage` during server rendering (it doesn't exist there) — read it on the client or use a cookie.
-- Only inverting colours: dark themes also need adjusted shadows, borders and less saturated accents, and still must meet contrast ratios (WCAG 2.2: 4.5:1 for normal text).
+- Only inverting colours: dark themes also need adjusted shadows, borders and less saturated accents, and still must meet contrast ratios (brightness difference between text and background; WCAG 2.2 — the Web Content Accessibility Guidelines — requires 4.5:1 for normal text).
 
 ### TL;DR
 Tokens as CSS variables, overridden by `[data-theme]`; a provider resolves light/dark/system and writes the attribute; a head script prevents the flash; `color-scheme` for native controls.
@@ -595,15 +595,15 @@ Tokens as CSS variables, overridden by `[data-theme]`; a provider resolves light
 ## 8.9 Component libraries
 
 ### What it is
-A **component library** gives you ready-made, accessible UI components — buttons, dialogs, menus, date pickers, tables — so you don't rebuild (and re-debug) them. Accessibility is the main reason to use one: a correct dropdown menu needs focus management, keyboard navigation and ARIA roles that take weeks to get right (see [Chapter 14](../14-patterns-and-architecture/README.md) and the HTML & CSS book's [accessibility chapter](../../../html-css/chapters/03-semantic-html-and-accessibility/README.md)).
+A **component library** gives you ready-made, accessible UI components — buttons, dialogs, menus, date pickers, tables — so you don't rebuild (and re-debug) them. Accessibility is the main reason to use one: a correct dropdown menu needs focus management (moving keyboard focus to the right element), keyboard navigation and ARIA roles (attributes that tell screen readers what a custom element is, e.g. `role="menu"`) that take weeks to get right (see [Chapter 14](../14-patterns-and-architecture/README.md) and the HTML & CSS book's [accessibility chapter](../../../html-css/chapters/03-semantic-html-and-accessibility/README.md)).
 
 ### Three kinds
 
 | Kind | What you get | Examples | Best when |
 |---|---|---|---|
-| **Styled kits** | Complete components with a design system and theming API | MUI (Material UI), Mantine, Chakra UI, Ant Design, React Bootstrap | Internal tools, admin panels, fast delivery, you accept their look |
+| **Styled kits** | Complete components with a design system (a shared set of visual rules and components) and theming API | MUI (Material UI), Mantine, Chakra UI, Ant Design, React Bootstrap | Internal tools, admin panels, fast delivery, you accept their look |
 | **Headless (unstyled) primitives** | Behaviour + accessibility, no styles — you bring CSS/Tailwind | Radix UI Primitives, React Aria (Adobe), Headless UI (Tailwind Labs), Base UI | A custom brand design that must still be accessible |
-| **Copy-in components** | Source code copied into *your* repo (via a CLI), built on headless primitives + Tailwind | shadcn/ui | You want to own and edit the code, not depend on a package's API |
+| **Copy-in components** | Source code copied into *your* repo (repository — your project's version-controlled code) (via a CLI), built on headless primitives + Tailwind | shadcn/ui | You want to own and edit the code, not depend on a package's API |
 
 ### How to choose
 | Question | Leans towards |

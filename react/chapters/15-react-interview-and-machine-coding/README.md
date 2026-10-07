@@ -1,6 +1,6 @@
 # Chapter 15 — React Interview and Machine Coding
 
-A front-end React interview usually has two technical parts. The **concepts round** asks "why" questions — why keys matter, why an Effect ran twice, why a memoized child still re-rendered — and listens for a precise mental model. The **machine-coding round** has you build a small widget (autocomplete, modal, tabs…) in 45–90 minutes while explaining your choices: how you split the problem, where state lives, whether the keyboard works, how you handle awkward cases.
+A front-end React interview usually has two technical parts. The **concepts round** asks "why" questions — why keys (the `key` prop that tells React which list item is which) matter, why an Effect (code in `useEffect` that runs after React updates the screen) ran twice, why a memoized child (one wrapped in `memo` so it skips re-rendering when its props are unchanged) still re-rendered — and listens for a precise mental model (your inner picture of how the system works). The **machine-coding round** has you build a small widget (a self-contained piece of UI: autocomplete — a text box that suggests matches as you type — modal, tabs…) in 45–90 minutes while explaining your choices: how you split the problem, where state lives, whether the keyboard works, how you handle awkward cases (edge cases: empty data, errors, very fast input and other situations at the limits).
 
 Part one is **53 questions with short, correct answers** for React 19, each linked to the section that teaches it; the most-disputed answers are *proved* by a runnable program. Part two is **eight machine-coding builds**, done as in the room: requirements → component tree → state design → code → a React Testing Library + `user-event` test → a Chrome screenshot → follow-ups and edge cases.
 
@@ -11,16 +11,16 @@ Part one is **53 questions with short, correct answers** for React 19, each link
 | 15.1 | How the rounds work | follow a repeatable method and time plan for a machine-coding round |
 | 15.2–15.9 | 53 interview questions | answer rendering, state, effects, refs, forms, context, performance, Suspense, transitions, Server Components, hydration, error boundaries, portals, testing and accessibility questions in 30 seconds |
 | 15.10 | Todo list with filters | use a reducer, derived state, inline editing and `localStorage` persistence |
-| 15.11 | Autocomplete | debounce input, abort stale requests, build the ARIA combobox keyboard pattern |
+| 15.11 | Autocomplete | debounce input (wait for a pause in typing), abort stale (outdated) requests, build the ARIA combobox keyboard pattern |
 | 15.12 | Infinite scroll | load pages with `IntersectionObserver` and never fire duplicate requests |
-| 15.13 | Modal dialog | render through a portal, trap focus, close on Escape, restore focus |
+| 15.13 | Modal dialog | render through a portal (into another DOM node), trap focus (keep Tab inside the dialog), close on Escape, restore focus |
 | 15.14 | Tabs | implement the ARIA tabs pattern with a roving `tabIndex` and arrow keys |
 | 15.15 | Star rating | build on native radio buttons so keyboard and screen readers work for free |
 | 15.16 | Pagination | write a pure page-range function with ellipses and a controlled pager |
 | 15.17 | Multi-step form wizard | validate per step, wire errors to fields, move focus correctly |
 | 15.18 | Other common prompts | map ten more prompts to the techniques in this chapter |
 
-Code: [`code/`](code/) — React 19.3 in jsdom (a browser-like DOM that runs in Node). Each build is one component file (`todo.jsx`, `autocomplete.jsx`, …) plus a test file (`02_todo.test.jsx`, …) that uses Node's built-in test runner (`node:test`), React Testing Library and `@testing-library/user-event`, exactly like [Chapter 12](../12-testing-react/README.md). The screenshots come from [`code/machine-coding.html`](code/machine-coding.html): open it directly to see all eight builds, or add `#todo`, `#autocomplete`, `#infinite`, `#modal`, `#tabs`, `#stars`, `#pagination` or `#wizard` to see one. Run everything with `bash tools_run_js.sh react` from the repository root.
+Code: [`code/`](code/) — React 19.3 in jsdom (a browser-like DOM that runs in Node). Each build is one component file (`todo.jsx`, `autocomplete.jsx`, …) plus a test file (`02_todo.test.jsx`, …) that uses Node's built-in test runner (`node:test`), React Testing Library and `@testing-library/user-event`, exactly like [Chapter 12](../12-testing-react/README.md). The screenshots come from [`code/machine-coding.html`](code/machine-coding.html): open it directly to see all eight builds, or add `#todo`, `#autocomplete`, `#infinite`, `#modal`, `#tabs`, `#stars`, `#pagination` or `#wizard` to see one. Run everything with `bash tools_run_js.sh react` from the repository root (the top folder of the project's version-controlled files).
 
 ---
 
@@ -31,10 +31,10 @@ Most companies run some mix of these rounds for a React role:
 
 | Round | What happens | What is really being tested |
 |---|---|---|
-| Concepts / "React internals" | 30–60 minutes of questions, often with a snippet: "what does this log?" | A correct mental model of rendering, state and effects |
-| Machine coding (UI build) | Build a widget in 45–90 minutes, in a sandbox or your own editor | Decomposition, state design, working code, accessibility, testing, talking while coding |
-| JavaScript | Closures, the event loop, `this`, and implement-from-scratch utilities such as `debounce` | The language under React — see [JavaScript Handbook Chapter 17](../../../javascript/chapters/17-javascript-for-interviews/README.md) |
-| Front-end system design | Design a news feed, a chat app, a design system | Data flow, caching, rendering strategy (CSR/SSR/RSC), performance, accessibility at scale |
+| Concepts / "React internals" | 30–60 minutes of questions, often with a snippet (a few lines of code): "what does this log?" | A correct mental model of rendering, state and effects |
+| Machine coding (UI build) | Build a widget in 45–90 minutes, in a sandbox (an online editor that runs your code) or your own editor | Decomposition (splitting a problem into small parts), state design, working code, accessibility, testing, talking while coding |
+| JavaScript | Closures (functions that remember variables from where they were created), the event loop (how JavaScript runs queued callbacks one at a time), `this`, and implement-from-scratch utilities such as `debounce` | The language under React — see [JavaScript Handbook Chapter 17](../../../javascript/chapters/17-javascript-for-interviews/README.md) |
+| Front-end system design | Design a news feed, a chat app, a design system (a shared library of UI components and rules) | Data flow, caching (keeping copies of data to avoid fetching again — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)), rendering strategy (CSR/SSR/RSC — client rendering, server rendering, Server Components; Q43–Q45), performance, accessibility at scale |
 
 ### The machine-coding method
 The same seven steps work for every build in this chapter. Say each step out loud; interviewers score the process, not only the final code.
@@ -49,11 +49,11 @@ flowchart LR
   F --> G["7 Edge cases and follow-ups"]
 ```
 
-1. **Clarify requirements** (3–5 min): what must work, then the quiet requirements — keyboard, screen readers, mobile, loading/error states, data size, browsers. Write a checklist; agree what's out of scope.
+1. **Clarify requirements** (3–5 min): what must work, then the quiet requirements — keyboard, screen readers, mobile, loading/error states, data size, browsers. Write a checklist; agree what's out of scope (deliberately not built today).
 2. **Sketch the component tree** (2–3 min): who renders whom, props down, callbacks up.
 3. **Design state** (3–5 min). List every piece of data, then ask of each: *can it be computed from something else?* (then it is derived, not state — [§3.8](../03-state-and-events/README.md#38-derived-state--choosing-the-minimal-state)); *who needs it?* (the closest common parent owns it — [§3.7](../03-state-and-events/README.md#37-lifting-state-up)); *does it belong outside React?* (server data, URL, `localStorage`).
-4. **Code the happy path** (20–30 min): something on screen early, then grow it; prefer native elements (`<button>`, `<input type="radio">`, `<form>`), which bring keyboard and screen-reader behaviour.
-5. **Keyboard and accessibility** (5–10 min): Tab order, visible focus, Escape, arrows where the pattern expects them, labels, roles, `aria-*` state.
+4. **Code the happy path** (the normal flow where nothing goes wrong; 20–30 min): something on screen early, then grow it; prefer native elements (`<button>`, `<input type="radio">`, `<form>`), which bring keyboard and screen-reader behaviour.
+5. **Keyboard and accessibility** (5–10 min): Tab order (the sequence the Tab key moves through), visible focus (an outline showing which element has keyboard focus), Escape, arrows where the pattern expects them, labels, roles, `aria-*` state.
 6. **Test** (5–10 min): one or two user-like tests — find by role and label, act with `user-event`, assert what the user sees ([§12.4](../12-testing-react/README.md#124-user-event--interacting-like-a-user)).
 7. **Edge cases and follow-ups** (the rest): empty, loading, error, huge lists, fast typing, double clicks, unmount mid-request, "how would this scale?".
 
@@ -80,19 +80,19 @@ flowchart LR
 Each answer takes about 30 seconds to say and links to the section that teaches it. Where an answer is often disputed, [`code/01_interview_facts.jsx`](code/01_interview_facts.jsx) proves it and its real output is shown. Answer aloud first, then check.
 
 **Q1. What happens, step by step, when you call a state setter?**
-Nothing changes immediately. (1) **Trigger** — the update is queued and a re-render scheduled; (2) **render** — React calls the component (and its children) and compares the new element tree with the previous one (reconciliation); (3) **commit** — React applies only the differences to the DOM, runs layout effects, the browser paints, then `useEffect` Effects run. → [§10.1](../10-performance/README.md#101-the-render-cycle-trigger--render--commit), [§1.3](../01-why-react-and-setup/README.md#13-rendering-the-virtual-dom-and-reconciliation-brief)
+Nothing changes immediately. (1) **Trigger** — the update is queued (put in a waiting list) and a re-render scheduled; (2) **render** — React calls the component (and its children) and compares the new element tree with the previous one (reconciliation); (3) **commit** — React applies only the differences to the DOM, runs layout effects (`useLayoutEffect` code, which runs before the screen is drawn), the browser paints (draws the pixels), then `useEffect` Effects run. → [§10.1](../10-performance/README.md#101-the-render-cycle-trigger--render--commit), [§1.3](../01-why-react-and-setup/README.md#13-rendering-the-virtual-dom-and-reconciliation-brief)
 
 **Q2. What is the difference between the render phase and the commit phase? Which one must be pure?**
-The **render phase** calls components to compute the UI. It must be **pure** (same inputs → same JSX, no side effects) because React may call it twice, pause it or discard it (concurrent rendering, StrictMode). The **commit phase** applies DOM changes and runs effects, once per committed update; side effects belong there or in event handlers. → [§2.5](../02-components-and-props/README.md#25-pure-components), [§10.1](../10-performance/README.md#101-the-render-cycle-trigger--render--commit)
+The **render phase** calls components to compute the UI. It must be **pure** (same inputs → same JSX, no side effects) because React may call it twice, pause it or discard it (concurrent rendering — React can interrupt a render to handle something more urgent; StrictMode — a development-only wrapper that runs things twice to expose bugs). The **commit phase** applies DOM changes and runs effects, once per committed update; side effects belong there or in event handlers. → [§2.5](../02-components-and-props/README.md#25-pure-components), [§10.1](../10-performance/README.md#101-the-render-cycle-trigger--render--commit)
 
 **Q3. What is reconciliation? Is "the virtual DOM" still the right way to describe React?**
-Reconciliation compares the previous element tree with the next to find the DOM changes. A general tree diff is O(n³); React makes it O(n) with two rules: **a different element type means a different subtree** (`<div>` → `<section>`, or `ComponentA` → `ComponentB`, destroys the old subtree and its state), and **keys identify list children** across renders. "Virtual DOM" is an older name for the in-memory element tree; today's docs speak of *rendering* and *committing*, and the idea that matters is identity by *type + position + key*. → [§1.3](../01-why-react-and-setup/README.md#13-rendering-the-virtual-dom-and-reconciliation-brief), [§3.10](../03-state-and-events/README.md#310-state-is-tied-to-a-position-in-the-tree)
+Reconciliation compares the previous element tree with the next to find the DOM changes. A general tree diff is O(n³) (Big-O notation: work grows with the cube of the number of elements n); React makes it O(n) (work grows in step with n) with two rules: **a different element type means a different subtree** (`<div>` → `<section>`, or `ComponentA` → `ComponentB`, destroys the old subtree and its state), and **keys identify list children** across renders. "Virtual DOM" is an older name for the in-memory element tree; today's docs speak of *rendering* and *committing*, and the idea that matters is identity by *type + position + key*. → [§1.3](../01-why-react-and-setup/README.md#13-rendering-the-virtual-dom-and-reconciliation-brief), [§3.10](../03-state-and-events/README.md#310-state-is-tied-to-a-position-in-the-tree)
 
 **Q4. Why do lists need keys, and why is the array index a bad key?**
-A key tells React which item is which between renders, so the right DOM nodes and **state** move with it. With index keys, inserting at the top or re-sorting gives key `0` to a different item, which then inherits the first row's DOM and state (typed text, a checked box, focus). Use a stable ID from the data; index keys only for static lists. Never `Math.random()` — new keys every render remount every item. → [§2.8](../02-components-and-props/README.md#28-rendering-lists-and-keys)
+A key tells React which item is which between renders, so the right DOM nodes and **state** move with it. With index keys, inserting at the top or re-sorting gives key `0` to a different item, which then inherits the first row's DOM and state (typed text, a checked box, focus). Use a stable ID from the data; index keys only for static lists. Never `Math.random()` — new keys every render remount (destroy and re-create) every item. → [§2.8](../02-components-and-props/README.md#28-rendering-lists-and-keys)
 
 **Q5. What does changing a component's `key` do?**
-React treats it as a **different instance**: the old one unmounts (state gone, Effects cleaned up) and a new one mounts fresh — the idiomatic way to reset a form when the selected user changes: `<Profile key={userId} />`.
+React treats it as a **different instance** (a separate copy of the component with its own state): the old one unmounts (state gone, Effects cleaned up) and a new one mounts fresh — the idiomatic (standard, expected) way to reset a form when the selected user changes: `<Profile key={userId} />`.
 ```
 # a different key = a new component instance = fresh state
   Draft state initialised
@@ -105,14 +105,14 @@ React treats it as a **different instance**: the old one unmounts (state gone, E
 When its own **state** changes, its **parent re-renders** (children re-render by default, props changed or not), or a **context** it reads changes. "Props changed" is not a separate trigger — props change only because the parent re-rendered. A re-render with identical output commits nothing to the DOM. → [§10.2](../10-performance/README.md#102-when-components-re-render)
 
 **Q7. Why does `{items.length && <List />}` sometimes render a `0`?**
-`&&` returns its left side when it is falsy, and React renders the number `0`. Use a boolean (`items.length > 0 && …`) or a ternary; `false`, `null`, `undefined` and `true` render nothing. → [§2.7](../02-components-and-props/README.md#27-conditional-rendering)
+`&&` returns its left side when it is falsy (treated as false: `0`, `''`, `null`, `undefined`, `NaN`, `false`), and React renders the number `0`. Use a boolean (`items.length > 0 && …`) or a ternary (`cond ? a : b`); `false`, `null`, `undefined` and `true` render nothing. → [§2.7](../02-components-and-props/README.md#27-conditional-rendering)
 
 ---
 
 ## 15.3 Interview questions: state, events and forms
 
 **Q8. I call `setCount(count + 1)` three times in one click. Why does the count go up by one?**
-State is a **snapshot**: within one render `count` is a constant, so all three calls queue "replace with 1". An **updater function** builds on the queued value: `setCount(c => c + 1)` three times gives +3. The handler still sees the old value after calling the setter.
+State is a **snapshot** (a frozen copy for that render): within one render `count` is a constant, so all three calls queue "replace with 1". An **updater function** builds on the queued value: `setCount(c => c + 1)` three times gives +3. The handler still sees the old value after calling the setter.
 ```
 # snapshot + batching: three setN(n + 1) vs three setN(m => m + 1)
   render n=0
@@ -123,19 +123,19 @@ State is a **snapshot**: within one render `count` is a constant, so all three c
 One render per click — that is **batching** (Q9). → [§3.3](../03-state-and-events/README.md#33-state-as-a-snapshot), [§3.5](../03-state-and-events/README.md#35-updater-functions--queueing-updates)
 
 **Q9. What is batching? Did React 18 change it?**
-React applies all updates queued during an event in **one** re-render. Before React 18 only React event handlers were batched; since React 18 (`createRoot`) batching is **automatic everywhere** — timeouts, promises, native listeners. To force a synchronous DOM update (rare: scrolling to a just-added item, focusing a heading that must already show new text) use `flushSync` from `react-dom`. → [§3.4](../03-state-and-events/README.md#34-batching)
+React applies all updates queued during an event in **one** re-render. Before React 18 only React event handlers were batched; since React 18 (`createRoot`) batching is **automatic everywhere** — timeouts, promises (objects for results that arrive later), native listeners (handlers added with the browser's own `addEventListener`). To force a synchronous (immediate, in this same step) DOM update (rare: scrolling to a just-added item, focusing a heading that must already show new text) use `flushSync` from `react-dom`. → [§3.4](../03-state-and-events/README.md#34-batching)
 
 **Q10. Why must state be updated immutably?**
-React detects change with `Object.is(old, new)`; a mutated object is the same reference, so React may skip the render, and `memo` and dependency checks miss it too. Mutation also breaks snapshots. Create new objects/arrays (spread, `map`, `filter`, `toSorted`, `with`) or use Immer for deep updates. → [§3.6](../03-state-and-events/README.md#36-updating-objects-and-arrays-immutably)
+React detects change with `Object.is(old, new)`; a mutated (changed in place) object is the same reference (the same object in memory), so React may skip the render, and `memo` and dependency checks miss it too. Mutation also breaks snapshots. Create new objects/arrays (spread, `map`, `filter`, `toSorted`, `with`) or use Immer (a library that lets you write "mutating" code but produces new copies) for deep updates. → [§3.6](../03-state-and-events/README.md#36-updating-objects-and-arrays-immutably)
 
 **Q11. What is "derived state", and what's wrong with copying props into state?**
 Anything **computable** from props or state during render — a filtered list, a count, "is the form valid". Store the minimum and compute the rest, or two copies drift apart. `useState(prop)` uses only the prop's **first** value; use the prop directly, name it `initialX` to make that explicit, or reset with a `key`. → [§3.8](../03-state-and-events/README.md#38-derived-state--choosing-the-minimal-state)
 
 **Q12. Where should a piece of state live?**
-As **low** as possible but **high enough** that all its users are below it — the closest common parent ("lifting state up"), passing down the value and a callback. Colocation keeps re-renders small; lifting avoids out-of-sync copies. → [§3.7](../03-state-and-events/README.md#37-lifting-state-up), [§6.1](../06-state-management/README.md#61-kinds-of-state--and-where-each-belongs)
+As **low** as possible but **high enough** that all its users are below it — the closest common parent ("lifting state up"), passing down the value and a callback. Colocation (keeping state next to the components that use it) keeps re-renders small; lifting avoids out-of-sync copies. → [§3.7](../03-state-and-events/README.md#37-lifting-state-up), [§6.1](../06-state-management/README.md#61-kinds-of-state--and-where-each-belongs)
 
 **Q13. Controlled vs uncontrolled inputs — which should I use?**
-**Controlled**: `value` from state plus `onChange`; React is the source of truth, so you can validate or format per keystroke. **Uncontrolled**: the DOM keeps the value (`defaultValue`) and you read it with a ref or `FormData` on submit — less code, fewer re-renders. Controlled when the UI reacts to each keystroke; uncontrolled for submit-and-read forms, especially with React 19 form Actions (`<form action={fn}>` receives `FormData` and resets uncontrolled fields after success). Don't switch one input between the two — starting with `value={undefined}` and later passing a string triggers a warning. → [§4.2](../04-forms-and-actions/README.md#42-controlled-vs-uncontrolled-inputs), [§4.4](../04-forms-and-actions/README.md#44-form-actions--form-actionfn)
+**Controlled**: `value` from state plus `onChange`; React is the source of truth (the one place the real value is kept), so you can validate or format per keystroke. **Uncontrolled**: the DOM keeps the value (`defaultValue`) and you read it with a ref or `FormData` on submit — less code, fewer re-renders. Controlled when the UI reacts to each keystroke; uncontrolled for submit-and-read forms, especially with React 19 form Actions (`<form action={fn}>` receives `FormData` and resets uncontrolled fields after success). Don't switch one input between the two — starting with `value={undefined}` and later passing a string triggers a warning. → [§4.2](../04-forms-and-actions/README.md#42-controlled-vs-uncontrolled-inputs), [§4.4](../04-forms-and-actions/README.md#44-form-actions--form-actionfn)
 
 **Q14. What do `useActionState`, `useFormStatus` and `useOptimistic` do?**
 - `useActionState(action, initialState)` → `[state, formAction, isPending]`: the action's return value (e.g. validation errors) becomes state.
@@ -144,20 +144,20 @@ As **low** as possible but **high enough** that all its users are below it — t
 → [§4.5](../04-forms-and-actions/README.md#45-useactionstate--the-result-of-the-last-submission), [§4.6](../04-forms-and-actions/README.md#46-useformstatus--status-of-the-parent-form), [§4.7](../04-forms-and-actions/README.md#47-useoptimistic--instant-feedback-automatic-rollback)
 
 **Q15. How are React events different from DOM events?**
-Handlers get a **synthetic event**, a cross-browser wrapper with the usual interface (`target`, `preventDefault()`, `stopPropagation()`). Since React 17 listeners sit on the **root container**, not `document`, and events propagate through the **React** tree (portals — Q49). `onChange` fires on every keystroke (like the DOM `input` event). Returning `false` doesn't prevent default; call `e.preventDefault()`. → [§3.1](../03-state-and-events/README.md#31-responding-to-events)
+Handlers get a **synthetic event**, a cross-browser (behaves the same in every browser) wrapper with the usual interface (`target`, `preventDefault()`, `stopPropagation()`). Since React 17 listeners sit on the **root container**, not `document`, and events propagate through the **React** tree (portals — Q49). `onChange` fires on every keystroke (like the DOM `input` event). Returning `false` doesn't prevent default; call `e.preventDefault()`. → [§3.1](../03-state-and-events/README.md#31-responding-to-events)
 
 ---
 
 ## 15.4 Interview questions: effects and refs
 
 **Q16. What is `useEffect` for — and when is it the wrong tool?**
-Effects **synchronise a component with an external system**: a request tied to what's on screen, a subscription, a timer, a non-React widget, `document.title`. Wrong tool for computing from props/state (do it in render), reacting to a user action (event handler), resetting state on a prop change (`key`) or passing data up (lift state). Each unnecessary Effect costs an extra render and invites bugs. → [§5.1](../05-effects-and-refs/README.md#51-where-side-effects-belong), [§5.6](../05-effects-and-refs/README.md#56-you-might-not-need-an-effect)
+Effects **synchronise a component with an external system** (anything React doesn't control: the network, the browser, a third-party library): a request tied to what's on screen, a subscription (a registration to be told about changes), a timer, a non-React widget, `document.title`. Wrong tool for computing from props/state (do it in render), reacting to a user action (event handler), resetting state on a prop change (`key`) or passing data up (lift state). Each unnecessary Effect costs an extra render and invites bugs. → [§5.1](../05-effects-and-refs/README.md#51-where-side-effects-belong), [§5.6](../05-effects-and-refs/README.md#56-you-might-not-need-an-effect)
 
 **Q17. What do no array, `[]` and `[a, b]` mean as the second argument?**
-No array: after **every** commit. `[]`: after mount only (cleanup on unmount). `[a, b]`: after mount and whenever `a` or `b` changed (`Object.is`). Dependencies aren't a choice — every reactive value the Effect reads must be listed (`react-hooks/exhaustive-deps` checks). Objects or functions created during render are new each time and re-run the Effect every render; create them inside the Effect or memoize them. → [§5.5](../05-effects-and-refs/README.md#55-dependencies-in-depth)
+No array: after **every** commit. `[]`: after mount only (cleanup on unmount). `[a, b]`: after mount and whenever `a` or `b` changed (`Object.is`). Dependencies aren't a choice — every reactive value (props, state, and anything computed from them) the Effect reads must be listed (the `react-hooks/exhaustive-deps` lint rule checks). Objects or functions created during render are new each time and re-run the Effect every render; create them inside the Effect or memoize them. → [§5.5](../05-effects-and-refs/README.md#55-dependencies-in-depth)
 
 **Q18. When does cleanup run, and in what order do Effects run?**
-Cleanup runs **before the Effect re-runs** (seeing the *old* values of its own render) and on **unmount**. Children's Effects run before their parent's, and all layout effects before any passive `useEffect`.
+Cleanup runs **before the Effect re-runs** (seeing the *old* values of its own render) and on **unmount**. Children's Effects run before their parent's, and all layout effects before any passive (ordinary, runs after paint) `useEffect`.
 ```
 # effect order: child before parent, layout before passive, cleanup sees OLD values
   child  layout setup   v=1
@@ -174,7 +174,7 @@ Cleanup runs **before the Effect re-runs** (seeing the *old* values of its own r
 → [§5.3](../05-effects-and-refs/README.md#53-cleanup--undo-what-setup-did)
 
 **Q19. Why does my Effect run twice, and my component render twice, in development?**
-`<StrictMode>` (in most project templates) deliberately runs, **in development only**, component bodies, initialisers and updaters twice and each Effect's **setup → cleanup → setup** on mount (since React 19, ref callbacks too). It surfaces impure renders and missing cleanups: whatever breaks would also break on a real remount (navigation, `<Activity>`, fast refresh). Fix the cleanup — don't disable StrictMode or add "has run" flags. Production runs everything once.
+`<StrictMode>` (in most project templates) deliberately runs, **in development only**, component bodies, initialisers and updaters twice and each Effect's **setup → cleanup → setup** on mount (since React 19, ref callbacks too). It surfaces impure renders and missing cleanups: whatever breaks would also break on a real remount (navigation, `<Activity>`, fast refresh — the dev feature that swaps in edited code without reloading the page). Fix the cleanup — don't disable StrictMode or add "has run" flags. Production runs everything once.
 ```
 # StrictMode (development only): render twice, effects setup -> cleanup -> setup
   effect setup
@@ -185,13 +185,13 @@ Cleanup runs **before the Effect re-runs** (seeing the *old* values of its own r
 → [§5.4](../05-effects-and-refs/README.md#54-strictmodes-double-run-development-only)
 
 **Q20. What race condition can happen when you fetch in an Effect, and how do you prevent it?**
-If `userId` goes 1 → 2 quickly, the response for 1 can arrive **after** the one for 2 and overwrite it. In the cleanup, set an `ignore` flag the `.then` checks, or abort with an `AbortController` (`fetch(url, { signal })`). Better: TanStack Query or router loaders, which also cache and de-duplicate. Build 2 (§15.11) tests this race. → [§5.7](../05-effects-and-refs/README.md#57-fetching-data-in-effects-and-race-conditions), [§7.6](../07-custom-hooks-and-hook-rules/README.md#76-usefetch--loading-error-success-and-no-races)
+A **race condition** is a bug where the result depends on which of two overlapping operations finishes first. If `userId` goes 1 → 2 quickly, the response for 1 can arrive **after** the one for 2 and overwrite it. In the cleanup, set an `ignore` flag the `.then` checks, or abort with an `AbortController` (a browser object that can cancel a `fetch`; `fetch(url, { signal })`). Better: TanStack Query (a data-fetching and caching library) or router loaders (functions a route runs to load its data), which also cache and de-duplicate (merge identical requests into one). Build 2 (§15.11) tests this race. → [§5.7](../05-effects-and-refs/README.md#57-fetching-data-in-effects-and-race-conditions), [§7.6](../07-custom-hooks-and-hook-rules/README.md#76-usefetch--loading-error-success-and-no-races)
 
 **Q21. `useEffect` vs `useLayoutEffect`?**
-`useLayoutEffect` runs after the DOM update but **before the browser paints**, so you can measure (a tooltip's height) and re-position without flicker. It blocks painting — use it only for measure-then-position; everything else goes in `useEffect`, which normally runs after paint. → [§5.11](../05-effects-and-refs/README.md#511-uselayouteffect--before-the-browser-paints)
+`useLayoutEffect` runs after the DOM update but **before the browser paints**, so you can measure (a tooltip's height) and re-position without flicker (a brief flash of the wrong layout). It blocks painting — use it only for measure-then-position; everything else goes in `useEffect`, which normally runs after paint. → [§5.11](../05-effects-and-refs/README.md#511-uselayouteffect--before-the-browser-paints)
 
 **Q22. `useRef` vs `useState`?**
-Both persist across renders. Setting state **re-renders**; changing `ref.current` does **not** and is visible immediately (no snapshot). Refs hold values that don't affect output — timer IDs, an `AbortController`, "request in flight" flags, DOM nodes. Don't read or write `ref.current` during render (except lazy initialisation): render must stay a pure function of props and state.
+Both persist across renders. Setting state **re-renders**; changing `ref.current` does **not** and is visible immediately (no snapshot). Refs hold values that don't affect output — timer IDs, an `AbortController`, "request in flight" (sent but not yet answered) flags, DOM nodes. Don't read or write `ref.current` during render (except lazy initialisation): render must stay a pure function of props and state.
 ```
 # changing ref.current does not re-render; state does
   render (ref=0)
@@ -201,10 +201,10 @@ Both persist across renders. Setting state **re-renders**; changing `ref.current
 → [§5.8](../05-effects-and-refs/README.md#58-useref-for-values), [§5.9](../05-effects-and-refs/README.md#59-refs-to-dom-nodes)
 
 **Q23. How do you pass a ref to your own component in React 19?**
-As an ordinary prop: `function Input({ ref, ...props }) { return <input ref={ref} {...props} /> }`. `forwardRef` is no longer needed (it still works; deprecation is planned). Ref callbacks may return a **cleanup function**. To expose a limited API (only `focus()`), use `useImperativeHandle`. → [§5.10](../05-effects-and-refs/README.md#510-passing-refs-to-your-own-components)
+As an ordinary prop: `function Input({ ref, ...props }) { return <input ref={ref} {...props} /> }`. `forwardRef` is no longer needed (it still works; deprecation — marking it as outdated before removal — is planned). Ref callbacks may return a **cleanup function**. To expose a limited API (only `focus()`), use `useImperativeHandle`. → [§5.10](../05-effects-and-refs/README.md#510-passing-refs-to-your-own-components)
 
 **Q24. What problem does `useEffectEvent` solve?**
-An Effect sometimes needs the *latest* value without re-running when it changes — a chat connection that logs with the current theme, an interval calling the latest `onTick`. As a dependency it reconnects on every change; left out it goes stale. `useEffectEvent(fn)` (stable since React 19.2) returns a non-reactive function that always sees the latest props/state, callable only from Effects. → [§7.7](../07-custom-hooks-and-hook-rules/README.md#77-hooks-that-take-callbacks--useeffectevent)
+An Effect sometimes needs the *latest* value without re-running when it changes — a chat connection that logs with the current theme, an interval calling the latest `onTick`. As a dependency it reconnects on every change; left out it goes stale (keeps seeing an old value). `useEffectEvent(fn)` (stable since React 19.2) returns a non-reactive function that always sees the latest props/state, callable only from Effects. → [§7.7](../07-custom-hooks-and-hook-rules/README.md#77-hooks-that-take-callbacks--useeffectevent)
 
 ---
 
@@ -217,10 +217,10 @@ Call Hooks only at the **top level** of components and custom Hooks — not in c
 A function named `use…` that calls other Hooks, to reuse **stateful logic** (`useDebouncedValue`, `useLocalStorage`). It shares logic, **not state**: each call has its own state, as if written inline. To share state, lift it or use context or a store. → [§7.3](../07-custom-hooks-and-hook-rules/README.md#73-custom-hooks--reusing-stateful-logic)
 
 **Q27. `useState` or `useReducer`?**
-`useState` for simple independent values. `useReducer` when values change together, the next state depends on the previous in several ways, or you want the logic in one **pure, testable function** with named actions (`{ type: 'toggled', id }`) — easy to move into Redux or Zustand later. Build 1 uses one. → [§6.2](../06-state-management/README.md#62-usereducer--consolidate-update-logic)
+`useState` for simple independent values. `useReducer` when values change together, the next state depends on the previous in several ways, or you want the logic in one **pure, testable function** with named actions (`{ type: 'toggled', id }`) — easy to move into Redux or Zustand (state-management libraries that keep state in a central store) later. Build 1 uses one. → [§6.2](../06-state-management/README.md#62-usereducer--consolidate-update-logic)
 
 **Q28. Is Context a state-management tool?**
-No — Context is a **transport** that passes a value to any depth; the state still lives in `useState`/`useReducer` in a provider. Good for theme, current user, locale, a reducer's `dispatch`. React 19 renders `<ThemeContext value={...}>` directly (`.Provider` still works). → [§6.3](../06-state-management/README.md#63-context--pass-data-deeply-without-props), [§6.5](../06-state-management/README.md#65-reducer--context--a-store-with-only-react)
+No — Context is a **transport** that passes a value to any depth; the state still lives in `useState`/`useReducer` in a provider (the component that supplies the context value). Good for theme, current user, locale (language and region), a reducer's `dispatch` (the function you call to send an action). React 19 renders `<ThemeContext value={...}>` directly (`.Provider` still works). → [§6.3](../06-state-management/README.md#63-context--pass-data-deeply-without-props), [§6.5](../06-state-management/README.md#65-reducer--context--a-store-with-only-react)
 
 **Q29. What is the performance problem with Context, and how do you fix it?**
 When a provider's `value` changes (`Object.is`), **every** consumer re-renders, `memo` or not. An inline `value={{ user, setUser }}` is a new object each render, so consumers re-render even when nothing changed:
@@ -231,7 +231,7 @@ When a provider's `value` changes (`Object.is`), **every** consumer re-renders, 
   --- parent re-renders, nothing really changed
   Label rendered (dark)
 ```
-(`Plain` and `Label` are both memoized; only `Label` reads the context, and only it re-rendered.) Fixes: memoize the value (`useMemo`, or let the React Compiler); **split** contexts (state vs dispatch, fast vs slow); move state down; or use an external store with selectors (Zustand, Redux, `useSyncExternalStore`) for high-frequency shared state. → [§6.4](../06-state-management/README.md#64-context-performance-caveats)
+(`Plain` and `Label` are both memoized; only `Label` reads the context, and only it re-rendered.) Fixes: memoize the value (`useMemo`, or let the React Compiler); **split** contexts (state vs dispatch, fast vs slow); move state down; or use an external store with selectors (functions that pick just the slice of state a component needs, so it re-renders only when that slice changes; Zustand, Redux, `useSyncExternalStore`) for high-frequency shared state. → [§6.4](../06-state-management/README.md#64-context-performance-caveats)
 
 **Q30. How do you choose a state-management approach?**
 First classify the state:
@@ -242,14 +242,14 @@ First classify the state:
 | Shared by a few nearby components | Lift to the common parent |
 | Needed deep in the tree, changes rarely | Context (+ reducer) |
 | Client state shared widely, changes often | Zustand or Redux Toolkit (selectors limit re-renders) |
-| Server data (cache of the backend) | TanStack Query, router loaders, or Server Components |
-| Shareable/bookmarkable (filters, page, tab) | The URL (search params) |
-| Form fields | Form Actions, or a form library (React Hook Form) for big forms |
+| Server data (cache of the backend — the server side of the app) | TanStack Query, router loaders, or Server Components |
+| Shareable/bookmarkable (filters, page, tab) | The URL (search params, the `?key=value` part) |
+| Form fields | Form Actions (React 19's `<form action={fn}>`), or a form library (React Hook Form) for big forms |
 
 → [§6.6](../06-state-management/README.md#66-when-to-reach-for-a-library), [§6.10](../06-state-management/README.md#610-choosing--comparison-and-decision-flow)
 
 **Q31. Why treat server data differently from client state?**
-Server data is a **cache** of something you don't own: it goes stale, is shared, and needs loading/error states, de-duplication, refetching, pagination and invalidation. Hand-writing that with `useEffect` + `useState` is subtle; TanStack Query (or loaders/RSC) solves it once. Keep `useState`/stores for true client state. → [§6.9](../06-state-management/README.md#69-tanstack-query--server-state), [§9.8](../09-routing-and-data-fetching/README.md#98-tanstack-query-basics)
+Server data is a **cache** of something you don't own: it goes stale, is shared, and needs loading/error states, de-duplication, refetching, pagination (loading data one page at a time) and invalidation (marking cached data as outdated so it is fetched again). Hand-writing that with `useEffect` + `useState` is subtle; TanStack Query (or loaders/RSC) solves it once. Keep `useState`/stores for true client state. → [§6.9](../06-state-management/README.md#69-tanstack-query--server-state), [§9.8](../09-routing-and-data-fetching/README.md#98-tanstack-query-basics)
 
 **Q32. What is `useSyncExternalStore` for?**
 Subscribing to a store **outside** React (`navigator.onLine`, a hand-written store, a library) safely under concurrent rendering — no "tearing", where parts of the screen show different versions. You pass `subscribe`, `getSnapshot` and optionally `getServerSnapshot`; Zustand and React Redux use it internally. → [§7.9](../07-custom-hooks-and-hook-rules/README.md#79-usesyncexternalstore--subscribing-to-outside-data)
@@ -265,16 +265,16 @@ Subscribing to a store **outside** React (`navigator.onLine`, a hand-written sto
 Both cache between renders until a dependency changes. `useMemo(() => compute(a), [a])` caches a **value**; `useCallback(fn, [a])` caches the **function** itself (= `useMemo(() => fn, [a])`). They are hints — React may drop the cache. Use them for measured slow calculations or when identity matters (a `memo` child, an Effect dependency). → [§10.5](../10-performance/README.md#105-usecallback-and-usememo-for-stable-props), [§10.6](../10-performance/README.md#106-usememo-for-expensive-calculations)
 
 **Q35. What is the React Compiler, and does it make `memo`/`useMemo`/`useCallback` obsolete?**
-A build-time tool (v1.0 stable since October 2025) that inserts memoization of values, callbacks and JSX automatically, more finely than people do by hand. With it, manual memoization is rarely needed; the Hooks remain escape hatches (e.g. to control an Effect's dependencies). It assumes the Rules of React (pure render, no mutation), skips code it can't prove safe, and doesn't fix slow algorithms, huge DOMs or big bundles. → [§10.7](../10-performance/README.md#107-react-compiler)
+A build-time tool (v1.0 stable since October 2025) that inserts memoization of values, callbacks and JSX automatically, more finely than people do by hand. With it, manual memoization is rarely needed; the Hooks remain escape hatches (manual tools for when the automatic way doesn't fit; e.g. to control an Effect's dependencies). It assumes the Rules of React (pure render, no mutation), skips code it can't prove safe, and doesn't fix slow algorithms, huge DOMs or big bundles. → [§10.7](../10-performance/README.md#107-react-compiler)
 
 **Q36. A page feels slow. How do you investigate?**
-Measure first: React DevTools **Profiler** (what rendered, why, how long), the browser Performance panel, and a **production** build (dev is slower and StrictMode doubles renders). Usual causes: state too high (a keystroke re-renders the page), new objects breaking `memo`, over-eager context values, expensive render calculations, long lists, big bundles. → [§10.3](../10-performance/README.md#103-measure-first-devtools-profiler-and-profiler), [§10.10](../10-performance/README.md#1010-common-performance-bugs)
+Measure first: React DevTools **Profiler** (the browser extension's recorder of what rendered, why, how long), the browser Performance panel, and a **production** build (the optimised version real users get) (dev is slower and StrictMode doubles renders). Usual causes: state too high (a keystroke re-renders the page), new objects breaking `memo`, over-eager context values, expensive render calculations, long lists, big bundles. → [§10.3](../10-performance/README.md#103-measure-first-devtools-profiler-and-profiler), [§10.10](../10-performance/README.md#1010-common-performance-bugs)
 
 **Q37. How does code splitting work in React?**
 `const Chart = lazy(() => import('./Chart.jsx'))` puts `Chart` in a separate file downloaded on first render; `<Suspense fallback={…}>` covers the wait. Split by route first, then heavy rarely-used widgets (editors, charts). → [§10.8](../10-performance/README.md#108-code-splitting-with-lazy-and-suspense)
 
 **Q38. How do you render 10,000 rows?**
-**Virtualize**: render only rows in or near the viewport, with spacers for the rest (TanStack Virtual, react-window). Or paginate (Build 7) or scroll infinitely (Build 3). Keep keys stable and rows cheap. → [§10.9](../10-performance/README.md#109-list-virtualization)
+**Virtualize**: render only rows in or near the viewport (the visible part of the page or scroll box), with spacers (empty boxes of the right height) for the rest (TanStack Virtual, react-window). Or paginate (Build 7) or scroll infinitely (Build 3). Keep keys stable and rows cheap. → [§10.9](../10-performance/README.md#109-list-virtualization)
 
 ---
 
@@ -287,7 +287,7 @@ Measure first: React DevTools **Profiler** (what rendered, why, how long), the b
 `use(resource)` reads a **promise** (suspends until it resolves; a rejection goes to the nearest error boundary) or a **context**, and may be called in `if` and loops. In a Client Component the promise must be **cached or created outside render** (from a Server Component, loader or cache) — one created during render is new each time, so the component suspends forever. → [§9.11](../09-routing-and-data-fetching/README.md#911-suspense-and-use)
 
 **Q41. `useTransition` vs `useDeferredValue`?**
-Both mark work **non-urgent** so typing stays responsive. `useTransition` → `[isPending, startTransition]`: wrap a **state update you control** (tab switch, filter, navigation) and React renders it interruptibly in the background; in React 19 the function may be async (an "Action"). `useDeferredValue(value)` suits a value handed to you (a prop): the slow part renders with an older copy that catches up when React has time. Neither is for a controlled input's own value, which must update urgently. → [§7.10](../07-custom-hooks-and-hook-rules/README.md#710-usetransition--non-urgent-updates), [§7.11](../07-custom-hooks-and-hook-rules/README.md#711-usedeferredvalue--let-part-of-the-ui-lag-behind)
+Both mark work **non-urgent** so typing stays responsive. `useTransition` → `[isPending, startTransition]`: wrap a **state update you control** (tab switch, filter, navigation) and React renders it interruptibly (it can pause it for more urgent work) in the background; in React 19 the function may be async (an "Action"). `useDeferredValue(value)` suits a value handed to you (a prop): the slow part renders with an older copy that catches up when React has time. Neither is for a controlled input's own value, which must update urgently. → [§7.10](../07-custom-hooks-and-hook-rules/README.md#710-usetransition--non-urgent-updates), [§7.11](../07-custom-hooks-and-hook-rules/README.md#711-usedeferredvalue--let-part-of-the-ui-lag-behind)
 
 **Q42. When content is already on screen and a new update suspends, does the user see the fallback again?**
 Not in a **transition**: React keeps the old content (dim it with `isPending`) until the new content is ready. Without a transition the nearest fallback reappears — which is why routers wrap navigations in transitions. → [§9.11](../09-routing-and-data-fetching/README.md#911-suspense-and-use), [§9.12](../09-routing-and-data-fetching/README.md#912-loading-and-error-states-that-users-like)
@@ -303,10 +303,10 @@ Not in a **transition**: React keeps the old content (dim it with `isPending`) u
 Hydration (`hydrateRoot`) makes server HTML interactive: React renders the same tree in the browser, **adopts** the existing DOM and attaches handlers, expecting the first client render to match the server exactly. Mismatches come from `Date.now()`, `Math.random()`, `window`/`localStorage` checks in render, locale formatting, invalid nesting (`<div>` in `<p>`) or extensions editing the DOM; React reports a recoverable error and client-renders that part. Fixes: render the same on both sides and switch after hydration (an Effect, or React 19.3's `use(browser())` inside Suspense); `useId` for IDs; `suppressHydrationWarning` only for a single unavoidable difference like a timestamp. → [§13.4](../13-server-rendering-and-frameworks/README.md#134-hydration-end-to-end), [§13.5](../13-server-rendering-and-frameworks/README.md#135-hydration-mismatches)
 
 **Q45. What are React Server Components, and how do they differ from Client Components?**
-**Server Components** run only on the server (per request or at build), can be `async` and read data directly, and **ship no code** — only their output. No state, Effects, handlers or browser APIs. **Client Components** are the React you know: pre-rendered to HTML, then hydrated and run in the browser. `'use client'` marks the **boundary** — that module and its imports become client code. Server → Client props must be **serializable** (data, JSX, promises, Server Functions — not ordinary functions or class instances). A Client Component can't import a Server Component but can receive one as `children`. → [§13.7](../13-server-rendering-and-frameworks/README.md#137-react-server-components), [§13.8](../13-server-rendering-and-frameworks/README.md#138-directives-use-client-and-use-server)
+**Server Components** run only on the server (per request or at build), can be `async` and read data directly, and **ship no code** — only their output. No state, Effects, handlers or browser APIs (built-in browser features such as `window` or `localStorage`). **Client Components** are the React you know: pre-rendered to HTML, then hydrated and run in the browser. `'use client'` marks the **boundary** — that module and its imports become client code. Server → Client props must be **serializable** (convertible to a format that can be sent over the network: data, JSX, promises, Server Functions — not ordinary functions or class instances). A Client Component can't import a Server Component but can receive one as `children`. → [§13.7](../13-server-rendering-and-frameworks/README.md#137-react-server-components), [§13.8](../13-server-rendering-and-frameworks/README.md#138-directives-use-client-and-use-server)
 
 **Q46. What does `'use server'` mean? Is it how you mark a Server Component?**
-No — Server Components are the default and need no directive. `'use server'` marks **Server Functions**: async functions that run on the server but are callable from the client (`<form action>`, or in a transition). Each becomes a network endpoint, so validate input and check authorisation inside, like any public API. → [§4.8](../04-forms-and-actions/README.md#48-server-functions-and-progressive-enhancement-overview), [§13.8](../13-server-rendering-and-frameworks/README.md#138-directives-use-client-and-use-server)
+No — Server Components are the default and need no directive. `'use server'` marks **Server Functions**: async functions that run on the server but are callable from the client (`<form action>`, or in a transition). Each becomes a network endpoint, so validate input and check authorisation (whether this user is allowed to do this) inside, like any public API. → [§4.8](../04-forms-and-actions/README.md#48-server-functions-and-progressive-enhancement-overview), [§13.8](../13-server-rendering-and-frameworks/README.md#138-directives-use-client-and-use-server)
 
 **Q47. What goes wrong if you put `'use client'` at the top of the root layout?**
 Everything it imports becomes client code: no zero-JS static parts, no direct data access, a bigger bundle. Push `'use client'` down to interactive **leaves** (a like button, a search box); keep pages and layouts as Server Components. → [§13.8](../13-server-rendering-and-frameworks/README.md#138-directives-use-client-and-use-server), [§13.9](../13-server-rendering-and-frameworks/README.md#139-nextjs-app-router-overview)
@@ -316,7 +316,7 @@ Everything it imports becomes client code: no zero-JS static parts, no direct da
 ## 15.9 Interview questions: error boundaries, portals, patterns, testing and accessibility
 
 **Q48. What do error boundaries catch — and what don't they?**
-A **class** component with `static getDerivedStateFromError` (show a fallback) and `componentDidCatch` (log); there's no Hook version, so many apps use `react-error-boundary`. It catches errors thrown while **rendering**, in lifecycle methods and in Effects **below** it — **not** in event handlers, async code you started (`setTimeout`, a `.then` outside render), server rendering, or itself. Handle handler errors with `try/catch` + state; to route an async error to a boundary, throw it during render (a rejected `use(promise)`) or inside `startTransition`. React 19 adds root `onCaughtError` / `onUncaughtError` for reporting.
+A **class** component with `static getDerivedStateFromError` (show a fallback) and `componentDidCatch` (log); there's no Hook version, so many apps use `react-error-boundary`. It catches errors thrown while **rendering**, in lifecycle methods (class methods React calls at mount, update and unmount) and in Effects **below** it — **not** in event handlers, async code you started (`setTimeout`, a `.then` outside render), server rendering, or itself. Handle handler errors with `try/catch` + state; to route an async error to a boundary, throw it during render (a rejected `use(promise)`) or inside `startTransition`. React 19 adds root `onCaughtError` / `onUncaughtError` for reporting.
 ```
 # error boundaries catch render errors, not event-handler errors
   render error -> Fallback: render failed
@@ -326,7 +326,7 @@ A **class** component with `static getDerivedStateFromError` (show a fallback) a
 → [§14.9](../14-patterns-and-architecture/README.md#149-error-boundaries), [§9.12](../09-routing-and-data-fetching/README.md#912-loading-and-error-states-that-users-like)
 
 **Q49. What is a portal, and how do events behave inside one?**
-`createPortal(children, domNode)` renders into a **different DOM node** (usually `document.body`) while keeping the same place in the **React** tree — for modals, tooltips and toasts that must escape `overflow: hidden` or a stacking context. Context still flows in, and events **bubble through React parents**, not DOM parents:
+`createPortal(children, domNode)` renders into a **different DOM node** (usually `document.body`) while keeping the same place in the **React** tree — for modals, tooltips and toasts that must escape `overflow: hidden` or a stacking context (a CSS layering group that can hide content under other layers). Context still flows in, and events **bubble through React parents**, not DOM parents:
 ```
 # events from a portal bubble through the REACT tree, not the DOM tree
   DOM parent of the button: <body>, inside the React parent's div? false
@@ -338,13 +338,13 @@ A **class** component with `static getDerivedStateFromError` (show a fallback) a
 **Custom Hooks** — the default for sharing *logic*. **Compound components** (`<Tabs><Tabs.List/><Tabs.Panel/></Tabs>`, state via context) — flexible *markup*, common in design systems. **Render props** (a function prop) — the caller decides what to render with the component's data; still handy for lists and virtualization. **HOCs** (`withAuth(Page)`) — wrap a component to inject props; mostly replaced by Hooks but common in older code. → [§2.4](../02-components-and-props/README.md#24-composition), [§14.4](../14-patterns-and-architecture/README.md#144-compound-components)–[§14.7](../14-patterns-and-architecture/README.md#147-choosing-a-reuse-pattern)
 
 **Q51. What is the philosophy of React Testing Library?**
-The closer a test is to how people use the UI, the more confidence it gives. Find elements as a user or screen reader would — **role and accessible name first** (`getByRole('button', { name: 'Save' })`), then label and text, `data-testid` last — act with `user-event` (real key presses, focus, clicks) and assert on what's visible. Skip implementation details (state, Hook calls, class names) so tests survive refactors. Use `findBy…`/`waitFor` for async UI; fake the network at the boundary (a function prop, or MSW), not your own modules. → [§12.1](../12-testing-react/README.md#121-what-to-test-and-the-testing-library-philosophy), [§12.3](../12-testing-react/README.md#123-queries-and-their-priority), [§12.4](../12-testing-react/README.md#124-user-event--interacting-like-a-user), [§12.6](../12-testing-react/README.md#126-mocking-fetch-and-when-to-use-msw)
+The closer a test is to how people use the UI, the more confidence it gives. Find elements as a user or screen reader would — **role and accessible name first** (`getByRole('button', { name: 'Save' })`), then label and text, `data-testid` last — act with `user-event` (real key presses, focus, clicks) and assert on what's visible. Skip implementation details (state, Hook calls, class names) so tests survive refactors (restructuring the code without changing behaviour). Use `findBy…`/`waitFor` for async UI; fake the network at the boundary (a function prop, or MSW — Mock Service Worker, a library that intercepts requests and returns fake responses), not your own modules. → [§12.1](../12-testing-react/README.md#121-what-to-test-and-the-testing-library-philosophy), [§12.3](../12-testing-react/README.md#123-queries-and-their-priority), [§12.4](../12-testing-react/README.md#124-user-event--interacting-like-a-user), [§12.6](../12-testing-react/README.md#126-mocking-fetch-and-when-to-use-msw)
 
 **Q52. How do you make React components accessible?**
-**Semantic HTML** first (`<button>`, `<a href>`, `<label>`, `<fieldset>`, headings, `<dialog>`) — roles, focus and keyboard for free. Label every input (`htmlFor` + `useId`). Manage **focus** on big changes (into a dialog and back, to a new step's heading, to the first invalid field). Support expected keys (Escape closes, arrows inside tabs/menus/listboxes). ARIA only for what HTML can't say (`aria-expanded`, `aria-current`, `aria-invalid`, `aria-describedby`, live regions) — no ARIA beats wrong ARIA. Check with `eslint-plugin-jsx-a11y`, role-based tests, a keyboard and a screen reader. → [§7.8](../07-custom-hooks-and-hook-rules/README.md#78-useid--ids-for-accessibility), [§14.10](../14-patterns-and-architecture/README.md#1410-accessibility-in-react), [HTML & CSS Chapter 3](../../../html-css/chapters/03-semantic-html-and-accessibility/README.md)
+**Semantic HTML** first (`<button>`, `<a href>`, `<label>`, `<fieldset>`, headings, `<dialog>`) — roles, focus and keyboard for free. Label every input (`htmlFor` + `useId`). Manage **focus** on big changes (into a dialog and back, to a new step's heading, to the first invalid field). Support expected keys (Escape closes, arrows inside tabs/menus/listboxes — lists of selectable options). ARIA (the attributes that describe elements to assistive technology) only for what HTML can't say (`aria-expanded`, `aria-current`, `aria-invalid`, `aria-describedby`, live regions — areas whose changes screen readers announce automatically) — no ARIA beats wrong ARIA. Check with `eslint-plugin-jsx-a11y`, role-based tests, a keyboard and a screen reader. → [§7.8](../07-custom-hooks-and-hook-rules/README.md#78-useid--ids-for-accessibility), [§14.10](../14-patterns-and-architecture/README.md#1410-accessibility-in-react), [HTML & CSS Chapter 3](../../../html-css/chapters/03-semantic-html-and-accessibility/README.md)
 
 **Q53. How would you type a component's props, children and events in TypeScript?**
-Props with a `type`/`interface` and destructuring (`function Button({ variant = 'primary', ...rest }: ButtonProps)`); children as `React.ReactNode`; native props via `React.ComponentProps<'button'>`; events as `React.ChangeEvent<HTMLInputElement>` or inferred from inline handlers; refs as `useRef<HTMLInputElement>(null)`; mutually exclusive props as **discriminated unions**. → [§11.2](../11-typescript-with-react/README.md#112-typing-props), [§11.4](../11-typescript-with-react/README.md#114-typing-events), [§11.9](../11-typescript-with-react/README.md#119-discriminated-unions-for-props)
+Props with a `type`/`interface` and destructuring (`function Button({ variant = 'primary', ...rest }: ButtonProps)`); children as `React.ReactNode`; native props via `React.ComponentProps<'button'>`; events as `React.ChangeEvent<HTMLInputElement>` or inferred from inline handlers; refs as `useRef<HTMLInputElement>(null)`; mutually exclusive props as **discriminated unions** (a union of object types told apart by one shared literal field such as `status`). → [§11.2](../11-typescript-with-react/README.md#112-typing-props), [§11.4](../11-typescript-with-react/README.md#114-typing-events), [§11.9](../11-typescript-with-react/README.md#119-discriminated-unions-for-props)
 
 ### Self-check (15.2–15.9)
 1. A child component is wrapped in `memo`, receives no props, and reads a context whose provider passes `value={{ theme }}`. Its parent re-renders. Does the child re-render? → Yes: the provider creates a new object, so the context value changed by `Object.is`, and context updates go around `memo` (Q29).
@@ -543,9 +543,9 @@ export default function TodoApp({ storageKey = 'todos' }) {
 
 What to point out while coding:
 - **Reducer** actions name *what happened* (`added`, `toggled`); the reducer is pure, so it's unit-tested without rendering (first test below).
-- **Lazy initialiser**: `useReducer(reducer, storageKey, loadTodos)` reads `localStorage` once. The **Effect** writes back after each change — syncing with an external system, exactly what Effects are for ([§7.4](../07-custom-hooks-and-hook-rules/README.md#74-uselocalstorage--state-that-survives-a-reload) makes it `useLocalStorage`).
+- **Lazy initialiser** (a function React calls only on the first render to compute the starting state): `useReducer(reducer, storageKey, loadTodos)` reads `localStorage` (the browser's small key-value store that survives reloads) once. The **Effect** writes back after each change — syncing with an external system, exactly what Effects are for ([§7.4](../07-custom-hooks-and-hook-rules/README.md#74-uselocalstorage--state-that-survives-a-reload) makes it `useLocalStorage`).
 - **Keys** are IDs, so filtering never moves the edit box to another item.
-- **Escape vs blur**: removing the focused edit input can fire `blur`, which would call `finish()` and save; the `cancelled` ref makes Escape win.
+- **Escape vs blur** (the event fired when an element loses focus): removing the focused edit input can fire `blur`, which would call `finish()` and save; the `cancelled` ref makes Escape win.
 
 ### Test
 `code/02_todo.test.jsx` (key parts):
@@ -594,12 +594,12 @@ Output:
 *Figure 15.1 — `TodoApp` in Chrome, restored from `localStorage`. The strike-through, the count and the "Clear completed" button are all derived from the one `todos` array.*
 
 ### Follow-ups and edge cases
-- **Persist to a server** → send each change to the API, showing it at once with `useOptimistic` and rolling back on failure ([§4.7](../04-forms-and-actions/README.md#47-useoptimistic--instant-feedback-automatic-rollback)), or a TanStack Query mutation with invalidation ([§9.10](../09-routing-and-data-fetching/README.md#910-mutations-invalidation-and-optimistic-updates)).
+- **Persist to a server** → send each change to the API, showing it at once with `useOptimistic` and rolling back (undoing the shown change) on failure ([§4.7](../04-forms-and-actions/README.md#47-useoptimistic--instant-feedback-automatic-rollback)), or a TanStack Query mutation (a request that changes server data) with invalidation ([§9.10](../09-routing-and-data-fetching/README.md#910-mutations-invalidation-and-optimistic-updates)).
 - **Shareable filter** → keep it in the URL (`?filter=active`) via the router's search params ([Chapter 9](../09-routing-and-data-fetching/README.md)).
 - **Two tabs open** → listen for the `storage` event (fired in *other* tabs) and dispatch a `replaced` action, or subscribe with `useSyncExternalStore`.
 - **10,000 todos** → virtualize; `memo(TodoItem)` with stable callbacks (or the React Compiler) stops every row re-rendering as you type.
-- **Undo** → a `past` stack in the reducer state; `undo` pops it.
-- **IDs** → `crypto.randomUUID()` in real apps; a counter ref is fine in an interview if you say why.
+- **Undo** → a `past` stack (a list where the last item added is the first taken off) in the reducer state; `undo` pops it.
+- **IDs** → `crypto.randomUUID()` (a built-in that generates a random, practically unique ID) in real apps; a counter ref is fine in an interview if you say why.
 
 ---
 
@@ -611,7 +611,7 @@ Output:
 |---|---|
 | Suggestions appear as the user types | Don't call the API on every keystroke — **debounce** (300 ms) |
 | Click or Enter selects a suggestion | Ignore **stale responses** (a slow answer for "ap" must not replace "apr") |
-| ArrowUp/ArrowDown move the highlight, wrapping at the ends; Escape closes | Screen readers announce the list and the highlighted option (ARIA **combobox** pattern) |
+| ArrowUp/ArrowDown move the highlight, wrapping at the ends; Escape closes | Screen readers announce the list and the highlighted option (ARIA **combobox** pattern — a text input paired with a popup list) |
 | Loading, empty and error states | The matching part of each suggestion is highlighted |
 
 The data source is a prop, `search(query, { signal })` → promise of strings, so the component is API-independent and easy to test.
@@ -753,7 +753,7 @@ export default function Autocomplete({ search, onSelect, label = 'Search', delay
 How the tricky parts work:
 1. **Debounce → search**: `query` changes every keystroke; `debounced` only after `delay` ms of quiet, and only then does the search Effect run.
 2. **Abort**: each search Effect owns an `AbortController`. When `debounced` changes, React runs the old Effect's **cleanup** first, aborting the old request (its `AbortError` is ignored), so an old response can never overwrite a newer one ([§5.7](../05-effects-and-refs/README.md#57-fetching-data-in-effects-and-race-conditions)). Note the ordering: the abort happens when the *debounced* value changes, not on the keystroke — a response for "ap" that lands during the pause after typing "r" is still shown (labelled by `result.for`) until the "apr" results replace it.
-3. **Focus stays in the input.** Options are never focused; `aria-activedescendant` names the active one (the WAI-ARIA combobox pattern), so the user keeps typing.
+3. **Focus stays in the input.** Options are never focused; `aria-activedescendant` (an attribute on the input pointing at the id of the highlighted option) names the active one (the WAI-ARIA combobox pattern), so the user keeps typing.
 4. **Mouse vs blur.** Clicking an option would blur the input and close the list *before* the click lands; `onMouseDown={e => e.preventDefault()}` prevents the blur.
 5. **Enter** selects only when an option is highlighted, with `preventDefault()` so a surrounding `<form>` doesn't submit.
 
@@ -822,8 +822,8 @@ The tests pass short real delays (10–100 ms) as a prop, so no fake timers are 
 - **Huge result lists** → cap results (top 10) or render them from `useDeferredValue(query)` ([§7.11](../07-custom-hooks-and-hook-rules/README.md#711-usedeferredvalue--let-part-of-the-ui-lag-behind)).
 - **Active option out of view** → in an Effect on `active`, `scrollIntoView({ block: 'nearest' })` the option.
 - **Selecting searches the chosen text** → harmless here (the list is closed), or skip when `query` equals the last selection.
-- **Highlighting user input** → never `dangerouslySetInnerHTML`; splitting the string and rendering `<mark>` in JSX, as `Highlight` does, is XSS-safe.
-- **Rate limits** → debounce plus `minChars`, caching and server-side limits.
+- **Highlighting user input** → never `dangerouslySetInnerHTML`; splitting the string and rendering `<mark>` in JSX, as `Highlight` does, is XSS-safe (XSS, cross-site scripting, is an attack where text typed by one user runs as code in another user's browser; JSX escapes text so it can't).
+- **Rate limits** (caps on how many requests a client may send per time window; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) → debounce plus `minChars`, caching and server-side limits.
 
 ---
 
@@ -838,7 +838,7 @@ The tests pass short real delays (10–100 ms) as a prop, so no fake timers are 
 | On failure, show an error with Retry | Don't update state after unmount; work inside a scrollable box, not only the window |
 
 ### How it works
-An **`IntersectionObserver`** tells you when an element (here an invisible 1-pixel **sentinel** after the last item) enters a **root** (the scroll box) — no `scroll` listeners, no layout reads on every scroll event. `rootMargin: '200px'` grows the root so loading starts 200 px *before* the user reaches the end.
+An **`IntersectionObserver`** tells you when an element (here an invisible 1-pixel **sentinel** after the last item) enters a **root** (the scroll box) — no `scroll` listeners, no layout reads (asking the browser for sizes and positions, which forces it to recalculate) on every scroll event. `rootMargin: '200px'` grows the root so loading starts 200 px *before* the user reaches the end.
 
 ```mermaid
 sequenceDiagram
@@ -863,7 +863,7 @@ sequenceDiagram
 | `page` | state | last page loaded |
 | `status` | state `'idle' \| 'loading' \| 'error'` | one variable, so "loading and error at once" is impossible |
 | `hasMore` | state | stop observing at the end |
-| `inFlight` | ref | a **synchronous** guard: `status` only changes on the next render, but a ref changes immediately |
+| `inFlight` | ref | a **synchronous** guard (a check that takes effect immediately): `status` only changes on the next render, but a ref changes immediately |
 | `mounted` | ref | ignore a response that arrives after unmount |
 | scroller, sentinel | refs to DOM nodes | the observer needs real elements |
 
@@ -994,7 +994,7 @@ In Chrome the real `IntersectionObserver` drives it. The demo page scrolls the b
 ### Follow-ups and edge cases
 - **Library** → TanStack Query's `useInfiniteQuery` handles pages, caching and `hasNextPage`; an observer still calls `fetchNextPage()` ([§9.9](../09-routing-and-data-fetching/README.md#99-query-keys-pagination-and-dependent-queries)).
 - **Thousands of items** → add virtualization ([§10.9](../10-performance/README.md#109-list-virtualization)).
-- **Cursor vs page numbers** → inserts while scrolling shift page numbers (duplicates, gaps); use a cursor (`?after=<lastId>`) and de-duplicate by `id`.
+- **Cursor vs page numbers** → inserts while scrolling shift page numbers (duplicates, gaps); use a cursor (a marker for "the last item I saw", e.g. `?after=<lastId>`) and de-duplicate by `id`.
 - **Back-navigation** → cache the data (TanStack Query) and restore `scrollTop`, or open details in a modal that keeps the list mounted.
 - **Accessibility** → the footer becomes unreachable; offer a "Load more" button too (it can be the sentinel) and announce new items via `role="status"`.
 - **Abort on unmount** → pass an `AbortSignal` to `fetchPage` and abort in a mount-only Effect's cleanup.
@@ -1009,7 +1009,7 @@ In Chrome the real `IntersectionObserver` drives it. The demo page scrolls the b
 |---|---|
 | Open from a button, show a title, content and actions | Rendered at the top level so no parent's `overflow` or `z-index` clips it |
 | Close with Cancel, Escape, or a click on the backdrop | Focus moves **into** the dialog on open and **back** to the opener on close |
-| A destructive confirm: "type the name to enable Delete" | **Tab** and **Shift+Tab** cycle inside the dialog; the page behind doesn't scroll |
+| A destructive (can't be undone) confirm: "type the name to enable Delete" | **Tab** and **Shift+Tab** cycle inside the dialog; the page behind doesn't scroll |
 | | Screen readers announce a dialog with its title: `role="dialog"`, `aria-modal`, `aria-labelledby` |
 
 ### Component tree
@@ -1152,9 +1152,9 @@ Output:
 - **Why not native `<dialog>`?** → In real apps, prefer it: `showModal()` uses the browser's **top layer** (no portal or z-index), makes the page behind **inert**, closes on Escape (a `cancel` event) and returns focus to the opener on close (HTML standard behaviour, in all major browsers). Call `showModal()`/`close()` in an Effect when `open` changes and listen for `close` to sync React state. Interviewers still ask for the hand-built version to see you know what the browser does.
 - **Screen readers can reach the page behind** a hand-built modal; `aria-modal="true"` helps, but `inert` on the app root is the robust fix (`<dialog>` does it for you).
 - **Nested modals** → keep a stack; only the top one handles Escape (the `stopPropagation` above) and traps focus.
-- **Exit animations** → keep it mounted in a `closing` state until `transitionend`.
+- **Exit animations** → keep it mounted in a `closing` state until `transitionend` (the browser event fired when a CSS transition finishes).
 - **SSR** → no `document` on the server; create the portal only after mount.
-- **Focusable detection** → the selector misses `contenteditable`, `<details>` and similar; `focus-trap` or Radix/React Aria handle the long tail.
+- **Focusable detection** → the selector misses `contenteditable` (elements the user can type into directly), `<details>` and similar; `focus-trap` or Radix/React Aria (libraries of accessible components) handle the long tail (the many rare cases).
 
 ---
 
@@ -1167,7 +1167,7 @@ Output:
 | A row of tabs; clicking one shows its panel | `role="tablist"`, `role="tab"` with `aria-selected` and `aria-controls`, `role="tabpanel"` with `aria-labelledby` |
 | Optional initial tab and `onChange` callback | **One** Tab-key stop for the whole tab row (roving `tabIndex`), then Tab moves into the panel |
 | Disabled tabs are skipped | ArrowLeft/ArrowRight move between tabs and wrap; Home/End jump to the ends |
-| Switching tabs keeps what the user typed in other panels | Selection follows focus ("automatic activation") |
+| Switching tabs keeps what the user typed in other panels | Selection follows focus ("automatic activation" — moving to a tab also selects it) |
 
 ### Component tree
 ```mermaid
@@ -1178,9 +1178,9 @@ flowchart TD
 ```
 
 ### State design
-Only one piece of state: `selected` (an index). The IDs that connect each tab to its panel come from `useId`, so two `Tabs` on one page never clash. `tabRefs` (an array of DOM nodes filled by **ref callbacks**) lets the keyboard handler move focus. The `tabs` array is a prop, so what is shown is derived from it.
+Only one piece of state: `selected` (an index). The IDs that connect each tab to its panel come from `useId`, so two `Tabs` on one page never clash. `tabRefs` (an array of DOM nodes filled by **ref callbacks** — functions passed as `ref` that React calls with the DOM node) lets the keyboard handler move focus. The `tabs` array is a prop, so what is shown is derived from it.
 
-**Roving tabindex** — what it is: in a composite widget (tabs, toolbar, radio group, menu), only the *current* item has `tabIndex={0}`; the others have `-1`. Tab enters the widget at the current item and the next Tab leaves it; arrow keys move *within* it. Keyboard users don't have to press Tab through every tab to reach the content.
+**Roving tabindex** — what it is: in a composite widget (one control made of several focusable items: tabs, toolbar, radio group, menu), only the *current* item has `tabIndex={0}`; the others have `-1`. Tab enters the widget at the current item and the next Tab leaves it; arrow keys move *within* it. Keyboard users don't have to press Tab through every tab to reach the content.
 
 ### Code
 `code/tabs.jsx`:
@@ -1300,7 +1300,7 @@ Output:
 ℹ fail 0
 ```
 
-Note `getByRole('tabpanel')` finds exactly one panel: elements with `hidden` are removed from the accessibility tree, and Testing Library's role queries ignore them by default — just like a screen reader.
+Note `getByRole('tabpanel')` finds exactly one panel: elements with `hidden` are removed from the accessibility tree (the simplified version of the page that the browser gives to screen readers), and Testing Library's role queries ignore them by default — just like a screen reader.
 
 ### In the browser
 ![A card with four tabs: Overview, Billing (selected, bold with a blue underline), Audit log (greyed out, disabled) and Members; the panel shows Next invoice: $48.00 on 1 October and Visa ending 4242, billed monthly](img/tabs.png)
@@ -1311,7 +1311,7 @@ Note `getByRole('tabpanel')` finds exactly one panel: elements with `hidden` are
 - **Controlled version** (e.g. synced with `?tab=billing`) → use the `value` prop when given, else internal state.
 - **Compound API** (`<Tabs><TabList><Tab/></TabList><TabPanel/></Tabs>`) → share `selected` and the ID prefix through context ([§14.4](../14-patterns-and-architecture/README.md#144-compound-components)).
 - **Disabled tabs** → ARIA guidance allows keeping them *focusable* with `aria-disabled="true"` so screen-reader users discover them; native `disabled`, used here, removes them from focus. Say which you chose.
-- **Heavy panels that keep state** → React 19.2's `<Activity mode="hidden">` hides content and unmounts its Effects while keeping state, and can pre-render at low priority.
+- **Heavy panels that keep state** → React 19.2's `<Activity mode="hidden">` (a component that hides part of the UI without throwing its state away) hides content and unmounts its Effects while keeping state, and can pre-render at low priority.
 - **Vertical tabs** → `aria-orientation="vertical"` and ArrowUp/ArrowDown.
 
 ---
@@ -1324,11 +1324,11 @@ Note `getByRole('tabpanel')` finds exactly one panel: elements with `hidden` are
 |---|---|
 | 5 stars; click to rate; show "3 of 5" | Works with the keyboard: Tab to the group, arrows to change |
 | Hover previews a rating without committing it | Screen readers announce the group name, each star's label ("3 stars") and which one is checked |
-| Clear the rating | Read-only mode for showing an average (one image with text alternative) |
+| Clear the rating | Read-only mode for showing an average (one image with text alternative — text a screen reader reads instead of the image) |
 | Controlled: parent owns the number | `max` configurable |
 
 ### The key design decision
-A rating is **one choice out of N** — a **radio group**. Real `<input type="radio">` elements, hidden with the standard `visually-hidden` CSS (still focusable and announced), give you one Tab stop, arrow keys, the checked state and correct screen-reader output for free. `<span onClick>` stars give none of that.
+A rating is **one choice out of N** — a **radio group**. Real `<input type="radio">` elements, hidden with the standard `visually-hidden` CSS (styles that hide an element from the eye but not from screen readers; still focusable and announced), give you one Tab stop, arrow keys, the checked state and correct screen-reader output for free. `<span onClick>` stars give none of that.
 
 ### Component tree and state
 ```mermaid
@@ -1459,7 +1459,7 @@ The component has **no keyboard code at all**; the keyboard test passes because 
 | | Never show an empty page when the data shrinks (e.g. after filtering) |
 
 ### Split the problem in two
-1. A **pure function** `getPageRange(current, total, siblings)` returning what to draw, e.g. `[1, '…', 9, 10, 11, '…', 20]` — easy to test with a table of cases (the heart of every "usePagination" Hook).
+1. A **pure function** (output depends only on its inputs; no side effects) `getPageRange(current, total, siblings)` returning what to draw, e.g. `[1, '…', 9, 10, 11, '…', 20]` — easy to test with a table of cases (the heart of every "usePagination" Hook).
 2. A **controlled** `<Pagination page totalPages onPageChange>` that draws it; the table owns `page` and `pageSize`.
 
 ### Component tree and state
@@ -1605,9 +1605,9 @@ Output:
 *Figure 15.7 — Page 5 of 10 with five rows per page: first and last pages, the current page with one neighbour each side, and ellipses for the gaps.*
 
 ### Follow-ups and edge cases
-- **Server-side pagination** → the API returns one page plus a total (`?page=5&limit=5` or a cursor); TanStack Query keyed by `['orders', page, pageSize]` with `placeholderData: keepPreviousData` keeps the old page visible while the next loads ([§9.9](../09-routing-and-data-fetching/README.md#99-query-keys-pagination-and-dependent-queries)).
+- **Server-side pagination** (the server sends one page at a time instead of the whole list) → the API returns one page plus a total (`?page=5&limit=5` or a cursor); TanStack Query keyed by `['orders', page, pageSize]` with `placeholderData: keepPreviousData` keeps the old page visible while the next loads ([§9.9](../09-routing-and-data-fetching/README.md#99-query-keys-pagination-and-dependent-queries)).
 - **Page in the URL** (`?page=5`) → shareable links and a working Back button.
-- **Offset vs cursor** → offsets allow "jump to page 17" but slow down on deep pages and shift on inserts; cursors are stable and fast but only next/previous.
+- **Offset vs cursor** → offsets ("skip the first N items") allow "jump to page 17" but slow down on deep pages and shift on inserts; cursors are stable and fast but only next/previous.
 - **Clamping keeps the stored page** → `page` stays 5 while page 2 is shown, so if the data grows back before the user pages again, the view jumps to 5. Resetting to page 1 whenever the filter changes (as rows-per-page does) avoids it.
 - **Focus after a page change** → move focus to the table heading and scroll to it, so screen-reader users hear the new rows.
 - **Huge counts** → counting is expensive; show "Next" without a total, or an estimate.
@@ -1647,7 +1647,7 @@ flowchart TD
 | `status` | state `'editing' \| 'submitting' \| 'done' \| 'failed'` | one variable instead of several booleans |
 | step definitions (`STEPS`) | constant outside the component | fields + a **pure** `validate(data)` per step — testable without rendering |
 
-The wizard is one `<form>`, so Enter in any field "clicks" the submit button — Next on steps 1–2, Create account on step 3. `noValidate` turns off the browser's validation bubbles so messages are consistent and accessible; `type="email"` and `autoComplete` still help mobile keyboards and password managers.
+The wizard is one `<form>`, so Enter in any field "clicks" the submit button — Next on steps 1–2, Create account on step 3. `noValidate` turns off the browser's validation bubbles (its built-in pop-up error tips) so messages are consistent and accessible; `type="email"` and `autoComplete` still help mobile keyboards and password managers (apps that store and fill in passwords).
 
 ### Code
 `code/wizard.jsx`:
@@ -1839,7 +1839,7 @@ Output:
 - **React 19 form Actions** → `<form action={createAccount}>` with `useActionState` for server errors and `useFormStatus` for the pending button ([§4.5](../04-forms-and-actions/README.md#45-useactionstate--the-result-of-the-last-submission)); Actions reset only *uncontrolled* fields, so these controlled ones keep their values.
 - **Big forms** → React Hook Form with a Zod schema per step; `trigger(['email', 'password'])` validates one step ([§4.9](../04-forms-and-actions/README.md#49-form-libraries--react-hook-form-and-zod-overview)).
 - **Validate again on the server** — client validation is convenience, not security.
-- **Save progress** → `data` (without the password!) in `sessionStorage`, or `step` in the URL so refresh and Back work.
+- **Save progress** → `data` (without the password!) in `sessionStorage` (like `localStorage`, but cleared when the tab closes), or `step` in the URL so refresh and Back work.
 - **Conditional steps** (e.g. "Company details" for Pro) → compute the visible steps from `data`.
 - **IDs** → field names as `id`s clash with two wizards on a page; prefix with `useId()`.
 - **Async validation** ("email already taken") → a debounced check on blur or Next, with a pending state on the field.
@@ -1853,14 +1853,14 @@ Output:
 |---|---|---|
 | Accordion | `openIds` (a `Set`, or one ID) | `<button aria-expanded aria-controls>`; or native `<details>`/`<summary>`; like Tabs |
 | Dropdown / menu button | `open`, `active` | Autocomplete's keyboard handling + Modal's Escape/click-outside + focus return |
-| Toast notifications | queue of `{ id, text }` | portal, `role="status"` live region, timers cleared in Effect cleanup |
+| Toast notifications (short pop-up messages that disappear) | queue of `{ id, text }` | portal, `role="status"` live region, timers cleared in Effect cleanup |
 | Tooltip / popover | `open` | portal, `useLayoutEffect` to measure and position, `aria-describedby`; or the native Popover API |
 | Countdown / stopwatch | `startedAt`, `elapsed` | `setInterval` in an Effect with cleanup; compute from timestamps, not by counting ticks |
-| Image carousel | `index` | wrap-around like Tabs; pause autoplay on hover/focus; `aria-roledescription="carousel"` |
-| File explorer / nested tree | `expanded` set; tree data as a prop | recursive components with keys; ARIA `tree` roles and arrow keys |
+| Image carousel (a slideshow of images) | `index` | wrap-around like Tabs; pause autoplay on hover/focus; `aria-roledescription="carousel"` |
+| File explorer / nested tree | `expanded` set; tree data as a prop | recursive components (a component that renders itself for each nested level) with keys; ARIA `tree` roles and arrow keys |
 | Sortable, filterable data table | `sort`, `filters`, `page` | all derived with `useMemo` if large; Pagination; URL state |
-| Kanban board (drag and drop) | columns → card IDs | normalised state in a reducer; `@dnd-kit` or native drag events; keyboard alternative |
-| OTP / PIN input | array of digits | refs array to move focus; paste handling; `autoComplete="one-time-code"` |
+| Kanban board (drag and drop) | columns → card IDs | normalised state (items stored once, by ID, and referenced by ID elsewhere) in a reducer; `@dnd-kit` (a drag-and-drop library) or native drag events; keyboard alternative |
+| OTP (one-time password) / PIN input | array of digits | refs array to move focus; paste handling; `autoComplete="one-time-code"` |
 | Progress bar / file upload | `progress`, `status` | `<progress>` element; abort with `AbortController` |
 | Chat window | messages; `status` per message | `useOptimistic` for sending; auto-scroll with a ref; virtualise long histories |
 

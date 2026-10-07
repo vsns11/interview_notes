@@ -1,6 +1,6 @@
 # Chapter 7 — Custom Hooks and the Rules of Hooks
 
-You have used a handful of built-in Hooks — `useState` (Chapter 3), `useActionState` (Chapter 4), `useEffect` and `useRef` (Chapter 5), `useReducer` and `useContext` (Chapter 6). This chapter does two things. First it explains the **Rules of Hooks** properly: what they are, *why* React needs them, and what breaks when you ignore them. Then it shows how to write your **own** Hooks — reusable pieces of stateful logic such as `useLocalStorage`, `useDebounce` and `useFetch` — and finishes with four built-in Hooks that are easiest to understand once you think in "Hooks": `useId`, `useSyncExternalStore`, `useTransition` and `useDeferredValue` (plus `useEffectEvent`, which makes callback-taking custom Hooks correct).
+You have used a handful of built-in Hooks — `useState` (Chapter 3), `useActionState` (Chapter 4), `useEffect` and `useRef` (Chapter 5), `useReducer` and `useContext` (Chapter 6). This chapter does two things. First it explains the **Rules of Hooks** properly: what they are, *why* React needs them, and what breaks when you ignore them. Then it shows how to write your **own** Hooks — reusable pieces of **stateful logic** (code that remembers values between renders, not just computes) such as `useLocalStorage`, `useDebounce` and `useFetch` — and finishes with four built-in Hooks that are easiest to understand once you think in "Hooks": `useId`, `useSyncExternalStore`, `useTransition` and `useDeferredValue` (plus `useEffectEvent`, which makes callback-taking custom Hooks correct).
 
 **What you'll learn**
 
@@ -19,19 +19,19 @@ You have used a handful of built-in Hooks — `useState` (Chapter 3), `useAction
 | 7.11 | `useDeferredValue` | let a slow part of the screen lag behind fast input |
 | 7.12 | Putting it together | a user search built from four custom Hooks |
 
-Code: [`code/`](code/) — React 19.3 in jsdom (a browser-like DOM for Node), driven with `@testing-library/react`. Examples that fetch data start a tiny `node:http` server on `127.0.0.1` inside the same script, so no internet is needed.
+Code: [`code/`](code/) — React 19.3 in jsdom (a browser-like DOM for Node), driven with `@testing-library/react`. Examples that fetch data start a tiny `node:http` server (Node's built-in web server module) on `127.0.0.1` ("localhost" — the address of your own machine) inside the same script, so no internet is needed.
 
 ---
 
 ## 7.1 What a Hook really is
 
 ### What it is
-A **Hook** is a special function, whose name starts with `use`, that lets a component "hook into" a React feature: remembering state (`useState`), running side effects (`useEffect`), reading context (`useContext`), and so on. Hooks only work **while React is rendering a component**, because that is the only time React knows *which* component the call belongs to.
+A **Hook** is a special function, whose name starts with `use`, that lets a component "hook into" a React feature: remembering state (`useState`), running **side effects** (work beyond computing a result — network calls, timers, DOM changes; `useEffect`), reading **context** (a value provided by a component higher up the tree; `useContext`), and so on. Hooks only work **while React is rendering a component**, because that is the only time React knows *which* component the call belongs to.
 
 ### How it works — state is matched by call order
 A component is just a function; its local variables disappear after it returns. So where does `useState` keep the value? React stores it *outside* your function, in an internal record for that component instance (called a **fiber**). That record holds a **list of Hook slots**. On every render React walks the list in step with your calls:
 
-1. Before calling your component, React points a cursor at slot 0.
+1. Before calling your component, React points a **cursor** (a marker for "which slot is next") at slot 0.
 2. The first Hook call reads slot 0 and moves the cursor to slot 1; the second reads slot 1; and so on.
 3. The **only** thing that tells React "this `useState` is the `name` one" is its **position** in the sequence. Hooks have no names or keys.
 
@@ -79,7 +79,7 @@ On the second render the conditional call was skipped, so `useState(36)` became 
 Analogy: a cloakroom that hands out coats by **queue position**, not by ticket. It works perfectly as long as the same people always queue in the same order. If one person skips the queue, everyone behind them gets the wrong coat.
 
 ### Why React chose call order
-The React team considered giving each Hook a name or key. Position won because it keeps Hooks cheap (no string keys to compare), makes custom Hooks composable (two custom Hooks can each call `useState` without name clashes) and lets the same Hook be used several times in one component (`useState` twice). The price is one simple rule: *call Hooks in the same order every render*.
+The React team considered giving each Hook a name or key. Position won because it keeps Hooks cheap (no string keys to compare), makes custom Hooks **composable** (able to be combined freely: two custom Hooks can each call `useState` without name clashes) and lets the same Hook be used several times in one component (`useState` twice). The price is one simple rule: *call Hooks in the same order every render*.
 
 ### TL;DR
 React stores Hook state in a per-component list and matches calls by **position**. Change the number or order of calls between renders and values land in the wrong slots.
@@ -151,21 +151,21 @@ GreetingFixed     -> Hello, Ada
 TrackerFixed      -> clicks: 0
 ```
 
-React detects the changed count and **throws** ("Rendered more/fewer hooks…"), which crashes that part of the tree. If the count stays the same but the *kind* of Hook changes, development builds print the "change in the order of Hooks" warning and you get the mixed-up state from §7.1. The fix is always the same shape: **call the Hook unconditionally, move the condition inside it** (into the Effect body, into the returned JSX, or into the arguments).
+React detects the changed count and **throws** ("Rendered more/fewer hooks…"), which crashes that part of the tree. If the count stays the same but the *kind* of Hook changes, development builds (the unoptimised version used while coding, with extra checks) print the "change in the order of Hooks" warning and you get the mixed-up state from §7.1. The fix is always the same shape: **call the Hook unconditionally, move the condition inside it** (into the Effect body, into the returned JSX, or into the arguments).
 
 ### Why rule 2 exists
-A Hook needs a "currently rendering component" to attach its slot to. A plain function called from an event handler, a timer or module scope has none — React throws *"Invalid hook call. Hooks can only be called inside of the body of a function component."* (The same message appears if your app accidentally bundles **two copies of React**, e.g. a linked library with its own `react` — a classic monorepo bug.)
+A Hook needs a "currently rendering component" to attach its slot to. A plain function called from an event handler, a timer or **module scope** (code at the top level of a file, outside any function) has none — React throws *"Invalid hook call. Hooks can only be called inside of the body of a function component."* (The same message appears if your app accidentally **bundles** (packs into the shipped JavaScript) **two copies of React**, e.g. a linked library with its own `react` — a classic **monorepo** bug; a monorepo is one repository holding several packages.)
 
 ### The linter: `eslint-plugin-react-hooks`
-You should never have to find these bugs at runtime. The official ESLint plugin checks them as you type:
+You should never have to find these bugs at **runtime** (while the app is running). The official **ESLint** plugin (ESLint is a **linter** — a tool that reads code without running it and flags likely bugs) checks them as you type:
 
 | Rule | What it catches |
 |---|---|
 | `react-hooks/rules-of-hooks` | Hooks in conditions, loops, after early returns, in non-`use` functions |
 | `react-hooks/exhaustive-deps` | Missing or unnecessary values in `useEffect` / `useMemo` / `useCallback` dependency arrays (Chapter 5) |
-| Compiler-based rules (purity, refs, set-state-in-effect, …) | Code the React Compiler cannot safely optimise — included in the plugin's recommended preset in recent versions |
+| Compiler-based rules (purity, refs, set-state-in-effect, …) | Code the React Compiler (a build tool that memoises components automatically) cannot safely optimise — included in the plugin's recommended preset (bundle of pre-chosen rules) in recent versions |
 
-Setup with ESLint 9's flat config (not run — Vite's React template already includes it):
+Setup with ESLint 9's flat config (the newer config format: one `eslint.config.js` exporting an array) (not run — Vite's React template already includes it):
 ```js
 // eslint.config.js
 import reactHooks from 'eslint-plugin-react-hooks';
@@ -188,7 +188,7 @@ The linter recognises Hooks **by name**: any function called `useSomething` (wit
 | Naming a Hook `getUser()` | Call it `useUser()` so the linter checks it and its callers |
 
 ### In the interview
-**30-second answer:** "Two rules: call Hooks only at the top level of components or custom Hooks, and only from React functions. React stores Hook state in a list per component and matches calls by order, so the order must be identical every render — a Hook inside an `if` or after an early return shifts every later slot. React throws 'Rendered more/fewer hooks' when the count changes, and `eslint-plugin-react-hooks` catches it statically."
+**30-second answer:** "Two rules: call Hooks only at the top level of components or custom Hooks, and only from React functions. React stores Hook state in a list per component and matches calls by order, so the order must be identical every render — a Hook inside an `if` or after an early return shifts every later slot. React throws 'Rendered more/fewer hooks' when the count changes, and `eslint-plugin-react-hooks` catches it **statically** (by reading the code, before it runs)."
 
 - *Why can `use` be conditional but `useState` can't?* — `use` doesn't store anything in a Hook slot; it reads a promise or context each time.
 - *How do you conditionally run an effect?* — Always call `useEffect`; put the `if` inside its body and include the condition in the dependencies.
@@ -213,12 +213,12 @@ A **custom Hook** is a JavaScript function whose name starts with `use` and that
 Analogy: a recipe card. Two cooks follow the same card, but each has their **own pot**. The recipe (logic) is shared; the soup (state) is not.
 
 ### The problem it solves
-Before Hooks, sharing stateful logic needed wrapper patterns — **higher-order components** and **render props** (Chapter 14) — that nested the tree deeply ("wrapper hell"). A custom Hook is a plain function call: no extra components, no extra nesting, and you can call several.
+Before Hooks, sharing stateful logic needed wrapper patterns — **higher-order components** (HOCs: functions that take a component and return a wrapped one with extra props) and **render props** (passing a function as a prop that returns what to render) (Chapter 14) — that nested the tree deeply ("wrapper hell"). A custom Hook is a plain function call: no extra components, no extra nesting, and you can call several.
 
 ### How it works
 1. Notice duplicated Hook logic in two components (a toggle, a subscription, a fetch).
 2. Move it into `function useSomething(args) { … }`.
-3. Return what callers need — a value, a tuple `[value, setter]`, or an object `{ data, error, status }`.
+3. Return what callers need — a value, a **tuple** (a short fixed-length array where each position has a meaning) `[value, setter]`, or an object `{ data, error, status }`.
 4. Every call site gets its **own** state: calling `useToggle()` in two components runs `useState` twice, in two different fibers.
 5. The Hook re-runs on every render of its caller, so it always sees the latest arguments.
 
@@ -270,7 +270,7 @@ Opening the first spoiler did not open the second, and the theme switch has its 
 | Return objects when there are 3+ values | `{ data, error, status }` is self-documenting and order-free |
 | Keep it pure during render | Same rule as components: side effects go in Effects or handlers |
 | Avoid "lifecycle" Hooks like `useMount(fn)` | They hide dependencies from the linter; write the Effect you mean |
-| Add `useDebugValue(label)` for library Hooks | Shows a label next to the Hook in React DevTools (used in `code/hooks.js`) |
+| Add `useDebugValue(label)` for library Hooks | Shows a label next to the Hook in React DevTools (the browser extension for inspecting components) (used in `code/hooks.js`) |
 
 ### When not to write one
 - The logic is used once and is short — inline is clearer.
@@ -297,9 +297,9 @@ Test them through a tiny component (as every example here does) or with `renderH
 A Hook with the same API as `useState`, but whose value is saved in the browser's **`localStorage`** (a small per-site key–value store that keeps strings across reloads and browser restarts) and read back on the next visit.
 
 ### How it works
-1. **Lazy initial state**: pass a function to `useState` so storage is read once, on mount (reading storage on every render would be wasteful).
-2. `JSON.parse` / `JSON.stringify` because storage only holds strings.
-3. `try/catch` around every storage call: storage can throw (Safari private mode, quota full, disabled cookies) and stored JSON can be corrupted.
+1. **Lazy initial state**: pass a function to `useState` so storage is read once, on mount (the component's first appearance) (reading storage on every render would be wasteful).
+2. `JSON.parse` / `JSON.stringify` (convert between JavaScript values and **JSON** text — JavaScript Object Notation, the standard text format for data) because storage only holds strings.
+3. `try/catch` around every storage call: storage can throw (Safari private mode, **quota** — the storage size limit — full, disabled cookies) and stored JSON can be corrupted.
 4. An Effect writes the value whenever it changes — writing is a side effect, so it does not belong in render.
 5. A second Effect listens for the **`storage` event**, which the browser fires in *other* tabs of the same site when one tab changes a key — so all tabs stay in sync.
 
@@ -356,10 +356,10 @@ corrupted JSON  : font size: 16px (fell back to the default)
 ### Trade-offs and limits
 | Concern | Note |
 |---|---|
-| Server rendering | `localStorage` doesn't exist on the server. Reading it during render makes the server HTML (default value) differ from the client (stored value) → hydration mismatch. With SSR, render the default first and load the stored value in an Effect, or use `useSyncExternalStore` with a `getServerSnapshot` (§7.9). |
+| Server rendering | `localStorage` doesn't exist on the server. Reading it during render makes the server HTML (default value) differ from the client (stored value) → **hydration mismatch** (when React starts in the browser over server-made HTML — *hydration* — and finds different output, it warns and redraws). With SSR, render the default first and load the stored value in an Effect, or use `useSyncExternalStore` with a `getServerSnapshot` (§7.9). |
 | Two components, same key, same tab | Each has its own `useState`; they don't see each other's changes (the `storage` event only fires in *other* tabs). If that matters, turn storage into an external store read with `useSyncExternalStore`. |
-| Size | About 5 MB per origin in most browsers; strings only; synchronous (blocks the main thread). Large data → IndexedDB. |
-| Security | Readable by any script on the page — never store tokens or personal data here (see the JS book's storage chapter). |
+| Size | About 5 MB per **origin** (protocol + domain + port, e.g. `https://shop.example`) in most browsers; strings only; synchronous (blocks the **main thread** — the single thread that runs your JS and draws the page). Large data → IndexedDB (the browser's built-in asynchronous database). |
+| Security | Readable by any script on the page — never store tokens (login credentials such as session or access tokens) or personal data here (see the JS book's storage chapter). |
 
 ### TL;DR
 Lazy-read once, write in an Effect, `try/catch` everything, listen to `storage` for other tabs. Beware SSR mismatches.
@@ -425,7 +425,7 @@ A variant, `useDebouncedCallback(fn, ms)`, debounces a *function* instead of a v
 
 ### Common mistakes
 - Forgetting the cleanup → every keystroke eventually fires.
-- Debouncing the controlled input's own value → the caret lags and characters appear late.
+- Debouncing the controlled input's own value → the **caret** (the blinking text cursor) lags and characters appear late.
 - Creating the debounced function inline each render (`debounce(fn, 300)` in the body) → a new timer per render, so nothing is debounced. Keep it in a ref or use the value-based Hook above.
 
 ### TL;DR
@@ -439,7 +439,7 @@ Timer in an Effect, cleared by the cleanup. Debounce the derived value, never th
 A Hook that fetches a URL and returns `{ status, data, error }`. It packages the Effect-based fetching pattern from [Chapter 5](../05-effects-and-refs/README.md) so components don't repeat it.
 
 ### The problem it solves — race conditions
-If the URL changes while a request is in flight (the user clicks user 1, then quickly user 2), two responses are racing. Without cleanup, **whichever arrives last wins** — even if it is for the old URL.
+If the URL changes while a request is **in flight** (sent but not answered yet) (the user clicks user 1, then quickly user 2), two responses are racing — a **race condition**, where the result depends on which finishes first. Without cleanup, **whichever arrives last wins** — even if it is for the old URL.
 
 `code/06_use_fetch.jsx` — the local server answers user 1 slowly (150 ms) and user 2 quickly (20 ms):
 ```jsx
@@ -488,16 +488,16 @@ missing user  : Could not load user 99: HTTP 404
 ```
 
 ### How it works
-1. Each Effect run creates an `AbortController`; its `signal` is passed to `fetch`.
+1. Each Effect run creates an `AbortController` (a browser object that can cancel requests); its `signal` is passed to `fetch`.
 2. When `url` changes (or the component unmounts), React runs the cleanup → `controller.abort()` → the old `fetch` rejects with an `AbortError`, which we ignore.
-3. `fetch` only rejects on *network* failure, so we check `res.ok` ourselves and turn 4xx/5xx into errors.
+3. `fetch` only rejects on *network* failure, so we check `res.ok` ourselves and turn 4xx/5xx (HTTP **status codes** for client errors such as 404 Not Found, and server errors such as 500) into errors. (HTTP basics: [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md).)
 4. The state is one object with a `status` field, so impossible combinations (loading *and* error) can't happen.
 5. Keeping old `data` while `status === 'loading'` lets the UI show "refreshing…" instead of flashing a spinner.
 
-(An alternative to aborting is an `ignore` flag set in cleanup, as in Chapter 5; it prevents the stale `setState` but lets the request finish. Aborting also saves bandwidth.)
+(An alternative to aborting is an `ignore` flag set in cleanup, as in Chapter 5; it prevents the stale `setState` but lets the request finish. Aborting also saves bandwidth — the amount of data transferred.)
 
 ### When not to use it
-`useFetch` is a good exercise and fine for a one-off widget, but real apps quickly need **caching** (don't refetch what you just loaded), **deduplication** (two components, one request), **refetch on focus**, **retries**, **pagination** and **mutations with invalidation**. That list is exactly what TanStack Query or a router loader provides — see [Chapter 9](../09-routing-and-data-fetching/README.md). Effects also start fetching only *after* render, which causes request **waterfalls** in nested components.
+`useFetch` is a good exercise and fine for a one-off widget, but real apps quickly need **caching** (don't refetch what you just loaded), **deduplication** (two components, one request), **refetch on focus**, **retries**, **pagination** (loading results one page at a time) and **mutations with invalidation** (after changing data, mark the cached copy out of date so it reloads). That list is exactly what TanStack Query or a router loader provides — see [Chapter 9](../09-routing-and-data-fetching/README.md). Effects also start fetching only *after* render, which causes request **waterfalls** (each request waiting for the previous one to finish instead of running in parallel) in nested components.
 
 ### In the interview
 **30-second answer:** "I'd keep `{status, data, error}` in one state object, start the fetch in an Effect keyed on the URL, pass an AbortController signal, and abort in the cleanup so a stale response can't overwrite a newer one. I'd check `res.ok` because fetch doesn't reject on 404. For production I'd use TanStack Query or router loaders to get caching, dedupe and retries."
@@ -517,7 +517,7 @@ Some custom Hooks accept a function: `useInterval(callback, ms)`, `useEventListe
 ### The problem it solves
 Two bad options existed before:
 - Put `callback` in the dependencies → the interval is torn down and recreated on every render.
-- Leave it out (`[]`) → the Effect keeps the **first** callback forever (a **stale closure**) and the linter complains.
+- Leave it out (`[]`) → the Effect keeps the **first** callback forever (a **stale closure** — a function still holding variables from an old render) and the linter complains.
 
 `code/11_use_effect_event.jsx`:
 ```jsx
@@ -568,7 +568,7 @@ Callback-taking Hooks: wrap the callback in `useEffectEvent`, call it from the E
 ## 7.8 `useId` — IDs for accessibility
 
 ### What it is
-`useId()` returns a **unique string ID** for the component instance calling it, stable across re-renders and identical between the server HTML and the hydrated client. It exists for HTML attributes that link elements by ID: `<label htmlFor>`, `aria-describedby`, `aria-labelledby`, `aria-controls`.
+`useId()` returns a **unique string ID** for the component instance calling it, stable across re-renders and identical between the server HTML and the hydrated client. It exists for HTML attributes that link elements by ID, including **ARIA** attributes (Accessible Rich Internet Applications — `aria-*` attributes that describe elements to screen readers): `<label htmlFor>`, `aria-describedby`, `aria-labelledby`, `aria-controls`.
 
 ### The problem it solves
 A reusable `<PasswordField>` needs `id` on its input so its `<label>` can point at it. Hard-coding `id="password"` breaks as soon as the field appears twice on a page (duplicate IDs; the second label points at the first input). A global counter (`id = nextId++`) breaks with server rendering, because server and client may count in a different order, causing hydration mismatches.
@@ -605,7 +605,7 @@ with identifierPrefix: _widget-R_0_-input
 ### How it works
 - The ID is derived from the component's **position in the tree** (its "parent path"), not from a counter, which is why server and client agree as long as they render the same tree.
 - Call it **once** per component and derive related IDs with suffixes (`${id}-input`, `${id}-hint`).
-- `identifierPrefix` (an option of `createRoot`, `hydrateRoot` and the server renderers) keeps IDs from two React roots on one page from colliding.
+- `identifierPrefix` (an option of `createRoot`, `hydrateRoot` and the server renderers) keeps IDs from two React **roots** (separate React apps mounted into different DOM elements via `createRoot`) on one page from colliding.
 - The exact format is an implementation detail and has changed between React versions; never parse it or hard-code it in CSS or tests. (Query by role/label in tests instead — as the output shows, that works *because* the IDs are wired correctly.)
 
 ### When not to use it
@@ -620,7 +620,7 @@ with identifierPrefix: _widget-R_0_-input
 ## 7.9 `useSyncExternalStore` — subscribing to outside data
 
 ### What it is
-An **external store** is any data that lives outside React state and can change on its own: browser APIs (`navigator.onLine`, `matchMedia`, `window.innerWidth`, `localStorage`), third-party state libraries, a WebSocket cache. `useSyncExternalStore` lets a component **read** such a store and **re-render** when it changes, without the subtle bugs of doing it with `useState` + `useEffect`.
+An **external store** is any data that lives outside React state and can change on its own: browser APIs (`navigator.onLine` — is the device online?, `matchMedia` — does a CSS media query match?, `window.innerWidth`, `localStorage`), third-party state libraries, a WebSocket (a persistent two-way server connection) cache. `useSyncExternalStore` lets a component **read** such a store and **re-render** when it changes, without the subtle bugs of doing it with `useState` + `useEffect`.
 
 ```js
 const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot?);
@@ -633,7 +633,7 @@ const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot?
 | `getServerSnapshot()` | Optional: the value to use during server rendering and hydration. Required if the component renders on the server. |
 
 ### Why not `useState` + `useEffect`?
-The Effect version subscribes *after* the first paint (so the first render may show a wrong value) and, with concurrent rendering, different components can read the store at slightly different moments during one render and show inconsistent values — called **tearing**. `useSyncExternalStore` reads the snapshot in a way React can check for consistency, and forces a synchronous re-render if the store changes mid-render.
+The Effect version subscribes *after* the first paint (so the first render may show a wrong value) and, with **concurrent rendering** (React can pause a render part-way and continue later, §7.10), different components can read the store at slightly different moments during one render and show inconsistent values — called **tearing**. `useSyncExternalStore` reads the snapshot in a way React can check for consistency, and forces a synchronous re-render if the store changes mid-render.
 
 `code/08_use_sync_external_store.jsx`:
 ```jsx
@@ -699,7 +699,7 @@ Part 3 shows why step 3 needs a *stable* snapshot: a fresh object is "different"
 - Router libraries subscribe to the history/location store this way.
 
 ### When not to use it
-If you can keep the data in React state (`useState`, `useReducer`), do. Mutations of an external store can't be marked as non-blocking **transitions**; if a store update happens during a transition, React falls back to a blocking render — so prefer React state for UI that benefits from `useTransition`.
+If you can keep the data in React state (`useState`, `useReducer`), do. Mutations of an external store can't be marked as non-blocking **transitions** (low-priority updates React may interrupt, §7.10); if a store update happens during a transition, React falls back to a blocking render — so prefer React state for UI that benefits from `useTransition`.
 
 ### In the interview
 **30-second answer:** "`useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)` is the official way to read mutable data from outside React. React subscribes after commit and re-reads the snapshot on each change, re-rendering when it differs. It prevents tearing in concurrent rendering. The snapshot must be cached — return the same reference while nothing changed — and `subscribe` should be stable. Zustand and React Redux use it internally."
@@ -796,7 +796,7 @@ The first render after the click still shows the **about** tab (dimmed, `isPendi
 Since React 19 you can pass an **async function** to `startTransition`. React calls such a function an **Action**: it tracks pending state for you, and it's the same mechanism behind form `action` props, `useActionState` and `useOptimistic` ([Chapter 4](../04-forms-and-actions/README.md)). One current limitation: state updates that happen **after an `await`** are not automatically part of the transition — wrap them in another `startTransition`, as in the example.
 
 ### Transitions and Suspense
-If a transition causes a component to suspend (e.g. a route loads data, [Chapter 9](../09-routing-and-data-fetching/README.md)), React **keeps showing the old screen** instead of replacing already-visible content with a `<Suspense>` fallback. That's why routers wrap navigations in transitions: no flashing spinners between pages.
+If a transition causes a component to **suspend** (pause rendering because something it needs isn't ready yet, e.g. a route loads data, [Chapter 9](../09-routing-and-data-fetching/README.md)), React **keeps showing the old screen** instead of replacing already-visible content with a `<Suspense>` fallback (the placeholder UI, such as a spinner, that `<Suspense>` shows while children are suspended). That's why routers wrap navigations in transitions: no flashing spinners between pages.
 
 ### Trade-offs and caveats
 | Point | Detail |
@@ -829,7 +829,7 @@ const deferredQuery = useDeferredValue(query, initialValue);   // React 19: valu
 
 ### How it works
 1. The user types; `text` updates urgently and the component renders with `text = "re"` but `deferred = ""`.
-2. A child wrapped in `memo` that receives `deferred` sees the **same prop** as before and is skipped — the input stays snappy.
+2. A child wrapped in `memo` (a wrapper that skips re-rendering when props are unchanged; Chapter 10) that receives `deferred` sees the **same prop** as before and is skipped — the input stays snappy.
 3. React then re-renders in the background with `deferred = "re"`; now the slow child renders.
 4. If another key arrives first, React abandons that background render and starts over with the newest value.
 

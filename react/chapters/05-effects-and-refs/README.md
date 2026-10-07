@@ -1,8 +1,8 @@
 # Chapter 5 — Effects and Refs
 
-So far every component has been a pure function of props and state (Chapter 2 §2.5), and every change has come from an event handler (Chapter 3). Real apps also need to talk to things **outside React**: a chat server connection, a timer, a browser API such as `document.title`, a third-party map widget, a DOM node that must be focused or measured. React's two **escape hatches** for this are **Effects** (`useEffect`, "run this code after rendering to synchronise with something outside") and **refs** (`useRef`, "remember a value, or hold a DOM node, without re-rendering").
+So far every component has been a pure function of props and state (Chapter 2 §2.5), and every change has come from an event handler (Chapter 3). Real apps also need to talk to things **outside React**: a chat server connection, a timer, a browser API (a built-in function or object the browser offers to code) such as `document.title`, a **third-party** (written by someone else, not by you or React) map widget, a DOM node that must be focused or measured. React's two **escape hatches** (deliberate ways to step outside React's normal render-from-state model) for this are **Effects** (`useEffect`, "run this code after rendering to synchronise with something outside") and **refs** (`useRef`, "remember a value, or hold a DOM node, without re-rendering").
 
-They are also the most over-used Hooks. Half of this chapter is about **when not to use an Effect**, because unnecessary Effects make apps slower and buggier.
+They are also the most over-used Hooks (React's built-in `use…` functions). Half of this chapter is about **when not to use an Effect**, because unnecessary Effects make apps slower and buggier.
 
 **What you'll learn**
 
@@ -21,20 +21,20 @@ They are also the most over-used Hooks. Half of this chapter is about **when not
 | 5.11 | `useLayoutEffect` | measure before the browser paints; know its cost |
 | 5.12 | Putting it together | a city search with five Effects and three refs |
 
-Code: [`code/`](code/) — React 19.3 in jsdom. jsdom has no layout engine, so the examples that measure or scroll fake the few layout numbers they need and say so.
+Code: [`code/`](code/) — React 19.3 in jsdom (a browser-like DOM that runs inside Node.js). jsdom has no **layout engine** (the part of a browser that works out each element's size and position), so the examples that measure or scroll fake the few layout numbers they need and say so.
 
 ---
 
 ## 5.1 Where side effects belong
 
 ### What it is
-A **side effect** is anything a piece of code does besides computing a return value: changing the DOM by hand, sending a request, starting a timer, writing to `localStorage`, logging analytics. React gives you three places to put code:
+A **side effect** is anything a piece of code does besides computing a return value: changing the DOM by hand, sending a request, starting a timer, writing to `localStorage` (small key-value storage kept by the browser), logging analytics (usage statistics sent to a tracking service). React gives you three places to put code:
 
 | Place | Runs when | Must be | Use it for |
 |---|---|---|---|
 | **Rendering** (the component body) | Every time React needs the UI | **Pure** — same inputs, same JSX, no side effects | Computing JSX and derived values |
 | **Event handlers** | When a specific user action happens | Anything goes | Side effects **caused by a particular interaction**: submit a form, buy a product, start a timer on click |
-| **Effects** (`useEffect`) | **After** a render is committed to the screen | Should be undoable (cleanup) | Side effects **caused by rendering itself** — keeping the component **synchronised** with an external system while it's on screen |
+| **Effects** (`useEffect`) | **After** a render is committed (React has applied its changes to the real DOM) | Should be undoable (cleanup) | Side effects **caused by rendering itself** — keeping the component **synchronised** with an **external system** (anything React doesn't control: network, timers, browser APIs, other libraries) while it's on screen |
 
 The question to ask is **"why does this code run?"**
 - *Because the user clicked "Send"* → event handler.
@@ -57,14 +57,14 @@ useEffect(setup, dependencies?)
 // dependencies: array of every reactive value setup reads (props, state, values derived from them)
 ```
 
-An **Effect** runs **after** React has updated the DOM (and normally after the browser has painted), so it never blocks the user from seeing the new screen. A **reactive value** is anything declared in the component body that can change between renders: props, state, and variables computed from them.
+An **Effect** runs **after** React has updated the DOM (and normally after the browser has **painted** — drawn the pixels on screen), so it never blocks the user from seeing the new screen. A **reactive value** is anything declared in the component body that can change between renders: props, state, and variables computed from them.
 
 The dependency array controls re-runs:
 
 | You write | Setup runs |
 |---|---|
 | `useEffect(fn)` — no array | After **every** render |
-| `useEffect(fn, [])` — empty array | Once after the first render (**mount**); cleanup on **unmount** |
+| `useEffect(fn, [])` — empty array | Once after the first render (**mount** = first appears); cleanup on **unmount** (= removed from the screen) |
 | `useEffect(fn, [a, b])` | After mount, and after any render where `a` or `b` changed (compared with `Object.is`) |
 
 ### How it works
@@ -122,7 +122,7 @@ render      count=1 name=Grace | DOM says: Grace: 1
 What to notice:
 1. **Effects run after the DOM is updated.** During render the `<h1>` still shows the old text; inside the Effect it shows the new text.
 2. **Dependencies are compared with the previous render.** Clicking "count" didn't re-run C (name unchanged); clicking "name" did.
-3. **Cleanup runs before the next setup** — and it sees the *old* values (`"Ada"`), because each render's Effect closes over that render's snapshot (Chapter 3 §3.3).
+3. **Cleanup runs before the next setup** — and it sees the *old* values (`"Ada"`), because each render's Effect closes over that render's snapshot (a **closure** — a function remembers the variables that existed where it was created; Chapter 3 §3.3).
 4. **Same state value → nothing is committed.** React may call the component once more to check (the extra "render" line) but doesn't update the DOM or run Effects.
 5. **Unmount** runs every remaining cleanup.
 
@@ -141,8 +141,8 @@ flowchart LR
 
 ### Rules
 - Call `useEffect` at the **top level** of the component (Hook rules — Chapter 7).
-- The setup function itself must not be `async` (it would return a promise, not a cleanup). Define an async function inside and call it (§5.7).
-- Effects **don't run on the server** (server rendering — Chapter 13).
+- The setup function itself must not be `async` (it would return a **promise** — an object standing for a result that arrives later — not a cleanup). Define an async function inside and call it (§5.7).
+- Effects **don't run on the server** (server rendering — producing HTML on the server before the page reaches the browser; Chapter 13).
 
 ### In the interview
 **30-second answer:** "`useEffect` synchronises a component with an external system. The setup runs after the render is committed; the optional cleanup runs before the next setup and on unmount. The dependency array lists every reactive value the Effect reads: no array runs after every render, an empty array only on mount, and otherwise when a dependency changes by `Object.is`. I think of it as start-sync/stop-sync rather than lifecycle events."
@@ -158,7 +158,7 @@ flowchart LR
 ## 5.3 Cleanup — undo what setup did
 
 ### What it is
-The **cleanup function** is what your setup returns. It must **undo** the setup: disconnect what you connected, unsubscribe what you subscribed, clear the timer you started, remove the listener you added, cancel the request you sent. Without it, each re-run *adds* another connection/timer/listener — a **leak**.
+The **cleanup function** is what your setup returns. It must **undo** the setup: disconnect what you connected, unsubscribe what you subscribed, clear the timer you started, remove the listener you added, cancel the request you sent. Without it, each re-run *adds* another connection/timer/listener — a **leak** (resources that are never released and pile up, wasting memory and network).
 
 ### How it works
 `code/02_cleanup_and_strict_mode.jsx`:
@@ -231,7 +231,7 @@ With cleanup, there is always **exactly one** open connection, to the right room
 | `window.addEventListener('resize', fn)` | `window.removeEventListener('resize', fn)` — the **same** function reference |
 | `const unsub = store.subscribe(fn)` | `unsub()` |
 | `const controller = new AbortController(); fetch(url, { signal })` | `controller.abort()` |
-| `const obs = new IntersectionObserver(…); obs.observe(el)` | `obs.disconnect()` |
+| `const obs = new IntersectionObserver(…); obs.observe(el)` (reports when an element scrolls into view) | `obs.disconnect()` |
 | `const map = new MapWidget(el)` | `map.destroy()` |
 | `dialog.showModal()` | `dialog.close()` |
 | Start an animation | Reset it to the initial state |
@@ -249,9 +249,9 @@ Return a function that exactly undoes the setup. Then re-runs, room switches and
 ## 5.4 StrictMode's double run (development only)
 
 ### What it is
-When your app is wrapped in `<StrictMode>` (Vite and most templates do this — Chapter 1 §1.6), React in **development** mounts every component, then **immediately simulates an unmount and a re-mount**: setup → cleanup → setup. In the output above, that's the `connect / disconnect / connect` on mount. Production builds run the setup once.
+When your app is wrapped in `<StrictMode>` (Vite and most templates do this — Chapter 1 §1.6), React in **development** mounts every component, then **immediately simulates an unmount and a re-mount**: setup → cleanup → setup. In the output above, that's the `connect / disconnect / connect` on mount. Production builds (the optimised version real users get) run the setup once.
 
-React 19 applies the same check to **ref callbacks** (§5.9) in development, and React 19.3 also does it for components that were server-rendered and then hydrated.
+React 19 applies the same check to **ref callbacks** (§5.9) in development, and React 19.3 also does it for components that were server-rendered and then **hydrated** (React attached itself to HTML the server already produced).
 
 ### Why React does this
 Users *do* unmount and remount components: they navigate away and back, a tab is hidden with `<Activity>` (React 19.2's component for hiding a subtree while keeping its state) and shown again, a list is filtered. If setup and cleanup are not symmetrical, those real situations produce bugs that are hard to reproduce. StrictMode forces the situation on every mount in development so you see the bug immediately — the leaky version shows `open: 2` right at mount.
@@ -263,9 +263,9 @@ The fix is **never** "stop React running it twice". The fix is a correct cleanup
 |---|---|---|
 | Two connections / subscriptions | A ref flag "already connected" | Return `disconnect` / `unsubscribe` |
 | Two intervals ticking twice as fast | Disable StrictMode | `return () => clearInterval(id)` |
-| Two fetches in the Network tab | Ref flag | Harmless if you ignore/abort the first (§5.7); or use a data library with caching |
+| Two fetches in the Network tab (the browser DevTools panel listing every request) | Ref flag | Harmless if you ignore/abort the first (§5.7); or use a data library with caching |
 | Analytics event logged twice | Ref flag | Acceptable in dev (production logs once), or send analytics from the event that caused it |
-| Code that must run once per **app load** (initialising a SDK) | Effect with a ref | Top-level module code, or a module-level `let didInit = false` guard |
+| Code that must run once per **app load** (initialising a SDK — Software Development Kit, a vendor's client library) | Effect with a ref | Top-level module code, or a module-level `let didInit = false` guard |
 
 ### In the interview
 **30-second answer:** "In development, StrictMode runs every Effect's setup, cleanup and setup again on mount to check the cleanup mirrors the setup. It doesn't happen in production. If the double run causes a visible problem, the Effect is missing a cleanup — the fix is to add one, not to suppress the second run."
@@ -278,7 +278,7 @@ Dev-only setup → cleanup → setup exposes missing cleanups. Fix the cleanup; 
 ## 5.5 Dependencies in depth
 
 ### The rule
-Every **reactive value** the Effect reads must be in its dependency array. The **`react-hooks/exhaustive-deps`** lint rule (in `eslint-plugin-react-hooks`, included by Vite's React template) checks this for you. Values that never change — module-level constants, `useRef` objects, state setters, the `dispatch` from `useReducer`/`useActionState` — can be left out.
+Every **reactive value** the Effect reads must be in its dependency array. The **`react-hooks/exhaustive-deps`** lint rule (a check run by a **linter** — a tool such as ESLint that reads your code and flags likely bugs; this rule lives in `eslint-plugin-react-hooks`, included by Vite's React template) checks this for you. Values that never change — module-level constants, `useRef` objects, state setters, the `dispatch` from `useReducer`/`useActionState` — can be left out.
 
 **You don't choose the dependencies; the code does.** If an Effect re-runs too often, change the code so it reads fewer reactive values. Never silence the linter with `// eslint-disable-next-line` — it leads to Effects reading stale values.
 
@@ -337,9 +337,9 @@ useEffectEvent: [
 ]
 ```
 
-1. **Objects/functions created during render** are new on every render, so `Object.is` always says "changed": 6 connections for 5 keystrokes. Move them **inside** the Effect (or outside the component if they don't use props/state) and depend on primitives (`roomId`).
+1. **Objects/functions created during render** are new on every render, so `Object.is` always says "changed": 6 connections for 5 keystrokes. Move them **inside** the Effect (or outside the component if they don't use props/state) and depend on **primitives** (simple values — strings, numbers, booleans — compared by value, not by reference) (`roomId`).
 2. **Updater functions** (Chapter 3 §3.5) let an interval increment `count` without reading it, so the interval is created once instead of being torn down and restarted on every tick.
-3. **`useEffectEvent`** splits logic in two: the *reactive* part (connect to `roomId` — should re-run when it changes) and the *non-reactive* part (show a toast in the *current* `theme` — should see the latest value but must **not** reconnect when the theme changes). Changing the theme did not reconnect, yet the toast used "dark". Changing the room did reconnect.
+3. **`useEffectEvent`** splits logic in two: the *reactive* part (connect to `roomId` — should re-run when it changes) and the *non-reactive* part (show a **toast** — a small pop-up notification that disappears by itself — in the *current* `theme` — should see the latest value but must **not** reconnect when the theme changes). Changing the theme did not reconnect, yet the toast used "dark". Changing the room did reconnect.
 
 ### `useEffectEvent` rules (stable since React 19.2)
 - Call the returned function **only from inside Effects** (or other Effect Events), never during render or from event handlers.
@@ -350,10 +350,10 @@ useEffectEvent: [
 ### Other techniques
 | Problem | Technique |
 |---|---|
-| Function prop from parent re-creates every render | Call it from an Effect Event, or have the parent memoise it with `useCallback` (Chapter 10) |
+| Function prop from parent re-creates every render | Call it from an Effect Event, or have the parent memoise it (keep the same function between renders) with `useCallback` (Chapter 10) |
 | Effect reads a whole object prop but needs one field | Destructure the primitive outside the Effect: `const { id } = user;` → `[id]` |
 | Two unrelated things in one Effect | Split into two Effects, each with its own dependencies |
-| Mutable value such as `location.pathname` or a ref's `.current` | Not a valid dependency (changes don't re-render). Subscribe with `useSyncExternalStore` (Chapter 7) |
+| Mutable value such as `location.pathname` or a ref's `.current` | Not a valid dependency (changes don't re-render). Subscribe with `useSyncExternalStore` (a Hook for reading a value that lives outside React and re-rendering when it changes; Chapter 7) |
 
 ### Self-check
 1. Why did `ObjectDep` reconnect on every keystroke? → A new `options` object each render; `Object.is` compares references.
@@ -368,7 +368,7 @@ List everything the Effect reads; reduce the list by changing code — move obje
 ## 5.6 You might not need an Effect
 
 ### The problem it solves
-Beginners reach for `useEffect` whenever "something should happen when X changes". Most of those cases involve **no external system** and are better written without an Effect. Unneeded Effects cost an **extra render**, can show **stale UI for a frame**, and create **chains** that are hard to follow.
+Beginners reach for `useEffect` whenever "something should happen when X changes". Most of those cases involve **no external system** and are better written without an Effect. Unneeded Effects cost an **extra render**, can show **stale UI for a frame** (one screen refresh, about 16 ms at 60 frames per second), and create **chains** that are hard to follow.
 
 ### How to recognise it
 If the Effect only (a) calls `setState` based on props/state, or (b) does something because of a *user action* that just happened — it's probably not needed.
@@ -464,14 +464,14 @@ Reading the evidence:
 | Share logic between two event handlers | Extract a function and call it from both |
 | Send a request because the user did something (POST on submit) | Do it in the event handler / form Action (Chapter 4) |
 | Run a chain of state updates (A changes → set B → set C…) | Calculate all next state in the one handler |
-| Initialise the app once (read a token, init a SDK) | Top-level module code or a `didInit` module flag |
+| Initialise the app once (read a token — e.g. a login credential string, init a SDK) | Top-level module code or a `didInit` module flag |
 | Tell the parent about a change | Call the parent's callback in the same handler, or lift the state up (Chapter 3 §3.7) |
 | Pass fetched data up to the parent | Fetch in the parent and pass it down |
 | Subscribe to an external store | `useSyncExternalStore` (Chapter 7) |
-| Fetch data | An Effect *with cleanup* is acceptable (§5.7), but prefer a framework loader or TanStack Query (Chapter 6 §6.9, Chapter 9) |
+| Fetch data | An Effect *with cleanup* is acceptable (§5.7), but prefer a framework loader (a function the router runs to fetch a page's data before showing it) or TanStack Query (a data-fetching and caching library) (Chapter 6 §6.9, Chapter 9) |
 
 ### What *does* need an Effect
-Connecting to a server or socket, subscribing to browser events (`resize`, `online`, keyboard shortcuts), timers that run while a component is visible, synchronising with a non-React widget (a map, a video player, `dialog.showModal()`), updating `document.title`, logging an impression **because the component was shown**, and fetching (with cleanup).
+Connecting to a server or socket (a WebSocket — a connection kept open so the server can push messages), subscribing to browser events (`resize`, `online`, keyboard shortcuts), timers that run while a component is visible, synchronising with a non-React widget (a map, a video player, `dialog.showModal()`), updating `document.title`, logging an **impression** (an analytics record that something was seen) **because the component was shown**, and fetching (with cleanup).
 
 ### In the interview
 **30-second answer:** "Effects are for synchronising with external systems. If there's no external system — just transforming props into state or reacting to a user event — I don't use one. Derived values are computed during render, expensive ones memoised; full resets use a `key`; event-caused logic goes in the handler; parents are notified in the same handler. Unneeded Effects add renders, show stale frames, and chain into hard-to-follow code."
@@ -492,7 +492,7 @@ No external system → no Effect. Compute in render, reset with `key`, act in ha
 ## 5.7 Fetching data in Effects and race conditions
 
 ### What it is
-Fetching in an Effect means: when the component shows with some input (a person, a search query), request the matching data and put it in state. It is a legitimate Effect — the component is synchronising with a server — but it has a classic trap: a **race condition**, where two requests are in flight and the **slower, older** one finishes last and overwrites the correct result.
+Fetching in an Effect means: when the component shows with some input (a person, a search query), request the matching data and put it in state. It is a legitimate Effect — the component is synchronising with a server — but it has a classic trap: a **race condition** (a bug where the result depends on which of several overlapping operations finishes first), where two requests are **in flight** (sent but not yet answered) and the **slower, older** one finishes last and overwrites the correct result.
 
 ### How it works — three versions
 `code/05_fetch_race_conditions.jsx` (the fake API answers Alice in 60 ms and Bob in 10 ms; the user picks Alice, then quickly Bob):
@@ -551,9 +551,9 @@ sequenceDiagram
 
 - **Naive**: the user selected Bob but sees Alice — the late response won.
 - **Ignore flag**: each Effect run has its own `ignore` variable; the cleanup of the Alice run sets *its* flag, so Alice's result is dropped.
-- **`AbortController`**: actually cancels the old request (saves bandwidth; `fetch` rejects with an `AbortError`, which you must not show as an error). Also models the three states you always need: **loading, error, success**.
+- **`AbortController`** (a browser object whose `abort()` cancels the requests given its `signal`): actually cancels the old request (saves **bandwidth** — the amount of data sent over the network; `fetch` rejects with an `AbortError`, which you must not show as an error). Also models the three states you always need: **loading, error, success**.
 
-With real `fetch`, check `response.ok` yourself — `fetch` only rejects on network failure, not on HTTP 404/500:
+With real `fetch`, check `response.ok` yourself — `fetch` only rejects on network failure, not on HTTP 404/500 (HTTP **status codes**: 404 = not found, 500 = server error; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md) for HTTP basics):
 ```js
 // (pattern — not run)
 const res = await fetch(`/api/bio/${person}`, { signal });
@@ -565,12 +565,12 @@ const data = await res.json();
 | Downside | Consequence |
 |---|---|
 | Starts only after render + paint | Slower than fetching during navigation or on the server |
-| Parent fetches, then child renders and fetches | **Network waterfalls** |
+| Parent fetches, then child renders and fetches | **Network waterfalls** (requests that wait for each other one after another instead of running in parallel) |
 | No cache | Going back and forth re-fetches everything |
-| Boilerplate | Loading/error/abort/retry in every component |
-| No deduplication | Two components needing the same data make two requests |
+| Boilerplate (repetitive set-up code) | Loading/error/abort/retry in every component |
+| No deduplication (merging identical requests into one) | Two components needing the same data make two requests |
 
-That's why real apps use a **framework's data loading** (React Router loaders, Next.js Server Components — Chapters 9, 13) or a **client cache** such as **TanStack Query** (Chapter 6 §6.9), which handle caching, deduplication, retries, and races for you. React 19's `use()` with Suspense is another option for promises created outside render (Chapter 9).
+That's why real apps use a **framework's data loading** (React Router loaders, Next.js Server Components — Chapters 9, 13) or a **client cache** (a store of already-fetched data kept in the browser) such as **TanStack Query** (Chapter 6 §6.9), which handle caching, deduplication, retries, and races for you. React 19's `use()` with Suspense (React's mechanism for showing a fallback such as a spinner while something is loading) is another option for promises created outside render (Chapter 9).
 
 ### Common mistakes
 - `useEffect(async () => …)` — setup must not return a promise.
@@ -602,7 +602,7 @@ Analogy: state is the scoreboard everyone watches — change it and the stadium 
 | Changing it | Via setter → **re-render** | Assign `ref.current = x` → **no re-render** |
 | Value during a render | A fixed snapshot | Mutable; could change at any time |
 | Read it during render? | Yes | **No** (except lazy initialisation) |
-| Use for | Anything shown on screen | IDs of timers, DOM nodes, latest-value holders, instances of non-React objects |
+| Use for | Anything shown on screen | IDs of timers, DOM nodes, latest-value holders, instances (created objects) of non-React objects |
 
 ### How it works
 `code/06_use_ref_values.jsx`:
@@ -658,7 +658,7 @@ engines created over 4 renders: 1
 3. `useRef(new VideoPlayerEngine())` would construct an engine on **every** render and throw it away; the `if (ref.current === null)` pattern creates it once. (For state, `useState(() => …)` does the same job — Chapter 3 §3.2.)
 
 ### Rules
-- **Don't read or write `ref.current` during rendering** (except the lazy-init pattern). Rendering must be pure; a value React can't track makes output unpredictable — and the React Compiler (Chapter 10) assumes you follow this rule.
+- **Don't read or write `ref.current` during rendering** (except the lazy-init pattern). Rendering must be pure; a value React can't track makes output unpredictable — and the React Compiler (a build tool that automatically memoises components; Chapter 10) assumes you follow this rule.
 - Read and write refs in **event handlers and Effects**.
 - A ref is **per component instance**, like state. A module-level variable would be shared by all instances.
 - The "`usePrevious`" hook you may see online (writing the previous value into a ref in an Effect and reading it during render) breaks the rule above; store the previous value in state as in §5.6 case 5 instead.
@@ -727,13 +727,13 @@ Output:
   after removing Jellylorum, the Map holds: Tom, Maru
 ```
 
-- During the first render the ref is still `null` — the DOM node doesn't exist yet. React sets refs during the **commit**, before layout Effects run. Use refs in handlers and Effects.
+- During the first render the ref is still `null` — the DOM node doesn't exist yet. React sets refs during the **commit**, before layout Effects (Effects that run before the browser paints, §5.11) run. Use refs in handlers and Effects.
 - You can't call `useRef` inside a loop (Hook rules), so for a list use **one ref holding a `Map`** and a **ref callback** per item.
 
 ### Ref callbacks
 A **ref callback** is a function passed as `ref`. React calls it with the DOM node when the element is attached. In **React 19** it can **return a cleanup function**, called when the node is detached — the example removes the cat from the Map. (Before React 19, and still if you return nothing, React calls the callback again with `null` on detach.) Two details:
 - An inline callback is a new function each render, so React detaches (runs cleanup) and re-attaches it after every render. That's harmless for simple bookkeeping; wrap it in `useCallback` if the work is expensive.
-- Arrow functions with an implicit return, like `ref={(n) => (instance = n)}`, now look like "returning a cleanup"; TypeScript rejects them. Use a block body `{ instance = n; }`.
+- Arrow functions with an **implicit return** (no braces, so the expression's value is returned), like `ref={(n) => (instance = n)}`, now look like "returning a cleanup"; TypeScript (typed JavaScript) rejects them. Use a block body `{ instance = n; }`.
 
 ### When to use DOM refs — and when not
 | Good uses | Avoid |
@@ -754,7 +754,7 @@ Tip: to scroll to an item you *just* added with `setState`, the DOM doesn't have
 ## 5.10 Passing refs to your own components
 
 ### What it is
-By default a component's DOM nodes are private. When a parent legitimately needs a child's node — a design-system `<TextField>` that the page wants to focus — the child must **pass the ref through**.
+By default a component's DOM nodes are private. When a parent legitimately needs a child's node — a design-system (a team's shared kit of UI components) `<TextField>` that the page wants to focus — the child must **pass the ref through**.
 
 - **React 19**: `ref` is an **ordinary prop** for function components. Destructure it and put it on the element.
 - **React 18 and earlier**: you had to wrap the component in **`forwardRef`**, which passes `ref` as a second argument. It still works in React 19, but React has announced it will be deprecated; new code should use the prop. (Class components still don't receive `ref` as a prop.)
@@ -809,7 +809,7 @@ Output:
 ```
 
 - Both styles delivered the `<input>` to the parent; the React 19 version is just a prop.
-- With `useImperativeHandle` the parent could only `focus` and `clear` — it can't restyle or remove the node. This is good encapsulation for component libraries.
+- With `useImperativeHandle` the parent could only `focus` and `clear` — it can't restyle or remove the node. This is good **encapsulation** (hiding internals and exposing only a deliberate interface) for component libraries.
 - **Fragment refs** (stable in React 19.3) give a `FragmentInstance` with methods such as `focus()` (focuses the first focusable child), `addEventListener`, `observeUsing(observer)` and `getClientRects()` — useful when you'd otherwise add a wrapper `<div>` only to hold a ref.
 
 ### Migration
@@ -819,7 +819,7 @@ Output:
 | `X.displayName` needed for DevTools with anonymous `forwardRef` | Normal named function |
 | `<Ctx.Provider value>` (related 19 change) | `<Ctx value>` (Chapter 6 §6.3) |
 
-React provides a codemod for the `forwardRef` migration.
+React provides a **codemod** (a script that rewrites your source code automatically) for the `forwardRef` migration.
 
 ### In the interview
 **30-second answer:** "To give a parent access to a child's DOM node, in React 19 the child just accepts `ref` as a prop and passes it to the element; `forwardRef` is the older way and is on the path to deprecation. If I don't want to expose the whole node, `useImperativeHandle` exposes a small API like `focus`. Refs are an escape hatch — I use them for focus, scroll, measurement and third-party widgets, not for rendering."
@@ -832,9 +832,9 @@ React 19: `function Field({ ref }) { return <input ref={ref} /> }`. `forwardRef`
 ## 5.11 `useLayoutEffect` — before the browser paints
 
 ### What it is
-`useLayoutEffect` has the same signature as `useEffect`, but it runs **synchronously after React updates the DOM and before the browser paints**. The browser waits for it. That makes it the right tool for one job: **measure layout and adjust before the user sees anything** — e.g. position a tooltip, or scroll a chat to the bottom without a visible jump.
+`useLayoutEffect` has the same signature as `useEffect`, but it runs **synchronously after React updates the DOM and before the browser paints**. The browser waits for it. That makes it the right tool for one job: **measure layout and adjust before the user sees anything** — e.g. position a **tooltip** (a small label that pops up next to an element), or scroll a chat to the bottom without a visible jump.
 
-`useInsertionEffect` runs even earlier (before layout effects) and exists for CSS-in-JS libraries to insert `<style>` tags; app code rarely needs it.
+`useInsertionEffect` runs even earlier (before layout effects) and exists for CSS-in-JS libraries (libraries where you write styles inside JavaScript, Chapter 8) to insert `<style>` tags; app code rarely needs it.
 
 ### How it works
 `code/08_layout_effect.jsx` — first the order of work, then a tooltip that must flip below its target when there's no room above:
@@ -896,7 +896,7 @@ flowchart LR
 ### Trade-offs
 | `useEffect` | `useLayoutEffect` |
 |---|---|
-| Doesn't block painting — **default choice** | Blocks painting — slow code here makes the app feel janky |
+| Doesn't block painting — **default choice** | Blocks painting — slow code here makes the app feel janky (stuttering, not smooth) |
 | May show one frame of the "before" state | No flicker for measure-then-adjust |
 | Fine for 99% of Effects | Only for reading layout and synchronously fixing it |
 | — | Does nothing during server rendering (the HTML is sent before any layout exists) |
@@ -912,7 +912,7 @@ flowchart LR
 
 | Need | Tool | Why |
 |---|---|---|
-| Debounce the query (wait until typing pauses) | Effect with `setTimeout` + cleanup (in a tiny `useDebounced` Hook — custom Hooks are Chapter 7) | Timer = external system; each keystroke's cleanup cancels the previous timer |
+| Debounce the query (wait until typing pauses) | Effect with `setTimeout` + cleanup (in a tiny `useDebounced` Hook — custom Hooks, your own reusable `use…` functions, are Chapter 7) | Timer = external system; each keystroke's cleanup cancels the previous timer |
 | Focus the box when the page opens | DOM ref + Effect | Focus is a browser API |
 | Press `/` anywhere to focus search | Window listener in an Effect + cleanup | Global subscription while mounted |
 | Search the (fake) API | Effect with `AbortController` | Server sync, race-safe |

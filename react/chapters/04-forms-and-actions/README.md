@@ -1,6 +1,6 @@
 # Chapter 4 — Forms and Actions
 
-Almost every real app has forms: sign-up, search, checkout, settings, comments. Chapter 3 §3.9 showed the basic **controlled input** (`value` + `onChange`). This chapter covers the whole topic: the two ways to own a field's value, validation that is helpful and accessible, and React 19's **Actions** — a built-in way to submit forms that tracks "pending", keeps the last result, resets the form, and shows optimistic updates, with far less code than the classic `onSubmit` + several `useState` calls.
+Almost every real app has forms: sign-up, search, checkout, settings, comments. Chapter 3 §3.9 showed the basic **controlled input** (`value` + `onChange`). This chapter covers the whole topic: the two ways to own a field's value, validation that is helpful and accessible, and React 19's **Actions** — a built-in way to submit forms that tracks "pending" (the request is still in flight), keeps the last result, resets the form, and shows **optimistic updates** (showing the expected result before the server confirms it), with far less code than the classic `onSubmit` + several `useState` calls.
 
 **What you'll learn**
 
@@ -17,20 +17,20 @@ Almost every real app has forms: sign-up, search, checkout, settings, comments. 
 | 4.9 | Form libraries | when React Hook Form + Zod pay off, and what the code looks like |
 | 4.10 | Putting it together | an RSVP form using every idea |
 
-Code: [`code/`](code/) — React 19.3 in jsdom, driven by `@testing-library/user-event`. Two small notes for anyone reusing the tests: each program sets `globalThis.FormData = window.FormData` (Node has its own `FormData` that cannot read a `<form>` element), and after React resets a form, `user.clear()` is called before typing again (user-event keeps its own copy of the field's text and doesn't notice the reset).
+Code: [`code/`](code/) — React 19.3 in jsdom (a browser-like DOM running inside Node.js), driven by `@testing-library/user-event` (a test helper that types and clicks like a real user). Two small notes for anyone reusing the tests: each program sets `globalThis.FormData = window.FormData` (`globalThis` is the global object in any JavaScript environment; Node has its own `FormData` that cannot read a `<form>` element), and after React resets a form, `user.clear()` is called before typing again (user-event keeps its own copy of the field's text and doesn't notice the reset).
 
 ---
 
 ## 4.1 How a form submission works
 
 ### What it is
-A **form** (`<form>`) groups input fields. When the user presses a submit button or hits Enter in a text field, the browser fires a **`submit` event** and then, by default, *navigates*: it sends the field values to the URL in the form's `action` attribute and loads a new page. (The HTML side — every input type, labels, fieldsets — is in the HTML & CSS book, [`../../../html-css/chapters/05-tables-and-forms/README.md`](../../../html-css/chapters/05-tables-and-forms/README.md).)
+A **form** (`<form>`) groups input fields. When the user presses a submit button or hits Enter in a text field, the browser fires a **`submit` event** and then, by default, *navigates* (goes to another page): it sends the field values to the URL (web address) in the form's `action` attribute and loads a new page. (The HTML side — every input type, labels, fieldsets — is in the HTML & CSS book, [`../../../html-css/chapters/05-tables-and-forms/README.md`](../../../html-css/chapters/05-tables-and-forms/README.md).)
 
 Only fields with a **`name`** attribute are sent. The data is a list of **name/value pairs**, which JavaScript exposes as a **`FormData`** object:
 
 | `FormData` method | Returns |
 |---|---|
-| `fd.get('email')` | The first value for that name (a string, or a `File` for file inputs), or `null` |
+| `fd.get('email')` | The first value for that name (a string, or a `File` — the browser's object for an uploaded file — for file inputs), or `null` |
 | `fd.getAll('topic')` | Every value for that name — for several checkboxes sharing one name |
 | `Object.fromEntries(fd)` | A plain object `{ name: value }` (keeps only the last value of repeated names) |
 | `new FormData(formElement)` | Builds the pairs from a form's current field values |
@@ -129,8 +129,8 @@ What the output shows:
 
 ### `defaultValue` is only a starting value
 `defaultValue` is read when the element is created; afterwards the DOM value belongs to the user. Two consequences:
-- To **reset** an uncontrolled field to new defaults, remount it with a new `key` (Chapter 3 §3.10) or call `form.reset()` (which restores the *default* values).
-- For `<select>`, React **ignores a changed `defaultValue` after mount** (it only applies it on creation). §4.10 hits this and uses `key` to remount the select.
+- To **reset** an uncontrolled field to new defaults, **remount** it (make React throw it away and create a fresh one) with a new `key` (Chapter 3 §3.10) or call `form.reset()` (which restores the *default* values).
+- For `<select>`, React **ignores a changed `defaultValue` after mount** (after the element first appears on the page) (it only applies it on creation). §4.10 hits this and uses `key` to remount the select.
 
 ### Which elements must be uncontrolled?
 `<input type="file">` is **always uncontrolled** — for security, JavaScript cannot set the file a user picks. Read `input.files` or `formData.get('avatar')` (a `File` object).
@@ -148,7 +148,7 @@ What the output shows:
 
 ### When to use which
 - **Uncontrolled + `FormData`** (usually with a form Action): most "fill in and submit" forms — sign-up, contact, settings.
-- **Controlled**: when the UI must react to every keystroke — live search, input masks (credit-card spacing), a counter, fields that depend on each other, a wizard that keeps values across steps.
+- **Controlled**: when the UI must react to every keystroke — live search, input masks (credit-card spacing), a counter, fields that depend on each other, a **wizard** (a form split into several steps with Next/Back buttons) that keeps values across steps.
 - Mixing is fine: one controlled search box in an otherwise uncontrolled form.
 
 ### Common mistakes
@@ -185,21 +185,21 @@ There are three layers, and real apps use all of them:
 
 | Layer | Where it runs | Purpose |
 |---|---|---|
-| **Built-in HTML constraints** (`required`, `type="email"`, `minLength`, `pattern`, `min`/`max`) | Browser | Free, instant, works without JavaScript |
+| **Built-in HTML constraints** (`required`, `type="email"`, `minLength`, `pattern` — a regular expression the value must match, `min`/`max`) | Browser | Free, instant, works without JavaScript |
 | **Client-side rules** in React | Browser | Custom messages, cross-field rules ("passwords match"), consistent styling |
 | **Server-side validation** | Server | The only one you can **trust** — anyone can bypass the browser |
 
-Client validation is for **user experience**; server validation is for **correctness and security**. Never skip the server.
+Client validation (the **client** is the user's browser; the **server** is your machine that receives the request) is for **user experience**; server validation is for **correctness and security**. Never skip the server.
 
 ### How built-in validation works
 The browser checks each field's constraints; if any fails, it blocks the submit event and shows its own bubble. Each field exposes a **`validity`** object (`valueMissing`, `typeMismatch`, `tooShort`, `patternMismatch`, `rangeOverflow`, …, and the summary `valid`) and `validationMessage`. Adding **`noValidate`** to the `<form>` turns the browser's blocking and bubbles off so your own UI takes over — while `validity` still works.
 
 ### How custom validation works
-1. Write **one pure `validate(values)` function** that returns an `errors` object (`{ email: 'Enter a valid email' }`). Pure means it's easy to test and to reuse on the server.
+1. Write **one pure `validate(values)` function** (pure = same input always gives the same output, and it changes nothing outside itself) that returns an `errors` object (`{ email: 'Enter a valid email' }`). Pure means it's easy to test and to reuse on the server.
 2. Compute `errors` **during render** from the current values — it's derived state (Chapter 3 §3.8), so never store it.
-3. Decide **when to show** each error. Showing "Email is invalid" after the first keystroke is hostile. A widely used rule: show a field's error once the user has **left** it (**blur**, tracked in a `touched` object) or after the first **submit** attempt; then update it live as they fix it.
-4. On submit with errors, **move focus to the first invalid field** so keyboard and screen-reader users land where the problem is.
-5. Make errors **accessible**: `aria-invalid="true"` on the field, the message linked with `aria-describedby`, and `role="alert"` so it's announced (details in the HTML & CSS book, [`../../../html-css/chapters/03-semantic-html-and-accessibility/README.md`](../../../html-css/chapters/03-semantic-html-and-accessibility/README.md)).
+3. Decide **when to show** each error. Showing "Email is invalid" after the first keystroke is hostile. A widely used rule: show a field's error once the user has **left** it (**blur** — the field losing keyboard focus — tracked in a `touched` object) or after the first **submit** attempt; then update it live as they fix it.
+4. On submit with errors, **move focus to the first invalid field** so keyboard and screen-reader users (people using software that reads the page aloud) land where the problem is.
+5. Make errors **accessible** (usable by people with disabilities and their assistive tools) using ARIA attributes (**ARIA** = Accessible Rich Internet Applications, extra HTML attributes that tell assistive technology what an element is or what state it is in): `aria-invalid="true"` on the field, the message linked with `aria-describedby`, and `role="alert"` so it's announced (details in the HTML & CSS book, [`../../../html-css/chapters/03-semantic-html-and-accessibility/README.md`](../../../html-css/chapters/03-semantic-html-and-accessibility/README.md)).
 
 `code/02_validation.jsx`:
 ```jsx
@@ -279,17 +279,17 @@ Reading it:
 | On blur (touched) | Balanced | Most fields |
 | On submit only | Calm but late | Short forms (login) |
 | On blur, then live while fixing | Best of both | Default recommendation |
-| Async (server) checks such as "username taken" | Needs debouncing and pending UI | Uniqueness checks — or just return the error from the submit Action (§4.5) |
+| Async (server) checks such as "username taken" | Needs debouncing (waiting until the user pauses typing before checking) and pending UI | Uniqueness checks — or just return the error from the submit Action (§4.5) |
 
 ### Common mistakes
-- Trusting client validation — attackers call your API directly. Validate on the server too.
+- Trusting client validation — attackers call your API (the server URLs your app sends requests to) directly. Validate on the server too.
 - Storing `errors` in state and "syncing" it in an Effect — compute it (Chapter 5 §5.6).
 - Showing errors only by colour — also use text, `aria-invalid` and `aria-describedby`.
 - Disabling the submit button until the form is valid — users can't discover *why* it's disabled. Prefer allowing submit and showing errors.
-- Over-strict regexes for emails and names; keep client checks simple and let the server (or a confirmation email) decide.
+- Over-strict regexes (regular expressions — compact text-matching patterns) for emails and names; keep client checks simple and let the server (or a confirmation email) decide.
 
 ### In the interview
-**30-second answer:** "I layer validation: HTML constraints for free basics, a pure `validate` function in React for custom and cross-field rules, and always server-side validation because the client can be bypassed. Errors are derived from values, shown after blur or first submit, linked with `aria-describedby`, flagged with `aria-invalid`, and on a failed submit I focus the first invalid field. For big forms I'd use a schema library such as Zod so the same rules run on both sides."
+**30-second answer:** "I layer validation: HTML constraints for free basics, a pure `validate` function in React for custom and cross-field rules, and always server-side validation because the client can be bypassed. Errors are derived from values, shown after blur or first submit, linked with `aria-describedby`, flagged with `aria-invalid`, and on a failed submit I focus the first invalid field. For big forms I'd use a schema library such as Zod so the same rules run on both sides." (A **schema** is a description of what valid data looks like — §4.9.)
 
 - *What does `noValidate` do?* — Turns off the browser's blocking and bubbles; constraint APIs (`validity`) still work.
 - *Why a pure `validate` function?* — Testable, reusable on the server, and errors become derived state.
@@ -314,7 +314,7 @@ The same idea exists on buttons: **`formAction={fn}`** on a `<button>` (or `<inp
 ### Why it matters
 Compared with `onSubmit`:
 - No `e.preventDefault()`, no reading fields by hand — you get `FormData`.
-- The function may be **async**; React tracks it as pending, which powers `useFormStatus` (§4.6), `useActionState`'s `isPending` (§4.5) and `useOptimistic` (§4.7).
+- The function may be **async** (declared `async`, so it can `await` slow work such as a network call and returns a **promise** — an object for a result that arrives later); React tracks it as pending, which powers `useFormStatus` (§4.6), `useActionState`'s `isPending` (§4.5) and `useOptimistic` (§4.7).
 - After the Action **finishes successfully**, React **resets the form**: uncontrolled fields go back to their `defaultValue`s (a fresh, empty form — exactly what you want after "Send").
 - With Server Functions (§4.8) the same form can even work **before JavaScript loads**.
 
@@ -323,7 +323,7 @@ Compared with `onSubmit`:
 2. React calls `preventDefault()`, creates `new FormData(form, submitter)` and starts a Transition.
 3. Your function runs with `formData`; while its promise is pending, the form is "pending".
 4. When it resolves, React commits any state updates and **resets** the form's uncontrolled fields.
-5. If it **throws** (or rejects), the error goes to the nearest **error boundary** (Chapter 14) — so catch expected errors yourself and turn them into state (§4.5).
+5. If it **throws** (or rejects — the promise fails), the error goes to the nearest **error boundary** (a component that catches crashes below it and shows a fallback UI; Chapter 14) — so catch expected errors yourself and turn them into state (§4.5).
 
 `code/03_form_action.jsx`:
 ```jsx
@@ -369,7 +369,7 @@ after the action finished:
 ### Details worth knowing
 | Detail | Behaviour |
 |---|---|
-| HTTP method | With a function action the `method` prop is irrelevant — nothing is sent by the browser; React calls your function |
+| HTTP method (`GET`/`POST` — the kind of request a browser sends) | With a function action the `method` prop is irrelevant — nothing is sent by the browser; React calls your function |
 | Controlled fields | Not reset (their value comes from state) — clear the state yourself |
 | Keep values after an error | Return them from the Action and use them as `defaultValue` (§4.5), or use controlled fields |
 | Reset by hand | `requestFormReset(formElement)` from `react-dom`, called inside a Transition/Action |
@@ -422,7 +422,7 @@ const [state, formAction, isPending] = useActionState(actionFn, initialState, pe
 
 Analogy: a receipt printer on the form. Each submission prints a receipt (the returned state); the form shows the latest receipt, and the printer can see the previous one.
 
-It was called `useFormState` (in `react-dom`) during the React 19 canary period; the stable API is `useActionState` from `react`.
+It was called `useFormState` (in `react-dom`) during the React 19 **canary** period (pre-release builds published for early testing); the stable API is `useActionState` from `react`.
 
 ### How it works
 `code/04_use_action_state.jsx`:
@@ -489,11 +489,11 @@ Step by step:
 
 ### Rules and caveats
 - The action receives **`(prevState, payload)`** — a very common bug is writing `async (formData) => …` and getting the previous state as "formData".
-- **Queued and sequential**: multiple dispatches don't run in parallel. Good for correctness, but a slow request delays the next one.
+- **Queued and sequential** (one after another): multiple dispatches (calls of the returned action function) don't run in parallel (at the same time). Good for correctness, but a slow request delays the next one.
 - **No built-in reset** of the state: return the initial state from the action, or remount the component with a new `key`.
 - **Throwing** cancels queued actions and shows the nearest error boundary — return errors instead.
 - If you set *other* state after an `await` inside the action, currently wrap that update in `startTransition` (§4.7 shows this).
-- With Server Functions, `initialState` and the payload must be **serializable** (plain data).
+- With Server Functions, `initialState` and the payload must be **serializable** (plain data that can be turned into text, sent over the network and rebuilt on the other side).
 
 ### `useActionState` vs doing it yourself
 | Manual (`onSubmit`) | `useActionState` |
@@ -586,7 +586,7 @@ after   : "Save note" disabled = false
 | `useFormStatus` | `isPending` from `useActionState` |
 |---|---|
 | Read by any **descendant** of the form | Available in the component that owns the action |
-| Great for reusable design-system buttons/spinners | Great when the owner needs it (disable the whole form) |
+| Great for reusable design-system (a team's shared kit of UI components and styles) buttons/spinners (animated loading indicators) | Great when the owner needs it (disable the whole form) |
 | Also exposes the submitted `data` | Also gives the action's result `state` |
 
 ### Common mistakes
@@ -721,7 +721,7 @@ Calling the setter outside an Action produces a development warning — there is
 ## 4.8 Server Functions and progressive enhancement (overview)
 
 ### What it is
-In a framework that supports **React Server Components** (for example Next.js App Router — Chapter 13), you can mark an async function with the directive **`'use server'`**. It becomes a **Server Function**: its code stays on the server, and the client gets a reference that, when called, sends the arguments over the network and runs the function there. Passed to a form's `action`, it's often called a **Server Action**.
+In a framework that supports **React Server Components** (components that run only on the server and send no JavaScript to the browser — for example Next.js App Router, Chapter 13), you can mark an async function with the **directive** (a special string at the top of a file or function that changes how tools treat it) **`'use server'`**. It becomes a **Server Function**: its code stays on the server, and the client gets a reference that, when called, sends the arguments over the network and runs the function there. Passed to a form's `action`, it's often called a **Server Action**.
 
 ```jsx
 // (framework-only — not run; needs a React Server Components bundler such as Next.js)
@@ -750,11 +750,11 @@ export function AddButton({ productId }) {
 ```
 
 ### Why it matters — progressive enhancement
-**Progressive enhancement** means the basic feature works with plain HTML, and JavaScript makes it nicer. Because a Server Function has a URL, a server-rendered form can be submitted **before the JavaScript bundle has loaded** (slow phone, flaky network): the browser does a normal POST, the server runs the function, and the page comes back with the result. The optional `permalink` argument of `useActionState` tells React which page to return in that case. Once hydrated, the same form works as the Actions in this chapter.
+**Progressive enhancement** means the basic feature works with plain HTML, and JavaScript makes it nicer. Because a Server Function has a URL, a server-rendered form can be submitted **before the JavaScript bundle** (the combined JS file of your app) **has loaded** (slow phone, flaky network): the browser does a normal POST (an HTTP request that sends data to the server), the server runs the function, and the page comes back with the result. The optional `permalink` argument of `useActionState` tells React which page to return in that case. Once **hydrated** (React has started in the browser and attached itself to the server's HTML), the same form works as the Actions in this chapter.
 
 ### Rules to remember
 - Arguments and return values must be **serializable** (strings, numbers, plain objects, arrays, `FormData`, …) — no functions or class instances.
-- Treat every Server Function as a **public API endpoint**: authenticate, authorise and validate inside it.
+- Treat every Server Function as a **public API endpoint** (a URL anyone on the internet can call): **authenticate** (check who the caller is), **authorise** (check they are allowed to do this) and validate inside it.
 - `'use server'` marks server-callable functions; it is **not** how you mark Server Components (those need no directive). Details in Chapter 13.
 
 ### TL;DR
@@ -769,9 +769,9 @@ Hand-written forms (§4.3) are fine for 3–5 fields. Big forms — dozens of fi
 
 | Library | Job |
 |---|---|
-| **React Hook Form** (RHF) | Manages field registration, values, touched/dirty state, errors, submit handling. Uses **uncontrolled inputs** + refs, so typing doesn't re-render the whole form |
-| **Zod** | A **schema** library: describe the shape and rules of data once, then `parse`/`safeParse` any value. Also infers TypeScript types from the schema |
-| `@hookform/resolvers` | Glue: lets RHF validate with a Zod (or Yup, Valibot…) schema |
+| **React Hook Form** (RHF) | Manages field registration, values, touched/dirty state (dirty = changed from its initial value), errors, submit handling. Uses **uncontrolled inputs** + refs, so typing doesn't re-render the whole form |
+| **Zod** | A **schema** library: describe the shape and rules of data once, then `parse`/`safeParse` any value. Also infers TypeScript types (works out the static types of typed JavaScript) from the schema |
+| `@hookform/resolvers` | Glue (small adapter code): lets RHF validate with a Zod (or Yup, Valibot…) schema |
 
 Sharing one Zod schema between the browser form and the server handler means the rules can't drift apart.
 
@@ -809,7 +809,7 @@ export function SignupForm({ onSignup }) {
 // if (!result.success) return { errors: z.flattenError(result.error).fieldErrors };
 ```
 
-- `register('email')` returns `{ name, onChange, onBlur, ref }`, spread onto the input.
+- `register('email')` returns `{ name, onChange, onBlur, ref }`, spread onto the input (`{...obj}` passes every field as a separate prop).
 - `handleSubmit(fn)` prevents the default, validates, and calls `fn(data)` only when valid (focusing the first invalid field by default).
 - In Zod 4, string formats such as email are top-level (`z.email()`), and custom messages use the `error` option (`message` still works but is deprecated). `safeParse` never throws.
 

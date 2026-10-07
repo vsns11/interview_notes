@@ -15,14 +15,14 @@ This chapter answers three questions before you write any serious React: *what p
 | 1.7 | Your first component | write, export, import and nest components |
 | 1.8 | JSX rules | one root, closed tags, `className`, `{expressions}`, fragments, `style` objects |
 
-All code lives in [`code/`](code/). It was run with **React 19.3** (current as of September 2026) on Node 24: `.jsx` files are compiled by esbuild and rendered into **jsdom** (a browser-like DOM that runs inside Node), and `@testing-library/react` is used to click buttons and read what a user would see. Run everything with `bash tools_run_js.sh react` from the repository root.
+All code lives in [`code/`](code/). It was run with **React 19.3** (current as of September 2026) on Node 24 (**Node.js** is a *runtime* — a program that runs JavaScript outside the browser, on your own computer or a server): `.jsx` files are **compiled** (translated into plain JavaScript that can actually run) by **esbuild** (a very fast JavaScript compiler and bundler) and rendered into **jsdom** (a browser-like DOM that runs inside Node), and `@testing-library/react` (a testing helper library) is used to click buttons and read what a user would see. Run everything with `bash tools_run_js.sh react` from the repository root.
 
 ---
 
 ## 1.1 What React is
 
 ### What it is
-**React** is a JavaScript **library** for building **user interfaces** (UIs) out of **components**. A *component* is a JavaScript function that returns a description of a piece of screen — a button, a profile card, a whole page. You combine small components into bigger ones, the way you build a wall out of bricks.
+**React** is a JavaScript **library** (a package of ready-made code that *your* program calls when it needs it) for building **user interfaces** (UIs) out of **components**. A *component* is a JavaScript function that returns a description of a piece of screen — a button, a profile card, a whole page. You combine small components into bigger ones, the way you build a wall out of bricks.
 
 Analogy: think of a restaurant. You (the developer) write the *menu* — for each situation, what the plate should look like. React is the kitchen: it works out how to get from the plate on the table now to the plate described on the menu, and does only the necessary work.
 
@@ -39,7 +39,7 @@ Key vocabulary used for the rest of the book:
 | **Hook** | A function starting with `use` (e.g. `useState`) that lets a component use React features. |
 
 ### Library, not framework
-React itself handles only one job: turning components + data into UI and keeping it up to date. Routing (which page for which URL), data fetching, and build tooling come from other packages or from a **framework** built on React (Next.js, React Router, Expo — §1.5).
+React itself handles only one job: turning components + data into UI and keeping it up to date. Routing (which page for which URL), data fetching, and **build tooling** (programs that turn your source files into the optimised files a browser downloads) come from other packages (a **package** is a reusable bundle of code you download and install, usually from the npm registry) or from a **framework** built on React (a framework is a fuller toolkit that sets the overall structure of your app and calls *your* code — the reverse of a library) (Next.js, React Router, Expo — §1.5).
 
 | Package | What it does |
 |---|---|
@@ -54,30 +54,30 @@ React itself handles only one job: turning components + data into UI and keeping
 | May 2013 | Open-sourced at JSConf US. JSX was controversial ("HTML in my JavaScript?"). |
 | 2015 | React Native brings the model to mobile apps. |
 | Feb 2019 | React 16.8 introduces **Hooks**; function components become the standard way to write React. |
-| Mar 2022 | React 18: concurrent rendering and automatic batching of state updates. |
+| Mar 2022 | React 18: concurrent rendering (React can pause and resume rendering work) and automatic batching (several state updates grouped into one re-render). |
 | Dec 5, 2024 | **React 19**: Actions, `useActionState`, `useOptimistic`, `use`, `ref` as a normal prop, Server Components stable. |
 | Feb 14, 2025 | Create React App (CRA) deprecated for new apps. |
-| Oct 2025 | React 19.2; React Compiler 1.0 (automatic memoization); Meta announces React will move to an independent React Foundation hosted by the Linux Foundation. |
+| Oct 2025 | React 19.2; React Compiler 1.0 (automatic **memoization** — remembering a computed result so it is not recomputed when inputs are unchanged); Meta announces React will move to an independent React Foundation hosted by the Linux Foundation. |
 | Sep 9, 2026 | React 19.3 (`<ViewTransition>`, refs on `<Fragment>`) — the version used in this book. |
 
 ### Why it matters
 - **Reusable pieces.** A `<Button>` written once is used in 200 places; fixing a bug in that one file repairs every place it is used.
 - **Predictable updates.** You describe the UI for the current data; React keeps the screen in sync (§1.2).
 - **Huge ecosystem.** Routers, form libraries, component kits, testing tools, and jobs. React is used by Meta (Facebook, Instagram, WhatsApp Web, Threads), Netflix, Airbnb, Discord, Shopify, and many others.
-- **One mental model, many targets.** Browser (React DOM), server HTML (SSR), mobile (React Native), even terminals and PDFs via community renderers.
+- **One mental model, many targets.** Browser (React DOM), server HTML (SSR — server-side rendering, §1.4), mobile (React Native), even terminals and PDFs via community **renderers** (libraries that turn React components into output for one particular target).
 
 ### When not to use it
 | Situation | Better fit |
 |---|---|
-| A mostly static site (blog, docs, landing page) with little interactivity | Plain HTML/CSS, or a static-site generator; add a sprinkle of JS |
-| A tiny widget on a server-rendered page | Vanilla JS or a very small library |
+| A mostly static site (blog, docs, landing page) with little interactivity | Plain HTML/CSS, or a static-site generator (a tool that builds plain HTML files ahead of time); add a sprinkle of JS |
+| A tiny widget on a server-rendered page | Vanilla JS (plain JavaScript, no library) or a very small library |
 | Hard limits on JavaScript size (very slow devices/networks) | Server-rendered HTML with minimal JS |
 
-React's runtime (react + react-dom) adds roughly 60–70 KB of gzipped JavaScript (the Figure 1.1 bundle, React included, is 69 KB gzipped) — small for an app, large for a single dropdown.
+React's runtime (the React code that ships to the browser: react + react-dom) adds roughly 60–70 KB of **gzipped** JavaScript (compressed with gzip, the way servers usually send files) (the Figure 1.1 **bundle** — the single combined JavaScript file built from your code and its packages — React included, is 69 KB gzipped) — small for an app, large for a single dropdown.
 
 ### Common mistakes
 - Thinking React *is* the whole app. You still need routing, data fetching, and a build tool — which is why react.dev recommends starting with a framework (§1.5).
-- Learning old tutorials: class components, `componentDidMount`, and CRA are legacy. This book uses function components and Hooks only.
+- Learning old tutorials: class components (the pre-2019 style of writing components as JavaScript classes), `componentDidMount` (a method of those classes that ran after the component appeared on screen), and CRA are legacy. This book uses function components and Hooks only.
 
 ### TL;DR
 React = a UI library: components (functions returning JSX) + React DOM to put them in the browser. Everything else (routing, data, build) comes from the ecosystem or a framework.
@@ -107,7 +107,7 @@ flowchart LR
 ```
 
 ### The problem it solves
-In an imperative UI every event handler must remember *every* piece of screen that depends on the changed data. With three labels, a badge and a disabled button all depending on `likes`, forgetting one line produces an inconsistent screen. Bugs grow with the number of (state × places-that-show-it) combinations. In the declarative version there is only one place — the JSX — that says what each piece looks like.
+In an imperative UI every **event handler** (a function that runs in response to an event such as a click or a key press) must remember *every* piece of screen that depends on the changed data. With three labels, a badge and a disabled button all depending on `likes`, forgetting one line produces an inconsistent screen. Bugs grow with the number of (state × places-that-show-it) combinations. In the declarative version there is only one place — the JSX — that says what each piece looks like.
 
 ### How it works — the same button both ways
 `code/01_imperative_vs_declarative.jsx`
@@ -149,15 +149,15 @@ Both give the same HTML. The difference is *where the knowledge lives*: in the i
 ### Trade-offs
 | | Imperative DOM code | Declarative React |
 |---|---|---|
-| Small widget | Shortest code, no dependency | Overhead of a library and build step |
+| Small widget | Shortest code, no dependency (extra package) | Overhead of a library and build step (a compile command run before deploying) |
 | Growing UI | Handlers get tangled; easy to forget an update | Each piece described once; scales well |
 | Performance | You can hand-optimise every step | React does diffing work; fast enough for almost all UIs, with tools for hot spots |
-| Debugging | Trace which handler changed what | Inspect state and props in React DevTools |
+| Debugging | Trace which handler changed what | Inspect state and props in React DevTools (a browser extension, §1.5) |
 
 ### In the interview
 **30-second answer:** "React is declarative: I describe what the UI should look like for the current state, and React works out the DOM operations. When state changes, React re-runs my component, compares the new output with the previous one, and applies only the differences. That removes a whole class of bugs where some part of the screen isn't updated."
 
-- *Is React fully declarative?* — The UI description is. You still write imperative code in event handlers (e.g. "on click, set state") and escape hatches such as refs and Effects (Chapter 5).
+- *Is React fully declarative?* — The UI description is. You still write imperative code in event handlers (e.g. "on click, set state") and escape hatches such as refs (a way to hold a value or a DOM node without re-rendering) and Effects (code that runs after rendering to sync with something outside React) (Chapter 5).
 - *What does UI = f(state) mean?* — Given the same state and props, a component should return the same JSX; the screen is derived from data rather than edited by hand.
 
 ### TL;DR
@@ -187,7 +187,7 @@ flowchart LR
     C --> P["Browser paints"]
 ```
 
-The diff uses two simple rules instead of an expensive general tree comparison (a general algorithm is roughly O(n³); React's heuristics make it about O(n)):
+The diff uses two simple rules instead of an expensive general tree comparison (a general algorithm is roughly O(n³); React's **heuristics** — rules of thumb that are fast and almost always right — make it about O(n)). **Big-O notation** describes how work grows with input size *n*: O(n) means work grows in step with the number of elements, O(n³) means 1,000 elements could need about a billion steps.
 
 | Rule | Consequence |
 |---|---|
@@ -198,7 +198,7 @@ The diff uses two simple rules instead of an expensive general tree comparison (
 Since React 16 the engine that performs this work is called **Fiber**; it can split rendering into small units, pause and resume (the basis of React 18+ *concurrent rendering*). You do not need its details to write React.
 
 ### Code — watching what React actually changes
-`code/04_reconciliation.jsx` renders a clock, records every DOM mutation with a `MutationObserver` (a browser API that reports DOM changes), then renders again with a new `time` prop.
+`code/04_reconciliation.jsx` renders a clock, records every DOM **mutation** (change) with a `MutationObserver` (a browser **API** — Application Programming Interface, a set of functions a system offers for code to call — that reports DOM changes), then renders again with a new `time` prop.
 
 ```jsx
 function Clock({ time }) {
@@ -233,7 +233,7 @@ Although the whole `Clock` function ran again, exactly **one** text node changed
 ### In the interview
 **30-second answer:** "When state changes, React re-renders: it calls the components to build a new tree of elements, diffs it against the previous tree, and commits only the differences to the DOM. The diff is O(n) thanks to two heuristics — elements of different types produce different trees, and keys identify list items across renders."
 
-- *What is the difference between render and commit?* — Render = calling components to compute the new tree (pure, may be repeated or discarded); commit = mutating the DOM and running layout effects/refs.
+- *What is the difference between render and commit?* — Render = calling components to compute the new tree (pure, may be repeated or discarded); commit = mutating the DOM and running layout effects/refs (layout effects are Effects that run right after the DOM changes but before the browser paints; Chapter 5).
 - *Why can changing a wrapper from `<div>` to `<section>` lose input text?* — Different type at the same position → the subtree is destroyed and recreated, including its state.
 
 ### Self-check
@@ -256,7 +256,7 @@ These are strategies for **where and when HTML is produced**.
 | **MPA** | Multi-Page Application | Every navigation asks the server for a new HTML page (classic PHP/Rails/Django sites). |
 | **SPA** | Single-Page Application | The server sends one almost-empty HTML file plus a JavaScript bundle; JavaScript builds every screen in the browser and handles navigation without full reloads. Also called **CSR** — client-side rendering. |
 | **SSR** | Server-Side Rendering | The server runs your React components per request and sends finished HTML; the browser then **hydrates** it (React attaches event handlers to existing HTML). |
-| **SSG** | Static Site Generation | Like SSR, but done once at **build time**; the HTML files are served from a CDN (Content Delivery Network — servers around the world that cache files close to users). |
+| **SSG** | Static Site Generation | Like SSR, but done once at **build time** (when you run the build, before any user visits); the HTML files are served from a CDN (Content Delivery Network — servers around the world that **cache** (keep copies of) files close to users). |
 
 ### How it works — see the difference in HTML
 `code/05_csr_vs_ssr.jsx` renders one component both ways.
@@ -282,7 +282,7 @@ click after hydration  -> Cart: 1 | same DOM node reused: true
 ```
 
 What the output teaches:
-1. With **CSR**, the first HTML has no content — users and search-engine crawlers see nothing until JavaScript downloads and runs.
+1. With **CSR**, the first HTML has no content — users and search-engine **crawlers** (bots that download pages to index them for search results) see nothing until JavaScript downloads and runs.
 2. With **SSR**, the content is in the first HTML (the `<!-- -->` comment separates two adjacent text pieces so hydration can match them).
 3. Server HTML is *not interactive* until **hydration** finishes; a click before that does nothing.
 4. Hydration **reuses** the server's DOM nodes rather than recreating them.
@@ -311,18 +311,18 @@ sequenceDiagram
 | First content shown | Fast | Slow (wait for JS) | Fast | Fastest (from CDN) |
 | Navigation between pages | Full reload | Instant, app-like | App-like after hydration | App-like after hydration |
 | SEO (search-engine optimisation) / link previews | Good | Weaker (crawlers must run JS) | Good | Good |
-| Server needed | Yes | No — static hosting | Yes (Node or edge runtime) | No — static hosting |
-| Fresh per-request data | Yes | Via API calls | Yes | Only at build (or revalidation) |
+| Server needed | Yes | No — static hosting (plain file serving) | Yes (Node or edge runtime — code run on servers near the user) | No — static hosting |
+| Fresh per-request data | Yes | Via API calls | Yes | Only at build (or revalidation — rebuilding a page after a set time) |
 | Typical examples | Wikipedia, classic admin tools | Figma-style tools, dashboards behind login | E-commerce, news | Docs, blogs, marketing pages |
 
-Modern React frameworks mix these **per route**: a marketing page can be static, a product page server-rendered, a dashboard client-rendered. React 19's **Server Components** go one step further (components that run only on the server and send no JS) — covered in [Chapter 13](../13-server-rendering-and-frameworks/README.md).
+Modern React frameworks mix these **per route**: a marketing page can be static, a product page server-rendered, a dashboard client-rendered. React 19's **Server Components** go one step further (components that run only on the server and send no JS) — covered in [Chapter 13](../13-server-rendering-and-frameworks/README.md). (For servers, CDNs and caching in general, see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md).)
 
 ### When not to use SSR
 - An internal tool behind a login where SEO does not matter and users keep the tab open all day — a plain SPA is simpler and cheaper to host.
 - When you cannot run a server (pure static hosting) — choose CSR or SSG.
 
 ### Common mistakes
-- Using browser-only APIs (`window`, `localStorage`) during render in an SSR app: the server has no `window`, so it crashes or the HTML differs from the client (a **hydration mismatch**).
+- Using browser-only APIs (`window` — the browser's global object; `localStorage` — small key-value storage saved in the browser) during render in an SSR app: the server has no `window`, so it crashes or the HTML differs from the client (a **hydration mismatch**).
 - Assuming SSR makes the page interactive sooner. It makes content *visible* sooner; interactivity still waits for JS + hydration.
 
 ### In the interview
@@ -341,9 +341,9 @@ MPA = server page per navigation; SPA/CSR = JS builds everything in the browser;
 ### What you need first
 | Tool | Why | Check |
 |---|---|---|
-| **Node.js** (current LTS; Vite needs 20.19+ or 22.12+) | Runs the dev server and build tools on your computer — your React code still runs in the browser | `node -v` |
+| **Node.js** (current LTS — Long-Term Support release; Vite needs 20.19+ or 22.12+) | Runs the dev server (a local web server for development) and build tools on your computer — your React code still runs in the browser | `node -v` |
 | **npm** (comes with Node), or pnpm / yarn / bun | Installs packages listed in `package.json` | `npm -v` |
-| An editor — VS Code is the common choice | Syntax highlighting, JSX support, extensions (ESLint, Prettier) | — |
+| An editor — VS Code is the common choice | Syntax highlighting, JSX support, extensions (ESLint — a **linter** that flags likely bugs; Prettier — a code formatter) | — |
 | **React Developer Tools** browser extension (Chrome, Firefox, Edge) | Inspect the component tree, props, and state; profile renders | Components tab in DevTools |
 
 ### Option A — start with a framework (react.dev's recommendation for new apps)
@@ -351,14 +351,14 @@ A **framework** bundles React with routing, data loading, server rendering and a
 
 | Framework | Command | Good for |
 |---|---|---|
-| **Next.js** (App Router) | `npx create-next-app@latest` | Full-stack web apps, SSR/SSG, Server Components; maintained by Vercel |
+| **Next.js** (App Router) | `npx create-next-app@latest` | Full-stack web apps (frontend and server code in one project), SSR/SSG, Server Components; maintained by Vercel |
 | **React Router** v8 (framework mode) | `npx create-react-router@latest` | Apps that grow from an SPA to full stack; built on Vite, maintained by Shopify |
 | **Expo** | `npx create-expo-app@latest` | iOS, Android and web from one codebase (React Native) |
 
-react.dev also lists newer options such as TanStack Start and RedwoodSDK. `npx` downloads and runs a package's command once without installing it globally; `@latest` picks the newest version.
+react.dev also lists newer options such as TanStack Start and RedwoodSDK. `npx` downloads and runs a package's command once without installing it globally (system-wide, for every project); `@latest` picks the newest version.
 
 ### Option B — build from scratch with Vite
-Use this when you want a plain client-side app (learning, dashboards, embedding in an existing site) and are happy to add routing and data fetching yourself. React docs list **Vite**, **Parcel** and **Rsbuild** as build tools; Vite is the most common.
+Use this when you want a plain client-side app (one rendered entirely in the browser — learning, dashboards, embedding in an existing site) and are happy to add routing and data fetching yourself. React docs list **Vite**, **Parcel** and **Rsbuild** as build tools; Vite is the most common. (The `react-ts` template below uses **TypeScript** — JavaScript plus type annotations such as "this prop is a string", checked before the code runs.)
 
 ```bash
 # (not run here — needs network) create, install, start
@@ -370,16 +370,16 @@ npm run dev          # start the dev server -> http://localhost:5173
 
 | Command | What happens |
 |---|---|
-| `npm create vite@latest …` | Runs the `create-vite` scaffolder, which copies a template folder. The extra `--` passes `--template react` through npm to the scaffolder. Templates include `react`, `react-ts`, and `react-compiler` / `react-compiler-ts` (pre-configured React Compiler). |
-| `npm install` | Reads `package.json`, installs dependencies into `node_modules/`, writes `package-lock.json` (exact versions). |
-| `npm run dev` | Starts Vite's **dev server**: serves files as native ES modules, compiles JSX on the fly, and uses **HMR** (Hot Module Replacement — edits appear in the browser in milliseconds without losing component state). |
-| `npm run build` | Produces an optimised production bundle in `dist/` (minified, tree-shaken, hashed file names for caching). |
+| `npm create vite@latest …` | Runs the `create-vite` scaffolder (a generator of starter project files), which copies a template folder. The extra `--` passes `--template react` through npm to the scaffolder. Templates include `react`, `react-ts`, and `react-compiler` / `react-compiler-ts` (pre-configured React Compiler). |
+| `npm install` | Reads `package.json`, installs dependencies (packages your project relies on) into `node_modules/`, writes `package-lock.json` (the **lockfile**: exact versions). |
+| `npm run dev` | Starts Vite's **dev server**: serves files as native ES modules (JavaScript files that use `import`/`export`, loaded by the browser directly), compiles JSX on the fly, and uses **HMR** (Hot Module Replacement — edits appear in the browser in milliseconds without losing component state). |
+| `npm run build` | Produces an optimised production bundle in `dist/` (minified = whitespace and long names stripped; tree-shaken = unused code removed; hashed file names = names that change when content changes, so browsers can cache safely). |
 | `npm run preview` | Serves `dist/` locally to test the production build. |
 
 Equivalent scaffolding commands: `pnpm create vite`, `yarn create vite`, `bun create vite`.
 
 ### What about Create React App?
-**Create React App (CRA)** was the standard starter from 2016. The React team deprecated it for new apps on **14 February 2025** (it still works in maintenance mode) because it had no active maintainers, was slow (webpack-based) and gave no path to routing, data fetching or SSR. Old tutorials using `npx create-react-app` are outdated — use a framework or Vite.
+**Create React App (CRA)** was the standard starter from 2016. The React team deprecated it for new apps on **14 February 2025** (it still works in maintenance mode) because it had no active maintainers, was slow (webpack-based — webpack is an older, configurable bundler) and gave no path to routing, data fetching or SSR. Old tutorials using `npx create-react-app` are outdated — use a framework or Vite.
 
 ### Adding React to an existing page
 You do not need a new project to use React. On an existing server-rendered site you can mount React into one element: add a build step that bundles your component, put `<div id="cart-widget"></div>` in the HTML, and call `createRoot(document.getElementById('cart-widget')).render(<Cart />)`. You can have several roots on one page.
@@ -405,12 +405,12 @@ import { render, screen } from '@testing-library/react';
 // 2. render components, click/type like a user, console.log what is on screen
 ```
 
-For pictures of real pages, the same code is bundled for the browser and screenshotted in headless Chrome. That is exactly how React apps are tested in real projects (Vitest/Jest + jsdom + Testing Library — [Chapter 12](../12-testing-react/README.md)).
+For pictures of real pages, the same code is bundled for the browser and screenshotted in **headless** Chrome (a real Chrome running without a visible window, controlled by a script). That is exactly how React apps are tested in real projects (Vitest/Jest — test runners that find and run test files — + jsdom + Testing Library — [Chapter 12](../12-testing-react/README.md)).
 
 ### Common mistakes
 - Running `npm run dev` outside the project folder (no `package.json` → "Missing script: dev").
 - Opening `index.html` by double-clicking. Vite's `index.html` loads `/src/main.jsx`, which a browser cannot run directly; use the dev server or build first.
-- Committing `node_modules/` to git; commit `package.json` and the lockfile instead.
+- Committing `node_modules/` to **git** (the version-control tool that records your project's history); commit `package.json` and the lockfile instead.
 - Mixing package managers (`npm` and `yarn` lockfiles in one repo).
 
 ### In the interview
@@ -448,7 +448,7 @@ my-react-app/
 1. The browser loads `index.html`, which has an empty `<div id="root"></div>` and `<script type="module" src="/src/main.jsx">`.
 2. `main.jsx` calls **`createRoot(domNode)`** — this creates a React **root**, React's handle on that DOM element.
 3. `root.render(<App />)` renders your component tree into it. From now on React owns everything inside `#root`.
-4. **`<StrictMode>`** wraps the app in development only: it calls each component twice per render and runs every Effect's setup → cleanup → setup once extra on mount, to expose impure code and missing cleanups early (Chapter 2 §2.5, Chapter 5). It has no effect in production builds.
+4. **`<StrictMode>`** wraps the app in development only: it calls each component twice per render and runs every Effect's setup → cleanup → setup once extra on **mount** (the moment a component first appears on screen), to expose **impure** code (code that changes things outside itself or gives different output for the same input) and missing **cleanups** (code that undoes what an Effect set up) early (Chapter 2 §2.5, Chapter 5). It has no effect in production builds.
 
 `code/vite-app/src/main.jsx` (identical in shape to the template):
 ```jsx
@@ -522,7 +522,7 @@ And the same `main.jsx` bundled with esbuild and opened in Chrome ([`code/first-
   "devDependencies": { "vite": "…", "@vitejs/plugin-react": "…" }
 }
 ```
-`dependencies` ship in your app; `devDependencies` are only needed to build it. `^19.x` means "any 19.* version" (semantic versioning — see the JavaScript book's modules chapter, `../../../javascript/chapters/10-modules-and-tooling/README.md`).
+`dependencies` ship in your app; `devDependencies` are only needed to build it. `^19.x` means "any 19.* version" (semantic versioning — the MAJOR.MINOR.PATCH numbering scheme where only a MAJOR bump may break your code — see the JavaScript book's modules chapter, `../../../javascript/chapters/10-modules-and-tooling/README.md`).
 
 ### How to grow the structure
 Start flat; add folders when a pattern appears. A common medium-size layout: `src/components/` (reusable UI), `src/features/<feature>/` (components + hooks + tests for one feature), `src/hooks/`, `src/lib/` (non-React helpers). Keep one component per file when it is exported. Architecture is covered in [Chapter 14](../14-patterns-and-architecture/README.md).
@@ -576,7 +576,7 @@ JSX uses it to decide the `type`: lowercase `<section>` → the string `'section
 | **Default** (one per file) | `export default function Button() {}` | `import Button from './Button.jsx'` (any name) |
 | **Named** (many per file) | `export function Button() {}` | `import { Button } from './Button.jsx'` (exact name) |
 
-Teams often pick one style for consistency; named exports make renames and auto-imports more reliable.
+Teams often pick one style for consistency; named exports make renames and auto-imports (the editor adding `import` lines for you) more reliable.
 
 ### Rules
 - **Define components at the top level of a module, never inside another component.** A component defined inside a parent is a brand-new function every render, so React sees a *different type* each time (§1.3) and destroys its state and DOM — slow and buggy.
@@ -599,7 +599,7 @@ Component = capitalised function returning JSX, defined at top level, exported d
 ## 1.8 JSX
 
 ### What it is
-**JSX** (JavaScript XML) is a syntax extension that lets you write markup inside JavaScript. It is *not* HTML and not a string: the compiler (esbuild, Babel, SWC, Oxc) turns each tag into a function call that returns a React element object. You can use React without JSX, but almost nobody does.
+**JSX** (JavaScript XML) is a syntax extension that lets you write markup inside JavaScript. It is *not* HTML and not a string: the compiler (esbuild, Babel, SWC, Oxc — all tools that translate modern JS/JSX into plain JS) turns each tag into a function call that returns a React element object. You can use React without JSX, but almost nobody does.
 
 `code/02_jsx_is_javascript.jsx`:
 ```jsx
@@ -663,7 +663,7 @@ Output (the HTML React produced):
 | 1 | **One root element** | A function can return only one value; JSX becomes one object | Wrap in `<div>` or a **Fragment** `<>…</>` (no extra DOM node, as the output shows) |
 | 2 | **Close every tag** | JSX is stricter than HTML | `<br />`, `<img />`, `<li>…</li>` |
 | 3 | **camelCase attributes** | Attributes become JS object keys; `class` and `for` are reserved words | `className`, `htmlFor`, `onClick`, `tabIndex`, `strokeWidth`. Exceptions: `aria-*` and `data-*` keep dashes |
-| 4 | **`{}` for JavaScript expressions** | Anything that produces a value: variables, calls, ternaries, `&&`, `.map()` | `{user.name}`, `{count * 2}`, `{formatDate(d)}` |
+| 4 | **`{}` for JavaScript expressions** | Anything that produces a value: variables, calls, ternaries (`cond ? a : b`), `&&`, `.map()` (builds a new array) | `{user.name}`, `{count * 2}`, `{formatDate(d)}` |
 | 5 | **`style` is an object** | `{{ … }}` = braces for JS + an object literal | `style={{ fontSize: 14 }}` — numbers get `px` automatically for most properties |
 
 Details that trip beginners:
@@ -673,15 +673,15 @@ Details that trip beginners:
 - **What renders nothing:** `null`, `undefined`, `true`, `false` render nothing; but `0` and `NaN` *do* render (the `&&` trap, Chapter 2 §2.7).
 - **Objects cannot be rendered:** `{user}` throws "Objects are not valid as a React child" — render `{user.name}` instead. Arrays of elements are fine.
 - **Keyed fragments:** the short `<>` cannot take props; when you need a `key` in a list use `<Fragment key={id}>` (import `Fragment` from `react`).
-- **Safety:** text in `{}` is escaped automatically, so `{"<script>…"}` shows as text rather than running — protection against XSS (cross-site scripting). Inserting raw HTML requires the deliberately scary `dangerouslySetInnerHTML={{ __html: … }}`; only use it with sanitised content.
-- `defaultValue` (seen above) sets an input's *initial* value without React controlling it; `value` makes it a **controlled input** ([Chapter 3 §3.9](../03-state-and-events/README.md)).
+- **Safety:** text in `{}` is **escaped** automatically (special characters like `<` are turned into harmless text), so `{"<script>…"}` shows as text rather than running — protection against XSS (cross-site scripting). Inserting raw HTML requires the deliberately scary `dangerouslySetInnerHTML={{ __html: … }}`; only use it with **sanitised** content (HTML cleaned of scripts and other dangerous parts).
+- `defaultValue` (seen above) sets an input's *initial* value without React controlling it; `value` makes it a **controlled input** (one whose value always comes from React state) ([Chapter 3 §3.9](../03-state-and-events/README.md)).
 
 Converting HTML to JSX by hand is error-prone; online "HTML to JSX" converters and editor extensions do it automatically.
 
 ### Trade-offs
 | JSX | Alternatives (template languages in Vue/Angular/Svelte) |
 |---|---|
-| Full JavaScript inside markup — no new loop/if syntax to learn | Special directives (`v-for`, `@if`) are more restricted but easier for designers to read |
+| Full JavaScript inside markup — no new loop/if syntax to learn | Special directives (template keywords such as `v-for`, `@if`) are more restricted but easier for designers to read |
 | Type-checked with TypeScript like any code | Needs dedicated tooling |
 | Needs a compile step | Also needs a compile step (in practice) |
 
@@ -690,7 +690,7 @@ Converting HTML to JSX by hand is error-prone; online "HTML to JSX" converters a
 
 - *Why do you not need `import React` any more?* — The automatic JSX runtime (React 17+) imports `jsx` from `react/jsx-runtime` for you.
 - *Is JSX safe from XSS?* — Values in braces are escaped before insertion; the risks are `dangerouslySetInnerHTML`, user-supplied URLs in `href` (React 19 replaces a `javascript:` URL with one that throws "React has blocked a javascript: URL as a security precaution"; still validate URLs yourself) and third-party HTML.
-- *Fragment vs div?* — A fragment groups children without an extra DOM node, keeping CSS layouts (flex/grid/tables) and HTML validity intact.
+- *Fragment vs div?* — A fragment groups children without an extra DOM node, keeping CSS layouts (flex/grid/tables — layout modes where an extra wrapper changes the result) and HTML validity intact.
 
 ### Self-check
 1. What does `<Card title="x" />` compile to? → A call like `jsx(Card, { title: 'x' })` returning `{ type: Card, props: { title: 'x' } }`.

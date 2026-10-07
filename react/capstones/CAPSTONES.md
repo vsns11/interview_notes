@@ -6770,3 +6770,557 @@ export async function loader({ params }: Route.LoaderArgs) {
 
 ### TL;DR
 Server-render anonymous, cacheable pages with critical data in the shell, stream optional parts, keep personal data uncached, make checkout progressive and idempotent, and hold Core Web Vitals to a budget.
+
+## Appendix: Concepts you need
+
+Every technical term, acronym, library and tool used in the 40 briefs above, in alphabetical order and in plain English, so you can look up anything a brief takes for granted. Each entry lists the projects that use it and, where this book teaches it, links to the chapter. System-design ideas such as caching, queues, CDNs, latency and replication are explained in depth in [System Design Fundamentals](../../system-design-patterns/modules/00-system-design-fundamentals/README.md).
+
+### A
+
+- **A/B testing** — Showing two versions of a feature to different groups of users and measuring which performs better. Used in project 40.
+- **`AbortController` / `AbortSignal`** — Browser objects for cancelling work: pass the `signal` to `fetch`, call `abort()` to cancel it, typically in an Effect's cleanup. Used in projects 4, 16, 23, 35. ([Ch 5](../chapters/05-effects-and-refs/README.md))
+- **Accessibility (a11y)** — Making the UI usable by everyone, including people using screen readers, only a keyboard, zoom or voice control. Used in projects 1, 3, 4, 6, 7, 11, 14, 16, 21, 24, 25, 27–29, 33, 37, 38. ([Ch 14](../chapters/14-patterns-and-architecture/README.md))
+- **Accessible chart** — A chart that also offers its data as text or a table, so screen-reader users get the same information. Used in projects 4, 14. ([Ch 14](../chapters/14-patterns-and-architecture/README.md))
+- **Accessible name** — What a screen reader announces for an element — a button's text, a label, `aria-label` — and what `getByRole(..., { name })` matches. Used in project 6. ([Ch 12](../chapters/12-testing-react/README.md))
+- **Action (React 19)** — A function React runs inside a transition — passed to `<form action>` or `startTransition` — with pending state tracked for you. Used in projects 3, 5, 7, 13, 15, 17, 19, 20, 23, 26, 34, 40. ([Ch 4](../chapters/04-forms-and-actions/README.md))
+- **`<Activity>`** — React 19.2 component that hides part of the UI while keeping its state, ready to show again instantly. Used in projects 12, 32. ([Ch 5](../chapters/05-effects-and-refs/README.md))
+- **`actualDuration` / `baseDuration`** — `<Profiler>` numbers: how long a commit actually took vs an estimate of a full re-render without memoization. Used in project 32. ([Ch 10](../chapters/10-performance/README.md))
+- **Admin dashboard / back office** — Internal screens staff use to manage data (users, orders, flags) rather than the customer-facing app. Used in projects 14, 19, 25, 26.
+- **Analytics** — Recording what users do (page views, clicks, timings) so the team can measure and improve the product. Used in projects 14, 17, 30, 40.
+- **APG (ARIA Authoring Practices Guide)** — The W3C guide describing how accessible widgets — combobox, tabs, grid, dialog — should behave. Used in projects 16, 24. ([Ch 14](../chapters/14-patterns-and-architecture/README.md))
+- **API** — Application Programming Interface — the functions or HTTP endpoints a library or server offers to other code. Used in projects 1, 4–9, 11–17, 19–29, 31, 35–40. ([Ch 1](../chapters/01-why-react-and-setup/README.md))
+- **App Router** — Next.js's routing system in the `app/` folder, built on Server Components, streaming and Server Functions. Used in project 26. ([Ch 13](../chapters/13-server-rendering-and-frameworks/README.md))
+- **Argon2 / bcrypt** — Slow, salted password-hashing algorithms designed so stolen hashes are expensive to crack. Used in project 19.
+- **ARIA** — Accessible Rich Internet Applications — `role` and `aria-*` attributes that tell assistive technology what an element is and its state. Used in projects 1, 3, 6, 7, 10, 11, 16, 24, 25, 28, 29. ([Ch 14](../chapters/14-patterns-and-architecture/README.md))
+- **`aria-activedescendant`** — Attribute on a focused input pointing at the id of the highlighted option, so focus stays in the input while the option is announced. Used in projects 16, 28. ([Ch 15](../chapters/15-react-interview-and-machine-coding/README.md))
+- **`aria-describedby` / `aria-invalid`** — Link a field to its error or hint text, and mark it as failing validation, so screen readers announce both. Used in projects 3, 7. ([Ch 4](../chapters/04-forms-and-actions/README.md))
+- **`aria-expanded` / `aria-controls`** — Say whether a popup or section is open, and which element it controls. Used in project 16. ([Ch 15](../chapters/15-react-interview-and-machine-coding/README.md))
+- **`aria-live` / live region** — An element whose text changes are announced by screen readers (`aria-live="polite"`, `role="status"`, `role="alert"`); it must exist before the text changes. Used in projects 7, 10, 11, 16. ([Ch 14](../chapters/14-patterns-and-architecture/README.md))
+- **`aria-pressed`** — Marks a button as a toggle and says whether it is currently on. Used in project 1. ([Ch 14](../chapters/14-patterns-and-architecture/README.md))
+- **`aria-rowcount` / `aria-rowindex` / `aria-colindex`** — Tell assistive technology the full size of a virtualized grid and each rendered cell's real position in it. Used in project 28. ([Ch 10](../chapters/10-performance/README.md))
+- **`aria-sort`** — Announces which column a table is sorted by and in which direction. Used in project 25. ([Ch 14](../chapters/14-patterns-and-architecture/README.md))
+- **`ArrayBuffer` / typed arrays** — Raw binary memory and number-array views on it (`Float64Array`) — compact and fast for large numeric data. Used in project 22.
+- **Assistive technology** — Tools that help disabled people use computers, such as screen readers and voice control. Used in projects 1, 6, 16. ([Ch 14](../chapters/14-patterns-and-architecture/README.md))
+- **Async Clipboard API** — Browser API (`navigator.clipboard`) for reading and writing the clipboard asynchronously, with user permission. Used in project 28.
+- **AsyncStorage** — React Native's simple key-value storage, like `localStorage` but asynchronous. Used in project 36.
+- **Authentication vs authorization** — Authentication proves who the user is (sign-in); authorization decides what they may do. Both must be checked on the server. Used in projects 19, 23, 26, 30. ([Ch 13](../chapters/13-server-rendering-and-frameworks/README.md))
+- **Automatic form reset** — After a successful form Action, React 19 resets uncontrolled fields to their default values. Used in project 7. ([Ch 4](../chapters/04-forms-and-actions/README.md))
+- **Autoplay policy** — Browser rule that blocks audio or video with sound from starting until the user has interacted with the page. Used in projects 20, 37.
+- **Autosave (debounced)** — Saving work automatically a short time after the user stops typing, instead of on every keystroke. Used in projects 15, 17. ([Ch 7](../chapters/07-custom-hooks-and-hook-rules/README.md))
+- **Awareness / presence** — Live information about other users in a shared document — who is online, where their cursor is, what they have selected. Used in projects 27, 36.
+- **axe** — Automated accessibility checker (axe-core), used in the browser and in tests such as Playwright. Used in projects 6, 14, 16, 24, 29. ([Ch 14](../chapters/14-patterns-and-architecture/README.md))
+
+### B
+
+- **Backoff retry** — Retrying a failed request after waits that grow each time (1 s, 2 s, 4 s…) so a struggling server is not flooded. Used in projects 4, 12, 14, 16, 19, 22, 23, 25, 30, 31, 34, 35. ([Ch 6](../chapters/06-state-management/README.md))
+- **Bare import** — An import by package name (`import React from 'react'`) rather than a file path; a browser needs an import map or bundler to resolve it. Used in project 38.
+- **Batching** — React combining several state updates from one event into a single re-render. Used in projects 2, 14, 22, 25, 35. ([Ch 3](../chapters/03-state-and-events/README.md))
+- **Blocking head script** — A tiny inline `<script>` in `<head>` that runs before the page paints — used to set the theme and avoid a flash of the wrong colours. Used in project 18. ([Ch 8](../chapters/08-styling/README.md))
+- **Branching (form)** — A multi-step form where answers decide which later steps appear. Used in projects 4, 5, 17, 24. ([Ch 4](../chapters/04-forms-and-actions/README.md))
+- **Breadcrumbs (error)** — The trail of recent user actions, navigation and requests recorded before an error, to help reproduce it. Used in project 39.
+- **Bundle / bundle size** — The JavaScript files a bundler produces for the browser; their size drives download and start-up time. Used in projects 4, 9, 18, 24, 26, 29, 30, 32, 36, 38, 40. ([Ch 10](../chapters/10-performance/README.md))
+- **Bundler** — A build tool (Vite, webpack, esbuild, Rspack) that combines modules into files the browser loads and splits them into chunks. Used in projects 29, 30, 38. ([Ch 1](../chapters/01-why-react-and-setup/README.md))
+
+### C
+
+- **Cache** — A stored copy of data or a response kept close to where it's needed so it can be reused instead of fetched again. Used in projects 4, 9, 12, 14, 16, 18, 19, 21, 25, 26, 28, 31–36, 38–40. ([Ch 9](../chapters/09-routing-and-data-fetching/README.md))
+- **Cache-Control** — HTTP header telling browsers and CDNs whether and for how long they may cache a response. Used in projects 19, 40.
+- **Callback prop** — A function passed down as a prop so a child can tell its parent something happened (`onSelect`). Used in projects 1–40. ([Ch 2](../chapters/02-components-and-props/README.md))
+- **Canvas 2D** — The `<canvas>` element's drawing API: you paint pixels with JavaScript calls instead of creating DOM elements — fast for many shapes. Used in projects 14, 20, 22, 27, 28, 33, 37, 38.
+- **Cart merge** — Combining an anonymous visitor's cart with their saved cart when they sign in. Used in project 13.
+- **Catch-up (sync)** — After reconnecting, fetching every message or event missed while offline, usually by sequence number. Used in projects 15, 34.
+- **CDN** — Content Delivery Network — caching servers around the world that serve files and pages from near the user. Used in projects 18, 26, 35, 38, 40. ([Ch 13](../chapters/13-server-rendering-and-frameworks/README.md))
+- **CDP** — Chrome DevTools Protocol — the interface tools like Playwright use to control Chrome, e.g. to throttle the CPU. Used in project 32.
+- **Changelog** — A file listing what changed in each released version. Used in project 29.
+- **Changesets** — A tool for recording version bumps and changelog notes per change, then publishing packages with correct semantic versions. Used in project 29.
+- **Chunking (uploads)** — Splitting a large file into pieces sent separately, so a failure only repeats one piece. Used in projects 23, 26, 30, 35.
+- **CI** — Continuous integration — a server that runs type checks, tests and builds on every push or pull request. Used in projects 24, 29, 30, 40. ([Ch 12](../chapters/12-testing-react/README.md))
+- **CLDR** — Unicode's database of locale data (plural rules, date formats) that `Intl` and i18n libraries use. Used in project 24.
+- **Client Component (`'use client'`)** — A component whose code ships to the browser and can use state, Effects and events; `'use client'` marks where client code starts. Used in projects 26, 35, 40. ([Ch 13](../chapters/13-server-rendering-and-frameworks/README.md))
+- **Client id** — An ID the browser generates for a new item before the server confirms it, so retries and optimistic UI can be matched up. Used in project 34.
+- **CLS (Cumulative Layout Shift)** — Core Web Vital measuring how much visible content jumps while the page loads; reserve space for images and late content. Used in projects 1, 6, 32, 40. ([Ch 10](../chapters/10-performance/README.md))
+- **CMS** — Content management system — where editors write content (posts, products) that the app fetches. Used in project 24.
+- **Coalescing** — Merging many rapid updates into one (keep only the latest price per symbol per frame) so the UI does less work. Used in projects 22, 33.
+- **CodeMirror** — An in-browser code-editor library (syntax highlighting, keyboard handling) controlled from React through a ref. Used in project 38.
+- **CodeSandbox** — An online code playground, an example of in-browser bundling. Used in project 38.
+- **Collision detection (drag and drop)** — Deciding which drop target the dragged item is over, e.g. by closest centre or overlapping area. Used in projects 11, 37.
+- **Combobox pattern** — The ARIA pattern for a text input with a popup list of options: arrow keys move, Enter selects, Escape closes. Used in projects 16, 29. ([Ch 15](../chapters/15-react-interview-and-machine-coding/README.md))
+- **Command pattern** — Representing each user action as an object with `do`/`undo`, which makes undo/redo and replay simple. Used in projects 20, 33. ([Ch 14](../chapters/14-patterns-and-architecture/README.md))
+- **Commit (phase)** — The step where React applies the computed changes to the real DOM, after the render phase. Used in projects 1, 4, 13, 18, 23, 32, 34. ([Ch 10](../chapters/10-performance/README.md))
+- **CommonJS / ESM** — Two JavaScript module formats: old `require`/`module.exports` (CommonJS) and standard `import`/`export` (ES modules). Used in projects 29, 38.
+- **Component** — A function that takes props and returns UI; the building block of every React app. Used in projects 1–40. ([Ch 2](../chapters/02-components-and-props/README.md))
+- **Composite index** — A database index over several columns (e.g. `(created_at, id)`) that makes sorting and keyset pagination fast. Used in project 25.
+- **Compound component** — A family of components (`Tabs`, `Tabs.Tab`, `Tabs.Panel`) that share state through a private context. Used in project 29. ([Ch 14](../chapters/14-patterns-and-architecture/README.md))
+- **Concurrency limit** — A cap on how many tasks (uploads, requests) run at the same time. Used in project 23.
+- **Concurrent rendering** — React's ability to prepare UI in the background, pause it for urgent input, and discard outdated work. Used in project 10. ([Ch 7](../chapters/07-custom-hooks-and-hook-rules/README.md))
+- **Context** — React's way to pass a value to deeply nested components without props (`createContext`, `use`/`useContext`). Used in projects 6, 7, 9, 11–13, 17–20, 23, 29–33, 36, 39. ([Ch 6](../chapters/06-state-management/README.md))
+- **Context re-render rule** — When a provider's value changes, every component reading that context re-renders, even through `memo`. Used in projects 11, 13, 18, 20, 29, 30, 33. ([Ch 6](../chapters/06-state-management/README.md))
+- **Contract (micro-frontends)** — The agreed, versioned interface between independently deployed parts — events, props, URLs — that both sides test against. Used in projects 29, 30.
+- **Controlled input** — A form field whose value comes from React state (`value` + `onChange`). Used in projects 2, 3, 7, 17, 32, 38. ([Ch 3](../chapters/03-state-and-events/README.md))
+- **Cookie** — A small named value the browser stores and sends with every request to that site; used for sessions and preferences. Used in projects 18, 19, 24, 26, 36, 38, 40. ([Ch 13](../chapters/13-server-rendering-and-frameworks/README.md))
+- **Core Web Vitals** — Google's user-experience metrics — LCP (loading), INP (responsiveness) and CLS (visual stability). Used in projects 12, 14, 26, 32, 40. ([Ch 10](../chapters/10-performance/README.md))
+- **CPU throttling** — Slowing the CPU on purpose in DevTools or Playwright to see how the app behaves on a slow phone. Used in project 32. ([Ch 10](../chapters/10-performance/README.md))
+- **CRDT** — Conflict-free replicated data type — a data structure that copies on many devices can edit independently and always merge to the same result. Used in projects 15, 27, 31, 33.
+- **CRUD** — Create, Read, Update, Delete — the four basic operations on stored data. Used in projects 9, 11.
+- **CSRF** — Cross-site request forgery — another site tricking a signed-in user's browser into sending an unwanted request; blocked with SameSite cookies and tokens. Used in project 19.
+- **CSS custom properties** — CSS variables (`--accent`) read with `var()`; the usual home for design tokens and themes. Used in projects 18, 29. ([Ch 8](../chapters/08-styling/README.md))
+- **CSS grid** — CSS layout system for two-dimensional rows and columns. Used in projects 1, 6, 37. ([Ch 8](../chapters/08-styling/README.md))
+- **CSS logical properties** — Direction-aware CSS (`margin-inline-start` instead of `margin-left`) so layouts flip correctly for right-to-left languages. Used in project 24. ([Ch 8](../chapters/08-styling/README.md))
+- **CSS Modules** — `*.module.css` files whose class names are made unique per file, so styles can't clash. Used in projects 1, 29, 30. ([Ch 8](../chapters/08-styling/README.md))
+- **CSV / TSV** — Plain-text table formats with comma- or tab-separated values; TSV is what spreadsheets put on the clipboard. Used in projects 14, 28.
+- **Cursor pagination (keyset)** — Asking for "the items after this one" using the last item's sort key; stable and fast even when rows are inserted. Used in projects 12, 25. ([Ch 9](../chapters/09-routing-and-data-fetching/README.md))
+- **Custom Hook** — Your own `use…` function that calls other Hooks to package reusable stateful logic. Used in projects 4, 8–10, 14–16, 20, 22, 23, 27, 31, 32, 34, 37. ([Ch 7](../chapters/07-custom-hooks-and-hook-rules/README.md))
+- **`CustomEvent` / event bus** — A browser event you create with your own name and data; an event bus passes such messages between loosely coupled parts. Used in project 30.
+
+### D
+
+- **Data grid** — A spreadsheet-like table with sorting, selection, keyboard navigation and often virtualization. Used in project 28. ([Ch 10](../chapters/10-performance/README.md))
+- **Data source abstraction** — One interface (`getRows(range)`) that hides whether rows come from memory or the server, so the grid doesn't care. Used in projects 28, 35.
+- **Data-access layer** — The server-side module that alone talks to the database and checks permissions, so components never query directly. Used in project 26. ([Ch 13](../chapters/13-server-rendering-and-frameworks/README.md))
+- **`data-theme` attribute** — An attribute on `<html>` (e.g. `data-theme="dark"`) that CSS uses to switch token values for a theme. Used in project 18. ([Ch 8](../chapters/08-styling/README.md))
+- **Database index** — A database structure that makes lookups and sorting by certain columns fast, like a book's index. Used in projects 15, 25.
+- **`DataTransfer`** — The object on drag-and-drop and clipboard events that holds the dropped files or copied data. Used in project 23.
+- **Debounce** — Wait until input has been quiet for a moment before acting (searching, saving). Used in projects 4, 10, 15, 16, 28, 38. ([Ch 7](../chapters/07-custom-hooks-and-hook-rules/README.md))
+- **Deduplication** — Making sure the same message or request is processed only once, even if it arrives twice. Used in projects 4, 12, 23, 34. ([Ch 9](../chapters/09-routing-and-data-fetching/README.md))
+- **Deep link / deep-link guard** — A URL that opens a specific screen or step; a guard redirects when its prerequisites are missing. Used in project 17. ([Ch 9](../chapters/09-routing-and-data-fetching/README.md))
+- **Dependency array** — The list of values after an Effect, `useMemo` or `useCallback`; it re-runs when one of them changes. Used in projects 4, 8, 30, 35, 39. ([Ch 5](../chapters/05-effects-and-refs/README.md))
+- **Derived index** — A lookup structure (e.g. tag → notes) computed from the data rather than stored, so it can't go out of sync. Used in projects 15, 25. ([Ch 3](../chapters/03-state-and-events/README.md))
+- **Derived state / derived data** — Values computed from existing state or props during render instead of being stored separately. Used in projects 1–4, 7, 9, 10, 14, 15. ([Ch 3](../chapters/03-state-and-events/README.md))
+- **Design system** — A product's shared set of tokens, accessible components and usage rules. Used in projects 17, 29, 30. ([Ch 14](../chapters/14-patterns-and-architecture/README.md))
+- **Design token** — A named design value (colour, spacing, radius) used everywhere instead of raw numbers. Used in projects 18, 29. ([Ch 14](../chapters/14-patterns-and-architecture/README.md))
+- **Detox / Maestro** — End-to-end testing tools for mobile apps. Used in project 36.
+- **Dev server** — The local server you run while developing; it serves your code and updates the page instantly when you save. Used in projects 1, 35. ([Ch 1](../chapters/01-why-react-and-setup/README.md))
+- **`devicechange`** — Browser event fired when cameras or microphones are plugged in or removed. Used in project 37.
+- **DevTools** — The browser's built-in developer tools, and React DevTools for inspecting components and profiling renders. Used in projects 13, 20, 30–32. ([Ch 10](../chapters/10-performance/README.md))
+- **Dexie / idb** — Small wrapper libraries that make IndexedDB easier to use with promises. Used in project 31.
+- **`<dialog>` + `showModal()`** — Native HTML modal: `showModal()` puts it on the top layer, makes the page inert and closes on Escape. Used in project 6. ([Ch 14](../chapters/14-patterns-and-architecture/README.md))
+- **Dirty-region rendering** — Redrawing only the part of a canvas that changed instead of the whole surface. Used in projects 22, 27.
+- **Discriminated union** — A TypeScript union of object types sharing a literal field (`status: 'idle' | 'error'`) that tells them apart. Used in projects 3, 4, 29. ([Ch 11](../chapters/11-typescript-with-react/README.md))
+- **dnd-kit** — A React drag-and-drop library; sensors read pointer, touch or keyboard input, and `DragOverlay` renders the floating copy. Used in projects 11, 21.
+- **DOM** — Document Object Model — the browser's tree of page elements that React updates for you. Used in projects 1–3, 5–7, 12, 16, 17, 20, 28, 30, 32, 33, 35–39. ([Ch 1](../chapters/01-why-react-and-setup/README.md))
+- **Downsampling** — Reducing many data points to fewer representative ones before drawing a chart. Used in project 14.
+- **Drag-and-drop events** — Browser events (`dragover`, `drop`) and pointer events used to move items or drop files onto a zone. Used in projects 2, 11, 14, 21, 23, 27, 28, 33.
+- **DST gap and overlap** — Daylight-saving changes create a missing local hour (gap) and a repeated one (overlap), which scheduling code must handle. Used in projects 14, 21.
+
+### E
+
+- **E2E test** — End-to-end test: drives the whole app in a real browser (Playwright) like a user would. Used in projects 26, 31, 34, 36, 38, 40. ([Ch 12](../chapters/12-testing-react/README.md))
+- **Edge function / edge runtime** — Server code that runs in many locations near users, with a lightweight runtime. Used in projects 4, 16, 22, 30, 40. ([Ch 13](../chapters/13-server-rendering-and-frameworks/README.md))
+- **Effect** — Code in `useEffect` that runs after render to synchronise a component with something outside React. Used in projects 4–6, 8–10, 12, 15–18, 20, 22, 23, 26, 27, 32–35, 37, 38. ([Ch 5](../chapters/05-effects-and-refs/README.md))
+- **Effect cleanup** — The function an Effect returns; it undoes the setup (clears timers, closes sockets) before the next run and on unmount. Used in projects 4–6, 8, 22, 23, 37–39. ([Ch 5](../chapters/05-effects-and-refs/README.md))
+- **Error boundary** — A component that catches errors thrown while rendering below it and shows fallback UI instead of a blank page. Used in projects 7, 14, 26, 30, 35, 38, 39. ([Ch 14](../chapters/14-patterns-and-architecture/README.md))
+- **Error summary** — A list of all form errors at the top of a step, each linking to its field, announced when submit fails. Used in project 17. ([Ch 4](../chapters/04-forms-and-actions/README.md))
+- **esbuild / esbuild-wasm** — A very fast JavaScript bundler and transformer; the WebAssembly build runs inside the browser. Used in project 38.
+- **ESLint** — The standard JavaScript linter; React plugins check the Rules of Hooks and accessibility. Used in project 32. ([Ch 7](../chapters/07-custom-hooks-and-hook-rules/README.md))
+- **Exclusion constraint** — A PostgreSQL rule that rejects rows whose ranges overlap — e.g. two bookings for the same room and time. Used in project 21.
+- **Exhaustive check** — A TypeScript `never` check in a `switch` default so forgetting to handle a case is a compile error. Used in project 5. ([Ch 11](../chapters/11-typescript-with-react/README.md))
+- **`EXPLAIN`** — SQL command that shows how the database will run a query, revealing missing indexes. Used in projects 25, 32.
+- **Expo / Expo Router** — A React Native framework and its file-based router for building iOS and Android apps. Used in project 36. ([Ch 13](../chapters/13-server-rendering-and-frameworks/README.md))
+- **Expo Router** — File-based routing for Expo/React Native apps, similar to Next.js folders. Used in project 36.
+- **Exponential backoff with jitter** — Retry waits that double each time plus a random offset, so many clients don't reconnect at the same instant. Used in projects 22, 31.
+- **External store** — Data that lives outside React (browser APIs, a hand-written store); read safely with `useSyncExternalStore`. Used in projects 9, 18, 20, 22, 27, 31, 33, 37. ([Ch 7](../chapters/07-custom-hooks-and-hook-rules/README.md))
+
+### F
+
+- **Fake timers** — Test replacements for timers that you advance by hand, so time-based code runs instantly and deterministically. Used in projects 5, 8, 16, 22. ([Ch 12](../chapters/12-testing-react/README.md))
+- **Fallback (UI)** — What shows instead of the real content while it loads (Suspense) or after it fails (error boundary, broken image). Used in projects 1, 4, 7, 14, 26, 30, 31, 35, 39, 40. ([Ch 9](../chapters/09-routing-and-data-fetching/README.md))
+- **Fan-out** — Sending one incoming event to many subscribers (every member of a chat room). Used in projects 22, 27, 34.
+- **Feature flag** — A switch that turns a feature on or off for some users at runtime, without deploying. Used in projects 1, 4, 19, 30, 32, 33, 36, 37, 39, 40. ([Ch 14](../chapters/14-patterns-and-architecture/README.md))
+- **Fetcher (`useFetcher`)** — React Router helper to load or submit data without navigating (inline edits, like buttons). Used in projects 15, 40. ([Ch 9](../chapters/09-routing-and-data-fetching/README.md))
+- **Fingerprint** — A short ID computed from content — a file's name, size and date, or an error's type and stack — used to recognise duplicates. Used in projects 23, 39.
+- **Finite state machine** — A model with a fixed set of states and allowed transitions (idle → running → paused), so impossible states can't occur. Used in projects 5, 33. ([Ch 5](../chapters/05-effects-and-refs/README.md))
+- **`FlatList`** — React Native's virtualized list component that renders only the rows on screen. Used in project 36. ([Ch 13](../chapters/13-server-rendering-and-frameworks/README.md))
+- **Focus management** — Moving keyboard focus in code when the UI changes — into a dialog, back to the opener, to the first error. Used in projects 1, 3, 4, 6–8, 11, 12, 16, 17, 21, 28, 29, 33. ([Ch 14](../chapters/14-patterns-and-architecture/README.md))
+- **FormatJS / react-intl** — Internationalisation libraries that format translated messages, plurals, dates and numbers in React. Used in project 24.
+- **FormData** — Browser object with a form's field names and values; what a form Action receives. Used in projects 3, 7. ([Ch 4](../chapters/04-forms-and-actions/README.md))
+- **FOUC / theme flash** — Flash of unstyled or wrongly themed content before the right CSS or theme applies. Used in projects 14, 15, 18, 19, 22, 24, 25, 28, 37, 39. ([Ch 8](../chapters/08-styling/README.md))
+- **Fractional indexing** — Ordering items with sortable strings so a moved item gets a key between its neighbours without renumbering the rest. Used in projects 11, 27.
+
+### G
+
+- **Generic component** — A TypeScript component with a type parameter (`Grid<T>`) whose row type is inferred from props. Used in projects 16, 17, 25, 28. ([Ch 11](../chapters/11-typescript-with-react/README.md))
+- **`getUserMedia` / `getDisplayMedia`** — Browser APIs that ask permission and return a camera/microphone stream or a screen-share stream. Used in project 37.
+- **Global error handlers** — `window.onerror` and `unhandledrejection` listeners that catch errors no component caught. Used in project 39.
+
+### H
+
+- **Hash routing / URL hash** — Keeping app state in the part of the URL after `#`, which the browser never sends to the server. Used in projects 2, 38, 39. ([Ch 9](../chapters/09-routing-and-data-fetching/README.md))
+- **Headless component / table library** — A component or library that provides behaviour, state and accessibility but no styles (TanStack Table, Radix). Used in projects 16, 25, 28, 29, 40. ([Ch 14](../chapters/14-patterns-and-architecture/README.md))
+- **Headless primitives** — Unstyled, accessible building blocks (Radix, React Aria) that a design system styles with its tokens. Used in projects 29, 36. ([Ch 14](../chapters/14-patterns-and-architecture/README.md))
+- **Heartbeat** — A small periodic message proving a connection is still alive; a missing one triggers a reconnect. Used in projects 22, 38.
+- **High-frequency updates** — Values that change many times a second (playback time, prices); keep them out of wide context and subscribe narrowly. Used in projects 20, 22, 23. ([Ch 6](../chapters/06-state-management/README.md))
+- **Hit testing** — Working out which shape is under the pointer, given coordinates. Used in projects 27, 33.
+- **HLS** — HTTP Live Streaming — video or audio split into small files with a playlist, so playback adapts to the network. Used in project 20.
+- **Horizontal scaling** — Handling more load by adding more server instances rather than a bigger machine. Used in projects 1, 28.
+- **Hosted payment fields** — Card inputs or a checkout page served by the payment provider, so card numbers never touch your servers. Used in projects 13, 39, 40.
+- **`hreflang`** — Link attribute telling search engines which URL is each language version of a page. Used in projects 24, 40.
+- **HTTP / HTTPS** — The request/response protocol of the web; HTTPS is the encrypted version. Used in projects 4, 5, 14, 19, 22, 23, 26, 34, 35. ([Ch 13](../chapters/13-server-rendering-and-frameworks/README.md))
+- **Hydration (`hydrateRoot`)** — React in the browser adopting server-rendered HTML: it renders the same tree, reuses the DOM and attaches event handlers. Used in projects 18, 26, 35, 36, 40. ([Ch 13](../chapters/13-server-rendering-and-frameworks/README.md))
+- **Hydration mismatch** — The browser's first render differs from the server HTML, so React re-renders that part on the client and logs an error. Used in projects 18, 30, 35. ([Ch 13](../chapters/13-server-rendering-and-frameworks/README.md))
+
+### I
+
+- **i18n / l10n** — Internationalisation (making an app translatable) and localisation (adapting it to one language and region). Used in project 24.
+- **IANA time zone** — A named zone such as `Europe/Berlin` that records offsets and daylight-saving rules over time. Used in projects 9, 14, 21.
+- **ICE, STUN and TURN** — WebRTC connection helpers: ICE tries possible network paths, STUN finds your public address, TURN relays media when direct paths fail. Used in projects 1–7, 9–17, 19–21, 26, 28, 29, 31, 33–35, 37, 39, 40.
+- **ICU MessageFormat** — A message syntax for translations with placeholders, plurals and selects (`{count, plural, one {# item} other {# items}}`). Used in projects 5, 24, 33.
+- **Idempotency / idempotency key** — An operation is idempotent if repeating it has the same effect as doing it once; a unique key per request lets the server ignore duplicates. Used in projects 12, 25, 31, 34, 40.
+- **iframe sandbox** — An `<iframe>` with the `sandbox` attribute runs untrusted code with restricted powers, isolated from your page. Used in projects 13, 38.
+- **IME** — Input method editor — how users type Chinese, Japanese and similar text; ignore Enter while composition is in progress. Used in projects 1, 10, 29, 30, 33, 38.
+- **Immer / patches** — Immer lets you write "mutating" code that produces new immutable state; patches describe each change for undo or syncing. Used in projects 5, 8, 11, 12, 18, 33. ([Ch 3](../chapters/03-state-and-events/README.md))
+- **Immutable update** — Creating a new object or array instead of changing the existing one, so React sees the change. Used in projects 2, 9, 33. ([Ch 3](../chapters/03-state-and-events/README.md))
+- **Imperative bridge** — Code (usually an Effect plus a ref) that drives a non-React API step by step — an audio element, an editor, a map. Used in projects 20, 27, 33, 37, 38. ([Ch 5](../chapters/05-effects-and-refs/README.md))
+- **Impossible state** — A combination of values that should never exist (loading and error at once); one status field prevents it. Used in project 5. ([Ch 3](../chapters/03-state-and-events/README.md))
+- **In-browser bundling** — Compiling and bundling code inside the browser (e.g. with esbuild-wasm in a worker), as code playgrounds do. Used in project 38.
+- **IndexedDB** — The browser's built-in database for large, structured, offline data (wrapped by libraries like Dexie or idb). Used in projects 9, 15, 27, 31.
+- **Infinite query / infinite scroll** — Loading the next page automatically as the user nears the end of a list (`useInfiniteQuery` plus a sentinel). Used in projects 12, 25, 27, 33, 34, 38. ([Ch 9](../chapters/09-routing-and-data-fetching/README.md))
+- **INP (Interaction to Next Paint)** — Core Web Vital: how long the page takes to visibly respond to clicks, taps and key presses. Used in projects 12, 14, 32, 40. ([Ch 10](../chapters/10-performance/README.md))
+- **`inputMode="decimal"`** — Hint that shows a numeric keypad with a decimal point on phones, without the quirks of `type="number"`. Used in project 3.
+- **Instant / wall-clock time** — An instant is an exact moment (stored in UTC); wall-clock time is what a local clock shows, which depends on the time zone. Used in project 21.
+- **Integer cents (minor units)** — Storing money as whole numbers of the smallest unit (1999 cents) to avoid floating-point rounding errors. Used in projects 3, 9, 10, 13, 18.
+- **Intent vs reality** — Separating what the user asked for (play) from what actually happened (the audio element is still loading). Used in projects 5, 20, 27, 33.
+- **`IntersectionObserver`** — Browser API that reports when an element scrolls into view — used for infinite scroll and lazy-loading. Used in project 12. ([Ch 15](../chapters/15-react-interview-and-machine-coding/README.md))
+- **`Intl` APIs** — Built-in internationalisation: `Intl.NumberFormat`, `DateTimeFormat`, `PluralRules`, `RelativeTimeFormat` format values per locale. Used in projects 3, 24.
+- **Inverse matrix** — The transform that undoes another, used to turn a screen-space pointer position back into canvas coordinates. Used in project 33.
+- **ISR** — Incremental static regeneration — static pages rebuilt in the background after a time window. Used in project 40. ([Ch 13](../chapters/13-server-rendering-and-frameworks/README.md))
+
+### J
+
+- **jsdom** — A JavaScript imitation of the browser DOM that runs in Node, used for component tests. Used in projects 6, 9, 20. ([Ch 12](../chapters/12-testing-react/README.md))
+- **JSI / TurboModules** — React Native's newer architecture for calling native code directly and quickly from JavaScript. Used in project 36.
+- **JSON** — JavaScript Object Notation — the text format used to send and store data (`{"id": 1}`). Used in projects 5, 9, 17, 18, 22, 33, 35, 40.
+- **JSX** — HTML-like syntax in JavaScript that compiles to React element objects. Used in projects 1, 24, 26, 32, 37, 38. ([Ch 1](../chapters/01-why-react-and-setup/README.md))
+- **JWT** — JSON Web Token — a signed token carrying claims about a user; risky to keep in JavaScript-readable storage. Used in project 19.
+
+### K
+
+- **Kanban board** — A board of columns (To do, Doing, Done) with cards you drag between them. Used in project 11.
+- **Key (list)** — The `key` prop that identifies an item among its siblings so React keeps the right state and DOM for it. Used in projects 1–40. ([Ch 2](../chapters/02-components-and-props/README.md))
+- **Kill switch** — A flag that instantly turns a feature off in production when something goes wrong. Used in projects 36, 39.
+- **KPI** — Key performance indicator — a headline business number on a dashboard (revenue, sign-ups). Used in project 14.
+
+### L
+
+- **Lab vs field data** — Lab data comes from controlled test runs; field data from real users' devices (RUM). Field data is what users feel. Used in projects 32, 40. ([Ch 10](../chapters/10-performance/README.md))
+- **Latency** — The delay between asking for something and getting it — e.g. a network round trip. Used in projects 11, 14, 25, 38.
+- **Layout route / nested routes** — A parent route that renders shared UI and an `<Outlet />` where the matching child route appears. Used in projects 15, 30. ([Ch 9](../chapters/09-routing-and-data-fetching/README.md))
+- **Lazy loading / `srcset`** — Loading images or code only when needed; `srcset` lets the browser pick an image size that fits the screen. Used in projects 6, 15, 24, 30, 32, 40. ([Ch 10](../chapters/10-performance/README.md))
+- **Lazy-loaded messages** — Loading only the current language's translation file, when it's needed, instead of shipping every language. Used in project 24.
+- **LCP (Largest Contentful Paint)** — Core Web Vital: when the largest visible element (often the hero image or title) has rendered. Used in projects 26, 32, 40. ([Ch 13](../chapters/13-server-rendering-and-frameworks/README.md))
+- **Lifting state up** — Moving state to the closest common parent of everything that reads it. Used in projects 1, 2, 12. ([Ch 3](../chapters/03-state-and-events/README.md))
+- **Lightbox** — A full-screen overlay that shows one image large, with next/previous and close controls. Used in project 6.
+- **Lighthouse / Lighthouse CI** — Chrome's page audit (performance, accessibility, SEO); Lighthouse CI runs it on every change and enforces budgets. Used in projects 3, 24, 26, 31, 40. ([Ch 14](../chapters/14-patterns-and-architecture/README.md))
+- **LiveKit** — An open-source SFU media server and SDK for building video calls. Used in project 37.
+- **Load test** — Simulating many users at once to see how a system behaves under heavy traffic. Used in project 40.
+- **Loader / action (React Router)** — Route functions that load data before a route renders (loader) and handle form submissions (action). Used in projects 13, 15, 19, 24, 40. ([Ch 9](../chapters/09-routing-and-data-fetching/README.md))
+- **Local UI state** — State that only one component needs (is a menu open), kept in that component with `useState`. Used in projects 1, 2, 15, 37. ([Ch 6](../chapters/06-state-management/README.md))
+- **Locale** — A language-and-region setting (`en-GB`, `ar-EG`) that controls translations and the format of dates, numbers and currency. Used in projects 3, 21, 24, 35, 40. ([Ch 13](../chapters/13-server-rendering-and-frameworks/README.md))
+- **`localStorage`** — Browser key-value string storage that survives reloads (about 5 MB per origin); synchronous and not available on the server. Used in projects 3, 8, 9, 13, 17–20, 23, 31, 38. ([Ch 7](../chapters/07-custom-hooks-and-hook-rules/README.md))
+- **LRU cache** — A size-limited cache that evicts the least recently used entry first. Used in project 28.
+- **lz-string** — A small compression library used to fit code into a shareable URL. Used in project 38.
+
+### M
+
+- **Manifest (web app / remote)** — A JSON file describing something to load: a PWA's name and icons, or which micro-frontend remotes exist and where. Used in projects 30, 31, 35.
+- **Manual mode (server-side sorting)** — Telling a table library that sorting and paging happen on the server, so it only tracks state and you fetch the right rows. Used in project 25.
+- **Markdown / MDX** — A plain-text formatting syntax (`# Title`, `**bold**`) turned into HTML; MDX allows components inside it. react-markdown renders it safely. Used in projects 15, 26.
+- **`matchMedia` / `prefers-color-scheme`** — Read the user's OS preferences (dark mode) from CSS media queries, in CSS or JavaScript. Used in project 18. ([Ch 8](../chapters/08-styling/README.md))
+- **Maximum element height** — Browsers cap how tall one element can be (millions of pixels), so huge virtual lists must scale their scroll space. Used in project 28.
+- **`maxPages`** — TanStack Query infinite-query option that keeps only the last N pages in memory. Used in project 12.
+- **MDN** — MDN Web Docs — the standard reference for HTML, CSS and browser APIs. Used in projects 6, 9, 12, 16, 18, 20–24, 31, 37.
+- **Measured vs estimated sizes** — Virtual lists start from estimated row heights and correct them once rows are rendered and measured. Used in project 28. ([Ch 10](../chapters/10-performance/README.md))
+- **Media Session API** — Lets a web page show track info and respond to play/pause keys and lock-screen controls. Used in project 20.
+- **`MediaStream` / `MediaStreamTrack`** — A live audio/video stream and its individual tracks (camera, microphone), which can be muted or stopped. Used in project 37.
+- **`memo` / `useMemo` / `useCallback`** — Memoization tools: skip a child's re-render when props are equal, cache a computed value, keep a function's identity stable. Used in projects 1, 2, 10, 13, 22, 32. ([Ch 10](../chapters/10-performance/README.md))
+- **Memoization** — Caching a result so repeated calls with the same inputs reuse it; the React Compiler adds it for you. Used in projects 2, 10, 11, 14, 15, 26, 28, 32, 36, 40. ([Ch 10](../chapters/10-performance/README.md))
+- **Mesh vs SFU** — In a mesh every participant sends video to every other; an SFU (selective forwarding unit) server receives each stream once and forwards it. Used in project 37.
+- **MFA / WebAuthn** — Multi-factor authentication adds a second proof (code, device); WebAuthn passkeys use device cryptography instead of passwords. Used in project 19.
+- **Micro-frontend** — Splitting one web app into parts built and deployed by separate teams, composed in the browser by a shell. Used in project 30. ([Ch 14](../chapters/14-patterns-and-architecture/README.md))
+- **Middleware** — Functions that run before a request or route handler and can check, change or stop it (auth, logging). Used in projects 19, 20, 35, 40. ([Ch 9](../chapters/09-routing-and-data-fetching/README.md))
+- **Minimal state** — Storing only what can't be computed from other state or props. Used in project 3. ([Ch 3](../chapters/03-state-and-events/README.md))
+- **Mixed value** — What a property panel shows when the selected items have different values for one property. Used in project 33.
+- **Mock / fake API** — A stand-in for a real dependency in tests or development that returns controlled responses. Used in projects 1, 4, 7, 8, 12, 20, 22, 26, 28, 30, 31, 34. ([Ch 12](../chapters/12-testing-react/README.md))
+- **Modal dialog** — A dialog over the page that blocks the rest until closed; needs focus trapping, Escape and focus restore. Used in projects 6, 29, 32, 33. ([Ch 14](../chapters/14-patterns-and-architecture/README.md))
+- **Module Federation** — A bundler feature (webpack, Rspack, Vite plugin) that loads code from separately deployed apps at runtime and shares libraries between them. Used in project 30.
+- **Monorepo / shared package** — One repository holding several apps and packages, so code (types, API clients) can be shared. Used in projects 30, 36. ([Ch 14](../chapters/14-patterns-and-architecture/README.md))
+- **MSW (Mock Service Worker)** — A library that intercepts network requests and returns fake responses, in tests and in the browser. Used in projects 4, 5, 11–14, 16. ([Ch 12](../chapters/12-testing-react/README.md))
+- **Multipart upload** — Uploading a file in several parts that the storage service joins together. Used in project 23.
+
+### N
+
+- **NAT** — Network address translation — routers sharing one public address among many devices, which makes direct peer connections hard. Used in project 37.
+- **Native components** — React Native renders real platform views (`View`, `Text`) instead of HTML elements. Used in project 36.
+- **Next.js** — Vercel's full-stack React framework with the App Router, Server Components and streaming. Used in project 26. ([Ch 13](../chapters/13-server-rendering-and-frameworks/README.md))
+- **Node (Node.js)** — The program that runs JavaScript outside the browser — dev servers, build tools, tests and servers. Used in projects 2, 11, 12, 18, 19, 22, 23, 25, 31, 33–35, 37, 39. ([Ch 1](../chapters/01-why-react-and-setup/README.md))
+- **Normalized state** — Storing items once in a map by ID and referring to them by ID elsewhere, like database tables. Used in projects 11, 39. ([Ch 6](../chapters/06-state-management/README.md))
+- **Notification permission** — The browser's permission prompt for showing system notifications; ask only after a user action. Used in projects 8, 22, 34, 36, 40.
+
+### O
+
+- **OAuth / PKCE** — OAuth lets users sign in through another provider; PKCE protects the code exchange in browser and mobile apps. Used in project 19.
+- **Object URL** — A temporary `blob:` URL for a local file (e.g. an image preview); revoke it when done to free memory. Used in project 23.
+- **Offline-first** — An app that reads and writes locally first and syncs with the server when a connection exists. Used in projects 8, 15, 22, 23, 27, 31, 34, 36, 38, 39.
+- **Offset pagination** — "Skip N rows, take M": simple, allows jumping to a page, but slows down and shifts on inserts at deep pages. Used in projects 12, 21, 23, 25, 27, 28. ([Ch 9](../chapters/09-routing-and-data-fetching/README.md))
+- **Offset (upload)** — How many bytes the server already has, so a resumed upload continues from there. Used in project 23.
+- **OKLCH** — A CSS colour space where lightness steps look even to the eye, which makes accessible palettes easier. Used in project 18.
+- **Opaque origin** — A sandboxed iframe without `allow-same-origin` gets a unique origin, so it can't read your cookies or storage. Used in project 38.
+- **Open redirect** — A vulnerability where a `?next=` URL can send users to any site; only allow relative, same-site paths. Used in project 19.
+- **OpenFeature / LaunchDarkly** — An open standard for feature-flag SDKs, and a commercial feature-flag service. Used in project 39.
+- **Operational transformation (OT)** — A collaboration technique where a server rewrites concurrent edits against each other so all copies converge (used by Google Docs). Used in project 27.
+- **Optimistic concurrency** — Saving with "only if the version is still N"; if someone changed it meanwhile, the save is rejected as a conflict. Used in project 31.
+- **Optimistic mutation (TanStack Query)** — `onMutate` cancels in-flight queries, saves a snapshot and writes the expected result with `setQueryData`; `onError` restores it; `onSettled` invalidates. Used in project 12. ([Ch 9](../chapters/09-routing-and-data-fetching/README.md))
+- **Optimistic update** — Showing the expected result immediately, before the server confirms, and rolling back if it fails (`useOptimistic`, query `onMutate`). Used in projects 7, 11–13, 25, 26, 31, 34. ([Ch 4](../chapters/04-forms-and-actions/README.md))
+- **Origin** — Protocol + domain + port (`https://shop.example`); storage and many security rules are separate per origin. Used in projects 9, 17, 19, 27, 38, 40. ([Ch 7](../chapters/07-custom-hooks-and-hook-rules/README.md))
+- **ORM / query builder** — Libraries that map database rows to objects (ORM) or build SQL in code (query builder). Used in project 26.
+- **OTA (over-the-air) update** — Shipping a new JavaScript bundle to installed mobile apps without a store release. Used in project 36.
+- **Outbox pattern** — Saving pending changes to a local queue first and sending them to the server in order when online. Used in project 31.
+- **Overlap layout (calendar)** — Placing calendar events that overlap in time side by side in columns. Used in project 21.
+- **Overscan** — Extra rows rendered just outside the visible area of a virtual list so fast scrolling shows no blanks. Used in project 28. ([Ch 10](../chapters/10-performance/README.md))
+- **OWASP** — A non-profit whose cheat sheets and Top 10 list describe common web security risks and defences. Used in project 19.
+
+### P
+
+- **p95 / p99** — Percentiles: the time 95% (or 99%) of requests or interactions finish within — a fairer target than the average. Used in project 25.
+- **Pagination** — Loading or showing a long list one page at a time — by offset (page numbers) or by cursor ("after this item"). Used in projects 1, 6, 10, 12, 15, 25, 26, 34, 36, 40. ([Ch 9](../chapters/09-routing-and-data-fetching/README.md))
+- **Password hashing** — Storing a slow, salted one-way hash of a password (Argon2, bcrypt) instead of the password itself. Used in projects 19, 23, 39.
+- **Payload** — The data carried in a request, response, message or action. Used in projects 5, 14, 19, 30, 37.
+- **Payment provider / hosted checkout** — A company (e.g. Stripe) that processes card payments; its hosted pages or fields keep card data off your servers. Used in projects 13, 40.
+- **PCI DSS** — The card-industry security standard; using the payment provider's hosted fields keeps most of it off your plate. Used in project 40.
+- **Per-key subscription** — Components subscribe to just the item they show (one ticker symbol), so one update re-renders only that row. Used in projects 7, 22. ([Ch 7](../chapters/07-custom-hooks-and-hook-rules/README.md))
+- **Per-step validation** — Validating only the current step's fields before moving on, with a final full check on submit. Used in project 17. ([Ch 4](../chapters/04-forms-and-actions/README.md))
+- **Perfect negotiation** — The WebRTC pattern where one peer is "polite" and yields on colliding offers, so renegotiation never deadlocks. Used in project 37.
+- **Performance budget** — Agreed limits (bundle KB, LCP, INP) that CI checks so performance doesn't slowly degrade. Used in projects 9, 22, 27, 29, 40. ([Ch 10](../chapters/10-performance/README.md))
+- **Persist / persister** — Saving a store or query cache to storage and restoring it on the next launch. Used in projects 2, 4, 5, 8, 9, 11, 13, 15, 17, 18, 20, 21, 25, 27, 31, 34, 36. ([Ch 6](../chapters/06-state-management/README.md))
+- **Personalized vs anonymous content** — Pages that are the same for everyone can be cached at a CDN; anything per-user must not be cached publicly. Used in projects 26, 35, 40.
+- **PII** — Personally identifiable information — names, emails, addresses — which must be scrubbed from logs and error reports. Used in project 39.
+- **`placeholderData: keepPreviousData`** — TanStack Query option that keeps showing the previous page while the next one loads, avoiding flicker. Used in project 25. ([Ch 9](../chapters/09-routing-and-data-fetching/README.md))
+- **Playwright** — End-to-end testing tool that drives real browsers (Chromium, Firefox, WebKit) and can take screenshots and throttle the network. Used in projects 1, 2, 6, 10–35, 37–40. ([Ch 12](../chapters/12-testing-react/README.md))
+- **Plural categories** — Languages have different plural forms (one, few, many, other); `Intl.PluralRules` tells you which one applies. Used in project 24.
+- **Pointer events** — Unified browser events for mouse, pen and touch (`pointerdown`, `pointermove`), with pointer capture for dragging. Used in projects 11, 21, 23, 27, 33.
+- **Polyfill** — Code that adds a missing browser feature (e.g. Temporal) so newer APIs work in older environments. Used in project 21.
+- **Polymorphism / `asChild`** — Letting a component render as another element (`as="a"`), or pass its behaviour to its single child (`asChild`). Used in projects 26, 29. ([Ch 14](../chapters/14-patterns-and-architecture/README.md))
+- **Pomodoro technique** — Working in focused 25-minute blocks separated by short breaks. Used in project 8.
+- **Portal (`createPortal`)** — Rendering children into another DOM node (usually `document.body`) while they stay in the same React tree. Used in projects 6, 11, 28, 30. ([Ch 14](../chapters/14-patterns-and-architecture/README.md))
+- **PostgreSQL** — A popular open-source relational (SQL) database. Used in projects 21, 25, 26, 31, 34, 39, 40.
+- **`postMessage`** — The browser API for sending messages between windows, iframes and workers that can't share memory. Used in project 38.
+- **PPR** — Partial prerendering — a static shell built ahead of time with dynamic parts streamed in per request. Used in project 26. ([Ch 13](../chapters/13-server-rendering-and-frameworks/README.md))
+- **Pre-aggregation** — Summarising raw events on the server (totals per hour) so the browser receives and draws far fewer points. Used in projects 14, 28, 34.
+- **Pre-rendering / SSG** — Producing HTML ahead of time at build, so pages are served as static files from a CDN. Used in projects 26, 35, 40. ([Ch 13](../chapters/13-server-rendering-and-frameworks/README.md))
+- **Pre-signed URL** — A temporary URL, signed by your server, that lets the browser upload straight to storage without your credentials. Used in project 23.
+- **`prefers-reduced-motion`** — User setting asking for less animation; respect it by toning down or removing motion. Used in project 24. ([Ch 14](../chapters/14-patterns-and-architecture/README.md))
+- **Prefetch** — Loading code or data before the user asks for it (on hover, or when a link scrolls into view). Used in projects 6, 12, 20, 30, 35, 40. ([Ch 9](../chapters/09-routing-and-data-fetching/README.md))
+- **Price snapshot** — Copying an item's price into the cart line when it is added, then re-checking it on the server at checkout. Used in project 13.
+- **Progressive enhancement** — Building so the basic feature works with plain HTML forms and links, and JavaScript improves it when available. Used in projects 7, 18, 26, 40. ([Ch 4](../chapters/04-forms-and-actions/README.md))
+- **Props** — The read-only inputs a parent passes to a child component. Used in projects 1–3, 6, 8, 10, 13, 14, 16, 26, 28–30, 32, 36. ([Ch 2](../chapters/02-components-and-props/README.md))
+- **Props spreading** — Passing all remaining props to an inner element (`{...rest}`) so a wrapper supports every native attribute. Used in projects 2, 28, 29, 32. ([Ch 14](../chapters/14-patterns-and-architecture/README.md))
+- **Protected route** — A route that redirects to sign-in unless the user is authenticated, checked in a loader or middleware (and again on the server). Used in projects 19, 40. ([Ch 9](../chapters/09-routing-and-data-fetching/README.md))
+- **Proxy** — A server in the middle that forwards requests and responses, possibly changing or caching them. Used in project 4.
+- **Pure component / pure function** — Same inputs, same output, no side effects — what React expects of components, reducers and filter functions. Used in projects 1–5, 8, 10, 13, 16–18, 24, 32, 36. ([Ch 2](../chapters/02-components-and-props/README.md))
+- **PWA** — Progressive Web App — a website with a manifest and service worker that can be installed and work offline. Used in projects 8, 31, 36.
+
+### Q
+
+- **Query key** — The array that names cached data in TanStack Query (`['orders', page, sort]`); every input of the fetch belongs in it. Used in projects 14, 16, 25. ([Ch 9](../chapters/09-routing-and-data-fetching/README.md))
+- **Queue** — A first-in, first-out list of waiting work (uploads, messages, saves) processed in order. Used in projects 2, 7, 11, 20, 23, 26, 31, 39.
+- **Quota (storage)** — The browser's limit on how much a site may store; writes can fail with `QuotaExceededError`. Used in projects 9, 31. ([Ch 7](../chapters/07-custom-hooks-and-hook-rules/README.md))
+
+### R
+
+- **Race condition** — A bug where the result depends on which of two overlapping operations finishes first, e.g. an old response overwriting a newer one. Used in projects 4, 11, 16, 21, 37. ([Ch 5](../chapters/05-effects-and-refs/README.md))
+- **Rate limiting** — Capping how many requests a client may make per time window, to protect the server. Used in projects 4, 5, 16, 19, 26, 39, 40.
+- **React Compiler** — A build-time plugin (1.0 in October 2025) that adds memoization automatically, assuming components follow the Rules of React. Used in projects 2, 10, 14, 26, 28, 32, 40. ([Ch 10](../chapters/10-performance/README.md))
+- **React Hook Form (RHF)** — Form library that tracks fields with refs and uncontrolled inputs, so big forms re-render little; pairs with Zod via `zodResolver`. Used in projects 7, 17, 29. ([Ch 4](../chapters/04-forms-and-actions/README.md))
+- **React Native** — React for real iOS and Android apps, rendering native views instead of HTML. Used in project 36. ([Ch 13](../chapters/13-server-rendering-and-frameworks/README.md))
+- **React Native Testing Library** — The React Native version of Testing Library: render components and query them like a user. Used in project 36. ([Ch 12](../chapters/12-testing-react/README.md))
+- **React Profiler / `<Profiler>`** — React DevTools' recorder (and the `<Profiler>` component) that shows which components rendered, why and how long. Used in projects 10, 13, 20, 22, 28, 32. ([Ch 10](../chapters/10-performance/README.md))
+- **React Router** — The most used React router; data mode adds loaders and actions, framework mode adds SSR and route modules. Used in projects 10, 12, 13, 15, 17, 19, 20, 24, 30, 40. ([Ch 9](../chapters/09-routing-and-data-fetching/README.md))
+- **React Testing Library (RTL)** — Helpers to render components and find elements as a user would (by role, label, text), then assert on what is shown. Used in projects 1–21, 23–26, 28, 29, 32, 34, 36, 39, 40. ([Ch 12](../chapters/12-testing-react/README.md))
+- **react-markdown / remark-gfm** — A library that renders Markdown as React elements without raw HTML, and a plugin adding GitHub-flavoured tables and task lists. Used in project 15.
+- **Rebalancing (ordering keys)** — Occasionally rewriting fractional order keys when they grow too long after many moves. Used in project 11.
+- **Recharts** — A React charting library that draws SVG charts from data arrays. Used in project 14.
+- **Reconciliation** — React comparing the new element tree with the previous one to find the smallest DOM change. Used in projects 1, 12, 20, 31, 33. ([Ch 1](../chapters/01-why-react-and-setup/README.md))
+- **Reducer** — A pure function `(state, action) => nextState` that puts all update logic in one testable place (`useReducer`). Used in projects 2, 5, 8, 9, 11, 13, 16, 17, 21, 23, 26, 28, 33, 37. ([Ch 6](../chapters/06-state-management/README.md))
+- **Ref / ref callback** — A `useRef` box whose `.current` survives renders without causing re-renders; often holds a DOM node. A ref callback is a function given as `ref` (in React 19 it may return a cleanup). Used in projects 4–6, 8, 16, 17, 20, 22, 23, 27, 29, 33, 37, 38. ([Ch 5](../chapters/05-effects-and-refs/README.md))
+- **Reference counting** — Counting how many subscribers use a shared resource and closing it when the count drops to zero. Used in project 22.
+- **Referential equality** — Two objects are equal to React only if they are the same object in memory (`Object.is`), not just alike. Used in projects 2, 5, 9, 12–14, 20, 32. ([Ch 3](../chapters/03-state-and-events/README.md))
+- **Refetch interval / visibility** — Re-fetching data on a timer, pausing while the tab is hidden and refreshing when it becomes visible again. Used in projects 4, 11, 12, 14–16, 35, 40. ([Ch 9](../chapters/09-routing-and-data-fetching/README.md))
+- **Regex escaping** — Escaping special characters (`.`, `*`, `(`) in user input before building a regular expression from it. Used in project 16.
+- **Release vs development build** — Development builds include checks and are slower; always measure performance on the optimised release/production build. Used in projects 32, 36. ([Ch 10](../chapters/10-performance/README.md))
+- **Remote (micro-frontend)** — An independently deployed app whose modules the shell loads at runtime. Used in project 30.
+- **Replication** — Keeping copies of the same data on several machines or devices and keeping them in sync. Used in project 27.
+- **Request cancellation** — Aborting a request whose result is no longer wanted (the user typed again), usually with `AbortController`. Used in projects 4, 16, 23, 28, 35. ([Ch 5](../chapters/05-effects-and-refs/README.md))
+- **`requestAnimationFrame` batching** — Collecting updates and applying them once per screen frame (about 60 per second), so the UI doesn't redraw for every message. Used in projects 22, 27.
+- **Responsive layout** — A layout that adapts to screen sizes from phones to wide desktops. Used in projects 1, 6, 10, 12, 14, 15, 38, 40. ([Ch 8](../chapters/08-styling/README.md))
+- **REST API** — An HTTP API organised around resources and methods (`GET /orders`, `POST /orders`). Used in projects 11, 15, 20, 30, 35, 36.
+- **Resumable upload (tus)** — An upload that can continue from where it stopped after a failure; tus is an open protocol for it. Used in projects 23, 25.
+- **Revalidation (`shouldRevalidate`, by tag)** — Re-running loaders or refreshing cached server data after a change; `shouldRevalidate` and cache tags control what refreshes. Used in projects 15, 26, 31, 40. ([Ch 9](../chapters/09-routing-and-data-fetching/README.md))
+- **Rollback** — Undoing an optimistic change when the server rejects it. Used in projects 11, 12, 30, 34, 37, 39. ([Ch 4](../chapters/04-forms-and-actions/README.md))
+- **Root error callbacks (React 19)** — `createRoot` options (`onCaughtError`, `onUncaughtError`, `onRecoverableError`) that report every React error to one place. Used in project 39. ([Ch 14](../chapters/14-patterns-and-architecture/README.md))
+- **Round-trip serialization** — Making sure state written to a string (URL, JSON) and read back gives the same value. Used in projects 10, 14, 25, 30, 34, 38.
+- **Route error element / ErrorBoundary** — The UI a route shows when its loader, action or component throws. Used in project 15. ([Ch 9](../chapters/09-routing-and-data-fetching/README.md))
+- **Route module** — In React Router framework mode, one file per route exporting `loader`, `action`, `meta`, `ErrorBoundary` and the component. Used in project 40. ([Ch 13](../chapters/13-server-rendering-and-frameworks/README.md))
+- **Roving `tabIndex`** — Only the active item in a group is in the Tab order (`tabIndex=0`); arrow keys move between items. Used in projects 19, 21. ([Ch 14](../chapters/14-patterns-and-architecture/README.md))
+- **RRULE** — The iCalendar format for repeating events ("every Tuesday until June"). Used in project 21.
+- **RSC (React Server Components)** — Components that run only on the server, can read data directly and ship no JavaScript to the browser. Used in projects 26, 35. ([Ch 13](../chapters/13-server-rendering-and-frameworks/README.md))
+- **Rspack / webpack** — Bundlers (Rspack is a fast Rust rewrite compatible with webpack) that support Module Federation. Used in project 30.
+- **RSS** — A feed format that lets readers subscribe to a site's new posts. Used in project 26.
+- **RTL (right-to-left)** — Languages such as Arabic and Hebrew read right to left; set `dir="rtl"` and use logical CSS properties. Used in project 24. ([Ch 8](../chapters/08-styling/README.md))
+- **Rules of React** — Components and Hooks are pure, props and state are never mutated, Hooks follow their rules — what the Compiler relies on. Used in project 32. ([Ch 2](../chapters/02-components-and-props/README.md))
+- **Runtime validation** — Checking data while the app runs (with a Zod schema), because TypeScript types vanish at runtime and stored or fetched data can be wrong. Used in projects 9, 17, 18, 30. ([Ch 4](../chapters/04-forms-and-actions/README.md))
+
+### S
+
+- **SaaS** — Software as a service — an application sold as a hosted subscription. Used in project 14.
+- **SameSite / HttpOnly / Secure** — Cookie flags: HttpOnly hides the cookie from JavaScript, Secure sends it only over HTTPS, SameSite limits cross-site sending (CSRF defence). Used in projects 19, 36.
+- **Sampling** — Keeping only a fraction of events (e.g. 10% of performance traces) to control cost. Used in projects 14, 39.
+- **Save queue** — Pending changes held in order and sent one after another, so saves don't race each other. Used in project 11.
+- **Scene graph** — The tree of shapes and groups that describes a drawing, separate from how it is rendered. Used in project 33.
+- **Schema validation (Zod)** — Describing the expected data shape once with Zod and checking real data against it at runtime; TypeScript types are derived from the schema. Used in projects 7, 9, 13, 17, 19, 26, 30, 36, 38. ([Ch 4](../chapters/04-forms-and-actions/README.md))
+- **Schema versioning and migration** — Storing a version number with saved data and upgrading old shapes to the new one when loading. Used in projects 9, 29, 33.
+- **Screen reader** — Software (VoiceOver, NVDA, JAWS) that reads the page aloud and lets users navigate by headings, landmarks and controls. Used in projects 1, 3, 6, 7, 11, 16, 28. ([Ch 14](../chapters/14-patterns-and-architecture/README.md))
+- **Screen vs world coordinates** — Screen coordinates are pixels on the display; world coordinates are positions on the infinite canvas, converted with the pan/zoom transform. Used in projects 27, 33.
+- **Scroll anchoring** — Keeping the visible content still when items are added above it (older chat messages, re-measured rows). Used in projects 28, 34.
+- **Scroll restoration** — Returning to the previous scroll position after navigating back. Used in project 12. ([Ch 9](../chapters/09-routing-and-data-fetching/README.md))
+- **SDK** — Software development kit — a library a service provides so your code can use it. Used in projects 33, 36, 39.
+- **SDP offer/answer** — The WebRTC handshake: each side describes its media capabilities in SDP text and they agree on a connection. Used in project 37.
+- **Secure storage (mobile)** — Platform-encrypted storage (iOS Keychain, Android Keystore) for tokens on a phone. Used in project 36.
+- **Seed data** — Sample data loaded at the start so the app has something realistic to show and test with. Used in projects 1, 22, 26.
+- **Selection model** — How a grid or list tracks what is selected (single, range with Shift, toggle with Ctrl), often as IDs rather than row positions. Used in projects 1, 16, 25, 27, 28, 33, 37, 38.
+- **Selective hydration** — With streaming, React hydrates each Suspense boundary on its own and prioritises the one the user interacts with. Used in project 35. ([Ch 13](../chapters/13-server-rendering-and-frameworks/README.md))
+- **Selector** — A function that picks part of a store's state; the component re-renders only when that part changes. Used in projects 3, 11, 13, 20, 22. ([Ch 6](../chapters/06-state-management/README.md))
+- **Semantic versioning** — MAJOR.MINOR.PATCH version numbers where only a major bump may break existing users. Used in projects 29, 30.
+- **Sentinel + `IntersectionObserver`** — An invisible element after the last item; when it scrolls into view the next page loads. Used in project 12. ([Ch 15](../chapters/15-react-interview-and-machine-coding/README.md))
+- **SEO** — Search engine optimisation — making pages rank and preview well; server-rendered HTML helps. Used in projects 24, 26, 30, 35, 40. ([Ch 13](../chapters/13-server-rendering-and-frameworks/README.md))
+- **Server error mapping** — Turning errors from the server ("email taken") into messages on the matching form fields. Used in projects 3, 7, 17. ([Ch 4](../chapters/04-forms-and-actions/README.md))
+- **Server Function / Server Action** — An async function marked `'use server'` that runs on the server but can be called from the client, e.g. as a form action; treat it as a public endpoint. Used in projects 7, 19, 26, 34, 40. ([Ch 4](../chapters/04-forms-and-actions/README.md))
+- **Server repricing** — Recomputing totals on the server from current prices; never trust a price sent by the browser. Used in project 13.
+- **Server sequence number (`seq`)** — An increasing number the server assigns to each message, giving one true order and making gaps detectable. Used in project 34.
+- **Server state** — A client-side cache of data the server owns; it goes stale and needs fetching, caching and invalidation (TanStack Query). Used in projects 12, 21, 28, 31, 35. ([Ch 6](../chapters/06-state-management/README.md))
+- **Server-Sent Events (SSE)** — A one-way stream of text events from server to browser over plain HTTP (`EventSource`). Used in projects 12, 22.
+- **Server-side rendering (SSR)** — Producing a page's HTML on the server for each request, then hydrating it in the browser. Used in projects 16, 18, 24, 26, 30, 35, 39, 40. ([Ch 13](../chapters/13-server-rendering-and-frameworks/README.md))
+- **Server-side slot computation** — Calculating free booking slots on the server, from availability and existing bookings, rather than trusting the browser. Used in projects 7, 11, 21.
+- **Server/client boundary** — The point where server-only code hands data to client code; only serializable props cross it. Used in projects 26, 35. ([Ch 13](../chapters/13-server-rendering-and-frameworks/README.md))
+- **Service worker** — A background script that sits between the page and the network; it can cache files and serve the app offline. Used in projects 4, 23, 31.
+- **Session cookie / session fixation** — A session cookie identifies a signed-in user; session fixation is an attack prevented by issuing a new session ID at sign-in. Used in projects 5, 9, 17, 19, 20, 26, 32, 36–40.
+- **Sharding** — Splitting data or connections across several servers by a key (room, user) so no single server holds everything. Used in project 27.
+- **Shell (app / streaming / host)** — The part of a page sent or loaded first (layout, navigation); in micro-frontends, the host app that loads the others. Used in projects 26, 30, 31, 35, 40. ([Ch 13](../chapters/13-server-rendering-and-frameworks/README.md))
+- **Shuffle order** — A random play order generated once (Fisher–Yates) and kept, so "next" is predictable while shuffle is on. Used in projects 5, 20.
+- **Signalling** — The messages (via your own server) that WebRTC peers exchange to find each other and agree on a connection. Used in project 37.
+- **Signed webhook** — A server-to-server HTTP callback (e.g. "payment succeeded") signed so you can verify it really came from the provider. Used in projects 21, 40.
+- **Singleton (shared)** — Exactly one shared instance — in micro-frontends, one copy of React shared by the shell and every remote. Used in project 30.
+- **Skeleton** — Grey placeholder shapes in the final layout, shown while content loads. Used in projects 1, 4, 14. ([Ch 9](../chapters/09-routing-and-data-fetching/README.md))
+- **Smoke test** — A quick end-to-end check that the app starts and its most basic path works. Used in projects 1, 29. ([Ch 12](../chapters/12-testing-react/README.md))
+- **Snapshot caching (`getSnapshot`)** — `useSyncExternalStore` needs `getSnapshot` to return the same object until data changes, or React loops forever. Used in project 9. ([Ch 7](../chapters/07-custom-hooks-and-hook-rules/README.md))
+- **Snapshot compaction** — Replacing a long history of updates with one saved snapshot so loading stays fast. Used in project 27.
+- **Source map** — A file mapping minified production code back to your original source, used to read error stack traces. Used in project 39.
+- **SPA** — Single-page application — one HTML page whose screens JavaScript draws and swaps. Used in projects 18, 19, 26, 39, 40. ([Ch 1](../chapters/01-why-react-and-setup/README.md))
+- **Spacer / total size** — In a virtual list, an element sized to the full content height so the scrollbar is correct while only a few rows exist. Used in project 28. ([Ch 10](../chapters/10-performance/README.md))
+- **Spatial index** — A data structure (grid, quadtree) for quickly finding the shapes near a point or inside a rectangle. Used in projects 27, 33.
+- **`srcObject`** — Property that connects a `<video>` element to a live `MediaStream`; set it from an Effect with a ref. Used in project 37.
+- **Stable `dispatch`** — `useReducer`'s `dispatch` function never changes identity, so it can be passed through context without causing re-renders. Used in projects 5, 8, 9, 11, 13. ([Ch 6](../chapters/06-state-management/README.md))
+- **Stale branch data** — Answers left over from steps that a changed choice has hidden; drop them before submitting. Used in project 17.
+- **Stale closure** — A function that still sees values from an old render, e.g. an interval set up once that reads the first state forever. Used in project 8. ([Ch 7](../chapters/07-custom-hooks-and-hook-rules/README.md))
+- **Stale data / staleness indicator** — Data that may be out of date; a staleness indicator tells the user (e.g. "updated 30 s ago" when the feed pauses). Used in projects 2–4, 8, 10, 12, 15–17, 21, 22, 26, 31, 40. ([Ch 9](../chapters/09-routing-and-data-fetching/README.md))
+- **Stale-while-revalidate** — Serve the cached copy now and refresh it in the background. Used in projects 26, 31, 40. ([Ch 9](../chapters/09-routing-and-data-fetching/README.md))
+- **`staleTime` vs `gcTime`** — TanStack Query: how long data counts as fresh, and how long unused data stays cached before being removed. Used in project 12. ([Ch 9](../chapters/09-routing-and-data-fetching/README.md))
+- **State colocation** — Keeping state as close as possible to the components that use it, so updates re-render less. Used in project 32. ([Ch 10](../chapters/10-performance/README.md))
+- **State snapshot** — Each render sees fixed state values; a setter schedules a new render rather than changing the variable you hold. Used in project 2. ([Ch 3](../chapters/03-state-and-events/README.md))
+- **Status union** — One `status` field with a few literal values (`'idle' | 'loading' | 'error'`) instead of several booleans. Used in projects 4, 7, 15, 20, 22, 23. ([Ch 11](../chapters/11-typescript-with-react/README.md))
+- **Sticky bucketing** — Assigning a user to a flag variant by hashing their ID, so they always see the same variant. Used in projects 27, 28, 34, 39.
+- **`storage` event** — Fired in *other* tabs when `localStorage` changes, so they can update their copy. Used in project 9. ([Ch 7](../chapters/07-custom-hooks-and-hook-rules/README.md))
+- **Storybook / story** — A workshop app where each "story" renders one component in one state, for development, docs and visual tests. Used in project 29. ([Ch 14](../chapters/14-patterns-and-architecture/README.md))
+- **Streaming promises from loaders** — A loader awaits critical data but returns slow data as a promise that the page renders inside Suspense when it arrives. Used in projects 2, 4, 20, 40. ([Ch 9](../chapters/09-routing-and-data-fetching/README.md))
+- **Streaming (SSR)** — Sending HTML in chunks as each Suspense boundary's data is ready, so slow parts don't block the page. Used in projects 20, 26, 35, 38, 40. ([Ch 13](../chapters/13-server-rendering-and-frameworks/README.md))
+- **StrictMode double-invoke** — In development, React runs renders and Effect setup → cleanup → setup twice to expose impure code and missing cleanups. Used in projects 4, 8, 22, 32, 37. ([Ch 5](../chapters/05-effects-and-refs/README.md))
+- **Structural sharing** — Reusing unchanged parts of old data in the new version, so unchanged objects keep their identity. Used in project 14.
+- **`suppressHydrationWarning`** — Silences a hydration-mismatch warning for one element whose content is expected to differ (a theme attribute, a time). Used in projects 18, 35. ([Ch 13](../chapters/13-server-rendering-and-frameworks/README.md))
+- **Suspense / Suspense boundary** — `<Suspense fallback>` shows a placeholder while code or data inside it is not ready; each one is a boundary for streaming. Used in projects 4, 14, 24, 26, 30, 35, 40. ([Ch 9](../chapters/09-routing-and-data-fetching/README.md))
+- **SVG** — Scalable Vector Graphics — shapes described in XML markup that React can render like HTML. Used in projects 8, 9, 14, 22, 27, 33.
+- **Sync cursor** — The position up to which a client has synced, so the next sync asks only for newer changes. Used in project 31.
+
+### T
+
+- **Tailwind CSS** — A utility-first CSS framework; v4 defines design tokens with `@theme`. Used in project 18. ([Ch 8](../chapters/08-styling/README.md))
+- **TanStack Query** — Server-state library that fetches, caches, de-duplicates, refetches and updates data (`useQuery`, `useMutation`, `useInfiniteQuery`). Used in projects 4, 12, 14, 16, 19, 21, 25, 34, 36, 39. ([Ch 9](../chapters/09-routing-and-data-fetching/README.md))
+- **TanStack Table** — Headless table library: you define columns (`ColumnDef<T>`) and it handles sorting and selection state while you render the markup. Used in project 25.
+- **TanStack Virtual** — Headless virtualization library that computes which rows and columns to render. Used in projects 12, 28. ([Ch 10](../chapters/10-performance/README.md))
+- **TCP / UDP** — Network transport protocols: TCP is reliable and ordered (HTTP, WebSocket); UDP is fast but may drop packets (real-time media). Used in project 37.
+- **Tearing** — Different parts of the screen showing different versions of the same external data in one render; prevented by `useSyncExternalStore`. Used in project 9. ([Ch 7](../chapters/07-custom-hooks-and-hook-rules/README.md))
+- **Temporal** — The new JavaScript date/time API with explicit types for instants, plain dates and zoned date-times. Used in project 21.
+- **Test runner** — A program (Vitest, Jest) that finds test files, runs them and reports results. Used in project 29. ([Ch 12](../chapters/12-testing-react/README.md))
+- **Text normalization** — Making text comparable — lower-casing and removing accents (Unicode NFD) — before searching. Used in project 10.
+- **Throttle** — Running something at most once per time interval while events keep coming (progress updates, persistence). Used in projects 5, 8, 16, 18, 20, 22, 23, 27, 32, 34. ([Ch 7](../chapters/07-custom-hooks-and-hook-rules/README.md))
+- **Ticker** — A live-updating list of prices or values, often for stock symbols. Used in project 22.
+- **Time to First Byte (TTFB)** — How long until the first byte of the response arrives; slow loaders or databases raise it. Used in projects 35, 40. ([Ch 13](../chapters/13-server-rendering-and-frameworks/README.md))
+- **Time-zone buckets** — Grouping events by day or hour in the viewer's time zone, not the server's, so charts line up with local days. Used in project 14.
+- **Timer drift / timer throttling** — `setInterval` ticks arrive late and background tabs slow timers down, so compute elapsed time from timestamps instead. Used in projects 1, 5, 8, 9, 15, 17, 21, 30, 32.
+- **Timestamp-based timing** — Storing when something started and computing elapsed time from the clock, instead of counting ticks. Used in projects 5, 8, 21, 34, 35.
+- **TLS** — Transport Layer Security — the encryption behind HTTPS and secure WebSockets (`wss://`). Used in project 37.
+- **TMS** — Translation management system — where translators edit an app's message files. Used in project 24.
+- **TodoMVC** — A reference to-do app implemented in many frameworks, useful for comparison. Used in project 2.
+- **Tool state machine** — Each editor tool (select, draw, pan) as a state machine reacting to pointer events in a defined order. Used in project 33.
+- **Transaction** — A group of database (or document) changes applied all together or not at all. Used in projects 21, 27, 31.
+- **Transaction origin** — A tag on a Yjs change saying who made it, so undo only reverts your own edits. Used in project 27.
+- **Transform matrix** — A small grid of numbers that represents moving, scaling and rotating, and can be combined and inverted. Used in project 33.
+- **Transition (`startTransition`)** — A non-urgent update React may render in the background and interrupt, keeping the current UI responsive. Used in projects 2, 5–7, 10, 14, 16, 18, 21, 32–34. ([Ch 7](../chapters/07-custom-hooks-and-hook-rules/README.md))
+- **Tree-shaking** — The bundler dropping exports nobody imports, so users download less code. Used in project 29. ([Ch 10](../chapters/10-performance/README.md))
+- **TTL cache** — A cache whose entries expire after a time-to-live (e.g. 10 minutes) and are then fetched again. Used in projects 4, 40.
+- **TypeScript** — JavaScript plus static types checked before the code runs. Used in projects 1–5, 7, 11, 15–17, 21, 25, 28, 29, 36, 38, 39. ([Ch 11](../chapters/11-typescript-with-react/README.md))
+- **Typing indicator** — The "Ada is typing…" signal, sent rarely (throttled) and expiring on its own. Used in projects 15, 34.
+
+### U
+
+- **Uncontrolled input** — A form field whose value lives in the DOM (`defaultValue`), read with `FormData` on submit. Used in projects 3, 7, 17, 38. ([Ch 4](../chapters/04-forms-and-actions/README.md))
+- **Undo / redo (`UndoManager`)** — Reverting and re-applying changes, usually from a stack of commands or patches; Yjs's `UndoManager` does it for shared documents. Used in projects 2, 11, 27, 33, 38.
+- **Unit test / integration test** — A unit test checks one small piece (a reducer, a formatter) in isolation; an integration test checks several pieces working together. Used in projects 3, 8, 9, 11, 13, 20, 21, 23, 24, 27–29, 31, 33, 34, 36–40. ([Ch 12](../chapters/12-testing-react/README.md))
+- **Unread count** — The number of messages a user hasn't seen, derived from their last-read position. Used in projects 14, 18, 22, 34.
+- **Updater function** — A function passed to a setter (`setN(n => n + 1)`) that computes the next state from the latest queued value. Used in projects 2, 8, 12. ([Ch 3](../chapters/03-state-and-events/README.md))
+- **URL state / search params** — Keeping filters, sort and page in the URL's `?key=value` part, so views can be shared and survive reloads. Used in projects 6, 10, 14, 25. ([Ch 9](../chapters/09-routing-and-data-fetching/README.md))
+- **`use()`** — React 19 API that reads a promise (suspending until ready) or a context, and may be called conditionally. Used in projects 4, 13, 26, 35, 40. ([Ch 9](../chapters/09-routing-and-data-fetching/README.md))
+- **`useActionState` / `useFormStatus`** — React 19 form Hooks: the result and pending flag of the last Action, and the pending status of the parent `<form>`. Used in projects 7, 13, 19, 26. ([Ch 4](../chapters/04-forms-and-actions/README.md))
+- **`useDeferredValue`** — Returns a lagging copy of a value so a slow child can render it in the background while typing stays fast. Used in projects 10, 15, 22. ([Ch 7](../chapters/07-custom-hooks-and-hook-rules/README.md))
+- **`useEffectEvent`** — React 19.2 Hook for logic inside an Effect that must read the latest props/state without re-running the Effect. Used in projects 8, 34, 37. ([Ch 7](../chapters/07-custom-hooks-and-hook-rules/README.md))
+- **`useId`** — Generates a unique, server-safe ID for linking labels and ARIA attributes. Used in project 16. ([Ch 7](../chapters/07-custom-hooks-and-hook-rules/README.md))
+- **`useOptimistic`** — React 19 Hook that shows an optimistic value while an Action runs and falls back to the real state when it ends. Used in projects 7, 13, 26, 34. ([Ch 4](../chapters/04-forms-and-actions/README.md))
+- **`user-event`** — Testing Library package that simulates real user interactions (typing, clicking, Tab) in tests. Used in projects 1, 2, 6, 7, 11, 16, 29. ([Ch 12](../chapters/12-testing-react/README.md))
+- **`useShallow`** — Zustand helper that compares a selector's object result shallowly, so returning several values doesn't re-render every time. Used in project 20. ([Ch 6](../chapters/06-state-management/README.md))
+- **`useSyncExternalStore`** — Hook that subscribes to an external store safely, given `subscribe` and `getSnapshot` functions. Used in projects 9, 18, 20, 22, 27, 31, 33, 37. ([Ch 7](../chapters/07-custom-hooks-and-hook-rules/README.md))
+- **UTC** — Coordinated Universal Time — the time-zone-free reference clock; store instants in UTC. Used in projects 9, 14, 21.
+- **UUID / `crypto.randomUUID()`** — A random 128-bit identifier that is practically unique; create one when an item is created, never during render. Used in projects 1, 2, 31, 34. ([Ch 2](../chapters/02-components-and-props/README.md))
+- **UX** — User experience — how easy and pleasant the product is to use. Used in projects 19, 27, 30, 31.
+
+### V
+
+- **Version skew** — Different parts of a system running different versions at the same time (an old shell with a new remote) and disagreeing. Used in project 30.
+- **`<ViewTransition>`** — React component (stable in 19.3) that animates between UI states using the browser's View Transitions API. Used in projects 6, 18.
+- **Virtualization (windowing)** — Rendering only the rows (and columns) currently visible in a long list or grid, inside a full-size spacer. Used in projects 1, 2, 6, 10–12, 15, 16, 22, 25, 28, 32, 34, 36. ([Ch 10](../chapters/10-performance/README.md))
+- **Visual regression testing** — Comparing screenshots before and after a change to catch unintended visual differences. Used in projects 14, 18, 29, 32. ([Ch 14](../chapters/14-patterns-and-architecture/README.md))
+- **Vite** — The build tool and dev server used by most React SPAs; also builds libraries and SSR bundles. Used in projects 1, 29, 30, 32, 35. ([Ch 1](../chapters/01-why-react-and-setup/README.md))
+- **Vitest** — A fast, Vite-based JavaScript test runner with a Jest-compatible API. Used in projects 1–5, 8–15, 17–29, 31, 33–40. ([Ch 12](../chapters/12-testing-react/README.md))
+
+### W
+
+- **W3C** — The World Wide Web Consortium, which publishes web standards such as WCAG and ARIA. Used in projects 6, 16, 21, 25, 28.
+- **`watch` (React Hook Form)** — RHF function that subscribes to a field's value, e.g. to show or hide later steps. Used in projects 17, 35. ([Ch 4](../chapters/04-forms-and-actions/README.md))
+- **WCAG / AA contrast** — The Web Content Accessibility Guidelines; level AA requires, for example, a 4.5:1 contrast ratio for normal text. Used in projects 17, 18. ([Ch 14](../chapters/14-patterns-and-architecture/README.md))
+- **Web Worker** — JavaScript running on a background thread, so heavy work (bundling, parsing) doesn't freeze the page. Used in projects 4, 8, 22, 23, 31, 38.
+- **web-vitals** — Google's small library that measures Core Web Vitals in real users' browsers. Used in projects 32, 40. ([Ch 10](../chapters/10-performance/README.md))
+- **WebAssembly (WASM)** — A compact binary format browsers run at near-native speed; tools like esbuild ship a WASM build for the browser. Used in project 38.
+- **WebGL** — Browser API for GPU-accelerated 2D/3D drawing on a canvas. Used in project 33.
+- **WebRTC** — Browser technology for real-time audio, video and data directly between peers (`RTCPeerConnection`). Used in project 37.
+- **WebSocket** — A connection kept open so server and browser can send messages to each other at any time. Used in projects 11, 12, 22, 27, 34, 37. ([Ch 5](../chapters/05-effects-and-refs/README.md))
+- **Wizard (multi-step form)** — A long form split into steps with Back/Next, validated step by step. Used in project 17. ([Ch 4](../chapters/04-forms-and-actions/README.md))
+- **Workbox** — Google's library for writing service-worker caching strategies; `skipWaiting` activates a new worker immediately. Used in project 31.
+
+### X
+
+- **XSS** — Cross-site scripting — an attacker's text running as code in other users' browsers; React escapes text, but `dangerouslySetInnerHTML` and unsafe Markdown bypass that. Used in projects 15, 16, 19. ([Ch 1](../chapters/01-why-react-and-setup/README.md))
+
+### Y
+
+- **Yjs** — A CRDT library: a `Y.Doc` holds shared types like `Y.Map` that sync between users through providers such as y-websocket and y-indexeddb. Used in projects 27, 38.
+
+### Z
+
+- **`zodResolver`** — Adapter that lets React Hook Form validate with a Zod schema. Used in project 17. ([Ch 4](../chapters/04-forms-and-actions/README.md))
+- **Zustand** — A small state library: `create` returns a Hook you read with selectors; no provider needed; `persist` saves it to storage. Used in projects 11, 13, 17, 20, 27. ([Ch 6](../chapters/06-state-management/README.md))

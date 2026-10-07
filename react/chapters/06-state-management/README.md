@@ -18,7 +18,7 @@ Chapter 3 gave each component its own memory with `useState` and showed how to *
 | 6.10 | Choosing | a comparison table and a decision flow |
 | 6.11 | Putting it together | a bookshop using each kind of state in its natural home |
 
-Code: [`code/`](code/) — React 19.3, Redux Toolkit 2.12 + React Redux 9.3, Zustand 5.0, TanStack Query 5.104, run in jsdom.
+Code: [`code/`](code/) — React 19.3, Redux Toolkit 2.12 + React Redux 9.3, Zustand 5.0, TanStack Query 5.104, run in jsdom (a browser-like DOM that runs inside Node.js).
 
 ---
 
@@ -31,16 +31,16 @@ Code: [`code/`](code/) — React 19.3, Redux Toolkit 2.12 + React Redux 9.3, Zus
 |---|---|---|---|
 | **Local UI state** | Is this dropdown open? Current tab? Text in this input? | Nothing special | `useState` in the component (Chapter 3) |
 | **Complex local state** | A form wizard, an editor with many actions | Clear update rules | `useReducer` (§6.2) |
-| **Shared / global client state** | Current user, theme, cart, feature flags, a multi-step draft | Reachable from far away; efficient updates | Lift up → Context (§6.3) → Zustand / Redux (§6.7–6.8) |
-| **Server state** (a cached copy of data owned by a server) | Product list, user profile, search results | Fetching, caching, de-duplication, refetching, staleness, retries | TanStack Query (§6.9), RTK Query, or framework loaders (Chapter 9) |
-| **URL state** | Filters, page number, selected item ID | Shareable, survives reload, back button | The URL: route params and search params (Chapter 9) |
+| **Shared / global client state** | Current user, theme, cart, feature flags (on/off switches that enable a feature for some users), a multi-step draft | Reachable from far away; efficient updates | Lift up → Context (§6.3) → Zustand / Redux (§6.7–6.8) |
+| **Server state** (a cached copy of data owned by a server) | Product list, user profile, search results | Fetching, caching (keeping a local copy to reuse), de-duplication (merging identical requests), refetching, staleness (how out-of-date the copy may be), retries | TanStack Query (§6.9), RTK Query, or framework loaders (router functions that fetch a page's data; Chapter 9) |
+| **URL state** | Filters, page number, selected item ID | Shareable, survives reload, back button | The URL: route params (parts of the path, like the `42` in `/books/42`) and search params (the `?genre=sf&page=2` part) (Chapter 9) |
 | **Form state** | Field values, errors, pending | Validation, submission | Form Actions / `useActionState`, or a form library (Chapter 4) |
 | **Derived state** | Totals, filtered lists, "is valid" | Must never be out of sync | **Not state** — compute during render (Chapter 3 §3.8) |
 
 Analogy: a house. Things you use in one room stay in that room (local state). Things the whole family needs go in the hallway (context/global store). Food you buy from the shop goes in the fridge, which has expiry dates and needs restocking (server state in a cache). The house address is written on the door (URL state).
 
 ### Why server state is different
-Server data is **owned by someone else**: other users can change it at any moment, so your copy is always potentially **stale**. It needs loading and error states, caching, de-duplication of identical requests, background refetching, and invalidation after you change it. Writing all that by hand with `useEffect` + `useState` (Chapter 5 §5.7) or storing it in Redux is a major source of complexity. A dedicated server-state library usually removes most of the "global state" an app thought it had.
+Server data is **owned by someone else**: other users can change it at any moment, so your copy is always potentially **stale**. It needs loading and error states, caching, de-duplication of identical requests, background refetching, and **invalidation** (marking cached data as out of date so it is fetched again) after you change it. (For caching in general, see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md).) Writing all that by hand with `useEffect` + `useState` (Chapter 5 §5.7) or storing it in Redux is a major source of complexity. A dedicated server-state library usually removes most of the "global state" an app thought it had.
 
 ### TL;DR
 Classify first: local, complex local, shared client, server, URL, form, derived. Keep state as local as possible; put server data in a query cache; never store what you can derive.
@@ -134,7 +134,7 @@ delete one         : [ '[ ] Buy stamps' ]
 1. **Pure**: same state + action → same result. No requests, timers, random IDs, or `Date.now()` inside — create those in the handler and put them in the action (`id: nextId++` above). StrictMode calls reducers twice in development to catch impurity.
 2. **Immutable**: return new objects/arrays. (Immer's `useImmerReducer` lets you write mutating code safely — the same trick Redux Toolkit uses, §6.7.)
 3. **Actions describe events, not setters**: prefer `{ type: 'task_completed', id }` over `{ type: 'set_done', value: true }`. One user action = one dispatch, even if several fields change.
-4. `dispatch` has a **stable identity**, so it's safe to pass down or omit from Effect dependencies.
+4. `dispatch` has a **stable identity** (it is the very same function object on every render), so it's safe to pass down or omit from Effect dependencies.
 5. Like setters, `dispatch` only affects the **next** render; reading `state` right after dispatching gives the old snapshot (Chapter 3 §3.3).
 
 ### `useState` vs `useReducer`
@@ -149,7 +149,7 @@ delete one         : [ '[ ] Buy stamps' ]
 Rule of thumb: start with `useState`; switch to `useReducer` when you see several handlers modifying the same state in related ways, or bugs from inconsistent updates. You can mix both in one component.
 
 ### In the interview
-**30-second answer:** "`useReducer` takes a reducer — a pure function from state and action to the next state — and returns the state plus a stable `dispatch`. Handlers dispatch actions describing what happened, and all update logic lives in the reducer, which I can unit-test without React. I switch from `useState` when many handlers update the same state or the transitions get complex, and I combine it with context for app-wide state."
+**30-second answer:** "`useReducer` takes a reducer — a pure function from state and action to the next state — and returns the state plus a stable `dispatch`. Handlers dispatch actions describing what happened, and all update logic lives in the reducer, which I can **unit-test** (test one small piece of code on its own) without React. I switch from `useState` when many handlers update the same state or the transitions get complex, and I combine it with context for app-wide state."
 
 - *Can a reducer fetch data?* — No; it must be pure. Fetch in an event handler or Effect and dispatch the result.
 - *What's the third argument?* — An initialiser: initial state is `init(initialArg)`, computed once.
@@ -167,7 +167,7 @@ Rule of thumb: start with `useState`; switch to `useReducer` when you see severa
 ## 6.3 Context — pass data deeply without props
 
 ### The problem it solves
-**Prop drilling** is passing a prop through many components that don't use it, only so a deep child can. With a theme, the current user or a locale needed in dozens of places, it becomes noise and couples every layer to data it doesn't care about. **Context** lets a parent make a value available to **every component below it**, however deep.
+**Prop drilling** is passing a prop through many components that don't use it, only so a deep child can. With a theme, the current user or a **locale** (the user's language and regional formats) needed in dozens of places, it becomes noise and **couples** (makes dependent on) every layer to data it doesn't care about. **Context** lets a parent make a value available to **every component below it**, however deep.
 
 Analogy: a building's Wi-Fi. Instead of running a cable (prop) from the router to each room through every room in between, the router broadcasts, and any device inside the building connects directly. A device in another building (outside the provider) gets nothing — or a default.
 
@@ -229,7 +229,7 @@ no provider -> btn-light (the default from createContext)
 
 What happened:
 1. Each `Section` read the level from the **nearest provider above** and provided `level + 1` to its children — so headings got the right tag without any `level` prop.
-2. A component reads the **closest** provider; the inner `high-contrast` provider overrode the outer theme only for its subtree.
+2. A component reads the **closest** provider; the inner `high-contrast` provider overrode the outer theme only for its **subtree** (that component and everything nested below it).
 3. When the provided value changed (toggle), consumers **re-rendered automatically** with the new value.
 4. With **no provider**, `useContext` returned the **default** passed to `createContext`.
 
@@ -243,7 +243,7 @@ What happened:
 | Class components | `static contextType` (legacy) |
 
 ### Common uses
-Theme, locale/i18n, current user/auth, feature flags, a router's location, a form library's form state, design-system settings (density, direction), and dependency injection for tests (provide a fake API client).
+Theme, locale/i18n (internationalisation — translating the UI into many languages), current user/auth, feature flags, a router's location, a form library's form state, design-system settings (density, direction), and **dependency injection** for tests (handing a component the services it uses from outside, e.g. provide a fake API client).
 
 ### Before you use context
 - **Try passing props first.** Explicit props through two or three levels are fine and easier to follow.
@@ -314,7 +314,7 @@ split contexts: mount                        {"Badge2":1,"Logout2":1,"Sidebar(no
 ```
 
 Three lessons:
-1. **Object literal as `value`** → a new object on every render of the provider → **all consumers re-render** on *unrelated* changes (the clock tick), defeating `memo`. Wrapping the value in `useMemo` (and functions in `useCallback`) fixed it. (The React Compiler does this memoisation automatically — Chapter 10.)
+1. **Object literal as `value`** → a new object on every render of the provider → **all consumers re-render** on *unrelated* changes (the clock tick), defeating `memo`. Wrapping the value in `useMemo` (a Hook that returns the same cached value until its inputs change) (and functions in `useCallback`, the same idea for functions) fixed it. (The React Compiler does this memoisation automatically — Chapter 10.)
 2. **Consumers re-render when anything in the value changes.** `LogoutButton` only needs `logout`, but re-rendered when `user` changed. **Splitting** into a state context and an actions context fixed it: the action-only consumer no longer re-renders.
 3. `memo` components that **don't read** the context (`Sidebar`) are unaffected. And a provider component that receives its subtree as **`children`** (like `AuthProvider`) doesn't re-render that subtree when its own state changes — only the consumers.
 
@@ -403,7 +403,7 @@ outside provider -> useTasks must be used inside <TasksProvider>
 - Because `dispatch` never changes, `AddTask` doesn't re-render when tasks change (§6.4 lesson 2).
 
 ### Limits
-It re-renders every `useTasks()` consumer on every change, has no selectors, no devtools/time travel, no middleware, and async flows (fetching) are up to you. Fine for a feature or a small app; for large shared client state with frequent updates, a library is more efficient and conventional.
+It re-renders every `useTasks()` consumer on every change, has no selectors, no devtools/time travel (stepping back through previous states in a debugging tool), no middleware, and async flows (fetching) are up to you. Fine for a feature or a small app; for large shared client state with frequent updates, a library is more efficient and conventional.
 
 ### TL;DR
 `useReducer` in a provider + separate state and dispatch contexts + `useX()` Hooks that throw outside the provider = a small, dependency-free store.
@@ -416,12 +416,12 @@ Built-ins (local state, lifting, `useReducer`, context) take most apps a long wa
 
 | Signal | Likely answer |
 |---|---|
-| Lots of `useEffect` + `useState` for fetching; loading/error flags everywhere; duplicate requests; stale lists after edits | **TanStack Query** (or RTK Query / SWR / framework loaders) — this alone removes most "global state" |
+| Lots of `useEffect` + `useState` for fetching; loading/error flags everywhere; duplicate requests; stale lists after edits | **TanStack Query** (or RTK Query / SWR / framework loaders — all server-data caching tools) — this alone removes most "global state" |
 | Shared client state that changes often and is read by many components (editor, canvas, dashboard filters, cart) | A store with selectors: **Zustand** (small) or **Redux Toolkit** (structured) |
 | Large team, many features, need strict conventions, action logs, time-travel debugging, middleware | **Redux Toolkit** |
-| State updates from outside React (WebSocket, timers, non-React code) | A store usable outside React (Zustand's `getState/setState`, Redux `store.dispatch`) |
-| Complex flows with explicit states and transitions (checkout, wizard, media player) | A reducer, or a state-machine library such as XState |
-| Fine-grained derived values (spreadsheet-like) | An atom library such as Jotai |
+| State updates from outside React (WebSocket — a connection kept open so the server can push messages, timers, non-React code) | A store usable outside React (Zustand's `getState/setState`, Redux `store.dispatch`) |
+| Complex flows with explicit states and transitions (checkout, wizard, media player) | A reducer, or a **state-machine** library (a model with a fixed list of states and allowed transitions between them) such as XState |
+| Fine-grained derived values (spreadsheet-like) | An **atom** library (state split into many tiny independent pieces) such as Jotai |
 
 And signals that you *don't* need one: a handful of shared values that rarely change (theme, user) — context is enough; or "global state" that is really server data — use a query library.
 
@@ -430,7 +430,7 @@ And signals that you *don't* need one: a handful of shared values that rarely ch
 ## 6.7 Redux Toolkit
 
 ### What it is
-**Redux** is a pattern and library for keeping app-wide state in **one store**, changed only by **dispatching actions** to **reducers** (the same idea as `useReducer`, but global and with a big ecosystem). **Redux Toolkit (RTK)** is the official, recommended way to write Redux today: it removes the old boilerplate (hand-written action types, switch statements, spread-heavy immutable updates, store setup).
+**Redux** is a pattern and library for keeping app-wide state in **one store**, changed only by **dispatching actions** to **reducers** (the same idea as `useReducer`, but global and with a big ecosystem). **Redux Toolkit (RTK)** is the official, recommended way to write Redux today: it removes the old **boilerplate** (repetitive set-up code: hand-written action types, switch statements, spread-heavy immutable updates, store setup).
 
 | Term | Meaning |
 |---|---|
@@ -438,7 +438,7 @@ And signals that you *don't* need one: a handful of shared values that rarely ch
 | **Slice** | One feature's state + reducers + generated action creators (`createSlice`) |
 | **Action creator** | Function returning an action object: `added('p1')` → `{ type: 'cart/added', payload: 'p1' }` |
 | **Selector** | Function that reads (and maybe derives) data from state: `state => state.cart.lines` |
-| **Thunk** | A function you dispatch for async logic; RTK's `createAsyncThunk` dispatches `pending`/`fulfilled`/`rejected` for you |
+| **Thunk** | A function you dispatch for async logic; RTK's `createAsyncThunk` dispatches `pending`/`fulfilled`/`rejected` (the three states of a promise: waiting, succeeded, failed) for you |
 | **Middleware** | Code between `dispatch` and the reducer (logging, thunks, analytics) |
 
 ```mermaid
@@ -514,23 +514,23 @@ after cleared : Total: $0 | action object: {"type":"cart/added","payload":"p9"}
 What each part did:
 1. **`createSlice`** generated the reducer *and* action creators (`added('p9')` → `{ type: 'cart/added', payload: 'p9' }`). Its reducers **look** mutating (`state.lines[id] = …`) but RTK runs them through **Immer**, which produces a new immutable state. (Either mutate the draft *or* return a new value — not both.)
 2. **`createAsyncThunk`** handled the async fetch and dispatched `pending` → `fulfilled`; the slice reacted with `extraReducers` to track `status`.
-3. **`configureStore`** combined the slices and, by default, added the thunk middleware, Redux DevTools support, and development checks that warn if you mutate state outside a reducer or put non-serializable values (class instances, functions) in state.
+3. **`configureStore`** combined the slices and, by default, added the thunk middleware, Redux DevTools support, and development checks that warn if you mutate state outside a reducer or put non-serializable values (ones that can't be turned into plain JSON text, e.g. class instances, functions) in state.
 4. **`useSelector`** subscribes a component to **just the value its selector returns**. Adding to the cart re-rendered `CartTotal` three times but `ProductList` zero times — the products slice was unchanged.
-5. **`createSelector`** (from Reselect, re-exported by RTK) memoised the derived total: repeat calls with the same inputs didn't recompute.
+5. **`createSelector`** (from Reselect, re-exported by RTK) **memoised** (cached by input) the derived total: repeat calls with the same inputs didn't recompute.
 
 ### Rules and good practices
 - One store per app; **slices per feature** (`features/cart/cartSlice.js`). Put state in Redux only if other parts of the app care about it — form input text usually doesn't belong there.
-- Keep state **serializable** (plain objects/arrays/primitives) — needed for DevTools, persistence and SSR.
+- Keep state **serializable** (plain objects/arrays/primitives) — needed for DevTools, persistence (saving state, e.g. to `localStorage`) and SSR (server-side rendering).
 - **Selectors must not return new objects/arrays on every call** (e.g. `useSelector(s => s.items.filter(...))`): the component would re-render on every dispatch (React Redux warns in development). Use `createSelector` or select primitives.
 - Model actions as **events** (`cart/added`), not setters (`cart/setLines`).
-- For server data, prefer **RTK Query** (included in RTK: `createApi`, auto-generated hooks such as `useGetProductsQuery`, caching and invalidation by tags) over hand-written thunks — same ideas as TanStack Query (§6.9).
-- TypeScript: infer `RootState` and `AppDispatch` from the store and use pre-typed hooks (Chapter 11).
+- For server data, prefer **RTK Query** (included in RTK: `createApi`, auto-generated hooks such as `useGetProductsQuery`, caching and invalidation by tags — labels that link queries to the mutations that make them stale) over hand-written thunks — same ideas as TanStack Query (§6.9).
+- TypeScript (JavaScript with static types): infer `RootState` and `AppDispatch` from the store and use pre-typed hooks (Chapter 11).
 
 ### Trade-offs
 | Pros | Cons |
 |---|---|
 | Predictable one-way data flow; every change is an action you can log | More concepts and files than Zustand |
-| Excellent DevTools: action log, state diff, time travel | Overkill for small apps |
+| Excellent DevTools: action log, state diff (what changed between two states), time travel | Overkill for small apps |
 | Conventions scale to large teams | Needs a `<Provider>` |
 | Middleware ecosystem; RTK Query built in | Global by default — easy to over-centralise |
 
@@ -601,14 +601,14 @@ new-object selector -> Maximum update depth exceeded. This can …  (fix: useSha
 - **Selective re-renders**: adding bears re-rendered only `BearCounter`; eating fish only `FishCounter`. `Controls` (selecting stable action functions) never re-rendered. `Everything`, with **no selector**, subscribed to the whole store and re-rendered on every change — avoid that in real code.
 - **`set` merges** the object you return into the state (one level deep, like the old class `setState`); pass `true` as a second argument to replace instead. **`get()`** reads current state inside actions.
 - **Outside React**: `getState`, `setState` and `subscribe` work anywhere (the subscriber fired for both changes, including the `fish` one where bears stayed 3).
-- **Middleware**: `persist` saved the settings store to `localStorage` (and rehydrates it on load); `devtools` connects to Redux DevTools; `immer` allows mutating-style `set`.
-- **The classic Zustand 5 bug**: a selector returning a **new object** every call makes React think the store changed on every check → infinite loop. Select primitives separately, or wrap object/array selectors in **`useShallow`**.
+- **Middleware**: `persist` saved the settings store to `localStorage` (the browser's small key-value storage) (and **rehydrates** it — loads the saved state back — on load); `devtools` connects to Redux DevTools; `immer` allows mutating-style `set`.
+- **The classic Zustand 5 bug**: a selector returning a **new object** every call makes React think the store changed on every check → **infinite loop** (render, "changed", render again … until React gives up). Select primitives separately, or wrap object/array selectors in **`useShallow`**.
 
 ### Trade-offs
 | Pros | Cons |
 |---|---|
 | Tiny API; almost no boilerplate | Fewer conventions — large teams must agree on structure |
-| No provider; usable outside React | Stores are module singletons: for SSR per-request state or tests you may need a store-per-provider pattern (`createStore` + context) |
+| No provider; usable outside React | Stores are module **singletons** (exactly one shared instance per loaded file): for SSR per-request state or tests you may need a store-per-provider pattern (`createStore` + context) |
 | Selector-based re-renders | Less tooling than Redux (DevTools via middleware) |
 | Middleware for persist/devtools/immer | Easy to grow one giant store — split into slices/stores |
 
@@ -630,9 +630,9 @@ new-object selector -> Maximum update depth exceeded. This can …  (fix: useSha
 | `queryKey` | Array that identifies the data, e.g. `['todos']`, `['user', id]`. Include every variable the fetch depends on | — |
 | `queryFn` | Async function returning the data (or throwing) | — |
 | `staleTime` | How long fetched data counts as **fresh** (no automatic refetch) | `0` (stale immediately) |
-| `gcTime` | How long **unused** cached data is kept before garbage collection | 5 minutes |
-| Retries | Failed queries retried with exponential backoff | 3 retries in the browser |
-| Refetch triggers | While stale: component mount, window refocus, network reconnect | On |
+| `gcTime` | How long **unused** cached data is kept before garbage collection (freeing memory nobody uses) | 5 minutes |
+| Retries | Failed queries retried with exponential backoff (waiting longer after each failure: 1 s, 2 s, 4 s…) | 3 retries in the browser |
+| Refetch triggers | While stale: component mount (first appears), window refocus (user returns to the tab), network reconnect | On |
 | `status` | `'pending'` (no data yet), `'error'`, `'success'` | — |
 | `fetchStatus` | `'fetching'`, `'paused'` (offline), `'idle'` — can be fetching while `success` (background refresh) | — |
 
@@ -694,9 +694,9 @@ Compare with Chapter 5 §5.7: no `useEffect`, no `ignore` flag, no loading/error
 ### More features (brief)
 - **Optimistic updates** with `onMutate` (update the cache, return a rollback) or by rendering `mutation.variables` while pending.
 - **`enabled: false`** for dependent queries (fetch B only when A's result exists).
-- **`placeholderData: keepPreviousData`** for pagination without flashing a spinner.
-- **`useInfiniteQuery`** for "load more"/infinite scroll; **`useSuspenseQuery`** for Suspense (Chapter 9).
-- **Prefetching** (`queryClient.prefetchQuery`) on hover or in route loaders; **DevTools** panel.
+- **`placeholderData: keepPreviousData`** for **pagination** (showing results one page at a time) without flashing a spinner.
+- **`useInfiniteQuery`** for "load more"/infinite scroll; **`useSuspenseQuery`** for Suspense (React's way to show a fallback while data loads; Chapter 9).
+- **Prefetching** (fetching data *before* it is needed, e.g. `queryClient.prefetchQuery`) on hover or in route loaders; **DevTools** panel.
 
 ### Common mistakes
 - Leaving a variable out of the key (`['user']` for every id) — different users overwrite each other's cache.
@@ -725,9 +725,9 @@ TanStack Query = server-state cache. `useQuery({ queryKey: [...vars], queryFn })
 | Async | Your code | Thunks, RTK Query | Plain async actions | Built in (it's the whole point) |
 | DevTools | React DevTools only | Redux DevTools (time travel) | Via `devtools` middleware | TanStack Query DevTools |
 | Outside React | No | `store.dispatch/getState` | `getState/setState` | `queryClient` methods |
-| Extra bundle size | None | Moderate (RTK + React Redux) | Very small (about 1 kB gzipped) | Moderate |
+| Extra bundle size (JS added to what users download) | None | Moderate (RTK + React Redux) | Very small (about 1 kB gzipped, i.e. compressed) | Moderate |
 
-Other names you'll meet: **Jotai** (atoms — small independent pieces of state composed together), **MobX** (observable objects with automatic tracking), **Valtio** (proxy-based mutable state), **XState** (state machines), **SWR** (server-state library by Vercel, similar to TanStack Query), **Recoil** (Meta's atom library — its repository was archived in January 2025; don't start new projects with it).
+Other names you'll meet: **Jotai** (atoms — small independent pieces of state composed together), **MobX** (observable objects — objects that notify listeners when they change — with automatic tracking), **Valtio** (proxy-based mutable state, where a stand-in object intercepts your writes), **XState** (state machines), **SWR** (server-state library by Vercel, similar to TanStack Query), **Recoil** (Meta's atom library — its repository (the project's code on GitHub) was archived, i.e. made read-only and unmaintained, in January 2025; don't start new projects with it).
 
 ```mermaid
 flowchart TD

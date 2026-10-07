@@ -1,6 +1,6 @@
 # Chapter 9 — Routing and Data Fetching
 
-Real apps have many screens and live on data from a server. This chapter covers the two libraries most React apps use for that: **React Router** (which screen to show for which URL, and — in its data mode — loading the data for that screen) and **TanStack Query** (caching and synchronising server data). It then connects both to React's own async tools, **Suspense** and **`use()`**, and ends with patterns for loading and error states that users actually like.
+Real apps have many screens and live on data from a server. This chapter covers the two libraries most React apps use for that: **React Router** (which screen to show for which URL, and — in its data mode — loading the data for that screen) and **TanStack Query** (caching — keeping a reusable local copy of — and synchronising server data). It then connects both to React's own async tools, **Suspense** (shows a fallback while something is loading) and **`use()`** (reads a promise's value during render), and ends with patterns for loading and error states that users actually like.
 
 You already know the manual way — fetching in an Effect with cleanup ([Chapter 5](../05-effects-and-refs/README.md), and the `useFetch` Hook in [Chapter 7](../07-custom-hooks-and-hook-rules/README.md)) — and [Chapter 6](../06-state-management/README.md) explained why server data is a different kind of state. Here you'll see what the libraries add and how to use them well.
 
@@ -22,16 +22,16 @@ You already know the manual way — fetching in an Effect with cleanup ([Chapter
 | 9.12 | Loading and error states | choose spinners vs skeletons vs stale content; handle every failure |
 | 9.13 | Putting it together | router loaders + Query cache in one small shop |
 
-Versions used: **React 19.3**, **React Router 8.4**, **TanStack Query 5.104**. Code in [`code/`](code/) runs in Node with jsdom; data comes from a tiny in-memory API ([`code/api-server.js`](code/api-server.js)) started on `127.0.0.1` inside each script, and the `[server]` lines in the outputs are that server's log.
+Versions used: **React 19.3**, **React Router 8.4**, **TanStack Query 5.104**. Code in [`code/`](code/) runs in Node with jsdom (a browser-like DOM for Node); data comes from a tiny in-memory API (a small web server that keeps its data in memory, not in a database) ([`code/api-server.js`](code/api-server.js)) started on `127.0.0.1` inside each script, and the `[server]` lines in the outputs are that server's log.
 
 ---
 
 ## 9.1 Client-side routing
 
 ### What it is
-**Routing** means choosing what to show based on the **URL**. In a traditional multi-page site the *server* does it: every link click requests a new HTML page and the browser reloads. In a **single-page application (SPA)** the page loads once, and a **client-side router** in JavaScript does it:
+**Routing** means choosing what to show based on the **URL** (the web address, e.g. `/products/3?sort=price`). In a traditional multi-page site the *server* does it: every link click requests a new HTML page and the browser reloads. In a **single-page application (SPA)** the page loads once, and a **client-side router** in JavaScript does it:
 
-1. It intercepts clicks on its links (`<Link>`), calls `event.preventDefault()`, and updates the address bar with the **History API** (`history.pushState`) — no request, no reload.
+1. It intercepts clicks on its links (`<Link>`), calls `event.preventDefault()`, and updates the address bar with the **History API** (the browser's built-in functions for changing the URL and back/forward history, e.g. `history.pushState`) — no request, no reload.
 2. It listens for the Back/Forward buttons (the `popstate` event).
 3. It matches the new URL against your **route definitions** and renders the matching components.
 
@@ -45,15 +45,15 @@ The URL *is* state — the most shareable state in your app. Anything a user mig
 |---|---|
 | Instant page changes, state survives navigation | Every page is a fresh load |
 | Needs JS; first load downloads the app | Works without JS |
-| The server must return `index.html` for *every* app path (so a refresh on `/products/3` doesn't 404) | Each URL maps to a real page |
-| SEO and first paint need SSR/pre-rendering for public content ([Chapter 13](../13-server-rendering-and-frameworks/README.md)) | Good by default |
+| The server must return `index.html` for *every* app path (so a refresh on `/products/3` doesn't 404 — the HTTP "Not Found" status) | Each URL maps to a real page |
+| SEO (search-engine optimisation) and first paint (the first time content appears) need SSR/pre-rendering (producing HTML on the server, per request or ahead of time) for public content ([Chapter 13](../13-server-rendering-and-frameworks/README.md)) | Good by default |
 
 ---
 
 ## 9.2 React Router v8 and its three modes
 
 ### What it is
-**React Router** is the most widely used router for React. Version **8** (June 2026) is a deliberately small upgrade from v7: it requires React 19.2.7+ and Node 22.22+, is ESM-only, removes the old `react-router-dom` package, and turns v7's "future flags" (notably **middleware**) on by default.
+**React Router** is the most widely used router for React. Version **8** (June 2026) is a deliberately small upgrade from v7: it requires React 19.2.7+ and Node 22.22+, is ESM-only (published only as modern ES modules that use `import`/`export`, not the older `require`), removes the old `react-router-dom` package, and turns v7's "future flags" (opt-in switches for upcoming behaviour) (notably **middleware**, §9.7) on by default.
 
 ```bash
 npm install react-router          # one package; there is no react-router-dom in v8
@@ -68,12 +68,12 @@ It can be used in three **modes** — pick one per app:
 | Mode | You write | Router provides | Use when |
 |---|---|---|---|
 | **Declarative** | `<BrowserRouter>` + `<Routes>`/`<Route>` JSX | URL matching, links, params, navigation | Simple SPAs, adding routing to an existing app, fetching data your own way (e.g. TanStack Query) |
-| **Data** | Route **objects** passed to `createBrowserRouter`, rendered with `<RouterProvider>` | + **loaders**, **actions**, pending states, route error boundaries, fetchers, middleware | SPAs that want data loading tied to navigation |
-| **Framework** | Route **modules** (files) + the React Router Vite plugin | + server rendering, code splitting per route, type generation, pre-rendering | Full-stack apps (this is the successor of the Remix framework) |
+| **Data** | Route **objects** passed to `createBrowserRouter`, rendered with `<RouterProvider>` | + **loaders**, **actions**, pending states, route error boundaries (components that show a fallback when something below them throws), fetchers, middleware | SPAs that want data loading tied to navigation |
+| **Framework** | Route **modules** (files) + the React Router Vite plugin | + server rendering, code splitting per route (downloading each page's code only when needed), type generation, pre-rendering | Full-stack apps (frontend + server code together; this is the successor of the Remix framework) |
 
 Each mode includes everything in the modes above it. The sections below use **declarative** mode first (§9.3–9.4), then **data** mode (§9.5–9.7). Tests and these examples use the **memory** variants — `<MemoryRouter>` and `createMemoryRouter` — which keep the URL history in memory instead of the address bar; in a browser app you use `<BrowserRouter>` / `createBrowserRouter` with identical route definitions.
 
-(Alternatives worth knowing: **TanStack Router**, a fully type-safe router with built-in search-param validation, and the file-based routers of **Next.js** and other frameworks.)
+(Alternatives worth knowing: **TanStack Router**, a fully **type-safe** router (TypeScript checks your paths and params at compile time) with built-in search-param validation, and the file-based routers of **Next.js** and other frameworks.)
 
 ---
 
@@ -81,7 +81,7 @@ Each mode includes everything in the modes above it. The sections below use **de
 
 ### How it works
 1. Wrap the app in a router: `<BrowserRouter>` (tests: `<MemoryRouter>`).
-2. Inside, `<Routes>` holds `<Route path="…" element={…}>` entries. On each URL change React Router picks the **best** matching route (it ranks routes by specificity — static segments beat dynamic `:params`, which beat `*` — so the order you write them in doesn't matter).
+2. Inside, `<Routes>` holds `<Route path="…" element={…}>` entries. On each URL change React Router picks the **best** matching route (it ranks routes by specificity — static **segments** (the pieces of a path between slashes) beat dynamic `:params`, which beat `*` — so the order you write them in doesn't matter).
 3. **Dynamic segments** start with `:` — `/products/:productId` matches `/products/3` and `useParams()` returns `{ productId: '3' }` (always strings).
 4. `path="*"` matches anything left over: your **404** page.
 5. `<Link to>` navigates; **`<NavLink>`** is a Link that knows whether it's **active** (matches the current URL) and passes `isActive` to `className`/`style` (`end` makes it match exactly).
@@ -168,7 +168,7 @@ Things to notice:
 | Treating `useParams()` values as numbers | They're strings: `Number(productId)` or compare as strings |
 | Filters/tabs/page in `useState` | Put shareable UI state in search params |
 | Calling `navigate()` during render | Navigate in handlers/Effects, or render `<Navigate>` |
-| Server returns 404 on refresh of `/products/3` | Configure a fallback to `index.html` (Vite preview, Netlify `_redirects`, nginx `try_files`) |
+| Server returns 404 on refresh of `/products/3` | Configure a fallback to `index.html` (Vite preview, Netlify `_redirects` — a hosting service's redirect file, nginx `try_files` — a web server's setting) |
 
 ### TL;DR
 `<Routes>`/`<Route path>`; `:param` + `useParams`; `useSearchParams` for `?query`; `<Link>`/`<NavLink>`; `useNavigate` in code; `*` for 404.
@@ -266,7 +266,7 @@ Fetching in Effects ([Chapter 5](../05-effects-and-refs/README.md)) starts only 
 4. While they run, the **current** screen stays visible and **`useNavigation().state`** is `'loading'` — use it for a progress bar.
 5. When they resolve, the new route renders; `useLoaderData()` returns the data.
 6. If a loader **throws**, the nearest route **`ErrorBoundary`** renders instead. Throw **`data(message, { status })`** for expected HTTP-like errors and check them with `isRouteErrorResponse(error)`.
-7. On the very first load there is no "current screen", so the router shows the root route's **`HydrateFallback`**.
+7. On the very first load there is no "current screen", so the router shows the root route's **`HydrateFallback`** (what to show until the app has **hydrated** — React has started in the browser).
 
 ```mermaid
 sequenceDiagram
@@ -357,8 +357,8 @@ The server log proves the two list requests ran **in parallel**. During navigati
 
 ### Details worth knowing
 - **Revalidation**: after an action (§9.6) or `useRevalidator().revalidate()`, the router re-runs the loaders on the page so data stays fresh; `shouldRevalidate` on a route can opt out.
-- **Streaming non-critical data**: a loader can return an object containing an *un-awaited* promise (`return { product: await p, reviews: reviewsPromise }`); render it with `<Await resolve={reviews}>` inside `<Suspense>`, or with `use()` (§9.11). The page shows as soon as the critical data is ready.
-- **Loaders are not components**: no Hooks inside them. They're plain async functions, easy to unit-test.
+- **Streaming non-critical data** (sending the page first and filling in slow data as it arrives): a loader can return an object containing an *un-awaited* promise (a **promise** is an object for a result that arrives later; un-awaited = not waited for) (`return { product: await p, reviews: reviewsPromise }`); render it with `<Await resolve={reviews}>` inside `<Suspense>`, or with `use()` (§9.11). The page shows as soon as the critical data is ready.
+- **Loaders are not components**: no Hooks inside them. They're plain async functions, easy to **unit-test** (test in isolation).
 - **Loaders don't cache**. Navigate back to a page and its loader runs again. Pair them with a cache (TanStack Query, §9.13) when that matters.
 
 ### TL;DR
@@ -369,14 +369,14 @@ The server log proves the two list requests ran **in parallel**. During navigati
 ## 9.6 Actions, `<Form>` and fetchers
 
 ### What it is
-An **action** is a route's function for **writes** (create, update, delete). React Router's **`<Form method="post">`** works like an HTML form, but instead of reloading the page it serialises the fields into a `Request`, calls the route's `action`, and then **automatically re-runs the loaders** on the page so the UI shows the new data.
+An **action** is a route's function for **writes** (create, update, delete). React Router's **`<Form method="post">`** works like an HTML form, but instead of reloading the page it **serialises** (packs into a sendable format) the fields into a `Request` (the standard object describing an HTTP request), calls the route's `action`, and then **automatically re-runs the loaders** on the page so the UI shows the new data.
 
 ### How it works
 1. `<Form method="post">` submits to the action of the route it's rendered in (or `action="/path"`).
 2. The action reads `await request.formData()`, validates, and writes to the server.
 3. It returns either:
    - **validation errors** — `return data({ errors }, { status: 400 })` — read in the component with **`useActionData()`**; or
-   - **`redirect('/somewhere')`** — the classic *Post/Redirect/Get* pattern, so Refresh doesn't resubmit.
+   - **`redirect('/somewhere')`** — the classic *Post/Redirect/Get* pattern (after a form POST, send the browser to a normal GET page), so Refresh doesn't resubmit.
 4. `useNavigation().state === 'submitting'` while the action runs — disable the button.
 5. After the action, the router **revalidates**: loaders run again and every `useLoaderData()` gets fresh data.
 6. **`useFetcher()`** does the same *without navigating* — for "like" buttons, inline edits, quick-add fields, several independent submissions at once. It has its own `fetcher.state` and `fetcher.data`.
@@ -458,7 +458,7 @@ React 19's own `<form action={fn}>`, `useActionState` and `useFormStatus` ([Chap
 ## 9.7 Middleware, lazy routes and framework mode
 
 ### Middleware (v8: on by default)
-**Middleware** functions run **before** a route's loaders/actions, from parent to child, and can do work before and after the rest of the chain by awaiting `next()`. Typical uses: authentication guards, logging/timing, putting shared data (the current user) into a typed **context** that loaders read.
+**Middleware** functions run **before** a route's loaders/actions, from parent to child, and can do work before and after the rest of the chain by awaiting `next()`. Typical uses: **authentication guards** (checks that send a logged-out user to the login page), logging/timing, putting shared data (the current user) into a typed **context** that loaders read.
 
 `code/05_middleware.jsx`:
 ```jsx
@@ -503,10 +503,10 @@ signed in, open /dashboard:
   shows "Dashboard for Ada"
 ```
 
-One guard on the parent protects every child route, and loaders no longer each re-check the session. (Client-side guards are about **UX**, not security — the server must still reject unauthorised API calls.) In declarative mode there is no middleware; the equivalent is a wrapper component that renders `<Navigate to="/login" replace />` when there's no user.
+One guard on the parent protects every child route, and loaders no longer each re-check the session. (Client-side guards are about **UX** (user experience), not security — the server must still reject unauthorised API calls.) In declarative mode there is no middleware; the equivalent is a wrapper component that renders `<Navigate to="/login" replace />` when there's no user.
 
 ### Lazy routes (code splitting)
-Large apps shouldn't download every page up front. A route's `lazy` property loads its module only when the route is first visited:
+Large apps shouldn't download every page up front. **Code splitting** breaks the JavaScript bundle into smaller files that load on demand. A route's `lazy` property loads its module only when the route is first visited:
 ```js
 // not run
 { path: 'reports', lazy: () => import('./routes/reports.jsx') }   // the module exports Component, loader, …
@@ -546,7 +546,7 @@ Middleware = before/after hooks around loaders (auth, logging, context). `lazy` 
 ## 9.8 TanStack Query basics
 
 ### What it is
-**TanStack Query** (formerly React Query) is a **server-state** library: it fetches, **caches**, de-duplicates, refreshes and invalidates data that lives on a server. You tell it *what* the data is (a **query key**) and *how* to get it (a **query function**); it handles *when*.
+**TanStack Query** (formerly React Query) is a **server-state** library: it fetches, **caches**, de-duplicates (merges identical simultaneous requests), refreshes and invalidates (marks out of date) data that lives on a server. (Caching in general: [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md).) You tell it *what* the data is (a **query key**) and *how* to get it (a **query function**); it handles *when*.
 
 Why a special library? Server data is not like UI state ([Chapter 6](../06-state-management/README.md)): someone else can change it, it can be out of date, several components need the same data, and loading/error states are everywhere. Writing that with Effects means re-implementing a cache.
 
@@ -555,14 +555,14 @@ Why a special library? Server data is not like UI state ([Chapter 6](../06-state
 2. In a component: `useQuery({ queryKey: ['product', id], queryFn: () => fetchProduct(id) })`.
 3. The first component to ask for a key triggers the fetch; others asking for the same key at the same time **share** it.
 4. The result is stored under the key. Next time any component asks, it gets the cached data **immediately**, and — if the data is **stale** — a background refetch updates it.
-5. The query function must **throw** on failure (`fetch` doesn't throw on 404 — check `res.ok`); failed queries are **retried** (3 times by default in the browser, with exponential backoff).
+5. The query function must **throw** on failure (`fetch` doesn't throw on 404 — check `res.ok`); failed queries are **retried** (3 times by default in the browser, with **exponential backoff** — waiting twice as long before each new attempt).
 
 Two timers control the cache:
 
 | Option | Default | Meaning |
 |---|---|---|
 | **`staleTime`** | `0` | How long data counts as **fresh**. Fresh data is served from cache with **no** refetch. With `0`, every new mount/focus triggers a background refetch (still showing cached data instantly). |
-| **`gcTime`** | 5 minutes | How long **unused** data (no component using the key) stays in memory before being garbage-collected. |
+| **`gcTime`** | 5 minutes | How long **unused** data (no component using the key) stays in memory before being garbage-collected (deleted to free memory). |
 
 ```mermaid
 stateDiagram-v2
@@ -627,11 +627,11 @@ Reading the output:
 1. The first load goes `pending/fetching` → `success/idle`.
 2. **De-duplication**: two components, one request.
 3. **Cache**: on remount the very first render already had `data=Keyboard` (`status=success`) while `isFetching=true` refreshed it in the background — no spinner. With `staleTime: 60s` there was no refetch at all.
-4. **Retries** hid two transient 503s from the user.
+4. **Retries** hid two **transient** (temporary) 503s — the HTTP "Service Unavailable" status — from the user.
 5. Errors arrive as `status: 'error'` with the thrown `Error`.
 
 ### Choosing `staleTime`
-`0` is safe but chatty. For data that changes rarely (product catalogue, user profile) a `staleTime` of 30 s–5 min removes most refetches. Set a default on the client — `new QueryClient({ defaultOptions: { queries: { staleTime: 60_000 } } })` — and override per query.
+`0` is safe but chatty (sends many requests). For data that changes rarely (product catalogue, user profile) a `staleTime` of 30 s–5 min removes most refetches. Set a default on the client — `new QueryClient({ defaultOptions: { queries: { staleTime: 60_000 } } })` — and override per query.
 
 ### Common mistakes
 | Mistake | Fix |
@@ -646,7 +646,7 @@ Reading the output:
 **30-second answer:** "TanStack Query manages server state. `useQuery` takes a key and a fetch function; it caches by key, de-dupes concurrent requests, retries failures, and refetches stale data in the background on mount, focus and reconnect. `staleTime` says how long data is fresh — default 0 — and `gcTime` how long unused data stays cached — default 5 minutes. `isPending` means no data yet; `isFetching` means a request is in flight."
 
 - *Why not Redux for server data?* — You'd hand-write caching, dedupe, refetching and invalidation; RTK Query or TanStack Query exist because that's hard to get right.
-- *What happens on window focus?* — Stale queries with mounted observers refetch.
+- *What happens on window focus?* — Stale queries with mounted observers (components currently using that query) refetch.
 
 ### TL;DR
 `useQuery({ queryKey, queryFn })`. Cache by key, dedupe, retry, background refetch of stale data. Tune `staleTime`; `isPending` vs `isFetching`.
@@ -658,7 +658,7 @@ Reading the output:
 ### Query keys
 A **query key** is an array that uniquely identifies the data: `['products']`, `['products', 7]`, `['products', { page: 2, sort: 'price' }]`. Rules:
 - **Every variable the query function uses belongs in the key.** Change a variable → new key → new cache entry → fetch. Forgetting one means the query keeps showing the old data.
-- Keys are compared by value (objects are hashed with sorted keys), so `{ page: 1, sort: 'x' }` and `{ sort: 'x', page: 1 }` are the same.
+- Keys are compared by value (objects are **hashed** — turned into a fixed string — with sorted keys), so `{ page: 1, sort: 'x' }` and `{ sort: 'x', page: 1 }` are the same.
 - Keys are **hierarchical**: invalidating `['products']` also matches `['products', 7]` and `['products', 7, 'reviews']` — design them general → specific.
 
 **`queryOptions()`** bundles a key and function into one reusable definition you can pass to `useQuery`, `useSuspenseQuery`, `prefetchQuery`, `ensureQueryData` and `getQueryData` (with TypeScript, the data type flows through).
@@ -716,14 +716,14 @@ All inputs in the key; general → specific; `queryOptions` for reuse; `keepPrev
 ## 9.10 Mutations, invalidation and optimistic updates
 
 ### What it is
-A **mutation** changes data on the server (POST/PUT/PATCH/DELETE). **`useMutation({ mutationFn })`** gives you `mutate(variables)` plus `isPending`, `isError`, `error`, `data`. Unlike queries, mutations don't run automatically and aren't cached by key.
+A **mutation** changes data on the server (POST/PUT/PATCH/DELETE — the HTTP methods for create, replace, partly update and delete). **`useMutation({ mutationFn })`** gives you `mutate(variables)` plus `isPending`, `isError`, `error`, `data`. Unlike queries, mutations don't run automatically and aren't cached by key.
 
 After a write, the cached queries that show that data are out of date. You fix that by **invalidating** them: `queryClient.invalidateQueries({ queryKey: ['todos'] })` marks matching queries stale and refetches the ones on screen.
 
 ### How it works — two strategies
 | Strategy | Steps | Feels | Use when |
 |---|---|---|---|
-| **Invalidate** (pessimistic) | `mutate` → wait for server → invalidate → refetch → UI updates | Correct, slight delay | Default; complex server-side effects |
+| **Invalidate** (pessimistic — wait for the server before showing the change) | `mutate` → wait for server → invalidate → refetch → UI updates | Correct, slight delay | Default; complex server-side effects |
 | **Optimistic update** | `onMutate`: cancel refetches, snapshot cache, write the expected result → server call → `onError`: restore snapshot → `onSettled`: invalidate | Instant | Likes, toggles, reordering, adding to lists — when the server almost always agrees |
 
 `code/07_mutations.jsx`:
@@ -812,7 +812,7 @@ C) optimistic update that fails
 - Unlike Hooks, `use` **may be called inside `if` blocks and loops** (§7.2). It may not be called inside `try/catch`.
 
 ### The one rule: don't create the promise during render
-`use(fetch(url))` inside a component creates a **new** promise on every render, so React can never finish (it warns that a component "was suspended by an uncached promise"). The promise must be **created once and reused**: passed in as a prop from a Server Component or a loader, stored in a cache, or produced by a library (TanStack Query, the router).
+`use(fetch(url))` inside a component creates a **new** promise on every render, so React can never finish (it warns that a component "was suspended by an uncached promise"). The promise must be **created once and reused**: passed in as a prop from a Server Component (a component that runs only on the server, Chapter 13) or a loader, stored in a cache, or produced by a library (TanStack Query, the router).
 
 `code/09_suspense_and_use.jsx`:
 ```jsx
@@ -859,7 +859,7 @@ function SuspenseName({ id }) {
 }
 ```
 
-The error boundary ([`code/ErrorBoundary.jsx`](code/ErrorBoundary.jsx)) is a class component — React still has no Hook equivalent of `getDerivedStateFromError`; most apps use the small `react-error-boundary` package instead:
+The error boundary ([`code/ErrorBoundary.jsx`](code/ErrorBoundary.jsx)) is a class component (the older way of writing components as JavaScript classes) — React still has no Hook equivalent of `getDerivedStateFromError` (the class method React calls when a child throws); most apps use the small `react-error-boundary` package instead:
 ```jsx
 export class ErrorBoundary extends Component {
   state = { error: null };
@@ -890,11 +890,11 @@ useSuspenseQuery: Mouse
 2. When the promise settles, React re-renders `Product`; `use` now returns the value (or throws the error to the **closest error boundary**).
 3. **Plain update** to an id whose data isn't loaded → the already-visible product is **hidden** and replaced by the fallback (a jarring flash).
 4. **Transition update** (`startTransition`, [Chapter 7](../07-custom-hooks-and-hook-rules/README.md)) → React **keeps the old content** on screen and exposes `isPending` instead. Routers wrap navigations in transitions for exactly this reason.
-5. `reset()` on the boundary clears the error and tries again (here with a different id; a real cache should also evict failed promises so a retry refetches).
+5. `reset()` on the boundary clears the error and tries again (here with a different id; a real cache should also **evict** (remove) failed promises so a retry refetches).
 
 ### Placing boundaries
 - Put `<Suspense>` where a loading placeholder makes sense **visually** — around a card, a panel, a route — not around every component.
-- Siblings inside one boundary are revealed **together** (no popcorn effect); separate boundaries let fast parts show first.
+- Siblings inside one boundary are revealed **together** (no "popcorn" effect — pieces popping in one by one at random); separate boundaries let fast parts show first.
 - Nest boundaries to stream progressively: page shell → main content → comments.
 - Pair each important Suspense boundary with an **error boundary** outside it.
 
@@ -908,7 +908,7 @@ useSuspenseQuery: Mouse
 ### Loading states — pick by situation
 | Situation | Show | Tool |
 |---|---|---|
-| First load of a page/section | **Skeleton** in the final layout (grey blocks) — avoids layout shift | Suspense fallback, `isPending` |
+| First load of a page/section | **Skeleton** in the final layout (grey blocks) — avoids **layout shift** (content jumping around as things load) | Suspense fallback, `isPending` |
 | Navigating between pages | **Old page + progress indicator** (top bar, dimming) | `useNavigation`, transitions |
 | Refreshing data already shown | Keep data, small "refreshing" hint, or nothing | `isFetching` with data |
 | Paginating / filtering | Previous results dimmed until new ones arrive | `keepPreviousData`, `useDeferredValue` |
@@ -918,11 +918,11 @@ useSuspenseQuery: Mouse
 ### Error states — every failure needs a home
 | Error kind | Where to handle | UI |
 |---|---|---|
-| Expected "not found" / 403 | Route `ErrorBoundary` via `throw data(msg, { status })`, or query `error` | A friendly page inside the layout, with navigation still working |
+| Expected "not found" / 403 (HTTP "Forbidden") | Route `ErrorBoundary` via `throw data(msg, { status })`, or query `error` | A friendly page inside the layout, with navigation still working |
 | Transient network error | Retries (Query does 3 by default), then error UI | Message + **Retry** button (`refetch()` / boundary `reset`) |
 | Validation error on submit | Action return value / mutation error | Inline, next to the field (`role="alert"`) |
-| Bug (exception during render) | Error boundary at route level + one at the app root | "Something went wrong" + report to monitoring in `componentDidCatch` |
-| Failure after optimistic update | `onError` rollback | Revert + toast explaining what didn't save |
+| Bug (exception during render) | Error boundary at route level + one at the app root | "Something went wrong" + report to monitoring (an error-tracking service such as Sentry) in `componentDidCatch` |
+| Failure after optimistic update | `onError` rollback | Revert + toast (small temporary pop-up message) explaining what didn't save |
 
 What error boundaries **don't** catch: errors in event handlers, in async code outside render (a `setTimeout`), and in the boundary itself. Handle those with `try/catch` and state, or route them into render (e.g. `mutation.error`).
 

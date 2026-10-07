@@ -1,6 +1,6 @@
 # Chapter 3 — State and Events
 
-Chapter 2's catalog could *show* data but not *react* to the user. This chapter adds interactivity: **event handlers** respond to clicks and typing, and **state** lets a component remember values between renders. Most React bugs beginners meet — "my counter only goes up by one", "the screen doesn't update", "the note moved to the wrong row" — come from the ideas here, so each is shown with a program you can run.
+Chapter 2's catalog could *show* data but not *react* to the user. This chapter adds interactivity: **event handlers** respond to clicks and typing, and **state** lets a component remember values between **renders** (each time React calls your component to work out its UI). Most React bugs beginners meet — "my counter only goes up by one", "the screen doesn't update", "the note moved to the wrong row" — come from the ideas here, so each is shown with a program you can run.
 
 **What you'll learn**
 
@@ -18,14 +18,14 @@ Chapter 2's catalog could *show* data but not *react* to the user. This chapter 
 | 3.10 | State and tree position | know when state is kept or reset, and use `key` to reset it |
 | 3.11 | Putting it together | a to-do app using every idea |
 
-Code: [`code/`](code/) — React 19.3 in jsdom; user actions are simulated with `fireEvent` (dispatches one DOM event) and `@testing-library/user-event` (simulates a real user: focus, key presses, clicks).
+Code: [`code/`](code/) — React 19.3 in jsdom (a browser-like DOM that runs inside Node.js); user actions are simulated with `fireEvent` (dispatches one DOM event) and `@testing-library/user-event` (simulates a real user: **focus** — making an element the one that receives keyboard input — key presses, clicks).
 
 ---
 
 ## 3.1 Responding to events
 
 ### What it is
-An **event** is something that happens in the browser — a click, a key press, a form submission. An **event handler** is a function you give React to run when that event happens. In JSX you pass it as a prop named `on` + event name in camelCase: `onClick`, `onChange`, `onSubmit`, `onKeyDown`, `onPointerMove`, `onFocus`, …
+An **event** is something that happens in the browser — a click, a key press, a form submission. An **event handler** is a function you give React to run when that event happens. In JSX you pass it as a prop named `on` + event name in **camelCase** (words joined, each new word capitalised): `onClick`, `onChange`, `onSubmit`, `onKeyDown`, `onPointerMove`, `onFocus`, …
 
 Analogy: a doorbell. You install the bell (pass the handler); it rings (runs) only when someone presses the button — not while you are installing it.
 
@@ -97,20 +97,20 @@ click "stop":
 ```
 
 What the output proves:
-- **`onClick={handleClick()}` is a bug**: the parentheses call the function *during rendering*, and the button receives its return value (`undefined`), so clicking does nothing. If the function sets state, you get an infinite loop ("Too many re-renders"). Pass `handleClick`, or wrap in an arrow when you need arguments: `onClick={() => onPlay('Kiki')}`.
+- **`onClick={handleClick()}` is a bug**: the parentheses call the function *during rendering*, and the button receives its return value (`undefined`), so clicking does nothing. If the function sets state, you get an **infinite loop** (render → set state → render … forever; React stops it with "Too many re-renders"). Pass `handleClick`, or wrap in an arrow when you need arguments: `onClick={() => onPlay('Kiki')}`.
 - **Custom components can define their own event props** (`onPlay`, `onUpload`). They are just function props; the name `on…` is a convention. The child decides *when* to call them; the parent decides *what* happens. This is how data flows **up** the tree.
-- **Bubbling (propagation)**: the click fired on the button, then on its parent `<div>`. `e.stopPropagation()` stopped it at the button. (All React events bubble except `onScroll`. To catch an event on the way *down* before children see it, use the capture version, e.g. `onClickCapture`.)
+- **Bubbling (propagation)**: the click fired on the button, then on its parent `<div>`. `e.stopPropagation()` stopped it at the button. (All React events bubble except `onScroll`. To catch an event on the way *down* before children see it, use the capture version, e.g. `onClickCapture` — the **capture phase** is the first pass of an event, from the page root down to the clicked element, before bubbling back up.)
 - **`e.preventDefault()`** stops the browser's built-in behaviour — here, the full page reload a form submit would cause. It does *not* stop bubbling; that's `stopPropagation`.
 
 ### React's event object
-React passes a **SyntheticEvent**: a wrapper around the browser's native event with the same interface (`target`, `currentTarget`, `preventDefault` …) that behaves consistently across browsers; `e.nativeEvent` gives the original. React attaches one listener per event type at the root container and dispatches to your handlers (event delegation) — you never call `addEventListener` for normal UI events.
+React passes a **SyntheticEvent**: a wrapper around the browser's **native** event (the browser's own event object, not React's) with the same interface (`target`, `currentTarget`, `preventDefault` …) that behaves consistently across browsers; `e.nativeEvent` gives the original. React attaches one **listener** (a function registered to be told when an event happens) per event type at the root container and dispatches to your handlers (**event delegation** — one listener high up handles events for many elements below it) — you never call `addEventListener` (the plain-DOM way to register a listener) for normal UI events.
 
 ### Common mistakes
 | Mistake | Fix |
 |---|---|
 | `onClick={handle()}` | `onClick={handle}` or `onClick={() => handle(id)}` |
 | `onclick` (lowercase) | `onClick` — React warns about the unknown prop |
-| Putting handlers on a `<div>` for clickable things | Use `<button>` — keyboard and screen-reader support for free |
+| Putting handlers on a `<div>` for clickable things | Use `<button>` — keyboard and screen-reader (software that reads the page aloud for blind users) support for free |
 | Using `stopPropagation` to fix a design problem | Usually a sign the parent should get an explicit callback instead |
 | Forgetting `preventDefault` on `onSubmit` | The page reloads and state is lost |
 
@@ -128,14 +128,14 @@ React passes a **SyntheticEvent**: a wrapper around the browser's native event w
 ## 3.2 State: a component's memory — `useState`
 
 ### What it is
-**State** is data a component remembers between renders and that changes over time because of interaction: the current input text, which tab is open, the items in a cart. You add state with the **`useState` Hook**:
+**State** is data a component remembers between renders and that changes over time because of interaction: the current input text, which tab is open, the items in a cart. You add state with the **`useState` Hook** (a **Hook** is a special React function whose name starts with `use`; it lets a component tap into React features such as state):
 
 ```jsx
 const [count, setCount] = useState(0);
 //     value  setter          initial value (used on the first render only)
 ```
 
-`useState` returns a pair (array destructuring gives them names): the **current value** and a **setter function**. Calling the setter (1) stores the new value and (2) asks React to **re-render** the component.
+`useState` returns a pair (**array destructuring** — `const [a, b] = arr` — gives the two items names): the **current value** and a **setter function**. Calling the setter (1) stores the new value and (2) asks React to **re-render** the component.
 
 Analogy: a whiteboard in a meeting room. A normal local variable is a note written on your hand — gone when you leave (the function returns). State is written on the room's whiteboard: React keeps it for you, and when you rewrite it, everyone in the room (the UI) sees the new value.
 
@@ -172,13 +172,13 @@ The broken version fails for two reasons: (1) changing a local variable does **n
 3. Second render: `useState(0)` ignores the `0` and returns `[1, setCount]`.
 4. React diffs and commits the new text.
 
-React matches `useState` calls to stored values **by call order**. That is why Hooks have rules: call them only at the **top level** of a component (or custom Hook) — never inside `if`, loops, or nested functions (Chapter 7 explains why in detail).
+React matches `useState` calls to stored values **by call order**. That is why Hooks have rules: call them only at the **top level** of a component (or **custom Hook** — your own function starting with `use` that calls other Hooks) — never inside `if`, loops, or nested functions (Chapter 7 explains why in detail).
 
 ### Details worth knowing
 - **Several state variables** are fine: `const [name, setName] = useState(''); const [age, setAge] = useState(0);` Group values that always change together into one object.
 - **Lazy initial state**: `useState(createInitialTodos)` (pass the function, not its result) runs an expensive initialiser only on the first render. `useState(createInitialTodos())` would call it every render and throw the result away.
 - **Setter identity is stable**: `setCount` is the same function across renders — safe to pass down.
-- **Same value → no re-render**: if the new value is identical to the current one (compared with `Object.is`), React skips re-rendering the component and its children (see §3.6).
+- **Same value → no re-render**: if the new value is identical to the current one (compared with `Object.is`, JavaScript's "exactly the same value / same object" check), React skips re-rendering the component and its children (see §3.6).
 - Naming: `[thing, setThing]` by convention.
 
 ### When not to use state
@@ -187,9 +187,9 @@ React matches `useState` calls to stored values **by call order**. That is why H
 | Never changes | A constant outside the component |
 | Comes from the parent | Props (don't copy into state — §3.8) |
 | Can be computed from props/state | A variable in render (§3.8) |
-| Must persist but must **not** re-render when it changes (timer ID, DOM node) | `useRef` (Chapter 5) |
-| Shared by many distant components | Lift up (§3.7), then context / a store (Chapter 6) |
-| Server data (lists from an API) | A data library such as TanStack Query (Chapters 6, 9) |
+| Must persist but must **not** re-render when it changes (timer ID, DOM node) | `useRef` — a box whose contents survive renders (Chapter 5) |
+| Shared by many distant components | Lift up (§3.7), then context / a store — a central object holding app-wide state (Chapter 6) |
+| Server data (lists from an API — a server's web interface you request data from) | A data library such as TanStack Query (fetches, caches and refreshes server data; Chapters 6, 9) |
 
 ### In the interview
 **30-second answer:** "`useState` gives a component memory. It returns the current value and a setter; calling the setter stores the new value and schedules a re-render. Local variables don't work because they reset each render and changing them doesn't trigger one. State is private to each component instance and identified by the Hook's call order, which is why Hooks must be called unconditionally at the top level."
@@ -256,7 +256,7 @@ Step by step for the "+3" button:
 3. `console.log` still sees `0` — the setter does not mutate the variable.
 4. React re-renders once with `number = 1`.
 
-The timeout shows that the snapshot is permanent: even 10 ms later, after the screen shows 5, the closure still sees `n = 0` from the render that created it. This follows directly from JavaScript **closures** (a function remembers the variables in scope where it was created — see the JavaScript book, `../../../javascript/chapters/04-functions-scope-and-closures/README.md`).
+The timeout (`setTimeout(fn, ms)` runs `fn` once after a delay) shows that the snapshot is permanent: even 10 ms later, after the screen shows 5, the closure still sees `n = 0` from the render that created it. This follows directly from JavaScript **closures** (a function remembers the variables in scope where it was created — see the JavaScript book, `../../../javascript/chapters/04-functions-scope-and-closures/README.md`).
 
 ### Why React works this way
 Snapshots make handlers predictable: if a user clicks "Send to Alice", then quickly switches the recipient to Bob, the message still goes to Alice — the handler captured the recipient at click time. No surprises from values changing mid-handler.
@@ -264,7 +264,7 @@ Snapshots make handlers predictable: if a user clicks "Send to Alice", then quic
 ### Common mistakes
 - Reading state right after setting it and expecting the new value → use the value you computed: `const next = number + 1; setNumber(next); send(next);`.
 - Expecting three `setX(x + 1)` calls to add 3 → use updater functions (§3.5).
-- **Stale closures**: a timer or subscription created once keeps reading an old snapshot. Use an updater function, or refs/Effects (Chapter 5).
+- **Stale closures**: a timer or **subscription** (a long-lived "tell me whenever X changes" registration) created once keeps reading an old snapshot. Use an updater function, or refs/Effects (Chapter 5).
 
 ### TL;DR
 State inside a render is a constant snapshot. Setters request a new render; they never change the variable you are holding.
@@ -282,7 +282,7 @@ Analogy: a waiter takes the whole table's order before going to the kitchen, rat
 - **Performance**: five setters in one click = one render, not five.
 - **Consistency**: the screen never shows a half-updated state (e.g. a new name with an old avatar).
 
-Since **React 18**, batching is **automatic everywhere**: in React event handlers *and* inside `setTimeout`, promises, `fetch` callbacks and native event listeners. (Before React 18 only React event handlers were batched.) React also never batches *across* separate user events: two clicks are two renders.
+Since **React 18**, batching is **automatic everywhere**: in React event handlers *and* inside `setTimeout`, **promises** (objects representing a result that will arrive later, used with `.then` or `await`), `fetch` callbacks and native event listeners. (Before React 18 only React event handlers were batched.) React also never batches *across* separate user events: two clicks are two renders.
 
 ### How it works — counting renders
 `code/04_batching_and_updaters.jsx` counts renders for several buttons (the full component is in §3.5):
@@ -298,7 +298,7 @@ in timeout       -> number = 43 | re-renders caused: 1
 
 Every row caused exactly **one** re-render, even "replace x3" (four setter calls on two state variables) and "in timeout" (two setters inside `setTimeout`).
 
-**Opting out:** in rare cases you must have the DOM updated synchronously before the next line (e.g. to scroll to a just-added item); `flushSync(() => setX(v))` from `react-dom` forces it. Use sparingly — it hurts performance.
+**Opting out:** in rare cases you must have the DOM updated **synchronously** (immediately, before any other code continues) before the next line (e.g. to scroll to a just-added item); `flushSync(() => setX(v))` from `react-dom` forces it. Use sparingly — it hurts performance.
 
 ### TL;DR
 All setter calls in one event → one re-render (everywhere since React 18). `flushSync` opts out.
@@ -308,7 +308,7 @@ All setter calls in one event → one re-render (everywhere since React 18). `fl
 ## 3.5 Updater functions — queueing updates
 
 ### What it is
-Instead of a value, you can pass a setter a **function** that receives the **pending** state and returns the next one: `setNumber(n => n + 1)`. React puts it in a **queue** and, on the next render, applies the queue in order.
+Instead of a value, you can pass a setter a **function** that receives the **pending** state and returns the next one: `setNumber(n => n + 1)`. React puts it in a **queue** (a first-in, first-out waiting list) and, on the next render, applies the queue in order.
 
 ### How it works
 `code/04_batching_and_updaters.jsx`:
@@ -353,7 +353,7 @@ flowchart LR
 |---|---|
 | The new value doesn't depend on the old one (`setName('Ada')`, `setOpen(false)`) | The new value is computed from the old one and several updates may queue (`+1` twice) |
 | Readability: most setters | Inside timers/subscriptions created earlier (avoids stale snapshots) |
-| | Handlers passed to memoised children (no dependency on current state) |
+| | Handlers passed to memoised children (children wrapped so they skip re-rendering when props are unchanged; no dependency on current state) |
 
 Conventions: name the parameter after the state's first letter (`n`, `c`) or `prev`. Updaters must be **pure** — StrictMode calls them twice in development to check.
 
@@ -380,9 +380,9 @@ State can hold objects and arrays, but you must treat them as **immutable** (rea
 Analogy: editing a shared document. Instead of scribbling on the original (others may be reading it, and nobody can tell it changed), you make a new version with the edit and announce "here's v2".
 
 ### Why it matters
-1. **React only notices new references.** A setter compares old and new with `Object.is`. The same object — even if you changed its insides — looks "unchanged", so React may skip the render.
-2. **Snapshots and history.** Old renders keep pointing at old objects; undo/redo and time-travel debugging work because previous versions are untouched.
-3. **Optimisations** (`memo`, the React Compiler) rely on "new reference = changed".
+1. **React only notices new references.** (A **reference** is a pointer to where an object lives in memory; two variables can refer to the same object.) A setter compares old and new with `Object.is`. The same object — even if you changed its insides — looks "unchanged", so React may skip the render.
+2. **Snapshots and history.** Old renders keep pointing at old objects; undo/redo and time-travel debugging (stepping backwards through past states in a dev tool) work because previous versions are untouched.
+3. **Optimisations** (`memo` — skip re-rendering a component whose props are unchanged; the React Compiler — a build tool that adds such skipping automatically) rely on "new reference = changed".
 
 ### Objects
 `code/05_updating_objects.jsx`:
@@ -444,14 +444,14 @@ original array untouched: [ ] Big Bellies, [ ] Lunar Landscape, [x] Terracotta A
 | Insert at i | `splice(i, 0, x)` | `[...arr.slice(0, i), x, ...arr.slice(i)]` or `arr.toSpliced(i, 0, x)` |
 | Remove | `splice`, `pop`, `shift` | `arr.filter(item => item.id !== id)` |
 | Replace / update one item | `arr[i] = x`, `item.done = true` | `arr.map(item => item.id === id ? { ...item, done: true } : item)` or `arr.with(i, x)` |
-| Sort / reverse | `sort()`, `reverse()` | `toSorted()`, `toReversed()` (ES2023), or copy first: `[...arr].sort()` |
+| Sort / reverse | `sort()`, `reverse()` | `toSorted()`, `toReversed()` (ES2023 — the 2023 edition of the JavaScript standard), or copy first: `[...arr].sort()` |
 
 The last line of the output confirms the original `initial` array was never modified.
 
 Important: `[...arr]` copies the **array**, not the objects inside it. `const copy = [...items]; copy[0].seen = true` still mutates the shared object — that's why the toggle recipe also spreads the item (`{ ...it, seen: !it.seen }`).
 
 ### Immer — write "mutations" safely
-Deep copying by hand gets noisy. **Immer** gives you a **draft** — a proxy object that records your changes — and produces a new immutable state with structural sharing (unchanged parts are reused). Above, `produce(draft => { … })` is passed to the setter as an updater. In components, the `use-immer` package wraps this as `useImmer`:
+Deep copying by hand gets noisy. **Immer** (a small library) gives you a **draft** — a **proxy** object (a stand-in that intercepts reads and writes) that records your changes — and produces a new immutable state with structural sharing (unchanged parts are reused). Above, `produce(draft => { … })` is passed to the setter as an updater. In components, the `use-immer` package wraps this as `useImmer`:
 
 ```jsx
 // (use-immer — not run; same idea as produce above)
@@ -459,7 +459,7 @@ import { useImmer } from 'use-immer';
 const [person, updatePerson] = useImmer({ name: 'Niki', artwork: { city: 'Hamburg' } });
 updatePerson(draft => { draft.artwork.city = 'Berlin'; });
 ```
-Redux Toolkit uses Immer internally (Chapter 6). Mutating the draft is fine; mutating real state is not.
+Redux Toolkit (the official toolset for Redux, a popular global-state library) uses Immer internally (Chapter 6). Mutating the draft is fine; mutating real state is not.
 
 ### Trade-offs
 | Manual spread | Immer |
@@ -499,7 +499,7 @@ When two components must **share or coordinate** state, move the state to their 
 Analogy: two siblings arguing over the TV remote. Give the remote to the parent; each child *asks* the parent to change the channel.
 
 ### How it works — an accordion
-`code/07_lifting_state_up.jsx`. Requirement: only one panel open at a time.
+`code/07_lifting_state_up.jsx`. An **accordion** is a stack of panels where clicking a header expands that panel. Requirement: only one panel open at a time.
 
 ```jsx
 // Before: each Panel owns isActive -> both can be open at once.
@@ -610,7 +610,7 @@ parent changed to red -> mirror: blue | direct: red
 | Avoid duplication | Store IDs, look objects up |
 | Avoid deep nesting | Normalise: `{ byId: {…}, ids: […] }` |
 
-"But isn't recalculating slow?" For typical lists (hundreds of items) filtering during render is microseconds. If a calculation is genuinely expensive, cache it with `useMemo` (Chapter 10) — still derived, never manually synced.
+"But isn't recalculating slow?" For typical lists (hundreds of items) filtering during render is microseconds. If a calculation is genuinely expensive, cache it with `useMemo` (a Hook that remembers a computed value until its inputs change; Chapter 10) — still derived, never manually synced.
 
 ### In the interview
 **30-second answer:** "I keep the minimal state and derive everything else during render — full names, totals, filtered lists. Storing derived values creates two sources of truth that can drift. I store IDs instead of copied objects, avoid mirroring props into state, and replace contradictory booleans with a single status value. Expensive derivations can be memoised with `useMemo`."
@@ -633,7 +633,7 @@ A **controlled input** is a form field whose displayed value comes from React st
 | `<select>` | `value` (on the `<select>`, not `selected` on options) | `e.target.value` |
 | `<input type="checkbox">` / `radio` | `checked` | `e.target.checked` |
 
-Note: React's `onChange` fires on **every keystroke** (like the DOM `input` event), not only on blur as the native `change` event does.
+Note: React's `onChange` fires on **every keystroke** (like the DOM `input` event), not only on **blur** (when the field loses focus) as the native `change` event does.
 
 ### How it works
 `code/09_controlled_inputs.jsx`:
@@ -688,14 +688,14 @@ The last lines show the classic mistake: `value` without `onChange` makes a **re
 | `value={undefined}` first, then a string | Warning "changing an uncontrolled input to be controlled". Initialise with `''`, never `undefined`/`null` |
 | Reading `e.target.value` for a checkbox | Use `e.target.checked` |
 | Setting `selected` on `<option>` | Put `value` on `<select>` |
-| One `useState` per field in a big form | Use one object + `[e.target.name]: e.target.value`, a reducer (Chapter 6), or a form library (Chapter 4) |
+| One `useState` per field in a big form | Use one object + `[e.target.name]: e.target.value`, a reducer (a function `(state, action) => newState`; Chapter 6), or a form library (Chapter 4) |
 
 ### Trade-offs
 | Controlled | Uncontrolled |
 |---|---|
 | Instant validation, formatting, dependent fields | Less code; the DOM holds the value |
-| Re-renders on each keystroke (fine for most forms) | Read values on submit via `FormData` or refs |
-| Easy to reset/prefill from state | React 19 form **Actions** make this style first-class (Chapter 4) |
+| Re-renders on each keystroke (fine for most forms) | Read values on submit via `FormData` (a browser object holding all of a form's field values) or refs |
+| Easy to reset/prefill from state | React 19 form **Actions** (functions passed to `<form action>` that React runs on submit) make this style first-class (Chapter 4) |
 
 ### TL;DR
 Controlled input = `value={state}` + `onChange={e => setState(e.target.value)}` (`checked`/`e.target.checked` for checkboxes). Initialise with `''`. Gives formatting, limits and live UI.
@@ -849,9 +849,9 @@ Design notes:
 - **One owner**: only `TodoApp` holds `todos`; children get data + callbacks.
 - **Minimal state**: `todos` and `filter`; `visible`, `remaining`, and whether "Clear completed" shows are derived.
 - **Updater functions** in `add`/`toggle`/`remove` make each safe even if called several times in one event.
-- **Accessible queries**: the test finds elements by label and role, which is also how screen-reader users find them (Chapter 12).
+- **Accessible queries**: the test finds elements by label and role (the element's accessibility category, e.g. `button`), which is also how screen-reader users find them (Chapter 12).
 
-When this grows (editing, undo, persistence), the update logic moves into a **reducer** (`useReducer`, Chapter 6) and saving to `localStorage` needs an **Effect** (Chapter 5).
+When this grows (editing, undo, **persistence** — keeping data after the page closes), the update logic moves into a **reducer** (`useReducer`, Chapter 6) and saving to `localStorage` (the browser's small built-in key-value storage) needs an **Effect** (code React runs after rendering to sync with the outside world; Chapter 5).
 
 ---
 
