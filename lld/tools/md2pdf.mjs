@@ -76,18 +76,18 @@ const CSS = `
 :root{color-scheme:light}
 *{box-sizing:border-box}
 html{background:#FBF0D9;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-body{font-family:Monaco,'Courier New',monospace;font-size:11.5px;line-height:1.65;color:#2E261C;background:#FBF0D9;margin:0;padding:0 13mm}
+body{font-family:Monaco,'Courier New',monospace;font-size:11.5px;line-height:1.55;color:#2E261C;background:#FBF0D9;margin:0;padding:0 11mm}
 a{color:#1F5FAF;text-decoration:none}
 h1{font-size:20px;color:#1C1712;border-bottom:3px solid #3A5BC7;padding-bottom:6px;margin:0 0 14px}
 section.doc + section.doc h1:first-child, .toc + section.doc h1:first-child{page-break-before:always}
-h2{font-size:15.5px;margin:24px 0 8px;padding-top:8px;border-top:1px solid #D6C29A;color:#2F5DB0;page-break-after:avoid}
+h2{font-size:15.5px;margin:18px 0 6px;padding-top:8px;border-top:1px solid #D6C29A;color:#2F5DB0;page-break-after:avoid}
 h3{font-size:12.5px;margin:14px 0 6px;color:#2A2218;page-break-after:avoid}
 h4{font-size:11.5px;margin:12px 0 4px;color:#2A2218;page-break-after:avoid}
-p{margin:7px 0}
+p{margin:5px 0}
 hr{border:0;border-top:1px solid #D6C29A;margin:16px 0}
-code{font-family:Monaco,'Courier New',monospace;font-size:10.8px;background:#EAD8B2;color:#8B2F5F;padding:1px 5px;border-radius:4px}
-pre{background:#F3E5C6;border:1px solid #D6C29A;border-left:4px solid #3A5BC7;border-radius:6px;padding:11px 13px;margin:10px 0;page-break-inside:avoid;white-space:pre-wrap}
-pre code{background:none;color:#2E261C;padding:0;font-size:10.8px;line-height:1.5;display:block}
+code{font-family:Monaco,'Courier New',monospace;font-size:10px;background:#EAD8B2;color:#8B2F5F;padding:1px 5px;border-radius:4px}
+pre{background:#F3E5C6;border:1px solid #D6C29A;border-left:4px solid #3A5BC7;border-radius:6px;padding:8px 11px;margin:8px 0;page-break-inside:avoid;white-space:pre-wrap}
+pre code{background:none;color:#2E261C;padding:0;font-size:10px;line-height:1.42;display:block}
 table{border-collapse:collapse;width:100%;margin:10px 0;font-size:10.3px;page-break-inside:avoid}
 th,td{border:1px solid #D6C29A;padding:5px 8px;text-align:left;vertical-align:top}
 th{background:#EAD8B2;color:#1C1712}
@@ -97,10 +97,10 @@ ul,ol{margin:6px 0 6px 4px;padding-left:20px}
 li{margin:2px 0}
 strong{color:#1C1712}
 em{color:#5A4A36}
-img.course{display:block;max-width:92%;max-height:115mm;margin:12px auto 2px;border:1px solid #D6C29A;border-radius:8px;padding:6px;background:#ffffff;page-break-inside:avoid}
+img.course{display:block;max-width:92%;max-height:95mm;margin:12px auto 2px;border:1px solid #D6C29A;border-radius:8px;padding:6px;background:#ffffff;page-break-inside:avoid}
 p:has(> img.course){page-break-inside:avoid;text-align:center}
 figure.diagram{margin:10px 0 12px;text-align:center;page-break-inside:avoid;background:#F3E5C6;border:1px solid #D6C29A;border-radius:8px;padding:8px}
-figure.diagram svg{max-width:100% !important;max-height:150mm;height:auto}
+figure.diagram svg{max-width:100% !important;max-height:125mm;height:auto}
 pre.mermaid{background:none;border:0;padding:0}
 .merr{color:#C62828;font-size:9px;white-space:pre-wrap;text-align:left;border:1px dashed #C62828;padding:6px}
 .cover{height:250mm;display:flex;flex-direction:column;justify-content:center;page-break-after:always}
