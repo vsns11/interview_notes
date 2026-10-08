@@ -2,11 +2,11 @@
 
 ## Module Introduction
 
-**What this module is.** Module 12 showed you how to compose patterns into four big systems. This module adds three more case studies from the same family: systems where **a wrong answer costs real money**. You'll design a hotel reservation system, a digital wallet, and a stock exchange. Before those, a short primer explains how money actually moves between banks, because every one of these systems eventually has to talk to that outside world. (This module is an addition to the course notes. It was written from first principles, the other books in this collection, and primary sources such as central-bank, payment-network and vendor documentation, which each lesson lists at the end. If general system-design terms such as latency, sharding, replication or caching are new to you, read [System Design Fundamentals](../00-system-design-fundamentals/README.md) first.)
+**What this module is.** Module 12 showed you how to compose patterns into four big systems. This module adds three more case studies from the same family: systems where **a wrong answer costs real money**. You'll design a hotel reservation system, a digital wallet, a stock exchange and an event-ticketing (flash-sale) system. Before those, a short primer explains how money actually moves between banks, because every one of these systems eventually has to talk to that outside world. (This module is an addition to the course notes. It was written from first principles, the other books in this collection, and primary sources such as central-bank, payment-network and vendor documentation, which each lesson lists at the end. If general system-design terms such as latency, sharding, replication or caching are new to you, read [System Design Fundamentals](../00-system-design-fundamentals/README.md) first.)
 
 **Analogy.** If the earlier modules taught you to cook individual dishes, this module is a shift in a restaurant where every plate is counted. The cooking is the same. What changes is that nothing may be served twice, nothing may go missing, and the manager checks the till against the tickets every night.
 
-**The four lessons**
+**The five lessons**
 
 | Lesson | Centre of gravity (the main problem) | Code you can run |
 |---|---|---|
@@ -14,6 +14,7 @@
 | Design a Hotel Reservation System | The last room: concurrency (many requests at the same moment) on a small, hot counter, plus deliberate overbooking | `code/hotel_inventory.py` |
 | Design a Digital Wallet | A double-entry ledger (every movement recorded as a matching debit and credit) at high throughput (operations per second); exactly-once transfers across shards (database pieces on separate servers) | `code/ledger.py` |
 | Design a Stock Exchange | A deterministic (same input, same output) single-threaded matching engine behind a sequencer (the component that numbers every order); microsecond (millionth of a second) latency | `code/order_book.py` |
+| Design an Event Ticketing and Flash-Sale System | Millions of buyers for a few thousand seats: a virtual waiting room, seat holds that expire, no double-selling, and bot defence | — |
 
 **Where the payment platform went.** Module 12 already has a full [Design 3 — The Payment Platform](../12-capstones/README.md#design-3--the-payment-platform) (payment intents, webhooks, i.e. HTTP calls a provider makes to your server when something happens, ledger, reconciliation). This module does **not** repeat it. The primer below explains the outside world that design plugs into, and the wallet case study picks up where its ledger stops (throughput and cross-shard transfers).
 
@@ -744,6 +745,236 @@ The timing line changes on every run and machine (the order and fill counts do n
 - **Remember:** one order per book, log before act, replicate the input not the state, integer ticks.
 
 **Sources.** M. Fowler, "The LMAX Architecture" (martinfowler.com, 2011) and the LMAX Disruptor technical paper; Nasdaq TotalView-ITCH 5.0 and OUCH 5.0 specifications; FIX Trading Community, FIX 4.4 specification (NewOrderSingle, ExecutionReport); D. Ongaro and J. Ousterhout, "In Search of an Understandable Consensus Algorithm (Raft)" (USENIX ATC 2014); SEC, T+1 settlement cycle rule (effective 28 May 2024); SEC investor bulletin on market-wide circuit breakers and the Limit Up–Limit Down plan; M. Kleppmann, *Designing Data-Intensive Applications*, ch. 7 and 9.
+
+---
+
+## Design an Event Ticketing and Flash-Sale System (Ticketmaster-like)
+
+**The prompt.** "Design a ticketing platform for concerts and sports. Fans browse events, pick seats on a seat map (or buy general-admission tickets), pay, and receive a mobile ticket. Some on-sales are huge: a stadium tour goes on sale at 10:00 and millions of people arrive at once."
+
+**What makes it hard.** On a normal day this is the hotel problem again: a small inventory, a few racing writers, hold → pay → confirm. A **flash sale** (a sale where demand arrives all at once and far exceeds supply) changes three things. First, traffic is not 10× normal but thousands of times normal, all in the first minute, and most of it can never be served because the tickets run out. Second, the inventory is tiny and **hot**: everyone wants the same front-section seats at the same second. Third, a large share of the "demand" is **bots** (automated scripts that buy tickets to resell them at a markup). For Taylor Swift's Eras Tour presale in November 2022, Ticketmaster reported 3.5 billion total system requests, four times its previous peak, driven partly by bot attacks and by fans without presale codes. So the design has to decide **who gets to try**, keep a seat sold at most once while thousands click it, and do both fairly.
+
+The object-oriented version (classes for `Show`, `Seat`, `Booking`) is in the LLD book, [15.2 Design a Movie Ticket Booking System](../../../lld/chapters/15-case-booking-1/README.md#152-design-a-movie-ticket-booking-system-bookmyshow). This lesson is the distributed-system view, at flash-sale scale.
+
+### 1. Requirements
+**Functional**
+- Browse events and view a seat map with live availability for **reserved seating** (each ticket is a specific seat) and **general admission** (GA: a count of interchangeable tickets, such as a standing floor).
+- Select seats (or let the system pick "best available"), place them on a **hold** for a few minutes, pay, and receive tickets.
+- Per-event **purchase limits** (for example, at most 4 tickets per account).
+- High-demand on-sales go through a **virtual waiting room** (an online queue in front of the store that admits people at a controlled rate).
+- Organisers configure events, price levels, holds for promoters, and the on-sale time.
+
+**Non-functional**
+- **Never sell a seat twice.** A double-sold seat means two people at the gate with valid-looking tickets.
+- **Fairness people can see:** no queue jumping, a believable position and wait estimate, and bots kept to a minimum.
+- **Survive the spike.** The store must stay responsive for admitted fans while millions wait. Rejecting or queueing people is acceptable. Falling over is not.
+- A retried or double-clicked purchase creates one order and one charge.
+- Seat maps can be a few seconds stale. The hold step must be exact.
+
+### 2. Back-of-envelope numbers
+My own round numbers for one big on-sale:
+- **Supply:** 10 stadium shows × 60,000 seats = **600,000 tickets**. At an average of 3 tickets per order that is **200,000 orders**.
+- **Demand:** **3 million** people present at 10:00 (comparable to the 3.5 million who registered for the Eras Tour presale). Without a queue, each browser refreshing every 2 seconds is 3M ÷ 2 = **1.5 million requests/s**, before counting bots.
+- **What the store can actually serve:** suppose a fan needs about **5 minutes** from admission to paid order (choose seats, log in, pay). Capping the store at **50,000 concurrent shoppers** gives an admission rate of 50,000 ÷ 300 s ≈ **170 people/s ≈ 10,000/minute**.
+- **How long the sale lasts:** if 80% of admitted fans buy, 200,000 orders need 250,000 admissions. 250,000 ÷ 170/s ≈ **1,500 s ≈ 25 minutes**. Admitting all 3 million at that rate would take 3,000,000 ÷ 170 ≈ 17,600 s, almost **5 hours**. So most of the queue will never reach the store, and the design must tell them so early.
+- **Inventory writes:** 170 admissions/s × ~3 hold attempts each (some fail because someone else got the seat first) ≈ **500 hold attempts/s**, all against one event's rows.
+- **Seat-map reads:** 50,000 shoppers refreshing every 5 s ≈ **10,000 reads/s**, all for the same few maps.
+- **Data size:** 600,000 seat rows × ~100 bytes ≈ **60 MB**. It fits in memory many times over.
+
+**What the numbers say.** Storage and write throughput are small; one database shard handles 500 conditional updates per second. The two real problems are the **3,000:1 gap** between people present and people the store can serve at once, which the waiting room absorbs at the edge, and the **contention** on a few thousand popular seats, which the hold design handles. This is not a "shard everything" problem.
+
+### 3. API
+```text
+# Waiting room (served at the edge / CDN)
+POST /v1/queue/{eventId}/join                -> {queueToken, position, estWaitSec}
+GET  /v1/queue/{eventId}/status              (queueToken cookie) -> {position, nowServing, estWaitSec, likelySoldOut}
+POST /v1/queue/{eventId}/admit               (queueToken) -> {accessToken, expiresAt}   only when position <= nowServing
+
+# Store (every call needs a valid accessToken for this event)
+GET  /v1/events/{eventId}/seatmap            -> {sections:[{id, priceLevel, available:[seatIds] or count}], version}
+POST /v1/holds    Idempotency-Key: 4b2e...
+     {eventId, seats:[...]} or {eventId, section, quantity, bestAvailable:true}
+     -> 201 {holdId, seats, expiresAt, amount}
+POST /v1/orders   Idempotency-Key: 9d1a...  {holdId, paymentMethodToken} -> 202 {orderId, status:"PAYMENT_PENDING"}
+GET  /v1/orders/{orderId}                    -> {status: PAYMENT_PENDING | CONFIRMED | FAILED, tickets[]}
+DELETE /v1/holds/{holdId}                    -> 204 (fan gives the seats back)
+```
+Two tokens do different jobs. The **queue token** records a place in line. The **access token** is short-lived permission to use the store for this event, bound to one account. The store never sees anyone who doesn't hold an access token.
+
+### 4. Data model
+```sql
+-- One row per sellable seat per event: the rows everyone races on.
+seat        (event_id, seat_id, section, row_label, seat_no, price_level,
+             status,                 -- AVAILABLE | HELD | PAYMENT_PENDING | SOLD | BLOCKED
+             hold_id, hold_expires_at, order_id, version,
+             PRIMARY KEY (event_id, seat_id))
+
+-- General admission: a counter per section, split into buckets (deep dive 2).
+ga_bucket   (event_id, section, bucket_no, remaining,
+             PRIMARY KEY (event_id, section, bucket_no))
+
+hold        (hold_id, event_id, account_id, seat_ids[], quantity, expires_at, status)
+orders      (order_id, idempotency_key UNIQUE, hold_id UNIQUE, account_id, event_id,
+             amount_cents, currency, status, payment_ref, created_at)
+purchase_count (event_id, account_id, tickets, PRIMARY KEY (event_id, account_id))
+```
+Three choices matter. **Everything for one event lives on one shard** (shard key `event_id`), so a hold never needs a distributed transaction. **Status lives on the seat row itself**, so "is it free?" and "take it" are one conditional statement. And `purchase_count` turns the per-account limit into a row the purchase transaction can check and update in the same transaction.
+
+### 5. The architecture
+
+```mermaid
+flowchart TD
+    F["Fan browser or app"] --> E["CDN edge: bot checks, waiting room, token checks"]
+    E -->|"queue status, cached seconds"| QS["Queue service: positions, nowServing counter"]
+    AC["Admission controller"] -->|"advance nowServing"| QS
+    E -->|"with access token only"| GW["API gateway: auth, per-account rate limits"]
+    GW --> SM["Seat-map service"]
+    GW --> INV["Inventory service: holds and sales"]
+    SM --> C[("Seat-map cache")]
+    INV --> DB[("Inventory DB, sharded by event_id")]
+    INV --> PAY["Payment service"]
+    DB -->|"outbox to event stream"| K[["Event stream"]]
+    K --> C
+    K --> T["Ticket issuing and notifications"]
+    SW["Hold sweeper"] --> DB
+    INV -->|"active shoppers, latency"| AC
+```
+
+1. **Edge (CDN).** All traffic lands on the CDN (content delivery network, see [CDN](../08-api-and-edge/README.md#cdn)). Bot screening runs there (deep dive 3), and so does the waiting room's hot path: issuing and checking signed tokens without a call to the origin (the company's own servers behind the CDN).
+2. **Queue service** assigns positions and holds one number that matters to everyone: **nowServing**, the highest position currently allowed in. Because that is a single value, the status endpoint can be cached at the edge for a few seconds, so 3 million pollers become a few requests per second to the origin.
+3. **Admission controller** advances `nowServing` according to how busy the store is: active shoppers, checkout latency and the hold failure rate. It is a feedback loop, not a fixed rate (deep dive 1).
+4. **API gateway** accepts only valid access tokens and applies per-account [Rate Limiting](../08-api-and-edge/README.md#rate-limiting).
+5. **Seat-map service** serves maps from a cache that the event stream refreshes. Maps are a read model ([CQRS](../03-storing-data/README.md#cqrs)): approximate and cheap.
+6. **Inventory service** is the only writer of seat state. Holds and sales are short transactions on the event's shard ([Sharding](../03-storing-data/README.md#sharding)).
+7. **Payment service** is the platform from [Module 12 Design 3](../12-capstones/README.md#design-3--the-payment-platform), called with the order ID as the idempotency key.
+8. **Outbox → event stream.** Each state change also writes an outbox row (an "event to publish" record in the same transaction), which a relay publishes. The cache, ticket issuing and notifications can't miss a sale that committed.
+9. **Hold sweeper** returns expired holds to the pool.
+
+### 6. Deep dive 1 — the virtual waiting room
+The waiting room turns an unmanageable spike into a steady flow the store can serve. It has four parts.
+
+**1. Pre-queue and the start.** People who arrive before 10:00 wait in a **pre-queue** with a countdown. At 10:00 everyone in the pre-queue gets a **random** position, and later arrivals join the back in arrival order. Queue-it, a waiting-room vendor, documents this model, and Cloudflare's Waiting Room offers random admission as an option. The randomisation matters: in a pure first-come queue, whoever's request lands first at 10:00:00.000 wins, which rewards bots and fast connections and pushes everyone to arrive earlier and earlier. Randomising the people who were on time removes the reason to race.
+
+**2. Signed tokens, so the edge can check them.** A queue token is a small record `{eventId, position, accountId, deviceId, issuedAt}` signed with an **HMAC** (a hash of the content plus a secret key, which proves the server issued it and nobody edited it). Any edge node can verify it without a database lookup. Changing the position breaks the signature. Binding it to the account and device stops one token from being shared across a bot farm.
+
+**3. The serving counter and the feedback loop.** Admission is `position ≤ nowServing`. Every few seconds the admission controller measures how many shoppers are active, the p99 (99th-percentile) latency of hold and checkout, and how often holds fail. It then raises `nowServing` by roughly *capacity left × expected conversion*. If latency climbs, it slows down. This is the same idea as [Backpressure](../10-batch-and-streaming/README.md#backpressure): the slowest stage sets the pace for everything in front of it. With the numbers above it admits about 10,000 people per minute.
+
+**4. Honest waiting.** The wait estimate is *positions ahead ÷ recent admission rate* (Cloudflare documents the same formula). Status polls arrive every 20–30 seconds with jitter (a random spread, so pollers don't arrive in lockstep). The response also includes `likelySoldOut`: when the remaining inventory divided by tickets per order is smaller than the number of people ahead, the page says so. In the example, someone at position 2,000,000 should learn within minutes, not after 5 hours. On admission, the queue token is exchanged once for an **access token** that lasts, say, 15 minutes and works only for that account and event.
+
+**Why at the edge.** The waiting room absorbs millions of requests per second only if almost none of them reach the origin. Static waiting page from the CDN, token checks at the edge, and one cached `nowServing` number: the origin sees joins, admissions and real shoppers.
+
+### 7. Deep dive 2 — seat holds with a TTL, inventory consistency, and payment timeouts
+**Holding seats exactly once.** A hold is one conditional update across all the requested seats, inside one transaction:
+```sql
+UPDATE seat
+   SET status = 'HELD', hold_id = :h, hold_expires_at = now() + interval '8 minutes',
+       version = version + 1
+ WHERE event_id = :e AND seat_id = ANY(:seats)
+   AND (status = 'AVAILABLE' OR (status = 'HELD' AND hold_expires_at < now()));
+-- expect rowcount = number of seats requested; otherwise ROLLBACK and tell the fan which seats went
+```
+All-or-nothing matters: a family of four does not want three seats together and one in another section. The second branch of the `WHERE` treats an **expired** hold as free, so a stuck sweeper never strands inventory. As in the hotel case, lock rows in a fixed order (by `seat_id`) to avoid deadlocks. The database row lock is the mutex (only one writer at a time). A separate Redis lock would add a second thing that can disagree with the data.
+
+**Taking contention off the hottest rows.** If everyone clicks seat A1 of row 1, a few hundred requests fight over one row and all but one fail. Two fixes help:
+- **Best available.** Let the server pick the seats ("2 tickets, section 101, best available"). It can hand out *different* adjacent blocks to concurrent requests, so most attempts succeed on the first try.
+- **Bucketed GA counters.** A general-admission section of 20,000 is one counter that every buyer decrements: a hot row. Split it into, say, 10 bucket rows of 2,000 each. A purchase picks a random bucket and runs `UPDATE ga_bucket SET remaining = remaining - :q WHERE ... AND remaining >= :q`, trying another bucket if this one is short. Ten rows mean ten times less lock contention. The cost is that a section looks sold out only when every bucket is empty, so the last few tickets need a sweep across all buckets.
+
+For a truly extreme event, a further step is a single-threaded **inventory owner** per event in memory, fed by a log (the stock-exchange pattern from earlier in this module). At 500 holds/s a database shard is enough, so it is a follow-up, not the default.
+
+**Hold → pay → confirm, and the payment timeout.** Seat states form a small state machine:
+
+```mermaid
+stateDiagram-v2
+    [*] --> AVAILABLE
+    AVAILABLE --> HELD : hold, TTL 8 min
+    HELD --> AVAILABLE : TTL expires or fan releases
+    HELD --> PAYMENT_PENDING : fan submits payment
+    PAYMENT_PENDING --> SOLD : payment authorized and order confirmed
+    PAYMENT_PENDING --> AVAILABLE : payment declined
+    SOLD --> AVAILABLE : refund or cancellation
+```
+
+1. **Hold** (above). The fan sees a countdown. The 8-minute TTL (time to live) balances fairness against conversion: too short and fans lose seats while typing card details, too long and abandoned carts lock up inventory during the busiest minutes.
+2. **Submit payment.** In one transaction, move the seats `HELD → PAYMENT_PENDING` (only if the hold is still valid) and insert the order with its idempotency key. From now on, **the sweeper does not touch these seats**. This is the key rule: a hold must not expire *while* a payment is in flight.
+3. **Pay**, outside any database transaction, with the order ID as the payment idempotency key. Authorise the card (reserve the money) rather than capture it (actually take it).
+4. **Confirm.** On success, set the seats to `SOLD`, increment `purchase_count` (fail if it would exceed the limit), then capture the payment and issue tickets through the outbox.
+5. **Payment timeout.** If the payment call times out, the result is *unknown*, not failed. The seats stay `PAYMENT_PENDING` with a deadline (say 2 minutes). A reconciler asks the payment service for the status *by idempotency key*. If authorized, confirm. If declined or not found after the deadline, release the seats and void any late authorization (cancel the reserved money). Never release first and ask later: that is how one seat ends up paid for twice.
+
+This is a [Saga](../07-consistency/README.md#saga) (a chain of local steps, each with a compensating undo). Releasing seats is the compensation for the hold; voiding is the compensation for the authorization.
+
+**Keeping everything else consistent.** Seat maps, "only 12 left" banners and the waiting room's `likelySoldOut` are all derived from the stream and may lag by seconds. Only the conditional update decides. Released seats re-enter the pool and appear on the map within seconds, which is why fans see tickets "drop" after a sell-out.
+
+### 8. Deep dive 3 — bots and fairness
+Bots buy fast, buy in volume and use many identities. No single defence stops them, so the design stacks defences at each step, from cheapest to most expensive for the attacker:
+
+1. **Before the sale: registration and lottery.** For the biggest on-sales, fans register days ahead with a verified phone number and an account with a purchase history. The platform then invites a subset by lottery (Ticketmaster calls its version Verified Fan). This moves the fight from "fastest request at 10:00" to "who is a real, distinct person", where bots are weakest and there's time to analyse.
+2. **At the edge: screening.** Rate limits per IP address and per network, browser and TLS fingerprinting (recognising automation tools by how their connections and browsers behave), and an invisible challenge or a CAPTCHA (a test meant to be easy for humans and hard for scripts) for suspicious sessions. A **proof-of-work** challenge (making the browser solve a small puzzle) raises the cost of running thousands of sessions.
+3. **In the queue: one place per person.** Tokens are bound to account and device. A second join from the same account returns the *same* position, not a second ticket in the lottery. Randomised start positions remove the advantage of being a millisecond faster.
+4. **In the store: limits enforced in the transaction.** `purchase_count` per account, plus checks on payment card, billing address and phone number across accounts. Limits enforced only in the UI don't count.
+5. **After the sale: detection and enforcement.** Look for clusters of accounts sharing cards, addresses or devices, and cancel those orders. Mobile tickets with **rotating barcodes** (the code shown changes every few seconds, so a screenshot is useless) make reselling outside approved channels harder.
+6. **The law.** In the US, the Better Online Ticket Sales (BOTS) Act of 2016 makes it illegal to circumvent the security measures a ticket seller uses to enforce purchase limits, and the FTC (Federal Trade Commission) enforces it. In January 2021 it announced its first cases: three brokers accused of buying about 150,000 tickets with bots and hundreds of fake accounts, with $31 million in penalties, of which $3.7 million was payable after the rest was suspended for inability to pay. The platform's job is to keep logs good enough to support such cases.
+
+*The trade-off:* every defence also catches some real fans (shared university networks, privacy browsers, people buying for family). Prefer challenges over blocks, and measure false positives as carefully as bots stopped.
+
+### 9. Scaling and the failure walk
+**Scaling.** The edge and the queue scale horizontally and hold little state per fan. Inventory scales by event: each event's rows sit on one shard, and the hottest event of the year gets a dedicated shard (a [Bulkhead](../05-reliability/README.md#bulkhead): a stadium on-sale can't slow down the local theatre). Seat-map reads come from the cache, so database load tracks holds, not page views.
+
+**The failure walk**
+1. **The queue service is down at 10:00.** Fail closed: the edge serves the static waiting page to everyone and admits no one, rather than opening the floodgates. A delayed on-sale is embarrassing. A collapsed store that oversells is far worse.
+2. **The admission controller overshoots** (admits too fast and checkout latency jumps). The feedback loop pauses admission, and access tokens already issued keep working. Admitted fans see slower pages, and the queue sees a stalled counter.
+3. **The inventory primary fails over.** Holds and orders are in the database, so nothing is lost. Hold and order requests fail for tens of seconds, and clients retry with the **same** idempotency keys. Hold timers should be extended by the length of the outage, so fans don't lose seats to an incident they didn't cause.
+4. **The payment provider is slow or down.** Orders pile up in `PAYMENT_PENDING`, and the reconciler resolves them by idempotency key. If it stays down, pause admission (no point admitting people who can't pay) and show an honest banner.
+5. **The sweeper stops.** Expired holds stay `HELD` but count as free in the conditional `WHERE`, so sales continue. Only the seat map is wrong (it shows them as taken) until the sweeper returns. Alert on hold age.
+6. **The seat-map cache or event stream lags.** Fans pick seats that are already gone, and the hold step refuses them. "Best available" hides most of this because the server chooses.
+
+### Trade-offs
+
+| Decision | Option A | Option B | Choose |
+|---|---|---|---|
+| Who gets in first | Pure first-come at T0 | Random positions for the pre-queue, then first-come | Random: removes the millisecond race; costs "I was on time and got 1,500,000" complaints, so explain it up front |
+| Admission rate | Fixed rate | Feedback on store health | Feedback: absorbs slow payments and hot seats; costs a control loop to tune and watch |
+| Hold storage | Redis keys with a TTL | Status and expiry on the seat row | Seat row: one source of truth and one atomic statement; costs database writes for every hold |
+| Hold length | 3–5 minutes | 8–10 minutes | ~8 min with a payment extension: fairness vs fans losing seats mid-typing |
+| Seat choice | Fan clicks exact seats | Server picks "best available" | Offer both; default to best available in flash sales to cut contention |
+| GA inventory | One counter | Bucketed counters | Buckets during on-sales: less contention; costs a final sweep for the last tickets |
+| Bot defence | Block suspects | Challenge suspects | Challenge by default, block on strong signals; false positives are real fans |
+
+### The follow-up questions
+- **"Why not just autoscale the store to handle 3 million people?"** The bottleneck is not servers but seats: 600,000 tickets can only make 200,000 people happy. Scaling the store to 3 million concurrent shoppers would only make the hot rows a bigger battlefield and turn a sell-out into errors. *Trap:* treating a supply problem as a capacity problem.
+- **"How do you show a live seat map to 50,000 people?"** Serve it from the cache with a version number, and push small deltas ("seats 101-A-1..4 held") over SSE (server-sent events) or WebSockets, or let clients poll every few seconds. It's fine to be a second behind. The hold is the truth.
+- **"Could you skip seat selection and run a pure lottery?"** Yes: collect entries, draw winners, then give winners a purchase window. That is fairer and kinder to the infrastructure, but it delays the purchase and needs a fallback for winners who don't pay.
+- **"What about dynamic pricing?"** The price level becomes a per-seat or per-section value that a pricing job updates. Snapshot the price into the hold, so the fan pays what they saw when they clicked.
+- **"Two data centres, active-active?"** Keep each event's inventory owned by one region (its home), and route holds there. The waiting room and seat maps can be served everywhere. Writing one seat from two regions needs consensus or invites double sales.
+
+### Pattern manifest
+
+| Pattern | Where it served | Taught in |
+|---|---|---|
+| CDN + edge logic | Waiting page, token checks, cached `nowServing` | [Module 08](../08-api-and-edge/README.md#cdn) |
+| Rate Limiting | Per IP and per account, at the edge and the gateway | [Module 08](../08-api-and-edge/README.md#rate-limiting) |
+| Backpressure | Admission controller paced by store health | [Module 10](../10-batch-and-streaming/README.md#backpressure) |
+| Sharding | `event_id`: a hold never crosses shards | [Module 03](../03-storing-data/README.md#sharding) |
+| Lost-update prevention | Conditional `UPDATE` on seat rows, ordered locking | Hotel case above |
+| Saga | Hold → pay → confirm, with release and void as compensations | [Module 07](../07-consistency/README.md#saga) |
+| Idempotency | Hold and order keys; payment keyed by order ID | [Module 05](../05-reliability/README.md#idempotency) |
+| CQRS + cache | Seat maps and availability banners | [Module 03](../03-storing-data/README.md#cqrs) |
+| Outbox / event stream | Cache refresh, ticket issuing, notifications | [Module 10](../10-batch-and-streaming/README.md#change-data-capture) |
+| Bulkhead | Hot events on dedicated shards | [Module 05](../05-reliability/README.md#bulkhead) |
+| Fail closed | Queue outage admits no one | [Module 05](../05-reliability/README.md#graceful-degradation) |
+
+### Self-check
+- **Q1: Why is the waiting room's status endpoint cheap even with 3 million pollers?** → Its answer depends on one shared number (`nowServing`) plus the fan's own signed token, so the edge can cache that number for seconds and compute the rest locally. The origin barely sees the polls.
+- **Q2: A fan's payment times out. Do you release the seats?** → No. The seats are `PAYMENT_PENDING`, which the sweeper ignores. Ask the payment service for the status by idempotency key. Confirm if authorized; release and void only once it is known to have failed or the deadline passes with no authorization.
+- **Q3: Why randomise positions at the start instead of using arrival order?** → Arrival order at 10:00:00 rewards bots and fast connections by milliseconds and pushes everyone to arrive earlier. Randomising the on-time crowd gives each of them the same chance.
+- **Q4: The sweeper has been down for an hour. Are seats lost?** → No. The hold `UPDATE` treats expired holds as available, so sales continue. Only the seat map overstates what's taken until the sweeper runs again.
+
+### TL;DR
+- **Problem:** a few hundred thousand seats, millions of people and bots at the same second; never sell a seat twice, and be fair.
+- **Mechanism:** an edge waiting room (random pre-queue, signed tokens, one cached `nowServing` counter advanced by a feedback loop); seat status on the seat row with an all-or-nothing conditional `UPDATE` and an 8-minute TTL; hold → payment pending → sold, with the sweeper never touching in-flight payments; layered bot defences from registration to purchase limits.
+- **Costs:** most of the queue never gets in (say so early), a control loop to tune, false positives among real fans, and a reconciler for unknown payment outcomes.
+- **Remember:** the waiting room protects the store; the seat row is the lock; a timed-out payment is unknown, not failed.
+
+**Sources.** Ticketmaster, statement on the Taylor Swift Eras Tour presale (business.ticketmaster.com, November 2022); Cloudflare Waiting Room developer documentation ("About Waiting Room", "Waiting Room cookie", estimated-wait formula) and blog on random queueing; Queue-it blog, "First-in-first-out vs randomization" (pre-queue model); US Public Law 114-274, Better Online Ticket Sales Act of 2016; FTC press release on its first BOTS Act cases (January 2021); PostgreSQL documentation on explicit locking; Stripe API docs, "Idempotent requests".
 
 ---
 

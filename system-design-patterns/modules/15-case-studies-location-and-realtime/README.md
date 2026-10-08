@@ -414,6 +414,28 @@ flowchart TB
 2. **Contraction Hierarchies** ([Geisberger et al., 2008](https://doi.org/10.1007/978-3-540-68552-4_24)). Offline, rank nodes by importance (motorway junctions high, cul-de-sacs low) and "contract" them one by one, adding **shortcut edges** that preserve shortest distances. Online, run two tiny searches — forward from A and backward from B — that only climb to more important nodes and meet in the middle. Queries drop to around a millisecond on continent-sized graphs. Cost: preprocessing takes minutes to hours, and changing a weight (traffic) invalidates shortcuts.
 3. **Multi-level partitioning / Customizable Route Planning** (Delling, Goldberg, Pajor & Werneck, 2011). Split the graph into cells (cities, then regions, then countries) and precompute distances between each cell's **boundary nodes**. The expensive part (the partition) rarely changes; the cheap "customization" step re-computes boundary distances with new weights in seconds, so **live traffic can be folded in** frequently. This is the natural fit for traffic-aware routing, and the partition doubles as a sharding scheme: a routing server holds its region in detail plus the top-level overlay for long trips.
 
+> **A\* step by step (with a tiny example).**
+>
+> *Terms:* **g(n)** is the best known travel time from the start to node n so far. **h(n)** is the heuristic estimate from n to the goal (here straight-line distance ÷ top speed, in minutes). **f(n) = g(n) + h(n)** is the estimated cost of the whole trip through n. The **open set** is a priority queue (a structure that always hands back its smallest item first) of nodes waiting to be expanded.
+>
+> 1. Put the start in the open set with g = 0.
+> 2. Pop the node with the smallest **f**. If it is the goal, stop: its g is the answer, and following parent pointers back gives the path.
+> 3. Otherwise, for each outgoing edge u → v with weight w: if g(u) + w < g(v), set g(v) = g(u) + w, record u as v's parent, and push or update v with f(v) = g(v) + h(v).
+> 4. Repeat from step 2.
+>
+> The result is guaranteed shortest if h is **admissible** (never overestimates the true remaining time) and, so that each node is expanded only once, **consistent** (h(u) ≤ w(u, v) + h(v) on every edge). With h = 0 everywhere, A\* is exactly Dijkstra.
+>
+> *Example.* Edges (minutes): S→A 4, S→B 2, B→A 1, A→G 3, B→G 6, and a side road S→C 1, C→G 10. Heuristic: h(S)=5, h(A)=3, h(B)=4, h(C)=9, h(G)=0 (C lies away from the goal).
+>
+> | Step | Pop (f) | Updates | Open set after |
+> |---|---|---|---|
+> | 1 | S (5) | A: g 4, f 7 · B: g 2, f 6 · C: g 1, f 10 | B 6, A 7, C 10 |
+> | 2 | B (6) | A improves to g 3, f 6 · G: g 8, f 8 | A 6, G 8, C 10 |
+> | 3 | A (6) | G improves to g 6, f 6 | G 6, C 10 |
+> | 4 | G (6) | goal reached | — |
+>
+> Shortest route S→B→A→G, 6 minutes. Dijkstra, ordering by g alone, would have expanded C first (g = 1) and wandered the wrong way; A\* never expanded it, because its f of 10 never became the smallest. On a road network the same effect prunes everything "behind" the start. But a straight-line heuristic is weak on winding or congested roads, which is why production routers add the precomputation of items 2 and 3.
+
 **Deep dive 3 — live traffic and ETA.** Raw GPS points are noisy (±10–20 m, worse between tall buildings), so first **map-match** each trace to the road the car was actually on. The classic approach is a hidden Markov model (a probability model that infers a hidden sequence, here the true roads, from noisy observations) over candidate road segments ([Newson & Krumm, 2009](https://doi.org/10.1145/1653771.1653818)): it prefers segments close to each point *and* transitions that make sense on the road network. From matched traces, compute each vehicle's speed on each segment, then aggregate per segment in **1-minute tumbling windows** (fixed, non-overlapping slices), partitioned by `segment_id` so one worker owns each segment ([partitioned consumption](../10-batch-and-streaming/README.md#partitioned-consumption)). Segments with too few probes fall back to the **historical profile** for that time-of-week bucket; blend the two by sample count. **ETA** = sum of predicted segment times along the route + turn and intersection delays — then an ML (machine learning) model corrects the systematic error (DeepMind and Google Maps described graph neural networks, neural networks that learn over graph-shaped data, for this in 2020; Uber described its DeepETA model in 2022 — see [Sources](#sources)). Note the forecasting subtlety: for a 1-hour trip, the segment you reach in 50 minutes should use the speed *predicted for then*, not the speed now.
 
 ### 6. The failure walk

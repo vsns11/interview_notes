@@ -276,6 +276,24 @@ after 1,000,000,000 links: next 7-char hash collides with p = 2.8e-04 (about 1 i
 
 **Interview one-liner:** "Sizing gives 1,000 creates and 10,000 redirects a second and 7-character base-62 codes; codes come from a range-leased counter, scrambled and base-62 encoded so they never collide; redirects are 302s served from CDN and cache-aside over a code-sharded store; clicks go to a queue so analytics never slows a redirect."
 
+### Variant: Pastebin
+
+A common follow-up is "now store the text itself": the user pastes a block of text (code, logs, a config file) and gets back a short link that shows it. The code generation, the cache-aside read path and the async analytics carry over unchanged. What changes is that the value is no longer a 100-byte URL but a **blob** (a "binary large object": an opaque chunk of bytes the system stores without interpreting it) of up to several megabytes. Pastebin.com, for example, has capped pastes at 512 KB for free accounts and 10 MB for paid ones.
+
+**Numbers, redone.** Assume 10M new pastes a day averaging 10 KB: 10M × 10 KB = **100 GB/day ≈ 36 TB/year** of raw text, against roughly 5 GB/day for the metadata rows. Reads are fewer than for a shortener (say 5:1, ≈ 600 reads/s average), but each read now moves 10 KB instead of 500 bytes. So bytes, not requests, set the bill.
+
+**Split metadata from content.** Keep the small row (`code`, `owner_id`, `size_bytes`, `content_hash`, `syntax`, `visibility`, `expires_at`, `object_key`) in the same code-sharded key-value store. Put the text in **object storage** (a service such as Amazon S3 that stores blobs by key, cheaply and durably, and serves them over HTTP). Large values in the database would bloat replication, backups and caches for data that is only ever fetched whole. Write the object **first**, then the row, so a row never points at a missing object. A crash in between leaves an orphan object (one nothing points to), which a periodic cleanup job deletes.
+
+**Reads.** `GET /{code}` renders a page from the metadata plus the text. A `/raw/{code}` URL can be served by the CDN straight from object storage. Cache only small, hot pastes in Redis (say under 64 KB). A 10 MB value would push hundreds of small entries out of the cache. Compress text on write: plain text usually shrinks several times, which cuts storage and transfer alike.
+
+**Size limits.** Enforce the cap at the edge before reading the body: reject an oversized `Content-Length` with `413 Content Too Large`, and stop reading a streamed upload at the cap. Rate-limit **bytes per user per day**, not just requests, because one client can fill a disk with a few thousand maximum-size pastes. For very large uploads, hand the client a **pre-signed URL** (a time-limited link that allows one upload straight to object storage), so the bytes never pass through your servers.
+
+**Expiry.** Pastes commonly offer "10 minutes / 1 day / 1 month / never" and **burn after reading**. Enforce expiry at read time (`expires_at < now` → `410 Gone`), as the shortener does. Physical deletion can use an object-storage lifecycle rule. But S3 documents that lifecycle expirations run asynchronously and may lag by days (billing stops when an object becomes eligible), so the read-time check is the only real guarantee. Burn-after-reading needs an atomic state change (`UPDATE ... SET status='burned' WHERE code=? AND status='active'`), so only one reader wins, and `Cache-Control: no-store`, so no CDN keeps a copy.
+
+**Privacy.** Unlisted pastes are often secrets someone shouldn't have pasted (keys, passwords). Give them longer random codes (10 or more base-62 characters) rather than scrambled counter values, keep them out of search engines, and scan public pastes for leaked credentials.
+
+*Sources for the variant:* Pastebin.com FAQ (paste size limits); Amazon S3 User Guide, "Expiring objects" and "Troubleshooting Amazon S3 Lifecycle issues" (asynchronous expiration, billing at eligibility); IETF RFC 9110, §15.5.14 (413 Content Too Large).
+
 **TL;DR**
 - **Numbers:** 100M links/day (1K/s), 10:1 reads (10K/s, 50K peak), 365B links in 10 years → 7 base-62 characters, ~180 TB.
 - **Codes:** counter from leased ranges → reversible scramble → base 62 (no collisions); hash-and-truncate needs conditional inserts and retries.
