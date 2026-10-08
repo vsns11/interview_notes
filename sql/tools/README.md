@@ -5,7 +5,7 @@ Run everything from the `sql/` book root. Needs Node 18+ and Google Chrome. `reg
 | Script | Purpose | Example |
 |---|---|---|
 | `md2pdf.mjs` | Render one or more `README.md` files → styled PDF (headless Chrome, Monaco font, colour-coded headings, highlighted code, Mermaid → SVG, images embedded). Given several inputs, it adds a cover (title from `COVER_TITLE`, default "SQL Handbook"; subtitle from `COVER_SUB`) and a table of contents. Reports Mermaid errors and broken images. | `node tools/md2pdf.mjs chapters/05-joins/Chapter05-Notes.pdf chapters/05-joins/README.md` |
-| `regen_pdfs.sh` | Regenerate every `chapters/NN-name/ChapterNN-Notes.pdf` and the combined `SQL-Handbook.pdf`. | `bash tools/regen_pdfs.sh` |
+| `regen_pdfs.sh` | Regenerate every `chapters/NN-name/ChapterNN-Notes.pdf` and the combined handbook as `SQL-Handbook-Vol1.pdf` and `SQL-Handbook-Vol2.pdf` (two volumes, each under 600 pages). | `bash tools/regen_pdfs.sh` |
 
 Shared helpers one level up (in the notes root) are used by the book's code, not by these tools:
 - `bash ../tools_pg.sh start | stop | psql [args]` runs the book's private PostgreSQL 14 (data in `~/.pg-books-system-design/` — outside the iCloud-synced Documents folder, port 5544, Unix socket in `/tmp`, UTF8). It never touches another PostgreSQL server.

@@ -79,7 +79,7 @@ The later chapters need different data, so they bring their own `00_schema.sql`:
 ## What's in here
 | Path | Purpose |
 |---|---|
-| `SQL-Handbook.pdf` | The whole book as one PDF, with a cover and a table of contents. |
+| `SQL-Handbook-Vol1.pdf`, `SQL-Handbook-Vol2.pdf` | The whole book in two PDFs (each under 600 pages), with a cover and a table of contents. Vol 1: Ch 1–11. Vol 2: Ch 12–20. |
 | `interview/INTERVIEW.md` + `interview/SQL-Interview-Edition.pdf` | **Interview Edition**: the whole book in ~51 pages for fast revision — per chapter must-know facts, key tables, likely questions with short answers, gotchas, the Ch 18–19 pattern tables with 19 representative problems, plus a top-25 question list and a last-minute checklist. |
 | `capstones/CAPSTONES.md` + `capstones/SQL-Capstone-Projects.pdf` | **Capstone Projects**: 40 build-it-yourself design briefs, beginner to advanced (personal library and movie ratings → e-commerce checkout, SKIP LOCKED queues, row-level security, JSONB → serializable ledger, partitioning, Citus, CDC/outbox, zero-downtime migrations, PITR, failover), each with requirements, architecture, an ER diagram, milestones, deep dives and interview questions, all on PostgreSQL 14 with newer features marked. |
 | `chapters/NN-name/README.md` + `ChapterNN-Notes.pdf` | One chapter (Markdown source and its PDF). |
@@ -174,7 +174,7 @@ Requires Node 18+ and Google Chrome (the path is set in `tools/md2pdf.mjs`).
 
 ```bash
 # from sql/
-bash tools/regen_pdfs.sh      # every ChapterNN-Notes.pdf + SQL-Handbook.pdf (cover title "SQL Handbook")
+bash tools/regen_pdfs.sh      # every ChapterNN-Notes.pdf + SQL-Handbook-Vol1.pdf and -Vol2.pdf
 
 # one chapter only
 node tools/md2pdf.mjs chapters/12-indexes-storage-and-query-performance/Chapter12-Notes.pdf chapters/12-indexes-storage-and-query-performance/README.md
