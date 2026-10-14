@@ -16,7 +16,7 @@ Every chapter is written for a first-time learner and defines each term the firs
 | Complete beginners to ML | The ideas from zero (Ch 1), just enough math (Ch 2) and the Python tools (Ch 3), every term defined |
 | Developers and analysts who know some Python | Classic algorithms with scikit-learn (Ch 4–9), then deep learning with PyTorch (Ch 10–12) |
 | Engineers moving into ML roles | Recommenders, RL, and how models are built, served and monitored in production (Ch 13–16) |
-| Interview candidates | The 7-step ML system design framework (Ch 15), thirteen worked case studies (Ch 17–18), responsible ML (Ch 19) and one-page cheat sheets with 50 interview questions (Ch 20) |
+| Interview candidates | The 7-step ML system design framework (Ch 15), thirteen worked case studies (Ch 17–18), responsible ML (Ch 19) and one-page cheat sheets with 50 interview questions (Ch 20), plus a 252-question interview bank (Ch 21) |
 
 ## How to use it
 Every topic follows the same rhythm: *what it is → why it matters → how it works → code with real output → trade-offs → when not to use it → common mistakes → real-world examples → in the interview → self-check → TL;DR*. To review, skim the TL;DRs. To check you really learned a topic, answer the self-check questions without looking back.
@@ -85,6 +85,7 @@ flowchart LR
 | 19 | [Responsible ML](chapters/19-responsible-ml/README.md) | Sources of bias, fairness definitions and measurement, mitigation, explainability, privacy, attacks on models, model cards, regulation, a checklist | `Chapter19-Notes.pdf` |
 | **Part VI — Revision** | | | |
 | 20 | [Cheat Sheets and Glossary](chapters/20-cheatsheet-and-glossary/README.md) | One-page sheets per topic, every algorithm and metric in a table, decision tables, the top 50 interview questions, and a 340+ term glossary linked to the chapters | `Chapter20-Notes.pdf` |
+| 21 | [Interview Question Bank](chapters/21-interview-question-bank/README.md) | 252 commonly asked ML interview questions (★ = very frequent) with say-it-out-loud answers: fundamentals, algorithms, probability and stats, deep learning, transformers, recommenders, ML system design, MLOps, responsible ML and from-scratch coding tasks, each linked to its chapter | `Chapter21-Notes.pdf` |
 
 Each chapter's PDF sits next to its README: `chapters/NN-name/ChapterNN-Notes.pdf`.
 
