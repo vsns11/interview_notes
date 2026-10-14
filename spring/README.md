@@ -15,7 +15,7 @@ Every chapter is written for a first-time learner and defines each term the firs
 | Java developers new to Spring | Spring taught from zero (Ch 1–7): the container, configuration, proxies, REST, data access — every term defined. You need the Java basics first (see the beginner path) |
 | Spring Boot 2/3 developers moving to Boot 4 | A "what changed" route: modular starters, Jackson 3, JSpecify null-safety, API versioning, HTTP service clients, `RestTestClient`, `@MockitoBean`, core `@Retryable`, Security 7's lambda-only DSL, Undertow removal (Ch 17 plus the sections it links to) |
 | Back-end and microservices developers | JPA and transactions done right, caching, security with JWT/OAuth2, WebFlux vs virtual threads (measured), Kafka with dead-letter topics and outbox, Actuator/Micrometer/tracing, Spring Cloud Gateway and Resilience4j (Ch 7–16) |
-| Interview candidates | 168 Spring interview questions, each linked to the section that teaches it, five "tricky answer" proofs, a project walkthrough template and debugging scenarios (Ch 18); cheat sheets with machine-checked defaults and a 343-term glossary (Ch 19) |
+| Interview candidates | 168 Spring interview questions, each linked to the section that teaches it, five "tricky answer" proofs, a project walkthrough template and debugging scenarios (Ch 18); a 250-question drill bank with scenario and coding questions (Ch 20); cheat sheets with machine-checked defaults and a 343-term glossary (Ch 19) |
 
 ## How to use it
 Every topic follows the same rhythm: *what it is → why it matters → how it works → code with real output → trade-offs → common mistakes → real-world use → in the interview → self-check → TL;DR*. To review, skim the TL;DRs. To check you really learned a topic, answer the self-check questions without looking back.
@@ -40,14 +40,15 @@ Every topic follows the same rhythm: *what it is → why it matters → how it w
 **Interview path (you already use Spring):**
 1. Skim the TL;DRs of Ch 2–4, 7 and 10 (DI, auto-configuration, proxies, transactions, security) — most "why doesn't this work?" questions live there.
 2. Work through **Ch 18**: answer each question out loud before reading the answer; follow the link when an answer surprises you. Practise the §18.16 project walkthrough and the §18.17 debugging scenarios.
-3. The night before, review with **Ch 19** (annotations, properties, starters, propagation table, §19.14 interview index, glossary).
+3. Drill **Ch 20**, the question bank: cover each answer, say yours, check; do the ★ questions and the scenario section first.
+4. The night before, review with **Ch 19** (annotations, properties, starters, propagation table, §19.14 interview index, glossary).
 
 ```mermaid
 flowchart LR
     A["Part I - Core: Ch 1-4"] --> B["Part II - Web and data: Ch 5-9"]
     B --> C["Part III - Security and testing: Ch 10-12"]
     C --> D["Part IV - Reactive, messaging, production, cloud: Ch 13-16"]
-    D --> E["Part V - Spring AI, what's new, interviews, revision: Ch 17-19"]
+    D --> E["Part V - Spring AI, what's new, interviews, revision: Ch 17-20"]
 ```
 
 ## Versions
@@ -111,6 +112,7 @@ Details and links per component: [§19.2](chapters/19-cheatsheet-and-glossary/RE
 | 17 | [Spring AI and What's New in Boot 4 / Framework 7](chapters/17-spring-ai-and-whats-new/README.md) | Spring AI 2.0 (`ChatClient`, prompts, advisors, memory, structured output, tools, RAG, MCP) tested offline with a fake model; Boot 3 → 4, Framework 6 → 7 and Security 6 → 7 migration tables; what Boot 4.1 adds | `Chapter17-Notes.pdf` |
 | 18 | [Spring Interview Questions](chapters/18-spring-interview-questions/README.md) | 168 questions from core to production, each linked to its teaching section; five tricky answers proved by tests; an "explain your project" template; debugging scenarios | `Chapter18-Notes.pdf` |
 | 19 | [Cheat Sheet and Glossary](chapters/19-cheatsheet-and-glossary/README.md) | Versions, annotations, starters, key properties, `@Transactional`, scopes, Security DSL snippets, test slices, Reactor operators, Actuator endpoints, tool choice, migration checklist, interview index, machine-checked proofs, 343-term glossary | `Chapter19-Notes.pdf` |
+| 20 | [Interview Question Bank](chapters/20-interview-question-bank/README.md) | 250 commonly asked Spring questions (★ = asked very often) worded as they appear in interview reports and popular question lists, each with a short answer to say out loud and links to the teaching section and to Ch 18; adds what Ch 18 lacks (Hibernate caches, `get` vs `load`, isolation anomalies, JWT filter code, saga, idempotency, rate limiting) plus scenario and coding questions | `Chapter20-Notes.pdf` |
 
 Each chapter's PDF sits next to its README: `chapters/NN-name/ChapterNN-Notes.pdf`.
 
