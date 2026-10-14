@@ -46,7 +46,7 @@ flowchart LR
     A["Part I - Foundations: Ch 1-4"] --> B["Part II - Building with LLMs: Ch 5-9"]
     B --> C["Part III - Beyond text, production, safety: Ch 10-12"]
     C --> D["Part IV - System design and cases: Ch 13-14"]
-    D --> E["Part V - Review and career: Ch 15-16"]
+    D --> E["Part V - Review and career: Ch 15-17"]
 ```
 
 ## What's in here
@@ -84,6 +84,7 @@ flowchart LR
 | **Part V — Review and career** | | | |
 | 15 | [Rapid Review, Future Trends and Glossary](chapters/15-rapid-review-future-glossary/README.md) | Two-minute review sheets for Ch 1–14, decision cheat sheets, red flags, a 52-question bank with a drill script, trends, a learning roadmap, a 183-term glossary | `Chapter15-Notes.pdf` |
 | 16 | [Appendix: AI for Your Career](chapters/16-appendix-ai-for-your-career/README.md) | Using AI honestly for portfolios, resumes, cover letters, emails, LinkedIn, freelancing, job search and interview practice — the fact-sheet method and a keyword-gap script | `Chapter16-Notes.pdf` |
+| 17 | [Interview Question Bank](chapters/17-interview-question-bank/README.md) | 215 GenAI/LLM interview questions in the wording interviewers use (★ = asked very often), each with a short spoken answer and a link to the full explanation: transformers, tokenization, fine-tuning, RLHF/DPO, LoRA, decoding, RAG, vector DBs, evaluation, agents/MCP, safety, serving, diffusion, system design | `Chapter17-Notes.pdf` |
 
 Each chapter's PDF sits next to its README: `chapters/NN-name/ChapterNN-Notes.pdf`.
 
