@@ -15,7 +15,7 @@ Every chapter is written for a first-time learner, every Java example is **Java 
 |---|---|
 | `LLD-Handbook-Study-Vol1.pdf`, `LLD-Handbook-Study-Vol2.pdf` | **Start here — Study Edition in two volumes.** Vol 1: the concepts (OOP, UML, SOLID, principles, clean code, refactoring, patterns, concurrency). Vol 2: the interview approach and all case studies. Every topic, heading and case study, with less padding. |
 | `interview/LLD-Interview-Edition.pdf` | **Interview Edition (~47 pages)** — fast night-before revision: framework, OOP/UML/SOLID, every pattern as one table row, concurrency, all 45 case studies as compact cards. Source: `interview/INTERVIEW.md`. |
-| `LLD-Handbook-Vol1.pdf` … `LLD-Handbook-Vol4.pdf` | Full Edition in four volumes (each under 600 pages), with longer explanations and complete code listings. Vol 1: OOP, UML, SOLID, design principles, clean code, refactoring (Ch 2–7). Vol 2: design patterns and concurrency (Ch 8–13). Vol 3: the LLD interview approach and case studies I (Ch 1, 14–17). Vol 4: case studies II and cheat sheets (Ch 18–22). |
+| `LLD-Handbook-Vol1.pdf` … `LLD-Handbook-Vol4.pdf` | Full Edition in four volumes (each under 600 pages), with longer explanations and complete code listings. Vol 1: OOP, UML, SOLID, design principles, clean code, refactoring (Ch 2–7). Vol 2: design patterns and concurrency (Ch 8–13). Vol 3: the LLD interview approach and case studies I (Ch 1, 14–17). Vol 4: case studies II, cheat sheets and the interview question bank (Ch 18–23). |
 | `chapters/NN-name/STUDY.md` + `ChapterNN-Study.pdf` | One chapter, Study Edition. |
 | `chapters/NN-name/README.md` + `ChapterNN-Notes.pdf` | One chapter, Full Edition. |
 | `chapters/NN-name/code/` | Runnable Java for that chapter (package per topic/case, each with a `Main`). |
@@ -53,6 +53,7 @@ Every chapter is written for a first-time learner, every Java example is **Java 
 | 21 | [Machine-coding round problems (task manager, wallet, calendar, Coding Blox, PropertyHunt, Ledger Co, inventory, Unix `find`)](chapters/21-case-machine-coding/README.md) |
 | **Part V — Revision** | |
 | 22 | [Cheat sheets & glossary](chapters/22-cheatsheets-glossary/README.md) |
+| 23 | [Interview question bank: 190+ most-asked LLD, machine-coding and concept questions with short answers](chapters/23-interview-question-bank/README.md) |
 
 ## Rebuild
 ```bash

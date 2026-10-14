@@ -13,7 +13,7 @@ done
 COVER_TITLE="LLD Handbook — Vol 1: OOP, UML, SOLID, Design Principles, Clean Code, Refactoring" node tools/md2pdf.mjs LLD-Handbook-Vol1.pdf chapters/0[2-7]*/README.md
 COVER_TITLE="LLD Handbook — Vol 2: Design Patterns and Concurrency" node tools/md2pdf.mjs LLD-Handbook-Vol2.pdf chapters/0[89]*/README.md chapters/1[0-3]*/README.md
 COVER_TITLE="LLD Handbook — Vol 3: Interview Approach and Case Studies I" node tools/md2pdf.mjs LLD-Handbook-Vol3.pdf chapters/01*/README.md chapters/1[4-7]*/README.md
-COVER_TITLE="LLD Handbook — Vol 4: Case Studies II and Cheat Sheets" node tools/md2pdf.mjs LLD-Handbook-Vol4.pdf chapters/1[89]*/README.md chapters/2*/README.md
+COVER_TITLE="LLD Handbook — Vol 4: Case Studies II, Cheat Sheets, Question Bank" node tools/md2pdf.mjs LLD-Handbook-Vol4.pdf chapters/1[89]*/README.md chapters/2*/README.md
 # Study Edition (condensed): per-chapter + combined
 for d in chapters/*/; do
   [ -f "$d/STUDY.md" ] || continue
