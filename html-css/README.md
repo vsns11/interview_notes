@@ -50,7 +50,8 @@ Build each example page yourself, open it in a browser and change values until t
 1. Skim the TL;DRs of Ch 3, 6, 7, 8, 9 and 10 to find gaps.
 2. Answer the 47 questions in **§14.6** out loud, then follow each link to the full explanation for any you missed.
 3. Practise the classics until you can explain them without notes: specificity and the cascade (§6.4–6.5), margin collapsing and BFCs (§7.3, §7.5), `z-index` and stacking contexts (§7.8), `flex: 1` and `min-width: 0` (§8.4), `auto-fill` vs `auto-fit` (§9.3), "what happens when you type a URL" (§1.6), Core Web Vitals (§14.3).
-4. The night before, review the cheat sheets (**§14.7**) and the glossary (**§14.8**).
+4. Drill the ★ questions in the **Interview Question Bank (Ch 15)**, then the rest, including the "build this layout" tasks.
+5. The night before, review the cheat sheets (**§14.7**) and the glossary (**§14.8**).
 
 ```mermaid
 flowchart LR
@@ -93,6 +94,7 @@ flowchart LR
 | **Part V — Modern CSS, performance and revision** | | | |
 | 13 | [Modern CSS and Architecture](chapters/13-modern-css-and-architecture/README.md) | Native nesting, `:is()`/`:where()`, `:has()`, `@layer`, `@scope`, logical properties, BEM, Tailwind CSS v4, CSS Modules, CSS-in-JS, Sass and PostCSS, resets, theming and dark mode | `Chapter13-Notes.pdf` |
 | 14 | [Performance, SEO, Interview Prep and Cheat Sheets](chapters/14-performance-seo-interview-and-cheatsheet/README.md) | The critical rendering path, render-blocking resources (measured), Core Web Vitals (LCP, INP, CLS, measured and fixed), SEO basics and JSON-LD, 47 interview questions, cheat sheets, 212-term glossary | `Chapter14-Notes.pdf` |
+| 15 | [Interview Question Bank](chapters/15-interview-question-bank/README.md) | 250 commonly asked HTML/CSS interview questions (85 ★ high-frequency) from h5bp, GreatFrontEnd, InterviewBit and similar lists, each with a say-it-out-loud answer and a link to the full explanation: semantics, a11y, forms, media, storage, selectors and cascade, box model, stacking, flex, grid, responsive, animation, modern CSS, architecture, performance, "build this layout" tasks | `Chapter15-Notes.pdf` |
 
 Each chapter's PDF sits next to its README: `chapters/NN-name/ChapterNN-Notes.pdf`.
 
