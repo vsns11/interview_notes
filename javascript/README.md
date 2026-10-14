@@ -17,7 +17,7 @@ Every chapter is written for a first-time learner and defines each term the firs
 | Developers coming from Java, Python, C#… | The JavaScript way of doing familiar things, and the traps that differ: coercion, `this`, prototypes, the event loop |
 | Front-end developers | The language under React and every framework, then the DOM, events, browser APIs and web security (Ch 13–14) |
 | Node / back-end developers | Modules and npm, async I/O, core modules, streams, an HTTP server, testing and TypeScript (Ch 10–12, 15–16) |
-| Interview candidates | DSA patterns in JS, implement-from-scratch classics, 53 tricky questions (Ch 17), and cheat sheets plus a 353-term glossary (Ch 18) |
+| Interview candidates | DSA patterns in JS, implement-from-scratch classics, 53 tricky questions (Ch 17), cheat sheets plus a 353-term glossary (Ch 18), and a 303-question bank (Ch 19) |
 
 ## How to use it
 Every topic follows the same rhythm: *what it is → why it matters → how it works → code with real output → trade-offs → common mistakes → real-world use → in the interview → self-check → TL;DR*. To review, skim the TL;DRs. To check you really learned a topic, answer the self-check questions without looking back.
@@ -41,14 +41,15 @@ Every topic follows the same rhythm: *what it is → why it matters → how it w
 2. Work through the ordering puzzles in **§12.3** until you can predict every line.
 3. Work through **Ch 17**: the DSA toolkit and twenty-one patterns, then re-type each classic (debounce, throttle, curry, memoize, deep clone, LRU cache, `Promise.all` polyfill) from memory and run it.
 4. Read the 53 questions in **§17.4** and practise saying the 30-second answers out loud.
-5. The night before, review with **Ch 18** (cheat sheets, "which API for which job", the interview-question index).
+5. Drill the **Ch 19** question bank: say each ★ answer out loud, then write the coding tasks and the LeetCode 30 Days of JavaScript problems from memory.
+6. The night before, review with **Ch 18** (cheat sheets, "which API for which job", the interview-question index).
 
 ```mermaid
 flowchart LR
     A["Part I - Language basics: Ch 1-4"] --> B["Part II - Working with data: Ch 5-8"]
     B --> C["Part III - Objects, modules, errors: Ch 9-11"]
     C --> D["Part IV - Async and the platforms: Ch 12-15"]
-    D --> E["Part V - Quality, interviews, revision: Ch 16-18"]
+    D --> E["Part V - Quality, interviews, revision: Ch 16-19"]
 ```
 
 ## What's in here
@@ -88,6 +89,7 @@ flowchart LR
 | 16 | [Testing and TypeScript](chapters/16-testing-and-typescript/README.md) | `node:assert/strict`, `node:test`, async tests, mocks and fake timers, snapshots and coverage; TypeScript types, narrowing, generics, `satisfies`, type stripping, JSDoc | `Chapter16-Notes.pdf` |
 | 17 | [JavaScript for Interviews](chapters/17-javascript-for-interviews/README.md) | The DSA toolkit and its complexities, twenty-one coding patterns, implement-from-scratch classics, 53 tricky questions answered with real output | `Chapter17-Notes.pdf` |
 | 18 | [Cheat Sheets and Glossary](chapters/18-cheatsheet-and-glossary/README.md) | One sheet per area (values machine-checked), "which API for which job", ES2015→ES2026 version table, study plan, question index, 353-term glossary | `Chapter18-Notes.pdf` |
+| 19 | [Interview Question Bank](chapters/19-interview-question-bank/README.md) | 303 commonly asked questions worded as interviewers ask them, ★ for the most frequent: types, scope, `this`, prototypes, async, modules, DOM, security, performance, Node, TypeScript, output puzzles, coding classics and LeetCode's 30 Days of JavaScript — each with a short answer and a link to the full explanation | `Chapter19-Notes.pdf` |
 
 Each chapter's PDF sits next to its README: `chapters/NN-name/ChapterNN-Notes.pdf`.
 
