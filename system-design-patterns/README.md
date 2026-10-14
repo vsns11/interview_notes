@@ -10,7 +10,7 @@ Condensed study notes for the DesignGurus course **System Design Patterns: From 
 |---|---|
 | `System-Design-Patterns-Vol1.pdf` | **Vol 1 — Fundamentals and Algorithms** (Modules 0 and 19): every basic concept from zero, then the algorithms step by step. |
 | `System-Design-Patterns-Vol2.pdf` | **Vol 2 — The Patterns** (Modules 1–11). |
-| `System-Design-Patterns-Vol3.pdf` | **Vol 3 — Interview Method and Case Studies** (Module 1's five-questions method, then Modules 12–18, 20 and 21). Each volume is under 600 pages, with a cover and clickable contents. |
+| `System-Design-Patterns-Vol3.pdf` | **Vol 3 — Interview Method and Case Studies** (Module 1's five-questions method, then Modules 12–18 and 20–22, ending with the interview question bank). Each volume is under 600 pages, with a cover and clickable contents. |
 | `interview/System-Design-Patterns-Interview-Edition.pdf` | **Interview Edition** (~63 pages): one compact card per pattern and per case study, the interview framework, back-of-envelope numbers, top questions, gotchas and a pattern-selection table for fast revision (source: `interview/INTERVIEW.md`). |
 | `capstones/CAPSTONES.md` + `capstones/System-Design-Patterns-Capstone-Projects.pdf` | **Capstone Projects**: 40 build-it-yourself design briefs, beginner to advanced (URL shortener and webhook delivery up to a Dynamo-style KV store, Kafka-like log, multi-region ledger and AI copilot platform), each with requirements, architecture, data model, milestones, hard parts, testing and interview questions. |
 | `modules/NN-name/README.md` | One module's notes (Markdown, renders on GitHub/VS Code). |
@@ -45,6 +45,7 @@ Condensed study notes for the DesignGurus course **System Design Patterns: From 
 | 19 | [Algorithms Deep Dive](modules/19-algorithms-deep-dive/README.md) | Paxos/Multi-Paxos vs Raft/ZAB, 2PC vs 3PC, leases, phi-accrual and SWIM, chain replication/CRAQ, hybrid logical clocks, TrueTime, version vectors; jump/rendezvous/Maglev hashing and bounded loads; HyperLogLog, count-min, heavy hitters, reservoir sampling, t-digest, trending; LSM compaction, B+-trees, MVCC, 2PL/SSI, skip lists, CLOCK/ARC/TinyLFU, timing wheels, Chandy-Lamport; inverted index, BM25, SimHash/MinHash/LSH, HNSW/IVF/PQ, Dijkstra/A*/contraction hierarchies, feed ranking |
 | 20 | [Case Studies: Content, Search and Platforms](modules/20-case-studies-content-search-and-platforms/README.md) | Distributed search, distributed logging and error monitoring, Quora, Instagram, Twitter/X (ranked timeline, trending), ad-click aggregation |
 | 21 | [Case Studies: Developer and AI Platforms](modules/21-case-studies-developer-and-ai-platforms/README.md) | Online judge (LeetCode), global deployment system, ChatGPT-style AI service, distributed cache cluster |
+| 22 | [Interview Question Bank](modules/22-interview-question-bank/README.md) | 210+ most-asked questions: 104 "Design X" prompts and 108 concept questions with short answers, plus a 45-minute answer plan |
 
 ## Rebuild the PDFs
 
