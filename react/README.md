@@ -17,7 +17,7 @@ Every chapter is written for a first-time React learner and defines each term th
 | Beginners who know JavaScript | React taught from zero (Ch 1–7): components, props, state, events, forms, Effects, refs and Hooks, every term defined |
 | Working React developers upgrading to React 19 | Actions and `useActionState` / `useFormStatus` / `useOptimistic`, `use()`, `ref` as a prop, `useEffectEvent`, `<Activity>`, the React Compiler, React Router 8 and what changed |
 | Full-stack / Next.js developers | SSR, streaming, hydration, SSG and partial prerendering, Server Components, `'use client'` / `'use server'`, Next.js App Router and React Router framework mode (Ch 13) |
-| Interview candidates | 53 React interview questions with 30-second answers, 8 machine-coding builds with tests (Ch 15), cheat sheets, a common-errors table and a 222-term glossary (Ch 16) |
+| Interview candidates | 53 React interview questions with 30-second answers, 8 machine-coding builds with tests (Ch 15), a 262-question interview bank (Ch 17), cheat sheets, a common-errors table and a 222-term glossary (Ch 16) |
 
 ## How to use it
 Every topic follows the same rhythm: *what it is → why it matters → how it works → code with real output → trade-offs → when not to use it → common mistakes → real-world use → in the interview → self-check → TL;DR*. To review, skim the TL;DRs. To check you really learned a topic, answer the self-check questions without looking back.
@@ -42,7 +42,8 @@ Every topic follows the same rhythm: *what it is → why it matters → how it w
 1. Skim the TL;DRs of Ch 2, 3, 5, 6, 7 and 10 (rendering and keys, snapshots and batching, Effects and cleanups, Context re-renders, Hook rules, `memo`).
 2. Read the 53 questions in **Ch 15** §15.2–15.9 and practise saying the 30-second answers out loud.
 3. Rebuild the machine-coding builds in §15.10–15.17 (todo list, autocomplete, infinite scroll, modal, tabs, star rating, pagination, form wizard) from a blank file, with a Testing Library test, following the method in §15.1.
-4. The night before, review with **Ch 16** (cheat sheets, the common-errors table, the question index).
+4. Drill the **Ch 17** question bank (★ questions first): cover each answer, say yours, check.
+5. The night before, review with **Ch 16** (cheat sheets, the common-errors table, the question index).
 
 ```mermaid
 flowchart LR
@@ -87,6 +88,7 @@ flowchart LR
 | 14 | [Patterns and Architecture](chapters/14-patterns-and-architecture/README.md) | Composition, container/presentational, custom Hooks, compound components, render props, HOCs, portals, error boundaries, accessibility, folder structure, design systems | `Chapter14-Notes.pdf` |
 | 15 | [React Interview and Machine Coding](chapters/15-react-interview-and-machine-coding/README.md) | How interviews are run, 53 questions with 30-second answers, 8 machine-coding builds (todo, autocomplete, infinite scroll, modal, tabs, star rating, pagination, wizard) with tests and screenshots | `Chapter15-Notes.pdf` |
 | 16 | [Cheat Sheets and Glossary](chapters/16-cheatsheet-and-glossary/README.md) | One sheet per area (behaviour machine-checked against React 19.3), every Hook in one table, common errors and fixes, question index, where to go next, 222-term glossary | `Chapter16-Notes.pdf` |
+| 17 | [Interview Question Bank](chapters/17-interview-question-bank/README.md) | 262 commonly asked React questions in 15 groups, worded as interviewers ask them (★ = very frequent), each with a say-it-aloud answer and a link to the full explanation: JSX, rendering and keys, Hooks and their pitfalls, React 19, state management, routing and data, performance, SSR/Next.js, testing, TypeScript, output puzzles, 34 machine-coding and scenario prompts | `Chapter17-Notes.pdf` |
 
 Each chapter's PDF sits next to its README: `chapters/NN-name/ChapterNN-Notes.pdf`.
 
