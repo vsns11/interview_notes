@@ -16,7 +16,7 @@ Every chapter is written for a first-time learner and defines each term the firs
 | Complete beginners | A first language taught from zero (Ch 1–9), every term defined |
 | Developers coming from Java, C#, JavaScript, Go… | The Python way of doing familiar things, and the traps that differ from your language |
 | Data analysts and scientists | A solid language base, then numpy, pandas and matplotlib (Ch 18) |
-| Interview candidates | DSA patterns in Python (Ch 19), gotchas and around 45 Q&A (Ch 20), and one-page cheat sheets (Ch 21) |
+| Interview candidates | DSA patterns in Python (Ch 19), gotchas and around 45 Q&A (Ch 20), one-page cheat sheets (Ch 21), and a 305-question bank (Ch 22) |
 
 ## How to use it
 Every topic follows the same rhythm: *what it is → why it matters → how it works → code with real output → trade-offs → common mistakes → real-world use → in the interview → self-check → TL;DR*. To review, skim the TL;DRs. To check you really learned a topic, answer the self-check questions without looking back.
@@ -28,14 +28,15 @@ Every topic follows the same rhythm: *what it is → why it matters → how it w
 2. Work through **Ch 19** pattern by pattern, re-typing each solution from memory and running its asserts.
 3. Read **Ch 20** (idioms, 13 gotchas, the Q&A) and practise saying the 30-second answers out loud.
 4. Go deeper where Ch 20 points you: Ch 11 (generators), Ch 12 (decorators), Ch 16 (GIL, asyncio), Ch 17 (memory, CPython internals).
-5. The night before, review with **Ch 21** (21.20 maps problem signals to patterns).
+5. Drill **Ch 22**, the question bank: the ★ questions first, then the output puzzles and coding tasks.
+6. The night before, review with **Ch 21** (21.20 maps problem signals to patterns).
 
 ```mermaid
 flowchart LR
     A["Part I - Basics: Ch 1-4"] --> B["Part II - Data structures and functions: Ch 5-9"]
     B --> C["Part III - Intermediate: Ch 10-13"]
     C --> D["Part IV - Tools and practice: Ch 14-18"]
-    D --> E["Part V - Interviews and revision: Ch 19-21"]
+    D --> E["Part V - Interviews and revision: Ch 19-22"]
 ```
 
 ## What's in here
@@ -78,6 +79,7 @@ flowchart LR
 | 19 | [Python for Coding Interviews](chapters/19-python-for-coding-interviews/README.md) | 18 DSA patterns in Python: two pointers, hashing, heaps (incl. two heaps), binary search, trees, graphs, union-find, DP, backtracking, bits, tries, greedy, intervals, fast/slow pointers, quickselect, math & geometry; pitfalls | `Chapter19-Notes.pdf` |
 | 20 | [Pythonic Idioms, Gotchas and Interview Q&A](chapters/20-pythonic-idioms-gotchas-interview-qa/README.md) | Idioms, 13 gotchas with demos and fixes, and about 45 interview questions answered briefly and accurately | `Chapter20-Notes.pdf` |
 | 21 | [Cheat Sheets and Glossary](chapters/21-cheatsheet-and-glossary/README.md) | One-page sheets per topic, "which tool for which job", and a 300+ term glossary linked to the chapters | `Chapter21-Notes.pdf` |
+| 22 | [Interview Question Bank](chapters/22-interview-question-bank/README.md) | 305 commonly asked Python interview questions (100 marked ★ as most frequent) in 15 groups, from basics to the GIL, free-threading and asyncio, plus output puzzles, Python coding tasks and NumPy/pandas; short spoken answers linked to the full explanations | `Chapter22-Notes.pdf` |
 
 Each chapter's PDF sits next to its README: `chapters/NN-name/ChapterNN-Notes.pdf`.
 
