@@ -16,7 +16,7 @@ Every chapter is written for a first-time learner and defines each term the firs
 | Developers who learned Java 8 (or 11) | A "what changed" route: `var`, switch expressions, text blocks, records, sealed types, pattern matching, sequenced collections, virtual threads, gatherers, Java 25's simpler `main` (Ch 17 plus the sections it links to) |
 | Developers coming from Python, JavaScript, C#… | Static types, the JVM, generics and erasure, checked exceptions, the collections framework — the parts that differ from what you know |
 | Back-end developers | Collections, streams, I/O, two concurrency chapters (threads to virtual threads), JVM internals and GC tuning, testing, Maven/Gradle, logging, JDBC (Ch 10–18) |
-| Interview candidates | Twenty DSA patterns in idiomatic Java, 42 Java language questions answered (Ch 19), cheat sheets with 250 machine-checked values and a 344-term glossary (Ch 20) |
+| Interview candidates | Twenty DSA patterns in idiomatic Java, 42 Java language questions answered (Ch 19), cheat sheets with 250 machine-checked values and a 344-term glossary (Ch 20), a 274-question interview bank with output puzzles and coding tasks (Ch 21) |
 
 ## How to use it
 Every topic follows the same rhythm: *what it is → why it matters → how it works → code with real output → trade-offs → common mistakes → real-world use → in the interview → self-check → TL;DR*. To review, skim the TL;DRs. To check you really learned a topic, answer the self-check questions without looking back.
@@ -40,14 +40,15 @@ Every topic follows the same rhythm: *what it is → why it matters → how it w
 1. Skim the TL;DRs of Ch 5–8 and 10 (equals/hashCode, immutability, exceptions, collections).
 2. Work through **Ch 19**: the toolkit (§19.1–19.7), then the twenty patterns (§19.8–19.27) — re-type each solution from memory and run it.
 3. Read the 42 questions in **§19.29** and practise the 30-second answers out loud; each links to the section that teaches it.
-4. The night before, review with **Ch 20** (cheat sheets, §20.17 interview-question index, glossary).
+4. Drill the **Ch 21** question bank: cover each answer, say yours out loud, then check (★ questions first).
+5. The night before, review with **Ch 20** (cheat sheets, §20.17 interview-question index, glossary).
 
 ```mermaid
 flowchart LR
     A["Part I - Foundations: Ch 1-4"] --> B["Part II - OOP and core APIs: Ch 5-9"]
     B --> C["Part III - Data and functional Java: Ch 10-13"]
     C --> D["Part IV - Concurrency and the JVM: Ch 14-16"]
-    D --> E["Part V - Modern Java, tooling, interviews, revision: Ch 17-20"]
+    D --> E["Part V - Modern Java, tooling, interviews, revision: Ch 17-21"]
 ```
 
 ## Related repositories
@@ -95,6 +96,7 @@ flowchart LR
 | 18 | [Testing, Build and Tooling](chapters/18-testing-build-and-tooling/README.md) | Project layout, Maven, Gradle, JUnit 6, parameterized tests, Mockito, AssertJ, reading failures, test design, logging, JDBC, JAR packaging, everyday tools, Spring Boot and friends | `Chapter18-Notes.pdf` |
 | 19 | [Java for Coding Interviews](chapters/19-java-for-coding-interviews/README.md) | The Java DSA toolkit and its pitfalls, a complexity table, twenty patterns with runnable checked solutions, talking through a solution, 42 Java interview questions answered | `Chapter19-Notes.pdf` |
 | 20 | [Cheat Sheets and Glossary](chapters/20-cheatsheet-and-glossary/README.md) | One sheet per area (values machine-checked by `CheatsheetChecks`), JVM flags and tools, version table 17 → 25, build and test commands, interview-question index, where next, 344-term glossary | `Chapter20-Notes.pdf` |
+| 21 | [Interview Question Bank](chapters/21-interview-question-bank/README.md) | 274 commonly asked Java interview questions (★ = very frequent) with say-it-out-loud answers and links to the full explanation: OOP, strings, equals/hashCode, exceptions, generics, collections internals, lambdas and streams, Java 9–25, concurrency, JVM and GC, I/O and serialization, testing, scenarios, output puzzles, coding tasks | `Chapter21-Notes.pdf` |
 
 Each chapter's PDF sits next to its README: `chapters/NN-name/ChapterNN-Notes.pdf`.
 
