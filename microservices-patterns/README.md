@@ -30,6 +30,7 @@ All 93 lessons across 14 chapters were read; the 12 patterns are written up belo
 | 11 | **Event-Driven Architecture** | Loose coupling and real-time reaction via events | [11-event-driven](chapters/11-event-driven/README.md) |
 | 12 | **CQRS** | Separate read and write models so each can be optimised | [12-cqrs](chapters/12-cqrs/README.md) |
 | 13 | **Configuration Externalization** | Change config without redeploying | [13-config-externalization](chapters/13-config-externalization/README.md) |
+| 14 | **Interview Question Bank** | 250 commonly asked microservices interview questions (monolith vs microservices, DDD, communication, gateway, resilience, data, observability, deployment, security, testing, Spring Cloud, scenarios) with short spoken answers and links to the chapters | [14-interview-question-bank](chapters/14-interview-question-bank/README.md) |
 
 **Interview Edition** — fast-revision digest of all 12 patterns (Q&A, gotchas, selection table, interview framework): [interview/INTERVIEW.md](interview/INTERVIEW.md) · PDF: [interview/Microservices-Patterns-Interview-Edition.pdf](interview/Microservices-Patterns-Interview-Edition.pdf)
 
