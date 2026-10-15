@@ -17,7 +17,7 @@ PostgreSQL is the main dialect. Where other databases behave differently, small 
 | Analysts and developers who know basic SQL | The parts people skip: NULL logic, CTEs and recursion, window functions, upsert, and the dialect traps (Ch 2–9) |
 | Backend developers | Constraints, indexes and `EXPLAIN`, transactions and isolation, JSONB, full-text search, row-level security, SQL from Python and Java, pooling and ORMs (Ch 9, 12–14) |
 | System-design learners | How storage, B-trees, MVCC and WAL work, then partitioning, sharding, replication, CAP, consensus, NoSQL and full schema case studies (Ch 12–17) |
-| Interview candidates | 83 worked SQL problems with a method for each (Ch 18–19), plus cheat sheets, 50 interview Q&As and a 298-term glossary (Ch 20), and a 250-question bank with LeetCode SQL 50 (Ch 21) |
+| Interview candidates | 83 worked SQL problems with a method for each (Ch 18–19), plus cheat sheets, a topic index into the Ch 21 question bank and a 601-term glossary (Ch 20), and a 250-question bank with LeetCode SQL 50 (Ch 21) |
 
 ## How to use it
 Every topic follows the same rhythm: *what it is → why it matters → how it works → code with real output → trade-offs → common mistakes → real-world use → in the interview → self-check → TL;DR*. To review, skim the TL;DRs. To check you really learned a topic, answer the self-check questions without looking back.
@@ -43,7 +43,7 @@ Every topic follows the same rhythm: *what it is → why it matters → how it w
 2. Learn the method in **§18.1**, then solve **Ch 18** (42 warm-up to medium problems) before reading each solution.
 3. Solve **Ch 19** (41 medium and hard problems: top-N per group, gaps and islands, pivots, relational division, retention).
 4. For design questions, read the "In the interview" sections of Ch 10–13 and a few case studies in Ch 17.
-5. The night before, review **Ch 20**: the pattern catalogue (§20.18), the 50 questions and answers (§20.19) and the dialect table (§20.16).
+5. The night before, review **Ch 20**: the pattern catalogue (§20.18), the interview topic index (§20.19, answers in Ch 21) and the dialect table (§20.16).
 6. Drill **Ch 21**: say the answer to each concept question out loud, and solve the LeetCode SQL 50 list and the other most-asked LeetCode problems by title.
 
 ```mermaid
@@ -80,7 +80,7 @@ The later chapters need different data, so they bring their own `00_schema.sql`:
 ## What's in here
 | Path | Purpose |
 |---|---|
-| `SQL-Handbook-Vol1.pdf`, `SQL-Handbook-Vol2.pdf` | The whole book in two PDFs (each under 600 pages), with a cover and a table of contents. Vol 1: Ch 1–11. Vol 2: Ch 12–21. |
+| `SQL-Handbook-Vol1.pdf`, `SQL-Handbook-Vol2.pdf` | The whole book in two PDFs (each under 350 pages), with a cover and a table of contents. Vol 1: Ch 1–11. Vol 2: Ch 12–21. |
 | `interview/INTERVIEW.md` + `interview/SQL-Interview-Edition.pdf` | **Interview Edition**: the whole book in ~51 pages for fast revision — per chapter must-know facts, key tables, likely questions with short answers, gotchas, the Ch 18–19 pattern tables with 19 representative problems, plus a top-25 question list and a last-minute checklist. |
 | `capstones/CAPSTONES.md` + `capstones/SQL-Capstone-Projects.pdf` | **Capstone Projects**: 40 build-it-yourself design briefs, beginner to advanced (personal library and movie ratings → e-commerce checkout, SKIP LOCKED queues, row-level security, JSONB → serializable ledger, partitioning, Citus, CDC/outbox, zero-downtime migrations, PITR, failover), each with requirements, architecture, an ER diagram, milestones, deep dives and interview questions, all on PostgreSQL 14 with newer features marked. |
 | `chapters/NN-name/README.md` + `ChapterNN-Notes.pdf` | One chapter (Markdown source and its PDF). |
@@ -116,7 +116,7 @@ The later chapters need different data, so they bring their own `00_schema.sql`:
 | **Part VI — Interviews and revision** | | | |
 | 18 | [SQL Interview Problems I](chapters/18-sql-interview-problems-1/README.md) | A five-step method, then 42 warm-up to medium problems: filtering, aggregation, joins, anti-joins, conditional aggregation, dates, ratios, first windows | `Chapter18-Notes.pdf` |
 | 19 | [SQL Interview Problems II](chapters/19-sql-interview-problems-2/README.md) | 41 medium and hard problems: Nth highest and top-N, running totals, gaps and islands, static and dynamic pivots, relational division, retention, rates | `Chapter19-Notes.pdf` |
-| 20 | [Cheat Sheets, Interview Q&A and Glossary](chapters/20-cheatsheet-and-glossary/README.md) | One sheet per area (behaviours machine-checked), decision tables, a five-database dialect table, the pattern catalogue, 50 interview Q&As, a 298-term glossary | `Chapter20-Notes.pdf` |
+| 20 | [Cheat Sheets, Interview Q&A and Glossary](chapters/20-cheatsheet-and-glossary/README.md) | One sheet per area (behaviours machine-checked), decision tables, a five-database dialect table, the pattern catalogue, an interview topic index pointing to Ch 21, a 601-term glossary | `Chapter20-Notes.pdf` |
 | 21 | [Interview Question Bank](chapters/21-interview-question-bank/README.md) | 250 questions as interviews ask them: 120 concept questions (keys, joins, NULL logic, normalization, indexes and `EXPLAIN`, transactions and locking, procedures and triggers, injection, partitioning, replication, sharding, SQL vs NoSQL) with short answers, and all of LeetCode SQL 50 plus 80 more most-asked LeetCode database problems, each with its approach and a tested PostgreSQL solution or a link to Ch 18–19 | `Chapter21-Notes.pdf` |
 
 Each chapter's PDF sits next to its README: `chapters/NN-name/ChapterNN-Notes.pdf`.

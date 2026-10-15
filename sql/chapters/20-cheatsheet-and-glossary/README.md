@@ -1,25 +1,21 @@
 # Chapter 20 — Cheat Sheets, Interview Q&A and Glossary
 
-This last chapter is the book on a few pages. It adds no new topics. It collects the syntax, rules, decision tables and vocabulary of Chapters 1–19 in one place so you can revise quickly before an interview, or look something up while you work. Every entry links back to the section that explains it properly, with examples and real output.
+The book on a few pages: no new topics, just the syntax, rules, decision tables and vocabulary of Chapters 1–19 in one place for quick revision or lookup. Every entry links to the section that explains it with examples and real output.
 
-**What you'll find here**
-
-- **Syntax cheat sheets** for each area of the book (20.2–20.14), most ending with the traps that matter most.
-- **The logical query-processing order** as a diagram (20.1). Most "why does this error happen" questions are answered by it.
-- **Decision tables**: which join (20.5), which subquery form (20.6), which window function (20.8), which index (20.11), which isolation level (20.12), which scaling tool (20.14) and which database (20.15).
+- **Syntax cheat sheets** per area (20.2–20.14), most ending with the traps that matter most; **the logical query-processing order** (20.1), which answers most "why does this error happen" questions.
+- **Decision tables**: which join (20.5), subquery form (20.6), window function (20.8), index (20.11), isolation level (20.12), scaling tool (20.14), database (20.15).
 - **A dialect table** for PostgreSQL, MySQL, SQL Server, SQLite and Oracle (20.16).
-- **Verified behaviours** (20.17). About a hundred claims from these sheets, such as `7/2 = 3`, `NULL` logic, rank ties and frame defaults, are asserted by a runnable script on PostgreSQL 14. A second script checks the SQLite column of the dialect table.
-- **The interview pattern catalogue** (20.18), linking every pattern to the solved problems in Chapters 18–19.
-- **Fifty interview questions with short answers** (20.19), each linked to its section.
-- **A glossary** of 595 terms, from *1NF* to *ZooKeeper* (20.20), covering every technical term, acronym and product name the book uses.
+- **Verified behaviours** (20.17): about a hundred claims from these sheets (`7/2 = 3`, `NULL` logic, rank ties, frame defaults…) asserted by a runnable script on PostgreSQL 14, plus a script checking the SQLite column of the dialect table.
+- **The interview pattern catalogue** (20.18), linking every pattern to solved problems in Chapters 18–19, and an **index of concept questions** (20.19) answered in the [Chapter 21 question bank](../21-interview-question-bank/README.md).
+- **A glossary** (20.20), from *1NF* to *ZooKeeper*: every technical term, acronym and product name the book uses, each defined once in plain English — look a word up there the first time you meet it.
 
-How to use it: read a sheet, cover the right-hand column of a table and say the answer out loud. Follow the link whenever an answer does not come easily. All SQL is PostgreSQL unless a row says otherwise. Other databases' syntax in the dialect table (20.16) was taken from their documentation and not run, except the SQLite column. Every technical term on these sheets, from *alias* to *ZooKeeper*, has a plain-English definition in the glossary (20.20): look a word up there the first time you meet it.
+How to use it: read a sheet, cover the right-hand column and say the answer aloud; follow the link when it doesn't come easily. All SQL is PostgreSQL unless a row says otherwise; other databases' syntax in 20.16 comes from their documentation and was not run, except the SQLite column.
 
 ---
 
 ## 20.1 The logical query-processing order
 
-You **write** `SELECT … FROM … WHERE … GROUP BY … HAVING … ORDER BY … LIMIT`, but the database **evaluates** it (logically) starting from `FROM`. Each step receives the table produced by the step before it. The optimizer (the part of the database that decides how to run a query) may physically reorder the work, but the result is always as if these steps ran in this order.
+You **write** `SELECT … FROM … WHERE … GROUP BY … HAVING … ORDER BY … LIMIT`, but the database **evaluates** it (logically) starting from `FROM`, each step receiving the previous step's table. The optimizer may physically reorder the work, but the result is always as if these steps ran in this order.
 
 ```mermaid
 flowchart TD
@@ -46,7 +42,7 @@ flowchart TD
 | A filter in `WHERE` on the right table of a `LEFT JOIN` removes the padded rows | `WHERE` runs after the join has built them ([§5.9](../05-joins/README.md#59-join-pitfalls)) |
 | With `SELECT DISTINCT`, `ORDER BY` may only use output columns | sorting happens after de-duplication |
 
-Two PostgreSQL relaxations: `GROUP BY` may refer to output aliases and positions (`GROUP BY 1`), and if you group by a table's primary key, the other columns of that table may be selected without being listed.
+Two PostgreSQL relaxations: `GROUP BY` may refer to output aliases and positions (`GROUP BY 1`), and grouping by a table's primary key lets you select that table's other columns without listing them.
 
 ---
 
@@ -68,7 +64,7 @@ LIMIT  10 OFFSET 20;                                    -- or OFFSET 20 ROWS FET
 | Need | Syntax | Remember |
 |---|---|---|
 | Rename a column | `expr AS name` | double-quote a name with spaces or capitals: `AS "Total"` |
-| Pattern match | `LIKE 'a_%'` | `%` = any run of characters, `_` = exactly one. `ESCAPE` for literal `%`. `~` / `~*` for regular expressions (text patterns) |
+| Pattern match | `LIKE 'a_%'` | `%` = any run of characters, `_` = exactly one. `ESCAPE` for literal `%`. `~` / `~*` for regular expressions |
 | Range | `x BETWEEN a AND b` | inclusive. For timestamps use half-open `x >= a AND x < b` |
 | NULL test | `IS NULL`, `IS NOT NULL` | `x = NULL` is never TRUE |
 | NULL-safe compare | `a IS [NOT] DISTINCT FROM b` | treats two NULLs as equal |
@@ -76,10 +72,10 @@ LIMIT  10 OFFSET 20;                                    -- or OFFSET 20 ROWS FET
 | Unique rows | `SELECT DISTINCT a, b` | applies to the whole output row, and NULLs count as equal |
 | First row per group | `SELECT DISTINCT ON (g) … ORDER BY g, ts` | PostgreSQL only. The leading `ORDER BY` keys must match `g` |
 | Sort | `ORDER BY a DESC NULLS LAST, b` | PostgreSQL puts NULLs **last** in ascending order and **first** in descending order |
-| Page | `LIMIT n OFFSET k` / `OFFSET k ROWS FETCH FIRST n ROWS ONLY` | always with `ORDER BY`. Deep pages → keyset pagination, which continues after the last key seen ([§12.14](../12-indexes-storage-and-query-performance/README.md#1214-offset-vs-keyset-pagination)) |
+| Page | `LIMIT n OFFSET k` / `OFFSET k ROWS FETCH FIRST n ROWS ONLY` | always with `ORDER BY`. Deep pages → keyset pagination ([§12.14](../12-indexes-storage-and-query-performance/README.md#1214-offset-vs-keyset-pagination)) |
 | Keep ties at the cut-off | `FETCH FIRST n ROWS WITH TIES` | needs `ORDER BY` (PostgreSQL 13+) |
 
-**Three-valued logic.** A comparison with `NULL` gives `UNKNOWN` (shown as NULL). `WHERE` and `HAVING` keep only rows where the condition is TRUE. `CHECK` constraints reject only FALSE.
+**Three-valued logic.** A comparison with `NULL` gives `UNKNOWN` (shown as NULL). `WHERE` and `HAVING` keep only rows where the condition is TRUE; `CHECK` constraints reject only FALSE.
 
 | `AND` | TRUE | FALSE | UNKNOWN |
 |---|---|---|---|
@@ -93,7 +89,7 @@ LIMIT  10 OFFSET 20;                                    -- or OFFSET 20 ROWS FET
 | **FALSE** | TRUE | FALSE | UNKNOWN |
 | **UNKNOWN** | TRUE | UNKNOWN | UNKNOWN |
 
-`NOT UNKNOWN` is UNKNOWN. Operator precedence is `NOT` > `AND` > `OR`, so add parentheses whenever you mix `AND` and `OR`.
+`NOT UNKNOWN` is UNKNOWN. Precedence is `NOT` > `AND` > `OR`, so parenthesise whenever you mix `AND` and `OR`.
 
 **Traps:** `x <> 5` silently drops rows where `x` is NULL. `NOT IN (list containing NULL)` returns no rows ([§2.5](../02-select-basics/README.md#25-null-and-three-valued-logic), [§6.2](../06-subqueries-and-set-operations/README.md#62-multi-row-subqueries-in-and-not-in)). `BETWEEN '2024-01-01' AND '2024-01-31'` on a timestamp misses everything after midnight on the 31st. `OFFSET 100000` still reads and throws away 100,000 rows.
 
@@ -110,9 +106,9 @@ Covers [Chapter 3](../03-functions-and-expressions/README.md).
 | Remainder | `7 % 3`, `mod(7, 3)` | takes the sign of the dividend (`-7 % 2` → `-1`) |
 | Rounding | `round(x, 2)`, `trunc(x)`, `ceil`, `floor` | `round(2.5)` → 3 on `numeric` (half away from zero), `round(2.5::float8)` → 2 (half to even) |
 | Logs and powers | `ln(x)`, `log(x)` (base 10), `log(b, x)`, `power(a, b)`, `sqrt` | MySQL's `LOG(x)` is the natural log |
-| Safe divide | `a / NULLIF(b, 0)` | `1 / 0` is an error (SQLSTATE 22012, a standard error code). The `NULLIF` version returns NULL. MySQL and SQLite return NULL for `x / 0` instead of failing (20.16) |
+| Safe divide | `a / NULLIF(b, 0)` | `1 / 0` is an error (SQLSTATE 22012); the `NULLIF` version returns NULL. MySQL and SQLite return NULL for `x / 0` instead of failing (20.16) |
 | Concatenate | `a \|\| b`, `concat(a, b)`, `concat_ws(', ', a, b)` | `\|\|` with a NULL gives NULL. `concat` skips NULLs |
-| Length | `length(s)` / `char_length(s)` = characters, `octet_length(s)` = bytes | `'é'` is 1 character, 2 bytes in UTF-8 (the usual text encoding) |
+| Length | `length(s)` / `char_length(s)` = characters, `octet_length(s)` = bytes | `'é'` is 1 character, 2 bytes in UTF-8 |
 | Pieces | `substring(s FROM 2 FOR 3)`, `left`, `right`, `split_part(s, ',', 2)` | positions are 1-based |
 | Clean up | `trim`, `lower`, `upper`, `initcap`, `replace`, `translate`, `lpad`, `regexp_replace` | |
 | Search | `position('x' IN s)`, `strpos(s, 'x')` | 0 means "not found" |
@@ -123,7 +119,7 @@ Covers [Chapter 3](../03-functions-and-expressions/README.md).
 | Time zones | `timestamptz` stores an instant. `ts AT TIME ZONE 'Europe/Paris'` converts | store `timestamptz`, not `timestamp` |
 | Conditionals | `CASE WHEN … THEN … ELSE … END`, `COALESCE`, `NULLIF`, `GREATEST`, `LEAST` | no `ELSE` → NULL. PostgreSQL's `GREATEST`/`LEAST` ignore NULLs |
 
-**Traps:** integer averages and percentages (`100 * a / b` with integers truncates, so write `100.0 * a / b`), `float` for money (use `numeric`), `timestamp` without a time zone for events in several regions, and assuming `LOG` means the same thing in every database.
+**Traps:** integer averages and percentages (`100 * a / b` with integers truncates — write `100.0 * a / b`), `float` for money (use `numeric`), `timestamp` without time zone for events in several regions, and assuming `LOG` means the same everywhere.
 
 ---
 
@@ -158,9 +154,9 @@ ORDER BY staff DESC;
 | `percentile_cont(0.5) WITHIN GROUP (ORDER BY x)` | median (interpolated) | `percentile_disc` returns an actual value; `mode()` the most common |
 | `GROUPING SETS ((a), (b), ())`, `ROLLUP (a, b)`, `CUBE (a, b)` | subtotals in one query | `grouping(a)` = 1 marks a rolled-up row. `ROLLUP (a, b)` = (a,b), (a), () |
 
-**Rules:** every selected column must be grouped or aggregated (or be functionally dependent on a grouped primary key, meaning its value is fixed once the key is known). NULLs form **one** group. `GROUP BY` does not sort. An aggregate query without `GROUP BY` always returns exactly one row, even over zero rows. That is why "return NULL if there is no answer" questions use an aggregate or scalar subquery ([P39](../18-sql-interview-problems-1/README.md#p39--second-highest-salary--and-return-null-if-none)).
+**Rules:** every selected column must be grouped or aggregated (or depend functionally on a grouped primary key). NULLs form **one** group. `GROUP BY` does not sort. An aggregate query without `GROUP BY` always returns exactly one row, even over zero rows — why "return NULL if there is no answer" questions use an aggregate or scalar subquery ([P39](../18-sql-interview-problems-1/README.md#p39--second-highest-salary--and-return-null-if-none)).
 
-**Traps:** `WHERE count(*) > 1` (use `HAVING`). `count(*)` after a `LEFT JOIN` counts the padding row, so use `count(right_table.id)` to get zero ([§5.9](../05-joins/README.md#59-join-pitfalls)). Averages of averages. Joining two child tables before aggregating multiplies the rows (fan-out).
+**Traps:** `WHERE count(*) > 1` (use `HAVING`). `count(*)` after a `LEFT JOIN` counts the padding row — use `count(right_table.id)` to get zero ([§5.9](../05-joins/README.md#59-join-pitfalls)). Averages of averages. Joining two child tables before aggregating multiplies the rows (fan-out).
 
 ---
 
@@ -205,7 +201,7 @@ flowchart LR
 
 *Figure 20.2 — Choosing a join.*
 
-**Pitfalls ([§5.9](../05-joins/README.md#59-join-pitfalls)):** fan-out when joining two one-to-many children, right-table conditions in `WHERE` after a `LEFT JOIN`, NULL join keys (never match), `count(*)` of padded rows, joining on names instead of keys, and `NOT IN` with NULLs. **How joins run:** nested loop (few outer rows, indexed inner key), hash join (large, equality only), merge join (both inputs sorted) ([§12.15](../12-indexes-storage-and-query-performance/README.md#1215-join-algorithms)).
+**Pitfalls ([§5.9](../05-joins/README.md#59-join-pitfalls)):** fan-out when joining two one-to-many children, right-table conditions in `WHERE` after a `LEFT JOIN`, NULL join keys (never match), `count(*)` of padded rows, joining on names instead of keys, `NOT IN` with NULLs. **How joins run:** nested loop (few outer rows, indexed inner key), hash join (large, equality only), merge join (both inputs sorted) ([§12.15](../12-indexes-storage-and-query-performance/README.md#1215-join-algorithms)).
 
 ---
 
@@ -231,7 +227,7 @@ Covers [Chapter 6](../06-subqueries-and-set-operations/README.md).
 | `INTERSECT [ALL]` | rows in both | NULLs compare as equal here |
 | `EXCEPT [ALL]` | rows in the first but not the second | not commutative. Oracle calls it `MINUS` |
 
-Rules: same number of columns, compatible types, column names come from the first query, `INTERSECT` binds tighter than `UNION`/`EXCEPT`, and `ORDER BY`/`LIMIT` apply to the whole combined result ([§6.11](../06-subqueries-and-set-operations/README.md#611-precedence-sorting-and-choosing-the-right-tool)).
+Rules: same number of columns, compatible types, column names from the first query, `INTERSECT` binds tighter than `UNION`/`EXCEPT`, and `ORDER BY`/`LIMIT` apply to the whole combined result ([§6.11](../06-subqueries-and-set-operations/README.md#611-precedence-sorting-and-choosing-the-right-tool)).
 
 ---
 
@@ -253,11 +249,11 @@ SELECT repeat('  ', depth - 1) || name AS org_chart FROM chain ORDER BY path;
 
 | Tool | What it is | Use it for | Remember |
 |---|---|---|---|
-| CTE `WITH x AS (…)` | a named subquery for one statement | readable step-by-step queries, reuse by name | PostgreSQL 12+ inlines (merges into the main query) single-use CTEs. `AS MATERIALIZED` / `NOT MATERIALIZED` override |
-| Data-modifying CTE | `WITH moved AS (DELETE … RETURNING *) INSERT … SELECT * FROM moved` | several changes in one atomic statement | PostgreSQL only. Every part sees the same snapshot (frozen view of the data) |
+| CTE `WITH x AS (…)` | a named subquery for one statement | readable step-by-step queries, reuse by name | PostgreSQL 12+ inlines single-use CTEs. `AS MATERIALIZED` / `NOT MATERIALIZED` override |
+| Data-modifying CTE | `WITH moved AS (DELETE … RETURNING *) INSERT … SELECT * FROM moved` | several changes in one atomic statement | PostgreSQL only. Every part sees the same snapshot |
 | Recursive CTE | anchor `UNION [ALL]` recursive term | trees, graphs, number and date series | the recursive term sees only the previous round. Stops when a round adds no rows. Needs a stop condition |
 | `CYCLE` / `SEARCH` clauses | built-in cycle detection and ordering | graphs | PostgreSQL 14+ |
-| `generate_series(a, b, step)` | a set-returning function (it returns rows) | calendars, filling gaps with zeros | inclusive of both ends. With `date` arguments and an `interval` step it returns `timestamptz`, so cast with `::date` |
+| `generate_series(a, b, step)` | a set-returning function | calendars, filling gaps with zeros | inclusive of both ends. With `date` arguments and an `interval` step it returns `timestamptz`, so cast with `::date` |
 | View | a stored query, no data | simplicity, security, stable interfaces | always current. Simple one-table views are updatable. `WITH CHECK OPTION` |
 | Materialized view | a stored result | expensive reports | stale until `REFRESH MATERIALIZED VIEW [CONCURRENTLY]` (needs a unique index) |
 
@@ -327,7 +323,7 @@ ON CONFLICT (sku) DO UPDATE SET qty = stock.qty + EXCLUDED.qty;   -- upsert
 | Statement | Does | Remember |
 |---|---|---|
 | `CREATE TABLE [IF NOT EXISTS]` | defines a table | `CREATE TABLE t AS SELECT …` copies data but no constraints. `LIKE src INCLUDING ALL` copies structure |
-| `ALTER TABLE … ADD / DROP / RENAME COLUMN`, `ALTER COLUMN … TYPE t USING expr`, `SET NOT NULL`, `ADD CONSTRAINT … NOT VALID` + `VALIDATE CONSTRAINT` | changes a table | many forms take an exclusive lock (blocking all other use of the table). Backfill (fill existing rows) before `SET NOT NULL` |
+| `ALTER TABLE … ADD / DROP / RENAME COLUMN`, `ALTER COLUMN … TYPE t USING expr`, `SET NOT NULL`, `ADD CONSTRAINT … NOT VALID` + `VALIDATE CONSTRAINT` | changes a table | many forms take an exclusive lock on the whole table. Backfill before `SET NOT NULL` |
 | `DROP TABLE [IF EXISTS] … [CASCADE]` | removes the table itself | `CASCADE` also drops dependent views and FKs |
 | `TRUNCATE t [RESTART IDENTITY] [CASCADE]` | empties the table fast | no per-row triggers. Transactional in PostgreSQL |
 | `DELETE FROM t WHERE …` | removes chosen rows | fires triggers, logs every row. Forget `WHERE` and every row goes |
@@ -354,7 +350,7 @@ ON CONFLICT (sku) DO UPDATE SET qty = stock.qty + EXCLUDED.qty;   -- upsert
 | `uuid` (`gen_random_uuid()`, PostgreSQL 13+) | ids made on many machines. Random UUIDs scatter B-tree inserts |
 | `GENERATED ALWAYS AS (expr) STORED` | derived columns kept in sync automatically. PostgreSQL 18 adds `VIRTUAL` (computed on read), which becomes the default when neither keyword is given |
 
-**Backups ([§9.12](../09-ddl-dml-and-constraints/README.md#912-backup-and-restore)):** `pg_dump` makes a logical copy, the statements needed to rebuild the data (plain SQL, or `-Fc` custom / `-Fd` directory formats for `pg_restore`, which can restore selected objects and run in parallel). Physical base backups (file-level copies of the whole server) + archived WAL (the write-ahead log of every change) allow point-in-time recovery (PITR). Plan by RPO (how much data you may lose) and RTO (how long recovery may take), keep 3 copies on 2 media with 1 off-site, and test restores.
+**Backups ([§9.12](../09-ddl-dml-and-constraints/README.md#912-backup-and-restore)):** `pg_dump` makes a logical copy (plain SQL, or `-Fc` custom / `-Fd` directory formats for `pg_restore`, which can restore selected objects in parallel). Physical base backups + archived WAL allow point-in-time recovery (PITR). Plan by RPO (data you may lose) and RTO (time to recover), keep 3 copies on 2 media with 1 off-site, and test restores.
 
 ---
 
@@ -362,7 +358,7 @@ ON CONFLICT (sku) DO UPDATE SET qty = stock.qty + EXCLUDED.qty;   -- upsert
 
 Covers [Chapter 10](../10-data-modeling-and-er-diagrams/README.md), [Chapter 11](../11-normalization/README.md) and [Chapter 17](../17-schema-design-case-studies/README.md).
 
-**Why databases exist ([§1.1](../01-databases-and-the-relational-model/README.md#11-before-databases-the-file-processing-era)).** File-based systems suffered from redundancy and inconsistency (the same fact stored in several files, drifting apart), isolated data in different formats, no general way to ask a new question, integrity rules buried in program code, lost updates when two users wrote at once, no atomic recovery after a crash, and all-or-nothing security. A DBMS (database management system) answers each of these by mediating every access.
+**Why databases exist ([§1.1](../01-databases-and-the-relational-model/README.md#11-before-databases-the-file-processing-era)).** File-based systems suffered redundancy and inconsistency (one fact in several files, drifting apart), isolated data in different formats, no general way to ask a new question, integrity rules buried in program code, lost updates when two users wrote at once, no atomic recovery after a crash, and all-or-nothing security. A DBMS answers each by mediating every access.
 
 **The three levels of a model ([§10.2](../10-data-modeling-and-er-diagrams/README.md#102-the-three-levels-of-a-data-model)).**
 
@@ -384,9 +380,9 @@ Covers [Chapter 10](../10-data-modeling-and-er-diagrams/README.md), [Chapter 11]
 
 **Mapping ER → tables ([§10.15](../10-data-modeling-and-er-diagrams/README.md#1015-converting-an-er-diagram-to-tables)).** Entity → table. Composite attribute → its parts. Multivalued attribute → its own table. Derived attribute → a view or generated column. 1:N → FK on the "many" side. M:N → junction table with a composite PK. 1:1 → FK + `UNIQUE`. Weak entity → owner's key + partial key as a composite PK, with `ON DELETE CASCADE`. Total participation → `NOT NULL` on the FK.
 
-**Keys ([§10.13](../10-data-modeling-and-er-diagrams/README.md#1013-keys-in-relational-databases)).** Superkey (any column set that identifies a row) ⊇ candidate key (a minimal superkey) ⊇ the one chosen **primary key**. The other candidates are **alternate keys** (enforce with `UNIQUE`). A **natural key** comes from the data (email, ISBN), a **surrogate key** is made up (identity, UUID). A good default: surrogate PK + `UNIQUE` on the natural key. **Prime attribute** = belongs to some candidate key.
+**Keys ([§10.13](../10-data-modeling-and-er-diagrams/README.md#1013-keys-in-relational-databases)).** Superkey ⊇ candidate key ⊇ the chosen **primary key**; other candidates are **alternate keys** (enforce with `UNIQUE`). **Natural key** (from the data: email, ISBN) vs **surrogate key** (made up: identity, UUID). A good default: surrogate PK + `UNIQUE` on the natural key.
 
-**Functional dependencies ([§11.1](../11-normalization/README.md#111-functional-dependencies)–[§11.5](../11-normalization/README.md#115-minimal-canonical-cover)).** `X → Y` means rows that agree on X agree on Y. It is a business rule: data can disprove it but never prove it. **Closure X⁺**: start with X, fire every FD whose left side is fully inside the set, repeat until nothing changes. X is a superkey when X⁺ contains every attribute. **Candidate keys**: attributes that never appear on a right side must be in every key, so start from them. **Armstrong's axioms**: reflexivity, augmentation, transitivity (plus derived union, decomposition, pseudotransitivity). **Minimal cover**: single-attribute right sides, no extraneous left-side attributes, no redundant FDs.
+**Functional dependencies ([§11.1](../11-normalization/README.md#111-functional-dependencies)–[§11.5](../11-normalization/README.md#115-minimal-canonical-cover)).** `X → Y` is a business rule: data can disprove it but never prove it. **Closure X⁺**: start with X, fire every FD whose left side is fully inside the set, repeat until nothing changes; X is a superkey when X⁺ contains every attribute. **Candidate keys**: attributes never on a right side must be in every key, so start from them. **Armstrong's axioms**: reflexivity, augmentation, transitivity (plus derived union, decomposition, pseudotransitivity). **Minimal cover**: single-attribute right sides, no extraneous left-side attributes, no redundant FDs.
 
 **Normal forms ([§11.6](../11-normalization/README.md#116-anomalies--why-normalization-exists)–[§11.13](../11-normalization/README.md#1113-fifth-normal-form-5nf--facts-that-need-three-tables)).**
 
@@ -397,11 +393,11 @@ Covers [Chapter 10](../10-data-modeling-and-er-diagrams/README.md), [Chapter 11]
 | 3NF | 2NF + no non-prime attribute depends on another non-key attribute. Formally: for each FD X → A, X is a superkey or A is prime | transitive dependencies |
 | BCNF | for every non-trivial FD X → Y, X is a superkey | the remaining FD redundancy |
 | 4NF | BCNF + no non-trivial multivalued dependency unless its left side is a superkey | independent lists stored together |
-| 5NF | every join dependency follows from the keys | facts that only make sense as three-way combinations |
+| 5NF (project-join NF) | every join dependency follows from the keys | facts that only make sense as three-way combinations |
 
-Two things people often get wrong about 1NF: atomicity depends on how the data is **used** (a full name is atomic if you never query first names separately), and a table is not in 1NF just because each cell holds one string. A comma-separated list in one string still breaks it.
+Two 1NF misunderstandings: atomicity depends on how data is **used** (a full name is atomic if you never query first names separately), and one string per cell is not enough — a comma-separated list in one string still breaks 1NF.
 
-**Anomalies** (why normalize): *insertion* (cannot record a fact without an unrelated one), *update* (one fact stored in many rows, so a change must touch all of them), *deletion* (removing one fact loses another). **Every decomposition must be lossless** (the shared columns are a key of at least one piece) and ideally **dependency-preserving**. 3NF can always have both. BCNF sometimes loses an FD, so most designs stop at 3NF ([§11.10](../11-normalization/README.md#1110-decomposition-done-right-lossless-joins-and-dependency-preservation)).
+**Anomalies** (insertion, update, deletion) come from storing one fact in several rows. **Every decomposition must be lossless** (shared columns are a key of at least one piece) and ideally **dependency-preserving**; 3NF can always have both, BCNF sometimes loses an FD, so most designs stop at 3NF ([§11.10](../11-normalization/README.md#1110-decomposition-done-right-lossless-joins-and-dependency-preservation)).
 
 **Design judgement calls ([§17.14](../17-schema-design-case-studies/README.md#1714-recurring-modeling-patterns)).**
 
@@ -435,7 +431,7 @@ EXPLAIN (ANALYZE, BUFFERS) SELECT … ;                               -- runs th
 
 | Query shape | Index | Why |
 |---|---|---|
-| `=`, `<`, `>`, `BETWEEN`, `ORDER BY`, `LIKE 'abc%'` (with `text_pattern_ops` or C collation, i.e. plain byte-order sorting) | **B-tree** (default) | sorted, supports ranges and order |
+| `=`, `<`, `>`, `BETWEEN`, `ORDER BY`, `LIKE 'abc%'` (with `text_pattern_ops` or C collation) | **B-tree** (default) | sorted, supports ranges and order |
 | `WHERE a = ? AND b > ?` | composite B-tree `(a, b)` | equality columns first, range column last |
 | `WHERE a = ?` returning only a few columns | `(a) INCLUDE (x, y)` | index-only scan, no table visits |
 | Only a small hot subset is queried (`status = 'new'`) | partial index `WHERE status = 'new'` | smaller, cheaper to maintain |
@@ -446,7 +442,7 @@ EXPLAIN (ANALYZE, BUFFERS) SELECT … ;                               -- runs th
 | Billions of rows physically ordered by time | **BRIN** | a few bytes per block range |
 | Low-selectivity column (`is_active` true for 90 %) | usually **none** | a sequential scan is cheaper |
 
-**Reading a plan ([§12.10](../12-indexes-storage-and-query-performance/README.md#1210-reading-explain-the-four-ways-to-read-a-table)).** Read from the innermost node outward. Each node shows `cost=startup..total` (planner units), estimated `rows`, and, with `ANALYZE`, `actual time`, actual `rows` and `loops` (multiply per-loop numbers by loops). `BUFFERS` shows pages hit in memory vs read.
+**Reading a plan ([§12.10](../12-indexes-storage-and-query-performance/README.md#1210-reading-explain-the-four-ways-to-read-a-table)).** Read from the innermost node outward. Each node shows `cost=startup..total` (planner units), estimated `rows`, and with `ANALYZE` `actual time`, actual `rows` and `loops` (multiply per-loop numbers by loops). `BUFFERS` shows pages hit in memory vs read.
 
 | Node | Means | Chosen when |
 |---|---|---|
@@ -459,9 +455,9 @@ EXPLAIN (ANALYZE, BUFFERS) SELECT … ;                               -- runs th
 | Merge Join | merges two sorted inputs | both sides already sorted (or cheap to sort) |
 | Sort / Incremental Sort, HashAggregate / GroupAggregate | sorting and grouping | watch `Sort Method: external merge` (spilled to disk) |
 
-**The big warning sign:** estimated rows far from actual rows. Refresh statistics with `ANALYZE`, and consider extended statistics (statistics on combinations of columns) for correlated columns ([§12.16](../12-indexes-storage-and-query-performance/README.md#1216-statistics-how-the-planner-estimates)).
+**The big warning sign:** estimated rows far from actual rows. Refresh statistics with `ANALYZE`; consider extended statistics for correlated columns ([§12.16](../12-indexes-storage-and-query-performance/README.md#1216-statistics-how-the-planner-estimates)).
 
-**Anti-patterns that disable an index ([§12.13](../12-indexes-storage-and-query-performance/README.md#1213-anti-patterns-that-disable-indexes)):** a function or arithmetic on the indexed column (`WHERE date(ts) = …`, `WHERE price * 1.2 > …`), a leading wildcard (`LIKE '%x'`), implicit casts, `OR` across different columns (sometimes fixable with `UNION` or a bitmap), a composite index whose leading column is not filtered (PostgreSQL 18+, like Oracle and MySQL 8.0.13+, can sometimes skip-scan it when that column has few distinct values, but don't design around it), deep `OFFSET` paging (use keyset: `WHERE (ts, id) < (:last_ts, :last_id) ORDER BY ts DESC, id DESC LIMIT 20`), and N+1 query loops from application code (one extra query per item of a list). Every index slows writes and uses space, so index real query patterns, not columns.
+**Anti-patterns that disable an index ([§12.13](../12-indexes-storage-and-query-performance/README.md#1213-anti-patterns-that-disable-indexes)):** a function or arithmetic on the indexed column (`WHERE date(ts) = …`, `WHERE price * 1.2 > …`), a leading wildcard (`LIKE '%x'`), implicit casts, `OR` across different columns (sometimes fixable with `UNION` or a bitmap), a composite index whose leading column is not filtered (PostgreSQL 18+, like Oracle and MySQL 8.0.13+, can sometimes skip-scan it when that column has few distinct values, but don't design around it), deep `OFFSET` paging (keyset: `WHERE (ts, id) < (:last_ts, :last_id) ORDER BY ts DESC, id DESC LIMIT 20`), and N+1 query loops in application code. Every index slows writes and uses space, so index real query patterns, not columns.
 
 ---
 
@@ -479,7 +475,7 @@ BEGIN ISOLATION LEVEL REPEATABLE READ;
 COMMIT;                          -- or ROLLBACK
 ```
 
-**ACID.** *Atomicity*: all or nothing (undo via log or, in PostgreSQL, by marking the transaction aborted). *Consistency*: constraints and application rules hold before and after. *Isolation*: concurrent transactions do not see each other's partial work (locks, MVCC = multiversion concurrency control, SSI = serializable snapshot isolation, both explained below). *Durability*: a committed change survives a crash (write-ahead log flushed at commit, checkpoints, replicas).
+**ACID.** *Atomicity*: all or nothing (undo via log or, in PostgreSQL, marking the transaction aborted). *Consistency*: constraints and application rules hold before and after. *Isolation*: concurrent transactions don't see each other's partial work (locks, MVCC, SSI). *Durability*: a committed change survives a crash (WAL flushed at commit, checkpoints, replicas).
 
 **Anomalies ([§13.4](../13-transactions-and-concurrency/README.md#134-isolation--anomalies-and-isolation-levels)).**
 
@@ -505,7 +501,7 @@ COMMIT;                          -- or ROLLBACK
 
 | Situation | Choose |
 |---|---|
-| Ordinary OLTP (many small transactions), single-statement changes (`SET qty = qty - 1`) | Read Committed |
+| Ordinary OLTP, single-statement changes (`SET qty = qty - 1`) | Read Committed |
 | A consistent multi-query report or export | Repeatable Read, `READ ONLY` |
 | Read a row, decide, write it back | `SELECT … FOR UPDATE` at Read Committed, or an atomic `UPDATE … WHERE`, or Repeatable Read + retry |
 | Optimistic editing across user think-time | a `version` column: `UPDATE … SET version = version + 1 WHERE id = ? AND version = ?` |
@@ -513,9 +509,9 @@ COMMIT;                          -- or ROLLBACK
 | Many workers taking jobs from a queue | `SELECT … FOR UPDATE SKIP LOCKED LIMIT 1` |
 | Must not wait at all | `FOR UPDATE NOWAIT` (errors immediately if locked) |
 
-**Concurrency control families ([§13.9](../13-transactions-and-concurrency/README.md#139-concurrency-control--the-big-picture)).** Pessimistic locking (shared/exclusive locks, two-phase locking: grow then shrink, strict 2PL holds write locks to commit). Optimistic (work freely, validate at commit, abort on conflict). Timestamp ordering (each transaction gets a timestamp, operations out of order are rejected). **MVCC** (writers create new row versions, readers see a snapshot, so readers never block writers. PostgreSQL marks versions with `xmin`/`xmax` and cleans dead ones with VACUUM).
+**Concurrency control families ([§13.9](../13-transactions-and-concurrency/README.md#139-concurrency-control--the-big-picture)).** Pessimistic locking (shared/exclusive locks; two-phase locking: grow then shrink; strict 2PL holds write locks to commit). Optimistic (work freely, validate at commit, abort on conflict). Timestamp ordering (operations out of timestamp order are rejected). **MVCC** (writers create new row versions, readers see a snapshot, so readers never block writers; PostgreSQL marks versions with `xmin`/`xmax` and cleans dead ones with VACUUM).
 
-**Deadlocks ([§13.11](../13-transactions-and-concurrency/README.md#1311-deadlocks)):** two transactions each wait for a lock the other holds. PostgreSQL detects it after `deadlock_timeout` and aborts one (SQLSTATE 40P01). Prevent it by locking rows in a consistent order and keeping transactions short. Application code should **retry on 40001 and 40P01**.
+**Deadlocks ([§13.11](../13-transactions-and-concurrency/README.md#1311-deadlocks)):** two transactions each wait for a lock the other holds. PostgreSQL detects it after `deadlock_timeout` and aborts one (SQLSTATE 40P01). Prevent by locking rows in a consistent order and keeping transactions short. Application code should **retry on 40001 and 40P01**.
 
 ---
 
@@ -554,8 +550,8 @@ CREATE TRIGGER t_touch BEFORE UPDATE ON products FOR EACH ROW EXECUTE FUNCTION t
 | Roles and privileges | `CREATE ROLE app LOGIN`, `GRANT SELECT, INSERT ON t TO app`, `REVOKE` | group roles, least privilege |
 | Row-level security | `ALTER TABLE t ENABLE ROW LEVEL SECURITY`, `CREATE POLICY p ON t USING (tenant_id = current_setting('app.tenant')::int)` | `USING` filters reads, `WITH CHECK` filters writes. Superusers and `BYPASSRLS` roles always bypass it; the table owner does too unless `FORCE ROW LEVEL SECURITY` |
 | SQL injection defence | bind parameters: psycopg `%s`, sqlite3 `?`, JDBC `PreparedStatement` `?` | never concatenate user input. Identifiers: allow-list or `format('%I', …)` |
-| From code | explicit transactions, `Decimal`/`BigDecimal` for money, batching or `COPY` for bulk loads, stream large results | a connection pool (small, reused) or PgBouncer (a pooling proxy) in front of many clients |
-| ORMs | fast for CRUD (create, read, update, delete) | watch for N+1 queries. Hand-write complex and hot queries ([§14.13](../14-advanced-sql-and-using-sql-from-code/README.md#1413-orms-vs-raw-sql)) |
+| From code | explicit transactions, `Decimal`/`BigDecimal` for money, batching or `COPY` for bulk loads, stream large results | a small, reused connection pool, or PgBouncer in front of many clients |
+| ORMs | fast for CRUD | watch for N+1 queries. Hand-write complex and hot queries ([§14.13](../14-advanced-sql-and-using-sql-from-code/README.md#1413-orms-vs-raw-sql)) |
 
 ---
 
@@ -582,17 +578,17 @@ CREATE TABLE events_2024_06 PARTITION OF events
 
 | Concept | One-line rule |
 |---|---|
-| Shard key | high cardinality (many distinct values), spreads load evenly, matches the most common query filter |
+| Shard key | high cardinality, spreads load evenly, matches the most common query filter |
 | Consistent hashing | only about 1/n of keys move when a node joins. Virtual nodes smooth the load |
 | Synchronous vs asynchronous replication | sync = no committed data lost but slower writes. Async = fast, with lag and possible loss on failover |
 | Single-leader / multi-leader / leaderless | one writer (simple) / several writers (conflicts to resolve) / quorums with R + W > N |
 | Consistency models | strong (linearizable) > sequential > causal > session (read-your-writes) > eventual |
 | CAP | during a network partition choose consistency or availability |
 | PACELC | if Partitioned choose A or C, Else choose Latency or Consistency |
-| Consensus (Raft, Paxos) | a majority of 2f + 1 nodes tolerates f crashes. Byzantine faults (nodes that lie, handled by PBFT) need 3f + 1 |
+| Consensus (Raft, Paxos) | a majority of 2f + 1 nodes tolerates f crashes. Byzantine faults (PBFT) need 3f + 1 |
 | Two-phase commit | prepare, then commit. Blocks if the coordinator dies after prepare |
 | Recovery | WAL first, checkpoints bound replay, redo committed work, undo uncommitted work |
-| High availability | heartbeat → quorum decides → promote a replica → fence (block writes from) the old leader → redirect clients |
+| High availability | heartbeat → quorum decides → promote a replica → fence the old leader → redirect clients |
 | Backups vs replicas | a replica copies your mistakes too. Only backups (with PITR) undo a bad `DELETE` |
 
 ---
@@ -604,7 +600,7 @@ Covers [Chapter 16](../16-beyond-relational/README.md). Default to PostgreSQL fo
 | Family | Data shape | Strength | Weakness | Examples |
 |---|---|---|---|---|
 | Relational (OLTP) | tables, keys, constraints | joins, ACID, ad-hoc SQL | scaling writes beyond one node takes work | PostgreSQL, MySQL, SQL Server, Oracle |
-| Key-value | key → opaque value | fastest get/put, TTL (automatic expiry), simple scale-out | no queries by value | Redis, DynamoDB (also document-like), Memcached |
+| Key-value | key → opaque value | fastest get/put, TTL, simple scale-out | no queries by value | Redis, DynamoDB (also document-like), Memcached |
 | Document | nested JSON per record | flexible schema, whole-object reads | cross-document joins and transactions are limited or costly | MongoDB, Couchbase, Firestore |
 | Wide-column | partition key + sorted clustering columns | huge write rates, time-ordered data per key | must model around queries, no joins | Cassandra, ScyllaDB, HBase, Bigtable |
 | Graph | nodes and edges | multi-hop traversals, paths | bulk analytics over all data, sharding | Neo4j, Amazon Neptune |
@@ -630,14 +626,14 @@ flowchart TD
     K -- "relevance text search" --> SE["Search engine"]
 ```
 
-*Figure 20.3 — A first-pass database choice. Real systems often combine several (polyglot persistence), fed from one source of truth by change data capture (streaming every committed change out of the main database).*
+*Figure 20.3 — A first-pass database choice. Real systems often combine several (polyglot persistence), fed from one source of truth by change data capture.*
 
-**ACID vs BASE.** BASE = *Basically Available, Soft state, Eventually consistent*: stay up and accept writes, and let replicas converge later. It is a spectrum, not a switch: many NoSQL stores offer tunable or per-operation consistency.
+**ACID vs BASE.** BASE = *Basically Available, Soft state, Eventually consistent*: stay up and accept writes, let replicas converge later. A spectrum, not a switch: many NoSQL stores offer tunable or per-operation consistency.
 
 ---
 ## 20.16 Dialect differences
 
-The book runs PostgreSQL 14. This table collects the differences you are most likely to hit when you move a query to another database. Versions in brackets are the first release with the feature. "—" means there is no built-in equivalent. Oracle means 19c, with features added in 21c or 23ai (renamed 26ai) marked. The SQLite column was checked on SQLite 3.43 by `code/02_sqlite_dialect.sqlite.sql` (20.17). The other columns come from each vendor's documentation and were not run here.
+The differences you are most likely to hit when moving a query off PostgreSQL 14. Versions in brackets are the first release with the feature; "—" means no built-in equivalent; Oracle means 19c, with 21c or 23ai (renamed 26ai) features marked. The SQLite column was checked on SQLite 3.43 by `code/02_sqlite_dialect.sqlite.sql` (20.17); the other columns come from vendor documentation and were not run.
 
 **Syntax and basics**
 
@@ -718,9 +714,11 @@ The book runs PostgreSQL 14. This table collects the differences you are most li
 | Feature | PostgreSQL | MySQL 8 (InnoDB) | SQL Server | SQLite | Oracle |
 |---|---|---|---|---|---|
 | Table storage | heap + separate indexes | clustered on the primary key | heap or clustered index | B-tree keyed by rowid | heap (index-organized tables optional) |
+| Page size | 8 KB | 16 KB | 8 KB | 4 KB default | (not covered) |
 | Partial index | yes | — | filtered index | yes | — (function-based index returning NULL) |
 | Covering `INCLUDE` | yes (11) | — (add to the key) | yes | — | — |
 | Expression index | yes | functional key parts (8.0.13) | index a computed column | yes | function-based index |
+| Hash index | yes (crash-safe since 10) | MEMORY engine only; InnoDB builds an adaptive hash index itself | memory-optimized tables | — | hash clusters |
 | Show the plan | `EXPLAIN (ANALYZE, BUFFERS)` | `EXPLAIN ANALYZE` (8.0.18), `EXPLAIN FORMAT=TREE` | actual execution plan, `SET STATISTICS IO ON` | `EXPLAIN QUERY PLAN` | `EXPLAIN PLAN FOR` + `DBMS_XPLAN.DISPLAY` |
 
 **Dates and functions**
@@ -742,7 +740,7 @@ The book runs PostgreSQL 14. This table collects the differences you are most li
 
 ## 20.17 Verified behaviours
 
-Every concrete behaviour quoted on these sheets, such as `7 / 2 = 3`, `NULL = NULL` being unknown, rank ties, the default window frame, `NOT IN` with a NULL, upsert, and `->>` returning text, is asserted by `code/01_cheatsheet_checks.sql`. The fixtures and a small checker live in `code/00_schema.sql`:
+Every concrete behaviour quoted on these sheets — `7 / 2 = 3`, `NULL = NULL` being unknown, rank ties, the default window frame, `NOT IN` with a NULL, upsert, `->>` returning text — is asserted by `code/01_cheatsheet_checks.sql`. Fixtures and a small checker live in `code/00_schema.sql`:
 
 ```sql
 CREATE FUNCTION chk(p_area text, p_claim text, p_got text, p_expected text)
@@ -757,97 +755,39 @@ BEGIN
 END $$;
 ```
 
-`chk` compares with `IS DISTINCT FROM`, so an expected NULL is checked properly too (a plain `<>` would let a NULL result slip through, which is exactly the trap of 20.2). The checks are grouped into `DO` blocks by area. A few examples:
+`chk` compares with `IS DISTINCT FROM`, so an expected NULL is checked properly (a plain `<>` would let a NULL result slip through — the trap of 20.2). Checks are grouped into `DO` blocks by area, for example:
 
 ```sql
 DO $$ BEGIN
   PERFORM chk('NULL', '2 NOT IN (1, NULL) is NULL, not TRUE',     (2 NOT IN (1, NULL))::text, NULL);
-  PERFORM chk('NULL', 'NOT IN over a list holding NULL keeps 0 rows',
-              (SELECT count(*) FROM customers WHERE id NOT IN (SELECT customer_id FROM banned))::text, '0');
   -- ...
 END $$;
 
 DO $$ BEGIN
-  PERFORM chk('Windows', 'row_number / rank / dense_rank on 30,20,20,10',
-              (SELECT string_agg(format('%s:%s/%s/%s', name, rn, rk, drk), ' ' ORDER BY rn)
-                 FROM (SELECT name,
-                              row_number() OVER (ORDER BY points DESC, name) AS rn,
-                              rank()       OVER (ORDER BY points DESC)       AS rk,
-                              dense_rank() OVER (ORDER BY points DESC)       AS drk
-                         FROM scores WHERE points IS NOT NULL) t),
-              'Al:1/1/1 Bo:2/2/2 Cy:3/2/2 Di:4/4/3');
   PERFORM chk('Windows', 'default frame with ORDER BY is RANGE: peers share the running total',
               (SELECT string_agg(s::text, ',' ORDER BY day, amount)
                  FROM (SELECT day, amount, sum(amount) OVER (ORDER BY day) AS s FROM sales) t),
               '10,40,40,45');
-  -- ...
+  -- ... (rank ties; later blocks: transactional TRUNCATE, JSONB, arrays, FTS — see the file)
 END $$;
-
--- transactional DDL: a TRUNCATE inside a failed sub-block is rolled back
-BEGIN
-  TRUNCATE t_users;
-  RAISE EXCEPTION 'undo';
-EXCEPTION WHEN raise_exception THEN NULL;
-END;
-PERFORM chk('DDL', 'TRUNCATE is transactional in PostgreSQL (rows came back)',
-            (SELECT count(*) FROM t_users)::text, '3');
 ```
 
-If a claim were wrong, the file would stop with, for example, `ERROR: cheat-sheet claim FAILED [Functions] …: got 2/2, expected 1/2`. (That exact message appeared once while this chapter was being written, when the scratch database was accidentally created with the `SQL_ASCII` encoding. In that encoding `length('é')` counts bytes. The runner always creates UTF-8 databases.) The file ends by listing what was verified.
+A wrong claim stops the file with, e.g., `ERROR: cheat-sheet claim FAILED [Functions] …: got 2/2, expected 1/2` — that exact message appeared once while writing this chapter, when the scratch database was accidentally created with `SQL_ASCII` encoding, where `length('é')` counts bytes (the runner always creates UTF-8 databases). Output (`bash tools_run_sql.sh sql '20-*'` → `OK`): claims per area — NULL 18, Functions 18, Aggregation 12, Joins 5, Subqueries 3, Set ops 5, DISTINCT 1, ORDER BY 4, WHERE 4, Windows 12, CTEs 3, Constraints 3, Upsert 2, DML 1, DDL 1, Transactions 2, JSONB 5, Arrays 3, FTS 2 — **`total_claims_verified` 104**.
 
-Output (`bash tools_run_sql.sh sql '20-*'` → `OK`, and the final queries):
-
-```text
-     area     | claims 
---------------+--------
- NULL         |     18
- Functions    |     18
- Aggregation  |     12
- Joins        |      5
- Subqueries   |      3
- Set ops      |      5
- DISTINCT     |      1
- ORDER BY     |      4
- WHERE        |      4
- Windows      |     12
- CTEs         |      3
- Constraints  |      3
- Upsert       |      2
- DML          |      1
- DDL          |      1
- Transactions |      2
- JSONB        |      5
- Arrays       |      3
- FTS          |      2
-(19 rows)
-
- total_claims_verified 
------------------------
-                   104
-(1 row)
-```
-
-The SQLite column of the dialect table is checked the same way by `code/02_sqlite_dialect.sqlite.sql`. SQLite has no `DO` blocks, so each claim is inserted into a table whose `CHECK (ok = 1)` fails the script when a claim is false:
+The SQLite column of the dialect table is checked by `code/02_sqlite_dialect.sqlite.sql`. SQLite has no `DO` blocks, so each claim is inserted into a table whose `CHECK (ok = 1)` fails the script when a claim is false:
 
 ```sql
 CREATE TABLE claim (what TEXT, ok INTEGER CHECK (ok = 1));
 INSERT INTO claim VALUES
  ('7/2 = 3 (integer division)',               7 / 2 = 3),
  ('a || NULL is NULL',                        ('a' || NULL) IS NULL),
- ('LIKE is case-insensitive for ASCII',       'Anna' LIKE 'a%'),
- ('NULLs sort first in ASC',                  (SELECT name FROM s ORDER BY pts LIMIT 1) = 'c'),
- ('IS DISTINCT FROM exists (3.39+)',          (NULL IS NOT DISTINCT FROM NULL) = 1),
  -- ...
  ('UNIQUE allows several NULLs',              (SELECT count(*) FROM u) = 2);
 BEGIN; CREATE TABLE gone (x); ROLLBACK;        -- DDL is transactional in SQLite too
 INSERT INTO claim SELECT 'DDL rolls back', (SELECT count(*) FROM sqlite_master WHERE name = 'gone') = 0;
 ```
 
-Output:
-
-```text
-28 SQLite claims verified
-```
+Output: `28 SQLite claims verified`.
 
 ---
 
@@ -888,99 +828,43 @@ Most SQL interview questions are one of about twenty patterns. Recognise the pat
 
 ## 20.19 Interview questions and answers
 
-Concept questions (the coding problems are in Chapters 18–19). Each answer is the short version. Follow the link for the long one.
+The concept questions that used to be answered here are answered once, in 30–60-second form with a link to the full explanation, in [Chapter 21 Part A](../21-interview-question-bank/README.md#part-a--concept-questions). Index by topic (Q-numbers are Chapter 21's):
 
-**Fundamentals**
+| Topic | Question → Chapter 21 |
+|---|---|
+| [Fundamentals and keys](../21-interview-question-bank/README.md#fundamentals-and-keys) | database vs DBMS vs SQL → Q1 · DDL/DML/DQL/DCL/TCL → Q2 · PK vs unique vs FK → Q4 · superkey vs candidate key → Q5 · natural vs surrogate key → Q6 · `DELETE` vs `TRUNCATE` vs `DROP` → Q9 |
+| [SELECT, NULL logic and query order](../21-interview-question-bank/README.md#select-null-logic-and-query-order) | evaluation order of a `SELECT` → Q13 · NULL and `x = NULL` → Q14 · why `NOT IN` returns nothing → Q16 · `WHERE` vs `HAVING` → Q18 · `count(*)` vs `count(col)` vs `count(DISTINCT col)` → Q19 · why `OFFSET` paging is slow → Q22 |
+| [Joins, subqueries and set operations](../21-interview-question-bank/README.md#joins-subqueries-and-set-operations) | join types → Q25 · `LEFT JOIN` behaving like inner → Q27 · anti-join → Q28 (semi-join: Q31) · correlated subquery → Q30 · `EXISTS` vs `IN` → Q31 · `UNION` vs `UNION ALL` → Q32 |
+| [Aggregation, CTEs, views and window functions](../21-interview-question-bank/README.md#aggregation-ctes-views-and-window-functions) | CTE vs subquery → Q36 · recursive CTE → Q37 · view vs materialized view → Q38 · window vs `GROUP BY` → Q40 · `ROW_NUMBER` / `RANK` / `DENSE_RANK` → Q41 · frames, repeated running totals, `LAST_VALUE` → Q43 · gaps and islands → Q45 · Nth highest salary → Q172 |
+| [Normalization and data modeling](../21-interview-question-bank/README.md#normalization-and-data-modeling) | anomalies / why normalize → Q49 · 1NF–BCNF → Q50 · denormalization → Q53 · many-to-many → Q54 |
+| [Indexes, EXPLAIN and query optimization](../21-interview-question-bank/README.md#indexes-explain-and-query-optimization) | B-tree → Q60 · clustered vs non-clustered → Q61 · composite column order → Q63 · covering index → Q64 · index not used → Q65 · reading `EXPLAIN ANALYZE` → Q67 · join algorithms → Q69 · N+1 → Q71 |
+| [Transactions, isolation and locking](../21-interview-question-bank/README.md#transactions-isolation-and-locking) | ACID → Q74 · anomalies → Q75 · isolation levels → Q76 · PostgreSQL's Repeatable Read → Q77 · lost updates → Q78 · write skew → Q79 · optimistic vs pessimistic → Q80 · deadlocks → Q82 · job queue → Q84 · MVCC → Q85 |
+| [Procedures, security, scaling, NoSQL](../21-interview-question-bank/README.md#stored-procedures-triggers-security-and-sql-injection) | SQL injection → Q93 · partitioning vs sharding vs replication → Q99 · sync vs async replication → Q101 · CAP and PACELC → Q104 · relational vs NoSQL → Q106 · backup vs replica (PITR) → Q109 |
 
-1. **What is the difference between a database, a DBMS and SQL?** A database is an organised, persistent collection of related data. A DBMS is the software that stores it and controls access (queries, concurrency, recovery, security). SQL is the declarative language used to talk to a relational DBMS. → [§1.2](../01-databases-and-the-relational-model/README.md#12-what-a-database-is), [§1.3](../01-databases-and-the-relational-model/README.md#13-what-a-dbms-does), [§1.9](../01-databases-and-the-relational-model/README.md#19-what-sql-is)
-2. **What are DDL, DML, DQL, DCL and TCL?** Define structure (`CREATE`, `ALTER`, `DROP`), change data (`INSERT`, `UPDATE`, `DELETE`), query (`SELECT`), grant rights (`GRANT`, `REVOKE`) and control transactions (`BEGIN`, `COMMIT`, `ROLLBACK`). → [§1.9](../01-databases-and-the-relational-model/README.md#19-what-sql-is)
-3. **Relational vs NoSQL — how do you choose?** By access pattern and consistency need. Relational for structured data with joins, constraints and transactions. NoSQL families when a specific shape (key lookups, nested documents, huge write rates, graphs) dominates and you accept weaker guarantees. → [§1.8](../01-databases-and-the-relational-model/README.md#18-relational-vs-non-relational-databases), [§16.10](../16-beyond-relational/README.md#1610-choosing-a-database)
-4. **In what order is a `SELECT` evaluated?** FROM/JOIN → WHERE → GROUP BY → aggregates → HAVING → SELECT (windows) → DISTINCT → set operations → ORDER BY → LIMIT. That is why `WHERE` cannot see aliases and `ORDER BY` can. → [§4.5](../04-aggregation/README.md#45-the-logical-order-of-query-processing)
-5. **What does NULL mean, and why does `x = NULL` not work?** NULL marks an unknown or missing value. Any comparison with it is UNKNOWN, and `WHERE` keeps only TRUE, so use `IS NULL` or `IS DISTINCT FROM`. → [§2.5](../02-select-basics/README.md#25-null-and-three-valued-logic)
-6. **Why can `NOT IN` return no rows?** `x NOT IN (a, NULL)` means `x <> a AND x <> NULL`. The second part is UNKNOWN, so the whole condition is never TRUE. Use `NOT EXISTS`. → [§6.2](../06-subqueries-and-set-operations/README.md#62-multi-row-subqueries-in-and-not-in)
-7. **`WHERE` vs `HAVING`?** `WHERE` filters rows before grouping and cannot use aggregates. `HAVING` filters groups after aggregation. → [§4.3](../04-aggregation/README.md#43-having)
-8. **`count(*)` vs `count(col)` vs `count(DISTINCT col)`?** All rows / non-NULL values / distinct non-NULL values. → [§4.1](../04-aggregation/README.md#41-aggregate-functions)
-9. **`UNION` vs `UNION ALL`?** `UNION` removes duplicates (extra sort or hash). `UNION ALL` keeps everything and is cheaper. → [§6.8](../06-subqueries-and-set-operations/README.md#68-set-operations-and-union)
-10. **`DELETE` vs `TRUNCATE` vs `DROP`?** Chosen rows (triggers fire, each row logged) / all rows quickly / the table itself. In PostgreSQL all three can be rolled back. → [§9.6](../09-ddl-dml-and-constraints/README.md#96-drop-and-truncate-vs-delete)
+One design question not in the bank:
 
-**Joins, subqueries, CTEs, windows**
-
-11. **Explain the join types.** Inner = matching pairs. Left/right = all of one side plus matches. Full = all of both. Cross = every pair. Self = a table joined to itself. → [§5.2](../05-joins/README.md#52-the-four-main-join-types-at-a-glance)
-12. **Why did my `LEFT JOIN` behave like an inner join?** A condition on the right table in `WHERE` removes the NULL-padded rows. Move it into `ON`. → [§5.9](../05-joins/README.md#59-join-pitfalls)
-13. **What is a semi-join and an anti-join?** Semi: left rows that have a match, each returned once (`EXISTS`). Anti: left rows with no match (`NOT EXISTS`). → [§5.8](../05-joins/README.md#58-semi-joins-and-anti-joins)
-14. **What is a correlated subquery?** A subquery that refers to the outer row, so conceptually it runs once per outer row. The planner can often turn it into a join. → [§6.3](../06-subqueries-and-set-operations/README.md#63-correlated-subqueries)
-15. **`EXISTS` vs `IN`?** Both express a semi-join and PostgreSQL usually plans them the same way. The difference is `NOT IN` vs `NOT EXISTS` when NULLs are possible. → [§6.4](../06-subqueries-and-set-operations/README.md#64-exists-and-not-exists)
-16. **CTE vs subquery vs view vs materialized view?** A CTE names a step inside one statement. A subquery is inline. A view is a stored query, always current. A materialized view stores the result and must be refreshed. → [§7.9](../07-ctes-views-and-recursion/README.md#79-choosing-the-right-tool)
-17. **How does a recursive CTE work?** The anchor produces the first rows. The recursive term runs again and again on the rows of the previous round until a round returns nothing. → [§7.3](../07-ctes-views-and-recursion/README.md#73-recursive-ctes-the-mechanics)
-18. **Window function vs `GROUP BY`?** `GROUP BY` collapses each group into one row. A window function computes over related rows but keeps every row. → [§8.1](../08-window-functions/README.md#81-what-a-window-function-is)
-19. **`ROW_NUMBER` vs `RANK` vs `DENSE_RANK`?** 1,2,3,4 vs 1,2,2,4 vs 1,2,2,3 on a tie for second place. → [§8.5](../08-window-functions/README.md#85-ranking-functions)
-20. **Why does my running total repeat on tied dates?** With `ORDER BY` and no frame clause the default frame is `RANGE … CURRENT ROW`, which includes all peers. Add a unique tie-breaker or use `ROWS`. → [§8.3](../08-window-functions/README.md#83-order-by-inside-over-running-calculations-and-the-default-frame)
-21. **Why is `LAST_VALUE` returning the current row?** The default frame ends at the current row. Extend it to `UNBOUNDED FOLLOWING`. → [§8.6](../08-window-functions/README.md#86-value-offset-functions-lag-lead-first_value-last_value-nth_value)
-22. **How do you find the Nth highest salary?** `SELECT DISTINCT salary … ORDER BY salary DESC OFFSET n-1 LIMIT 1`, wrapped in a scalar subquery to get NULL when there is none, or `dense_rank() = n`. → [P39](../18-sql-interview-problems-1/README.md#p39--second-highest-salary--and-return-null-if-none)
-23. **What is the gaps-and-islands trick?** In a consecutive run, `value − row_number()` stays constant, so grouping by it groups each run. → [§8.9](../08-window-functions/README.md#89-gaps-and-islands)
-
-**Design**
-
-24. **Primary key vs unique key vs foreign key?** PK: the chosen identifier, unique and not null, one per table. Unique: another identifier (alternate key), NULLs usually allowed. FK: a column that must match a key in another table. → [§9.3](../09-ddl-dml-and-constraints/README.md#93-keys-and-constraints)
-25. **Superkey vs candidate key?** A superkey identifies rows. A candidate key is a superkey with nothing extra: drop any of its columns and it no longer identifies rows. → [§10.13](../10-data-modeling-and-er-diagrams/README.md#1013-keys-in-relational-databases)
-26. **Natural vs surrogate key?** Natural keys come from the business data and can change. Surrogate keys are generated and meaningless. A common default is a surrogate PK plus `UNIQUE` on the natural key. → [§10.13](../10-data-modeling-and-er-diagrams/README.md#1013-keys-in-relational-databases)
-27. **Explain 1NF, 2NF, 3NF and BCNF.** Atomic values / no partial dependency on a composite key / no transitive dependency / every determinant is a superkey. → [§11.7](../11-normalization/README.md#117-first-normal-form-1nf)–[§11.11](../11-normalization/README.md#1111-boycecodd-normal-form-bcnf)
-28. **What anomalies does normalization prevent?** Insertion, update and deletion anomalies, all caused by storing one fact in more than one place. → [§11.6](../11-normalization/README.md#116-anomalies--why-normalization-exists)
-29. **When would you denormalize?** For a measured read bottleneck, with a way to keep the copies correct (same transaction, trigger, or materialized view) and a reconciliation check. → [§11.16](../11-normalization/README.md#1116-denormalization--when-and-how-to-break-the-rules)
-30. **How do you model a many-to-many relationship?** A junction table with two FKs and a composite PK (or a surrogate PK + `UNIQUE` on the pair). Relationship attributes go there too. → [§10.15](../10-data-modeling-and-er-diagrams/README.md#1015-converting-an-er-diagram-to-tables)
-31. **What is a weak entity?** An entity that cannot be identified without its owner, such as an order line within an order. Its key is the owner's key + a partial key. → [§10.9](../10-data-modeling-and-er-diagrams/README.md#109-weak-entities)
-
-**Performance**
-
-32. **How does a B-tree index speed up a query?** It keeps keys sorted in a shallow balanced tree (3–4 levels for millions of rows), so finding a key or the start of a range takes a few page reads instead of a full scan. → [§12.6](../12-indexes-storage-and-query-performance/README.md#126-tree-based-indexes-b-trees-and-b-trees)
-33. **Clustered vs non-clustered index?** A clustered index stores the table rows in index order (InnoDB's primary key, SQL Server's clustered index). A non-clustered index is separate and points to the rows. PostgreSQL tables are heaps. `CLUSTER` reorders once but does not maintain the order. → [§12.4](../12-indexes-storage-and-query-performance/README.md#124-what-an-index-is)
-34. **How do you choose column order in a composite index?** Leftmost prefix rule: equality columns first, then the range or sort column. → [§12.11](../12-indexes-storage-and-query-performance/README.md#1211-composite-indexes-and-column-order)
-35. **What is a covering index?** One that contains every column the query needs, allowing an index-only scan. → [§12.12](../12-indexes-storage-and-query-performance/README.md#1212-covering-partial-and-expression-indexes)
-36. **Why is my index not used?** A function or cast on the column, a leading wildcard, low selectivity, stale statistics, a non-leading composite column, or a table so small that a seq scan is cheaper. → [§12.13](../12-indexes-storage-and-query-performance/README.md#1213-anti-patterns-that-disable-indexes)
-37. **How do you read `EXPLAIN ANALYZE`?** Innermost node first. Compare estimated with actual rows, look at loops, the biggest actual times, sorts spilling to disk, and seq scans on big tables with selective filters. → [§12.10](../12-indexes-storage-and-query-performance/README.md#1210-reading-explain-the-four-ways-to-read-a-table), [§12.17](../12-indexes-storage-and-query-performance/README.md#1217-a-tuning-workflow)
-38. **Why is `OFFSET` paging slow, and what is the fix?** The database still reads and discards all the skipped rows. Keyset pagination (`WHERE (ts, id) < (last_ts, last_id)`) jumps straight there through an index. → [§12.14](../12-indexes-storage-and-query-performance/README.md#1214-offset-vs-keyset-pagination)
-39. **Nested loop vs hash join vs merge join?** Small outer input with an indexed inner / large equality joins / inputs already sorted. → [§12.15](../12-indexes-storage-and-query-performance/README.md#1215-join-algorithms)
-40. **What is the N+1 problem?** One query for a list, then one more query per item. Fix it with a join, `= ANY($1)` with a batch of ids, or ORM eager loading. → [§12.13](../12-indexes-storage-and-query-performance/README.md#1213-anti-patterns-that-disable-indexes), [§14.13](../14-advanced-sql-and-using-sql-from-code/README.md#1413-orms-vs-raw-sql)
-
-**Transactions and concurrency**
-
-41. **Explain ACID.** Atomicity (all or nothing), consistency (rules hold), isolation (concurrent transactions do not interfere), durability (committed data survives crashes). → [§13.1](../13-transactions-and-concurrency/README.md#131-what-a-transaction-is)
-42. **Name the isolation levels and anomalies.** Read Uncommitted, Read Committed, Repeatable Read, Serializable. Anomalies: dirty read, non-repeatable read, phantom, lost update, write skew. → [§13.4](../13-transactions-and-concurrency/README.md#134-isolation--anomalies-and-isolation-levels)
-43. **What does PostgreSQL's Repeatable Read prevent that the standard does not require?** Phantoms (it is snapshot isolation), and it aborts lost updates with a serialization error. It still allows write skew. → [§13.4](../13-transactions-and-concurrency/README.md#134-isolation--anomalies-and-isolation-levels)
-44. **How do you prevent lost updates?** An atomic `UPDATE … SET x = x - 1`, `SELECT … FOR UPDATE`, Repeatable Read with retry, or optimistic locking with a version column. → [§13.7](../13-transactions-and-concurrency/README.md#137-lost-updates-and-how-to-prevent-them)
-45. **What is write skew?** Two transactions read the same data, then update different rows, together breaking a rule both checked. Serializable (SSI) or explicit locks prevent it. → [§13.8](../13-transactions-and-concurrency/README.md#138-write-skew-and-serializable-isolation)
-46. **What is MVCC?** Writers create new row versions, and each transaction reads the versions visible in its snapshot, so readers do not block writers. Old versions are removed by VACUUM. → [§13.14](../13-transactions-and-concurrency/README.md#1314-multiversion-concurrency-control-mvcc)
-47. **Optimistic vs pessimistic locking?** Pessimistic locks before touching data (waits, deadlocks possible). Optimistic works freely and checks for conflicts at commit (aborts and retries). Low contention favours optimistic. → [§13.9](../13-transactions-and-concurrency/README.md#139-concurrency-control--the-big-picture)
-48. **How are deadlocks handled?** The database detects the wait cycle and aborts one transaction (40P01). Prevent them with a consistent lock order and short transactions, and retry in code. → [§13.11](../13-transactions-and-concurrency/README.md#1311-deadlocks)
-49. **How do you build a job queue in SQL?** `SELECT … FOR UPDATE SKIP LOCKED LIMIT 1` inside a transaction, so each worker takes a different unlocked row. → [§13.12](../13-transactions-and-concurrency/README.md#1312-row-locks-for-work-queues-for-update-nowait-skip-locked)
-
-**Security, scaling, beyond**
-
-50. **How do you prevent SQL injection?** Parameterized queries (bind variables). Never concatenate input. Allow-list identifiers. Least-privilege roles. → [§14.9](../14-advanced-sql-and-using-sql-from-code/README.md#149-sql-injection-and-parameterized-queries)
-51. **Partitioning vs sharding vs replication?** Partitioning splits a table inside one server. Sharding puts partitions on different servers. Replication keeps copies of the same data for availability and read scaling. → [§15.2](../15-scaling-databases/README.md#152-partitioning), [§15.3](../15-scaling-databases/README.md#153-sharding), [§15.5](../15-scaling-databases/README.md#155-replication)
-52. **Explain the CAP theorem.** During a network partition a distributed store must choose between consistency (refuse some requests) and availability (answer, possibly stale). PACELC adds that without a partition you trade latency against consistency. → [§15.7](../15-scaling-databases/README.md#157-the-cap-theorem-and-pacelc)
-53. **Synchronous vs asynchronous replication?** Sync waits for the replica before commit (no loss, higher latency). Async commits first (fast, may lose recent writes on failover). → [§15.5](../15-scaling-databases/README.md#155-replication)
-54. **What is the difference between a backup and a replica?** A replica copies every change, including mistakes, within seconds. A backup is a point-in-time copy you can restore from. PITR combines a base backup with archived WAL. → [§15.11](../15-scaling-databases/README.md#1511-data-resilience-redundancy-mirroring-backups), [§9.12](../09-ddl-dml-and-constraints/README.md#912-backup-and-restore)
+- **What is a weak entity?** An entity that cannot be identified without its owner, such as an order line within an order. Its key is the owner's key + a partial key. → [§10.9](../10-data-modeling-and-er-diagrams/README.md#109-weak-entities)
 
 ---
 ## 20.20 Glossary (A–Z)
 
-Short definitions of the terms used across the book, in plain words. The last column links to the section that explains each term with examples. The terms from the course's key-term review cards (the problems that made databases necessary, ER notation, keys, functional dependencies, normal forms, modeling levels, and the case-study judgement calls) are included, with the judgement calls summarised as a table in 20.10.
+Every term the book uses, defined once in plain words; the last column links to the section that explains it with examples. Terms defined in a table on the cheat sheets above (join types, normal forms, isolation anomalies, plan nodes…) point there instead of repeating it. The course's key-term review cards (problems that made databases necessary, ER notation, keys, FDs, normal forms, modeling levels, case-study judgement calls) are included; the judgement calls are the 20.10 table.
 
-**595 terms.** Jump to: 0–9 · A · B · C · D · E · F · G · H · I · J · K · L · M · N · O · P · Q · R · S · T · U · V · W · X · Y · Z
+**601 terms.** Jump to: 0–9 · A · B · C · D · E · F · G · H · I · J · K · L · M · N · O · P · Q · R · S · T · U · V · W · X · Y · Z
 
 ### 0–9
 
 | Term | Meaning | See |
 |---|---|---|
-| **1NF (first normal form)** | Every cell holds a single atomic value and there are no repeating groups of columns. | [§11.7](../11-normalization/README.md#117-first-normal-form-1nf) |
-| **2NF (second normal form)** | 1NF, and no non-prime attribute depends on only part of a composite candidate key. | [§11.8](../11-normalization/README.md#118-second-normal-form-2nf) |
+| **1NF (first normal form)** | Defined in the 20.10 sheet. | [§11.7](../11-normalization/README.md#117-first-normal-form-1nf) |
+| **2NF (second normal form)** | Defined in the 20.10 sheet. | [§11.8](../11-normalization/README.md#118-second-normal-form-2nf) |
 | **2PC (two-phase commit)** | Distributed commit protocol: the coordinator asks every participant to prepare, then tells all to commit or all to abort. Blocks if the coordinator fails after prepare. | [§15.9](../15-scaling-databases/README.md#159-fault-tolerance-and-recovery) |
 | **2PL (two-phase locking)** | A transaction acquires locks in a growing phase and releases them in a shrinking phase, never acquiring after releasing. Guarantees serializable schedules. | [§13.10](../13-transactions-and-concurrency/README.md#1310-lock-based-concurrency-control) |
 | **3-2-1 backup rule** | Keep three copies of the data on two different kinds of storage, with one copy off-site. | [§9.12](../09-ddl-dml-and-constraints/README.md#912-backup-and-restore) |
-| **3NF (third normal form)** | 2NF, and for every FD X → A either X is a superkey or A is a prime attribute. Removes transitive dependencies. | [§11.9](../11-normalization/README.md#119-third-normal-form-3nf) |
-| **4NF (fourth normal form)** | BCNF, and every non-trivial multivalued dependency has a superkey on its left side. | [§11.12](../11-normalization/README.md#1112-fourth-normal-form-4nf--independent-multivalued-facts) |
-| **5NF (fifth normal form)** | Every join dependency is implied by the candidate keys. Also called project-join normal form. | [§11.13](../11-normalization/README.md#1113-fifth-normal-form-5nf--facts-that-need-three-tables) |
+| **3NF synthesis / BCNF decomposition** | The two standard normalization algorithms: synthesis builds 3NF tables from a minimal cover (always lossless and dependency-preserving); BCNF decomposition splits on violating FDs (lossless, may lose an FD). | [§11.14](../11-normalization/README.md#1114-putting-it-together--a-normalization-procedure) |
+| **3NF (third normal form)** | Defined in the 20.10 sheet. | [§11.9](../11-normalization/README.md#119-third-normal-form-3nf) |
+| **4NF (fourth normal form)** | Defined in the 20.10 sheet. | [§11.12](../11-normalization/README.md#1112-fourth-normal-form-4nf--independent-multivalued-facts) |
+| **5NF (fifth normal form)** | Defined in the 20.10 sheet. | [§11.13](../11-normalization/README.md#1113-fifth-normal-form-5nf--facts-that-need-three-tables) |
 
 ### A
 
@@ -1000,8 +884,8 @@ Short definitions of the terms used across the book, in plain words. The last co
 | **Anomaly (data)** | An insertion, update or deletion problem caused by storing the same fact in more than one row. | [§11.6](../11-normalization/README.md#116-anomalies--why-normalization-exists) |
 | **Anomaly (isolation)** | A result that could not happen if transactions ran one at a time, such as a dirty read or write skew. | [§13.4](../13-transactions-and-concurrency/README.md#134-isolation--anomalies-and-isolation-levels) |
 | **ANSI / ISO SQL standard** | The official SQL specification that every vendor implements, each with its own extensions and gaps. | [§1.9](../01-databases-and-the-relational-model/README.md#19-what-sql-is) |
-| **Anti-join** | Returns rows of one table that have no match in another. Written `NOT EXISTS` or `LEFT JOIN … IS NULL`. | [§5.8](../05-joins/README.md#58-semi-joins-and-anti-joins) |
-| **ANY / SOME / ALL** | Compare a value with a set: true if the comparison holds for at least one element (`ANY`, `SOME`) or for every element (`ALL`). | [§6.5](../06-subqueries-and-set-operations/README.md#65-any-some-and-all) |
+| **Anti-join** | Defined in the 20.5 sheet. | [§5.8](../05-joins/README.md#58-semi-joins-and-anti-joins) |
+| **ANY / SOME / ALL** | Defined in the 20.6 sheet. | [§6.5](../06-subqueries-and-set-operations/README.md#65-any-some-and-all) |
 | **AOF (append-only file)** | Redis persistence mode that logs every write command so the data can be rebuilt after a restart. | [§16.11](../16-beyond-relational/README.md#1611-inside-two-workhorses-elasticsearch-and-the-elk-stack-and-redis) |
 | **API** | Application programming interface: the set of calls one program offers to others. | [§1.8](../01-databases-and-the-relational-model/README.md#18-relational-vs-non-relational-databases) |
 | **Append-only table** | A table that only ever gets new rows, never updates in place, such as an event log or a ledger. | [§17.14](../17-schema-design-case-studies/README.md#1714-recurring-modeling-patterns) |
@@ -1023,9 +907,9 @@ Short definitions of the terms used across the book, in plain words. The last co
 | Term | Meaning | See |
 |---|---|---|
 | **Backfill** | Filling in values for existing rows after adding a new column or rule. | [§9.5](../09-ddl-dml-and-constraints/README.md#95-alter-changing-existing-tables) |
-| **BASE** | Basically available, soft state, eventually consistent: the looser guarantee model of many NoSQL systems. | [§16.1](../16-beyond-relational/README.md#161-why-nosql) |
+| **BASE** | Defined in the 20.15 sheet. | [§16.1](../16-beyond-relational/README.md#161-why-nosql) |
 | **Base backup** | A physical copy of a PostgreSQL server's whole data directory: the starting point for PITR or a new replica. | [§9.12](../09-ddl-dml-and-constraints/README.md#912-backup-and-restore) |
-| **BCNF (Boyce–Codd normal form)** | For every non-trivial FD X → Y, X is a superkey. | [§11.11](../11-normalization/README.md#1111-boycecodd-normal-form-bcnf) |
+| **BCNF (Boyce–Codd normal form)** | Defined in the 20.10 sheet. | [§11.11](../11-normalization/README.md#1111-boycecodd-normal-form-bcnf) |
 | **BEGIN / COMMIT / ROLLBACK** | Start a transaction, make its changes permanent, or discard them. | [§13.1](../13-transactions-and-concurrency/README.md#131-what-a-transaction-is) |
 | **BETWEEN** | Inclusive range test: `x BETWEEN a AND b` means `x >= a AND x <= b`. | [§2.4](../02-select-basics/README.md#24-ranges-lists-and-patterns-between-in-likeilike-regex) |
 | **Big data** | Data too large, too fast or too varied for one ordinary database server (volume, velocity, variety). | [§16.9](../16-beyond-relational/README.md#169-big-data-and-distributed-processing-frameworks) |
@@ -1033,13 +917,13 @@ Short definitions of the terms used across the book, in plain words. The last co
 | **Binary search** | Finding a value in sorted data by repeatedly halving the search range: about log₂ n steps. | [§12.5](../12-indexes-storage-and-query-performance/README.md#125-single-level-indexing-with-numbers) |
 | **Bind parameter (placeholder)** | A marker such as `$1`, `%s` or `?` in the SQL text whose value the driver sends separately. | [§14.9](../14-advanced-sql-and-using-sql-from-code/README.md#149-sql-injection-and-parameterized-queries) |
 | **BitmapAnd / BitmapOr** | Plan nodes that combine the row bitmaps of several indexes with AND or OR before reading the table. | [§12.10](../12-indexes-storage-and-query-performance/README.md#1210-reading-explain-the-four-ways-to-read-a-table) |
-| **Bitmap scan** | Plan that collects matching row locations from one or more indexes into a bitmap, then reads the table pages in physical order. | [§12.10](../12-indexes-storage-and-query-performance/README.md#1210-reading-explain-the-four-ways-to-read-a-table) |
+| **Bitmap scan** | Defined in the 20.11 sheet. | [§12.10](../12-indexes-storage-and-query-performance/README.md#1210-reading-explain-the-four-ways-to-read-a-table) |
 | **Bloat** | Space wasted in a table or index by dead row versions and half-empty pages. | [§13.14](../13-transactions-and-concurrency/README.md#1314-multiversion-concurrency-control-mvcc) |
 | **Block** | Another word for page: the fixed-size unit in which the disk and the DBMS read and write data. | [§12.1](../12-indexes-storage-and-query-performance/README.md#121-how-a-database-stores-data) |
 | **Blocking factor** | How many records fit in one disk block (block size ÷ record size). | [§12.5](../12-indexes-storage-and-query-performance/README.md#125-single-level-indexing-with-numbers) |
 | **Bloom filter** | Compact probabilistic set that answers "definitely not present" or "probably present". | [§12.8](../12-indexes-storage-and-query-performance/README.md#128-bloom-filters) |
 | **BM25** | The standard relevance score used by search engines such as Elasticsearch: rewards rare query words that appear often in a short document. | [§16.11](../16-beyond-relational/README.md#1611-inside-two-workhorses-elasticsearch-and-the-elk-stack-and-redis) |
-| **BRIN index** | Block range index: stores min/max per range of table pages. Tiny and effective when values follow physical order, such as time. | [§12.9](../12-indexes-storage-and-query-performance/README.md#129-postgresqls-other-index-types-gin-gist-brin) |
+| **BRIN index** | Defined in the 20.11 sheet. | [§12.9](../12-indexes-storage-and-query-performance/README.md#129-postgresqls-other-index-types-gin-gist-brin) |
 | **BSON** | MongoDB's binary form of JSON, with extra types such as dates and 64-bit integers. | [§16.3](../16-beyond-relational/README.md#163-document-databases) |
 | **B-tree / B+ tree** | Balanced, shallow, sorted tree index. In a B+ tree all keys live in linked leaf pages, which makes range scans cheap. PostgreSQL's default index. | [§12.6](../12-indexes-storage-and-query-performance/README.md#126-tree-based-indexes-b-trees-and-b-trees) |
 | **Bucket (hashing)** | A slot, usually a page, that a hash function sends keys to. | [§12.3](../12-indexes-storage-and-query-performance/README.md#123-file-organization) |
@@ -1056,7 +940,7 @@ Short definitions of the terms used across the book, in plain words. The last co
 | **Calendar table** | A table (or `generate_series`) with one row per day, joined to data so that days with no activity still appear. | [§7.6](../07-ctes-views-and-recursion/README.md#76-generate_series-making-rows-postgresql) |
 | **Candidate key** | A minimal set of attributes that uniquely identifies every row. | [§10.13](../10-data-modeling-and-er-diagrams/README.md#1013-keys-in-relational-databases) |
 | **Canonical pair** | Storing an undirected pair (two friends) once in a fixed order, such as `user_a < user_b`. | [§17.13](../17-schema-design-case-studies/README.md#1713-snapchat-ephemeral-messaging) |
-| **CAP theorem** | If the network splits, a replicated store can stay fully consistent or stay fully available, but not both. | [§15.7](../15-scaling-databases/README.md#157-the-cap-theorem-and-pacelc) |
+| **CAP theorem** | Defined in the 20.14 sheet. | [§15.7](../15-scaling-databases/README.md#157-the-cap-theorem-and-pacelc) |
 | **Cardinality (ER)** | The maximum number of instances on each side of a relationship: 1:1, 1:N or M:N. | [§10.7](../10-data-modeling-and-er-diagrams/README.md#107-relationships-degree-cardinality-and-participation) |
 | **Cardinality estimate** | The planner's guess of how many rows a plan node will produce. | [§12.16](../12-indexes-storage-and-query-performance/README.md#1216-statistics-how-the-planner-estimates) |
 | **Cardinality (relation)** | The number of rows in a relation. | [§10.12](../10-data-modeling-and-er-diagrams/README.md#1012-relations-tuples-attributes--the-precise-vocabulary) |
@@ -1075,6 +959,7 @@ Short definitions of the terms used across the book, in plain words. The last co
 | **Citus** | A PostgreSQL extension that shards tables across several PostgreSQL servers and runs queries on them in parallel. | [§15.3](../15-scaling-databases/README.md#153-sharding) |
 | **ClickHouse** | An open-source columnar database for fast analytical queries. | [§12.1](../12-indexes-storage-and-query-performance/README.md#121-how-a-database-stores-data) |
 | **Click-through rate (CTR)** | Clicks divided by impressions (times the ad was shown), usually as a percentage. | [§18.8](../18-sql-interview-problems-1/README.md#188-ratios-and-percentages-p34p38) |
+| **Closure of an FD set (F⁺)** | All functional dependencies implied by a given set F. | [§11.3](../11-normalization/README.md#113-armstrongs-inference-rules) |
 | **Closure table** | A tree-storage pattern with one row for every ancestor–descendant pair, so subtree queries need no recursion. | [§7.4](../07-ctes-views-and-recursion/README.md#74-hierarchies-trees-stored-as-parent-pointers) |
 | **Clustered index** | An index whose order is the physical order of the table rows (InnoDB primary key, SQL Server clustered index). | [§12.4](../12-indexes-storage-and-query-performance/README.md#124-what-an-index-is) |
 | **Clustering column** | In a wide-column store, the column that sorts the rows inside one partition. | [§16.4](../16-beyond-relational/README.md#164-column-family-and-wide-column-stores) |
@@ -1092,7 +977,7 @@ Short definitions of the terms used across the book, in plain words. The last co
 | **Composite index** | An index on several columns. Usable for filters on a leftmost prefix of its columns. | [§12.11](../12-indexes-storage-and-query-performance/README.md#1211-composite-indexes-and-column-order) |
 | **Composite key** | A key made of two or more columns. | [§10.13](../10-data-modeling-and-er-diagrams/README.md#1013-keys-in-relational-databases) |
 | **Compression** | Storing data in fewer bytes. Column stores compress well because one column's values are alike. | [§12.2](../12-indexes-storage-and-query-performance/README.md#122-data-compression-and-encoding) |
-| **Conceptual model** | Business-level model of entities and relationships, without types or DBMS details. | [§10.2](../10-data-modeling-and-er-diagrams/README.md#102-the-three-levels-of-a-data-model) |
+| **Conceptual model** | Defined in the 20.10 sheet. | [§10.2](../10-data-modeling-and-er-diagrams/README.md#102-the-three-levels-of-a-data-model) |
 | **Concurrency control** | The mechanisms (locking, timestamps, MVCC, validation) that keep concurrent transactions correct. | [§13.9](../13-transactions-and-concurrency/README.md#139-concurrency-control--the-big-picture) |
 | **Conditional aggregation** | Aggregating only the rows that meet a condition, with `FILTER (WHERE …)` or `sum(CASE …)`. | [§4.4](../04-aggregation/README.md#44-conditional-aggregation-filter-and-case) |
 | **Connection pool** | A set of reusable open database connections shared by application threads. | [§14.12](../14-advanced-sql-and-using-sql-from-code/README.md#1412-connection-pooling) |
@@ -1101,20 +986,20 @@ Short definitions of the terms used across the book, in plain words. The last co
 | **Consistency (ACID)** | Every committed transaction leaves all constraints and business rules satisfied. | [§13.3](../13-transactions-and-concurrency/README.md#133-consistency) |
 | **Consistency (CAP)** | In CAP: every read sees the most recent write, as if there were a single copy. Not the same as the C in ACID. | [§15.7](../15-scaling-databases/README.md#157-the-cap-theorem-and-pacelc) |
 | **Consistency model** | The guarantee a distributed store gives about what reads can see: strong, causal, eventual and others. | [§15.6](../15-scaling-databases/README.md#156-consistency-models) |
-| **Consistent hashing** | Placing nodes and keys on a hash ring so that adding a node moves only a small share of keys. | [§15.3](../15-scaling-databases/README.md#153-sharding) |
+| **Consistent hashing** | Defined in the 20.14 sheet. | [§15.3](../15-scaling-databases/README.md#153-sharding) |
 | **Constraint** | A rule enforced by the DBMS on the data: NOT NULL, UNIQUE, PRIMARY KEY, FOREIGN KEY, CHECK, EXCLUDE. | [§9.3](../09-ddl-dml-and-constraints/README.md#93-keys-and-constraints) |
 | **COPY** | PostgreSQL's bulk command for loading or exporting many rows at once, far faster than row-by-row `INSERT`s. | [§14.10](../14-advanced-sql-and-using-sql-from-code/README.md#1410-using-sql-from-python) |
-| **Correlated subquery** | A subquery that refers to a column of the outer query and is logically evaluated per outer row. | [§6.3](../06-subqueries-and-set-operations/README.md#63-correlated-subqueries) |
+| **Correlated subquery** | Defined in the 20.6 sheet. | [§6.3](../06-subqueries-and-set-operations/README.md#63-correlated-subqueries) |
 | **Cost (planner)** | The planner's estimate of the work of a plan, in arbitrary units based on page reads and CPU. | [§12.10](../12-indexes-storage-and-query-performance/README.md#1210-reading-explain-the-four-ways-to-read-a-table) |
 | **Covering index** | An index containing every column a query needs, allowing an index-only scan. | [§12.12](../12-indexes-storage-and-query-performance/README.md#1212-covering-partial-and-expression-indexes) |
 | **CPU** | The processor that executes instructions. Sorting, hashing and expression evaluation cost CPU time. | [§12.1](../12-indexes-storage-and-query-performance/README.md#121-how-a-database-stores-data) |
 | **CRDT** | Conflict-free replicated data type: a structure (counter, set) whose replicas can always be merged without conflicts. | [§15.5](../15-scaling-databases/README.md#155-replication) |
-| **CROSS JOIN** | Join that returns the Cartesian product. | [§5.1](../05-joins/README.md#51-join-theory-the-cartesian-product-and-cross-join) |
+| **CROSS JOIN** | Defined in the 20.5 sheet. | [§5.1](../05-joins/README.md#51-join-theory-the-cartesian-product-and-cross-join) |
 | **Crosstab** | A function from PostgreSQL's `tablefunc` extension that pivots rows into columns. | [§14.7](../14-advanced-sql-and-using-sql-from-code/README.md#147-pivot-and-unpivot) |
 | **Crow's foot notation** | ER notation that draws cardinality and optionality with symbols at the ends of relationship lines. | [§10.5](../10-data-modeling-and-er-diagrams/README.md#105-the-entity-relationship-er-model-and-its-notations) |
 | **CRUD** | Create, read, update, delete: the four basic operations on stored data. | [§14.13](../14-advanced-sql-and-using-sql-from-code/README.md#1413-orms-vs-raw-sql) |
 | **CSV** | Comma-separated values: a plain-text table format with one row per line. | [§1.1](../01-databases-and-the-relational-model/README.md#11-before-databases-the-file-processing-era) |
-| **CTE (common table expression)** | A named subquery defined with `WITH` and used by the statement that follows. | [§7.1](../07-ctes-views-and-recursion/README.md#71-common-table-expressions-with) |
+| **CTE (common table expression)** | Defined in the 20.7 sheet. | [§7.1](../07-ctes-views-and-recursion/README.md#71-common-table-expressions-with) |
 | **CUBE** | Grouping extension that produces subtotals for every combination of the listed columns. | [§4.6](../04-aggregation/README.md#46-subtotals-grouping-sets-rollup-and-cube) |
 | **Cursor** | A pointer for fetching a query result a batch of rows at a time. | [§14.10](../14-advanced-sql-and-using-sql-from-code/README.md#1410-using-sql-from-python) |
 | **Cypher** | Neo4j's graph query language, which writes patterns like `(a)-[:FOLLOWS]->(b)`. | [§16.5](../16-beyond-relational/README.md#165-graph-databases) |
@@ -1127,7 +1012,7 @@ Short definitions of the terms used across the book, in plain words. The last co
 | **Data independence** | Changing how data is stored (physical) or parts of the schema (logical) without changing applications. | [§1.3](../01-databases-and-the-relational-model/README.md#13-what-a-dbms-does) |
 | **Data integrity** | The data is accurate and obeys its rules (types, keys, constraints). | [§1.3](../01-databases-and-the-relational-model/README.md#13-what-a-dbms-does) |
 | **Data model** | A description of the data's entities, attributes, relationships and rules. | [§10.1](../10-data-modeling-and-er-diagrams/README.md#101-what-data-modeling-is) |
-| **Data-modifying CTE** | A `WITH` step containing `INSERT`, `UPDATE` or `DELETE … RETURNING` (PostgreSQL). | [§7.2](../07-ctes-views-and-recursion/README.md#72-data-modifying-ctes-postgresql) |
+| **Data-modifying CTE** | Defined in the 20.7 sheet. | [§7.2](../07-ctes-views-and-recursion/README.md#72-data-modifying-ctes-postgresql) |
 | **Data type** | The kind of value a column holds (integer, text, date …), which decides what operations are allowed. | [§3.1](../03-functions-and-expressions/README.md#31-data-types-and-conversions) |
 | **Data warehouse** | A database built for analysis, loaded from operational systems and tuned for large scans and aggregates. | [§11.16](../11-normalization/README.md#1116-denormalization--when-and-how-to-break-the-rules) |
 | **DBMS** | Software that defines, stores, queries, protects and shares a database. | [§1.3](../01-databases-and-the-relational-model/README.md#13-what-a-dbms-does) |
@@ -1145,23 +1030,24 @@ Short definitions of the terms used across the book, in plain words. The last co
 | **Delta encoding** | Storing each value as the difference from the previous one, giving small numbers for sorted ids or timestamps. | [§12.2](../12-indexes-storage-and-query-performance/README.md#122-data-compression-and-encoding) |
 | **Denormalization** | Deliberately storing redundant data to speed up reads, with a mechanism to keep it correct. | [§11.16](../11-normalization/README.md#1116-denormalization--when-and-how-to-break-the-rules) |
 | **Dense index** | An index with one entry for every record or key value. | [§12.4](../12-indexes-storage-and-query-performance/README.md#124-what-an-index-is) |
-| **DENSE_RANK** | Ranking function that gives ties the same rank and leaves no gaps (1, 2, 2, 3). | [§8.5](../08-window-functions/README.md#85-ranking-functions) |
+| **DENSE_RANK** | Defined in the 20.8 sheet. | [§8.5](../08-window-functions/README.md#85-ranking-functions) |
 | **Dependency preservation** | Every functional dependency can be checked within a single table after decomposition. | [§11.10](../11-normalization/README.md#1110-decomposition-done-right-lossless-joins-and-dependency-preservation) |
+| **Dependent (FD)** | The right side of a functional dependency. | [§11.1](../11-normalization/README.md#111-functional-dependencies) |
 | **Derived attribute** | An attribute that can be computed from others, such as age from birth date. | [§10.6](../10-data-modeling-and-er-diagrams/README.md#106-entities-and-the-five-kinds-of-attribute) |
-| **Derived table** | A subquery in the `FROM` clause. | [§6.6](../06-subqueries-and-set-operations/README.md#66-table-subqueries-derived-tables-and-row-subqueries) |
+| **Derived table** | Defined in the 20.6 sheet. | [§6.6](../06-subqueries-and-set-operations/README.md#66-table-subqueries-derived-tables-and-row-subqueries) |
 | **Determinant** | The left side of a functional dependency. | [§11.1](../11-normalization/README.md#111-functional-dependencies) |
 | **Dialect** | One vendor's version of SQL, with its own syntax and functions. | [§1.9](../01-databases-and-the-relational-model/README.md#19-what-sql-is) |
 | **Dictionary encoding** | Replacing repeated values with small integer codes plus one lookup table of the distinct values. | [§12.2](../12-indexes-storage-and-query-performance/README.md#122-data-compression-and-encoding) |
 | **Differential / incremental backup** | A differential backup copies everything changed since the last full backup. An incremental copies changes since the last backup of any kind. | [§9.12](../09-ddl-dml-and-constraints/README.md#912-backup-and-restore) |
 | **Dirty page** | A page changed in memory but not yet written to disk. | [§15.9](../15-scaling-databases/README.md#159-fault-tolerance-and-recovery) |
-| **Dirty read** | Reading another transaction's uncommitted change. | [§13.4](../13-transactions-and-concurrency/README.md#134-isolation--anomalies-and-isolation-levels) |
-| **Dirty write** | Overwriting another transaction's uncommitted change. | [§13.4](../13-transactions-and-concurrency/README.md#134-isolation--anomalies-and-isolation-levels) |
+| **Dirty read** | Defined in the 20.12 sheet. | [§13.4](../13-transactions-and-concurrency/README.md#134-isolation--anomalies-and-isolation-levels) |
+| **Dirty write** | Defined in the 20.12 sheet. | [§13.4](../13-transactions-and-concurrency/README.md#134-isolation--anomalies-and-isolation-levels) |
 | **Disaster recovery** | The plans and off-site copies that let you restore service after losing a whole server, site or data set. | [§15.11](../15-scaling-databases/README.md#1511-data-resilience-redundancy-mirroring-backups) |
 | **DISTINCT** | Removes duplicate rows from a result. `DISTINCT ON (cols)` keeps the first row per group (PostgreSQL). | [§2.6](../02-select-basics/README.md#26-distinct-removing-duplicate-rows) |
 | **Distributed SQL** | Another name for NewSQL: SQL and ACID transactions over data sharded and replicated across many nodes. | [§16.7](../16-beyond-relational/README.md#167-newsql--distributed-sql) |
 | **Distributed transaction** | A transaction that changes data on more than one node, so it needs a protocol such as two-phase commit. | [§15.9](../15-scaling-databases/README.md#159-fault-tolerance-and-recovery) |
 | **DML** | Data manipulation language: `INSERT`, `UPDATE`, `DELETE`, `MERGE`. | [§1.9](../01-databases-and-the-relational-model/README.md#19-what-sql-is) |
-| **Document database** | NoSQL store that keeps each record as a nested document, usually JSON. | [§16.3](../16-beyond-relational/README.md#163-document-databases) |
+| **Document database** | Defined in the 20.15 sheet. | [§16.3](../16-beyond-relational/README.md#163-document-databases) |
 | **Dollar quoting** | PostgreSQL's `$$ … $$` string syntax, used for function bodies so inner quotes need no escaping. | [§14.1](../14-advanced-sql-and-using-sql-from-code/README.md#141-user-defined-functions) |
 | **Domain** | The set of allowed values for an attribute. | [§10.12](../10-data-modeling-and-er-diagrams/README.md#1012-relations-tuples-attributes--the-precise-vocabulary) |
 | **Double-entry bookkeeping** | Recording each money movement as a debit and an equal credit, so all entries always sum to zero. | [§17.3](../17-schema-design-case-studies/README.md#173-banking-system) |
@@ -1192,7 +1078,7 @@ Short definitions of the terms used across the book, in plain words. The last co
 | **Eventual consistency** | If writes stop, all replicas eventually return the same value. | [§15.6](../15-scaling-databases/README.md#156-consistency-models) |
 | **Eviction policy** | The rule a cache uses to decide what to drop when it is full, such as LRU or LFU. | [§16.2](../16-beyond-relational/README.md#162-key-value-stores) |
 | **Exactly-once** | A processing guarantee that each message affects the result exactly one time, even when it is retried. | [§16.9](../16-beyond-relational/README.md#169-big-data-and-distributed-processing-frameworks) |
-| **EXCEPT** | Set operation returning rows of the first query that do not appear in the second. | [§6.10](../06-subqueries-and-set-operations/README.md#610-except) |
+| **EXCEPT** | Defined in the 20.6 sheet. | [§6.10](../06-subqueries-and-set-operations/README.md#610-except) |
 | **EXCLUDE constraint** | PostgreSQL constraint that forbids two rows whose values conflict under given operators, such as overlapping ranges. | [§17.2](../17-schema-design-case-studies/README.md#172-hotel-reservation-system) |
 | **EXCLUDED (ON CONFLICT)** | In `INSERT … ON CONFLICT DO UPDATE`, the pseudo-row holding the values that were proposed for insertion. | [§9.11](../09-ddl-dml-and-constraints/README.md#911-upsert-insert--on-conflict-and-merge) |
 | **Exclusive lock (X)** | A lock that only one transaction can hold. It blocks every other lock on the same item. | [§13.10](../13-transactions-and-concurrency/README.md#1310-lock-based-concurrency-control) |
@@ -1224,7 +1110,8 @@ Short definitions of the terms used across the book, in plain words. The last co
 | **Foreign key** | Columns whose values must match a key in a referenced table (or be NULL). | [§9.3](../09-ddl-dml-and-constraints/README.md#93-keys-and-constraints) |
 | **Frame (window frame)** | The subset of the partition that an aggregate or value window function sees for the current row. | [§8.4](../08-window-functions/README.md#84-frames-rows-range-groups-and-exclude) |
 | **fsync** | The operating-system call that forces written data out of caches onto durable storage. | [§15.9](../15-scaling-databases/README.md#159-fault-tolerance-and-recovery) |
-| **FULL OUTER JOIN** | Returns all rows from both sides, padding with NULLs where there is no match. | [§5.6](../05-joins/README.md#56-full-outer-join) |
+| **Full functional dependency** | An FD that needs its whole composite determinant: remove any column and it no longer holds. | [§11.2](../11-normalization/README.md#112-types-of-functional-dependencies) |
+| **FULL OUTER JOIN** | Defined in the 20.5 sheet. | [§5.6](../05-joins/README.md#56-full-outer-join) |
 | **Full-text search** | Searching documents by words with stemming and ranking. `tsvector @@ tsquery` in PostgreSQL. | [§14.6](../14-advanced-sql-and-using-sql-from-code/README.md#146-full-text-search) |
 | **Functional dependency** | `X → Y`: any two rows with equal X values have equal Y values. | [§11.1](../11-normalization/README.md#111-functional-dependencies) |
 | **Fuzzy checkpoint** | A checkpoint that writes dirty pages out gradually while transactions keep running, instead of pausing all work. | [§15.9](../15-scaling-databases/README.md#159-fault-tolerance-and-recovery) |
@@ -1237,16 +1124,16 @@ Short definitions of the terms used across the book, in plain words. The last co
 | **Generated column** | A column computed from other columns of the same row (`GENERATED ALWAYS AS (expr) STORED`). | [§9.4](../09-ddl-dml-and-constraints/README.md#94-generated-keys-identity-sequences-serial-uuid-generated-columns) |
 | **generate_series** | PostgreSQL function that returns a series of numbers or timestamps as rows. | [§7.6](../07-ctes-views-and-recursion/README.md#76-generate_series-making-rows-postgresql) |
 | **Geohash** | A short string that encodes a map cell from latitude and longitude. Nearby places share a prefix. | [§16.8](../16-beyond-relational/README.md#168-time-series-and-spatial-databases) |
-| **GIN index** | Generalized inverted index: maps each element (word, key, array item) to the rows that contain it. | [§12.9](../12-indexes-storage-and-query-performance/README.md#129-postgresqls-other-index-types-gin-gist-brin) |
-| **GiST index** | Generalized search tree for overlap and nearest-neighbour queries on ranges, geometry and more. | [§12.9](../12-indexes-storage-and-query-performance/README.md#129-postgresqls-other-index-types-gin-gist-brin) |
+| **GIN index** | Defined in the 20.11 sheet. | [§12.9](../12-indexes-storage-and-query-performance/README.md#129-postgresqls-other-index-types-gin-gist-brin) |
+| **GiST index** | Defined in the 20.11 sheet. | [§12.9](../12-indexes-storage-and-query-performance/README.md#129-postgresqls-other-index-types-gin-gist-brin) |
 | **Gossip protocol** | Nodes spread cluster state by repeatedly swapping what they know with random peers. | [§16.11](../16-beyond-relational/README.md#1611-inside-two-workhorses-elasticsearch-and-the-elk-stack-and-redis) |
 | **GQL** | The ISO-standard graph query language (2024), close to Cypher. | [§16.5](../16-beyond-relational/README.md#165-graph-databases) |
-| **Graph database** | NoSQL store of nodes and edges optimised for traversing relationships. | [§16.5](../16-beyond-relational/README.md#165-graph-databases) |
+| **Graph database** | Defined in the 20.15 sheet. | [§16.5](../16-beyond-relational/README.md#165-graph-databases) |
 | **Gremlin** | A step-by-step graph traversal language used by Apache TinkerPop databases such as Amazon Neptune. | [§16.5](../16-beyond-relational/README.md#165-graph-databases) |
 | **GROUP BY** | Groups rows that share values so aggregates are computed per group. | [§4.2](../04-aggregation/README.md#42-group-by) |
 | **GROUPING()** | A function that returns 1 on a subtotal row where the column was rolled up, and 0 otherwise. | [§4.6](../04-aggregation/README.md#46-subtotals-grouping-sets-rollup-and-cube) |
 | **GROUPING SETS** | Computes several groupings in one query, such as per region, per product and a grand total. | [§4.6](../04-aggregation/README.md#46-subtotals-grouping-sets-rollup-and-cube) |
-| **GROUPS frame** | A window frame measured in peer groups rather than rows or values. | [§8.4](../08-window-functions/README.md#84-frames-rows-range-groups-and-exclude) |
+| **GROUPS frame** | Defined in the 20.8 sheet. | [§8.4](../08-window-functions/README.md#84-frames-rows-range-groups-and-exclude) |
 
 ### H
 
@@ -1256,7 +1143,7 @@ Short definitions of the terms used across the book, in plain words. The last co
 | **HashAggregate / GroupAggregate** | Plan nodes that group rows, either with an in-memory hash table or by reading input already sorted on the group key. | [§12.15](../12-indexes-storage-and-query-performance/README.md#1215-join-algorithms) |
 | **Hash function** | A function that turns a key into a fixed-size number. The same key always gives the same number. | [§12.3](../12-indexes-storage-and-query-performance/README.md#123-file-organization) |
 | **Hash index** | Index that hashes keys into buckets. Supports equality lookups only. | [§12.7](../12-indexes-storage-and-query-performance/README.md#127-hash-based-indexing) |
-| **Hash join** | Join that builds a hash table on one input and probes it with the other. Equality only. | [§12.15](../12-indexes-storage-and-query-performance/README.md#1215-join-algorithms) |
+| **Hash join** | Defined in the 20.11 sheet. | [§12.15](../12-indexes-storage-and-query-performance/README.md#1215-join-algorithms) |
 | **Hash partitioning** | Assigning rows to partitions by a hash of the key, spreading them evenly. | [§15.2](../15-scaling-databases/README.md#152-partitioning) |
 | **Hash table** | A structure that stores items in buckets chosen by a hash of the key, giving lookups in about constant time. | [§12.7](../12-indexes-storage-and-query-performance/README.md#127-hash-based-indexing) |
 | **HAVING** | Filters groups after aggregation. | [§4.3](../04-aggregation/README.md#43-having) |
@@ -1284,18 +1171,18 @@ Short definitions of the terms used across the book, in plain words. The last co
 | **Impedance mismatch** | The friction between objects in code (nested, linked by references) and flat relational tables. | [§14.13](../14-advanced-sql-and-using-sql-from-code/README.md#1413-orms-vs-raw-sql) |
 | **IN** | True if a value equals any element of a list or subquery result. | [§6.2](../06-subqueries-and-set-operations/README.md#62-multi-row-subqueries-in-and-not-in) |
 | **Index** | An auxiliary structure that finds rows by key without scanning the whole table. | [§12.4](../12-indexes-storage-and-query-performance/README.md#124-what-an-index-is) |
-| **Index-only scan** | Answering a query from the index alone, without visiting table pages. | [§12.10](../12-indexes-storage-and-query-performance/README.md#1210-reading-explain-the-four-ways-to-read-a-table) |
-| **Index scan** | Walking an index to find matching entries, then fetching each row from the table. | [§12.10](../12-indexes-storage-and-query-performance/README.md#1210-reading-explain-the-four-ways-to-read-a-table) |
+| **Index-only scan** | Defined in the 20.11 sheet. | [§12.10](../12-indexes-storage-and-query-performance/README.md#1210-reading-explain-the-four-ways-to-read-a-table) |
+| **Index scan** | Defined in the 20.11 sheet. | [§12.10](../12-indexes-storage-and-query-performance/README.md#1210-reading-explain-the-four-ways-to-read-a-table) |
 | **InfluxDB** | A time-series database for metrics and sensor data. | [§16.8](../16-beyond-relational/README.md#168-time-series-and-spatial-databases) |
 | **information_schema** | The SQL-standard set of views that describe the database's tables, columns and constraints. | [§1.2](../01-databases-and-the-relational-model/README.md#12-what-a-database-is) |
 | **Inlining (CTE)** | The planner folding a CTE into the main query so it can be optimised together with it (PostgreSQL 12+). | [§7.1](../07-ctes-views-and-recursion/README.md#71-common-table-expressions-with) |
-| **In-memory database** | A database that keeps its working data in RAM and persists it with snapshots and logs. | [§16.6](../16-beyond-relational/README.md#166-in-memory-databases) |
-| **INNER JOIN** | Returns only pairs of rows that satisfy the join condition. | [§5.3](../05-joins/README.md#53-inner-join) |
+| **In-memory database** | Defined in the 20.15 sheet. | [§16.6](../16-beyond-relational/README.md#166-in-memory-databases) |
+| **INNER JOIN** | Defined in the 20.5 sheet. | [§5.3](../05-joins/README.md#53-inner-join) |
 | **InnoDB** | MySQL's default storage engine: transactional, with each table stored clustered on its primary key. | [§1.4](../01-databases-and-the-relational-model/README.md#14-inside-a-dbms-the-core-components) |
 | **INSERT** | DML statement that adds rows. | [§9.8](../09-ddl-dml-and-constraints/README.md#98-insert) |
 | **Integer division** | Dividing two integers drops the fraction: in PostgreSQL `7 / 2` is `3`. | [§2.3](../02-select-basics/README.md#23-operators) |
 | **Intention lock (IS, IX)** | A table-level lock announcing that the transaction will lock rows inside the table, so table and row locks can be checked quickly. | [§13.10](../13-transactions-and-concurrency/README.md#1310-lock-based-concurrency-control) |
-| **INTERSECT** | Set operation returning rows present in both queries. | [§6.9](../06-subqueries-and-set-operations/README.md#69-intersect) |
+| **INTERSECT** | Defined in the 20.6 sheet. | [§6.9](../06-subqueries-and-set-operations/README.md#69-intersect) |
 | **Interval** | A PostgreSQL type for a length of time, such as `interval '2 hours'`. | [§3.4](../03-functions-and-expressions/README.md#34-date-and-time-functions) |
 | **Inverted index** | An index that maps each word or element to the list of rows or documents that contain it. | [§12.9](../12-indexes-storage-and-query-performance/README.md#129-postgresqls-other-index-types-gin-gist-brin) |
 | **I/O** | Input/output: reading from or writing to disk or the network, usually the slowest part of running a query. | [§12.1](../12-indexes-storage-and-query-performance/README.md#121-how-a-database-stores-data) |
@@ -1322,16 +1209,16 @@ Short definitions of the terms used across the book, in plain words. The last co
 |---|---|---|
 | **Kafka** | Apache Kafka: a distributed, replicated log used to stream events between systems. | [§16.9](../16-beyond-relational/README.md#169-big-data-and-distributed-processing-frameworks) |
 | **Keyset pagination** | Paging by remembering the last key seen (`WHERE key > :last`) instead of using `OFFSET`. | [§12.14](../12-indexes-storage-and-query-performance/README.md#1214-offset-vs-keyset-pagination) |
-| **Key-value store** | NoSQL store that maps keys to values with get and put operations. | [§16.2](../16-beyond-relational/README.md#162-key-value-stores) |
+| **Key-value store** | Defined in the 20.15 sheet. | [§16.2](../16-beyond-relational/README.md#162-key-value-stores) |
 
 ### L
 
 | Term | Meaning | See |
 |---|---|---|
-| **LAG / LEAD** | Window functions returning a value from a row before or after the current one. | [§8.6](../08-window-functions/README.md#86-value-offset-functions-lag-lead-first_value-last_value-nth_value) |
+| **LAG / LEAD** | Defined in the 20.8 sheet. | [§8.6](../08-window-functions/README.md#86-value-offset-functions-lag-lead-first_value-last_value-nth_value) |
 | **Last-write-wins (LWW)** | A conflict rule that keeps the value with the latest timestamp and silently drops the others. | [§15.5](../15-scaling-databases/README.md#155-replication) |
 | **Latency** | The time a single operation takes, from request to response. | [§1.5](../01-databases-and-the-relational-model/README.md#15-database-architectures) |
-| **LATERAL** | A subquery in `FROM` that may refer to columns of tables listed before it. | [§6.7](../06-subqueries-and-set-operations/README.md#67-lateral-subqueries) |
+| **LATERAL** | Defined in the 20.5 sheet. | [§6.7](../06-subqueries-and-set-operations/README.md#67-lateral-subqueries) |
 | **Lazy / eager loading** | ORM strategies: fetch related objects only when they are first used (lazy, which risks N+1) or up front with a join (eager). | [§12.13](../12-indexes-storage-and-query-performance/README.md#1213-anti-patterns-that-disable-indexes) |
 | **Leader election** | Choosing one node to coordinate writes, typically via a consensus system. | [§15.8](../15-scaling-databases/README.md#158-consensus-and-leader-election) |
 | **Leader / follower** | In replication, the leader (primary) accepts writes and the followers (replicas, standbys) copy its changes. | [§15.5](../15-scaling-databases/README.md#155-replication) |
@@ -1339,7 +1226,7 @@ Short definitions of the terms used across the book, in plain words. The last co
 | **Lease** | A lock or leadership right that expires automatically after a set time unless renewed. | [§15.8](../15-scaling-databases/README.md#158-consensus-and-leader-election) |
 | **Ledger** | An append-only table of money or stock movements. Balances are sums over it. | [§17.3](../17-schema-design-case-studies/README.md#173-banking-system) |
 | **Leftmost prefix rule** | A composite index on (a, b, c) helps filters on a, (a, b) or (a, b, c), not on b alone. | [§12.11](../12-indexes-storage-and-query-performance/README.md#1211-composite-indexes-and-column-order) |
-| **LEFT OUTER JOIN** | Returns every left row, with matching right rows or NULLs. | [§5.4](../05-joins/README.md#54-left-outer-join) |
+| **LEFT OUTER JOIN** | Defined in the 20.5 sheet. | [§5.4](../05-joins/README.md#54-left-outer-join) |
 | **Lexeme** | A normalised word (after stemming) stored in a `tsvector`. | [§14.6](../14-advanced-sql-and-using-sql-from-code/README.md#146-full-text-search) |
 | **LIKE / ILIKE** | Pattern matching with `%` and `_`. `ILIKE` is case-insensitive (PostgreSQL). | [§2.4](../02-select-basics/README.md#24-ranges-lists-and-patterns-between-in-likeilike-regex) |
 | **LIMIT / OFFSET** | Return at most n rows, after skipping k rows. | [§2.8](../02-select-basics/README.md#28-limit-offset-and-fetch-returning-a-page) |
@@ -1348,11 +1235,11 @@ Short definitions of the terms used across the book, in plain words. The last co
 | **List partitioning** | Assigning rows to partitions by a list of discrete values, such as region codes. | [§15.2](../15-scaling-databases/README.md#152-partitioning) |
 | **Lock** | A marker that restricts other transactions' access to a row or table until released. | [§13.10](../13-transactions-and-concurrency/README.md#1310-lock-based-concurrency-control) |
 | **Lock manager** | The DBMS component that grants, queues and releases locks. | [§1.4](../01-databases-and-the-relational-model/README.md#14-inside-a-dbms-the-core-components) |
-| **Logical model** | Model with attributes, keys and normalized relations, independent of a particular DBMS. | [§10.2](../10-data-modeling-and-er-diagrams/README.md#102-the-three-levels-of-a-data-model) |
+| **Logical model** | Defined in the 20.10 sheet. | [§10.2](../10-data-modeling-and-er-diagrams/README.md#102-the-three-levels-of-a-data-model) |
 | **Logical query processing order** | The conceptual order in which the clauses of a SELECT are evaluated, starting with FROM. | [§4.5](../04-aggregation/README.md#45-the-logical-order-of-query-processing) |
 | **Logical replication** | Replicating row changes (insert, update, delete) for chosen tables, rather than copying raw WAL bytes. | [§15.5](../15-scaling-databases/README.md#155-replication) |
 | **Lossless join** | A decomposition whose pieces join back to exactly the original rows. | [§11.10](../11-normalization/README.md#1110-decomposition-done-right-lossless-joins-and-dependency-preservation) |
-| **Lost update** | Two read-modify-write transactions where the second silently overwrites the first. | [§13.7](../13-transactions-and-concurrency/README.md#137-lost-updates-and-how-to-prevent-them) |
+| **Lost update** | Defined in the 20.12 sheet. | [§13.7](../13-transactions-and-concurrency/README.md#137-lost-updates-and-how-to-prevent-them) |
 | **LRU / LFU** | Cache eviction policies: drop the least recently used, or the least frequently used, item first. | [§16.2](../16-beyond-relational/README.md#162-key-value-stores) |
 | **LSM tree** | Log-structured merge tree: writes go to memory and sorted files that are merged in the background. | [§16.4](../16-beyond-relational/README.md#164-column-family-and-wide-column-stores) |
 | **LSN (log sequence number)** | A position in the write-ahead log, used to order changes and to track recovery and replication progress. | [§13.5](../13-transactions-and-concurrency/README.md#135-durability) |
@@ -1365,10 +1252,10 @@ Short definitions of the terms used across the book, in plain words. The last co
 | **MapReduce** | A batch-processing model: map each record to key-value pairs, group them by key, then reduce each group to a result. | [§16.9](../16-beyond-relational/README.md#169-big-data-and-distributed-processing-frameworks) |
 | **MariaDB** | An open-source fork of MySQL. | [§1.7](../01-databases-and-the-relational-model/README.md#17-rdbms--relational-database-management-systems) |
 | **Materialized path** | Storing each tree node's full ancestor path, such as `/1/4/9/`, in a column. | [§7.4](../07-ctes-views-and-recursion/README.md#74-hierarchies-trees-stored-as-parent-pointers) |
-| **Materialized view** | A stored query result that must be refreshed to reflect new data. | [§7.8](../07-ctes-views-and-recursion/README.md#78-materialized-views) |
+| **Materialized view** | Defined in the 20.7 sheet. | [§7.8](../07-ctes-views-and-recursion/README.md#78-materialized-views) |
 | **Memcached** | A simple distributed in-memory key-value cache. | [§16.6](../16-beyond-relational/README.md#166-in-memory-databases) |
 | **MERGE** | Standard statement that inserts, updates or deletes target rows based on a source (PostgreSQL 15+). | [§9.11](../09-ddl-dml-and-constraints/README.md#911-upsert-insert--on-conflict-and-merge) |
-| **Merge join** | Join that walks two inputs sorted on the join key. | [§12.15](../12-indexes-storage-and-query-performance/README.md#1215-join-algorithms) |
+| **Merge join** | Defined in the 20.11 sheet. | [§12.15](../12-indexes-storage-and-query-performance/README.md#1215-join-algorithms) |
 | **Merkle tree** | A tree of hashes in which each parent hashes its children, so two replicas can find differences by comparing a few hashes. | [§15.5](../15-scaling-databases/README.md#155-replication) |
 | **Metadata** | Data about data, such as table and column definitions. | [§1.2](../01-databases-and-the-relational-model/README.md#12-what-a-database-is) |
 | **Minimal cover** | An equivalent set of FDs with single-attribute right sides, no extraneous attributes and no redundant FDs. | [§11.5](../11-normalization/README.md#115-minimal-canonical-cover) |
@@ -1387,20 +1274,20 @@ Short definitions of the terms used across the book, in plain words. The last co
 | Term | Meaning | See |
 |---|---|---|
 | **N+1 query problem** | Running one query for a list, then one more per item, instead of a single set-based query. | [§12.13](../12-indexes-storage-and-query-performance/README.md#1213-anti-patterns-that-disable-indexes) |
-| **Natural join** | A join on all columns with the same name. Risky because it changes silently when columns are added. | [§5.10](../05-joins/README.md#510-using-natural-join-multi-table-joins-and-how-joins-are-executed) |
+| **Natural join** | Defined in the 20.5 sheet. | [§5.10](../05-joins/README.md#510-using-natural-join-multi-table-joins-and-how-joins-are-executed) |
 | **Natural key** | A key taken from real-world data, such as an ISBN or email. | [§10.13](../10-data-modeling-and-er-diagrams/README.md#1013-keys-in-relational-databases) |
 | **Neo4j** | A widely used graph database, queried with Cypher. | [§16.10](../16-beyond-relational/README.md#1610-choosing-a-database) |
-| **Nested loop join** | For each row of the outer input, look up matches in the inner input. | [§12.15](../12-indexes-storage-and-query-performance/README.md#1215-join-algorithms) |
+| **Nested loop join** | Defined in the 20.11 sheet. | [§12.15](../12-indexes-storage-and-query-performance/README.md#1215-join-algorithms) |
 | **Network partition** | A network failure that splits the nodes into groups that cannot reach each other. | [§15.1](../15-scaling-databases/README.md#151-distributed-databases-the-big-picture) |
 | **NewSQL** | Distributed databases that keep SQL and ACID while scaling out, such as Spanner and CockroachDB. | [§16.7](../16-beyond-relational/README.md#167-newsql--distributed-sql) |
 | **Non-equi join** | A join whose condition is not plain equality, such as `BETWEEN` or `<`. | [§5.1](../05-joins/README.md#51-join-theory-the-cartesian-product-and-cross-join) |
-| **Non-repeatable read** | Reading the same row twice in a transaction and getting different values. | [§13.4](../13-transactions-and-concurrency/README.md#134-isolation--anomalies-and-isolation-levels) |
+| **Non-repeatable read** | Defined in the 20.12 sheet. | [§13.4](../13-transactions-and-concurrency/README.md#134-isolation--anomalies-and-isolation-levels) |
 | **Normal form** | A level of design quality (1NF, 2NF, 3NF, BCNF …) defined by which dependencies a table may contain. | [§11.6](../11-normalization/README.md#116-anomalies--why-normalization-exists) |
 | **Normalization** | Organising tables so each fact is stored once, guided by functional dependencies and normal forms. | [§11.6](../11-normalization/README.md#116-anomalies--why-normalization-exists) |
 | **NoSQL** | Non-relational databases: key-value, document, wide-column and graph stores. | [§16.1](../16-beyond-relational/README.md#161-why-nosql) |
 | **NOT NULL** | Constraint forbidding NULL in a column. | [§9.3](../09-ddl-dml-and-constraints/README.md#93-keys-and-constraints) |
 | **NOWAIT** | A locking option that raises an error at once instead of waiting for a locked row. | [§13.12](../13-transactions-and-concurrency/README.md#1312-row-locks-for-work-queues-for-update-nowait-skip-locked) |
-| **NTILE** | Window function that splits ordered rows into n roughly equal buckets. | [§8.5](../08-window-functions/README.md#85-ranking-functions) |
+| **NTILE** | Defined in the 20.8 sheet. | [§8.5](../08-window-functions/README.md#85-ranking-functions) |
 | **NULL** | A marker for a missing or unknown value. Comparisons with it yield UNKNOWN. | [§2.5](../02-select-basics/README.md#25-null-and-three-valued-logic) |
 | **NULLIF** | Returns NULL if its two arguments are equal, otherwise the first. | [§3.5](../03-functions-and-expressions/README.md#35-conditional-expressions-case-coalesce-nullif-greatest-least) |
 | **NULL padding** | The NULLs an outer join fills into the columns of the side that had no match. | [§5.4](../05-joins/README.md#54-left-outer-join) |
@@ -1430,7 +1317,7 @@ Short definitions of the terms used across the book, in plain words. The last co
 
 | Term | Meaning | See |
 |---|---|---|
-| **PACELC** | Extension of CAP: under Partition choose Availability or Consistency, Else choose Latency or Consistency. | [§15.7](../15-scaling-databases/README.md#157-the-cap-theorem-and-pacelc) |
+| **PACELC** | Defined in the 20.14 sheet. | [§15.7](../15-scaling-databases/README.md#157-the-cap-theorem-and-pacelc) |
 | **Page** | Fixed-size unit of storage and I/O (8 KB in PostgreSQL). | [§12.1](../12-indexes-storage-and-query-performance/README.md#121-how-a-database-stores-data) |
 | **Pagination** | Returning a result one page at a time, with `LIMIT`/`OFFSET` or keyset paging. | [§12.14](../12-indexes-storage-and-query-performance/README.md#1214-offset-vs-keyset-pagination) |
 | **Parameterized query** | A query whose values are sent separately from the SQL text as bind parameters, preventing injection. | [§14.9](../14-advanced-sql-and-using-sql-from-code/README.md#149-sql-injection-and-parameterized-queries) |
@@ -1453,8 +1340,8 @@ Short definitions of the terms used across the book, in plain words. The last co
 | **PgBouncer** | A lightweight connection pooler placed between applications and PostgreSQL. | [§14.12](../14-advanced-sql-and-using-sql-from-code/README.md#1412-connection-pooling) |
 | **pg_dump / pg_restore** | PostgreSQL's tools to export a logical backup and to load it back. | [§9.12](../09-ddl-dml-and-constraints/README.md#912-backup-and-restore) |
 | **pg_trgm (trigrams)** | A PostgreSQL extension that splits text into three-character pieces so indexes can speed up `LIKE '%x%'` and similarity search. | [§12.13](../12-indexes-storage-and-query-performance/README.md#1213-anti-patterns-that-disable-indexes) |
-| **Phantom read** | Re-running a query in a transaction returns a different set of rows because of inserts or deletes. | [§13.4](../13-transactions-and-concurrency/README.md#134-isolation--anomalies-and-isolation-levels) |
-| **Physical model** | Model with exact types, indexes, partitions and storage for a specific DBMS. | [§10.2](../10-data-modeling-and-er-diagrams/README.md#102-the-three-levels-of-a-data-model) |
+| **Phantom read** | Defined in the 20.12 sheet. | [§13.4](../13-transactions-and-concurrency/README.md#134-isolation--anomalies-and-isolation-levels) |
+| **Physical model** | Defined in the 20.10 sheet. | [§10.2](../10-data-modeling-and-er-diagrams/README.md#102-the-three-levels-of-a-data-model) |
 | **PITR (point-in-time recovery)** | Restoring a base backup and replaying archived WAL up to a chosen moment. | [§9.12](../09-ddl-dml-and-constraints/README.md#912-backup-and-restore) |
 | **Pivot** | Turning row values into columns, usually with conditional aggregation. | [§14.7](../14-advanced-sql-and-using-sql-from-code/README.md#147-pivot-and-unpivot) |
 | **PL/pgSQL** | PostgreSQL's procedural language for functions, procedures and triggers. | [§14.1](../14-advanced-sql-and-using-sql-from-code/README.md#141-user-defined-functions) |
@@ -1492,19 +1379,19 @@ Short definitions of the terms used across the book, in plain words. The last co
 | **Raft** | A consensus algorithm with an elected leader that replicates a log to a majority. | [§15.8](../15-scaling-databases/README.md#158-consensus-and-leader-election) |
 | **RAID** | Combining several disks for safety or speed: RAID 1 mirrors, RAID 5 and 6 add parity, RAID 10 mirrors and stripes. | [§15.11](../15-scaling-databases/README.md#1511-data-resilience-redundancy-mirroring-backups) |
 | **RAM** | The computer's main memory: much faster than disk, but its contents are lost when the power goes. | [§12.1](../12-indexes-storage-and-query-performance/README.md#121-how-a-database-stores-data) |
-| **RANGE frame** | A window frame defined by value distance from the current row's `ORDER BY` value. Includes peers. | [§8.4](../08-window-functions/README.md#84-frames-rows-range-groups-and-exclude) |
+| **RANGE frame** | Defined in the 20.8 sheet. | [§8.4](../08-window-functions/README.md#84-frames-rows-range-groups-and-exclude) |
 | **Range partitioning** | Assigning rows to partitions by ranges of a key, usually dates. | [§15.2](../15-scaling-databases/README.md#152-partitioning) |
 | **Range type** | A PostgreSQL type holding an interval of values, such as `daterange` or `tstzrange`, with operators like `&&` (overlaps). | [§17.1](../17-schema-design-case-studies/README.md#171-hospital-management-system) |
-| **RANK** | Ranking function that gives ties the same rank and skips the next ranks (1, 2, 2, 4). | [§8.5](../08-window-functions/README.md#85-ranking-functions) |
+| **RANK** | Defined in the 20.8 sheet. | [§8.5](../08-window-functions/README.md#85-ranking-functions) |
 | **RDBMS** | Relational database management system: a DBMS based on the relational model, such as PostgreSQL. | [§1.7](../01-databases-and-the-relational-model/README.md#17-rdbms--relational-database-management-systems) |
 | **RDB snapshot** | Redis's point-in-time dump of its whole data set to a file. | [§16.11](../16-beyond-relational/README.md#1611-inside-two-workhorses-elasticsearch-and-the-elk-stack-and-redis) |
 | **Read Committed** | Isolation level where each statement sees only data committed before it began. PostgreSQL's default. | [§13.4](../13-transactions-and-concurrency/README.md#134-isolation--anomalies-and-isolation-levels) |
 | **Read replica** | A copy of the database that serves read queries. | [§15.5](../15-scaling-databases/README.md#155-replication) |
-| **Read skew** | Seeing different parts of the data at different moments within one transaction. | [§13.4](../13-transactions-and-concurrency/README.md#134-isolation--anomalies-and-isolation-levels) |
+| **Read skew** | Defined in the 20.12 sheet. | [§13.4](../13-transactions-and-concurrency/README.md#134-isolation--anomalies-and-isolation-levels) |
 | **Read-your-writes** | A guarantee that a user always sees their own earlier writes. | [§15.6](../15-scaling-databases/README.md#156-consistency-models) |
 | **Rebalancing** | Moving data between nodes when nodes are added or removed, to keep the load even. | [§15.3](../15-scaling-databases/README.md#153-sharding) |
 | **Recovery** | Restoring a consistent state after a crash, using the log to redo committed and undo uncommitted work. | [§15.9](../15-scaling-databases/README.md#159-fault-tolerance-and-recovery) |
-| **Recursive CTE** | A CTE that refers to itself, used for hierarchies, graphs and series. | [§7.3](../07-ctes-views-and-recursion/README.md#73-recursive-ctes-the-mechanics) |
+| **Recursive CTE** | Defined in the 20.7 sheet. | [§7.3](../07-ctes-views-and-recursion/README.md#73-recursive-ctes-the-mechanics) |
 | **Redis** | An in-memory data-structure store (strings, hashes, lists, sets, sorted sets, streams) used as a cache, queue or database. | [§16.2](../16-beyond-relational/README.md#162-key-value-stores) |
 | **Redo / undo** | Redo re-applies committed changes from the log. Undo reverses changes made by transactions that did not commit. | [§15.9](../15-scaling-databases/README.md#159-fault-tolerance-and-recovery) |
 | **Redundancy** | The same fact stored more than once. | [§11.6](../11-normalization/README.md#116-anomalies--why-normalization-exists) |
@@ -1522,15 +1409,15 @@ Short definitions of the terms used across the book, in plain words. The last co
 | **Result set** | The rows a query returns. | [§2.1](../02-select-basics/README.md#21-select-choosing-what-comes-back) |
 | **Retention policy** | A rule for how long data is kept before it is deleted or summarised. | [§16.8](../16-beyond-relational/README.md#168-time-series-and-spatial-databases) |
 | **RETURNING** | Clause that returns the rows affected by `INSERT`, `UPDATE` or `DELETE`. | [§9.8](../09-ddl-dml-and-constraints/README.md#98-insert) |
-| **RIGHT OUTER JOIN** | Returns every right row, with matching left rows or NULLs. | [§5.5](../05-joins/README.md#55-right-outer-join) |
+| **RIGHT OUTER JOIN** | Defined in the 20.5 sheet. | [§5.5](../05-joins/README.md#55-right-outer-join) |
 | **Rigorous 2PL** | Two-phase locking that holds every lock, read and write, until the transaction ends. | [§13.10](../13-transactions-and-concurrency/README.md#1310-lock-based-concurrency-control) |
 | **Role** | A PostgreSQL user or group that owns objects and holds privileges. | [§14.8](../14-advanced-sql-and-using-sql-from-code/README.md#148-security-roles-privileges-and-row-level-security) |
 | **ROLLUP** | Grouping extension that adds hierarchical subtotals and a grand total. | [§4.6](../04-aggregation/README.md#46-subtotals-grouping-sets-rollup-and-cube) |
 | **Round-robin** | Handing items to nodes in turn: 1, 2, 3, 1, 2, 3 … | [§15.2](../15-scaling-databases/README.md#152-partitioning) |
 | **Row-level security** | Policies that filter which rows a role may read or write. | [§14.8](../14-advanced-sql-and-using-sql-from-code/README.md#148-security-roles-privileges-and-row-level-security) |
-| **ROW_NUMBER** | Window function giving each row a unique sequential number in its partition. | [§8.5](../08-window-functions/README.md#85-ranking-functions) |
+| **ROW_NUMBER** | Defined in the 20.8 sheet. | [§8.5](../08-window-functions/README.md#85-ranking-functions) |
 | **Row-oriented storage** | Storage that keeps all the columns of a row together. Good for OLTP reads and writes of whole rows. | [§12.1](../12-indexes-storage-and-query-performance/README.md#121-how-a-database-stores-data) |
-| **ROWS frame** | A window frame counted in physical rows. | [§8.4](../08-window-functions/README.md#84-frames-rows-range-groups-and-exclude) |
+| **ROWS frame** | Defined in the 20.8 sheet. | [§8.4](../08-window-functions/README.md#84-frames-rows-range-groups-and-exclude) |
 | **Row value (row constructor)** | Several values written as one, `(a, b)`, compared left to right: `(ts, id) < (:ts, :id)`. | [§6.6](../06-subqueries-and-set-operations/README.md#66-table-subqueries-derived-tables-and-row-subqueries) |
 | **RPO / RTO** | Recovery point objective (data you may lose) and recovery time objective (downtime you may have). | [§9.12](../09-ddl-dml-and-constraints/README.md#912-backup-and-restore) |
 | **R-tree** | A spatial index that groups nearby objects into nested bounding rectangles. | [§16.8](../16-beyond-relational/README.md#168-time-series-and-spatial-databases) |
@@ -1545,18 +1432,18 @@ Short definitions of the terms used across the book, in plain words. The last co
 | **Sargable** | A predicate the database can answer with an index seek, such as `col >= value` with no function on `col`. | [§12.13](../12-indexes-storage-and-query-performance/README.md#1213-anti-patterns-that-disable-indexes) |
 | **Savepoint** | A marker inside a transaction you can roll back to without abandoning the whole transaction. | [§13.2](../13-transactions-and-concurrency/README.md#132-atomicity) |
 | **Scalar function** | A function that returns one value per input row, such as `upper` or `round`. | [§4.1](../04-aggregation/README.md#41-aggregate-functions) |
-| **Scalar subquery** | A subquery that returns one value. Zero rows give NULL, more than one row is an error. | [§6.1](../06-subqueries-and-set-operations/README.md#61-subqueries-queries-inside-queries) |
+| **Scalar subquery** | Defined in the 20.6 sheet. | [§6.1](../06-subqueries-and-set-operations/README.md#61-subqueries-queries-inside-queries) |
 | **Scatter-gather** | Sending a query to every shard and merging their partial results. | [§15.4](../15-scaling-databases/README.md#154-distributed-query-processing) |
 | **Schema** | The structure of a database (tables, columns, constraints), or a PostgreSQL namespace that groups objects. | [§9.2](../09-ddl-dml-and-constraints/README.md#92-create-databases-schemas-and-tables) |
 | **Schema-on-read / on-write** | Structure checked when data is read (typical of NoSQL) or when it is written (relational). | [§1.8](../01-databases-and-the-relational-model/README.md#18-relational-vs-non-relational-databases) |
 | **Secondary index** | An index on columns other than the file's ordering key, with one entry per record (dense). | [§12.4](../12-indexes-storage-and-query-performance/README.md#124-what-an-index-is) |
 | **Selectivity** | The fraction of rows a predicate keeps. Low fractions favour index scans. | [§12.16](../12-indexes-storage-and-query-performance/README.md#1216-statistics-how-the-planner-estimates) |
-| **SELF JOIN** | Joining a table to itself under two aliases. | [§5.7](../05-joins/README.md#57-self-join) |
-| **Semi-join** | Returns rows of one table that have at least one match in another, each once. | [§5.8](../05-joins/README.md#58-semi-joins-and-anti-joins) |
+| **SELF JOIN** | Defined in the 20.5 sheet. | [§5.7](../05-joins/README.md#57-self-join) |
+| **Semi-join** | Defined in the 20.5 sheet. | [§5.8](../05-joins/README.md#58-semi-joins-and-anti-joins) |
 | **Semi-structured data** | Data that carries its own flexible structure, such as JSON or XML. | [§14.4](../14-advanced-sql-and-using-sql-from-code/README.md#144-json-and-jsonb) |
 | **Semi-synchronous replication** | The primary waits until at least one replica has received the change before confirming the commit. | [§15.5](../15-scaling-databases/README.md#155-replication) |
 | **Sequence** | A database object that hands out increasing numbers. | [§9.4](../09-ddl-dml-and-constraints/README.md#94-generated-keys-identity-sequences-serial-uuid-generated-columns) |
-| **Sequential scan** | Reading every page of a table. | [§12.10](../12-indexes-storage-and-query-performance/README.md#1210-reading-explain-the-four-ways-to-read-a-table) |
+| **Sequential scan** | Defined in the 20.11 sheet. | [§12.10](../12-indexes-storage-and-query-performance/README.md#1210-reading-explain-the-four-ways-to-read-a-table) |
 | **serial / bigserial** | PostgreSQL's older auto-increment shorthand: an integer column with a sequence as its default. | [§9.4](../09-ddl-dml-and-constraints/README.md#94-generated-keys-identity-sequences-serial-uuid-generated-columns) |
 | **Serializable** | The strongest isolation level: the outcome equals some serial order of the transactions. | [§13.8](../13-transactions-and-concurrency/README.md#138-write-skew-and-serializable-isolation) |
 | **Serialization failure** | Error 40001: the database aborted a transaction to preserve isolation. Retry it. | [§13.7](../13-transactions-and-concurrency/README.md#137-lost-updates-and-how-to-prevent-them) |
@@ -1577,6 +1464,7 @@ Short definitions of the terms used across the book, in plain words. The last co
 | **Spark** | Apache Spark: distributed in-memory processing of large data sets, with SQL and DataFrame APIs. | [§16.9](../16-beyond-relational/README.md#169-big-data-and-distributed-processing-frameworks) |
 | **Sparse index** | An index with entries for only some records, typically one per block. | [§12.4](../12-indexes-storage-and-query-performance/README.md#124-what-an-index-is) |
 | **Split brain** | Two nodes both believe they are the leader and accept writes, so the data diverges. | [§15.8](../15-scaling-databases/README.md#158-consensus-and-leader-election) |
+| **Spurious tuple** | A row invented by joining the pieces of a lossy decomposition. | [§11.10](../11-normalization/README.md#1110-decomposition-done-right-lossless-joins-and-dependency-preservation) |
 | **SQL** | Structured Query Language: the declarative standard language of relational databases. | [§1.9](../01-databases-and-the-relational-model/README.md#19-what-sql-is) |
 | **SQLAlchemy** | Python's widely used SQL toolkit and ORM. | [§14.12](../14-advanced-sql-and-using-sql-from-code/README.md#1412-connection-pooling) |
 | **SQL injection** | An attack that smuggles SQL into a query through unescaped input. | [§14.9](../14-advanced-sql-and-using-sql-from-code/README.md#149-sql-injection-and-parameterized-queries) |
@@ -1612,7 +1500,7 @@ Short definitions of the terms used across the book, in plain words. The last co
 | **Throughput** | How much work a system completes per unit of time, such as transactions per second. | [§16.2](../16-beyond-relational/README.md#162-key-value-stores) |
 | **TiDB** | A MySQL-compatible distributed SQL database built on the TiKV key-value store. | [§16.7](../16-beyond-relational/README.md#167-newsql--distributed-sql) |
 | **TimescaleDB** | A PostgreSQL extension for time-series data that partitions tables by time automatically. | [§16.8](../16-beyond-relational/README.md#168-time-series-and-spatial-databases) |
-| **Time-series database** | A store optimised for timestamped measurements, retention and downsampling. | [§16.8](../16-beyond-relational/README.md#168-time-series-and-spatial-databases) |
+| **Time-series database** | Defined in the 20.15 sheet. | [§16.8](../16-beyond-relational/README.md#168-time-series-and-spatial-databases) |
 | **Timestamp ordering** | Concurrency control that orders conflicting operations by transaction timestamps. | [§13.13](../13-transactions-and-concurrency/README.md#1313-timestamp-based-concurrency-control) |
 | **timestamptz vs timestamp** | `timestamptz` stores an exact instant, shown in the session's time zone. `timestamp` stores a wall-clock reading with no zone. | [§3.1](../03-functions-and-expressions/README.md#31-data-types-and-conversions) |
 | **TOAST** | PostgreSQL's mechanism for compressing or moving large values out of the main table page. | [§12.1](../12-indexes-storage-and-query-performance/README.md#121-how-a-database-stores-data) |
@@ -1637,7 +1525,8 @@ Short definitions of the terms used across the book, in plain words. The last co
 | Term | Meaning | See |
 |---|---|---|
 | **Undo log** | A log of old values used to roll back the changes of transactions that do not commit. | [§13.14](../13-transactions-and-concurrency/README.md#1314-multiversion-concurrency-control-mvcc) |
-| **UNION / UNION ALL** | Combine two results, removing duplicates (`UNION`) or keeping them (`UNION ALL`). | [§6.8](../06-subqueries-and-set-operations/README.md#68-set-operations-and-union) |
+| **Union / decomposition (FD rules)** | Derived Armstrong rules: X → Y and X → Z give X → YZ; X → YZ gives X → Y and X → Z. | [§11.3](../11-normalization/README.md#113-armstrongs-inference-rules) |
+| **UNION / UNION ALL** | Defined in the 20.6 sheet. | [§6.8](../06-subqueries-and-set-operations/README.md#68-set-operations-and-union) |
 | **UNIQUE constraint** | Forbids duplicate non-NULL values in a column or column set. | [§9.3](../09-ddl-dml-and-constraints/README.md#93-keys-and-constraints) |
 | **Unique index** | An index that also rejects duplicate keys. It is how UNIQUE and PRIMARY KEY are enforced. | [§9.3](../09-ddl-dml-and-constraints/README.md#93-keys-and-constraints) |
 | **unnest** | A function that expands an array into a set of rows. | [§14.5](../14-advanced-sql-and-using-sql-from-code/README.md#145-arrays) |
@@ -1659,7 +1548,7 @@ Short definitions of the terms used across the book, in plain words. The last co
 | **Vector clock** | A list of per-node counters attached to a value, used to tell whether two versions are ordered or concurrent. | [§15.5](../15-scaling-databases/README.md#155-replication) |
 | **Version column** | A counter increased on every update and checked in the `WHERE` clause, which implements optimistic locking. | [§13.7](../13-transactions-and-concurrency/README.md#137-lost-updates-and-how-to-prevent-them) |
 | **Vertical scaling** | Moving to a bigger machine (scale up). | [§15.1](../15-scaling-databases/README.md#151-distributed-databases-the-big-picture) |
-| **View** | A named, stored query that behaves like a table and holds no data of its own. | [§7.7](../07-ctes-views-and-recursion/README.md#77-views) |
+| **View** | Defined in the 20.7 sheet. | [§7.7](../07-ctes-views-and-recursion/README.md#77-views) |
 | **Virtual node** | One of many small positions a physical node owns on a hash ring, so load spreads evenly. | [§15.3](../15-scaling-databases/README.md#153-sharding) |
 | **Visibility map** | A PostgreSQL bitmap marking pages whose rows are visible to every transaction, which makes index-only scans possible. | [§12.10](../12-indexes-storage-and-query-performance/README.md#1210-reading-explain-the-four-ways-to-read-a-table) |
 | **Volatility (function)** | How stable a function's result is: `IMMUTABLE` (never changes), `STABLE` (fixed within a statement) or `VOLATILE` (may change on every call). | [§14.1](../14-advanced-sql-and-using-sql-from-code/README.md#141-user-defined-functions) |
@@ -1673,13 +1562,13 @@ Short definitions of the terms used across the book, in plain words. The last co
 | **Weak entity** | An entity identified only together with its owner entity. | [§10.9](../10-data-modeling-and-er-diagrams/README.md#109-weak-entities) |
 | **Weighted average** | An average in which each value counts in proportion to a weight, such as units sold. | [§18.8](../18-sql-interview-problems-1/README.md#188-ratios-and-percentages-p34p38) |
 | **WHERE** | Filters rows before grouping. Keeps only rows where the condition is TRUE. | [§2.2](../02-select-basics/README.md#22-where-filtering-rows) |
-| **Wide-column store** | NoSQL store with partition keys and sorted clustering columns, such as Cassandra. | [§16.4](../16-beyond-relational/README.md#164-column-family-and-wide-column-stores) |
+| **Wide-column store** | Defined in the 20.15 sheet. | [§16.4](../16-beyond-relational/README.md#164-column-family-and-wide-column-stores) |
 | **Wildcard** | A pattern character: in `LIKE`, `%` matches any run of characters and `_` exactly one. | [§2.4](../02-select-basics/README.md#24-ranges-lists-and-patterns-between-in-likeilike-regex) |
 | **Window function** | A function computed over a set of rows related to the current row, without collapsing them. | [§8.1](../08-window-functions/README.md#81-what-a-window-function-is) |
 | **WITH TIES** | Extends `FETCH FIRST n` to include rows tied with the last one. | [§2.8](../02-select-basics/README.md#28-limit-offset-and-fetch-returning-a-page) |
 | **work_mem** | PostgreSQL setting for the memory one sort or hash may use before it spills to disk. | [§12.15](../12-indexes-storage-and-query-performance/README.md#1215-join-algorithms) |
 | **Write amplification** | One logical write causing several physical writes (log, page, index, compaction). | [§12.4](../12-indexes-storage-and-query-performance/README.md#124-what-an-index-is) |
-| **Write skew** | Two transactions read overlapping data and write different rows, together breaking a rule each checked. | [§13.8](../13-transactions-and-concurrency/README.md#138-write-skew-and-serializable-isolation) |
+| **Write skew** | Defined in the 20.12 sheet. | [§13.8](../13-transactions-and-concurrency/README.md#138-write-skew-and-serializable-isolation) |
 
 ### X
 
@@ -1713,7 +1602,7 @@ Short definitions of the terms used across the book, in plain words. The last co
 - **Indexes**: B-tree by default, equality columns before range columns, no functions on indexed columns, keyset instead of deep `OFFSET`, and compare estimated with actual rows in `EXPLAIN ANALYZE` (20.11).
 - **Transactions**: PostgreSQL defaults to Read Committed. Repeatable Read is snapshot isolation (write skew still possible). Serializable (SSI) prevents everything but needs retries on 40001 (20.12).
 - **Dialects** differ most on paging, concatenation, NULL sorting, upsert, `RETURNING`, integer division and transactional DDL (20.16).
-- About 100 PostgreSQL claims and 28 SQLite claims on these sheets are checked by runnable scripts (20.17). The pattern catalogue (20.18) and the fifty Q&A (20.19) link back to the full explanations.
+- About 100 PostgreSQL claims and 28 SQLite claims on these sheets are checked by runnable scripts (20.17). The pattern catalogue (20.18) and the question index (20.19) link to the full solutions and answers.
 
 This is the end of the SQL Handbook. For more on the design side of data systems, see the [DDIA notes](../../../ddia/README.md), and for how databases fit into whole systems, the case studies in [Chapter 17](../17-schema-design-case-studies/README.md).
 

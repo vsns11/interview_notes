@@ -1,23 +1,8 @@
 # Chapter 8 — Window Functions: Rankings, Running Totals and Row-to-Row Comparisons
 
-`GROUP BY` answers "what is the total per department?" but throws away the individual rows to do it. Very often you need both at once: *each* employee **and** their department's average; *each* day's sales **and** the running total so far; *each* order **and** the previous order by the same customer. **Window functions** do exactly that. They compute a value across a set of related rows — the *window* — while keeping every row in the result.
+`GROUP BY` gives "total per department" but discards the rows. Often you need both: *each* employee **and** the department average; *each* day **and** the running total; *each* order **and** the customer's previous order. **Window functions** compute across related rows — the *window* — while keeping every row. They replace awkward self-joins and correlated subqueries (re-run per outer row) and underlie many interview questions (top-N per group, running totals, second-highest salary, streaks, month-over-month growth).
 
-They replace awkward self-joins (a table joined to itself) and correlated subqueries (subqueries re-run for every outer row), and they sit behind many SQL interview questions (top-N per group, running totals, second-highest salary, streaks, month-over-month growth).
-
-**What you'll learn**
-
-| # | Topic | You will be able to… |
-|---|---|---|
-| 8.1 | `OVER()` | explain how a window function differs from `GROUP BY` |
-| 8.2 | `PARTITION BY` | compute per-group values next to each row (share of total, diff from average) |
-| 8.3 | `ORDER BY` in a window | build running totals and understand the default frame and its tie trap |
-| 8.4 | Frames: `ROWS` / `RANGE` / `GROUPS`, `EXCLUDE` | choose exactly which rows each calculation sees |
-| 8.5 | Ranking | use `ROW_NUMBER`, `RANK`, `DENSE_RANK`, `NTILE`, `PERCENT_RANK`, `CUME_DIST` and handle ties |
-| 8.6 | Value functions | compare rows with `LAG`/`LEAD`, `FIRST_VALUE`/`LAST_VALUE`/`NTH_VALUE` |
-| 8.7 | Running & moving calculations | running totals, moving averages, cumulative share, growth % |
-| 8.8 | Top-N per group & dedup (de-duplication: removing extra copies) | the most-asked window pattern, plus "keep the latest row" |
-| 8.9 | Gaps and islands | find streaks, missing ranges and sessions (bursts of activity separated by idle time) |
-| 8.10 | Named windows, `FILTER`, evaluation order, performance | write tidy window queries and know how they execute |
+**Sections:** 8.1 `OVER()` · 8.2 `PARTITION BY` · 8.3 `ORDER BY` in a window · 8.4 Frames: `ROWS` / `RANGE` / `GROUPS`, `EXCLUDE` · 8.5 Ranking · 8.6 Value functions · 8.7 Running & moving calculations · 8.8 Top-N per group & dedup (de-duplication: removing extra copies) · 8.9 Gaps and islands · 8.10 Named windows, `FILTER`, evaluation order, performance.
 
 **Setup.** The `company` sample database from [chapter 1](../01-databases-and-the-relational-model/README.md#111-the-sample-database) plus two small tables added in [`code/00_schema.sql`](code/00_schema.sql):
 
@@ -26,14 +11,14 @@ They replace awkward self-joins (a table joined to itself) and correlated subque
 | `daily_sales(store, day, amount)` | Mumbai 1–7 March 2025; Pune the same week **except 4 March** (closed) | running totals, moving averages, frames, a gap |
 | `logins(user_id, login_date)` | two users' login days in May 2025 with breaks | streaks (gaps and islands) |
 
-Mumbai's sales for 3 and 4 March are both 1500, and two Pune days are both 650 — deliberate ties. In `employees`, Rahul and Meera (Engineering) both earn 98 000 and Arjun and Sara (Sales) both earn 68 000.
+Deliberate ties: Mumbai's 3 and 4 March are both 1500, two Pune days are 650; Rahul and Meera earn 98 000, Arjun and Sara 68 000.
 
 ---
 
 ## 8.1 What a window function is
 
 ### What it is
-A **window function** is a function that, for each row, looks at a set of rows related to it (its **window**) and returns one value — **without merging the rows**. You recognise it by the `OVER (...)` clause after the function call:
+A **window function** looks, for each row, at a set of related rows (its **window**) and returns one value — **without merging the rows**. It is recognised by `OVER (...)`:
 
 ```sql
 function_name(args) OVER (
@@ -42,8 +27,6 @@ function_name(args) OVER (
     [frame clause]          -- which rows around the current one to use
 )
 ```
-
-Analogy: in a class photo, `GROUP BY` replaces each row of students with one sign ("Row 2: average height 150 cm"). A window function keeps every student and pins a badge on each: "your row's average is 150 cm", "you are 3rd tallest in your row", "the student to your left is 2 cm shorter".
 
 ### The problem it solves
 Compare `GROUP BY` with a window:
@@ -61,7 +44,7 @@ Output:
        2 |    89500
 (2 rows)
 ```
-Two rows: the individual employees are gone. With windows, every employee stays and gets the aggregates beside them:
+Two rows; the employees are gone. With windows every employee stays, aggregates beside them:
 ```sql
 SELECT first_name, dept_id, salary,
        round(avg(salary) OVER ())                     AS company_avg,
@@ -83,19 +66,12 @@ Output:
  ...
 (8 rows)
 ```
-- `OVER ()` — an empty window means "all rows of the result" (here the 8 rows left after `WHERE`), so `company_avg` is the same on every row.
-- `OVER (PARTITION BY dept_id)` — the window is "all rows with my `dept_id`".
-
-Without window functions you'd need a join to a grouped subquery (or a correlated subquery per row) for each extra column.
+`OVER ()` means all rows of the result (the 8 left after `WHERE`), so `company_avg` is constant; `OVER (PARTITION BY dept_id)` means "rows with my `dept_id`". Without windows each extra column needs a join to a grouped subquery or a correlated subquery.
 
 ### How it works
-1. The query's `FROM`, `WHERE`, `GROUP BY` and `HAVING` run first and produce a set of rows.
-2. For each window function, rows are split into **partitions** (`PARTITION BY`) and sorted inside each partition (`ORDER BY`).
-3. For each row, the function looks at the rows of its window (the whole partition, or a **frame** within it — 8.3/8.4) and computes one value.
-4. That value becomes a new column. Row count is unchanged.
-5. Then `DISTINCT`, the final `ORDER BY` and `LIMIT` run.
+After `FROM`, `WHERE`, `GROUP BY`, `HAVING`, rows are split into **partitions** (`PARTITION BY`) and sorted within them (`ORDER BY`); per row the function reads its window (the partition, or a **frame** in it — 8.3/8.4) and adds one value as a new column — row count unchanged. Then `DISTINCT`, the final `ORDER BY` and `LIMIT` run.
 
-Two families of functions can be used with `OVER`:
+Two families work with `OVER`:
 
 | Family | Functions | Notes |
 |---|---|---|
@@ -111,15 +87,12 @@ Two families of functions can be used with `OVER`:
 | SQL Server | ranking 2005; aggregate `ORDER BY` + frames 2012 | `ROWS`; `RANGE` only with `UNBOUNDED`/`CURRENT ROW`; no `GROUPS`/`EXCLUDE` |
 | Oracle | 8i (1999) | full, plus extensions |
 
-### TL;DR
-`f(...) OVER (...)` computes across related rows but keeps every row. `OVER ()` = all rows; add `PARTITION BY`, `ORDER BY` and a frame to narrow it.
-
 ---
 
 ## 8.2 PARTITION BY: per-group values next to each row
 
 ### What it is
-`PARTITION BY expr` splits the rows into independent groups, like `GROUP BY` does, but without collapsing them. Each row's window is its own partition; the function "restarts" in every partition.
+`PARTITION BY expr` splits rows into independent groups like `GROUP BY`, without collapsing them; the function restarts in each partition.
 
 ### Typical uses
 ```sql
@@ -141,11 +114,11 @@ Output:
  ...
 (8 rows)
 ```
-"Percent of group total" and "difference from group average" are the two most common `PARTITION BY` calculations. `100.0 *` forces decimal division ([chapter 3](../03-functions-and-expressions/README.md)).
+"Percent of group total" and "difference from group average" are the two classic uses (`100.0 *` forces decimal division, [chapter 3](../03-functions-and-expressions/README.md)).
 
 **Partitioning rules**
-- You can partition by several expressions: `PARTITION BY store, date_trunc('month', day)`.
-- `NULL` values form **one** partition together (just like `GROUP BY`):
+- Several expressions are allowed: `PARTITION BY store, date_trunc('month', day)`.
+- `NULL`s form **one** partition (like `GROUP BY`):
 
 ```sql
 SELECT first_name, dept_id, count(*) OVER (PARTITION BY dept_id) AS same_dept
@@ -163,27 +136,18 @@ Output:
  Rohan      |  (null) |         2
 (4 rows)
 ```
-- Different window functions in one `SELECT` can use different partitions (the first example mixed `OVER ()` with `OVER (PARTITION BY dept_id)`).
+- Window functions in one `SELECT` can use different partitions (8.1 mixed `OVER ()` and `OVER (PARTITION BY dept_id)`).
 
 ### Common mistakes
-- **Expecting fewer rows.** A window never removes rows; if you want one row per group, you want `GROUP BY` (or filter afterwards, 8.8).
-- **Mixing a window and a non-grouped column in a `GROUP BY` query**: in a grouped query, window functions see the *grouped* rows, so their arguments must be grouped columns or aggregates (8.7 shows `sum(sum(x)) OVER ()`).
-
-### Self-check
-1. *How many rows does `SELECT name, avg(salary) OVER (PARTITION BY dept_id) FROM employees` return?* → One per employee (15).
-2. *Where do rows with `dept_id` NULL go?* → Together in one partition.
-
-### TL;DR
-`PARTITION BY` = `GROUP BY` without collapsing. Perfect for "share of group total" and "difference from group average".
+- **Expecting fewer rows** — a window never removes rows; one row per group is `GROUP BY` (or filter afterwards, 8.8).
+- **Non-grouped columns in a grouped query's window** — windows see the *grouped* rows, so arguments must be grouped columns or aggregates (8.7: `sum(sum(x)) OVER ()`).
 
 ---
 
 ## 8.3 ORDER BY inside OVER: running calculations and the default frame
 
 ### What it is
-Adding `ORDER BY` inside `OVER` does two things:
-1. It defines the order that ranking and offset functions (`row_number`, `lag`, …) use.
-2. For **aggregate** window functions it changes the default window from "the whole partition" to "from the start of the partition **up to the current row**" — so `sum` becomes a **running total**, `count` a running count, `max` a running maximum.
+`ORDER BY` inside `OVER` (1) sets the order for ranking and offset functions (`row_number`, `lag`, …) and (2) changes an **aggregate's** default window from the whole partition to "partition start **up to the current row**" — `sum` becomes a **running total**, `count` a running count, `max` a running maximum.
 
 ```sql
 -- code/02_order_and_default_frame.sql
@@ -201,21 +165,19 @@ Output:
  Mumbai | 2025-03-01 | 1200.00 |       1200.00 |           1
  Mumbai | 2025-03-02 |  900.00 |       2100.00 |           2
  Mumbai | 2025-03-03 | 1500.00 |       3600.00 |           3
- Mumbai | 2025-03-04 | 1500.00 |       5100.00 |           4
- Mumbai | 2025-03-05 |  700.00 |       5800.00 |           5
- Mumbai | 2025-03-06 | 1100.00 |       6900.00 |           6
+ ...
  Mumbai | 2025-03-07 | 1800.00 |       8700.00 |           7
 (7 rows)
 ```
 
 ### The default frame and the tie trap
-The exact default, when `ORDER BY` is present and no frame is written, is:
+With `ORDER BY` and no frame written, the default is:
 
 ```sql
 RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
 ```
 
-`RANGE` works on *values*, not physical rows: "current row" means the current row **and all its peers** — rows with the same `ORDER BY` value. So when the ordering column has ties, tied rows are added together and all get the same "running" total:
+`RANGE` works on *values*: "current row" means the current row **and all its peers** (same `ORDER BY` value), so tied rows are summed together and share one "running" total:
 
 ```sql
 SELECT first_name, salary,
@@ -237,9 +199,9 @@ Output:
  Daniel     | 150000.00 |     358000.00 |  358000.00 |    358000.00
 (4 rows)
 ```
-- `default_range`: Arjun and Sara are peers, so both see 68 000 + 68 000.
-- `rows_frame`: `ROWS` counts physical rows, so the total grows one row at a time — but which tied row comes "first" is **not defined**; next time Sara could get 68 000.
-- `unique_order`: adding a tie-breaker (`emp_id`) makes the order unique, so there are no peers and every frame type gives the same, **deterministic** (identical on every run) result. This is the best fix.
+- `default_range`: peers Arjun and Sara both see 68 000 + 68 000.
+- `rows_frame`: physical rows, one at a time — but which tied row is "first" is **undefined**; Sara could get 68 000 next time.
+- `unique_order`: a tie-breaker (`emp_id`) removes peers, so every frame type gives the same **deterministic** (identical every run) result — the best fix.
 
 | `OVER (...)` contains | Default window for aggregates |
 |---|---|
@@ -247,22 +209,15 @@ Output:
 | `ORDER BY` | `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW` (start → current row + its peers) |
 
 ### Common mistakes
-- **Running totals that "jump"** on duplicate dates or amounts — the peer effect. Order by a unique key, or write `ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`.
-- **Confusing the window's `ORDER BY` with the query's `ORDER BY`.** The one inside `OVER` only controls the calculation; the output order is set by the final `ORDER BY` (without it, output order is not guaranteed).
-
-### Self-check
-1. *Why can a running total show the same value on two rows?* → The default `RANGE` frame includes peers — rows with the same `ORDER BY` value.
-2. *Two ways to avoid it?* → Make the `ORDER BY` unique (add a key) or use a `ROWS` frame (plus a tie-breaker for determinism).
-
-### TL;DR
-`ORDER BY` in `OVER` turns aggregates into running aggregates. The default frame is `RANGE … CURRENT ROW`, which lumps ties together — add a unique tie-breaker.
+- **Running totals that "jump"** on duplicates (the peer effect) — order by a unique key, or write `ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`.
+- **Confusing the window's `ORDER BY` with the query's** — the one in `OVER` controls only the calculation; output order needs the final `ORDER BY`.
 
 ---
 
 ## 8.4 Frames: ROWS, RANGE, GROUPS and EXCLUDE
 
 ### What it is
-The **frame** is the subset of the partition that an aggregate (and `first_value`/`last_value`/`nth_value`) looks at for the current row. It "slides" as the current row moves. Ranking functions and `lag`/`lead` ignore the frame.
+The **frame** is the part of the partition that an aggregate (and `first_value`/`last_value`/`nth_value`) sees for the current row; it slides as the row moves. Ranking functions and `lag`/`lead` ignore it.
 
 ```sql
 { ROWS | RANGE | GROUPS } BETWEEN frame_start AND frame_end [EXCLUDE ...]
@@ -283,7 +238,7 @@ Short form: `ROWS 2 PRECEDING` means `ROWS BETWEEN 2 PRECEDING AND CURRENT ROW`.
 | `GROUPS` (PostgreSQL 11+) | *n peer groups* before (a group = rows with equal `ORDER BY` values) | included together | an `ORDER BY` |
 
 ### Frame diagrams
-In the tables below, each line is one "current row" (**X**), and `x` marks the other rows inside its frame. The SQL uses `string_agg(...) OVER (frame)` to list the days in each frame — a handy trick to *see* a frame.
+`string_agg(...) OVER (frame)` lists the days in each frame — a trick to *see* a frame (the `frame_days` column).
 
 **`ROWS BETWEEN 2 PRECEDING AND CURRENT ROW`** — a sliding window of up to 3 rows:
 ```sql
@@ -309,18 +264,7 @@ Output:
  2025-03-07 | 1800.00 | 05,06,07   |   3600.00
 (7 rows)
 ```
-
-| current row | 01 | 02 | 03 | 04 | 05 | 06 | 07 |
-|---|---|---|---|---|---|---|---|
-| 01 | **X** | · | · | · | · | · | · |
-| 02 | x | **X** | · | · | · | · | · |
-| 03 | x | x | **X** | · | · | · | · |
-| 04 | · | x | x | **X** | · | · | · |
-| 05 | · | · | x | x | **X** | · | · |
-| 06 | · | · | · | x | x | **X** | · |
-| 07 | · | · | · | · | x | x | **X** |
-
-The first two frames are *shorter* — there are no earlier rows. (The `WINDOW w AS (...)` clause names a window so it can be reused; see 8.10.)
+The first two frames are *shorter* — no earlier rows. (`WINDOW w AS (...)` names a reusable window, 8.10.)
 
 **Centered: `ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING`** — smoothing that looks both ways:
 ```sql
@@ -343,7 +287,7 @@ Output:
 (7 rows)
 ```
 
-**`ROWS` vs `RANGE` when a day is missing.** Pune has no row for 4 March. "The previous 2 rows" and "the previous 2 days" now differ:
+**`ROWS` vs `RANGE` when a day is missing.** Pune has no 4 March, so "previous 2 rows" and "previous 2 days" differ:
 ```sql
 SELECT day, amount,
        string_agg(to_char(day, 'DD'), ',') OVER (ORDER BY day
@@ -366,29 +310,7 @@ Output:
  2025-03-07 | 300.00 | 05,06,07 | 05,06,07
 (6 rows)
 ```
-`ROWS 2 PRECEDING` (three rows, whatever their dates):
-
-| current row | 01 | 02 | 03 | 05 | 06 | 07 |
-|---|---|---|---|---|---|---|
-| 01 | **X** | · | · | · | · | · |
-| 02 | x | **X** | · | · | · | · |
-| 03 | x | x | **X** | · | · | · |
-| 05 | · | x | x | **X** | · | · |
-| 06 | · | · | x | x | **X** | · |
-| 07 | · | · | · | x | x | **X** |
-
-`RANGE INTERVAL '2 days' PRECEDING` (dates from current − 2 days to current):
-
-| current row | 01 | 02 | 03 | 05 | 06 | 07 |
-|---|---|---|---|---|---|---|
-| 01 | **X** | · | · | · | · | · |
-| 02 | x | **X** | · | · | · | · |
-| 03 | x | x | **X** | · | · | · |
-| 05 | · | · | x | **X** | · | · |
-| 06 | · | · | · | x | **X** | · |
-| 07 | · | · | · | x | x | **X** |
-
-For "average of the last 3 *calendar* days", `RANGE` with an interval is correct and `ROWS` silently reaches back to 2 March. (Alternatively, fill the missing days with `generate_series` first — [chapter 7](../07-ctes-views-and-recursion/README.md#76-generate_series-making-rows-postgresql).)
+`ROWS 2 PRECEDING` takes three rows whatever their dates; `RANGE INTERVAL '2 days' PRECEDING` takes dates from current − 2 days to current. For "average of the last 3 *calendar* days" `RANGE` is correct and `ROWS` silently reaches back to 2 March (or fill missing days with `generate_series` first — [chapter 7](../07-ctes-views-and-recursion/README.md#76-generate_series-making-rows-postgresql)).
 
 **`ROWS` vs `RANGE` vs `GROUPS` with ties.** Ordering Pune by `amount` (two days have 650):
 ```sql
@@ -415,11 +337,11 @@ Output:
  2025-03-05 | 800.00 | 650,800 | 650,650,800 | 650,650,800
 (6 rows)
 ```
-- `ROWS 1 PRECEDING`: the previous physical row, so the two 650 rows get *different* frames.
-- `RANGE 150 PRECEDING`: every row whose amount is between (current − 150) and current, **including all peers**. For 650: amounts 500…650 → 500, 650, 650.
-- `GROUPS 1 PRECEDING`: the current peer group plus the one group before it. For 650: groups {500} and {650, 650}. For 800: groups {650, 650} and {800}.
+- `ROWS 1 PRECEDING`: the previous physical row — the two 650 rows get *different* frames.
+- `RANGE 150 PRECEDING`: amounts from current − 150 to current, **all peers included** (for 650: 500, 650, 650).
+- `GROUPS 1 PRECEDING`: the current peer group plus the one before (650: {500}, {650, 650}; 800: {650, 650}, {800}).
 
-**`EXCLUDE`** (PostgreSQL 11+) removes rows from the frame: `EXCLUDE CURRENT ROW`, `EXCLUDE GROUP` (current row and its peers), `EXCLUDE TIES` (peers but not the current row), `EXCLUDE NO OTHERS` (default). Example — each day compared with the average of all *other* days:
+**`EXCLUDE`** (PostgreSQL 11+) removes rows from the frame: `EXCLUDE CURRENT ROW`, `EXCLUDE GROUP` (current row and peers), `EXCLUDE TIES` (peers, not the current row), `EXCLUDE NO OTHERS` (default). Average of all *other* days:
 ```sql
 SELECT day, amount,
        round(avg(amount) OVER (ORDER BY day ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
@@ -450,10 +372,10 @@ Output:
 | Current value and the next distinct value(s) | `GROUPS BETWEEN CURRENT ROW AND 1 FOLLOWING` |
 
 ### Common mistakes
-- **Writing `ROWS 6 PRECEDING` for "last 7 days" when dates can be missing** — use `RANGE` with an interval.
-- **Forgetting the frame applies only to some functions.** `row_number`, `rank`, `lag`, `lead`, `ntile` ignore it.
-- **Frame start after frame end** (e.g. `BETWEEN CURRENT ROW AND 1 PRECEDING`) — an error.
-- **Porting `GROUPS`/`EXCLUDE`/`RANGE n PRECEDING` to SQL Server or MySQL** — not supported there (see the dialect table in 8.1).
+- **`ROWS 6 PRECEDING` for "last 7 days" with missing dates** — use `RANGE` with an interval.
+- **Expecting `row_number`, `rank`, `lag`, `lead`, `ntile` to obey the frame** — they ignore it.
+- **Frame start after frame end** (`BETWEEN CURRENT ROW AND 1 PRECEDING`) — an error.
+- **Porting `GROUPS`/`EXCLUDE`/`RANGE n PRECEDING` to SQL Server or MySQL** — unsupported (8.1 dialect table).
 
 ### In the interview
 **30-second answer:** "The frame says which rows around the current one an aggregate sees. `ROWS` counts physical rows, `RANGE` uses the ordering value — so ties are always included and you can say 'within 7 days' — and `GROUPS` counts groups of tied rows. The default with `ORDER BY` is `RANGE UNBOUNDED PRECEDING TO CURRENT ROW`, which is why running totals can repeat on ties."
@@ -461,20 +383,15 @@ Output:
 - *Moving 7-day average with missing days?* → `avg(x) OVER (ORDER BY day RANGE BETWEEN INTERVAL '6 days' PRECEDING AND CURRENT ROW)`, or fill the calendar and use `ROWS 6 PRECEDING`.
 
 ### Self-check
-1. *Pune, current row 5 March: which days are in `ROWS 2 PRECEDING`? In `RANGE INTERVAL '2 days' PRECEDING`?* → 2, 3, 5 March; 3, 5 March.
+1. *Pune, current row 5 March: days in `ROWS 2 PRECEDING`? In `RANGE INTERVAL '2 days' PRECEDING`?* → 2, 3, 5 March; 3, 5 March.
 2. *Which frame mode treats tied rows as separate?* → `ROWS`.
-3. *What does `EXCLUDE CURRENT ROW` do?* → Removes the current row from its own frame.
-4. *What is `ROWS 3 PRECEDING` short for?* → `ROWS BETWEEN 3 PRECEDING AND CURRENT ROW`.
-
-### TL;DR
-Frame = which rows an aggregate sees. `ROWS` = physical rows, `RANGE` = value distance (ties included, intervals allowed), `GROUPS` = peer groups. `EXCLUDE` removes rows. Write the frame explicitly whenever it matters.
 
 ---
 
 ## 8.5 Ranking functions
 
 ### What it is
-Ranking functions give each row a number based on its position in the window's `ORDER BY`. They differ in **how they treat ties**.
+Ranking functions number rows by position in the window's `ORDER BY`; they differ in **how they treat ties**.
 
 | Function | Returns | Ties |
 |---|---|---|
@@ -513,11 +430,10 @@ Output:
  Sara       |  68000.00 |          8 |    7 |          6 |     0.86 |      1.00 |       3
 (8 rows)
 ```
-Reading the ties:
-- Rahul and Meera tie at 98 000: `rank` 4 and 4, then Priya gets **6** (position 5 is "used up"); `dense_rank` gives 4, 4, then **5**.
-- `row_number` gave Rahul 4 and Meera 5 — but nothing in `ORDER BY salary DESC` says so; it could flip. Add a tie-breaker (`ORDER BY salary DESC, emp_id`) whenever you use `row_number`.
-- `percent_rank` for Priya: (6 − 1) / (8 − 1) = 0.71. `cume_dist` for Rahul/Meera: 5 of 8 rows have salary ≥ 98 000 in this descending order → 0.63.
-- `ntile(3)` over 8 rows: 8 / 3 = 2 remainder 2, so the first two buckets get 3 rows and the last gets 2.
+- Rahul and Meera tie at 98 000: `rank` 4, 4, then Priya **6** (5 is "used up"); `dense_rank` 4, 4, then **5**.
+- `row_number` gave Rahul 4, Meera 5 — arbitrary; it could flip. Always add a tie-breaker (`ORDER BY salary DESC, emp_id`).
+- `percent_rank` for Priya: (6 − 1) / (8 − 1) = 0.71. `cume_dist` for Rahul/Meera: 5 of 8 rows are ≥ 98 000 in this order → 0.63.
+- `ntile(3)` over 8 rows: 8 / 3 = 2 remainder 2, so buckets of 3, 3, 2.
 
 **Ranking within groups** — add `PARTITION BY`:
 ```sql
@@ -540,7 +456,7 @@ Output:
 (13 rows)
 ```
 
-**`ntile` for quartiles.** Bucket everyone into four salary quartiles (the four equal-sized quarters of the sorted values), then summarise each bucket (window in a subquery, `GROUP BY` outside):
+**`ntile` for quartiles** (four equal-sized quarters of the sorted values) — window in a subquery, `GROUP BY` outside:
 ```sql
 SELECT quartile, count(*) AS people, min(salary), max(salary)
 FROM (SELECT salary, ntile(4) OVER (ORDER BY salary) AS quartile FROM employees) t
@@ -557,7 +473,7 @@ Output:
         4 |      3 | 150000.00 | 250000.00
 (4 rows)
 ```
-Note that 68 000 and 98 000 appear in two buckets each: `ntile` fills buckets by row count and **splits ties**. If tied values must stay together, compute buckets from `percent_rank` or `cume_dist` instead (or use `percentile_cont`, an ordered-set aggregate — an aggregate that reads its input in sorted order, like a median — for exact quartile boundaries — [chapter 4](../04-aggregation/README.md)).
+68 000 and 98 000 each land in two buckets: `ntile` fills by row count and **splits ties**. To keep ties together use `percent_rank`/`cume_dist`, or `percentile_cont` (an ordered-set aggregate, reading input sorted, like a median) for exact quartile boundaries ([chapter 4](../04-aggregation/README.md)).
 
 ### Which ranking function? (the question interviewers love)
 | Question | Use |
@@ -582,16 +498,11 @@ Output:
  185000.00
 (1 row)
 ```
-Asha, the CEO, earns 250 000, so Vikram's 185 000 is the second-highest distinct value. Wrapping in `max()` returns one row even when several people share that salary, and `NULL` rather than no rows when there is no 2nd value.
+Asha earns 250 000, so Vikram's 185 000 is second. `max()` returns one row even if several share that salary, and `NULL` rather than no rows when there is no 2nd value.
 
 ### Self-check
 1. *Salaries 100, 90, 90, 80: rank of 80? dense_rank?* → 4; 3.
-2. *Why add `emp_id` to `ORDER BY` for `row_number`?* → To make the numbering deterministic among ties.
-3. *`ntile(4)` over 10 rows — bucket sizes?* → 3, 3, 2, 2.
-4. *Which function answers "second highest distinct salary"?* → `dense_rank() = 2`.
-
-### TL;DR
-`row_number` (unique, arbitrary among ties), `rank` (ties share, gaps after), `dense_rank` (ties share, no gaps), `ntile(n)` (n near-equal buckets), `percent_rank`/`cume_dist` (relative position 0–1). Always think about ties.
+2. *`ntile(4)` over 10 rows — bucket sizes?* → 3, 3, 2, 2.
 
 ---
 
@@ -636,11 +547,9 @@ Output:
  Pune   | 2025-03-03 |  500.00 |   650.00 | -150.00 |   (null) |            400.00
 (7 rows)
 ```
-`PARTITION BY store` stops `lag` from reaching into the other store's rows: Pune's first day has no previous day even though Mumbai's last row came before it. The `WHERE` runs before the window, so `lead` on 4 March sees nothing (5 March was filtered out).
+`PARTITION BY store` stops `lag` crossing into the other store (Pune's first day has no previous). `WHERE` runs first, so `lead` on 4 March sees nothing (5 March was filtered). `lag` means previous **row**, not previous **day** — in Pune the row before 5 March is 3 March; fill gaps or check the date difference (8.9).
 
-Note that `lag` means "previous **row**", not "previous **day**": in Pune, the row before 5 March is 3 March. If you need the previous *calendar* day, fill gaps first or check the date difference (8.9).
-
-**The `last_value` trap.** With `ORDER BY` in the window, the default frame ends at the current row, so `last_value` just returns the current row:
+**The `last_value` trap.** With `ORDER BY`, the default frame ends at the current row, so `last_value` returns the current row:
 ```sql
 SELECT day, amount,
        first_value(amount) OVER (ORDER BY day)    AS first_amt,
@@ -664,11 +573,9 @@ Output:
  2025-03-07 | 300.00 |    400.00 |             300.00 |               300.00 |     650.00
 (6 rows)
 ```
-Fix: extend the frame to `UNBOUNDED FOLLOWING`, or use `first_value` with the order reversed (`first_value(amount) OVER (ORDER BY day DESC)`), which needs no frame.
+Fix: extend the frame to `UNBOUNDED FOLLOWING`, or reverse the order with `first_value(amount) OVER (ORDER BY day DESC)` (no frame needed). `first_value(first_name) OVER (PARTITION BY dept_id ORDER BY salary DESC)` puts each department's top earner beside every employee ("gap to the leader").
 
-`first_value(first_name) OVER (PARTITION BY dept_id ORDER BY salary DESC)` puts each department's top earner beside every employee — handy for "gap to the leader" columns (the file shows it).
-
-**Time between events** — days between a customer's consecutive orders (a standard retention metric, i.e. a measure of how often customers come back):
+**Time between events** — days between a customer's orders (a retention metric: how often customers come back):
 ```sql
 SELECT customer_id, order_id, placed_at::date AS placed,
        placed_at::date - lag(placed_at::date) OVER (PARTITION BY customer_id ORDER BY placed_at) AS days_since_prev
@@ -691,7 +598,7 @@ Output:
 Subtracting two `date`s gives an integer number of days in PostgreSQL.
 
 ### Dialect notes
-- `IGNORE NULLS` (e.g. `lag(x) IGNORE NULLS OVER (...)`, "the last non-null value") is in the SQL standard and supported by Oracle, SQL Server 2022, BigQuery and Snowflake (two cloud data-warehouse products). PostgreSQL gains it in **version 19** (in beta as of September 2026); PostgreSQL 14–18 and MySQL lack it. There, emulate it with a running `count(x)` as a group key and `first_value` within each group, or a correlated subquery.
+- `IGNORE NULLS` (`lag(x) IGNORE NULLS OVER (...)`, "last non-null value") is standard and supported by Oracle, SQL Server 2022, BigQuery and Snowflake (cloud data warehouses). PostgreSQL gains it in **version 19** (in beta as of September 2026); PostgreSQL 14–18 and MySQL lack it — emulate with a running `count(x)` as group key plus `first_value` per group, or a correlated subquery.
 - `nth_value(...) FROM LAST` (counting from the end of the frame) exists in Oracle and a few warehouses, not in PostgreSQL, MySQL or SQL Server.
 
 ### Common mistakes
@@ -705,19 +612,15 @@ Subtracting two `date`s gives an integer number of days in PostgreSQL.
 - *How did people do this before window functions?* → A self-join on `t2.day = t1.day - 1` (breaks with gaps) or a correlated subquery `(SELECT ... WHERE t2.day < t1.day ORDER BY day DESC LIMIT 1)`.
 
 ### Self-check
-1. *What does `lag(x, 1, 0)` return on the first row?* → 0.
-2. *Why does `last_value(x) OVER (ORDER BY d)` equal `x`?* → The default frame ends at the current row (plus peers).
-3. *Which of these ignore the frame: `lag`, `first_value`, `lead`, `nth_value`?* → `lag` and `lead`.
-
-### TL;DR
-`lag`/`lead` = previous/next row per partition (with optional offset and default). `first_value`/`last_value`/`nth_value` read the frame — give `last_value` a full frame.
+1. *`lag(x, 1, 0)` on the first row?* → 0.
+2. *Which ignore the frame: `lag`, `first_value`, `lead`, `nth_value`?* → `lag` and `lead`.
 
 ---
 
 ## 8.7 Running totals, moving averages and growth
 
 ### What it is
-The everyday analytics calculations are just aggregate window functions with the right frame:
+Everyday analytics = aggregate windows with the right frame:
 
 | Metric | Window |
 |---|---|
@@ -757,14 +660,10 @@ Output:
  Pune   | 2025-03-07 |  300.00 |       3300.00 |        583.3 |           3 |              100.0
 (13 rows)
 ```
-Two things to notice:
-1. The first two moving averages use only 1 and 2 rows (`rows_in_avg`) — a "warm-up" period. Averages over fewer points than intended can mislead on a chart.
-2. Pune's 5 March average (650.0) uses 2, 3 and 5 March because the frame is `ROWS` — see 8.4 for the `RANGE` alternative.
-
-To hide warm-up rows, show the average only when the frame is full: `CASE WHEN count(*) OVER w = 3 THEN avg(amount) OVER w END` (in `code/06_running_and_moving.sql`).
+The first two moving averages use only 1 and 2 rows (`rows_in_avg`) — a "warm-up" that can mislead on a chart; hide it with `CASE WHEN count(*) OVER w = 3 THEN avg(amount) OVER w END` (in the code file). Pune's 5 March average uses 2, 3, 5 March because the frame is `ROWS` (8.4 for `RANGE`).
 
 ### Windows on top of GROUP BY
-Window functions run **after** `GROUP BY`, so they can work on the grouped rows. That's how you get "monthly revenue and the running total of monthly revenue" in one query. The inner `sum` is the normal aggregate (per month); the outer `sum(...) OVER` adds up those monthly sums:
+Windows run **after** `GROUP BY`, so they work on grouped rows — monthly revenue plus its running total in one query: the inner `sum` is per month, the outer `sum(...) OVER` adds those up:
 ```sql
 SELECT date_trunc('month', o.placed_at)::date AS month,
        sum(oi.quantity * oi.unit_price * (1 - oi.discount))::numeric(10,2) AS revenue,
@@ -785,7 +684,7 @@ Output:
  2025-06-01 | 1516.60 |         7403.62
 (6 rows)
 ```
-`sum(sum(...))` looks odd but is correct. It's often clearer to aggregate in a CTE (Common Table Expression — a named subquery written with `WITH`, [chapter 7](../07-ctes-views-and-recursion/README.md)) first and apply windows in the outer query — as here for **month-over-month growth**:
+`sum(sum(...))` looks odd but is correct; often clearer is aggregating in a CTE (named subquery written with `WITH`, [chapter 7](../07-ctes-views-and-recursion/README.md)) and windowing outside — here **month-over-month growth**:
 ```sql
 WITH monthly AS (
     SELECT date_trunc('month', o.placed_at)::date AS month,
@@ -811,23 +710,20 @@ Output:
  2025-06-01 | 1516.60 |     249.93 |          506.8
 (6 rows)
 ```
-If a month could have *no* orders, generate the months first ([chapter 7](../07-ctes-views-and-recursion/README.md#76-generate_series-making-rows-postgresql)) — otherwise `lag` would compare with two months back. Guard divisions with `NULLIF(prev, 0)` if the previous value can be zero.
+If a month can have *no* orders, generate the months first ([chapter 7](../07-ctes-views-and-recursion/README.md#76-generate_series-making-rows-postgresql)) or `lag` compares with two months back. Guard with `NULLIF(prev, 0)` if the previous value can be zero.
 
 ### Real-world examples
 Account balance after each transaction (running `sum` ordered by time and id), 7-day moving average of daily active users, stock level as a running sum of `+received −shipped`.
-
-### TL;DR
-Running total = `sum` + `ROWS UNBOUNDED PRECEDING`; moving average = `avg` + `ROWS n PRECEDING` (watch warm-up rows and gaps); growth = value / `lag(value)` − 1. Windows run after `GROUP BY`, so `sum(sum(x)) OVER (...)` works — a CTE is often clearer.
 
 ---
 
 ## 8.8 Top-N per group and de-duplication
 
 ### The problem
-"Top 2 earners in each department", "latest order per customer", "best-selling product per category" — these **top-N-per-group** questions are the most common window-function interview problem. `LIMIT` can't do it (it limits the whole result, not each group), and `GROUP BY` returns only the aggregated value, not the rest of the row.
+**Top-N-per-group** ("top 2 earners per department", "latest order per customer", "best seller per category") is the most common window interview problem. `LIMIT` limits the whole result, not each group; `GROUP BY` returns only the aggregate, not the rest of the row.
 
 ### Why you need a subquery or CTE
-Window functions are computed *after* `WHERE`, so you cannot filter on them in the same query level:
+Windows are computed *after* `WHERE`, so you can't filter on them at the same level:
 ```sql
 -- code/07_top_n_per_group.sql
 SELECT first_name, salary FROM employees
@@ -839,12 +735,10 @@ ERROR:  window functions are not allowed in WHERE
 LINE 2: WHERE row_number() OVER (ORDER BY salary DESC) <= 3;
               ^
 ```
-(They're not allowed in `GROUP BY` or `HAVING` either.) The pattern is always: **compute the rank in a CTE or subquery, filter in the outer query.**
+(Nor in `GROUP BY` or `HAVING`.) The pattern: **rank in a CTE or subquery, filter in the outer query.**
 
 ### How it works
-1. In a CTE, add `row_number()` / `rank()` / `dense_rank()` `OVER (PARTITION BY group ORDER BY measure DESC)`.
-2. In the outer query, `WHERE rank_col <= N`.
-3. Pick the ranking function according to how ties should be treated.
+In a CTE add `row_number()` / `rank()` / `dense_rank()` `OVER (PARTITION BY group ORDER BY measure DESC)`; outside, `WHERE rank_col <= N`; choose the function by how ties should behave.
 
 ```sql
 WITH ranked AS (
@@ -873,7 +767,7 @@ Output:
  Sales       | Sara       |  68000.00 |  4 |   3 |    3
 (8 rows)
 ```
-The three filters give different answers when there are ties — here for Sales:
+With ties the three filters differ — Sales:
 ```sql
 -- ranked = Sales only; then:
 SELECT 'row_number <= 3' AS rule, string_agg(first_name, ', ' ORDER BY rn) AS kept FROM ranked WHERE rn <= 3
@@ -899,7 +793,7 @@ Output:
 
 Ask in an interview: "If two people tie for 3rd, should both be returned?"
 
-**Latest row per key (de-duplication).** Same pattern with `N = 1`, ordered newest first:
+**Latest row per key (de-duplication)** — `N = 1`, newest first:
 ```sql
 SELECT customer_id, order_id, placed_at, status
 FROM (
@@ -920,7 +814,7 @@ Output:
            8 |      109 | 2025-04-09 16:45:00 | delivered
 (8 rows)
 ```
-**Find duplicates to delete** — number the rows within each duplicate group, and everything with `rn > 1` is an extra copy. The duplicate Anita Shah (chapter 1's messy email) is found after normalising the email:
+**Duplicates to delete** — number rows within each duplicate group; `rn > 1` are extra copies. The duplicate Anita Shah (messy email) after normalising:
 ```sql
 WITH dups AS (
     SELECT customer_id,
@@ -937,7 +831,7 @@ Output:
             8
 (1 row)
 ```
-To actually delete: `DELETE FROM customers WHERE customer_id IN (SELECT customer_id FROM dups WHERE rn > 1)` (after re-pointing that customer's orders — [chapter 9](../09-ddl-dml-and-constraints/README.md) covers `DELETE` and foreign keys — columns whose values must match a key in another table).
+Delete with `DELETE FROM customers WHERE customer_id IN (SELECT customer_id FROM dups WHERE rn > 1)` after re-pointing that customer's orders ([chapter 9](../09-ddl-dml-and-constraints/README.md): `DELETE` and foreign keys — columns that must match a key in another table).
 
 ### Alternatives
 | Approach | Top-1 | Top-N | Notes |
@@ -948,7 +842,7 @@ To actually delete: `DELETE FROM customers WHERE customer_id IN (SELECT customer
 | Correlated subquery `WHERE salary = (SELECT max(...) ...)` | yes (with ties) | awkward | classic pre-window approach |
 | `QUALIFY rn <= N` | yes | yes | filter on windows without a subquery — Snowflake, BigQuery, DuckDB, Teradata; **not** PostgreSQL / MySQL / SQL Server |
 
-For top-1, `SELECT DISTINCT ON (dept_id) dept_id, first_name, salary FROM employees WHERE dept_id IS NOT NULL ORDER BY dept_id, salary DESC, emp_id` returns each department's best-paid person in one short query (the file runs it).
+Top-1 shortcut: `SELECT DISTINCT ON (dept_id) dept_id, first_name, salary FROM employees WHERE dept_id IS NOT NULL ORDER BY dept_id, salary DESC, emp_id`.
 
 ### In the interview
 **30-second answer:** "Rank rows inside each group with a window function in a CTE — `PARTITION BY` the group, `ORDER BY` the measure descending — then filter `rank <= N` in the outer query, because window functions can't appear in `WHERE`. I'd choose `row_number`, `rank` or `dense_rank` depending on whether ties should be included, and add a tie-breaker for determinism."
@@ -957,26 +851,17 @@ For top-1, `SELECT DISTINCT ON (dept_id) dept_id, first_name, salary FROM employ
 - *How to make it fast on a big table?* → Index `(dept_id, salary DESC)`; PostgreSQL can then read each partition pre-sorted; for few groups a `LATERAL ... LIMIT N` uses the index directly.
 
 ### Self-check
-1. *Why can't you write `WHERE rank() OVER (...) = 1`?* → Window functions are evaluated after `WHERE`.
-2. *Top 2 per group, ties allowed to exceed 2 — which function?* → `rank()` (or `dense_rank()` for distinct values).
-3. *How do you keep only the newest row per `user_id`?* → `row_number() OVER (PARTITION BY user_id ORDER BY created_at DESC, id DESC) = 1` in a subquery.
-
-### TL;DR
-Rank in a CTE, filter outside. `row_number` = exactly N, `rank` = N places with ties, `dense_rank` = N distinct values. `rn = 1` newest-first is the standard dedup. PostgreSQL shortcut for top-1: `DISTINCT ON`.
+1. *Keep only the newest row per `user_id`?* → `row_number() OVER (PARTITION BY user_id ORDER BY created_at DESC, id DESC) = 1` in a subquery.
 
 ---
 
 ## 8.9 Gaps and islands
 
 ### What it is
-An **island** is a run of consecutive values (consecutive days a user logged in, consecutive seat numbers that are free, consecutive readings above a threshold). A **gap** is a missing stretch between islands. "Longest login streak", "find missing invoice numbers" and "group events into sessions" are all gaps-and-islands problems.
+An **island** is a run of consecutive values (login days, free seat numbers, readings above a threshold); a **gap** is a missing stretch between islands. Longest streak, missing invoice numbers and sessionizing events are all gaps-and-islands problems.
 
 ### How it works — the row-number trick
-For a run of consecutive dates, the date goes up by 1 each row and so does `row_number()`. Their **difference is therefore constant within a run** and changes when a day is skipped. That constant identifies the island.
-
-1. Number the rows per user in date order: `rn = row_number() OVER (PARTITION BY user_id ORDER BY login_date)`.
-2. Compute `grp = login_date - rn` (a date minus an integer is a date).
-3. `GROUP BY user_id, grp`: each group is one island; `min`/`max`/`count` describe it.
+In a run of consecutive dates both the date and `row_number()` rise by 1 per row, so their **difference is constant within a run** and changes at a skipped day — it labels the island. Compute `rn = row_number() OVER (PARTITION BY user_id ORDER BY login_date)`, `grp = login_date - rn` (date minus integer is a date), then `GROUP BY user_id, grp` with `min`/`max`/`count`.
 
 ```sql
 -- code/08_gaps_and_islands.sql
@@ -999,7 +884,7 @@ Output:
        1 | 2025-05-10 |  6 | 2025-05-04
 (6 rows)
 ```
-The value of `grp` has no meaning of its own — it's just a label shared by the rows of one run. (`row_number()` returns `bigint`; the `::int` cast is needed because PostgreSQL defines `date - integer`, not `date - bigint`.)
+`grp` has no meaning beyond being a shared label. (`::int` because `row_number()` is `bigint` and PostgreSQL defines `date - integer`, not `date - bigint`.)
 
 **Each island (streak):**
 ```sql
@@ -1044,9 +929,9 @@ Output:
        2 |              4 | 2025-05-02
 (2 rows)
 ```
-If the data can contain the same date twice for a user, de-duplicate first (or use `dense_rank` instead of `row_number`), otherwise the trick breaks.
+Duplicate dates per user break the trick — de-duplicate first or use `dense_rank`.
 
-**Gaps with `lead`.** Compare each row with the next one; a difference greater than 1 is a gap:
+**Gaps with `lead`** — a difference above 1 to the next row is a gap:
 ```sql
 SELECT user_id,
        login_date + 1              AS gap_start,
@@ -1072,11 +957,9 @@ Output:
 The same query with integer ids finds missing invoice or ticket numbers.
 
 ### The general method: flag and running sum
-The row-number trick needs "consecutive" to mean "+1". For any other rule — events less than 30 minutes apart, temperature above a threshold, same status as the previous row — use two steps:
-1. **Flag** the first row of each island: `CASE WHEN <this row does NOT continue the previous one> THEN 1 ELSE 0 END`, using `lag`.
-2. **Running sum** of the flags: `sum(flag) OVER (ORDER BY ...)` numbers the islands 1, 2, 3, …
+The row-number trick needs "consecutive" = "+1". For any other rule (events < 30 minutes apart, above a threshold, same status as previous): (1) **flag** each island's first row with `lag` (`CASE WHEN <does NOT continue the previous row> THEN 1 ELSE 0 END`); (2) a **running sum** of flags numbers the islands 1, 2, 3, ….
 
-Here: **sessionization** — a new session starts when more than 30 minutes have passed since the previous event:
+**Sessionization** — a new session after more than 30 minutes idle:
 ```sql
 WITH ev(user_id, at) AS (VALUES
     (7, TIMESTAMP '2025-05-01 09:00'), (7, '2025-05-01 09:10'), (7, '2025-05-01 09:25'),
@@ -1105,10 +988,10 @@ Output:
        7 | 2025-05-01 15:30:00 |           1 |          3
 (6 rows)
 ```
-The first event has no previous one: `lag` is `NULL`, the comparison is `NULL` (not true), so the `CASE` falls to `ELSE 1` — a new session, as intended. Group by `(user_id, session_no)` to get session start, end and length. (`VALUES` as a CTE creates inline sample rows; the first row's `TIMESTAMP` literal sets the column type.)
+The first event's `lag` is `NULL`, so the comparison isn't true and `ELSE 1` starts a session, as intended. Group by `(user_id, session_no)` for start, end, length. (The `VALUES` CTE makes inline rows; the first `TIMESTAMP` literal sets the type.)
 
 ### Real-world examples
-App streaks and contribution graphs, web-analytics sessions (30 minutes of inactivity is a common cut-off), periods when CPU (the processor) load stayed above 90 %, missing cheque or invoice numbers.
+App streaks and contribution graphs, web-analytics sessions (30 minutes idle is a common cut-off), periods of CPU load above 90 %, missing cheque or invoice numbers.
 
 ### In the interview
 **30-second answer:** "For consecutive dates or integers, subtract `row_number()` from the value; the difference is constant within each run, so grouping by it gives the islands with `min`, `max`, `count`. For general rules, flag each row that starts a new island using `lag`, then a running `sum` of the flags gives an island id. Gaps come from `lead(value) - value > 1`."
@@ -1117,19 +1000,14 @@ App streaks and contribution graphs, web-analytics sessions (30 minutes of inact
 - *What if a user logs in twice on the same day?* → De-duplicate to one row per day first, or use `dense_rank`.
 
 ### Self-check
-1. *Why is `login_date - row_number()` constant inside a streak?* → Both increase by exactly 1 per row while the days are consecutive.
-2. *What does the running sum of "new island" flags give?* → A sequential island number per row.
-3. *How do you list missing numbers between consecutive ids?* → `lead(id) - id > 1` → gap from `id + 1` to `lead(id) - 1`.
-
-### TL;DR
-Islands: `value - row_number()` is a run label → `GROUP BY` it. General rule: flag starts with `lag`, running `sum` of flags = island id. Gaps: `lead(v) - v > 1`.
+1. *Missing numbers between consecutive ids?* → `lead(id) - id > 1` → gap from `id + 1` to `lead(id) - 1`.
 
 ---
 
 ## 8.10 Named windows, FILTER, evaluation order and performance
 
 ### The WINDOW clause
-When several functions share a window, define it once with `WINDOW name AS (...)` (after `HAVING`, before `ORDER BY`) and write `OVER name`. A window can also be based on another: `OVER (w ROWS 2 PRECEDING)` adds a frame to named window `w` (the base window must not have its own frame).
+Define a shared window once with `WINDOW name AS (...)` (after `HAVING`, before `ORDER BY`) and write `OVER name`. `OVER (w ROWS 2 PRECEDING)` adds a frame to named window `w` (which must have no frame of its own).
 ```sql
 -- code/09_named_windows_filter_plan.sql
 SELECT store, day, amount,
@@ -1148,16 +1026,14 @@ Output:
 -------+------------+--------+---------------+-------------+-------------
  Pune  | 2025-03-01 | 400.00 |        400.00 |      400.00 |           5
  Pune  | 2025-03-02 | 650.00 |       1050.00 |      650.00 |           2
- Pune  | 2025-03-03 | 500.00 |       1550.00 |      650.00 |           4
- Pune  | 2025-03-05 | 800.00 |       2350.00 |      800.00 |           1
- Pune  | 2025-03-06 | 650.00 |       3000.00 |      800.00 |           2
+ ...
  Pune  | 2025-03-07 | 300.00 |       3300.00 |      800.00 |           6
 (6 rows)
 ```
-`max(...) OVER w_run` is a running maximum ("best day so far"). The `WINDOW` clause is supported by PostgreSQL, MySQL 8, SQLite and SQL Server 2022 (not earlier SQL Server).
+`max(...) OVER w_run` is a running maximum ("best day so far"). `WINDOW` is supported by PostgreSQL, MySQL 8, SQLite and SQL Server 2022 (not earlier).
 
 ### FILTER on window aggregates
-The `FILTER (WHERE ...)` clause from [chapter 4](../04-aggregation/README.md#44-conditional-aggregation-filter-and-case) also works on aggregate window functions (PostgreSQL and SQLite; elsewhere use `count(CASE WHEN cond THEN 1 END) OVER (...)`):
+`FILTER (WHERE ...)` ([chapter 4](../04-aggregation/README.md#44-conditional-aggregation-filter-and-case)) works on aggregate windows too (PostgreSQL, SQLite; elsewhere `count(CASE WHEN cond THEN 1 END) OVER (...)`):
 ```sql
 SELECT day, amount,
        count(*) FILTER (WHERE amount >= 1500) OVER (ORDER BY day) AS big_days_so_far
@@ -1173,8 +1049,7 @@ Output:
  2025-03-02 |  900.00 |               0
  2025-03-03 | 1500.00 |               1
  2025-03-04 | 1500.00 |               2
- 2025-03-05 |  700.00 |               2
- 2025-03-06 | 1100.00 |               2
+ ...
  2025-03-07 | 1800.00 |               3
 (7 rows)
 ```
@@ -1185,14 +1060,14 @@ flowchart LR
     A["FROM and JOIN"] --> B["WHERE"] --> C["GROUP BY"] --> D["HAVING"] --> E["Window functions"] --> F["SELECT list and DISTINCT"] --> G["ORDER BY"] --> H["LIMIT / OFFSET"]
 ```
 Consequences:
-- **`WHERE` changes the window.** `rank() OVER (ORDER BY salary DESC)` with `WHERE dept_id = 1` ranks only Engineering (Vikram 1, Neha 2, Rahul and Meera 3). For company-wide ranks shown only for Engineering, rank in a subquery **without** the filter and filter outside.
+- **`WHERE` changes the window**: with `WHERE dept_id = 1`, `rank() OVER (ORDER BY salary DESC)` ranks only Engineering (Vikram 1, Neha 2, Rahul and Meera 3). For company-wide ranks shown for Engineering, rank in a subquery **without** the filter, filter outside.
 - Windows **can't** be used in `WHERE`, `GROUP BY` or `HAVING` (they don't exist yet) → wrap in a subquery/CTE (8.8).
 - Windows **can** be used in `ORDER BY` (`ORDER BY rank() OVER (...)`) and can take aggregates as arguments in grouped queries (8.7).
 - `DISTINCT` runs after windows, so `SELECT DISTINCT dept_id, count(*) OVER (PARTITION BY dept_id)` works (one row per department).
 - `LIMIT` runs last, so `row_number() ... LIMIT 5` numbers *all* rows first.
 
 ### Performance
-PostgreSQL evaluates windows with a **WindowAgg** node (one step in the execution plan that `EXPLAIN` prints) that reads rows sorted by the `PARTITION BY` + `ORDER BY` keys:
+PostgreSQL runs windows in a **WindowAgg** node (a step of the plan `EXPLAIN` prints) reading rows sorted by `PARTITION BY` + `ORDER BY` keys:
 ```sql
 EXPLAIN (COSTS OFF)
 SELECT store, day, sum(amount) OVER (PARTITION BY store ORDER BY day)
@@ -1218,11 +1093,11 @@ Output:
          ->  Seq Scan on employees
 (4 rows)
 ```
-- In the first plan the primary key `(store, day)` (the columns that uniquely identify each row, which PostgreSQL backs with an index) already delivers rows in the needed order, so there's **no sort**. In the second, PostgreSQL must sort by `dept_id, salary DESC`.
+- In the first plan the primary key `(store, day)` (uniquely identifying each row, backed by an index) already delivers the needed order — **no sort**. The second must sort by `dept_id, salary DESC`.
 - **Index tip:** an index on `(partition columns, order columns)` can remove the sort — e.g. `CREATE INDEX ON employees (dept_id, salary DESC)` ([chapter 12](../12-indexes-storage-and-query-performance/README.md#1211-composite-indexes-and-column-order)).
-- Windows with **different** `PARTITION BY`/`ORDER BY` need separate sorts; windows sharing the same definition are computed in one pass — another reason to reuse a named window.
-- Sliding frames with `sum`/`count`/`avg` are computed incrementally (by adjusting the previous row's result rather than starting over), but `min`/`max` over a moving frame (and frames with `EXCLUDE`) may need re-scanning the frame, which gets expensive for large frames.
-- A window over millions of rows sorts all of them; filter in `WHERE` first when the logic allows.
+- **Different** `PARTITION BY`/`ORDER BY` need separate sorts; identical definitions share one pass — reuse named windows.
+- Sliding `sum`/`count`/`avg` frames are computed incrementally (adjusting the previous result), but `min`/`max` over a moving frame (and `EXCLUDE` frames) may re-scan the frame — expensive for large frames.
+- A window over millions of rows sorts them all; filter in `WHERE` first when logic allows.
 
 ---
 

@@ -1,8 +1,6 @@
 # Chapter 18 — SQL Interview Problems I: Method and 42 Warm-Up to Medium Problems
 
-Chapters 2–8 taught the tools one at a time. Interviews mix them. You get a short business question and a schema, and you have to decide what to filter, what to group, what to join and what could go wrong, then say it all out loud while you type. This chapter covers the method first and then works through 42 practice problems (easy up to lower-medium). They are grouped by the **pattern** they train, so you learn to spot the pattern rather than memorise answers.
-
-**What you'll learn**
+Chapters 2–8 taught the tools one at a time; interviews mix them. Given a short business question and a schema, you decide what to filter, group and join and what could go wrong, saying it aloud as you type. This chapter gives the method, then 42 practice problems (easy to lower-medium) grouped by the **pattern** they train, so you learn to spot patterns rather than memorise answers.
 
 | # | Section | Patterns |
 |---|---|---|
@@ -12,14 +10,14 @@ Chapters 2–8 taught the tools one at a time. Interviews mix them. You get a sh
 | 18.4 | Joins (P17–P22) | inner, self, cross + left, "top 1 with ties" |
 | 18.5 | Anti-joins (P23–P26) | `NOT EXISTS`, `LEFT JOIN … IS NULL`, the `NOT IN` + NULL trap |
 | 18.6 | Conditional aggregation (P27–P28) | `FILTER`, `SUM(CASE …)`, `UNION ALL` then pivot |
-| 18.7 | Date logic (P29–P33) | half-open month ranges, date arithmetic, gaps and islands (finding runs of consecutive values), "value as of a date" |
+| 18.7 | Date logic (P29–P33) | half-open month ranges, date arithmetic, gaps and islands (runs of consecutive values), "value as of a date" |
 | 18.8 | Ratios and percentages (P34–P38) | integer division, `NULLIF`, weighted averages, retention (share of users who come back) |
 | 18.9 | Window and ranking basics (P39–P42) | second highest, first row per group, running total, compare to group average |
 | 18.10 | Pattern table | every problem → pattern → key SQL feature |
 
 The harder problems (Nth highest, top-N per group, streaks, pivots, trips and users) are in [Chapter 19](../19-sql-interview-problems-2/README.md).
 
-**How to run the examples.** Every problem has its own file in [`code/`](code/). Each file creates its own small tables, fills them with invented data, and runs the solution plus an edge case or alternative. The runner gives each file a fresh PostgreSQL 14 database. The output under each query is real `psql` (PostgreSQL's command-line client) output, and `(null)` is how we display `NULL` (SQL's marker for a missing or unknown value).
+**How to run the examples.** Each problem has a file in [`code/`](code/) that creates small invented tables and runs the solution plus an edge case or alternative, each on a fresh PostgreSQL 14 database. Output is real `psql` output; `(null)` displays `NULL`.
 
 ```bash
 bash tools_run_sql.sh sql '18-*'                     # all 42 files, fresh DB each
@@ -27,7 +25,7 @@ bash tools_pg.sh psql -d postgres -c 'CREATE DATABASE scratch'
 bash tools_pg.sh psql -d scratch -f sql/chapters/18-sql-interview-problems-1/code/26_reps_without_red.sql
 ```
 
-Every problem statement, dataset and explanation below is written for this book. The problems are classic interview-style exercises; many also appear on public practice sites under similar names.
+Every statement, dataset and explanation is written for this book; the problems are classic interview exercises, many also on public practice sites under similar names (the [question bank](../21-interview-question-bank/README.md) maps LeetCode titles to them).
 
 ---
 
@@ -35,11 +33,11 @@ Every problem statement, dataset and explanation below is written for this book.
 
 ### What it is
 
-A repeatable routine for turning a vague question ("which sellers were idle last year?") into a correct query while the interviewer watches. Think of it as a pilot's checklist: the steps are dull, but they catch the mistakes that nerves cause.
+A repeatable routine for turning a vague question ("which sellers were idle last year?") into a correct query while the interviewer watches — dull steps that catch the mistakes nerves cause.
 
 ### Why it matters
 
-Most wrong answers in SQL interviews come from **misreading the question** or **missing an edge case** (an unusual input at the boundary of what the query must handle, such as an empty table or a NULL), not from syntax: counting rows instead of distinct users, losing people with zero activity, integer division turning 0.67 into 0, `NOT IN` silently returning nothing. Interviewers also score your *process*: do you ask questions, test your idea on a few rows, and explain your trade-offs?
+Most wrong answers come from **misreading the question** or **missing an edge case** (an empty table, a NULL), not syntax: counting rows instead of distinct users, losing zero-activity people, integer division turning 0.67 into 0, `NOT IN` silently returning nothing. Interviewers also score your *process*: questions asked, ideas tested on a few rows, trade-offs explained.
 
 ### How it works — the five steps
 
@@ -52,29 +50,29 @@ flowchart LR
 ```
 
 1. **Clarify.** Repeat the question in your own words, then ask:
-   - What is one **row** of each table (the *grain*)? What is the **primary key** (the column or columns that uniquely identify a row)? Can there be **duplicate rows**?
+   - What is one **row** of each table (the *grain*)? What is the primary key? Can there be **duplicate rows**?
    - Which columns can be **NULL**? What should happen to rows with NULLs?
    - Should entities with **no activity** appear (with 0) or be left out?
    - How should **ties** be handled: return all of them, or any one?
    - Output: which columns, what names, what **order**, how much **rounding**?
    - Are dates **inclusive**? Which time zone? Is "consecutive" by calendar day or by record?
 2. **Sketch sample data.** Write 3–5 rows, including one awkward row (a NULL, a duplicate, a tie), plus the output you expect. This settles misunderstandings before you write code.
-3. **Build in the logical order.** Write the query in the order the database evaluates it (see [Chapter 4, logical query order](../04-aggregation/README.md)): `FROM`/`JOIN` → `WHERE` → `GROUP BY` → `HAVING` → `SELECT` → `ORDER BY` → `LIMIT`. Use **CTEs** (common table expressions: named sub-queries written as `WITH step1 AS (…)`) so each step can be checked on its own ([Chapter 7](../07-ctes-views-and-recursion/README.md)).
+3. **Build in the logical order** the database evaluates ([§4.5](../04-aggregation/README.md#45-the-logical-order-of-query-processing)): `FROM`/`JOIN` → `WHERE` → `GROUP BY` → `HAVING` → `SELECT` → `ORDER BY` → `LIMIT`, with CTEs (`WITH step1 AS (…)`, [Chapter 7](../07-ctes-views-and-recursion/README.md)) so each step can be checked alone.
 4. **Attack it with edge cases**, using the checklist below.
-5. **Verify and discuss.** Run the query against your sample in your head (or for real). Then mention what **index** (a sorted lookup structure that lets the database find rows without reading the whole table) would help and give one alternative formulation.
+5. **Verify and discuss.** Run the query against your sample (in your head or for real), then mention a helpful index and one alternative formulation.
 
 ### The edge-case checklist
 
 | Risk | Typical symptom | Usual fix |
 |---|---|---|
-| NULL in a comparison | rows vanish from `<>`, `NOT IN` returns nothing | `IS DISTINCT FROM`, `NOT EXISTS`, `COALESCE` (returns its first non-NULL argument) |
+| NULL in a comparison | rows vanish from `<>`, `NOT IN` returns nothing | `IS DISTINCT FROM`, `NOT EXISTS`, `COALESCE` |
 | Entities with no rows | people with zero orders missing | `LEFT JOIN` from the entity table, `count(col)` not `count(*)` |
 | Duplicates | counts too high, repeated ids | `DISTINCT`, `count(DISTINCT …)`, check the join's grain |
-| Join fan-out (one row matching many, so rows multiply) | sums doubled after joining two child tables | aggregate before joining, or `count(DISTINCT)` |
-| Ties | "the winner" is really two people | `RANK`/`DENSE_RANK` (ranking functions; ties share a rank), `FETCH FIRST … WITH TIES` |
+| Join fan-out (rows multiply) | sums doubled after joining two child tables | aggregate before joining, or `count(DISTINCT)` |
+| Ties | "the winner" is really two people | `RANK`/`DENSE_RANK` (ties share a rank), `FETCH FIRST … WITH TIES` |
 | Integer division | `1/3 = 0` | multiply by `100.0` or cast to `numeric` first |
 | Division by zero | runtime error | `NULLIF(denominator, 0)` |
-| Empty result vs NULL | "return NULL if none" gives zero rows | wrap in an aggregate or a scalar subquery (a sub-query used as a single value) |
+| Empty result vs NULL | "return NULL if none" gives zero rows | wrap in an aggregate or a scalar subquery |
 | Date boundaries | last day of the month (or 29 Feb) lost | half-open ranges: `>= start AND < next_start` |
 
 ### Common mistakes
@@ -89,13 +87,9 @@ flowchart LR
 **30-second answer to "how do you approach a SQL problem?"** "I first pin down the grain and keys of each table, what NULLs and duplicates mean, and whether zero-activity rows and ties should appear. I sketch a few rows with the expected output, then build the query in evaluation order (joins, filters, grouping, having, select, sort) using CTEs so I can check each step. Finally I test NULLs, duplicates, ties, empty groups and date boundaries, and mention an index or an alternative."
 
 - *"Your query returns nothing for a new customer — is that right?"* It depends on the spec. If they should appear with 0, start from the customer table with a `LEFT JOIN` and `COALESCE` the aggregate.
-- *"Would this be fast on 100 M rows?"* Talk about the filter/join columns and a matching index, **sargable** predicates (conditions written so an index can be used — "Search ARGument ABLE"; e.g. no function wrapped around the indexed column), and **pre-aggregation** (summarising rows before a join or storing summaries ahead of time). See [Chapter 12](../12-indexes-storage-and-query-performance/README.md).
-
-### Self-check
-
-1. Why ask about the grain first? → It tells you what one row means, so you know whether to count rows or distinct ids, and whether a join can multiply rows.
-2. What's wrong with `WHERE year(d) = 2020`? → It works, but wrapping the column in a function prevents an ordinary index on `d` from being used. Use `d >= '2020-01-01' AND d < '2021-01-01'`.
-3. `count(*)` vs `count(col)` after a `LEFT JOIN`? → `count(*)` counts the NULL-padded row as 1; `count(col)` counts it as 0.
+- *"Would this be fast on 100 M rows?"* A matching index on filter/join columns, **sargable** predicates (no function around the indexed column — `WHERE year(d) = 2020` works but can't use an index on `d`; write `d >= '2020-01-01' AND d < '2021-01-01'`), and **pre-aggregation** (summarise before joining, or store summaries) — [§12.13](../12-indexes-storage-and-query-performance/README.md#1213-anti-patterns-that-disable-indexes).
+- *Why ask about the grain first?* It says what one row means: count rows or distinct ids, and whether a join can multiply rows.
+- *`count(*)` vs `count(col)` after a `LEFT JOIN`?* `count(*)` counts the NULL-padded row as 1; `count(col)` as 0.
 
 ### TL;DR
 
@@ -105,7 +99,7 @@ Clarify (grain, NULLs, zeros, ties, output), sketch sample rows, build in evalua
 
 ## 18.2 Filtering problems (P1–P8)
 
-The simplest pattern: keep or drop **individual rows** with `WHERE`. The traps are `NULL` (**three-valued logic**: a condition can be `TRUE`, `FALSE` or `UNKNOWN`, and comparisons with NULL give `UNKNOWN`), boundaries (`>` vs `>=`) and string rules. Background: [Chapter 2](../02-select-basics/README.md) and [Chapter 3](../03-functions-and-expressions/README.md).
+The simplest pattern: keep or drop **individual rows** with `WHERE`. The traps are `NULL` (three-valued logic: comparisons with NULL give `UNKNOWN`, and `WHERE` keeps only `TRUE`), boundaries (`>` vs `>=`) and string rules. Background: [Chapter 2](../02-select-basics/README.md) and [Chapter 3](../03-functions-and-expressions/README.md).
 
 ### P1 · Big cities — `OR` filter
 
@@ -131,7 +125,7 @@ Output:
 
 **Why it works.** Each row is tested on its own. Coralbay fails because "more than" is strict. Eastvale's area test gives `UNKNOWN`, but `UNKNOWN OR TRUE` is `TRUE`, so its population is enough. Fernhill gives `UNKNOWN OR FALSE` = `UNKNOWN`, and `WHERE` keeps only `TRUE`.
 
-**Alternative.** `SELECT … WHERE area_km2 > 3000 UNION SELECT … WHERE population > 5000000` returns the same set. On some engines (notably older MySQL) this lets each branch use its own index. PostgreSQL can instead combine two indexes with a *BitmapOr* (a plan step that merges the row lists found by two index scans) for the plain `OR`.
+**Alternative.** `SELECT … WHERE area_km2 > 3000 UNION SELECT … WHERE population > 5000000` returns the same set; on some engines (notably older MySQL) each branch then uses its own index. PostgreSQL can instead combine two indexes with a *BitmapOr* for the plain `OR`.
 
 ### P2 · Odd-numbered, not-boring movies — modulo and `<>`
 
@@ -156,7 +150,7 @@ Output:
 
 **Why it works.** `%` is the remainder. Odd ids leave remainder 1. The `<>` drops the boring one.
 
-**Edge cases.** Two rows went missing silently. In PostgreSQL, `-3 % 2` is `-1` (the result takes the sign of the **dividend**, the number being divided), so `= 1` misses negative odd ids. And `NULL <> 'boring'` is `UNKNOWN`. If an unknown description should count as "not boring", say so explicitly:
+**Edge cases.** Two rows went missing silently. In PostgreSQL `-3 % 2` is `-1` (the sign of the dividend), so `= 1` misses negative odd ids. And `NULL <> 'boring'` is `UNKNOWN`. If an unknown description should count as "not boring", say so explicitly:
 
 ```sql
 SELECT * FROM movie
@@ -173,7 +167,7 @@ ORDER BY rating DESC;
 (4 rows)
 ```
 
-MySQL has `MOD(id, 2)` as well as `%`. Its **NULL-safe** equality (one that treats two NULLs as equal and never returns `UNKNOWN`) is `<=>`, so "is distinct from" is written `NOT (a <=> b)`.
+MySQL has `MOD(id, 2)` as well as `%`; its NULL-safe equality is `<=>`, so "is distinct from" is `NOT (a <=> b)`.
 
 ### P3 · Green products — `AND` on flag columns
 
@@ -258,7 +252,7 @@ SELECT id FROM comment WHERE char_length(body) > 100 ORDER BY id;
 (1 row)
 ```
 
-**Why it works / edge cases.** Comment 3 is exactly 100 characters, so it is not "more than" 100. Comment 4 is 60 copies of `é`: 60 **characters** but 120 **bytes** in **UTF-8** (the standard text encoding, which stores accented and non-Latin characters in 2–4 bytes each).
+**Why it works / edge cases.** Comment 3 is exactly 100 characters, so not "more than" 100. Comment 4 is 60 copies of `é`: 60 **characters** but 120 **bytes** in UTF-8 (accented and non-Latin characters take 2–4 bytes).
 
 ```sql
 SELECT id, char_length(body) AS chars, octet_length(body) AS bytes FROM comment ORDER BY id;
@@ -299,7 +293,7 @@ ORDER BY id;
 (2 rows)
 ```
 
-**Why it works.** A **regular expression** (regex) is a mini-language for describing text patterns, and `~` tests whether a string matches one. `^` and `$` **anchor** the pattern to the start and end, so it must match the whole string. `[A-Za-z]` forces a letter first, and the class after it allows the other characters (inside `[...]` a `.` is literal, and a `-` placed last is literal). `\.` is a literal dot.
+**Why it works.** `~` tests a string against a **regular expression** (a text-pattern language). `^` and `$` **anchor** the pattern to the start and end, so it must match the whole string. `[A-Za-z]` forces a letter first, and the class after it allows the other characters (inside `[...]` a `.` is literal, and a `-` placed last is literal). `\.` is a literal dot.
 
 **Edge cases.** Remove the anchors and the backslash, and six rows match. That includes `dee@northwindXdev`, because an unescaped `.` matches any character, and `fay@northwind.dev.evil.com`, because the end is not anchored. `~` is case-sensitive, so `gus@NORTHWIND.DEV` fails. Use `~*` if the domain should be case-insensitive (it then matches ids 1, 5, 7). Dialects: MySQL `REGEXP` / `REGEXP_LIKE()`, Oracle `REGEXP_LIKE()`. SQL Server gained `REGEXP_LIKE()` only in SQL Server 2025 (database compatibility level 170) and Azure SQL; older versions fall back to `LIKE` patterns. In MySQL string literals the backslash itself must be doubled (`'\\.'`).
 
@@ -566,7 +560,7 @@ ORDER BY s.yr, s.sale_id;
 (3 rows)
 ```
 
-**Why it works.** Each sale finds its single matching product (`product_id` is the product table's primary key), so the join neither loses nor duplicates sales. **Edge case:** with a foreign key, every sale has a product. Without one, an orphan sale would vanish from an inner join, so switch to `LEFT JOIN` and show a NULL name. Break ties in the sort (`, s.sale_id`) so the order is **deterministic** (the same every run). An **orphan** here is a child row whose parent row doesn't exist.
+**Why it works.** Each sale finds its single matching product (`product_id` is the product PK), so the join neither loses nor duplicates sales. **Edge case:** with a foreign key every sale has a product; without one an **orphan** sale (no parent row) vanishes from an inner join — use `LEFT JOIN` to show a NULL name. Break sort ties (`, s.sale_id`) so the order is **deterministic** (same every run).
 
 ### P18 · Average process time per machine — self-join start to end
 
@@ -592,9 +586,9 @@ ORDER BY s.machine_id;
 (3 rows)
 ```
 
-**Why it works.** This is a **self-join** (a table joined to itself). **Aliases** (short alternative names) `s` and `e` give two views of the same table. The join puts each process's start and end on one row, and `avg` then averages the differences. The unfinished process has no `end` row, so the inner join drops it.
+**Why it works.** A **self-join**: aliases `s` and `e` give two views of the same table. The join puts each process's start and end on one row, and `avg` then averages the differences. The unfinished process has no `end` row, so the inner join drops it.
 
-**Alternative / edge case.** You can pivot each process to one row with `max(ts) FILTER (WHERE kind = 'start')` and `… 'end'`, and then average the differences. That gives the same numbers, because the unfinished process's difference is NULL and `avg` skips it. A tempting shortcut is `(sum of end ts − sum of start ts) / count(DISTINCT process_id)`, and it would be wrong here, because it adds the unfinished start into the sum. **PostgreSQL note:** `round(x, 3)` exists only for `numeric`. Here `ts` is `numeric`. If it were `double precision` (a `float` — an approximate binary number type), write `round((…)::numeric, 3)` (`::numeric` is PostgreSQL's shorthand for a **cast**, i.e. converting a value to another type).
+**Alternative / edge case.** You can pivot each process to one row with `max(ts) FILTER (WHERE kind = 'start')` and `… 'end'`, and then average the differences. That gives the same numbers, because the unfinished process's difference is NULL and `avg` skips it. A tempting shortcut is `(sum of end ts − sum of start ts) / count(DISTINCT process_id)`, and it would be wrong here, because it adds the unfinished start into the sum. **PostgreSQL note:** `round(x, 3)` exists only for `numeric` (here `ts` is `numeric`); for `double precision` write `round((…)::numeric, 3)`.
 
 ### P19 · Fiction books per author — join, filter, group, two-key sort
 
@@ -648,7 +642,7 @@ ORDER BY st.student_id, su.subject_name;
 (9 rows)
 ```
 
-**Why it works.** "Every pair, including zeros" means you must *create* the pairs, because the **fact table** (the table recording events — here, sittings) only has pairs that happened. `CROSS JOIN` (every row of one table combined with every row of the other) builds the full 3 × 3 grid. The `LEFT JOIN` attaches matching sittings (both columns in `ON`), and `count(e.subject_name)` turns missing matches into 0. This **grid + left join** pattern also fills in missing days in time series (with `generate_series`, which produces a sequence of numbers or dates).
+**Why it works.** "Every pair, including zeros" means you must *create* the pairs, because the **fact table** (recording events — sittings) only has pairs that happened. `CROSS JOIN` builds the full 3 × 3 grid, the `LEFT JOIN` attaches matching sittings (both columns in `ON`), and `count(e.subject_name)` turns missing matches into 0. This **grid + left join** pattern also fills missing days in time series (with `generate_series`).
 
 ### P21 · Election winner — ORDER BY an aggregate, and ties
 
@@ -716,7 +710,7 @@ ORDER BY f.followee;
  dee      |   1 |        1
 (4 rows)
 ```
-Only `count(DISTINCT b.follower)` is correct there. When a join can match many rows on **both** sides, either de-duplicate or use `EXISTS` (a *semi-join* — it keeps a row if at least one match exists — which never multiplies).
+Only `count(DISTINCT b.follower)` is correct there. When a join can match many rows on **both** sides, de-duplicate or use `EXISTS` (a *semi-join*, which never multiplies).
 
 ---
 
@@ -753,7 +747,7 @@ ORDER BY s.seller_name;
 (2 rows)
 ```
 
-**Why it works.** For each seller, the subquery asks "is there any 2020 order?". `NOT EXISTS` keeps sellers where the answer is no: Reed sold only in 2019, and Tern never sold. Quill's 31 December order counts, and Sable's 1 January 2021 order doesn't. The **half-open** range `>= 1 Jan AND < next 1 Jan` is safe for `date` and `timestamp` alike. `BETWEEN '2020-01-01' AND '2020-12-31'` would miss 31 December after midnight if the column were a timestamp. PostgreSQL executes `NOT EXISTS` as a hash or merge **anti-join** (two internal join algorithms: one builds an in-memory lookup table, the other walks two sorted inputs side by side), and an index on `orders(seller_id, sold_on)` makes each probe cheap.
+**Why it works.** For each seller, the subquery asks "is there any 2020 order?". `NOT EXISTS` keeps sellers where the answer is no: Reed sold only in 2019, and Tern never sold. Quill's 31 December order counts, and Sable's 1 January 2021 order doesn't. The **half-open** range `>= 1 Jan AND < next 1 Jan` is safe for `date` and `timestamp` alike. `BETWEEN '2020-01-01' AND '2020-12-31'` would miss 31 December after midnight if the column were a timestamp. PostgreSQL executes `NOT EXISTS` as a hash or merge **anti-join** ([§12.15](../12-indexes-storage-and-query-performance/README.md#1215-join-algorithms)); an index on `orders(seller_id, sold_on)` makes each probe cheap.
 
 ### P24 · Dormant accounts — LEFT JOIN … IS NULL
 
@@ -778,7 +772,7 @@ ORDER BY a.account_name;
 
 **Why it works.** The LEFT JOIN attaches only *2020* transactions. Accounts with none get a NULL-padded row, and `WHERE t.txn_id IS NULL` keeps exactly those. Test a column that can't be NULL in a real match, such as the primary key.
 
-**The classic bug.** Move the date test into `WHERE` and you ask for rows where `t` is NULL **and** `t.txn_date` is in 2020. No row can be both, so the result is `(0 rows)`. **Alternative:** a **set difference** of ids (rows in the first result that are not in the second), `SELECT account_id FROM account EXCEPT SELECT account_id FROM txn WHERE …2020…`, which returns the same Juniper and Kestrel.
+**The classic bug.** Move the date test into `WHERE` and you ask for rows where `t` is NULL **and** `t.txn_date` is in 2020. No row can be both, so the result is `(0 rows)`. **Alternative:** a set difference of ids, `SELECT account_id FROM account EXCEPT SELECT account_id FROM txn WHERE …2020…`, returns the same Juniper and Kestrel.
 
 ### P25 · Sessions with no ads — anti-join on a range condition
 
@@ -827,7 +821,7 @@ ORDER BY r.name;
 (3 rows)
 ```
 
-**Why it works.** The subquery joins orders to companies so it can filter by company *name*, and it is **correlated** on the rep (it refers to the outer row `r`, so it is evaluated per rep).
+**Why it works.** The subquery joins orders to companies to filter by company *name*, and is **correlated** on the rep (it refers to the outer row `r`).
 
 **Edge case — the NOT IN trap.** `WHERE r.rep_id NOT IN (SELECT o.rep_id FROM … WHERE c.name = 'RED')` returns the same three names. Then we insert one RED order with no rep (`rep_id` NULL), and the `NOT IN` version returns:
 ```
@@ -841,7 +835,7 @@ ORDER BY r.name;
 
 ## 18.6 Conditional aggregation (P27–P28)
 
-**Conditional aggregation** computes several filtered aggregates over the same groups in one pass. It is SQL's way to turn row values (statuses, types) into columns, a simple **pivot**. PostgreSQL and standard SQL spell it `agg(...) FILTER (WHERE cond)`. Every engine accepts `SUM(CASE WHEN cond THEN x ELSE 0 END)`. See [Chapter 4 §4.4](../04-aggregation/README.md).
+**Conditional aggregation** ([§4.4](../04-aggregation/README.md#44-conditional-aggregation-filter-and-case)) computes several filtered aggregates over the same groups in one pass, turning row values (statuses, types) into columns — a simple **pivot**: `agg(...) FILTER (WHERE cond)` in PostgreSQL and standard SQL, `SUM(CASE WHEN cond THEN x ELSE 0 END)` everywhere.
 
 ### P27 · Attendance summary — one column per status
 
@@ -987,7 +981,7 @@ ORDER BY employee_name;
 (2 rows)
 ```
 
-**Why it works / edge cases.** `end - start` counts the *gaps* between days, and `+ 1` counts the *days*. Ivo (10–12 March) is exactly 3 days, so it is not "more than three". Jade's absence crosses 29 February 2024 and is still counted correctly as 4 days. **Clarify** whether "more than three days" means calendar or working days. For working days, count `generate_series(start, end, '1 day')` rows whose `extract(isodow …) < 6` (ISO day of week: Monday = 1 … Sunday = 7). Dialects: MySQL `DATEDIFF(end, start)` (days), SQL Server `DATEDIFF(day, start, end)`, SQLite `julianday(end) - julianday(start)`.
+**Why it works / edge cases.** `end - start` counts the *gaps* between days, and `+ 1` counts the *days*. Ivo (10–12 March) is exactly 3 days, so it is not "more than three". Jade's absence crosses 29 February 2024 and is still counted correctly as 4 days. **Clarify** calendar vs working days; for working days count `generate_series(start, end, '1 day')` rows whose `extract(isodow …) < 6` (Monday = 1 … Sunday = 7). Dialects: MySQL `DATEDIFF(end, start)` (days), SQL Server `DATEDIFF(day, start, end)`, SQLite `julianday(end) - julianday(start)`.
 
 ### P32 · Absence streaks of 3+ days — gaps and islands (first taste)
 
@@ -995,7 +989,7 @@ ORDER BY employee_name;
 
 **Data:** student 1 is absent 1–3 Jan, present 4 Jan, then absent 5–8 Jan. Student 2 is absent 1–2 and 4–5 Jan (no run of 3). Student 3 is absent 30 Jan – 1 Feb, across a month boundary.
 
-The trick: within a run of consecutive dates, `date − row_number()` is constant. (`row_number()` is a **window function** numbering rows 1, 2, 3… within each `PARTITION BY` group in the given order; `PARTITION BY` splits rows into groups without collapsing them.)
+The trick: within a run of consecutive dates, `date − row_number()` is constant (`row_number()` numbers rows 1, 2, 3… within each `PARTITION BY` group, [Chapter 8](../08-window-functions/README.md)).
 
 ```sql
 SELECT student_id, att_date,
@@ -1114,7 +1108,7 @@ MySQL gets these right without casts (its `/` is decimal), which is why solution
 
 ### P35 · Ad click-through rate — divide by a possibly-zero count
 
-**Problem.** `ad_action(ad_id, user_id, action)` with actions Clicked / Viewed / Ignored. **CTR** (click-through rate, the share of impressions that led to a click) = clicks × 100 / (clicks + views), or 0 when an ad has neither. Round to 2 decimals and sort by CTR (highest first), then by ad id.
+**Problem.** `ad_action(ad_id, user_id, action)` with actions Clicked / Viewed / Ignored. **CTR** (click-through rate) = clicks × 100 / (clicks + views), or 0 when an ad has neither. Round to 2 decimals and sort by CTR (highest first), then by ad id.
 
 ```sql
 SELECT ad_id,
@@ -1158,7 +1152,7 @@ ORDER BY lf DESC, b.book_id;
 (4 rows)
 ```
 
-**Why it works.** The numerator is per group. The **denominator** (the bottom of the fraction; the **numerator** is the top) is the whole-table count from an uncorrelated scalar subquery, which runs once. Book 4 was never lent, so the LEFT JOIN keeps it and `count(l.loan_id)` is 0. Without `::numeric`, 3/6 would be 0 in PostgreSQL.
+**Why it works.** The numerator is per group; the denominator is the whole-table count from an uncorrelated scalar subquery, which runs once. Book 4 was never lent, so the LEFT JOIN keeps it and `count(l.loan_id)` is 0. Without `::numeric`, 3/6 would be 0 in PostgreSQL.
 
 **Alternative.** A window over the grouped result avoids the second scan: `count(l.loan_id)::numeric / NULLIF(sum(count(l.loan_id)) OVER (), 0)`. Window functions run after `GROUP BY`, so they can aggregate the aggregates. This gives the same output here. Keep the `NULLIF`: with an empty `loan` table the window sum is 0 and the division would fail. The two denominators differ only if `loan` could hold book ids missing from `book`, which the foreign key rules out.
 
@@ -1185,7 +1179,7 @@ ORDER BY p.product_id;
 (3 rows)
 ```
 
-**Why it works.** This is a **range join** (the join condition is "falls inside an interval", not equality). The join matches each sale to exactly one price period (same product, date inside the period). Product 1 sold 100 units at 5 and 15 at 20: (500 + 300) / 115 = 6.96. Product 3 has a price but no sales. Its sums are NULL, NULL/NULL is NULL (not an error), and `COALESCE` makes it 0.
+**Why it works.** A **range join** (condition "falls inside an interval", not equality) matches each sale to exactly one price period (same product, date inside the period). Product 1 sold 100 units at 5 and 15 at 20: (500 + 300) / 115 = 6.96. Product 3 has a price but no sales. Its sums are NULL, NULL/NULL is NULL (not an error), and `COALESCE` makes it 0.
 
 **The bug.** `avg(p.price)` averages the *price rows* (5 and 20 → 12.50) and ignores that most units sold at 5. Whenever rows carry a quantity, use a **weighted** average: `sum(value × weight) / sum(weight)`. If a sale could fall outside every period, it would silently vanish, so check with an anti-join.
 
@@ -1208,13 +1202,13 @@ LEFT JOIN activity a ON a.player_id = f.player_id AND a.played_on = f.first_on +
 (1 row)
 ```
 
-**Why it works.** The CTE gives one row per player (the denominator). The LEFT JOIN looks for a row exactly one day later (`date + 1`). `count(a.player_id)` counts only players who matched (the numerator). Players 1 and 4 returned (player 4 on 29 February 2024, which `+ 1` handles). Player 3 came back two days later, which doesn't count, and player 2 never came back. The result is 2/4. Without the cast, `count / count` is `0`. This "day-1 retention" metric is a staple of **product-analytics** interviews (questions about measuring how users behave in an app). Variants ask for the fraction *per install date* (group by `first_on`) or for day-7 retention (`+ 7`).
+**Why it works.** The CTE gives one row per player (the denominator). The LEFT JOIN looks for a row exactly one day later (`date + 1`). `count(a.player_id)` counts only players who matched (the numerator). Players 1 and 4 returned (player 4 on 29 February 2024, which `+ 1` handles). Player 3 came back two days later, which doesn't count, and player 2 never came back. The result is 2/4. Without the cast, `count / count` is `0`. This "day-1 retention" metric is a staple of product-analytics interviews; variants ask for the fraction *per install date* (group by `first_on`) or for day-7 retention (`+ 7`).
 
 ---
 
 ## 18.9 Window and ranking basics (P39–P42)
 
-A first look at problems that are easiest with **window functions**: functions that compute over related rows without collapsing them. Full coverage is in [Chapter 8](../08-window-functions/README.md), and the harder variants are in [Chapter 19](../19-sql-interview-problems-2/README.md).
+Problems easiest with **window functions** ([Chapter 8](../08-window-functions/README.md)); harder variants are in [Chapter 19](../19-sql-interview-problems-2/README.md).
 
 ### P39 · Second-highest salary — and "return NULL if none"
 
@@ -1233,7 +1227,7 @@ SELECT (SELECT DISTINCT salary FROM emp ORDER BY salary DESC OFFSET 1 LIMIT 1)
 (1 row)
 ```
 
-**Why it works.** `DISTINCT` collapses the two 300s, so `OFFSET 1` skips exactly one value. Wrapping the query in an outer `SELECT (…)` makes it a **scalar subquery**, which yields NULL when the inner query finds nothing. After deleting all but the 300s, the wrapped query returns `(null)` in one row, while an unwrapped query (the file shows the bare `dense_rank` version) returns 0 rows.
+**Why it works.** `DISTINCT` collapses the two 300s, so `OFFSET 1` skips exactly one value. Wrapping it in an outer `SELECT (…)` makes a **scalar subquery**, which yields NULL when the inner query finds nothing. After deleting all but the 300s, the wrapped query returns `(null)` in one row, while an unwrapped query (the file shows the bare `dense_rank` version) returns 0 rows.
 
 **Alternative.** `dense_rank() OVER (ORDER BY salary DESC)` numbers distinct values 1, 1, 2, 3. Keep `dr = 2`, and wrap the result in `max(salary)` so an empty result still becomes one NULL row. Without `DISTINCT`, `OFFSET 1` would return the duplicate 300, the most common wrong answer. Another classic is `SELECT max(salary) FROM emp WHERE salary < (SELECT max(salary) FROM emp)`. The general N-th version is in Chapter 19.
 
@@ -1259,7 +1253,7 @@ ORDER BY player_id, played_on;
 
 **Portable alternatives** (same output in the file):
 - `row_number() OVER (PARTITION BY player_id ORDER BY played_on) = 1` in a subquery. Use `rank()` if two rows could share the first date and you want both.
-- `WHERE (player_id, played_on) IN (SELECT player_id, min(played_on) … GROUP BY player_id)`, a **row-value** `IN` (comparing several columns at once as a tuple). SQL Server doesn't support row-value `IN`, so there you'd join to the grouped subquery instead.
+- `WHERE (player_id, played_on) IN (SELECT player_id, min(played_on) … GROUP BY player_id)`, a **row-value** `IN` (several columns compared as a tuple); SQL Server lacks it, so join to the grouped subquery instead.
 
 ### P41 · Games played so far — running total
 
@@ -1282,9 +1276,9 @@ ORDER BY player_id, played_on;
 (5 rows)
 ```
 
-**Why it works.** `PARTITION BY` restarts the sum per player. `ORDER BY` inside `OVER` makes the default **frame** (the set of rows the window function looks at for the current row) "from the first row up to the current row, including rows that tie on the sort key" (`RANGE UNBOUNDED PRECEDING`). Here `(player_id, played_on)` is unique, so there are no ties. If two rows could share a date and you want a strict row-by-row total, write `ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`.
+**Why it works.** `PARTITION BY` restarts the sum per player. `ORDER BY` inside `OVER` makes the default **frame** ([§8.3](../08-window-functions/README.md#83-order-by-inside-over-running-calculations-and-the-default-frame)) "first row up to the current row, including sort-key ties" (`RANGE UNBOUNDED PRECEDING`). Here `(player_id, played_on)` is unique, so there are no ties. If two rows could share a date and you want a strict row-by-row total, write `ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`.
 
-**Alternative.** Before window functions (MySQL < 8.0), you'd self-join each row to all earlier-or-same rows of the same player and `sum`. It gives the same output but does O(n²) work per player (work grows with the square of the number of rows: 10× the rows, 100× the work).
+**Alternative.** Before window functions (MySQL < 8.0), you'd self-join each row to all earlier-or-same rows of the same player and `sum`. It gives the same output but does O(n²) work per player (10× the rows, 100× the work).
 
 ### P42 · Active businesses — compare each row to its group's average
 

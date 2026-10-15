@@ -1,32 +1,10 @@
 # Chapter 4 — Aggregation: Summarising Many Rows
 
-Chapters 2 and 3 worked **row by row**: `WHERE` kept or dropped each row, and functions such as `upper()` or `round()` turned one row's value into another value for the same row. Most business questions are not about single rows, though. "How many orders did we ship last month?", "What is the average salary per department?", "Which customers spent more than 1,000?" — each of these squeezes **many rows into one answer**. That squeezing is called **aggregation**, and it is the subject of this chapter.
+Chapters 2 and 3 worked **row by row**. Most business questions — "how many orders shipped last month?", "average salary per department?", "which customers spent over 1,000?" — squeeze **many rows into one answer**. That is **aggregation**.
 
-**What you'll learn**
+**Sections:** 4.1 aggregate functions (and their `NULL`/empty-input rules) · 4.2 `GROUP BY` · 4.3 `HAVING` · 4.4 conditional aggregation (`FILTER`, `CASE`) and pivot-style reports · 4.5 the logical query processing order · 4.6 subtotals with `GROUPING SETS`, `ROLLUP`, `CUBE`.
 
-- The aggregate functions (`COUNT`, `SUM`, `AVG`, `MIN`, `MAX` and PostgreSQL's useful extras) and exactly how each treats `NULL` and empty input.
-- `GROUP BY` — splitting rows into groups and getting one result row per group — and the rule about which columns you may select.
-- `HAVING` — filtering whole groups after they have been summarised — and how it differs from `WHERE`.
-- Conditional aggregation with `FILTER (WHERE …)` and `CASE`, the trick behind most "count several things in one pass" and pivot-style reports (reports that turn row values into columns, §4.4).
-- The **logical query processing order** — the order in which the database *conceptually* evaluates the clauses of a `SELECT` — and why it explains almost every "column does not exist" error.
-- Subtotals and grand totals in a single query with `GROUPING SETS`, `ROLLUP` and `CUBE`.
-
-**How to run the examples.** Every query in this chapter is in [`code/`](code/) and was run on the book's private PostgreSQL 14 server; the output under each query is the real `psql` output. `(null)` in the output is how we asked `psql` to display `NULL` (`\pset null '(null)'`).
-
-```bash
-bash tools_run_sql.sh sql '04-*'                         # run this chapter's files (fresh DB per file)
-bash tools_pg.sh psql -d <db> -f sql/chapters/04-aggregation/code/02_group_by.sql
-```
-
-**The sample data.** We keep using the book's `company` database from [Chapter 1](../01-databases-and-the-relational-model/README.md) ([`code/00_schema.sql`](code/00_schema.sql) is an exact copy). The tables that matter most here:
-
-| Table | Rows | What is in it (the quirks we will meet) |
-|---|---|---|
-| `employees` | 15 | `emp_id`, `first_name`, `dept_id`, `salary`, `commission_pct`, `hire_date`, `manager_id`. The CEO (Asha) and the intern (Rohan) have **no department** (`dept_id` is `NULL`); only 3 people have a commission; two salaries are shared by two people each. |
-| `departments` | 6 | Engineering, Sales, Marketing, Finance, Support, Research (Research has **no** employees). |
-| `orders` | 14 | `status` is one of pending / shipped / delivered / cancelled; `sales_rep_id` is `NULL` for online orders. |
-| `order_items` | 22 | One row per product in an order: `quantity`, `unit_price` (price paid), `discount` (0.10 = 10 % off). |
-| `products`, `customers` | 9, 10 | One product has no category; two customers have never ordered. |
+**Running the examples.** All queries are in [`code/`](code/), run on the book's PostgreSQL 14 server (`bash tools_run_sql.sh sql '04-*'` runs this chapter on fresh databases); `(null)` is psql's `\pset null` display. Data: the `company` database ([chapter 1, 1.11](../01-databases-and-the-relational-model/README.md#111-the-sample-database); [`code/00_schema.sql`](code/00_schema.sql)). Quirks that matter here: Asha (CEO) and Rohan (intern) have **no department**; Research has **no** employees; only 3 people have a commission; two salaries are shared by two people each; `sales_rep_id` is `NULL` for online orders; one product has no category; two customers never ordered.
 
 ---
 
@@ -34,7 +12,7 @@ bash tools_pg.sh psql -d <db> -f sql/chapters/04-aggregation/code/02_group_by.sq
 
 ### What it is
 
-An **aggregate function** takes a *set of rows* and returns *one value* that summarises them. Think of a shop's till at closing time: it does not print every sale again — it prints the number of sales, the total taken, the largest single sale. Those are aggregates.
+An **aggregate function** takes a *set of rows* and returns *one value* summarising them — like a till's end-of-day count of sales, total taken and largest sale.
 
 | Function | Returns | Works on | Notes |
 |---|---|---|---|
@@ -45,18 +23,17 @@ An **aggregate function** takes a *set of rows* and returns *one value* that sum
 | `AVG(expr)` | arithmetic mean = `SUM / COUNT(expr)` | numbers, intervals | Divides by the count of **non-NULL** values. |
 | `MIN(expr)` / `MAX(expr)` | smallest / largest | anything that can be sorted: numbers, text, dates | Text uses the column's collation (alphabetical order). |
 
-Two words you will see a lot: a **scalar function** (Chapter 3) works on one row's values and returns one value *per row*; an **aggregate function** works on many rows and returns one value *per group*. Without `GROUP BY`, the whole table (after `WHERE`) is one group, so the query returns exactly one row.
+A **scalar function** (chapter 3) returns one value *per row*; an aggregate returns one value *per group*. Without `GROUP BY`, the whole table (after `WHERE`) is one group, so the query returns exactly one row.
 
 ### Why it matters
 
-Reports, dashboards, KPIs (key performance indicators — the headline numbers a business tracks), billing, fraud checks and most SQL interview questions are aggregations. Doing the summary inside the database is also far cheaper than shipping every row to your application and adding them up there: the database reads the rows where they live and sends back one small result.
+Reports, dashboards, KPIs (key performance indicators — a business's headline numbers), billing, fraud checks and most SQL interview questions are aggregations. Summarising inside the database is far cheaper than shipping every row to the application: it reads rows where they live and returns one small result.
 
 ### How it works
 
-1. The database builds the input rows (`FROM` and any joins — a **join** combines rows of several tables by matching values, [Chapter 5](../05-joins/README.md)), then removes rows that fail `WHERE`.
-2. For each aggregate in the `SELECT` list, it walks the remaining rows, keeping a small running **state** (a counter, a running total, the smallest value so far …).
-3. Before feeding a value into the state, it **skips `NULL`s** — every aggregate except `COUNT(*)` does this.
-4. At the end it turns the state into the result (for `AVG`, total ÷ count).
+1. Build the input rows (`FROM` and any joins — a **join** combines rows of several tables by matching values, [Chapter 5](../05-joins/README.md)); drop rows failing `WHERE`.
+2. Per aggregate, walk the rows keeping a small running **state** (counter, running total, smallest so far…), **skipping `NULL`s** — every aggregate except `COUNT(*)` does.
+3. Turn the state into the result (for `AVG`, total ÷ count).
 
 ```sql
 SELECT count(*)              AS employees,
@@ -96,9 +73,7 @@ Output:
 (1 row)
 ```
 
-- `count(*)` = 15: every row.
-- `count(email)` = 13: two employees have no email.
-- `count(dept_id)` = 13 but `count(DISTINCT dept_id)` = 5: 13 people have a department, and they are spread over 5 different departments. The two `NULL`s are not counted as a sixth "value".
+`count(*)` = 15 rows; `count(email)` = 13 (two have no email); `count(dept_id)` = 13 people with a department, spread over `count(DISTINCT dept_id)` = 5 departments — the two `NULL`s are not a sixth "value".
 
 ### NULLs are skipped — and that changes averages
 
@@ -118,7 +93,7 @@ Output:
 (1 row)
 ```
 
-`AVG` divided by **3** (the people who have a commission), not by 15. Whether that is right depends on the question. "What is the average commission rate *among people who earn commission*?" → 0.083 is correct. "What is the average commission rate *across all staff*, treating no commission as zero?" → you must say so with `COALESCE(commission_pct, 0)`, giving 0.017. Neither is wrong; the mistake is not knowing which one you asked for.
+`AVG` divided by **3** (people with a commission), not 15. "Average rate *among people who earn commission*" → 0.083 is right; "across all staff, no commission = zero" → say so with `COALESCE(commission_pct, 0)`, giving 0.017. Neither is wrong; the mistake is not knowing which you asked.
 
 ### Empty input
 
@@ -136,7 +111,7 @@ Output:
 (1 row)
 ```
 
-Nobody earns over a million, so the aggregates see zero rows. `COUNT` answers `0`; `SUM`, `AVG`, `MIN` and `MAX` answer `NULL` ("there is no total of nothing"). You still get **one row** back — an aggregate query without `GROUP BY` always returns exactly one row. If your application expects `0` for an empty sum, write `COALESCE(SUM(x), 0)`.
+With zero input rows `COUNT` answers `0`; `SUM`, `AVG`, `MIN`, `MAX` answer `NULL` ("no total of nothing"). You still get **one row** — an aggregate query without `GROUP BY` always returns exactly one. For `0` from an empty sum write `COALESCE(SUM(x), 0)`.
 
 ### Other useful points
 
@@ -165,25 +140,11 @@ Output:
 (1 row)
 ```
 
-A `WHERE` clause simply shrinks the set being aggregated:
-
-```sql
-SELECT count(*) AS delivered, min(placed_at) AS first, max(placed_at) AS last
-FROM orders WHERE status = 'delivered';
-```
-
-Output:
-
-```text
- delivered |        first        |        last         
------------+---------------------+---------------------
-         7 | 2025-01-03 10:15:00 | 2025-04-09 16:45:00
-(1 row)
-```
+A `WHERE` clause simply shrinks the set being aggregated (`WHERE status = 'delivered'` → 7 orders, first 2025-01-03, last 2025-04-09).
 
 ### Beyond the big five (PostgreSQL)
 
-PostgreSQL ships many more aggregates. These are the ones you will actually use:
+The extra PostgreSQL aggregates you will actually use:
 
 ```sql
 SELECT string_agg(first_name, ', ' ORDER BY first_name) AS engineers,
@@ -222,9 +183,9 @@ Output:
 | `percentile_disc(f) …` | percentile that is an actual input value | "the median order", not an average of two |
 | `mode() WITHIN GROUP (ORDER BY x)` | most frequent value | most common salary / status |
 
-> **Key term — percentile and median:** The *f*-th percentile is the value below which a fraction *f* of the sorted values fall; the **median** is the 50th percentile, the middle value, which (unlike the average) is not dragged by a few huge values. *Interpolated* means that when the cut falls between two values, the result is blended from both, so it may be a number that never occurs in the data. **Latency** is how long one request takes; "p95 latency" is its 95th percentile — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md).
+> **Key term — percentile and median:** the *f*-th percentile is the value below which a fraction *f* of sorted values fall; the **median** is the 50th percentile, which (unlike the average) is not dragged by a few huge values. *Interpolated* = blended from the two values either side of the cut, so it may never occur in the data. **Latency** is how long one request takes; "p95 latency" is its 95th percentile ([System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)).
 
-`percentile_cont`, `percentile_disc` and `mode` are **ordered-set aggregates**: the `WITHIN GROUP (ORDER BY …)` tells them which order to read the values in.
+`percentile_cont`, `percentile_disc` and `mode` are **ordered-set aggregates**: `WITHIN GROUP (ORDER BY …)` says which order to read the values in.
 
 ### Dialect differences
 
@@ -237,8 +198,8 @@ Output:
 
 ### Common mistakes
 
-- **`COUNT(column)` when you meant `COUNT(*)`** (or the other way round). They differ exactly by the number of `NULL`s in that column.
-- **Averaging with NULLs without thinking** — see the commission example above.
+- **`COUNT(column)` vs `COUNT(*)` mixed up** — they differ by the number of `NULL`s in that column.
+- **Averaging with NULLs without thinking** (commission example).
 - **`SUM` of an empty set used as a number** in application code — it is `NULL`, not `0`.
 - **Integer averages in SQL Server** (`AVG` of `int` returns an `int`).
 - **`COUNT(DISTINCT a, b)`** — PostgreSQL does not accept two arguments; count distinct *rows* instead: `COUNT(DISTINCT (a, b))` or a subquery with `SELECT DISTINCT a, b`.
@@ -253,14 +214,9 @@ Output:
 
 ### Self-check
 
-1. A column has values 10, NULL, 20. What do `COUNT(*)`, `COUNT(col)`, `SUM(col)`, `AVG(col)` return? → 3, 2, 30, 15.
-2. What does `SELECT MAX(salary) FROM employees WHERE 1 = 0` return — zero rows or one row? → One row containing `NULL`.
-3. How would you count employees who have *no* email? → `COUNT(*) - COUNT(email)`, or `COUNT(*) FILTER (WHERE email IS NULL)` (§4.4).
-4. Can `MIN` be used on a text column? → Yes; it returns the alphabetically first value (by the column's collation).
-
-### TL;DR
-
-Aggregates turn many rows into one value. `COUNT(*)` counts rows; every other aggregate skips `NULL`s. Empty input → `COUNT` = 0, the rest `NULL`. No `GROUP BY` → exactly one result row.
+1. Values 10, NULL, 20: `COUNT(*)`, `COUNT(col)`, `SUM(col)`, `AVG(col)`? → 3, 2, 30, 15.
+2. `SELECT MAX(salary) FROM employees WHERE 1 = 0` — zero rows or one? → One row containing `NULL`.
+3. Count employees with *no* email? → `COUNT(*) - COUNT(email)`, or `COUNT(*) FILTER (WHERE email IS NULL)` (§4.4).
 
 ---
 
@@ -268,9 +224,7 @@ Aggregates turn many rows into one value. `COUNT(*)` counts rows; every other ag
 
 ### What it is
 
-`GROUP BY` splits the rows into **groups** — one group per distinct value (or combination of values) of the listed expressions — and then runs the aggregates **once per group**. The result has **one row per group**.
-
-Analogy: a teacher sorting exam papers into piles by class, then writing the number of papers and the average mark on top of each pile. The piles are the groups; the numbers on top are the aggregates.
+`GROUP BY` splits rows into **groups** — one per distinct value (or combination) of the listed expressions — and runs the aggregates **once per group**, giving **one row per group** (like sorting exam papers into piles by class and writing count and average mark on each pile).
 
 ### How it works
 
@@ -300,25 +254,7 @@ Output:
 (6 rows)
 ```
 
-Six groups: five departments plus a **`NULL` group** holding Asha and Rohan, who have no department. Notice that Research (department 6) does not appear: `GROUP BY` can only make groups from rows that exist in its input. To list departments with zero employees you need an outer join (a join that also keeps rows with no match; [Chapter 5](../05-joins/README.md#54-left-outer-join)).
-
-```mermaid
-flowchart LR
-    R["15 employee rows"] --> G1["dept 1 - 4 rows"]
-    R --> G2["dept 2 - 4 rows"]
-    R --> G3["dept 3 - 2 rows"]
-    R --> G4["dept 4 - 2 rows"]
-    R --> G5["dept 5 - 1 row"]
-    R --> GN["dept NULL - 2 rows"]
-    G1 --> O1["1 | 4 | 523000"]
-    G2 --> O2["2 | 4 | 358000"]
-    G3 --> O3["3 | 2 | 181000"]
-    G4 --> O4["4 | 2 | 211000"]
-    G5 --> O5["5 | 1 | 64000"]
-    GN --> ON["NULL | 2 | 280000"]
-```
-
-*Figure 4.1 — GROUP BY dept_id: split the rows into piles, then summarise each pile into one output row.*
+Five departments plus a **`NULL` group** (Asha and Rohan). Research does not appear: groups come only from existing rows. Departments with zero employees need an outer join (keeps rows with no match; [Chapter 5](../05-joins/README.md#54-left-outer-join)).
 
 ### Grouping by several columns
 
@@ -345,11 +281,11 @@ Output:
 (5 rows)
 ```
 
-The order of columns in `GROUP BY` does not change *which* groups you get — `GROUP BY a, b` and `GROUP BY b, a` produce the same groups. Row order in the output is controlled only by `ORDER BY`.
+`GROUP BY a, b` and `GROUP BY b, a` give the same groups; output order comes only from `ORDER BY`.
 
 ### Grouping by an expression
 
-You can group by a computed value, such as the month of a timestamp:
+Group by a computed value, such as a timestamp's month:
 
 ```sql
 SELECT date_trunc('month', placed_at)::date AS month, count(*) AS orders
@@ -372,7 +308,7 @@ Output:
 (6 rows)
 ```
 
-PostgreSQL also lets you refer to a `SELECT` alias or a column position in `GROUP BY` (a non-standard convenience; if an alias clashes with a real column name, the real column wins):
+PostgreSQL also accepts a `SELECT` alias or column position in `GROUP BY` (non-standard; if an alias clashes with a real column name, the real column wins):
 
 ```sql
 SELECT extract(year FROM hire_date) AS hire_year, count(*) AS hires
@@ -388,19 +324,12 @@ Output:
 -----------+-------
       2015 |     1
       2016 |     1
-      2017 |     1
-      2018 |     1
-      2019 |     2
-      2020 |     1
-      2021 |     2
-      2022 |     2
-      2023 |     2
-      2024 |     1
+ ...
       2025 |     1
 (11 rows)
 ```
 
-Grouping usually follows a join. Revenue per product category joins `order_items` to `products` first (joins are Chapter 5):
+Grouping usually follows a join (chapter 5) — revenue per category:
 
 ```sql
 SELECT p.category, sum(oi.quantity) AS units,
@@ -422,27 +351,11 @@ Output:
 (4 rows)
 ```
 
-A `GROUP BY` with no aggregates returns each distinct group once — the same result as `SELECT DISTINCT status FROM orders`:
-
-```sql
-SELECT status FROM orders GROUP BY status ORDER BY status;
-```
-
-Output:
-
-```text
-  status   
------------
- cancelled
- delivered
- pending
- shipped
-(4 rows)
-```
+A `GROUP BY` with no aggregates returns each distinct group once: `SELECT status FROM orders GROUP BY status` = `SELECT DISTINCT status FROM orders` (4 rows).
 
 ### The single-value rule
 
-After grouping, each output row stands for a whole group. A column that is neither grouped nor aggregated could have **several different values** inside one group — which one should be shown? SQL refuses to guess:
+Each output row stands for a whole group, so a column neither grouped nor aggregated could have **several values** per group. SQL refuses to guess:
 
 ```sql
 SELECT dept_id, first_name, count(*) FROM employees GROUP BY dept_id;
@@ -456,7 +369,7 @@ LINE 1: SELECT dept_id, first_name, count(*) FROM employees GROUP BY...
                         ^
 ```
 
-There is one exception. If you group by a table's **primary key** (the column whose value uniquely identifies each row), every other column of that table has exactly one value per group (it is *functionally dependent* on the key — see [Chapter 11](../11-normalization/README.md)), so PostgreSQL (9.1+) allows it:
+Exception: grouping by a table's **primary key** (the column uniquely identifying each row) means every other column of that table has one value per group (it is *functionally dependent* on the key — [Chapter 11](../11-normalization/README.md)), so PostgreSQL (9.1+) allows it:
 
 ```sql
 SELECT d.dept_id, d.name, count(e.emp_id) AS headcount
@@ -487,19 +400,26 @@ Output:
 
 ### Trade-offs and performance
 
-The database groups rows in one of two ways (you can see which with `EXPLAIN`, the command that prints how the database plans to run a query, [Chapter 12](../12-indexes-storage-and-query-performance/README.md)): **hash aggregation** builds an in-memory hash table (a lookup structure that turns each key into a slot number, so finding a key takes about one step) keyed by the group values (fast, no sorting, needs memory for all groups), or **sort + group aggregation** sorts the rows by the grouping key and summarises each run of equal keys (can use an index — a sorted lookup structure kept beside the table — that is already in that order, and streams rows through with little memory). Grouping by many high-cardinality columns (columns with many distinct values) creates many groups and costs more memory.
+Two physical strategies (shown by `EXPLAIN`, which prints the query plan — [Chapter 12](../12-indexes-storage-and-query-performance/README.md)):
+
+| Strategy | How | Trade-off |
+|---|---|---|
+| **Hash aggregation** | in-memory hash table (turns each key into a slot number, ~one-step lookup) keyed by group values | fast, no sort; needs memory for all groups |
+| **Sort + group aggregation** | sort by the grouping key, summarise each run of equal keys | can use an index (sorted lookup structure beside the table) already in that order; streams with little memory |
+
+Grouping by high-cardinality columns (many distinct values) creates many groups and costs more memory.
 
 ### When not to use it
 
-- If you need each **row** *and* a group total next to it (e.g. each salary and its department's average), `GROUP BY` collapses the rows you want to keep. Use a **window function** (an aggregate-like function that computes over a set of related rows but keeps every row in the output) instead: `avg(salary) OVER (PARTITION BY dept_id)` — [Chapter 8](../08-window-functions/README.md).
-- If you only want distinct values, `SELECT DISTINCT` states the intent more clearly.
+- Each **row** *and* its group total (salary next to department average)? `GROUP BY` collapses the rows; use a **window function** (computes over related rows but keeps every row): `avg(salary) OVER (PARTITION BY dept_id)` — [Chapter 8](../08-window-functions/README.md).
+- Only distinct values? `SELECT DISTINCT` states the intent more clearly.
 
 ### Common mistakes
 
-- Selecting a column that is not grouped (error above) — and "fixing" it by adding the column to `GROUP BY`, which silently creates *smaller* groups than you meant. Ask yourself: "one row per *what*?" and group by exactly that.
-- Expecting groups for values that have no rows (Research). Groups come only from existing rows.
-- Forgetting that `NULL` keys form their own group — often labelled with `COALESCE(dept_id::text, 'none')` in reports.
-- Relying on `GROUP BY` to sort. PostgreSQL's hash aggregation returns groups in no particular order; always add `ORDER BY`.
+- "Fixing" the non-grouped-column error by adding the column to `GROUP BY`, silently creating *smaller* groups. Ask "one row per *what*?" and group by exactly that.
+- Expecting groups for values with no rows (Research).
+- Forgetting `NULL` keys form their own group — label with `COALESCE(dept_id::text, 'none')`.
+- Relying on `GROUP BY` to sort — hash aggregation returns groups in no order; add `ORDER BY`.
 
 ### In the interview
 
@@ -511,13 +431,8 @@ The database groups rows in one of two ways (you can see which with `EXPLAIN`, t
 
 ### Self-check
 
-1. `GROUP BY dept_id` on our data gives 6 rows but there are 6 departments. Is the Research department one of them? → No; the sixth group is the `NULL` group. Research has no rows to group.
-2. Why is `SELECT dept_id, first_name, count(*) … GROUP BY dept_id` an error? → `first_name` has several values per department; SQL will not pick one.
-3. Does `GROUP BY a, b` produce more, fewer or the same number of groups as `GROUP BY a`? → The same or more — each `a` group is split by `b`.
-
-### TL;DR
-
-`GROUP BY` = split rows into groups by key, aggregate each group, one output row per group. Select only keys and aggregates. `NULL` keys form one group. Add `ORDER BY` for order.
+1. `GROUP BY dept_id` gives 6 rows and there are 6 departments. Is Research one? → No; the sixth is the `NULL` group.
+2. Does `GROUP BY a, b` give more, fewer or the same groups as `GROUP BY a`? → The same or more — each `a` group is split by `b`.
 
 ---
 
@@ -525,7 +440,7 @@ The database groups rows in one of two ways (you can see which with `EXPLAIN`, t
 
 ### What it is
 
-`HAVING` is a filter on **groups**. It runs **after** grouping and aggregation, so its condition can use aggregates such as `count(*) > 2`. `WHERE` is a filter on **rows** and runs *before* grouping, so it cannot.
+`HAVING` filters **groups**, **after** aggregation, so it can use aggregates (`count(*) > 2`). `WHERE` filters **rows** *before* grouping, so it cannot.
 
 | | `WHERE` | `HAVING` |
 |---|---|---|
@@ -555,11 +470,9 @@ Output:
 (2 rows)
 ```
 
-1. Group the 15 employees by `dept_id` (6 groups).
-2. Compute `count(*)` for each group.
-3. Keep only groups where the count is greater than 2 — Engineering and Sales.
+Group 15 employees into 6 groups, count each, keep groups over 2 — Engineering and Sales.
 
-Using `WHERE` and `HAVING` together is common: `WHERE` removes unwanted *rows*, then `HAVING` removes unwanted *groups*. "Among orders that were not cancelled, which customers ordered at least twice?"
+`WHERE` removes *rows*, then `HAVING` removes *groups*. "Among non-cancelled orders, which customers ordered at least twice?"
 
 ```sql
 SELECT customer_id, count(*) AS orders
@@ -582,9 +495,9 @@ Output:
 (4 rows)
 ```
 
-Customer 3 (Chen) has two orders in total, but one is cancelled; `WHERE` drops it first, the group then has 1 row, and `HAVING` drops the group.
+Customer 3 (Chen) has two orders but one is cancelled: `WHERE` drops it, the group has 1 row, `HAVING` drops the group.
 
-`HAVING` may use an aggregate that is not in the `SELECT` list, and may combine conditions with `AND`/`OR`:
+`HAVING` may use an aggregate not in the `SELECT` list, and combine conditions:
 
 ```sql
 SELECT dept_id
@@ -619,7 +532,7 @@ Output:
 (3 rows)
 ```
 
-In the first result the `NULL` group qualifies because it contains the CEO's salary.
+The `NULL` group qualifies in the first result because it holds the CEO's salary.
 
 ### An aggregate in WHERE is an error
 
@@ -635,36 +548,15 @@ LINE 1: SELECT dept_id, count(*) FROM employees WHERE count(*) > 2 G...
                                                       ^
 ```
 
-When `WHERE` runs, groups do not exist yet, so there is nothing to count (§4.5 shows the full order).
+When `WHERE` runs, groups don't exist yet (§4.5).
 
 ### Row conditions belong in WHERE
 
-A condition on a grouping column works in either place and gives the same answer:
-
-```sql
-SELECT dept_id, count(*) FROM employees GROUP BY dept_id HAVING dept_id = 2;
-SELECT dept_id, count(*) FROM employees WHERE dept_id = 2 GROUP BY dept_id;
-```
-
-Output:
-
-```text
- dept_id | count 
----------+-------
-       2 |     4
-(1 row)
-
- dept_id | count 
----------+-------
-       2 |     4
-(1 row)
-```
-
-Prefer `WHERE`: it removes rows *before* the expensive grouping, can use an index, and tells the reader "this is a row filter". (PostgreSQL's planner — the component that decides how to execute a query — often moves such a `HAVING` condition down into `WHERE` for you, but don't rely on every database doing so.)
+A condition on a grouping column gives the same answer in either place: `… GROUP BY dept_id HAVING dept_id = 2` and `… WHERE dept_id = 2 GROUP BY dept_id` both return `2 | 4`. Prefer `WHERE`: it removes rows *before* the expensive grouping, can use an index, and reads as a row filter. (PostgreSQL's planner — the component deciding how to execute a query — often pushes such a `HAVING` down into `WHERE`, but not every database does.)
 
 ### HAVING without GROUP BY
 
-If a query has `HAVING` but no `GROUP BY`, the whole input is treated as **one group**. The query returns that one row if the condition is true, and no rows otherwise:
+`HAVING` without `GROUP BY` treats the whole input as **one group**: one row if the condition holds, none otherwise:
 
 ```sql
 SELECT count(*) AS products FROM products HAVING count(*) > 5;
@@ -686,9 +578,9 @@ Output:
 
 ### Common mistakes
 
-- Putting an aggregate condition in `WHERE` (error) or a row condition in `HAVING` (works but slower and confusing).
-- Referring to a `SELECT` alias in `HAVING`: `HAVING headcount > 2` fails in PostgreSQL (`column "headcount" does not exist`), because `HAVING` is evaluated before `SELECT` names its outputs. Repeat the aggregate. (MySQL allows the alias as an extension.)
-- Forgetting that `WHERE` changes what `HAVING` sees (the Chen example).
+- Aggregate condition in `WHERE` (error) or row condition in `HAVING` (works, slower, confusing).
+- `SELECT` alias in `HAVING`: `HAVING headcount > 2` fails in PostgreSQL (`column "headcount" does not exist`) — `HAVING` runs before `SELECT` names outputs; repeat the aggregate. (MySQL allows the alias.)
+- Forgetting `WHERE` changes what `HAVING` sees (Chen).
 
 ### In the interview
 
@@ -700,13 +592,8 @@ Output:
 
 ### Self-check
 
-1. Which runs first, `WHERE` or `HAVING`? → `WHERE` (on rows), then grouping, then `HAVING` (on groups).
-2. Rewrite `HAVING dept_id <> 5` in the better place. → `WHERE dept_id <> 5` (before `GROUP BY`) — careful: `WHERE dept_id <> 5` also drops `NULL` rows, just as the `HAVING` version drops the `NULL` group.
-3. What does `SELECT count(*) FROM t HAVING count(*) > 0` return on an empty table? → No rows (the count is 0, so the one group is filtered out).
-
-### TL;DR
-
-`HAVING` = `WHERE` for groups. Aggregates go in `HAVING`; row filters go in `WHERE`. No `GROUP BY` → one big group.
+1. Rewrite `HAVING dept_id <> 5` in the better place. → `WHERE dept_id <> 5` — it also drops `NULL` rows, just as the `HAVING` version drops the `NULL` group.
+2. `SELECT count(*) FROM t HAVING count(*) > 0` on an empty table? → No rows (count 0 filters out the one group).
 
 ---
 
@@ -714,15 +601,15 @@ Output:
 
 ### What it is
 
-**Conditional aggregation** means aggregating only the rows that meet a condition, *inside* a single query, so you can compute several differently-filtered numbers side by side. PostgreSQL has a dedicated clause for it — `aggregate(...) FILTER (WHERE condition)` (SQL standard; PostgreSQL 9.4+, SQLite 3.30+). Every database supports the older trick of putting a `CASE` expression inside the aggregate.
+**Conditional aggregation** aggregates only rows meeting a condition, *inside* one query, so several differently-filtered numbers sit side by side. Standard clause: `aggregate(...) FILTER (WHERE condition)` (PostgreSQL 9.4+, SQLite 3.30+); every database supports a `CASE` inside the aggregate.
 
 ### The problem it solves
 
-"For each customer: total orders, delivered orders, cancelled orders, online orders." With plain `WHERE` you would need four queries (or four subqueries — queries nested inside another), each scanning (reading through every row of) `orders` again. Conditional aggregation does it in **one pass** over the table.
+"Per customer: total, delivered, cancelled, online orders." Plain `WHERE` needs four queries (or subqueries — queries nested inside another), each scanning `orders` again; conditional aggregation does it in **one pass**.
 
 ### How it works
 
-`FILTER (WHERE cond)` feeds only the rows where `cond` is true into that one aggregate. Other aggregates in the same query still see all rows of the group.
+`FILTER (WHERE cond)` feeds only matching rows into that one aggregate; other aggregates still see all rows of the group.
 
 ```sql
 SELECT customer_id,
@@ -751,40 +638,14 @@ Output:
 (8 rows)
 ```
 
-The portable version uses `CASE`. Two equivalent styles:
+The portable `CASE` versions give identical numbers (`code/04_conditional_aggregation.sql`):
 
-- `SUM(CASE WHEN cond THEN 1 ELSE 0 END)` — adds 1 for each matching row.
-- `COUNT(CASE WHEN cond THEN 1 END)` — the `CASE` gives `NULL` for non-matching rows, and `COUNT` skips `NULL`s.
-
-```sql
-SELECT customer_id,
-       count(*)                                          AS total,
-       sum(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END) AS delivered,
-       count(CASE WHEN status = 'cancelled' THEN 1 END)      AS cancelled
-FROM orders
-GROUP BY customer_id
-ORDER BY customer_id;
-```
-
-Output:
-
-```text
- customer_id | total | delivered | cancelled 
--------------+-------+-----------+-----------
-           1 |     3 |         2 |         0
-           2 |     2 |         2 |         0
-           3 |     2 |         1 |         1
-           4 |     1 |         0 |         1
-           5 |     2 |         1 |         0
-           6 |     2 |         0 |         0
-           7 |     1 |         0 |         0
-           8 |     1 |         1 |         0
-(8 rows)
-```
+- `SUM(CASE WHEN cond THEN 1 ELSE 0 END)` — adds 1 per matching row.
+- `COUNT(CASE WHEN cond THEN 1 END)` — non-matching rows give `NULL`, which `COUNT` skips.
 
 ### Ratios and percentages
 
-Conditional aggregates make "what share of X is Y" questions easy — divide a filtered aggregate by the unfiltered one. Multiply by `100.0` (not `100`) so integer inputs don't cause integer division.
+"What share of X is Y": divide a filtered aggregate by the unfiltered one, multiplying by `100.0` (not `100`) to avoid integer division.
 
 ```sql
 SELECT dept_id,
@@ -809,11 +670,11 @@ Output:
 (5 rows)
 ```
 
-Support shows `NULL`, not 0: its only employee was hired in 2023, so the filtered `SUM` saw no rows and returned `NULL`. Wrap it in `COALESCE(…, 0)` if the report should show 0.
+Support shows `NULL`, not 0: its only employee was hired in 2023, so the filtered `SUM` saw no rows. Use `COALESCE(…, 0)` to show 0.
 
 ### Pivot-style reports
 
-One column per category of something is called a **pivot** (rows turned into columns). Conditional aggregation is the standard way to pivot in SQL when the column list is known in advance:
+A **pivot** turns rows into columns (one column per category). Conditional aggregation is the standard SQL pivot when the columns are known in advance:
 
 ```sql
 SELECT p.category,
@@ -839,7 +700,7 @@ Output:
 (4 rows)
 ```
 
-Dynamic pivots (where the columns are not known until you look at the data) and `crosstab` (a PostgreSQL extension function that builds pivot tables) are covered in [Chapter 14](../14-advanced-sql-and-using-sql-from-code/README.md).
+Dynamic pivots (columns unknown until you see the data) and `crosstab` (a PostgreSQL extension function for pivots): [Chapter 14](../14-advanced-sql-and-using-sql-from-code/README.md).
 
 ### Trade-offs
 
@@ -850,13 +711,13 @@ Dynamic pivots (where the columns are not known until you look at the data) and 
 | `COUNT(CASE WHEN c THEN 1 END)` | Everywhere | Good | Relies on `COUNT` skipping `NULL`. |
 | Separate queries / subqueries | Everywhere | Verbose | Several scans of the table. |
 
-In MySQL a boolean expression is 0 or 1, so `SUM(status = 'delivered')` is a common MySQL shortcut (not valid in PostgreSQL, where `boolean` can't be summed; you would write `SUM((status = 'delivered')::int)`).
+MySQL booleans are 0/1, so `SUM(status = 'delivered')` works there; PostgreSQL can't sum `boolean` — write `SUM((status = 'delivered')::int)`.
 
 ### Common mistakes
 
-- `COUNT(CASE WHEN c THEN 1 ELSE 0 END)` — counts *every* row, because 0 is not `NULL`. Use `SUM` with `ELSE 0`, or `COUNT` with no `ELSE`.
-- Integer division in ratios (`100 * a / b` with integer `a`, `b`).
-- Putting the condition in `WHERE` when other columns need the unfiltered rows — that filters the rows for *all* aggregates.
+- `COUNT(CASE WHEN c THEN 1 ELSE 0 END)` counts *every* row (0 is not `NULL`). Use `SUM` with `ELSE 0`, or `COUNT` with no `ELSE`.
+- Integer division in ratios (`100 * a / b`).
+- Putting the condition in `WHERE` when other columns need unfiltered rows — it filters *all* aggregates.
 
 ### In the interview
 
@@ -867,13 +728,8 @@ In MySQL a boolean expression is 0 or 1, so `SUM(status = 'delivered')` is a com
 
 ### Self-check
 
-1. Write "number of employees with no email per department" two ways. → `COUNT(*) FILTER (WHERE email IS NULL)` and `SUM(CASE WHEN email IS NULL THEN 1 ELSE 0 END)`.
-2. What does a `FILTER`ed `SUM` return for a group where no row matches? → `NULL`.
-3. Why is `100.0` used instead of `100` in percentages? → To force numeric (decimal) arithmetic instead of integer division.
-
-### TL;DR
-
-Put the condition *inside* the aggregate (`FILTER (WHERE …)` or `CASE`) to compute many filtered numbers in one scan. It powers breakdowns, ratios and fixed pivots.
+1. "Employees with no email per department", two ways? → `COUNT(*) FILTER (WHERE email IS NULL)`; `SUM(CASE WHEN email IS NULL THEN 1 ELSE 0 END)`.
+2. A `FILTER`ed `SUM` where no row matches? → `NULL`.
 
 ---
 
@@ -881,22 +737,7 @@ Put the condition *inside* the aggregate (`FILTER (WHERE …)` or `CASE`) to com
 
 ### What it is
 
-You **write** a `SELECT` in this order: `SELECT … FROM … WHERE … GROUP BY … HAVING … ORDER BY … LIMIT`. The database **conceptually evaluates** it in a different order, starting with `FROM`. This *logical query processing order* is a mental model defined by the SQL standard's semantics: each step takes the table produced by the previous step and hands a new table to the next one.
-
-```mermaid
-flowchart TD
-    A["1. FROM and JOINs - build the input rows"] --> B["2. WHERE - keep rows where the condition is TRUE"]
-    B --> C["3. GROUP BY - split rows into groups"]
-    C --> D["4. Aggregates computed per group"]
-    D --> E["5. HAVING - keep groups where the condition is TRUE"]
-    E --> F["6. SELECT - compute output expressions, window functions, assign aliases"]
-    F --> G["7. DISTINCT - remove duplicate output rows"]
-    G --> H["8. UNION / INTERSECT / EXCEPT - combine with other queries"]
-    H --> I["9. ORDER BY - sort, may use aliases"]
-    I --> J["10. LIMIT / OFFSET or FETCH - keep a slice of the rows"]
-```
-
-*Figure 4.2 — Logical query processing order. Each step only sees what earlier steps produced.*
+You **write** `SELECT … FROM … WHERE … GROUP BY … HAVING … ORDER BY … LIMIT`; the database **conceptually evaluates** it starting with `FROM`. This *logical query processing order* is defined by the SQL standard's semantics: each step takes the previous step's table and hands a new table to the next, so each step only sees what earlier steps produced.
 
 | Step | Clause | Input → output | Can refer to |
 |---|---|---|---|
@@ -912,7 +753,7 @@ flowchart TD
 
 ### Why it matters
 
-Almost every "column does not exist" or "aggregate not allowed" error is explained by this order:
+It explains almost every "column does not exist" or "aggregate not allowed" error:
 
 - **`WHERE` can't use a `SELECT` alias** — the alias is created in step 6, `WHERE` is step 2.
 - **`WHERE` can't use aggregates** — groups don't exist until step 3.
@@ -920,7 +761,7 @@ Almost every "column does not exist" or "aggregate not allowed" error is explain
 - **`LIMIT` applies to the sorted, final rows** — so `ORDER BY … LIMIT 3` really means "top 3".
 - **Window functions can't be used in `WHERE`** — they are computed in step 6 ([Chapter 8](../08-window-functions/README.md)).
 
-It also guides efficient writing and debugging. Filtering rows as early as possible (in `WHERE`, step 2) means fewer rows to group, aggregate and sort later; and when a query returns surprising results, walking through the steps in this order — what rows does `FROM` produce, which survive `WHERE`, what groups form — usually shows where the logic went wrong.
+It also guides efficiency and debugging: filter early (`WHERE`, step 2) so fewer rows are grouped and sorted; and trace a surprising result step by step — what `FROM` produces, what survives `WHERE`, what groups form.
 
 ```sql
 SELECT emp_id, salary * 12 AS yearly FROM employees WHERE yearly > 2000000;
@@ -949,7 +790,7 @@ Output:
 (3 rows)
 ```
 
-Two fixes for the `WHERE` case: repeat the expression (`WHERE salary * 12 > 2000000`), or compute it in a **derived table** (a subquery in `FROM`, [Chapter 6](../06-subqueries-and-set-operations/README.md#66-table-subqueries-derived-tables-and-row-subqueries)) so that it becomes an input column of the outer query:
+Fix the `WHERE` case by repeating the expression (`WHERE salary * 12 > 2000000`) or computing it in a **derived table** (a subquery in `FROM`, [Chapter 6](../06-subqueries-and-set-operations/README.md#66-table-subqueries-derived-tables-and-row-subqueries)) so it becomes an input column:
 
 ```sql
 SELECT * FROM (SELECT emp_id, salary * 12 AS yearly FROM employees) t
@@ -989,18 +830,9 @@ Output:
 (3 rows)
 ```
 
-Tracing it step by step:
+Trace: **FROM** 15 rows → **WHERE** drops Asha (2015), Kiran (2016), Daniel (2017) → 12 rows → **GROUP BY** groups 1 (4), 2 (3), 3 (2), 4 (1: Omar), 5 (1: Li), `NULL` (1: Rohan) → aggregates → **HAVING** keeps 1, 2, 3 → **SELECT** names `headcount`, `avg_salary` → **ORDER BY** the alias → **LIMIT 3** keeps all three.
 
-1. **FROM** `employees` → 15 rows.
-2. **WHERE** hired in 2018 or later → drops Asha (2015), Kiran (2016) and Daniel (2017) → 12 rows.
-3. **GROUP BY** `dept_id` → groups 1 (4 rows), 2 (3 rows), 3 (2), 4 (1: Omar), 5 (1: Li), `NULL` (1: Rohan).
-4. **Aggregates** → count and average per group.
-5. **HAVING** `count(*) >= 2` → keeps groups 1, 2, 3.
-6. **SELECT** → computes `headcount`, `avg_salary` and names them.
-7. **ORDER BY** `avg_salary DESC` (an alias — allowed here).
-8. **LIMIT 3** → all three survive.
-
-`DISTINCT` happens after `SELECT` and before `ORDER BY` and `LIMIT`, and `ORDER BY` may even sort by an aggregate that is not selected:
+`DISTINCT` happens after `SELECT` and before `ORDER BY`/`LIMIT`, and `ORDER BY` may sort by an aggregate that is not selected:
 
 ```sql
 SELECT DISTINCT job_title FROM employees ORDER BY job_title LIMIT 4;
@@ -1032,7 +864,7 @@ Output:
 
 ### Logical order is not physical order
 
-The logical order defines **what the answer is**, not **how the database computes it**. The query planner is free to do things in any order that gives the same answer: it may push a `WHERE` condition into a join, use an index so rows arrive already sorted and skip the sort step, stop reading once `LIMIT` rows are found, or move a `HAVING` condition on a grouping column down into the scan. `EXPLAIN` shows the physical plan ([Chapter 12](../12-indexes-storage-and-query-performance/README.md)).
+The logical order defines **what the answer is**, not **how it is computed**. The planner may push a `WHERE` into a join, read rows pre-sorted from an index and skip the sort, stop once `LIMIT` rows are found, or move a `HAVING` on a grouping column into the scan. `EXPLAIN` shows the physical plan ([Chapter 12](../12-indexes-storage-and-query-performance/README.md)).
 
 ### Dialect notes
 
@@ -1055,13 +887,8 @@ The extensions work because those databases look the name up among the output co
 
 ### Self-check
 
-1. Put in logical order: `HAVING`, `FROM`, `ORDER BY`, `SELECT`, `WHERE`, `GROUP BY`, `LIMIT`. → `FROM`, `WHERE`, `GROUP BY`, `HAVING`, `SELECT`, `ORDER BY`, `LIMIT`.
-2. Why does `ORDER BY yearly` work but `WHERE yearly > …` fail? → `ORDER BY` runs after `SELECT` creates the alias; `WHERE` runs before.
-3. Where do window functions run? → In the `SELECT` step — after `HAVING`, before `DISTINCT`/`ORDER BY`.
-
-### TL;DR
-
-**F**rom → **W**here → **G**roup by → **H**aving → **S**elect → **D**istinct → **O**rder by → **L**imit. A clause can only use what earlier steps produced. Logical order ≠ execution plan.
+1. Order: `HAVING`, `FROM`, `ORDER BY`, `SELECT`, `WHERE`, `GROUP BY`, `LIMIT`? → `FROM`, `WHERE`, `GROUP BY`, `HAVING`, `SELECT`, `ORDER BY`, `LIMIT` (mnemonic F-W-G-H-S-D-O-L, with `DISTINCT` after `SELECT`).
+2. Where do window functions run? → In the `SELECT` step — after `HAVING`, before `DISTINCT`/`ORDER BY`.
 
 ---
 
@@ -1069,7 +896,7 @@ The extensions work because those databases look the name up among the output co
 
 ### What it is
 
-A normal `GROUP BY` produces one level of detail. Reports often need **several levels at once**: revenue per country *and* category, a subtotal per country, and a grand total. `GROUPING SETS`, `ROLLUP` and `CUBE` (SQL:1999; PostgreSQL 9.5+) produce all of those levels in one query, as if several `GROUP BY` queries had been glued together with `UNION ALL` (which stacks the rows of several queries into one result).
+Reports often need **several levels at once**: revenue per country *and* category, per-country subtotals, a grand total. `GROUPING SETS`, `ROLLUP` and `CUBE` (SQL:1999; PostgreSQL 9.5+) produce them in one query, as if several `GROUP BY` queries were stacked with `UNION ALL` (which appends the rows of several queries).
 
 | Syntax | Groupings produced | Example with `(country, category)` |
 |---|---|---|
@@ -1077,11 +904,11 @@ A normal `GROUP BY` produces one level of detail. Reports often need **several l
 | `ROLLUP (a, b)` | `(a, b)`, `(a)`, `()` — a hierarchy, dropping columns from the right | detail, per-country subtotal, grand total |
 | `CUBE (a, b)` | every subset: `(a, b)`, `(a)`, `(b)`, `()` — 2ⁿ groupings | detail, per-country, per-category, grand total |
 
-In a subtotal row, a column that was "rolled up" is shown as `NULL`. The function `GROUPING(col)` returns 1 when `col` is `NULL` *because it was rolled up*, and 0 when it is a real value — which is how you tell a subtotal `NULL` from a genuine `NULL` in the data.
+A "rolled-up" column shows as `NULL` in subtotal rows. `GROUPING(col)` returns 1 when `col` is `NULL` *because it was rolled up* and 0 otherwise — telling a subtotal `NULL` from a genuine data `NULL`.
 
 ### How it works
 
-We first define a small view (a saved query, [Chapter 7](../07-ctes-views-and-recursion/README.md)) with one row per non-cancelled order line:
+A view (a saved query, [Chapter 7](../07-ctes-views-and-recursion/README.md)) with one row per non-cancelled order line:
 
 ```sql
 CREATE VIEW sales AS
@@ -1123,7 +950,7 @@ Output:
 (12 rows)
 ```
 
-The rows with `category = (null)` are the per-country subtotals; the last row (both `NULL`) is the grand total. Replacing those `NULL`s with labels using `GROUPING()`:
+`category = (null)` rows are per-country subtotals; the last row is the grand total. Labelling them with `GROUPING()`:
 
 ```sql
 SELECT CASE WHEN grouping(country) = 1 THEN 'ALL countries' ELSE country END AS country,
@@ -1137,24 +964,18 @@ ORDER BY grouping(country), country, grouping(category), category;
 Output:
 
 ```text
-    country    |    category    | revenue 
+    country    |    category    | revenue
 ---------------+----------------+---------
  India         | Accessories    |  621.85
- India         | Electronics    | 2558.04
- India         | Furniture      | 1441.47
+ ...
  India         | ALL categories | 4621.36
- UK            | Accessories    |   49.50
- UK            | Electronics    | 1808.86
- UK            | Furniture      |  499.00
- UK            | ALL categories | 2357.36
- USA           | Electronics    |  324.90
- USA           | Other          |  100.00
+ ...
  USA           | ALL categories |  424.90
  ALL countries | ALL categories | 7403.62
 (12 rows)
 ```
 
-**CUBE** adds the per-category totals across all countries. `grouping(country, category)` returns a bit mask (a number whose binary digits each flag one column: here the left bit is `country`, the right bit `category`) — 0 for detail rows, 1 when `category` was rolled up, 2 when `country` was, 3 for the grand total:
+**CUBE** adds per-category totals across countries. `grouping(country, category)` returns a bit mask (each binary digit flags one column: left bit `country`, right bit `category`) — 0 detail, 1 `category` rolled up, 2 `country` rolled up, 3 grand total:
 
 ```sql
 SELECT country, category, round(sum(revenue), 2) AS revenue,
@@ -1170,13 +991,7 @@ Output:
  country |  category   | revenue | level_bits 
 ---------+-------------+---------+------------
  India   | Accessories |  621.85 |          0
- India   | Electronics | 2558.04 |          0
- India   | Furniture   | 1441.47 |          0
- UK      | Accessories |   49.50 |          0
- UK      | Electronics | 1808.86 |          0
- UK      | Furniture   |  499.00 |          0
- USA     | Electronics |  324.90 |          0
- USA     | Other       |  100.00 |          0
+ ...                                (8 detail rows)
  India   | (null)      | 4621.36 |          1
  UK      | (null)      | 2357.36 |          1
  USA     | (null)      |  424.90 |          1
@@ -1188,7 +1003,7 @@ Output:
 (16 rows)
 ```
 
-**GROUPING SETS** lets you pick exactly the levels you want — here one total per country, one per category, and the grand total, but no country × category detail:
+**GROUPING SETS** picks exactly the levels — per country, per category, grand total, no detail:
 
 ```sql
 SELECT country, category, count(*) AS lines
@@ -1230,9 +1045,9 @@ Output:
 
 ### Common mistakes
 
-- Confusing a subtotal `NULL` with a real `NULL` in the data (use `GROUPING()`; or, as the view does, `COALESCE` real `NULL`s to a label first).
-- Expecting subtotals in a particular order — add an `ORDER BY` (often on `GROUPING(...)`).
-- Using `CUBE` on many columns: 5 columns = 32 groupings.
+- Confusing a subtotal `NULL` with a real one (use `GROUPING()`, or `COALESCE` real `NULL`s to a label first, as the view does).
+- Expecting subtotals in some order — `ORDER BY` (often on `GROUPING(...)`).
+- `CUBE` on many columns: 5 columns = 32 groupings.
 
 ### In the interview
 
@@ -1243,13 +1058,8 @@ Output:
 
 ### Self-check
 
-1. Which groupings does `ROLLUP (year, month, day)` produce? → `(year, month, day)`, `(year, month)`, `(year)`, `()`.
-2. What does `GROUPING(country)` return on the grand-total row? → 1.
-3. Rewrite `GROUP BY ROLLUP (a)` with `GROUPING SETS`. → `GROUP BY GROUPING SETS ((a), ())`.
-
-### TL;DR
-
-`ROLLUP` = hierarchy of subtotals + grand total; `CUBE` = all combinations; `GROUPING SETS` = exactly the ones you list. Use `GROUPING()` to label subtotal rows.
+1. Groupings of `ROLLUP (year, month, day)`? → `(year, month, day)`, `(year, month)`, `(year)`, `()`.
+2. `GROUP BY ROLLUP (a)` as `GROUPING SETS`? → `GROUP BY GROUPING SETS ((a), ())`.
 
 ---
 

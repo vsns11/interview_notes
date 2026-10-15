@@ -1,21 +1,10 @@
 # Chapter 6 — Subqueries and Set Operations
 
-Some questions need **the answer to another question first**. "Who earns more than the average?" needs the average before it can compare. "Which customers never ordered?" needs the list of customers who *did*. SQL lets you put one query **inside** another — a **subquery** — and use its result as a value, a list, or a whole table. The second half of the chapter covers the other way of combining queries: stacking or comparing their results with the **set operators** `UNION`, `INTERSECT` and `EXCEPT`.
+Some questions need **another answer first**: "who earns more than average?" needs the average; "which customers never ordered?" needs those who did. A **subquery** is a query **inside** another, whose result serves as a value, a list or a table. The second half covers stacking or comparing whole results with the **set operators** `UNION`, `INTERSECT` and `EXCEPT`.
 
-**What you'll learn**
+**Sections:** 6.1 subqueries (scalar, row, table; non-correlated vs correlated) · 6.2 `IN`/`NOT IN` and the `NULL` trap · 6.3 correlated subqueries · 6.4 `EXISTS` · 6.5 `ANY`/`SOME`/`ALL` · 6.6 derived tables and row subqueries · 6.7 `LATERAL` for top-N per group (the first *N* rows inside each group) · 6.8–6.10 `UNION`, `INTERSECT`, `EXCEPT` (and `ALL` forms) · 6.11 precedence, sorting, choosing a tool.
 
-- What a subquery (nested query) is, where it can appear, and the three shapes of result it can return: **scalar**, **row**, **table**.
-- **Non-correlated** subqueries (run once) vs **correlated** subqueries (conceptually re-run for every outer row), and how PostgreSQL actually executes them.
-- Multi-row subqueries with `IN`, `EXISTS`, `ANY`/`SOME`/`ALL` — and the famous `NOT IN` + `NULL` trap.
-- **Derived tables** (subqueries in `FROM`), row subqueries, and `LATERAL` for "top-N per group" (the first *N* rows inside each group, e.g. the two best-paid people in every department).
-- The set operations `UNION`, `UNION ALL`, `INTERSECT`, `EXCEPT` (and their `ALL` forms): rules, `NULL` handling, precedence, sorting, and when to prefer a join or `EXISTS` instead.
-
-**How to run the examples.** All queries are in [`code/`](code/) and ran on the book's private PostgreSQL 14; outputs are real `psql` output, `NULL` shown as `(null)`. Data: the book's `company` database ([`code/00_schema.sql`](code/00_schema.sql); see [Chapter 1](../01-databases-and-the-relational-model/README.md)).
-
-```bash
-bash tools_run_sql.sh sql '06-*'
-bash tools_pg.sh psql -d <db> -f sql/chapters/06-subqueries-and-set-operations/code/04_exists.sql
-```
+**Running the examples.** All queries are in [`code/`](code/) (`bash tools_run_sql.sh sql '06-*'`), real psql output from PostgreSQL 14, `NULL` shown as `(null)`, on the `company` database ([`code/00_schema.sql`](code/00_schema.sql); [Chapter 1](../01-databases-and-the-relational-model/README.md)).
 
 ---
 
@@ -23,9 +12,7 @@ bash tools_pg.sh psql -d <db> -f sql/chapters/06-subqueries-and-set-operations/c
 
 ### What it is
 
-A **subquery** (also called a **nested query** or **inner query**) is a complete `SELECT` statement written in parentheses inside another SQL statement (the **outer query**). The database evaluates the subquery and uses its result in the outer query — as a single value, as a list of values to compare against, or as a temporary table.
-
-Analogy: asking a colleague "what is the team's average salary?" before you can answer your manager's question "who earns more than average?". The colleague's answer is the subquery.
+A **subquery** (**nested query**, **inner query**) is a complete `SELECT` in parentheses inside another statement (the **outer query**), whose result is used as a single value, a list to compare against, or a temporary table.
 
 ### Where a subquery can appear
 
@@ -41,9 +28,7 @@ Analogy: asking a colleague "what is the team's average salary?" before you can 
 
 ### Types of subqueries
 
-Subqueries are classified in two independent ways:
-
-**By the shape of their result**
+Two independent classifications. **By result shape:**
 
 | Type | Returns | Typical operators |
 |---|---|---|
@@ -52,22 +37,14 @@ Subqueries are classified in two independent ways:
 | **Column / multi-row subquery** | one column, many rows | `IN`, `NOT IN`, `ANY`, `ALL` |
 | **Table subquery** | many rows and columns | `FROM`, `EXISTS`, `IN` with row values |
 
-**By dependence on the outer query**
+**By dependence on the outer query:**
 
 | Type | Meaning | Evaluated |
 |---|---|---|
 | **Non-correlated** (simple, nested) | The inner query does not mention the outer query's tables. It can run on its own. | Conceptually **once**; the result is reused. |
 | **Correlated** | The inner query refers to a column of the current outer row (e.g. `WHERE x.dept_id = e.dept_id`). It can't run on its own. | Conceptually **once per outer row** (§6.3). |
 
-Textbooks and courses name the same shapes in slightly different ways. How the common names map onto the two tables above:
-
-| Name you may meet | What it means | Example in this chapter |
-|---|---|---|
-| Nested scalar subquery | returns one value, used in a comparison | `salary > (SELECT avg(salary) …)` (below) |
-| Single-row subquery | returns at most one row (one or several columns); used with `=`, `<`, `>` or a row constructor | `(dept_id, job_title) = (SELECT … WHERE emp_id = 4)` (§6.6) |
-| Multiple-row subquery | returns several rows; needs `IN`, `ANY`, `ALL` or `EXISTS` | `dept_id IN (SELECT dept_id … 'Mumbai')` (§6.2) |
-| Single-column subquery | returns one column (one or many rows) | every `IN (SELECT one_column …)` |
-| Correlated subquery | refers to the outer row | "above *their own* department's average" (§6.3) |
+Other names you may meet: *nested scalar subquery* (one value in a comparison, below); *single-row subquery* (at most one row, used with `=`, `<`, `>` or a row constructor, §6.6); *multiple-row subquery* (several rows, needs `IN`, `ANY`, `ALL` or `EXISTS`, §6.2); *single-column subquery* (one column, one or many rows — every `IN (SELECT one_column …)`).
 
 ### How a non-correlated scalar subquery works
 
@@ -92,13 +69,9 @@ Output:
 (6 rows)
 ```
 
-1. The database runs the inner query once: the average salary is 107,800.
-2. It substitutes that value, so the outer query becomes `WHERE salary > 107800`.
-3. It runs the outer query.
+The inner query runs once (average 107,800), the value is substituted (`WHERE salary > 107800`), then the outer query runs. Without a subquery the application needs two round trips (request plus reply) — and the value could change between them.
 
-Without a subquery you would need two round trips (a request sent to the database plus its reply) from your application (fetch the average, then send a second query) — and the value could change between them.
-
-A scalar subquery can be used anywhere a single value can, including the `SELECT` list and arithmetic:
+A scalar subquery works anywhere a single value can, including the `SELECT` list and arithmetic:
 
 ```sql
 SELECT first_name, salary,
@@ -121,7 +94,7 @@ Output:
 (4 rows)
 ```
 
-Two classic uses — "the row with the extreme value" and "the second-highest value":
+Classic uses — the row with the extreme value, and the second-highest value:
 
 ```sql
 SELECT first_name, hire_date FROM employees
@@ -146,11 +119,11 @@ Output:
 (1 row)
 ```
 
-The second query reads "the largest salary that is smaller than the largest salary". (For the *N*-th highest in general, window functions — functions that compute over related rows while keeping every row — such as `DENSE_RANK()` are cleaner — [Chapter 8](../08-window-functions/README.md) — and interview versions are in [Chapter 19](../19-sql-interview-problems-2/README.md).)
+"The largest salary smaller than the largest salary." For the *N*-th highest, window functions (compute over related rows while keeping every row) such as `DENSE_RANK()` are cleaner ([Chapter 8](../08-window-functions/README.md); interview versions in [Chapter 19](../19-sql-interview-problems-2/README.md)).
 
 ### Scalar subqueries: the two edge cases
 
-If a scalar subquery returns **no rows**, its value is `NULL`:
+**No rows** → `NULL`:
 
 ```sql
 SELECT (SELECT salary FROM employees WHERE emp_id = 999) AS missing;
@@ -163,7 +136,7 @@ SELECT (SELECT salary FROM employees WHERE emp_id = 999) AS missing;
 (1 row)
 ```
 
-If it returns **more than one row**, the query fails at run time:
+**More than one row** → run-time failure:
 
 ```sql
 SELECT first_name FROM employees
@@ -174,23 +147,18 @@ WHERE salary = (SELECT salary FROM employees WHERE dept_id = 1);
 ERROR:  more than one row returned by a subquery used as an expression
 ```
 
-This error depends on the **data**, not just the query — it can work in testing and fail in production (the live system real users depend on) once a second matching row appears. If more than one row is possible, use `IN` (§6.2), or make the subquery provably single-row (aggregate it, or filter on a unique key).
+The error depends on the **data** — it can pass testing and fail in production once a second matching row appears. If several rows are possible, use `IN` (§6.2) or make the subquery provably single-row (aggregate, or filter on a unique key).
 
 ### Common mistakes
 
-- Using `=` with a subquery that can return several rows (use `IN`).
-- Forgetting the parentheses, or putting `ORDER BY` inside a subquery and expecting the outer result to be ordered (only the outermost `ORDER BY` orders the final result).
-- Writing a subquery where a join is simpler — e.g. fetching a column from a related table for every row (see §6.3 for when each is better).
+- `=` with a subquery that can return several rows (use `IN`).
+- `ORDER BY` inside a subquery expecting an ordered outer result — only the outermost `ORDER BY` counts.
+- A subquery where a join is simpler, e.g. fetching a related column for every row (§6.3).
 
 ### Self-check
 
-1. What does a scalar subquery return when it finds no row? → `NULL`.
-2. Is `(SELECT avg(salary) FROM employees)` correlated? → No — it doesn't refer to any outer table, so it runs once.
-3. Name the four places a subquery can appear in a `SELECT`. → `SELECT` list, `FROM`/`JOIN`, `WHERE`, `HAVING`.
-
-### TL;DR
-
-A subquery is a `SELECT` inside parentheses. By result: scalar, row, column, table. By dependence: non-correlated (runs once) or correlated (per outer row). Scalar with 0 rows → `NULL`; with 2+ rows → error.
+1. Is `(SELECT avg(salary) FROM employees)` correlated? → No — it refers to no outer table, so it runs once.
+2. Four places a subquery can appear in a `SELECT`? → `SELECT` list, `FROM`/`JOIN`, `WHERE`, `HAVING`.
 
 ---
 
@@ -198,7 +166,7 @@ A subquery is a `SELECT` inside parentheses. By result: scalar, row, column, tab
 
 ### What it is
 
-When the subquery returns **one column with many rows**, you compare against the whole list. `x IN (subquery)` is true if `x` equals **any** value in the list; `x NOT IN (subquery)` is true if `x` equals **none** of them.
+For **one column, many rows**: `x IN (subquery)` is true if `x` equals **any** value; `x NOT IN (subquery)` if it equals **none**.
 
 ```sql
 SELECT first_name, dept_id FROM employees
@@ -220,9 +188,7 @@ Output:
 (6 rows)
 ```
 
-The subquery returns `{2, 3}` (Sales and Marketing are in Mumbai), and the outer query keeps employees whose `dept_id` is in that set. `IN` never produces duplicates in the outer result, even if the list contains a value many times — it's a semi-join (each outer row is returned at most once if it has any match; [Chapter 5](../05-joins/README.md#58-semi-joins-and-anti-joins)).
-
-The subquery can have its own joins and filters:
+The subquery returns `{2, 3}` (Mumbai departments). `IN` never duplicates outer rows even if the list repeats values — it is a semi-join (each outer row at most once; [Chapter 5](../05-joins/README.md#58-semi-joins-and-anti-joins)). The subquery can have its own joins and filters:
 
 ```sql
 SELECT name FROM products
@@ -239,18 +205,14 @@ Output:
 -----------------------------
  Ergonomic Chair
  Gift Card
- Laptop Pro 14
- Mechanical Keyboard
- Noise-Cancelling Headphones
- Standing Desk
- USB-C Hub
+ ...
  Wireless Mouse
 (8 rows)
 ```
 
 ### Nesting several levels
 
-Subqueries can be nested inside subqueries. Read them **from the innermost outwards**: Furniture products → orders containing them → the customers of those orders.
+Read nested subqueries **from the innermost outwards**: Furniture products → orders containing them → their customers.
 
 ```sql
 SELECT first_name, last_name FROM customers
@@ -273,7 +235,7 @@ Output:
 (3 rows)
 ```
 
-Deep nesting is legal but hard to read; the same question is usually clearer as joins plus `DISTINCT`/`EXISTS`, or as a chain of CTEs (Common Table Expressions — named subqueries written with `WITH`; [Chapter 7](../07-ctes-views-and-recursion/README.md)).
+Deep nesting is legal but hard to read; joins plus `DISTINCT`/`EXISTS`, or a chain of CTEs (Common Table Expressions — named subqueries written with `WITH`; [Chapter 7](../07-ctes-views-and-recursion/README.md)), are usually clearer.
 
 ### The NOT IN trap
 
@@ -293,7 +255,7 @@ Output:
 (1 row)
 ```
 
-Zero — obviously wrong. The subquery's list contains a `NULL` (the CEO has no manager). `x NOT IN (a, b, NULL)` means `x <> a AND x <> b AND x <> NULL`. The last comparison is UNKNOWN for every `x`, so the whole condition can never be TRUE — at best UNKNOWN — and `WHERE` keeps only TRUE rows ([three-valued logic, Chapter 2](../02-select-basics/README.md)). One `NULL` in the list silently empties the result.
+Zero — wrong. The list contains a `NULL` (the CEO has no manager). `x NOT IN (a, b, NULL)` means `x <> a AND x <> b AND x <> NULL`; the last part is UNKNOWN for every `x`, so the condition is never TRUE and `WHERE` keeps nothing ([three-valued logic, Chapter 2](../02-select-basics/README.md)).
 
 | Condition | `x = 3`, list `(1, 2)` | `x = 3`, list `(1, 2, NULL)` | `x = 1`, list `(1, 2, NULL)` |
 |---|---|---|---|
@@ -317,22 +279,16 @@ ORDER BY emp_id;
 Output (both):
 
 ```text
- first_name 
+ first_name
 ------------
  Neha
  Rahul
- Meera
- Priya
- Arjun
- Sara
- Ananya
- Omar
- Li
+ ...
  Rohan
 (10 rows)
 ```
 
-Prefer `NOT EXISTS`: it is correct whatever the data, states the intent ("there is no row that…"), and PostgreSQL plans it as an efficient anti join (a join that returns only the outer rows with *no* match), whereas `NOT IN (subquery)` must stay a filter that checks the whole list (hashed — loaded into an in-memory hash table, a structure that finds a value in about one step — if it fits in memory, otherwise re-scanned per row).
+Prefer `NOT EXISTS`: correct whatever the data, states the intent, and PostgreSQL plans it as an anti join (returns outer rows with *no* match), whereas `NOT IN (subquery)` stays a filter checking the whole list (hashed into an in-memory hash table if it fits, otherwise re-scanned per row).
 
 ### In the interview
 
@@ -343,12 +299,8 @@ Prefer `NOT EXISTS`: it is correct whatever the data, states the intent ("there 
 
 ### Self-check
 
-1. `SELECT 5 NOT IN (1, 2, NULL)` returns? → `NULL` (UNKNOWN).
-2. Which three columns in our schema would make a `NOT IN (SELECT col …)` risky? → Any nullable one, e.g. `employees.manager_id`, `employees.dept_id`, `orders.sales_rep_id`.
-
-### TL;DR
-
-`IN` = "is in the list"; `NOT IN` + a `NULL` in the list = empty result. Anti-joins: use `NOT EXISTS`.
+1. `SELECT 5 NOT IN (1, 2, NULL)`? → `NULL` (UNKNOWN).
+2. Columns in our schema that make `NOT IN (SELECT col …)` risky? → Any nullable one: `employees.manager_id`, `employees.dept_id`, `orders.sales_rep_id`.
 
 ---
 
@@ -356,9 +308,7 @@ Prefer `NOT EXISTS`: it is correct whatever the data, states the intent ("there 
 
 ### What it is
 
-A **correlated subquery** refers to a column of the **current row of the outer query**. It therefore can't be run once up front: conceptually, the database runs it again for every outer row, with that row's values plugged in.
-
-Analogy: a teacher checking each student's mark against *that student's own class average*. The average to compare with changes as the teacher moves from student to student.
+A **correlated subquery** refers to a column of the **current outer row**, so it can't run once up front: conceptually it re-runs for every outer row with that row's values plugged in.
 
 ### How it works
 
@@ -384,14 +334,11 @@ Output:
 (5 rows)
 ```
 
-1. Take the first outer row, e.g. Vikram with `e.dept_id = 1`.
-2. Run the inner query with `e.dept_id` replaced by 1 → average of Engineering = 130,750.
-3. Keep Vikram if 185,000 > 130,750. Move to the next outer row and repeat.
-4. Asha and Rohan (`dept_id` `NULL`) are never kept: `x.dept_id = NULL` matches nothing, so the average is `NULL` and the comparison is UNKNOWN.
+For Vikram (`e.dept_id = 1`) the inner query gives Engineering's average 130,750; 185,000 > 130,750, so he is kept; repeat per row. Asha and Rohan (`dept_id` `NULL`) are never kept: `x.dept_id = NULL` matches nothing, the average is `NULL`, the comparison UNKNOWN.
 
-The aliases `e` (outer) and `x` (inner) are essential — both refer to `employees`, and the alias tells SQL which copy each column belongs to. An unqualified column in a subquery is resolved to the **nearest** table that has it (the inner one first), which can silently turn a correlated subquery into a non-correlated one or vice versa.
+The aliases `e` (outer) and `x` (inner) are essential: an unqualified column resolves to the **nearest** table that has it (inner first), which can silently turn a correlated subquery into a non-correlated one or vice versa.
 
-"The top earner in each department" (ties would all be returned):
+Top earner per department (ties all returned):
 
 ```sql
 SELECT e.dept_id, e.first_name, e.salary
@@ -415,7 +362,7 @@ Output:
 
 ### Correlated subqueries in SELECT, and the join alternative
 
-A correlated scalar subquery in the `SELECT` list works like a per-row lookup:
+In the `SELECT` list it works like a per-row lookup:
 
 ```sql
 SELECT c.customer_id, c.first_name,
@@ -432,12 +379,7 @@ Output:
 -------------+------------+--------+------------
            1 | Anita      |      3 | 2025-06-02
            2 | Ben        |      2 | 2025-04-01
-           3 | Chen       |      2 | 2025-05-06
-           4 | Divya      |      1 | 2025-02-28
-           5 | Ethan      |      2 | 2025-05-20
-           6 | Fatima     |      2 | 2025-06-15
-           7 | George     |      1 | 2025-04-25
-           8 | Anita      |      1 | 2025-04-09
+ ...
            9 | Hana       |      0 | (null)
           10 | Ivan       |      0 | (null)
 (10 rows)
@@ -452,7 +394,7 @@ GROUP BY c.customer_id, c.first_name
 ORDER BY c.customer_id;
 ```
 
-(Identical output — omitted.) How PostgreSQL's optimizer (the component that decides how to run a query) executes the subquery version, as shown by `EXPLAIN` (which prints the chosen plan; `Seq Scan` = read the whole table):
+(Identical output.) How the optimizer runs the subquery version, per `EXPLAIN` (prints the chosen plan; `Seq Scan` = read the whole table):
 
 ```sql
 EXPLAIN (COSTS OFF)
@@ -471,7 +413,7 @@ FROM customers c;
 (5 rows)
 ```
 
-`SubPlan 1` under the customers scan means the inner aggregate really **runs once per customer**. With an index on `orders.customer_id` (an **index** is a sorted lookup structure that finds rows by a column's value without reading the whole table) each run is a quick index lookup, and for a page of 20 rows that is perfectly fine. Over a million customers it's a million lookups, where the join version reads `orders` once and aggregates everything with a single hash join (build a hash table from one input, then probe it with each row of the other).
+`SubPlan 1` means the inner aggregate really **runs once per customer**. With an index on `orders.customer_id` (an **index** is a sorted lookup structure finding rows by value without reading the whole table) each run is a quick lookup — fine for a page of 20 rows. Over a million customers it's a million lookups, while the join version reads `orders` once with a single hash join (build a hash table from one input, probe it with the other).
 
 | | Correlated subquery | Join + `GROUP BY` (or derived table) |
 |---|---|---|
@@ -480,11 +422,11 @@ FROM customers c;
 | Multiple values from the same lookup | One subquery **per value** (repeated work) | One join gives all columns |
 | Risk | Slow on large outer tables without an index | Fan-out if you join several children (Chapter 5 §5.9) |
 
-Rule of thumb: `EXISTS`/`NOT EXISTS` correlated subqueries are excellent and idiomatic. For scalar lookups over **many** rows, prefer a join, a derived table, or `LATERAL` (§6.7).
+Rule: correlated `EXISTS`/`NOT EXISTS` are excellent and idiomatic; for scalar lookups over **many** rows prefer a join, derived table or `LATERAL` (§6.7).
 
 ### Correlated subqueries in UPDATE and DELETE
 
-Correlated subqueries are also the standard way to update a table from related data:
+The standard way to update a table from related data:
 
 ```sql
 ALTER TABLE projects ADD COLUMN total_hours int;
@@ -510,9 +452,9 @@ Output:
 
 ### Common mistakes
 
-- Forgetting to correlate (`WHERE x.dept_id = dept_id` without the outer alias resolves to `x.dept_id = x.dept_id`, which is always true for non-NULL values).
-- A correlated scalar subquery that can return two rows (error at run time).
-- Using per-row subqueries for large reports without an index on the correlated column.
+- Forgetting to correlate: `WHERE x.dept_id = dept_id` resolves to `x.dept_id = x.dept_id`, always true for non-NULL values.
+- A correlated scalar subquery that can return two rows (run-time error).
+- Per-row subqueries in large reports without an index on the correlated column.
 
 ### In the interview
 
@@ -523,13 +465,7 @@ Output:
 
 ### Self-check
 
-1. Why are Asha and Rohan never returned by the "above department average" query? → Their `dept_id` is `NULL`, so the inner average is `NULL` and the comparison is UNKNOWN.
-2. What does `SubPlan` in an `EXPLAIN` tell you? → A subquery evaluated (potentially) once per outer row.
-3. Is `WHERE EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.customer_id)` correlated? → Yes (it references `c`).
-
-### TL;DR
-
-Correlated = refers to the outer row, evaluated per outer row. Great with `EXISTS`; for big scalar lookups prefer joins, derived tables or window functions.
+1. What does `SubPlan` in an `EXPLAIN` tell you? → A subquery evaluated (potentially) once per outer row.
 
 ---
 
@@ -537,7 +473,7 @@ Correlated = refers to the outer row, evaluated per outer row. Great with `EXIST
 
 ### What it is
 
-`EXISTS (subquery)` is TRUE if the subquery returns **at least one row**, FALSE if it returns none. It never returns UNKNOWN, and it doesn't care what the subquery's `SELECT` list contains. `NOT EXISTS` is the opposite. They are almost always correlated.
+`EXISTS (subquery)` is TRUE if the subquery returns **at least one row**, else FALSE — never UNKNOWN, and the subquery's `SELECT` list is irrelevant. `NOT EXISTS` is the opposite. Both are almost always correlated.
 
 ```sql
 SELECT d.name FROM departments d
@@ -555,21 +491,7 @@ Output:
 (2 rows)
 ```
 
-"Departments that have at least one project still running." The database can stop searching as soon as it finds one matching project for a department.
-
-Because only the existence of a row matters, `SELECT 1`, `SELECT *` or even `SELECT NULL` inside `EXISTS` all behave identically; `SELECT 1` is a common convention that signals "I don't need the columns".
-
-```sql
-SELECT count(*) FROM departments d
-WHERE EXISTS (SELECT NULL FROM employees e WHERE e.dept_id = d.dept_id);
-```
-
-```text
- count 
--------
-     5
-(1 row)
-```
+Departments with a project still running; the search stops at the first match per department. `SELECT 1`, `SELECT *` or even `SELECT NULL` inside `EXISTS` behave identically (`EXISTS (SELECT NULL FROM employees e WHERE e.dept_id = d.dept_id)` still counts 5 departments); `SELECT 1` signals "no columns needed".
 
 ### NOT EXISTS — the anti-join
 
@@ -595,7 +517,7 @@ Output:
 
 ### "For all" questions: double NOT EXISTS
 
-SQL has no "for all" operator, but "X for **all** Y" is the same as "there is **no** Y for which X is missing". Which customers bought **every** Accessories product?
+No "for all" operator exists, but "X for **all** Y" = "**no** Y for which X is missing". Customers who bought **every** Accessories product:
 
 ```sql
 SELECT c.customer_id, c.first_name FROM customers c
@@ -615,11 +537,11 @@ Output:
 (1 row)
 ```
 
-Read it as: "customers for whom there is no Accessories product that they have not bought". This pattern is called **relational division**. An often simpler alternative is counting: group each customer's distinct Accessories purchases and keep those whose count equals the number of Accessories products (`HAVING count(DISTINCT product_id) = (SELECT count(*) FROM products WHERE category = 'Accessories')`).
+"Customers for whom no Accessories product is unbought" — **relational division**. Often simpler: count each customer's distinct Accessories purchases and keep those matching the total (`HAVING count(DISTINCT product_id) = (SELECT count(*) FROM products WHERE category = 'Accessories')`).
 
 ### IN vs EXISTS vs NOT IN vs NOT EXISTS with a NULL
 
-A block list that contains a `NULL` shows the difference clearly:
+A block list containing a `NULL`:
 
 ```sql
 CREATE TABLE blocked (customer_id int);
@@ -639,7 +561,7 @@ Output:
 (1 row)
 ```
 
-`IN` and `EXISTS` agree (1 blocked customer). `NOT IN` returns 0 because of the `NULL`; `NOT EXISTS` correctly returns the 9 other customers.
+`IN` and `EXISTS` agree; `NOT IN` returns 0 because of the `NULL`; `NOT EXISTS` correctly returns the 9 others.
 
 | | `IN (subquery)` | `EXISTS (subquery)` |
 |---|---|---|
@@ -649,16 +571,12 @@ Output:
 | Negation with `NULL`s | `NOT IN` breaks | `NOT EXISTS` is safe |
 | Performance in PostgreSQL | both become semi joins | both become semi joins |
 
-Old advice that "`EXISTS` is always faster than `IN`" came from older optimizers; modern optimizers (PostgreSQL included) usually turn both `IN (subquery)` and `EXISTS` into the same semi-join. Choose by clarity — but always prefer `NOT EXISTS` over `NOT IN`.
+"`EXISTS` is always faster than `IN`" is advice from older optimizers; modern ones (PostgreSQL included) turn both into the same semi-join. Choose by clarity — but always `NOT EXISTS` over `NOT IN`.
 
 ### Self-check
 
-1. What does `EXISTS` return if the subquery's single row is all `NULL`s? → TRUE — a row exists.
-2. Rewrite `WHERE dept_id IN (SELECT dept_id FROM departments WHERE location = 'Pune')` with `EXISTS`. → `WHERE EXISTS (SELECT 1 FROM departments d WHERE d.dept_id = e.dept_id AND d.location = 'Pune')`.
-
-### TL;DR
-
-`EXISTS` = "at least one row". Never UNKNOWN, ignores the select list, stops at the first match. `NOT EXISTS` is the safe anti-join; double `NOT EXISTS` expresses "for all".
+1. `EXISTS` over a single all-`NULL` row? → TRUE — a row exists.
+2. `WHERE dept_id IN (SELECT dept_id FROM departments WHERE location = 'Pune')` with `EXISTS`? → `WHERE EXISTS (SELECT 1 FROM departments d WHERE d.dept_id = e.dept_id AND d.location = 'Pune')`.
 
 ---
 
@@ -666,10 +584,7 @@ Old advice that "`EXISTS` is always faster than `IN`" came from older optimizers
 
 ### What it is
 
-`ANY` and `ALL` let you use any comparison operator (`=`, `<>`, `<`, `>`, `<=`, `>=`) against a list:
-
-- `x > ANY (subquery)` — true if `x` is greater than **at least one** value (i.e. greater than the minimum). `SOME` is an exact synonym for `ANY`.
-- `x > ALL (subquery)` — true if `x` is greater than **every** value (i.e. greater than the maximum).
+`ANY` and `ALL` apply any comparison (`=`, `<>`, `<`, `>`, `<=`, `>=`) against a list: `x > ANY (subquery)` — greater than **at least one** value (the minimum; `SOME` is an exact synonym); `x > ALL (subquery)` — greater than **every** value (the maximum).
 
 ```sql
 SELECT first_name, salary FROM employees
@@ -689,10 +604,7 @@ Output:
 ------------+-----------
  Omar       |  76000.00
  Rahul      |  98000.00
- Meera      |  98000.00
- Lucas      | 120000.00
- Kiran      | 135000.00
- Neha       | 142000.00
+ ...
  Vikram     | 185000.00
 (7 rows)
 
@@ -703,7 +615,7 @@ Output:
 (2 rows)
 ```
 
-Sales salaries range from 68,000 to 150,000. `> ANY` means "above 68,000": Ananya (61,000) and Li (64,000) fail it, while Asha and Rohan drop out for another reason — `dept_id <> 2` is UNKNOWN for their `NULL` department. `> ALL` means "above 150,000" (Vikram and Asha).
+Sales salaries run 68,000–150,000. `> ANY` = "above 68,000": Ananya (61,000) and Li (64,000) fail; Asha and Rohan drop out because `dept_id <> 2` is UNKNOWN for their `NULL` department. `> ALL` = "above 150,000" (Vikram, Asha).
 
 | Expression | Same as |
 |---|---|
@@ -735,7 +647,7 @@ Output:
 
 ### Empty lists
 
-Over an **empty** subquery, `ALL` is TRUE (vacuously: there is no value that fails) and `ANY` is FALSE (there is no value that passes). This differs from the `min`/`max` rewrite, where `max` of nothing is `NULL`:
+Over an **empty** subquery `ALL` is TRUE (vacuously — no value fails) and `ANY` is FALSE (none passes), unlike the `min`/`max` rewrite where `max` of nothing is `NULL`:
 
 ```sql
 SELECT (5 > ALL (SELECT salary FROM employees WHERE dept_id = 6)) AS all_empty,
@@ -749,7 +661,7 @@ SELECT (5 > ALL (SELECT salary FROM employees WHERE dept_id = 6)) AS all_empty,
 (1 row)
 ```
 
-PostgreSQL also accepts an **array** (an ordered list of values held in one value) on the right-hand side, which is how application code usually passes a list as one parameter (a value sent separately from the SQL text, filled into a placeholder):
+PostgreSQL also accepts an **array** (an ordered list held in one value) on the right — how application code passes a list as one parameter (a value sent separately from the SQL text into a placeholder):
 
 ```sql
 SELECT name FROM products WHERE product_id = ANY (ARRAY[1, 3, 5]) ORDER BY product_id;
@@ -772,12 +684,7 @@ SELECT name FROM products WHERE product_id = ANY (ARRAY[1, 3, 5]) ORDER BY produ
 
 ### Self-check
 
-1. `salary > ALL (SELECT salary FROM employees WHERE dept_id = 99)` — with no department 99, which rows pass? → All rows (ALL over an empty set is TRUE).
-2. What is `= ANY` equivalent to? → `IN`.
-
-### TL;DR
-
-`ANY`/`SOME` = compare with at least one; `ALL` = compare with every one. `= ANY` ≡ `IN`; `<> ALL` ≡ `NOT IN` (NULL trap). `ALL` of empty = TRUE.
+1. `salary > ALL (SELECT salary FROM employees WHERE dept_id = 99)` with no department 99? → Every row passes (ALL over empty is TRUE).
 
 ---
 
@@ -785,7 +692,7 @@ SELECT name FROM products WHERE product_id = ANY (ARRAY[1, 3, 5]) ORDER BY produ
 
 ### What it is
 
-A subquery in the `FROM` clause is a **derived table** (PostgreSQL's docs call it a *subquery in FROM*; some people say *inline view*). Its result is treated as a temporary, unnamed table that exists only for this query. You must give it an alias (optional from PostgreSQL 16; our server is 14):
+A subquery in `FROM` is a **derived table** (PostgreSQL docs: *subquery in FROM*; also *inline view*) — a temporary, unnamed table for this query only. It needs an alias (optional from PostgreSQL 16; our server is 14):
 
 ```sql
 SELECT * FROM (SELECT 1 AS x);
@@ -800,7 +707,7 @@ HINT:  For example, FROM (SELECT ...) [AS] foo.
 
 ### Why it matters
 
-Derived tables let you **build a query in stages**: compute something, then filter, join or aggregate the result. They solve the "can't use an alias in `WHERE`" and "can't aggregate an aggregate" problems from [Chapter 4](../04-aggregation/README.md#45-the-logical-order-of-query-processing).
+Derived tables **build a query in stages** — compute, then filter, join or aggregate — solving "can't use an alias in `WHERE`" and "can't aggregate an aggregate" ([Chapter 4](../04-aggregation/README.md#45-the-logical-order-of-query-processing)).
 
 ```sql
 SELECT dept_id, headcount
@@ -822,7 +729,7 @@ Output:
 (5 rows)
 ```
 
-(The same filter could be written with `HAVING`; the derived-table form becomes necessary when the next step is something `HAVING` can't do.) An **aggregate of an aggregate** — "the average department payroll" — needs two levels, because `avg(sum(salary))` is not allowed:
+(`HAVING` could do this filter; the derived table is needed when the next step is beyond `HAVING`.) An **aggregate of an aggregate** — average department payroll — needs two levels, since `avg(sum(salary))` is not allowed:
 
 ```sql
 SELECT round(avg(payroll)) AS avg_department_payroll
@@ -839,7 +746,7 @@ Output:
 (1 row)
 ```
 
-Derived tables can also be **joined** like any table — the standard cure for join fan-out ([Chapter 5 §5.9](../05-joins/README.md#59-join-pitfalls)). Each order's total next to that customer's average order total:
+Derived tables can be **joined** — the standard cure for fan-out ([Chapter 5 §5.9](../05-joins/README.md#59-join-pitfalls)). Each order's total next to the customer's average:
 
 ```sql
 SELECT o.order_id, o.customer_id, round(t.order_total, 2) AS order_total, round(ca.avg_total, 2) AS customer_avg
@@ -868,11 +775,11 @@ Output:
 (5 rows)
 ```
 
-Notice the order-total subquery written **twice**. That repetition is exactly what a CTE (`WITH order_totals AS (…)`) removes — [Chapter 7](../07-ctes-views-and-recursion/README.md). Since PostgreSQL 12 a simple CTE that is referenced once is inlined (pasted into the main query), i.e. executed just like the equivalent derived table; CTEs mainly win on readability and reuse.
+The order-total subquery is written **twice** — the repetition a CTE (`WITH order_totals AS (…)`) removes ([Chapter 7](../07-ctes-views-and-recursion/README.md)). Since PostgreSQL 12 a simple CTE referenced once is inlined (pasted into the main query), so it runs like the derived table; CTEs win on readability and reuse.
 
 ### Row subqueries
 
-A **row subquery** returns a single row with several columns and is compared with a **row constructor** `(a, b)`. "Employees with the same department *and* job title as employee 4":
+A **row subquery** returns one row of several columns, compared with a **row constructor** `(a, b)` — same department *and* job title as employee 4:
 
 ```sql
 SELECT first_name, job_title, dept_id FROM employees
@@ -890,7 +797,7 @@ Output:
 (2 rows)
 ```
 
-With `IN`, a multi-column subquery can return many rows. "Each customer's latest order" as "(customer, time) pairs that are some customer's maximum":
+With `IN`, a multi-column subquery can return many rows — each customer's latest order:
 
 ```sql
 SELECT customer_id, order_id, placed_at::date
@@ -906,11 +813,7 @@ Output:
 -------------+----------+------------
            1 |      113 | 2025-06-02
            2 |      108 | 2025-04-01
-           3 |      111 | 2025-05-06
-           4 |      105 | 2025-02-28
-           5 |      112 | 2025-05-20
-           6 |      114 | 2025-06-15
-           7 |      110 | 2025-04-25
+ ...
            8 |      109 | 2025-04-09
 (8 rows)
 ```
@@ -919,12 +822,7 @@ Output:
 
 ### Self-check
 
-1. Why can't you write `SELECT avg(sum(salary)) FROM employees GROUP BY dept_id`? → Aggregates can't be nested; compute the sums in a derived table and average them outside.
-2. What must every derived table have in PostgreSQL 14? → An alias.
-
-### TL;DR
-
-Subquery in `FROM` = derived table: build queries in stages, aggregate aggregates, pre-aggregate before joins. Row subqueries compare several columns at once.
+1. Why not `SELECT avg(sum(salary)) FROM employees GROUP BY dept_id`? → Aggregates can't nest; sum in a derived table, average outside.
 
 ---
 
@@ -932,7 +830,7 @@ Subquery in `FROM` = derived table: build queries in stages, aggregate aggregate
 
 ### What it is
 
-A normal derived table can't refer to other tables in the same `FROM` clause — it's evaluated independently. A **`LATERAL`** subquery **can** refer to columns of tables listed *before* it, so it is re-evaluated for each row of those tables. Think of it as a correlated subquery that may return **many rows and many columns**, placed in `FROM`.
+A normal derived table can't refer to other `FROM` items. A **`LATERAL`** subquery **can** refer to tables listed *before* it and is re-evaluated per row of them — a correlated subquery in `FROM` that may return **many rows and columns**. Without `LATERAL`:
 
 ```sql
 SELECT d.name, t.n FROM departments d,
@@ -948,7 +846,7 @@ HINT:  There is an entry for table "d", but it cannot be referenced from this pa
 
 ### The problem it solves: top-N per group
 
-"The two highest-paid employees in each department" is hard with plain subqueries (you can't `LIMIT` per group). With `LATERAL`, for each department run a small query that sorts that department's employees and takes 2:
+"Two highest-paid per department" is hard with plain subqueries (no per-group `LIMIT`). With `LATERAL`, per department sort its employees and take 2:
 
 ```sql
 SELECT d.name, t.first_name, t.salary
@@ -969,16 +867,12 @@ Output:
  Engineering | Vikram     | 185000.00
  Engineering | Neha       | 142000.00
  Sales       | Daniel     | 150000.00
- Sales       | Priya      |  72000.00
- Marketing   | Lucas      | 120000.00
- Marketing   | Ananya     |  61000.00
- Finance     | Kiran      | 135000.00
- Finance     | Omar       |  76000.00
+ ...
  Support     | Li         |  64000.00
 (9 rows)
 ```
 
-`CROSS JOIN LATERAL` drops outer rows for which the subquery returns nothing (Research is missing). To keep them, use `LEFT JOIN LATERAL … ON true` — `ON true` because the correlation is already inside the subquery:
+`CROSS JOIN LATERAL` drops outer rows with an empty subquery (Research). Keep them with `LEFT JOIN LATERAL … ON true` (`ON true` because the correlation is inside):
 
 ```sql
 SELECT d.name, t.first_name, t.salary
@@ -996,15 +890,13 @@ Output:
     name     | first_name |  salary   
 -------------+------------+-----------
  Engineering | Vikram     | 185000.00
- Sales       | Daniel     | 150000.00
- Marketing   | Lucas      | 120000.00
- Finance     | Kiran      | 135000.00
+ ...
  Support     | Li         |  64000.00
  Research    | (null)     |    (null)
 (6 rows)
 ```
 
-"Each customer's most recent order, with several of its columns" — something a scalar subquery can only do one column at a time:
+Each customer's latest order with several columns (a scalar subquery gives one column at a time):
 
 ```sql
 SELECT c.first_name, last.order_id, last.status, last.placed_at::date
@@ -1023,18 +915,13 @@ Output:
 ------------+----------+-----------+------------
  Anita      |      113 | pending   | 2025-06-02
  Ben        |      108 | delivered | 2025-04-01
- Chen       |      111 | cancelled | 2025-05-06
- Divya      |      105 | cancelled | 2025-02-28
- Ethan      |      112 | shipped   | 2025-05-20
- Fatima     |      114 | pending   | 2025-06-15
- George     |      110 | shipped   | 2025-04-25
- Anita      |      109 | delivered | 2025-04-09
+ ...
  Hana       |   (null) | (null)    | (null)
  Ivan       |   (null) | (null)    | (null)
 (10 rows)
 ```
 
-With an index on `orders (customer_id, placed_at)`, each lateral lookup reads just one index entry — often the fastest way to get "latest row per group" when there are few outer rows. Window functions (`ROW_NUMBER() OVER (PARTITION BY …)`, [Chapter 8](../08-window-functions/README.md)) are the other standard approach and are usually better when you need the answer for *every* group of a large table.
+With an index on `orders (customer_id, placed_at)` each lateral lookup reads one index entry — often fastest for "latest row per group" with few outer rows. Window functions (`ROW_NUMBER() OVER (PARTITION BY …)`, [Chapter 8](../08-window-functions/README.md)) are usually better for *every* group of a large table.
 
 | Database | Syntax |
 |---|---|
@@ -1043,17 +930,13 @@ With an index on `orders (customer_id, placed_at)`, each lateral lookup reads ju
 | SQL Server, Oracle 12c+ | `CROSS APPLY` / `OUTER APPLY` (Oracle also has `LATERAL`) |
 | SQLite | not supported |
 
-### TL;DR
-
-`LATERAL` = a derived table that can see earlier `FROM` items, evaluated per outer row; can return many rows/columns. Top-N per group, latest row per group. `LEFT JOIN LATERAL … ON true` keeps outer rows with no result.
-
 ---
 
 ## 6.8 Set operations and UNION
 
 ### What it is
 
-**Set operations** combine the **results of two queries** into one result, by rows, like the operations on sets in mathematics (a *set* is a collection of distinct items; a *Venn picture* draws two sets as overlapping circles):
+**Set operations** combine the **results of two queries** by rows, like mathematical set operations (a *set* is a collection of distinct items; a *Venn picture* draws two sets as overlapping circles):
 
 | Operator | Result | Venn picture |
 |---|---|---|
@@ -1062,16 +945,7 @@ With an index on `orders (customer_id, placed_at)`, each lateral lookup reads ju
 | `INTERSECT` | rows in **both** results | only the overlap |
 | `EXCEPT` | rows in the first result that are **not** in the second | left circle minus overlap |
 
-Joins combine tables **side by side** (more columns); set operations stack results **on top of each other** (more or fewer rows, same columns).
-
-```mermaid
-flowchart LR
-    Q1["Query 1 result - rows"] --> OP{"UNION / INTERSECT / EXCEPT"}
-    Q2["Query 2 result - rows"] --> OP
-    OP --> R["One result - same columns as Query 1"]
-```
-
-*Figure 6.1 — A set operation takes two results with the same columns and produces one.*
+Joins combine tables **side by side** (more columns); set operations stack results **on top of each other** (same columns, more or fewer rows).
 
 ### The rules
 
@@ -1100,7 +974,7 @@ LINE 1: SELECT emp_id FROM employees UNION SELECT first_name FROM cu...
 
 ### UNION
 
-One contact list from two tables, with a literal column (a fixed value typed into the query, here `'employee'`) to show where each row came from:
+One contact list from two tables, a literal column (`'employee'`) marking the source:
 
 ```sql
 SELECT first_name, last_name, 'employee' AS kind FROM employees WHERE dept_id = 3
@@ -1121,7 +995,7 @@ Output:
 (4 rows)
 ```
 
-Every city where we have customers or offices — `UNION` removes the duplicates (Mumbai, Bengaluru, Delhi …):
+Every city with customers or offices — `UNION` removes duplicates:
 
 ```sql
 SELECT city FROM customers WHERE city IS NOT NULL
@@ -1137,15 +1011,13 @@ Output:
 -----------
  Bengaluru
  Delhi
- London
- Mumbai
- New York
+ ...
  Pune
  mumbai
 (7 rows)
 ```
 
-Note that `mumbai` and `Mumbai` are different strings, so both survive — clean data first (`initcap(city)`, [Chapter 3](../03-functions-and-expressions/README.md)) if case shouldn't matter.
+`mumbai` and `Mumbai` differ, so both survive — clean first (`initcap(city)`, [Chapter 3](../03-functions-and-expressions/README.md)).
 
 ### UNION vs UNION ALL
 
@@ -1168,7 +1040,7 @@ Output:
 (1 row)
 ```
 
-`UNION` returned 3 (India, UK, USA — duplicates inside **each** input are removed too, not just between them). `UNION ALL` returned all 10 + 1 = 11 rows.
+`UNION`: 3 (duplicates inside **each** input are removed too); `UNION ALL`: 10 + 1 = 11.
 
 | | `UNION` | `UNION ALL` |
 |---|---|---|
@@ -1176,9 +1048,7 @@ Output:
 | Extra work | a sort or hash over the whole result | none — rows are just appended |
 | Use when | you need distinct rows | the inputs can't overlap, or duplicates are meaningful (counting, event logs) |
 
-Default to **`UNION ALL`** unless you actually need de-duplication; `UNION` on large results costs a sort or hash and hides data problems.
-
-A typical `UNION ALL`: stacking two kinds of events into one timeline:
+Default to **`UNION ALL`**; `UNION` on large results costs a sort or hash and hides data problems. Typical use — two event kinds in one timeline:
 
 ```sql
 SELECT placed_at AS at, 'order placed'  AS event, order_id FROM orders   WHERE customer_id = 1
@@ -1215,13 +1085,7 @@ SELECT NULL::text AS v UNION SELECT NULL::text;
 
 ### Self-check
 
-1. `SELECT 1 UNION SELECT 1 UNION ALL SELECT 1` returns how many rows? → 2 (operators apply left to right: `(1 UNION 1)` = 1 row, then `UNION ALL 1` = 2 rows).
-2. Where do the result's column names come from? → The first query.
-3. Why prefer `UNION ALL` by default? → No de-duplication cost and no silently lost rows.
-
-### TL;DR
-
-Set operations stack results with the same column count and compatible types; names come from the first query. `UNION` de-duplicates (cost!), `UNION ALL` doesn't. `NULL`s count as equal.
+1. `SELECT 1 UNION SELECT 1 UNION ALL SELECT 1`? → 2 rows (left to right: `(1 UNION 1)` = 1 row, then `UNION ALL 1`).
 
 ---
 
@@ -1229,9 +1093,7 @@ Set operations stack results with the same column count and compatible types; na
 
 ### What it is
 
-`INTERSECT` returns the rows that appear in **both** results (the overlap of the Venn diagram), without duplicates.
-
-"Cities where we have both customers and an office":
+`INTERSECT` returns rows in **both** results (the overlap), without duplicates. Cities with both customers and an office:
 
 ```sql
 SELECT city FROM customers
@@ -1251,9 +1113,9 @@ Output:
 (3 rows)
 ```
 
-The `(null)` row is a lesson in rule 4: one customer has no city and one department has no location, and set operations treat the two `NULL`s as equal. An inner join on `c.city = d.location` would not match them. Add `WHERE city IS NOT NULL` if that row is unwanted.
+The `(null)` row is rule 4: a city-less customer and a location-less department match because set operations treat `NULL`s as equal (an inner join on `c.city = d.location` wouldn't). Add `WHERE city IS NOT NULL` if unwanted.
 
-"Employees who are on a project **and** manage someone":
+Employees on a project **and** managing someone:
 
 ```sql
 SELECT emp_id FROM employee_projects
@@ -1273,7 +1135,7 @@ Output:
 (3 rows)
 ```
 
-`INTERSECT` is equivalent to a semi-join with `EXISTS` on all columns (using `IS NOT DISTINCT FROM` for `NULL`s) plus `DISTINCT`. Use `INTERSECT` when you compare whole rows of two similar results; use `EXISTS`/`JOIN` when you need other columns from either side.
+`INTERSECT` = `EXISTS` semi-join on all columns (`IS NOT DISTINCT FROM` for `NULL`s) plus `DISTINCT`. Use it to compare whole rows of similar results; `EXISTS`/`JOIN` when you need other columns.
 
 ---
 
@@ -1281,9 +1143,7 @@ Output:
 
 ### What it is
 
-`EXCEPT` returns the rows of the first result that do **not** appear in the second (the left crescent), without duplicates. Oracle calls it `MINUS` (Oracle 21c also accepts `EXCEPT`).
-
-"Products that were never ordered":
+`EXCEPT` returns rows of the first result **not** in the second (the left crescent), without duplicates. Oracle calls it `MINUS` (21c also accepts `EXCEPT`). Products never ordered:
 
 ```sql
 SELECT product_id FROM products
@@ -1324,9 +1184,9 @@ Output:
 (1 row)
 ```
 
-Customer cities with no office; office cities with no customers (only Pune).
+Customer cities with no office; office cities with no customers (Pune).
 
-Because `NULL`s compare equal in set operations, `EXCEPT` is also a handy way to **diff two queries that contain `NULL`s** — for example, check that a refactored query (rewritten for clarity or speed, meant to behave identically) returns exactly the same rows as the old one: `(old EXCEPT new)` and `(new EXCEPT old)` should both be empty. Here Meera's row is removed even though her email is `NULL`:
+Because `NULL`s compare equal, `EXCEPT` **diffs queries containing `NULL`s** — e.g. a refactored query (rewritten, meant to behave identically) vs the old: `(old EXCEPT new)` and `(new EXCEPT old)` must both be empty. Meera's row is removed despite her `NULL` email:
 
 ```sql
 SELECT first_name, email FROM employees WHERE dept_id = 1
@@ -1347,7 +1207,7 @@ Output:
 
 ### Without INTERSECT and EXCEPT
 
-Some databases lacked these operators for a long time — MySQL only gained `INTERSECT` and `EXCEPT` in 8.0.31 (2022) — so you will often see them written with semi- and anti-joins instead ([Chapter 5 §5.8](../05-joins/README.md#58-semi-joins-and-anti-joins)):
+MySQL only gained `INTERSECT` and `EXCEPT` in 8.0.31 (2022), so you often see semi-/anti-join equivalents ([Chapter 5 §5.8](../05-joins/README.md#58-semi-joins-and-anti-joins)):
 
 ```sql
 -- INTERSECT-like: customer cities that also have an office
@@ -1377,18 +1237,16 @@ Output:
            4 | Divya      | Delhi
            5 | Ethan      | New York
            6 | Fatima     | (null)
-           7 | George     | London
-           8 | Anita      | mumbai
-           9 | Hana       | New York
+ ...
           10 | Ivan       | Delhi
 (8 rows)
 ```
 
-(A `LEFT JOIN (SELECT DISTINCT location FROM departments) d ON d.location = c.city WHERE d.location IS NULL` returns the same 8 rows — see the code file.) Two differences from the real operators matter: you must add `DISTINCT` yourself to get set semantics (no duplicate rows), and `=` does **not** treat `NULL`s as equal. That is why the first query uses `IS NOT DISTINCT FROM` to reproduce `INTERSECT`'s `(null)` row, and why Fatima (no city) appears in the `NOT EXISTS` result although `EXCEPT` would have removed her `NULL` city. In return, the `EXISTS` forms can return any columns of the outer table, not just the compared ones.
+(A `LEFT JOIN (SELECT DISTINCT location FROM departments) d ON d.location = c.city WHERE d.location IS NULL` returns the same 8 rows.) Differences from the real operators: add `DISTINCT` yourself for set semantics, and `=` does **not** treat `NULL`s as equal — hence `IS NOT DISTINCT FROM` to reproduce `INTERSECT`'s `(null)` row, and Fatima (no city) appearing although `EXCEPT` would remove her. In return, `EXISTS` forms can return any outer columns.
 
 ### The ALL variants: bag semantics
 
-SQL tables are really **bags** (multisets): the same row can appear several times. The `ALL` forms keep track of **how many times** each row appears:
+SQL tables are **bags** (multisets): a row can appear several times. `ALL` forms track **how many times**:
 
 | Operator | Row appearing *m* times in A and *n* times in B appears … |
 |---|---|
@@ -1438,7 +1296,7 @@ Output (in order):
 (2 rows)
 ```
 
-Check against the table: value 1 is 3 times in `a` and 2 times in `b` → `INTERSECT ALL` gives min(3, 2) = 2 copies, `EXCEPT ALL` gives 3 − 2 = 1 copy. Value 2 occurs once in `a` and twice in `b` → 1 copy in `INTERSECT ALL`, 0 in `EXCEPT ALL`. Value 3 is only in `a` → only in the `EXCEPT` results. For completeness, `UNION` gives `1, 2, 3, 4` and `UNION ALL` gives all 10 values.
+Value 1 (3× in `a`, 2× in `b`) → `INTERSECT ALL` min(3, 2) = 2 copies, `EXCEPT ALL` 3 − 2 = 1. Value 2 (1×, 2×) → 1 copy, 0 copies. Value 3 (only in `a`) → only in the `EXCEPT` results. `UNION` gives `1, 2, 3, 4`; `UNION ALL` all 10 values.
 
 ### Dialect support
 
@@ -1458,13 +1316,8 @@ Check against the table: value 1 is 3 times in `a` and 2 times in `b` → `INTER
 
 ### Self-check
 
-1. `A = {1,1,2}`, `B = {1}`. What are `A EXCEPT B` and `A EXCEPT ALL B`? → `{2}` and `{1, 2}`.
-2. Which set operator is not commutative (gives a different answer when its two sides are swapped)? → `EXCEPT`.
-3. Why did `INTERSECT` return a `(null)` city? → Set operations treat two `NULL`s as the same value.
-
-### TL;DR
-
-`INTERSECT` = in both; `EXCEPT` = in the first only (order matters). `ALL` variants count duplicates (min, difference). Great for diffing results.
+1. `A = {1,1,2}`, `B = {1}`: `A EXCEPT B`, `A EXCEPT ALL B`? → `{2}`, `{1, 2}`.
+2. Which set operator is not commutative (swapping sides changes the answer)? → `EXCEPT`.
 
 ---
 
@@ -1472,7 +1325,7 @@ Check against the table: value 1 is 3 times in `a` and 2 times in `b` → `INTER
 
 ### Precedence
 
-`INTERSECT` binds **tighter** than `UNION` and `EXCEPT` (like multiplication before addition); `UNION` and `EXCEPT` are evaluated left to right. Parentheses override:
+`INTERSECT` binds **tighter** than `UNION` and `EXCEPT` (like × before +); `UNION`/`EXCEPT` go left to right. Parentheses override:
 
 ```sql
 SELECT 1 AS v UNION SELECT 2 INTERSECT SELECT 3;          -- = 1 UNION (2 INTERSECT 3)
@@ -1492,7 +1345,7 @@ Output:
 (0 rows)
 ```
 
-When mixing operators, **always use parentheses** — readers shouldn't need to remember precedence.
+When mixing operators, **always parenthesise**.
 
 ### ORDER BY and LIMIT
 
@@ -1535,7 +1388,7 @@ Output:
 (2 rows)
 ```
 
-The final `ORDER BY` may only use **output column names or positions** — not expressions. Move the set operation into a derived table to sort by an expression:
+The final `ORDER BY` accepts only **output column names or positions**, not expressions — move the set operation into a derived table:
 
 ```sql
 SELECT first_name FROM employees UNION SELECT first_name FROM customers ORDER BY upper(first_name);
@@ -1567,31 +1420,7 @@ ORDER BY upper(first_name) LIMIT 3;
 
 ### EXCEPT vs NOT EXISTS
 
-```sql
-SELECT customer_id FROM customers EXCEPT SELECT customer_id FROM orders ORDER BY 1;
-
-SELECT c.customer_id, c.first_name, c.city FROM customers c
-WHERE NOT EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.customer_id)
-ORDER BY 1;
-```
-
-Output:
-
-```text
- customer_id 
--------------
-           9
-          10
-(2 rows)
-
- customer_id | first_name |   city   
--------------+------------+----------
-           9 | Hana       | New York
-          10 | Ivan       | Delhi
-(2 rows)
-```
-
-Both find the customers who never ordered, but `EXCEPT` can only return the compared columns, while `NOT EXISTS` returns any columns of the outer table.
+`SELECT customer_id FROM customers EXCEPT SELECT customer_id FROM orders` and the `NOT EXISTS` anti-join both find customers 9 and 10, but `EXCEPT` returns only the compared columns, while `NOT EXISTS` returns any columns of the outer table (Hana, New York; Ivan, Delhi).
 
 ### Choosing between joins, subqueries and set operations
 
@@ -1615,12 +1444,8 @@ Both find the customers who never ordered, but `EXCEPT` can only return the comp
 
 ### Self-check
 
-1. What does `SELECT 1 UNION SELECT 2 INTERSECT SELECT 2` return? → `{1, 2}` — `INTERSECT` first gives `{2}`, then `UNION` with `{1}`.
-2. How do you sort a `UNION` result by `lower(name)`? → Wrap it in a derived table, or add `lower(name)` as an output column of every branch.
-
-### TL;DR
-
-`INTERSECT` before `UNION`/`EXCEPT`; use parentheses. Final `ORDER BY`/`LIMIT` apply to the whole result and accept only output columns. Pick joins for columns, `EXISTS` for existence, set operators for whole-result comparisons.
+1. `SELECT 1 UNION SELECT 2 INTERSECT SELECT 2`? → `{1, 2}` — `INTERSECT` first gives `{2}`, then `UNION` with `{1}`.
+2. Sort a `UNION` by `lower(name)`? → Wrap it in a derived table, or add `lower(name)` as an output column of every branch.
 
 ---
 

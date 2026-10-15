@@ -1,15 +1,11 @@
 # Chapter 15 — Scaling Databases: Partitioning, Sharding, Replication and Recovery
 
-A single PostgreSQL server goes a long way: one machine with plenty of **RAM** (the fast working memory a computer loses when powered off), fast **SSDs** (solid-state drives — disks with no moving parts, much faster than spinning hard drives) and good indexes (Chapter 12) can serve thousands of queries per second. Sooner or later, though, the data outgrows one disk, the traffic outgrows one **CPU** (the processor that executes instructions), or the business can't accept that one broken machine takes the whole product offline. This chapter is about what databases do when **one box is no longer enough**.
-
-Two ideas carry most of the weight:
+One PostgreSQL server with plenty of RAM, fast SSDs and good indexes (Chapter 12) can serve thousands of queries per second. Sooner or later, though, the data outgrows one disk, the traffic outgrows one CPU, or the business can't accept that one broken machine takes the product offline. This chapter is about what databases do when **one box is no longer enough**. Two ideas carry most of the weight:
 
 - **Partitioning / sharding**: split the data so each piece is smaller (more capacity, faster scans).
-- **Replication**: copy the data so there is more than one of each piece (availability, read scaling, disaster recovery).
+- **Replication**: copy the data so each piece exists more than once (availability, read scaling, disaster recovery).
 
 Then come the problems they create: copies disagree (consistency models, CAP), machines must agree (consensus, leader election), and failures must not lose committed data (logging, checkpoints, two-phase commit, failover, backups).
-
-**What you'll learn**
 
 | Section | Topic | Runnable part |
 |---|---|---|
@@ -25,9 +21,9 @@ Then come the problems they create: copies disagree (consistency models, CAP), m
 | 15.10 | High availability and failover | — |
 | 15.11 | Data resilience: redundancy, mirroring, backups | — |
 
-> **Going deeper.** This chapter explains each idea once, at interview depth. For book-level depth see your DDIA notes — [Replication](../../../ddia/chapters/05-replication/README.md), [Partitioning](../../../ddia/chapters/06-partitioning/README.md), [Trouble with distributed systems](../../../ddia/chapters/08-trouble-with-distributed-systems/README.md), [Consistency and consensus](../../../ddia/chapters/09-consistency-and-consensus/README.md) — and for the design-interview pattern view the system-design-patterns notes: [Storing data](../../../system-design-patterns/modules/03-storing-data/README.md) (primary-replica, sharding, consistent hashing, WAL), [Consistency](../../../system-design-patterns/modules/07-consistency/README.md) (2PC, saga, quorum, vector clocks), [Scaling](../../../system-design-patterns/modules/06-scaling/README.md), [Reliability](../../../system-design-patterns/modules/05-reliability/README.md).
+> **Going deeper.** This chapter explains each idea once, at interview depth. Book-level depth: DDIA notes — [Replication](../../../ddia/chapters/05-replication/README.md), [Partitioning](../../../ddia/chapters/06-partitioning/README.md), [Trouble with distributed systems](../../../ddia/chapters/08-trouble-with-distributed-systems/README.md), [Consistency and consensus](../../../ddia/chapters/09-consistency-and-consensus/README.md). Design-interview patterns: [Storing data](../../../system-design-patterns/modules/03-storing-data/README.md) (primary-replica, sharding, consistent hashing, WAL), [Consistency](../../../system-design-patterns/modules/07-consistency/README.md) (2PC, saga, quorum, vector clocks), [Scaling](../../../system-design-patterns/modules/06-scaling/README.md), [Reliability](../../../system-design-patterns/modules/05-reliability/README.md).
 
-All SQL files are in `code/` and run on the book's private PostgreSQL 14 server (`bash tools_run_sql.sh sql '15-*'`). `00_schema.sql` creates 12 customers in three regions (`NA`, `EU`, `APAC`) and 3,000 orders spread over 2022–2024. Python simulations run with the books' venv (`.venv-books/bin/python code/<file>.py`).
+SQL files in `code/` run on the book's PostgreSQL 14 server (`bash tools_run_sql.sh sql '15-*'`); `00_schema.sql` creates 12 customers in three regions (`NA`, `EU`, `APAC`) and 3,000 orders over 2022–2024. Python simulations: `.venv-books/bin/python code/<file>.py`.
 
 ---
 
@@ -35,16 +31,16 @@ All SQL files are in `code/` and run on the book's private PostgreSQL 14 server 
 
 ### What it is
 
-A **distributed database** stores its data on several machines (**nodes**), possibly in different **data centres** (buildings full of servers, power and network gear), but presents itself to applications as *one* database. Think of a library with branches across a city: you search one catalogue and borrow from whichever branch has the book, without knowing which building holds which shelf.
+A **distributed database** stores data on several machines (**nodes**), possibly in different **data centres**, but presents itself to applications as *one* database.
 
 | Term / characteristic | Meaning |
 |---|---|
 | **Node** | One server (physical or virtual) running a database process. **Cluster** = the group of nodes forming the database. |
-| **Transparency** | The client doesn't need to know *where* a row is stored (**location transparency**) or *how many copies* exist (**replication transparency**). |
-| **Fault tolerance** | The system keeps working when individual nodes fail, because data is copied elsewhere. |
-| **Concurrency** | Many transactions on many nodes run at once without corrupting shared data (the concurrency control of Chapter 13, now across machines). |
+| **Transparency** | The client needn't know *where* a row is (**location transparency**) or *how many copies* exist (**replication transparency**). |
+| **Fault tolerance** | Keeps working when nodes fail, because data is copied elsewhere. |
+| **Concurrency** | Many transactions on many nodes run at once without corrupting shared data (Chapter 13's concurrency control, across machines). |
 | **Scalability** | Capacity grows by adding nodes. |
-| **Network partition** | Some nodes can't talk to others because the network between them failed. Don't confuse it with *data* partitioning (15.2). |
+| **Network partition** | Some nodes can't talk to others because the network between them failed — not to be confused with *data* partitioning (15.2). |
 
 ### Scale up vs scale out
 
@@ -56,14 +52,12 @@ A **distributed database** stores its data on several machines (**nodes**), poss
 | Failure | Still one machine = one point of failure | Survives node loss if data is replicated |
 | App changes | None | Often needed (shard keys, cross-node queries) |
 
-Distributed databases are built for **scale-out**. Scale-up is simpler and usually comes first — many companies run a large Postgres or MySQL **primary** (the one server that accepts writes) plus **read replicas** (copies that serve only reads) for years before they shard. For a gentle introduction to these system-design building blocks see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md).
-
-### Benefits and challenges
+Distributed databases are built for **scale-out**, but scale-up is simpler and usually first: many companies run a large Postgres or MySQL **primary** (the one server accepting writes) plus **read replicas** (copies serving reads) for years before sharding ([System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)). Scale-up's limits are cost and a **single point of failure** (one component whose failure takes everything down).
 
 | Benefits | Challenges |
 |---|---|
-| **High availability** (the service stays usable almost all the time) — other copies serve if a node or region dies | **Consistency** of copies written in different places (15.5–15.7) |
-| **Lower latency** (latency = the time one request takes, start to finish) — data near its users (Singapore reads a Singapore node) | **Network latency** — milliseconds per cross-region hop |
+| **High availability** — other copies serve if a node or region dies | **Consistency** of copies written in different places (15.5–15.7) |
+| **Lower latency** — data near its users (Singapore reads a Singapore node) | **Network latency** — milliseconds per cross-region hop |
 | **Load spreading** — no node takes every request | **Failure detection** — silent may mean dead or slow (15.8–15.10) |
 | **Capacity** grows with node count | **Operational complexity** — harder debugging and upgrades |
 
@@ -83,12 +77,7 @@ flowchart LR
   App --> B1
 ```
 
-**Partitioning** gives each node a *subset* of the data (capacity, parallel work); **replication** stores each subset on *several* nodes (fault tolerance, read capacity). Most real systems do both. *Example:* a food-delivery app in 20 countries partitions menus and orders by country (queries are local, and data-residency laws such as **GDPR** (the EU's General Data Protection Regulation, which restricts where and how personal data is stored) are easier to meet), replicates each partition to three **availability zones** (separate data centres in one cloud region, with independent power and networking), and adds nodes to the busiest cities on New Year's Eve.
-
-### Self-check
-
-1. *Which two techniques does almost every distributed database combine?* Partitioning (split) and replication (copy).
-2. *Why try scale-up first?* No application changes and no distributed-systems problems; its limits are cost and a **single point of failure** (one component whose failure takes everything down).
+**Partitioning** gives each node a *subset* of the data (capacity, parallel work); **replication** stores each subset on *several* nodes (fault tolerance, read capacity); most real systems do both. *Example:* a food-delivery app in 20 countries partitions menus and orders by country (queries are local, and data-residency laws such as **GDPR**, the EU's personal-data regulation, are easier to meet), replicates each partition to three **availability zones** (separate data centres in one cloud region with independent power and networking), and adds nodes to the busiest cities on New Year's Eve.
 
 ---
 
@@ -96,9 +85,7 @@ flowchart LR
 
 ### What it is
 
-**Partitioning** splits one large table into smaller pieces (**partitions**) that are stored and managed separately while queries still see one logical table — like a filing cabinet with one drawer per year. Its goals: **faster queries** (a query for March 2023 reads only the 2023 partition — **partition pruning**), **easier maintenance** (archive a year by detaching one partition), **scalability** (partitions can live on different nodes — then it's *sharding*, 15.3), and **fault tolerance** (each partition can be replicated independently).
-
-### Horizontal vs vertical
+**Partitioning** splits one large table into smaller pieces (**partitions**) stored and managed separately while queries still see one logical table. Goals: **faster queries** (March 2023 reads only the 2023 partition — **partition pruning**), **easier maintenance** (archive a year by detaching one partition), **scalability** (partitions on different nodes = *sharding*, 15.3), **fault tolerance** (each partition replicated independently).
 
 | Aspect | **Horizontal** (split rows) | **Vertical** (split columns) |
 |---|---|---|
@@ -107,7 +94,7 @@ flowchart LR
 | Cost | Routing; queries without the key hit every piece | Joins to reassemble a full row |
 | Typical use | Huge event/order/log tables, distributed DBs | Wide tables with big text/JSON/blob columns |
 
-A vertical split (`code/05_vertical_partitioning.sql`) keeps listing-page columns (`product_id`, `name`, `price`) in `product_core` and the long `description` / `spec_sheet` text in `product_details`, whose primary key also references `product_core`. With 1,000 products, `pg_total_relation_size` shows:
+A vertical split (`code/05_vertical_partitioning.sql`) keeps listing-page columns (`product_id`, `name`, `price`) in `product_core` and the long `description` / `spec_sheet` in `product_details` (PK also referencing `product_core`). For 1,000 products, `pg_total_relation_size`:
 
 ```
  core_size | details_size 
@@ -115,7 +102,7 @@ A vertical split (`code/05_vertical_partitioning.sql`) keeps listing-page column
  128 kB    | 1672 kB
 ```
 
-The listing page now reads 128 kB instead of about 1.8 MB; a view (`product_full`) joins the halves back when needed. Postgres already moves very large values out of line by itself (**TOAST**, Chapter 12), so a manual split pays off most for medium-sized, rarely read columns.
+The listing page reads 128 kB instead of ~1.8 MB; a view (`product_full`) joins the halves back. Postgres already moves very large values out of line (**TOAST**, [§12.1](../12-indexes-storage-and-query-performance/README.md#121-how-a-database-stores-data)), so a manual split pays off most for medium-sized, rarely read columns.
 
 ### Partitioning strategies
 
@@ -129,13 +116,11 @@ The listing page now reads 128 kB instead of about 1.8 MB; a view (`product_full
 
 ![Composite partitioning: each range partition is further split into hash sub-partitions](img/composite-partitioning.svg)
 
-*Figure — Composite (range + hash) partitioning: each range partition is itself split into hash buckets h1–h4 (course diagram).*
-
-Postgres supports range, list and hash natively, and composite by nesting them; it has no round-robin (that appears in warehouse systems, e.g. Azure Synapse's `ROUND_ROBIN` distribution). **To choose**, look at your most common and most expensive queries: the partition key should be in their `WHERE` clause so pruning works, it should spread data reasonably evenly, and adding/dropping partitions should stay simple.
+Postgres supports range, list and hash natively, composite by nesting; no round-robin (that's in warehouse systems, e.g. Azure Synapse `ROUND_ROBIN`). **To choose:** the key should be in the `WHERE` of your most common and most expensive queries (so pruning works), spread data reasonably evenly, and keep adding/dropping partitions simple.
 
 ### How it works in PostgreSQL (declarative partitioning)
 
-Declarative partitioning arrived in PostgreSQL 10 (hash partitioning, default partitions and primary keys on partitioned tables in 11). You create a **parent** with `PARTITION BY RANGE | LIST | HASH (columns)` — it stores no rows — and each **partition** with `CREATE TABLE … PARTITION OF parent FOR VALUES …`. Inserts into the parent are routed to the right partition (a row that fits none is rejected unless a `DEFAULT` partition exists), and a `WHERE` on the partition key lets the **planner** (the part of Postgres that decides how to execute a query) **prune** partitions that can't match.
+Since PostgreSQL 10 (hash partitioning, default partitions and PKs on partitioned tables in 11): a **parent** declared `PARTITION BY RANGE | LIST | HASH (columns)` stores no rows; each **partition** is `CREATE TABLE … PARTITION OF parent FOR VALUES …`. Inserts are routed (a row fitting none is rejected unless a `DEFAULT` partition exists), and a `WHERE` on the key lets the planner **prune** partitions that can't match.
 
 #### Range partitioning, with pruning
 
@@ -172,9 +157,7 @@ FROM orders_by_year GROUP BY 1 ORDER BY 1;
  orders_other |    1 | 2025-03-15 | 2025-03-15
 ```
 
-`FROM … TO …` has an **inclusive** lower and **exclusive** upper bound, so `2023-01-01` belongs to `orders_2023`; `tableoid::regclass` is a hidden column naming the physical table holding each row; and the PK includes `order_date` because each partition enforces uniqueness only on its own rows.
-
-Pruning at plan time, versus a query that doesn't filter on the key:
+`FROM … TO …` has an **inclusive** lower and **exclusive** upper bound (so `2023-01-01` is in `orders_2023`); `tableoid::regclass` is a hidden column naming the physical table holding each row; the PK includes `order_date` because each partition enforces uniqueness only on its own rows. Pruning at plan time, versus a query not filtering on the key:
 
 ```sql
 EXPLAIN (COSTS OFF) SELECT sum(amount) FROM orders_by_year
@@ -194,7 +177,7 @@ EXPLAIN (COSTS OFF) SELECT sum(amount) FROM orders_by_year WHERE customer_id = 7
          ...   (same for orders_2023, orders_2024 and orders_other)
 ```
 
-`Append` means "scan each child and concatenate" — all four partitions are read. **Partitioning only helps queries that filter on the partition key.** When the value is known only at run time (a **prepared-statement** parameter — a prepared statement is a query parsed and planned once, then run many times with different values plugged into `$1`, `$2`…), Postgres 11+ prunes during execution:
+`Append` = "scan each child and concatenate" — all four read. **Partitioning only helps queries that filter on the partition key.** When the value is a prepared-statement parameter (known only at run time), Postgres 11+ prunes during execution:
 
 ```sql
 SET plan_cache_mode = force_generic_plan;
@@ -210,7 +193,7 @@ EXPLAIN (COSTS OFF) EXECUTE by_day('2023-05-05');
                Filter: (order_date = $1)
 ```
 
-**Maintenance is where range partitioning shines** — archiving a year is a **metadata** change (an edit to the database's own bookkeeping about which tables exist, not to the rows), not a giant `DELETE`:
+**Maintenance is where range partitioning shines** — archiving a year is a metadata change, not a giant `DELETE`:
 
 ```sql
 ALTER TABLE orders_by_year DETACH PARTITION orders_2022;         -- instant; now a plain table
@@ -219,7 +202,7 @@ CREATE TABLE orders_2025 PARTITION OF orders_by_year FOR VALUES FROM ('2025-01-0
 INSERT INTO orders_by_year VALUES (9001, 1, '2025-03-15', 99);
 ```
 
-Afterwards the parent holds `orders_2023` (990), `orders_2024` (994) and `orders_2025` (1), and the detached `orders_2022` still has its 1,016 rows as an ordinary table. The `DELETE` is needed because Postgres refuses to create `orders_2025` while the DEFAULT partition still holds 2025 rows — better to create partitions ahead of time (a scheduled job or the `pg_partman` **extension** — an add-on package installed into Postgres with `CREATE EXTENSION`). `DETACH PARTITION … CONCURRENTLY` (Postgres 14+) avoids blocking queries on the parent.
+Afterwards the parent holds `orders_2023` (990), `orders_2024` (994), `orders_2025` (1); the detached `orders_2022` keeps its 1,016 rows as an ordinary table. The `DELETE` is needed because Postgres refuses to create `orders_2025` while DEFAULT still holds 2025 rows — create partitions ahead of time (a scheduled job or the `pg_partman` extension). `DETACH PARTITION … CONCURRENTLY` (Postgres 14+) avoids blocking queries on the parent.
 
 #### List, hash and composite
 
@@ -238,11 +221,11 @@ Afterwards the parent holds `orders_2023` (990), `orders_2024` (994) and `orders
 NOTICE:  rejected: no partition of relation "customers_by_region" found for row
 ```
 
-The last line comes from inserting a `'LATAM'` customer with no matching partition and no `DEFAULT` — a useful safety net that stops data landing in the wrong jurisdiction.
+The last line: a `'LATAM'` customer with no partition and no `DEFAULT` is rejected — a safety net against data landing in the wrong jurisdiction.
 
-`code/03_hash_partitioning.sql` spreads orders over four partitions (`FOR VALUES WITH (MODULUS 4, REMAINDER 0..3)`): 730 / 752 / 774 / 744 rows — close to even. `WHERE order_id = 2024` prunes to one partition (`Seq Scan on orders_h2`), but `order_id BETWEEN 100 AND 110` produces an `Append` over all four, because hashing scatters neighbouring values.
+`code/03_hash_partitioning.sql` spreads orders over four partitions (`FOR VALUES WITH (MODULUS 4, REMAINDER 0..3)`): 730 / 752 / 774 / 744 rows. `WHERE order_id = 2024` prunes to one (`Seq Scan on orders_h2`), but `order_id BETWEEN 100 AND 110` scans all four — hashing scatters neighbours.
 
-`code/04_composite_partitioning.sql` partitions server logs by month, and each month is itself declared `PARTITION BY HASH (server_id)` with two leaves (`MODULUS 2, REMAINDER 0/1`):
+`code/04_composite_partitioning.sql` partitions server logs by month, each month `PARTITION BY HASH (server_id)` with two leaves (`MODULUS 2, REMAINDER 0/1`):
 
 ```
  leaf_partition  | rows | servers 
@@ -258,18 +241,15 @@ The last line comes from inserting a `'LATAM'` customer with no matching partiti
                   (logged_at < '2024-02-11 00:00:00+00'::timestamp with time zone) AND (server_id = 3))
 ```
 
-A filter on both keys prunes to **one leaf of four**. The 2-vs-4 server split also teaches that **hashing evens things out only with many distinct key values** (six servers into two buckets is lumpy). `pg_partition_tree('server_logs')` lists the tree: parent (level 0), months (level 1), leaves (level 2).
+A filter on both keys prunes to **one leaf of four**. The 2-vs-4 server split shows that **hashing evens things out only with many distinct key values**. `pg_partition_tree('server_logs')` lists parent (level 0), months (1), leaves (2).
 
 ### Trade-offs and dialects
 
-Postgres limits to know: unique/PK constraints must include every partition-key column; planning time grows with partition count (hundreds are fine, many thousands are heavy); an index on the parent becomes a *local* index on each partition — there is no global index; an `UPDATE` that changes the key moves the row (PG 11+); and `enable_partitionwise_join` / `_aggregate` (off by default) process matching partitions pairwise.
+Postgres limits: unique/PK constraints must include every partition-key column; planning time grows with partition count (hundreds fine, many thousands heavy); an index on the parent becomes a *local* index per partition — no global index; an `UPDATE` changing the key moves the row (PG 11+); `enable_partitionwise_join` / `_aggregate` (off by default) process matching partitions pairwise.
 
-Other dialects *(not run)*: **MySQL** declares `PARTITION BY RANGE/LIST/HASH/KEY (...) (PARTITION p0 VALUES LESS THAN (...), ...)` inside `CREATE TABLE`, and every unique key must include the partitioning columns; **SQL Server** uses a partition function plus a partition scheme (range only); **Oracle** adds interval partitioning (auto-created ranges); **SQLite** has none.
+Other dialects *(not run)*: **MySQL** declares `PARTITION BY RANGE/LIST/HASH/KEY (...) (PARTITION p0 VALUES LESS THAN (...), ...)` in `CREATE TABLE`, every unique key including the partitioning columns; **SQL Server** a partition function plus scheme (range only); **Oracle** adds interval partitioning (auto-created ranges); **SQLite** none.
 
-### Common mistakes
-
-- A key the hot queries don't filter on (every query scans every partition); partitioning tables under a few million rows at all — a good index is simpler.
-- Forgetting next month's partition, so inserts fail or pile into DEFAULT; thousands of tiny partitions; expecting hash partitioning to speed up range scans.
+**Common mistakes:** a key the hot queries don't filter on; partitioning tables under a few million rows (a good index is simpler); forgetting next month's partition (inserts fail or pile into DEFAULT); thousands of tiny partitions; expecting hash partitioning to speed up range scans.
 
 ### In the interview
 
@@ -277,12 +257,7 @@ Other dialects *(not run)*: **MySQL** declares `PARTITION BY RANGE/LIST/HASH/KEY
 
 - *Range vs hash for an `events` table?* Range by time if queries are "recent events" and old data is archived; hash by `user_id` if queries are per user and write load must be spread.
 - *Hot-partition problem?* Range-by-time sends all current writes to the newest partition; mitigate with time + hash composite.
-
-### Self-check
-
-1. *Why is `2023-01-01` in `orders_2023`?* Range upper bounds are exclusive.
-2. *What does `Subplans Removed` mean?* Partitions pruned at execution time because the value was a parameter.
-3. *Which strategy can't find a row by key without scanning everything?* Round-robin.
+- *`Subplans Removed`?* Partitions pruned at execution time because the value was a parameter.
 
 ### TL;DR
 
@@ -294,38 +269,32 @@ Partition by the column your big queries filter on: range for time, list for cat
 
 ### What it is
 
-**Sharding** is horizontal partitioning where each partition — a **shard** — lives in a **separate database server**, a complete, independent database holding a subset of the rows. A **shard key** decides which shard owns a row, and a **router** sends each query to the right shard(s). Example: `order_id` 1–1,000,000 on shard A and 1,000,001–2,000,000 on shard B; `WHERE order_id = 42` goes only to A.
+**Sharding** is horizontal partitioning where each partition — a **shard** — lives on a **separate database server**, a complete, independent database holding a subset of rows. A **shard key** decides which shard owns a row; a **router** sends each query to the right shard(s). Example: `order_id` 1–1,000,000 on shard A, 1,000,001–2,000,000 on B; `WHERE order_id = 42` goes only to A.
 
 ![Sharding splits one large database into several smaller databases](img/sharding.svg)
-
-*Figure — One database with millions of rows split into three shards, each an independent database (course diagram).*
 
 ### How it works
 
 1. Pick a **shard key** (`user_id`, `tenant_id`).
-2. Choose a **mapping** from key to shard: a range table, a hash, or a lookup directory.
-3. A **router** applies it: the application, a **proxy** (a middle server that receives client connections and forwards them to the right database — Vitess for MySQL; pgcat/pgdog for Postgres), or the database itself (Citus, MongoDB `mongos`, CockroachDB).
-4. Single-shard queries go straight to one shard; queries without the key are **scattered** to all shards and **gathered** — slower.
-5. Each shard is **replicated** (15.5) — sharding alone doesn't remove single points of failure; a shard without replicas loses its slice of data when it dies.
+2. Choose a **mapping**: a range table, a hash, or a lookup directory.
+3. A **router** applies it: the application, a **proxy** (a middle server forwarding client connections — Vitess for MySQL; pgcat/pgdog for Postgres), or the database itself (Citus, MongoDB `mongos`, CockroachDB).
+4. Single-shard queries go to one shard; queries without the key are **scattered** to all and **gathered** — slower.
+5. Each shard is **replicated** (15.5) — sharding alone doesn't remove single points of failure.
 
 ### Choosing the shard key (the most important decision)
 
 | Property | Why | Example |
 |---|---|---|
-| **Spreads data and load evenly** | Avoids a **hotspot** — one overloaded shard sets the speed of the whole system | `user_id` (millions of values), not `country` |
+| **Spreads data and load evenly** | Avoids a **hotspot** — one overloaded shard sets the whole system's speed | `user_id` (millions of values), not `country` |
 | **Matches the main query pattern** | Most queries hit exactly one shard | B2B SaaS sharded by `tenant_id` |
 | **Keeps related data together** | Joins and transactions stay on one shard (**co-location**) | A user's orders on the user's shard |
 | **Rarely changes / minimises rebalancing** | Changing the key or shard count means moving data | Immutable ids, not email addresses |
 
-Typical choices: `user_id` for social apps, `tenant_id` for SaaS, time ranges for time-series (but then all current writes hit the newest shard).
-
-Compared with partitioning inside one server, sharding needs a router instead of the planner, turns cross-piece queries into network scatter-gather and cross-piece transactions into distributed commits (2PC, 15.9), and lets one shard fail while the others keep serving (**fault isolation**). Its benefits: **write scaling**, **smaller working sets** (the **working set** is the data a system touches often; here each shard's hot data fits in RAM), fault isolation and more total capacity.
+Typical: `user_id` for social apps, `tenant_id` for SaaS, time ranges for time-series (but then current writes hit the newest shard). Versus partitioning in one server, sharding needs a router instead of the planner, turns cross-piece queries into network scatter-gather and cross-piece transactions into distributed commits (2PC, 15.9), and lets one shard fail while others serve (**fault isolation**). Benefits: **write scaling**, **smaller working sets** (each shard's frequently touched data fits in RAM), fault isolation, more total capacity.
 
 ### Rebalancing: why `hash % N` hurts and consistent hashing helps
 
-With naive `hash(key) % N`, changing N from 4 to 5 changes the answer for most keys. (A **hash** function turns any key into a fixed-size, random-looking number; the same key always gives the same number.) **Consistent hashing** puts shards and keys on a ring (0 to 2³²); each key belongs to the next shard clockwise, so a new shard only takes keys from its neighbour. **Virtual nodes** give each shard many small points on the ring to even out the load (Cassandra, Riak and Dynamo-style systems). `code/consistent_hashing.py` places 100,000 keys, then adds a fifth shard:
-
-The ring is a sorted list of `(hash, shard)` points; `lookup` uses `bisect` (Python's binary search over a sorted list) to find the first point clockwise of `h(key)`:
+With naive `hash(key) % N`, changing N from 4 to 5 remaps most keys. **Consistent hashing** puts shards and keys on a ring (0 to 2³²); each key belongs to the next shard clockwise, so a new shard takes keys only from its neighbour. **Virtual nodes** give each shard many small ring points to even out load (Cassandra, Riak, Dynamo-style systems). `code/consistent_hashing.py` places 100,000 keys, then adds a fifth shard; the ring is a sorted list of `(hash, shard)` points searched with `bisect`:
 
 ```python
 def lookup(self, key):
@@ -341,32 +310,21 @@ ideal fraction to move when going 4 -> 5 shards: 1/5 = 20.0%
 ```
 
 - `hash % N` balances perfectly but moves **80%** of keys — a huge migration.
-- One ring point per shard moves little only because the new shard landed on a tiny arc; the biggest shard holds 10× the smallest.
-- **200 vnodes** move about 17% (near the ideal 20%) and stay balanced — why real systems use them.
+- One point per shard moves little only because the new shard landed on a tiny arc; the biggest shard holds 10× the smallest (uneven arcs → uneven load).
+- **200 vnodes** move ~17% (near the ideal 20%) and stay balanced — why real systems use them.
 
-Another approach: a **fixed number of logical partitions** (say 1,024) mapped to servers by a directory; adding a server moves whole partitions and nothing is re-hashed (Citus shards, Vitess keyspace ranges and Kafka partitions work roughly this way). More in [DDIA ch.6 — rebalancing](../../../ddia/chapters/06-partitioning/README.md).
+Alternative: a **fixed number of logical partitions** (say 1,024) mapped to servers by a directory; adding a server moves whole partitions, nothing re-hashed (roughly Citus shards, Vitess keyspace ranges, Kafka partitions). More: [DDIA ch.6 — rebalancing](../../../ddia/chapters/06-partitioning/README.md).
 
-**Sharding Postgres in practice.** Core Postgres has no built-in sharding: use application-level routing, the **Citus** extension (`create_distributed_table('orders','customer_id')` co-locates tables sharing the key), partitions whose leaves are `postgres_fdw` foreign tables (15.4), or a Postgres-compatible distributed SQL database (CockroachDB, YugabyteDB — Chapter 16).
+**Sharding Postgres in practice.** Core Postgres has no built-in sharding: application-level routing, the **Citus** extension (`create_distributed_table('orders','customer_id')` co-locates tables sharing the key), partitions whose leaves are `postgres_fdw` foreign tables (15.4), or a Postgres-compatible distributed SQL database (CockroachDB, YugabyteDB — Chapter 16).
 
-### Common mistakes
-
-- **Monotonic key + range sharding** (auto-increment id, timestamp): every new row hits the last shard.
-- **Low-cardinality keys** (cardinality = the number of distinct values; country, status): too few shards, some huge.
-- **Sharding too early**: read replicas, caching ([Caching patterns](../../../system-design-patterns/modules/04-caching/README.md)) and a bigger machine are cheaper first steps.
-- **Forgetting cross-shard needs**: global unique constraints, cross-shard joins and all-user reports become hard.
+**Common mistakes:** **monotonic key + range sharding** (auto-increment id, timestamp — every new row hits the last shard); **low-cardinality keys** (country, status — too few shards, some huge); **sharding too early** (read replicas, caching — [Caching patterns](../../../system-design-patterns/modules/04-caching/README.md) — and a bigger machine come first); **forgetting cross-shard needs** (global unique constraints, cross-shard joins, all-user reports become hard).
 
 ### In the interview
 
 **30-second answer:** "Sharding puts horizontal partitions on separate servers so writes and storage scale out. The shard key should spread load evenly, match the main access pattern so most queries hit one shard, and keep related rows together. Queries without the key become scatter-gather and cross-shard transactions need 2PC. For rebalancing I'd use consistent hashing with virtual nodes, or fixed logical partitions mapped to nodes, never `hash mod N`."
 
 - *A celebrity user overloads one shard?* Split that key (`user123#0..9`) to spread writes and merge on read, or cache their reads.
-- *Unique ids across shards?* UUIDv7 (a **UUID** is a 128-bit random-looking id that can be generated anywhere without coordination; v7 starts with a timestamp so ids sort by time), Snowflake-style ids (timestamp + machine id + sequence), or per-shard sequences with disjoint ranges.
-
-### Self-check
-
-1. *Why is `hash % N` bad for resharding?* Changing N remaps most keys (≈80% going from 4 to 5).
-2. *What do virtual nodes fix?* Uneven arcs on the ring, hence uneven load.
-
+- *Unique ids across shards?* UUIDv7 (a 128-bit id generated anywhere without coordination; v7 starts with a timestamp so ids sort by time), Snowflake-style ids (timestamp + machine id + sequence), or per-shard sequences with disjoint ranges.
 
 ---
 
@@ -374,9 +332,7 @@ Another approach: a **fixed number of logical partitions** (say 1,024) mapped to
 
 ### What it is
 
-When a query's rows are spread over several nodes, the database must decide **which nodes to ask, what to ask each one, and how to combine the answers** — moving as little data as possible, using nodes in parallel, and still returning a correct answer.
-
-### How it works
+With rows spread over nodes, the database decides **which nodes to ask, what to ask each, and how to combine answers** — moving as little data as possible, in parallel, correctly.
 
 ```mermaid
 flowchart LR
@@ -388,7 +344,7 @@ flowchart LR
   A --> R[Result to client]
 ```
 
-Step 1 includes **data localisation** (finding which nodes hold each table); step 3 minimises network traffic and time given data location, link speeds and node load; step 5 merges partial results (union, final sort, final sum).
+Step 1 includes **data localisation** (which nodes hold each table); step 3 minimises network traffic and time given location, link speeds and node load; step 5 merges partial results (union, final sort, final sum).
 
 | Technique | Idea |
 |---|---|
@@ -403,7 +359,7 @@ Challenges: data localisation, network latency, a far larger plan space, nodes f
 
 ### Seeing it in Postgres with `postgres_fdw`
 
-`postgres_fdw` (a **foreign data wrapper**) lets one Postgres query tables on another; the remote tables appear locally as **foreign tables**. `code/06_distributed_query_fdw.sql` points it back at the same private server: schema `shard_b` plays the "remote node", and `remote.orders` is the foreign table:
+`postgres_fdw` (a **foreign data wrapper**) lets one Postgres query tables on another, which appear locally as **foreign tables**. `code/06_distributed_query_fdw.sql` points it at the same server: schema `shard_b` plays the "remote node", `remote.orders` is the foreign table:
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS postgres_fdw;
@@ -427,7 +383,7 @@ EXPLAIN (VERBOSE, COSTS OFF) SELECT customer_id, count(*), sum(amount) FROM remo
    Remote SQL: SELECT customer_id, count(*), sum(amount) FROM shard_b.orders GROUP BY 1
 ```
 
-The `Remote SQL` line shows what was pushed down: the filter (only two columns and matching rows travel) and the whole `GROUP BY` (only 12 rows come back). A **cross-node join** — local `customers` in the USA joined to remote `orders` — returns the right answer (Ben 250 orders / 64,750.00, Grace 250 / 65,000.00, Jack 250 / 64,750.00), but its plan reveals a weakness (a **Hash Join** builds an in-memory lookup table from one side, then probes it with each row of the other):
+`Remote SQL` shows what was pushed down: the filter (only two columns and matching rows travel) and the whole `GROUP BY` (12 rows come back). A **cross-node join** — local USA `customers` with remote `orders` — is correct (Ben 250 orders / 64,750.00, Grace 250 / 65,000.00, Jack 250 / 64,750.00), but its plan shows a weakness:
 
 ```
  Hash Join
@@ -439,7 +395,7 @@ The `Remote SQL` line shows what was pushed down: the filter (only two columns a
                Filter: (c.country = 'USA'::text)
 ```
 
-The remote query has **no WHERE**: all 3,000 orders cross the network and only 750 survive. The **semi-join** fix finds the USA customer ids locally first and ships only those:
+The remote query has **no WHERE**: all 3,000 orders cross the network, 750 survive. The **semi-join** fix finds USA ids locally and ships only those:
 
 ```sql
 EXPLAIN (VERBOSE, COSTS OFF)
@@ -456,25 +412,15 @@ WHERE o.customer_id = ANY (ARRAY(SELECT customer_id FROM customers WHERE country
            Filter: (customers.country = 'USA'::text)
 ```
 
-The `InitPlan` (a sub-query Postgres runs once before the main query) runs locally; its three ids travel as `$1`, and only the 750 matching orders come back. Distributed **optimisers** (the components that choose the cheapest execution plan — Citus, CockroachDB, Spark, Trino) make such choices automatically from table sizes and data location.
+The `InitPlan` (a sub-query run once before the main query) runs locally; its three ids travel as `$1`, and only the 750 matching orders return. Distributed optimisers (Citus, CockroachDB, Spark, Trino) choose such strategies automatically from table sizes and location.
 
-### Common mistakes
-
-- Wrapping remote columns in functions the remote side can't evaluate, which blocks push-down — check `Remote SQL` in `EXPLAIN VERBOSE`.
-- Joining two large tables sharded on *different* keys in the hot path — co-locate or denormalise.
-- `ORDER BY … LIMIT` across shards without per-shard limits — each shard should return its own top N first.
+**Common mistakes:** wrapping remote columns in functions the remote side can't evaluate (blocks push-down — check `Remote SQL` in `EXPLAIN VERBOSE`); joining two large tables sharded on *different* keys in the hot path (co-locate or denormalise); `ORDER BY … LIMIT` across shards without per-shard limits (each shard should return its own top N first).
 
 ### In the interview
 
-**30-second answer:** "The **coordinator** (the node that receives the query and orchestrates the others) localises the data, splits the query into per-node fragments, pushes filters and partial aggregates to the data, runs fragments in parallel and merges results. Network transfer dominates, so the optimiser prefers co-located joins, broadcasts small tables and uses semi-joins to ship keys instead of rows."
+**30-second answer:** "The **coordinator** (the node receiving the query and orchestrating the others) localises the data, splits the query into per-node fragments, pushes filters and partial aggregates to the data, runs fragments in parallel and merges results. Network transfer dominates, so the optimiser prefers co-located joins, broadcasts small tables and uses semi-joins to ship keys instead of rows."
 
 - *Why can't `AVG` be pushed down as `AVG`?* An average of averages is wrong when groups differ in size; push down `SUM` and `COUNT`, divide at the end.
-
-
-### Self-check
-
-1. *Where do you see what `postgres_fdw` pushed down?* The `Remote SQL:` line of `EXPLAIN VERBOSE`.
-2. *What does a semi-join ship first?* Only the join keys from the smaller side.
 
 ---
 
@@ -482,17 +428,15 @@ The `InitPlan` (a sub-query Postgres runs once before the main query) runs local
 
 ### What it is
 
-**Replication** keeps **copies of the same data on several nodes** (**replicas**) — like keeping photos on your laptop, an external drive and the cloud. Benefits: **high availability** (a replica takes over when the primary dies), **read scaling** (reports read from replicas), **lower latency** (a Frankfurt replica serves Europe), **disaster recovery** (**DR** — getting back to work after losing a whole site; here, a copy in another region). Costs: keeping replicas in sync, extra storage and network traffic, and **conflicts** when several copies accept writes.
-
-### Kinds of replication (what gets copied, and when)
+**Replication** keeps **copies of the same data on several nodes** (**replicas**). Benefits: **high availability** (a replica takes over when the primary dies), **read scaling**, **lower latency** (a Frankfurt replica serves Europe), **disaster recovery** (**DR** — a copy in another region for losing a whole site). Costs: keeping replicas in sync, extra storage and traffic, **conflicts** when several copies accept writes.
 
 | Type | How it works | Trade-off | Typical use |
 |---|---|---|---|
 | **Full** | Every replica holds the whole database | Any replica answers anything / storage × replicas | DR copies |
-| **Transactional** | Each committed transaction streams to replicas in commit order, near real time | Close and ordered / continuous overhead | OLTP (day-to-day transactional workload) read replicas, Postgres logical replication |
+| **Transactional** | Each committed transaction streams to replicas in commit order, near real time | Close and ordered / continuous overhead | OLTP read replicas, Postgres logical replication |
 | **Snapshot** | Periodically copy a full snapshot | Very simple / only as fresh as the last copy | Nightly reporting copies |
 | **Merge** | Copies change independently (even offline), then merge by rules | Works disconnected / conflicts | Field and mobile apps |
-| **Key-based incremental** | Copy rows whose `updated_at`/version is newer than the last sync | Moves little data / **misses hard deletes** (rows physically removed) unless tombstoned (marked deleted instead) | ETL (extract-transform-load pipelines) into warehouses, IoT (internet-connected device) sync |
+| **Key-based incremental** | Copy rows whose `updated_at`/version is newer than the last sync | Moves little data / **misses hard deletes** (physically removed rows) unless tombstoned (marked deleted) | ETL into warehouses, IoT device sync |
 
 A retailer might mix them: orders and stock transactionally, the catalogue as nightly snapshots, a full replica in another region.
 
@@ -514,29 +458,25 @@ sequenceDiagram
   L->>F: WAL record (later)
 ```
 
-**Synchronous** replication returns a commit only when the sync replica(s) also have it: no acknowledged commit is lost, but every write pays a network **round trip** (a message there plus the reply back) and commits **block** if that replica is down (use it for money and orders). **Asynchronous** returns once the leader has it: fast, but the newest commits may be lost if the leader dies, and replicas lag (**replication lag**) — fine for read replicas, cross-region copies and analytics. Most systems are **semi-synchronous**: wait for *one* (or a quorum of) replicas, the rest async. **In PostgreSQL**, physical **streaming replication** ships the **WAL** (write-ahead log — the database's append-only record of every change, 15.9) to **standbys** (replica servers ready to take over), async by default; `synchronous_standby_names` (e.g. `'ANY 1 (s1, s2)'`) makes commits wait, and `synchronous_commit` sets how far: `remote_write` (received), `on` (flushed), `remote_apply` (applied, so standby reads see it). **Logical replication** (`CREATE PUBLICATION` / `SUBSCRIPTION`, PG 10+) streams row changes per table.
+**Synchronous**: a commit returns only when the sync replica(s) have it — no acknowledged commit lost, but every write pays a network round trip and commits **block** if that replica is down (money, orders). **Asynchronous**: returns once the leader has it — fast, but the newest commits may be lost if the leader dies, and replicas lag (**replication lag**) — fine for read replicas, cross-region copies, analytics. Most systems are **semi-synchronous**: wait for *one* (or a quorum of) replicas, the rest async.
+
+**In PostgreSQL**, physical **streaming replication** ships the WAL ([§13.5](../13-transactions-and-concurrency/README.md#135-durability)) to **standbys** (replicas ready to take over), async by default; `synchronous_standby_names` (e.g. `'ANY 1 (s1, s2)'`) makes commits wait, and `synchronous_commit` sets how far: `remote_write` (received), `on` (flushed), `remote_apply` (applied, so standby reads see it). **Logical replication** (`CREATE PUBLICATION` / `SUBSCRIPTION`, PG 10+) streams row changes per table.
 
 ### Replication topologies
 
 ![Single-leader replication](img/single-leader.svg)
 
-*Figure — Single-leader: one leader takes writes and streams them to followers, which serve reads (course diagram).*
-
-**1. Single-leader** (primary/replica; formerly master/slave). All writes go to the leader, which records them in its **replication log / WAL** and ships the log to **followers** (sync or async). Reads may use any node. If the leader fails, **failover** promotes a follower (15.10). Simple, no write conflicts, strong consistency possible; but write throughput is one machine's and async followers can be stale. Examples: PostgreSQL, MySQL, SQL Server Always On, MongoDB replica sets.
+**1. Single-leader** (primary/replica; formerly master/slave). All writes go to the leader, which ships its **replication log / WAL** to **followers** (sync or async); reads may use any node; if the leader fails, **failover** promotes a follower (15.10). Simple, no write conflicts, strong consistency possible; but write throughput is one machine's and async followers can be stale. PostgreSQL, MySQL, SQL Server Always On, MongoDB replica sets.
 
 ![Multi-leader replication](img/multi-leader.svg)
 
-*Figure — Multi-leader: several leaders accept writes and replicate to each other (course diagram).*
-
-**2. Multi-leader** (active-active). Several nodes (often one per region) accept writes and replicate to each other. The same row changed at two leaders at once is a **conflict**, resolved by **last-write-wins** (by timestamp — silently drops one write), custom merge code, or **CRDTs** (conflict-free replicated data types, which merge automatically). If one leader fails, clients switch to another. Used for multi-region writes, offline apps (each device is a leader) and collaborative editing. Examples: MySQL Group Replication (multi-primary), Postgres with BDR/pgEdge, CouchDB.
+**2. Multi-leader** (active-active). Several nodes (often one per region) accept writes and replicate to each other. One row changed at two leaders at once is a **conflict**, resolved by **last-write-wins** (by timestamp — silently drops one write), custom merge code, or **CRDTs** (conflict-free replicated data types, which merge automatically). If a leader fails, clients switch. Used for multi-region writes, offline apps (each device a leader), collaborative editing. MySQL Group Replication (multi-primary), Postgres with BDR/pgEdge, CouchDB.
 
 ![Leaderless replication](img/leaderless.svg)
 
-*Figure — Leaderless: the client writes to and reads from several nodes directly (course diagram).*
+**3. Leaderless** (Dynamo-style). The client (or a coordinator) sends each write to all **N** replicas and succeeds once **W** acknowledge; reads ask **R** replicas and keep the newest version. If **R + W > N**, every read set overlaps every write set (the **quorum condition**). Stale replicas are fixed by **read repair** (the reader writes the newest value back), background **anti-entropy** (comparing **Merkle trees** — trees of hashes where each parent hashes its children, so replicas find differing data by comparing a few hashes) and **hinted handoff** (writes for a down node are held and delivered later). Concurrent writes are detected with **version vectors / vector clocks** (a per-node list of counters on each value; comparing two lists shows whether one write happened after the other or they were concurrent). Cassandra, ScyllaDB, Riak, Amazon's original Dynamo (the DynamoDB *service* uses a leader per partition). Leaderless systems use **quorums, not consensus** (no Paxos/Raft per write): available, but guaranteeing less.
 
-**3. Leaderless** (Dynamo-style). The client (or a coordinator for it) sends each write to all **N** replicas and succeeds once **W** acknowledge; reads ask **R** replicas and keep the newest version. If **R + W > N**, every read set overlaps every write set (the **quorum condition**). Stale replicas are fixed by **read repair** (the reader writes the newest value back), background **anti-entropy** (Merkle-tree comparison — a **Merkle tree** is a tree of hashes where each parent hashes its children, so two replicas can find differing data by comparing a few hashes) and **hinted handoff** (writes for a down node are held and delivered later). Concurrent writes are detected with **version vectors / vector clocks** (a per-node list of counters attached to each value; comparing two lists tells whether one write happened after the other or they were concurrent). Examples: Cassandra, ScyllaDB, Riak, Amazon's original Dynamo (the DynamoDB *service* actually uses a leader per partition). Leaderless systems use **quorums, not consensus** — no Paxos/Raft per write — so they stay available but guarantee less.
-
-`code/quorum.py` simulates N = 3: in each trial a new version reaches only W random replicas, then a read asks R random replicas, keeps the highest version, and counts as stale if that is still the old value:
+`code/quorum.py` simulates N = 3: each trial a new version reaches W random replicas, a read asks R random replicas and keeps the highest version; stale if still old:
 
 ```
 N = 3 replicas, 10,000 trials per setting
@@ -551,24 +491,18 @@ N = 3 replicas, 10,000 trials per setting
 N=3, W=2, R=2: writes and reads still succeed with 1 replica down (2 of 3 answer); with 2 down they fail -> the system chooses consistency.
 ```
 
-Every setting with R + W > N had **zero** stale reads. N=3, W=2, R=2 survives one failed replica — Cassandra's `QUORUM` level; `ONE` is fast but possibly stale. Quorums still aren't full **linearizability** (the strongest guarantee, defined in 15.6): sloppy quorums (writes accepted by stand-in nodes when the usual ones are down), concurrent writes and clock-based last-write-wins can produce anomalies ([DDIA ch.5](../../../ddia/chapters/05-replication/README.md)).
+Every R + W > N setting had **zero** stale reads (for N=5, e.g. W=3, R=3). N=3, W=2, R=2 survives one failed replica — Cassandra's `QUORUM`; `ONE` is fast but possibly stale. Quorums still aren't **linearizability** (15.6): sloppy quorums (writes accepted by stand-in nodes), concurrent writes and clock-based last-write-wins can produce anomalies ([DDIA ch.5](../../../ddia/chapters/05-replication/README.md)).
 
 **Choosing a topology:** correctness first → single-leader with a sync replica; writes in several regions → multi-leader with a conflict plan; must stay writable through failures and eventual is acceptable → leaderless with quorums.
 
-**Replication lag in practice.** A user updates their profile, the next page is served by a lagging replica, and the old version appears. Fixes: read your own recent writes from the leader, pin a session to one replica, or wait until the replica's `pg_last_wal_replay_lsn()` reaches the write's LSN — the session guarantees of 15.6.
+**Replication lag in practice.** A user updates their profile, a lagging replica serves the next page, the old version appears. Fixes: read your own recent writes from the leader, pin a session to one replica, or wait until the replica's `pg_last_wal_replay_lsn()` reaches the write's LSN — the session guarantees of 15.6.
 
 ### In the interview
 
 **30-second answer:** "Replication keeps copies for availability, read scaling and DR. Sync loses no acknowledged commits but slows writes; async is fast but can lose recent commits and serve stale reads, so most systems are semi-sync. Topologies: single-leader (simple, no conflicts), multi-leader (multi-region writes, conflicts), leaderless (quorums with R + W > N, read repair)."
 
 - *A user doesn't see their own comment?* A lagging async replica served the read; use read-your-writes routing.
-- *Last-write-wins downside?* Concurrent updates are silently lost, and **clock skew** (machines' clocks disagreeing slightly) can discard the newer one.
-
-### Self-check
-
-1. *Which replication type can miss hard deletes?* Key-based incremental.
-2. *N=5: which W and R guarantee overlap?* Any pair with R + W > 5, e.g. W=3, R=3.
-
+- *Last-write-wins downside?* Concurrent updates are silently lost, and **clock skew** (clocks disagreeing slightly) can discard the newer one.
 
 ---
 
@@ -576,7 +510,7 @@ Every setting with R + W > N had **zero** stale reads. N=3, W=2, R=2 survives on
 
 ### What it is
 
-With several copies, "what will a read return?" has more than one answer. A **consistency model** is the contract: which writes a read is guaranteed to see, and in what order clients observe operations. Stronger models are easier to program against but need more coordination (slower, less available); weaker ones are faster but push work onto the application.
+With several copies, "what will a read return?" has more than one answer. A **consistency model** is the contract: which writes a read is guaranteed to see, and in what order clients observe operations. Stronger models are easier to program against but need more coordination (slower, less available); weaker ones are faster but push work onto the application. (Not ACID's C, which is about constraints — [§13.3](../13-transactions-and-concurrency/README.md#133-consistency); these are about **replicas and ordering**.)
 
 ```mermaid
 flowchart TB
@@ -586,16 +520,14 @@ flowchart TB
   SE --> E["Eventual / weak<br/>replicas converge some time later"]
 ```
 
-### The models
-
 | Model | Guarantee | How it's built | Pros / cons | Use |
 |---|---|---|---|---|
-| **Strong (linearizable)** | Every read sees the **latest completed write**; the system acts like one copy with operations in **real-time** order (if A finishes before B starts, everyone sees A first) | Synchronous replication or consensus (15.8), atomic operations, one global order | Simplest to reason about, no stale reads / coordination latency, scales less, may be **unavailable** during partitions | Balances, stock at checkout, "is this username taken?", locks. etcd, ZooKeeper writes, Spanner, CockroachDB, single-node Postgres |
-| **Sequential** | All clients see **the same order**, and each client's operations in its own program order — but not necessarily real-time order | A global sequencer | One agreed history / still needs coordination, no recency promise | CPU memory models, distributed shared memory; rare by name in databases |
-| **Causal** | If A could have influenced B (same client did A then B, or B read A), **everyone sees A before B**; unrelated (**concurrent**) operations may appear in different orders | Track dependencies with **vector clocks**; delay an update until its dependencies are visible | Little coordination, works across regions, matches intuition / complex tracking, brief divergence | Replies after questions, chat, collaborative editing; MongoDB causally consistent sessions |
-| **Weak / eventual** | Few promises; **eventual consistency**: if writes stop, replicas converge | Async propagation, anti-entropy, conflict resolution | Lowest latency, highest availability / stale and out-of-order reads, confusing UX (a like count that jumps) | Caches/CDNs (content delivery networks — servers worldwide holding copies of content), counters, analytics, DNS (the internet's name-to-address lookup) |
+| **Strong (linearizable)** | Every read sees the **latest completed write**; acts like one copy with operations in **real-time** order (if A finishes before B starts, everyone sees A first) | Synchronous replication or consensus (15.8), atomic operations, one global order | Simplest to reason about, no stale reads / coordination latency, scales less, may be **unavailable** during partitions | Balances, stock at checkout, "is this username taken?", locks. etcd, ZooKeeper writes, Spanner, CockroachDB, single-node Postgres |
+| **Sequential** | All clients see **the same order**, each client's operations in program order — but not necessarily real-time order | A global sequencer | One agreed history / still needs coordination, no recency promise | CPU memory models, distributed shared memory; rare by name in databases |
+| **Causal** | If A could have influenced B (same client did A then B, or B read A), **everyone sees A before B**; **concurrent** operations may appear in different orders | Track dependencies with **vector clocks**; delay an update until its dependencies are visible | Little coordination, works across regions, matches intuition / complex tracking, brief divergence | Replies after questions, chat, collaborative editing; MongoDB causally consistent sessions |
+| **Weak / eventual** | Few promises; **eventual consistency**: if writes stop, replicas converge | Async propagation, anti-entropy, conflict resolution | Lowest latency, highest availability / stale and out-of-order reads, confusing UX (a like count that jumps) | Caches/CDNs, counters, analytics, DNS |
 
-*Sequential example:* Alice posts P1 then P2, Bob posts Q1; everyone sees one interleaving (say P1, Q1, P2), never P2 before P1 — but a reader just after Q1 finished may not see it yet.
+*Sequential example:* Alice posts P1 then P2, Bob posts Q1; everyone sees one interleaving (say P1, Q1, P2), never P2 before P1 — but a reader just after Q1 finished may not see it yet (strong would).
 
 ### Session (client-centric) guarantees
 
@@ -608,11 +540,9 @@ Weaker than the global models, but they fix the anomalies users notice, **within
 | **Monotonic writes** | Your writes apply in the order issued | "price = 12" applied before the earlier "price = 10" | Version-control commits, debit then credit |
 | **Writes-follow-reads** | A write after reading X is ordered after X | Reply stored before the post it answers | Comment threads |
 
-**Session consistency** bundles them (Azure Cosmos DB's default level): track the last version/LSN each session saw and route its reads to replicas at least that fresh — coherent for the user and cheap, though sessions may see different states and routing loses some **load-balancing** (spreading requests across servers) freedom.
+**Session consistency** bundles them (Azure Cosmos DB's default): track the last version/LSN each session saw and route its reads to replicas at least that fresh — coherent for the user and cheap, though sessions may see different states and routing loses some load-balancing freedom.
 
 **How to choose:** strong for money and stock; session guarantees where users mostly need their own actions to stick; causal for cause-and-effect content; eventual for high-volume, tolerant data. Many systems let you **choose per operation** — Cassandra consistency levels, DynamoDB `ConsistentRead`, MongoDB read/write concerns, Cosmos DB's five levels.
-
-> **Don't confuse** this "C" with the **C in ACID** (Chapter 13), which means "transactions keep constraints and invariants true". Consistency *models* are about **replicas and ordering**.
 
 ### In the interview
 
@@ -620,12 +550,7 @@ Weaker than the global models, but they fix the anomalies users notice, **within
 
 - *Model for a comment thread?* Causal — replies must never precede their parent.
 - *Linearizable vs serializable?* Linearizability is about single objects and real-time recency; serializability is about multi-object transactions behaving as if run one at a time. Both together = "strict serializability" (Spanner).
-
-### Self-check
-
-1. *A refresh shows an older comment list. Which guarantee broke?* Monotonic reads.
-2. *Sequential vs strong?* Strong also respects real-time order.
-
+- *A refresh shows an older comment list — which guarantee broke?* Monotonic reads.
 
 ---
 
@@ -635,7 +560,7 @@ Weaker than the global models, but they fix the anomalies users notice, **within
 
 The **CAP theorem** (Eric Brewer's conjecture, 2000; proved by Gilbert and Lynch, 2002) concerns three properties of a replicated store:
 
-- **C — Consistency** (here *linearizability*; see also [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md) for CAP in context): every read sees the most recent successful write. If Priya's balance drops from ₹500 to ₹300, no node may still report ₹500.
+- **C — Consistency** (here *linearizability*; CAP in context: [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)): every read sees the most recent successful write — if Priya's balance drops from ₹500 to ₹300, no node may still report ₹500.
 - **A — Availability**: every request to a **non-failed** node gets a non-error response, without waiting indefinitely.
 - **P — Partition tolerance**: the system keeps working when the network drops or delays messages between groups of nodes.
 
@@ -643,21 +568,17 @@ The **CAP theorem** (Eric Brewer's conjecture, 2000; proved by Gilbert and Lynch
 
 ![CAP triangle: CP, AP and CA regions](img/cap.svg)
 
-*Figure — The three CAP properties and the CP, AP and CA combinations (course diagram).*
-
 ### Why "pick two of three" is misleading
 
-In anything spanning more than one machine, **partitions will happen** (switches fail, cables get cut), so P can't be given up. The real choice is what to do *during* a partition:
+Across machines **partitions will happen** (switches fail, cables get cut), so P can't be given up; the real choice is what to do *during* one:
 
 | Choice | During a partition | Pros | Cons | Examples |
 |---|---|---|---|---|
-| **CP** | Refuse or delay some requests (usually on the minority side) rather than return stale data | Correct, no divergence | Errors/timeouts for some users, coordination latency | etcd, ZooKeeper (small, strongly consistent coordination stores), HBase, Spanner, CockroachDB |
+| **CP** | Refuse or delay some requests (usually the minority side) rather than return stale data | Correct, no divergence | Errors/timeouts for some users, coordination latency | etcd, ZooKeeper (small, strongly consistent coordination stores), HBase, Spanner, CockroachDB |
 | **AP** | Keep answering on both sides, reconcile later | Always responsive | Temporarily inconsistent, needs conflict resolution | Cassandra/ScyllaDB (at `ONE`), Riak, CouchDB, DNS |
 | **CA** | Only if partitions never happen — effectively one node | Simple and strong | No tolerance of network failure | A single Postgres server (not distributed, so CAP doesn't really apply) |
 
-*Example:* a subscriber counter is kept in two data centres and the link breaks. **AP** lets both sides keep accepting clicks and merges the counts later; **CP** makes the minority side refuse clicks until the link returns.
-
-Nuances: the choice is often **per operation** (CP for "place order and decrement stock", AP for "show reviews"); with **no** partition a system can be both C and A; and CAP's A is strict — many "CP" systems are highly available in practice.
+*Example:* a subscriber counter in two data centres when the link breaks — **AP** keeps accepting clicks on both sides and merges later; **CP** makes the minority side refuse clicks until the link returns. Nuances: the choice is often **per operation** (CP for "place order and decrement stock", AP for "show reviews"); with **no** partition a system can be both C and A; CAP's A is strict — many "CP" systems are highly available in practice.
 
 ### PACELC
 
@@ -674,36 +595,27 @@ Daniel Abadi's **PACELC** (2010): **if Partition, choose A or C; Else, choose La
 
 - *Is a single Postgres server CA?* It isn't distributed, so CAP isn't about it; with async replicas plus failover it's neither fully C (can lose recent commits) nor fully A.
 
-### Self-check
-
-1. *What does C mean in CAP, and what does PACELC add?* Linearizability; the latency-vs-consistency trade-off in normal operation.
-
-
 ---
 
 ## 15.8 Consensus and leader election
 
 ### What consensus is
 
-**Consensus** gets several nodes to **agree on one value** (or one ordered log) even when some crash or messages are delayed. Everything that needs "exactly one" rests on it — one leader, one commit decision, one log order, one lock owner — so it underpins consistency, fault tolerance, event ordering and coordination. A correct protocol guarantees **agreement** (all non-faulty nodes decide the same value), **validity** (the decision was proposed by someone; if all propose v, it's v), **termination** (non-faulty nodes eventually decide) and **fault tolerance** (it survives a minority of **crash faults**, or fewer than a third of **Byzantine faults** — nodes that lie). It's hard because nodes crash, networks partition and reorder messages, some nodes may be malicious, and every round trip adds latency. The **FLP result** (Fischer, Lynch, Paterson, 1985) proves no **deterministic** (same inputs, always same steps) protocol can *guarantee* termination in a fully asynchronous network if even one node may crash — so real protocols are always *safe* and use timeouts to *usually* make progress.
+**Consensus** gets nodes to **agree on one value** (or one ordered log) even when some crash or messages are delayed. Everything needing "exactly one" rests on it — one leader, one commit decision, one log order, one lock owner. A correct protocol guarantees **agreement** (all non-faulty nodes decide the same value), **validity** (the decision was proposed by someone; if all propose v, it's v), **termination** (non-faulty nodes eventually decide) and **fault tolerance** (survives a minority of **crash faults**, or fewer than a third of **Byzantine faults** — nodes that lie). It's hard because nodes crash, networks partition and reorder messages, some nodes may be malicious, and every round trip adds latency. The **FLP result** (Fischer, Lynch, Paterson, 1985): no **deterministic** protocol can *guarantee* termination in a fully asynchronous network if even one node may crash — so real protocols are always *safe* and use timeouts to *usually* make progress.
 
 ### The algorithms in brief
 
 ![Paxos: proposers send proposals to acceptors](img/paxos.svg)
 
-*Figure — Paxos roles: proposers send numbered proposals to a set of acceptors, which accept and communicate the chosen value (course diagram).*
-
-**Paxos** (Leslie Lamport; written 1989, published 1998) has **proposers**, **acceptors** and **learners**. (1) **Prepare/Promise:** a proposer sends *prepare(n)* with a unique, higher number to a majority; each acceptor promises to ignore anything below *n* and reports the highest-numbered proposal it already accepted. (2) **Accept:** with a majority of promises the proposer sends *accept(n, v)*, where *v* must be the highest-numbered value reported (its own only if none). (3) Once a **majority accepts**, *v* is chosen and learners are told. It tolerates ⌊(N−1)/2⌋ crashes, needs no synchronised clocks for safety and is formally proven, but it's hard to implement, costs two round trips per decision (**Multi-Paxos** keeps a stable leader to skip phase 1), and duelling proposers can stall it. Used in Google's Chubby and Spanner.
+**Paxos** (Leslie Lamport; written 1989, published 1998) has **proposers**, **acceptors**, **learners**. (1) **Prepare/Promise:** a proposer sends *prepare(n)* with a unique, higher number to a majority; each acceptor promises to ignore anything below *n* and reports the highest-numbered proposal it already accepted. (2) **Accept:** with a majority of promises it sends *accept(n, v)*, where *v* must be the highest-numbered reported value (its own only if none). (3) Once a **majority accepts**, *v* is chosen and learners are told. Tolerates ⌊(N−1)/2⌋ crashes, needs no synchronised clocks for safety, formally proven — but hard to implement, two round trips per decision (**Multi-Paxos** keeps a stable leader to skip phase 1), and duelling proposers can stall it. Google's Chubby and Spanner.
 
 ![Raft: follower, candidate and leader states](img/raft.svg)
 
-*Figure — Raft node states: follower → candidate (on timeout) → leader (on majority vote), and back to follower on discovering a newer term (course diagram).*
+**Raft** (Ongaro and Ousterhout, 2014) gives the same guarantees, designed to be **understandable**. (1) **Election:** time is split into numbered **terms**; a follower hearing no **heartbeat** (periodic "I'm alive") within its **randomised election timeout** (150–300 ms in the paper) becomes a **candidate**, increments the term and requests votes; each node votes once per term, only for a candidate whose log is at least as up to date; a majority makes a **leader**, and random timeouts make split votes rare. (2) **Log replication:** the leader sends **AppendEntries** (also the heartbeat); an entry is **committed** once a majority stores it. (3) **Safety:** only a node holding every committed entry can win. Weaknesses: the leader caps throughput, unstable networks cause repeated elections, each commit waits for a majority. etcd (Kubernetes' store), Consul, CockroachDB, TiKV, YugabyteDB, Kafka's KRaft; MongoDB's replica-set protocol is Raft-inspired.
 
-**Raft** (Ongaro and Ousterhout, 2014) gives the same guarantees but was designed to be **understandable**. (1) **Election:** time is split into numbered **terms**; a follower that hears no **heartbeat** (a small periodic "I'm alive" message) within its **randomised election timeout** (150–300 ms in the paper) becomes a **candidate**, increments the term and requests votes; each node votes once per term, only for a candidate whose log is at least as up to date as its own; a majority makes a **leader**, and the random timeouts make split votes rare. (2) **Log replication:** the leader sends **AppendEntries** (also the heartbeat); an entry is **committed** once a majority stores it. (3) **Safety:** only a node holding every committed entry can win. Its weaknesses: the leader is a throughput ceiling, unstable networks cause repeated elections, and each commit waits for a majority. Used in etcd (Kubernetes' store), Consul, CockroachDB, TiKV, YugabyteDB and Kafka's KRaft; MongoDB's replica-set protocol is Raft-inspired.
+**PBFT** (Practical Byzantine Fault Tolerance; Castro and Liskov, 1999) tolerates **f lying nodes out of N ≥ 3f + 1**. In each **view** a **primary** runs *pre-prepare* (assign a sequence number) → *prepare* (replicas broadcast; prepared after 2f matching messages from others) → *commit* (after 2f + 1 matching commits) → *reply* (the client waits for f + 1 identical replies, so one is honest). **O(N²) messages**, so clusters stay at tens of nodes; **permissioned blockchains** (ledgers only approved participants may join; Hyperledger family) and critical control systems.
 
-**PBFT** (Practical Byzantine Fault Tolerance; Castro and Liskov, 1999) tolerates **f lying nodes out of N ≥ 3f + 1**. In each **view** a **primary** runs *pre-prepare* (assign a sequence number) → *prepare* (replicas broadcast; prepared after 2f matching messages from others) → *commit* (after 2f + 1 matching commits) → *reply* (the client waits for f + 1 identical replies, so one is honest). It costs **O(N²) messages**, so clusters stay at tens of nodes; used in **permissioned blockchains** (shared ledgers where only approved participants may join; Hyperledger family) and critical control systems.
-
-**Proof of Work** (Bitcoin) serves **open** networks, where fake identities make vote-counting useless: miners race to find a **nonce** (a throwaway number tried over and over) that puts the block hash under a target, others verify cheaply, and the chain with the most accumulated work wins — no central authority, but heavy energy use, slow finality (a block every ~10 minutes) and exposure to a **51% attack** (whoever controls most of the computing power can rewrite recent history). **Proof of Stake** (Ethereum since the 2022 "Merge") weights votes by locked-up currency instead.
+**Proof of Work** (Bitcoin) serves **open** networks, where fake identities make vote-counting useless: miners race to find a **nonce** that puts the block hash under a target, others verify cheaply, and the chain with the most accumulated work wins — no central authority, but heavy energy use, slow finality (a block every ~10 minutes) and exposure to a **51% attack** (most of the computing power can rewrite recent history). **Proof of Stake** (Ethereum since the 2022 "Merge") weights votes by locked-up currency.
 
 | Algorithm | Fault model, tolerance | Cost | Fits |
 |---|---|---|---|
@@ -712,22 +624,20 @@ Daniel Abadi's **PACELC** (2010): **if Partition, choose A or C; Else, choose La
 | PBFT | Byzantine, ⌊(N−1)/3⌋ | O(N²) messages | Permissioned ledgers |
 | PoW / PoS | Byzantine, open membership (honest majority of hash power / stake) | Slow, energy-hungry / better throughput | Public blockchains |
 
-Known members that may crash → Raft or Paxos (what you'll meet inside databases); known members that may lie → PBFT family; unknown members → PoW/PoS. For the full reasoning see [DDIA ch.9](../../../ddia/chapters/09-consistency-and-consensus/README.md).
+Known members that may crash → Raft or Paxos (what you'll meet inside databases); known members that may lie → PBFT family; unknown members → PoW/PoS. Full reasoning: [DDIA ch.9](../../../ddia/chapters/09-consistency-and-consensus/README.md).
 
 ### Leader election
 
-A **leader** is the single decider for writes, task assignment or a lock; election picks one and re-picks when it fails. Hard parts: a slow leader looks dead, partitions can create **two leaders** (**split brain**), and clocks differ between nodes.
+A **leader** is the single decider for writes, task assignment or a lock; election picks one and re-picks on failure. Hard parts: a slow leader looks dead, partitions can create **two leaders** (**split brain**), clocks differ.
 
 | Strategy | How it works | Strengths | Weaknesses |
 |---|---|---|---|
 | **Bully** | The detecting node sends ELECTION to all **higher** ids; if none answers it wins, else the higher node takes over; the winner broadcasts COORDINATOR | Simple, deterministic (highest live id) | Up to **O(n²)** messages; the top node always leads, even if weak |
-| **Ring** | ELECTION travels round a logical ring, each node substituting its id if higher; whoever gets its **own** id back wins and circulates COORDINATOR | About **2n** messages, equal participation | Slow on big rings; a dead node breaks the ring unless skipped |
+| **Ring** | ELECTION travels a logical ring, each node substituting its id if higher; whoever gets its **own** id back wins and circulates COORDINATOR | About **2n** messages, equal participation | Slow on big rings; a dead node breaks the ring unless skipped |
 | **Randomised** | Candidates wait a **random delay**, the first to announce wins, collisions retry | Simple, collisions rare | Non-deterministic (Raft adds majority votes) |
 | **ZooKeeper** | Each candidate creates an **ephemeral sequential** znode (gone when its session dies); the **lowest** leads; each watches only the znode just **before** its own | Reliable, simple API; ZooKeeper runs the consensus protocol **ZAB** | Extra system to run (same pattern: etcd, Consul, Kubernetes **Lease**) |
 
 ![Bully algorithm rounds](img/bully.svg)
-
-*Figure — Bully election: after the leader fails, election messages flow to higher ids until the highest live node announces itself (course diagram).*
 
 `code/leader_election.py` counts messages when the highest-id leader has crashed and the *lowest* id notices first (Bully's worst case):
 
@@ -740,21 +650,15 @@ nodes bully leader bully msgs ring leader ring msgs
 
 Same leader either way; Bully grows roughly with n², Ring with 2n.
 
-**Fencing.** A correctly elected leader can be *paused* (long **GC** — garbage-collection pause, when a runtime stops the program to free unused memory — or a **VM** (virtual machine) freeze), replaced, then wake up still believing it leads. Give each new leader a higher term/epoch number (a **fencing token**) and have storage reject writes carrying an older one — Raft terms do exactly this.
+**Fencing.** A correctly elected leader can be *paused* (a long garbage-collection pause or a VM freeze), replaced, then wake still believing it leads. Give each new leader a higher term/epoch number (a **fencing token**) and have storage reject writes carrying an older one — Raft terms do exactly this.
 
 ### In the interview
 
 **30-second answer:** "Consensus lets nodes agree on a value or log despite failures. Raft elects a leader with randomised timeouts and majority votes and commits an entry once a majority stores it, tolerating ⌊(N−1)/2⌋ crashes; Paxos is the older equivalent. PBFT tolerates liars with 3f+1 nodes at O(N²) messages. For leader election I'd use etcd or ZooKeeper and fence stale leaders with epoch numbers."
 
-- *Why 3 or 5 nodes, not 4?* A majority of 4 is 3, so 4 nodes tolerate one failure — no better than 3.
-- *What is split brain?* Two nodes both acting as leader after a partition; prevent it with majority quorums and fencing.
-
-### Self-check
-
-1. *A 5-node Raft cluster tolerates how many failures?* 2.
-2. *PBFT with f = 2 needs at least?* 3f + 1 = 7 nodes.
-3. *Which znode does a ZooKeeper candidate watch?* The one just before its own.
-4. *What can't be guaranteed in a fully asynchronous system (FLP)?* Termination.
+- *Why 3 or 5 nodes, not 4?* A majority of 4 is 3, so 4 nodes tolerate one failure — no better than 3 (5 tolerate 2).
+- *What is split brain?* Two nodes both acting as leader after a partition; prevent with majority quorums and fencing.
+- *PBFT with f = 2?* At least 3f + 1 = 7 nodes.
 
 ### TL;DR
 
@@ -766,24 +670,22 @@ Consensus = majority agreement that survives crashes (Raft/Paxos) or lies (PBFT,
 
 ### What it is
 
-**Fault tolerance** is the ability to **keep working correctly while parts are failing**. A **fault** is one component going wrong (dead disk, crashed process, dropped packet); a **failure** is the whole system stopping or answering wrongly — fault tolerance stops the first becoming the second, like a twin-engine plane landing on one engine. Its objectives are **continuity of service**, **data integrity**, **graceful degradation** (recommendations vanish but checkout works) and **recovery**, in support of **availability**, **reliability**, **safety** (failures stay contained — aviation, cars) and **maintainability** (easy repair and upgrade).
+**Fault tolerance** is **working correctly while parts fail**. A **fault** is one component going wrong (dead disk, crashed process, dropped packet); a **failure** is the whole system stopping or answering wrongly — fault tolerance stops the first becoming the second. Objectives: **continuity of service**, **data integrity**, **graceful degradation** (recommendations vanish but checkout works), **recovery** — in support of **availability**, **reliability**, **safety** (failures stay contained) and **maintainability**.
 
-Handling a fault has five phases: **detection** (heartbeats, health checks, monitoring) → **diagnosis** (logs, error codes, tools) → **evidence generation** (detailed logs, snapshots, audit trails) → **assessment** (impact analysis, dependency maps) → **recovery** (fail over, restart, reconfigure, restore). Techniques exist at every level: **hardware** (RAID — several disks combined so one can fail without data loss, see 15.11 — hot-swappable drives, dual power supplies), **software** (exception handling, retries with **backoff** (waiting longer between each retry), timeouts, graceful degradation, **circuit breakers** (stop calling a failing service for a while so it can recover) — see [Reliability patterns](../../../system-design-patterns/modules/05-reliability/README.md)) and **system** (checkpointing, mirroring, load balancing, replication and failover). The rest of this section covers the database machinery: WAL, checkpoints and distributed commit.
+Handling a fault has five phases: **detection** (heartbeats, health checks, monitoring) → **diagnosis** (logs, error codes) → **evidence generation** (detailed logs, snapshots, audit trails) → **assessment** (impact analysis, dependency maps) → **recovery** (fail over, restart, reconfigure, restore). Techniques at every level: **hardware** (RAID, 15.11; hot-swappable drives, dual power supplies), **software** (exception handling, retries with backoff, timeouts, graceful degradation, **circuit breakers** that stop calling a failing service for a while — [Reliability patterns](../../../system-design-patterns/modules/05-reliability/README.md)) and **system** (checkpointing, mirroring, load balancing, replication and failover). The rest covers the database machinery.
 
-### Write-ahead logging (WAL)
+### Write-ahead logging, redo, undo and LSNs
 
-**The rule:** *a change's log record must be safely on disk before the changed data page is written.* The log is an append-only sequential file (fast to write); data pages are written back lazily. After a crash the data files may be stale or half-written, but **the log has the truth**. A transaction changes **pages** (fixed-size blocks, 8 kB in Postgres, in which tables are stored) in memory (the **buffer pool** — the database's in-RAM cache of pages) and creates a log record per change; at **COMMIT** the log up to the commit record is **flushed (fsync'd** — `fsync` is the system call that forces data out of OS caches onto the physical disk), and only then is the commit acknowledged — now **durable** (the D of ACID, Chapter 13). *Example:* Ravi moves ₹5,000 from A to B; "A −5,000", "B +5,000" and a commit record are flushed and he sees "Transfer complete". If the server crashes a millisecond later, before the data pages were written, recovery replays those records.
+The WAL rule — *a change's log record reaches disk before the changed data page*, with the log flushed (`fsync`) before COMMIT is acknowledged — is explained in [§13.5](../13-transactions-and-concurrency/README.md#135-durability). *Example:* Ravi moves ₹5,000 from A to B; "A −5,000", "B +5,000" and a commit record are flushed and he sees "Transfer complete"; if the server crashes a millisecond later, before the data pages were written, recovery replays those records. Recovery has two jobs:
 
-### Redo, undo and LSNs
+- **Redo** makes **committed** work survive: re-apply logged changes (**after-images** — new values) that may not have reached the data files.
+- **Undo** makes **uncommitted** work vanish: **before-images** (old values) restore any in-flight change that reached disk.
+- Most databases do both. The classic design, **ARIES** (analysis → redo, "repeat history" → undo the losers), is used by DB2 and SQL Server; InnoDB uses the same redo + undo idea, its **undo logs** also serving MVCC snapshots.
+- **PostgreSQL's WAL is redo-only.** Under MVCC ([§13.14](../13-transactions-and-concurrency/README.md#1314-multiversion-concurrency-control-mvcc)) an update writes a *new* row version; an aborted transaction is just marked not-committed in `pg_xact`, its versions are invisible, and VACUUM removes them later.
 
-- **Redo** makes **committed** work survive: recovery re-applies logged changes (**after-images** — the new values; **before-images** are the old values) that may not have reached the data files.
-- **Undo** makes **uncommitted** work vanish: before-images restore any in-flight change that reached disk.
-- Most databases do both. The classic design, **ARIES** (analysis → redo, "repeat history" → undo the losers), is used by DB2 and SQL Server; InnoDB uses the same redo + undo idea.
-- **PostgreSQL's WAL is redo-only.** Thanks to **MVCC** (multi-version concurrency control, Chapter 13 — readers see an older version of a row while a writer creates a new one) an update writes a *new* row version; an aborted transaction is just marked not-committed in `pg_xact`, so its versions are invisible and **VACUUM** (Postgres's background clean-up of dead row versions) removes them later. InnoDB keeps separate **undo logs**, which also serve its MVCC snapshots.
+Every WAL record has a **log sequence number (LSN)** — its byte position in the log, always increasing. LSNs **order** redo/undo, tell recovery **what's already applied** (each data page stores the LSN of its last change, so older records are skipped), **mark checkpoints** (replay starts at the checkpoint's redo LSN) and **measure replication lag** (primary LSN vs replica replay LSN).
 
-Every WAL record has a **log sequence number (LSN)** — its byte position in the log, always increasing. LSNs **order** redo/undo, tell recovery **what's already applied** (each data page stores the LSN of its last change, so older records are skipped), **mark checkpoints** (replay starts from the checkpoint's redo LSN) and **measure replication lag** (primary LSN vs replica replay LSN).
-
-`code/07_wal_lsn_checkpoint.sql` first prints the server's defaults (`wal_level` = replica, `synchronous_commit` = on — commit waits for the WAL flush, `checkpoint_timeout` = 5min, `max_wal_size` = 1GB, `full_page_writes` = on), then measures WAL growth:
+`code/07_wal_lsn_checkpoint.sql` first prints the defaults (`wal_level` = replica, `synchronous_commit` = on, `checkpoint_timeout` = 5min, `max_wal_size` = 1GB, `full_page_writes` = on), then measures WAL growth:
 
 ```sql
 INSERT INTO lsn_marks VALUES ('before', pg_current_wal_insert_lsn());
@@ -811,17 +713,15 @@ FROM pg_control_checkpoint();
  t
 ```
 
-`pg_current_wal_insert_lsn()` returns the current end of WAL (like `0/1A2B3C4`; booleans are printed because exact LSNs differ per run). Each row cost over 50 bytes of WAL — row data, index entries and headers. With `full_page_writes = on`, the first change to a page after a checkpoint logs the **whole page**, guarding against **torn pages** (pages only partly written when power was lost, mixing old and new bytes). After `CHECKPOINT` the **redo LSN** is past our inserts, so a crash now would start replay there.
+`pg_current_wal_insert_lsn()` returns the end of WAL (like `0/1A2B3C4`; booleans are printed because exact LSNs differ per run). Each row cost over 50 bytes of WAL (row data, index entries, headers). With `full_page_writes = on`, the first change to a page after a checkpoint logs the **whole page**, guarding against torn pages. After `CHECKPOINT` the **redo LSN** is past our inserts, so a crash now would replay from there.
 
 ### Checkpointing
 
-A **checkpoint** flushes all **dirty pages** (pages changed in memory but not yet written to disk) and logs *"everything before LSN X is on disk"*, so recovery replays only from there and older WAL (not needed by replicas or archiving) can be recycled.
+A **checkpoint** flushes all dirty pages and logs *"everything before LSN X is on disk"*, so recovery replays only from there and older WAL (not needed by replicas or archiving) can be recycled.
 
 ![Checkpoint and failure timeline](img/checkpoint.svg)
 
-*Figure — T1 finishes before the checkpoint, T2 and T3 commit after it, T4 is still running at the failure and is rolled back (course diagram).*
-
-At the failure: **T1** is already in the data files (ignored); **T2 and T3** committed after the checkpoint and may exist only in the log (**redone**); **T4** never committed (**undone** — in Postgres, simply invisible). `code/wal_recovery.py` runs this on a toy log — T1 (A→B 300) commits before the checkpoint, T2 (C→D 50) after it, and T3 (A→C 20) is interrupted after one of its pages was flushed — with a forward **redo** pass over updates after the checkpoint and a backward **undo** pass using before-images of transactions that never committed:
+At the failure: **T1** finished before the checkpoint (already in the data files, ignored); **T2 and T3** committed after it and may exist only in the log (**redone**); **T4** never committed (**undone** — in Postgres, simply invisible). `code/wal_recovery.py` runs this on a toy log — T1 (A→B 300) commits before the checkpoint, T2 (C→D 50) after it, T3 (A→C 20) is interrupted after one page was flushed — with a forward **redo** pass after the checkpoint and a backward **undo** pass using before-images of uncommitted transactions:
 
 ```
 on disk after crash : {'A': 580, 'B': 400, 'C': 500, 'D': 0}
@@ -833,24 +733,22 @@ recovered state     : {'A': 600, 'B': 400, 'C': 450, 'D': 50}
 money conserved     : True
 ```
 
-T1 needed nothing, T2 was replayed, T3's early-flushed change was rolled back, and the 1,500 total is intact.
+T1 needed nothing, T2 was replayed, T3's early-flushed change rolled back; the 1,500 total is intact.
 
-Checkpoints come in two types. A **sharp (consistent)** checkpoint pauses new work, flushes every dirty page and resumes — simple and fully consistent, but a visible stall. A **fuzzy** checkpoint logs a start point, flushes pages *while work continues*, then logs the end; recovery starts from the start point — no downtime, more bookkeeping. PostgreSQL uses the fuzzy style: every `checkpoint_timeout` (5 min default) or when `max_wal_size` of WAL accumulates, spreading writes over `checkpoint_completion_target` (0.9 of the interval by default since PG 14).
+A **sharp (consistent)** checkpoint pauses new work, flushes every dirty page and resumes — simple, fully consistent, a visible stall. A **fuzzy** checkpoint logs a start point, flushes *while work continues*, then logs the end; recovery starts from the start point — no downtime, more bookkeeping. PostgreSQL is fuzzy: every `checkpoint_timeout` (5 min default) or when `max_wal_size` of WAL accumulates, spreading writes over `checkpoint_completion_target` (0.9 of the interval by default since PG 14).
 
-**Distributed checkpointing.** The nodes' saved states must form a **consistent global state**: if node 1's checkpoint records *sending* a message, node 2's must record *receiving* it. **Coordinated** checkpointing (a coordinator, or markers along channels as in the Chandy–Lamport snapshot) is always consistent at the cost of a short pause; **uncoordinated** checkpointing is cheaper but recovery must search for a consistent combination and can cascade rollbacks (the **domino effect**). *Example:* payment, stock and email nodes restore from one global checkpoint, so you never get "stock decremented but payment never recorded" (Apache Flink — a stream-processing engine — uses barrier checkpoints that work this way).
+**Distributed checkpointing.** Nodes' saved states must form a **consistent global state**: if node 1's checkpoint records *sending* a message, node 2's must record *receiving* it. **Coordinated** checkpointing (a coordinator, or markers along channels as in the Chandy–Lamport snapshot) is always consistent at the cost of a short pause; **uncoordinated** is cheaper but recovery must search for a consistent combination and can cascade rollbacks (the **domino effect**). *Example:* payment, stock and email nodes restore from one global checkpoint, so never "stock decremented but payment never recorded" (Apache Flink's barrier checkpoints work this way).
 
 ### Coordinated commit: two-phase commit (2PC)
 
-Distributed recovery is hard because networks partition, nodes fail and recover at different times, many transactions run concurrently, and every node must agree to commit or abort. When one transaction changes data on **several nodes** (a transfer from an account on node 1 to one on node 2), atomicity must span machines. **2PC** uses a **coordinator**:
+Distributed recovery is hard because networks partition, nodes fail and recover at different times, many transactions run concurrently, and every node must agree to commit or abort. When one transaction changes data on **several nodes** (a transfer between accounts on nodes 1 and 2), atomicity must span machines. **2PC** uses a **coordinator**:
 
 ![Two-phase commit message flow](img/2pc.svg)
 
-*Figure — 2PC message flow: phase 1 asks every participant to prepare and collects their votes; phase 2 sends the commit and waits for acknowledgements (course diagram).*
+1. **Phase 1 — prepare (vote).** "Can you commit?" Each participant makes its changes durable, logs **PREPARED** and votes **YES** — from then on it may not decide alone — or **NO** (constraint failure, disk full).
+2. **Phase 2 — decide.** All YES → the coordinator logs **COMMIT** and tells everyone; any NO or timeout → **ABORT**, everyone rolls back.
 
-1. **Phase 1 — prepare (vote).** "Can you commit?" Each participant makes its changes durable, logs **PREPARED** and votes **YES** — from then on it may not decide alone — or votes **NO** (constraint failure, disk full).
-2. **Phase 2 — decide.** All YES → the coordinator logs **COMMIT** and tells everyone to commit; any NO or timeout → it logs **ABORT** and everyone rolls back.
-
-**Recovery:** a participant restarting without a PREPARED record aborts alone; one *with* PREPARED must **ask the coordinator**. If the coordinator crashes, participants that haven't voted can abort, but those that **voted YES must wait** — guessing could break atomicity. That wait, with **locks** held (locks stop other transactions touching the same rows), is **2PC's blocking problem**; network delays and partitions also stall decisions. `code/two_phase_commit.py` shows all three cases:
+**Recovery:** a participant restarting without a PREPARED record aborts alone; one *with* PREPARED must **ask the coordinator**. If the coordinator crashes, participants that haven't voted can abort, but those that **voted YES must wait** — guessing could break atomicity. That wait, with locks held, is **2PC's blocking problem**; network delays and partitions also stall decisions. `code/two_phase_commit.py` shows all three cases:
 
 ```
 --- happy path: debit on node 1, credit on node 2
@@ -866,7 +764,7 @@ Distributed recovery is hard because networks partition, nodes fail and recover 
   node2: prepared, holding locks, cannot commit or abort alone -> BLOCKED
 ```
 
-**2PC in PostgreSQL** — the participant side, driven by an external transaction manager *(not run: it needs `max_prepared_transactions > 0`, and the book server keeps the default 0)*:
+**2PC in PostgreSQL** — the participant side, driven by an external transaction manager *(not run: needs `max_prepared_transactions > 0`; the book server keeps the default 0)*:
 
 ```sql
 BEGIN;
@@ -875,27 +773,20 @@ PREPARE TRANSACTION 'transfer-42';   -- phase 1: durable, survives a crash, lock
 COMMIT PREPARED 'transfer-42';       -- later, on the coordinator's decision (or ROLLBACK PREPARED)
 ```
 
-Java XA/JTA transaction managers (XA is the standard interface for distributed transactions; JTA is Java's API for it) and MySQL's `XA START … XA PREPARE … XA COMMIT` work the same way. Forgotten prepared transactions hold locks and block VACUUM — monitor `pg_prepared_xacts`.
+Java XA/JTA transaction managers (XA = the standard distributed-transaction interface; JTA = Java's API for it) and MySQL's `XA START … XA PREPARE … XA COMMIT` work the same way. Forgotten prepared transactions hold locks and block VACUUM — monitor `pg_prepared_xacts`.
 
 ### Three-phase commit (3PC)
 
 ![Three-phase commit message flow](img/3pc.svg)
 
-*Figure — 3PC: canCommit?/Yes, then preCommit/ACK, then doCommit/haveCommitted (course diagram).*
-
-3PC inserts a **PreCommit** step between voting and committing: (1) **CanCommit** — vote as in 2PC; (2) **PreCommit** — if all voted YES, participants acknowledge and log that the outcome will be commit; (3) **DoCommit** — the final commit. If the coordinator dies, participants that logged pre-commit know everyone voted YES and can commit after a timeout; if no live participant has seen pre-commit, nobody can have committed, so they abort. This is **non-blocking** — *provided* message delays are bounded and nodes only crash. Under a real **partition** both sides can time out and decide differently, so 3PC is rarely used. Modern systems make the coordinator fault-tolerant by **running the commit decision through consensus** (Spanner: 2PC over Paxos groups; CockroachDB: a transaction record replicated by Raft), and cross-service workflows use **sagas** (compensating steps) — see [2PC and Saga patterns](../../../system-design-patterns/modules/07-consistency/README.md).
+3PC inserts **PreCommit** between voting and committing: (1) **CanCommit** — vote as in 2PC; (2) **PreCommit** — if all voted YES, participants acknowledge and log that the outcome will be commit; (3) **DoCommit**. If the coordinator dies, participants that logged pre-commit know everyone voted YES and commit after a timeout; if no live participant saw pre-commit, nobody can have committed, so they abort. **Non-blocking** — *provided* message delays are bounded and nodes only crash; under a real **partition** both sides can time out and decide differently, so 3PC is rarely used. Modern systems make the coordinator fault-tolerant by **running the commit decision through consensus** (Spanner: 2PC over Paxos groups; CockroachDB: a transaction record replicated by Raft), and cross-service workflows use **sagas** (compensating steps) — [2PC and Saga patterns](../../../system-design-patterns/modules/07-consistency/README.md).
 
 ### In the interview
 
 **30-second answer:** "Databases survive crashes with write-ahead logging: the log is flushed before commit is acknowledged and data pages are written later. Recovery starts at the last checkpoint, redoes committed changes and undoes uncommitted ones — Postgres needs no undo thanks to MVCC. Across nodes, 2PC gives atomic commit, but prepared participants block if the coordinator dies, so real systems replicate the decision with Paxos/Raft or use sagas."
 
 - *What does `synchronous_commit = off` trade?* Commits return before the WAL flush: a crash can lose the last fraction of a second of commits, never corrupt data.
-
-### Self-check
-
-1. *T2 committed after the last checkpoint; T4 hadn't committed. At a crash?* T2 is redone, T4 undone (invisible in Postgres).
-3. *A 2PC participant voted YES and lost the coordinator. Can it abort?* No — it must wait.
-4. *Sharp vs fuzzy checkpoint?* Sharp pauses work to flush; fuzzy flushes while work continues.
+- *A 2PC participant voted YES and lost the coordinator — can it abort?* No, it must wait.
 
 ### TL;DR
 
@@ -907,23 +798,23 @@ Log first, write data later; checkpoints bound recovery; recovery = redo committ
 
 ### What it is
 
-**High availability (HA)** keeps the service up despite failures, measured in "nines" (the percentage of time the service is up): 99.9% ≈ 8.8 hours of downtime a year, 99.99% ≈ 53 minutes. Two targets make it concrete: **RPO** (recovery point objective — how much *data* you may lose; synchronous replication gives RPO = 0) and **RTO** (recovery time objective — how long you may be *down*; hot standbys and automatic failover make it short). HA = **replication** (15.5; a copy exists) + **failover** (switch to it). A sync standby has every acknowledged commit at failover (RPO 0, slower commits — typical for a local standby in financial systems); an async one may miss the last commits (RPO > 0, fast commits — remote regions, read replicas).
+**High availability (HA)** keeps the service up despite failures, measured in "nines": 99.9% ≈ 8.8 hours of downtime a year, 99.99% ≈ 53 minutes. Two targets: **RPO** (recovery point objective — how much *data* you may lose; synchronous replication gives RPO = 0) and **RTO** (recovery time objective — how long you may be *down*; hot standbys and automatic failover make it short). HA = **replication** (15.5) + **failover**. A sync standby has every acknowledged commit (RPO 0, slower commits — local standbys in financial systems); an async one may miss the last commits (RPO > 0 — the lag at failure — fast commits; remote regions, read replicas).
 
 ### Failover
 
 | Type | Standby state | Recovery time | Cost |
 |---|---|---|---|
 | **Cold** | Not running; must start and restore/catch up | Minutes to hours | Cheapest |
-| **Warm** | Running and receiving updates, but needs some catch-up or config | Seconds to minutes | Medium |
+| **Warm** | Running and receiving updates, needs some catch-up or config | Seconds to minutes | Medium |
 | **Hot** | Running, in sync, ready to serve immediately | Seconds | Highest |
 
 1. **Heartbeats** — several missed "I'm alive" signals raise suspicion.
 2. **Decision** — a **quorum** (majority of nodes or witnesses) must agree the primary is dead, preventing **split brain**; **priority rules** pick the standby (highest replayed LSN, preferred zone).
 3. **Promotion** — Postgres: `pg_ctl promote` or `SELECT pg_promote()` (PG 12+).
 4. **Fencing** the old primary — STONITH ("shoot the other node in the head"), lease revocation, or blocking at the proxy.
-5. **Redirecting clients** — DNS, a **virtual IP** (an address that can be moved from one machine to another), a proxy (HAProxy, PgBouncer) or **service discovery** (a registry clients ask "where is the primary right now?").
+5. **Redirecting clients** — DNS, a **virtual IP** (an address movable between machines), a proxy (HAProxy, PgBouncer) or **service discovery** (a registry answering "where is the primary right now?").
 
-Core PostgreSQL has **no automatic failover** (switching to a standby without a human — see the steps above); use **Patroni** (leader state in etcd/Consul/ZooKeeper — consensus-backed), **repmgr** or **pg_auto_failover**, or a managed service (Amazon RDS/Aurora, Cloud SQL, Azure Database). **Best practices:** redundancy across failure domains (racks, zones, regions), load-balanced reads with writes routed to the current primary, monitoring (replication lag, heartbeats, disk), **backups too** (a bad `DELETE` replicates in milliseconds — HA is not a backup), and **regular failover tests** (game days, **chaos experiments** — deliberately breaking things in a controlled way to prove recovery works).
+Core PostgreSQL has **no automatic failover** (without a human); use **Patroni** (leader state in etcd/Consul/ZooKeeper — consensus-backed), **repmgr** or **pg_auto_failover**, or a managed service (Amazon RDS/Aurora, Cloud SQL, Azure Database). **Best practices:** redundancy across failure domains (racks, zones, regions); load-balanced reads with writes routed to the current primary; monitoring (replication lag, heartbeats, disk); **backups too** (a bad `DELETE` replicates in milliseconds — HA is not a backup); **regular failover tests** (game days, **chaos experiments** — deliberately breaking things in a controlled way).
 
 ```mermaid
 flowchart LR
@@ -943,16 +834,11 @@ A zone failure in New York fails over to the sync hot standby in seconds with no
 
 **30-second answer:** "HA = replicas plus automatic failover: heartbeats detect failure, a quorum confirms it to avoid split brain, the most up-to-date standby is promoted, the old primary is fenced, clients are redirected. Sync standbys give zero data loss, async lower latency with some loss. I'd state RPO/RTO, choose hot/warm/cold to match, and test failover regularly."
 
-
-### Self-check
-
-1. *RPO with async replication?* Greater than zero — the lag at the moment of failure.
-
 ---
 
 ## 15.11 Data resilience: redundancy, mirroring, backups
 
-HA keeps the service **running**; **data resilience** makes sure the **data itself** survives disk crashes, corruption, ransomware, operator mistakes and site disasters.
+HA keeps the service **running**; **data resilience** makes the **data itself** survive disk crashes, corruption, ransomware, operator mistakes and site disasters.
 
 ### Redundancy
 
@@ -960,22 +846,18 @@ HA keeps the service **running**; **data resilience** makes sure the **data itse
 |---|---|---|---|
 | **Replication** | Full copies on other nodes (15.5) | N× | Node or site loss |
 | **RAID 1 / 10** | Mirror each disk (10 = mirrors, striped; popular for databases) | 2× | 1 disk per mirror pair |
-| **RAID 5 / 6** | Stripe data (spread it across disks) with one / two parity blocks (extra blocks computed from the data, used to rebuild a lost disk) | 1 / 2 disks | Any 1 / any 2 disks |
+| **RAID 5 / 6** | Stripe data across disks with one / two parity blocks (computed from the data, used to rebuild a lost disk) | 1 / 2 disks | Any 1 / any 2 disks |
 | **Erasure coding** | k data + m parity fragments; any k rebuild the data | (k+m)/k: 6+3 → 1.5× | Any m fragments |
 
-Erasure coding (e.g. Reed–Solomon) gives replication-level safety at 1.5× instead of 3× storage, paid for with CPU and slower rebuilds — **object stores** (services like Amazon S3 that store whole files by key) and HDFS (Hadoop's distributed file system) use it for large, cooler (rarely read) data.
+Erasure coding (e.g. Reed–Solomon) gives replication-level safety at 1.5× instead of 3× storage, paid for with CPU and slower rebuilds — **object stores** (Amazon S3 and similar, storing whole files by key) and HDFS (Hadoop's distributed file system) use it for large, rarely read data.
 
-### Mirroring
+**Mirroring** keeps an **exact, real-time copy**: every write goes to primary and mirror together, and the mirror takes over immediately — near-instant failover, always current, but double storage and extra write latency. *Example:* a bank mirrors its transaction database synchronously between two nearby data centres. (SQL Server literally called it "Database Mirroring"; Postgres's equivalent is synchronous streaming replication.)
 
-**Mirroring** keeps an **exact, real-time copy**: every write goes to primary and mirror together, and the mirror takes over immediately. Near-instant failover and always current, but double storage and extra write latency. *Example:* a bank mirrors its transaction database synchronously between two nearby data centres. (SQL Server literally called it "Database Mirroring"; Postgres's equivalent is synchronous streaming replication.)
-
-### Media failure recovery
-
-A **media failure** is lost or damaged storage — **physical** (dead drive, bad sectors) or **logical** (corruption from software/firmware bugs or malware). Defences: **hot swapping** failed RAID drives while running; **health monitoring** (**SMART** drive telemetry, cloud volume metrics); **data scrubbing** (periodically read every block, verify **checksums** (small fingerprints computed from data; a mismatch means corruption), repair from redundancy — ZFS, Ceph; Postgres detects corrupted pages with `initdb --data-checksums`); and **replication** to other nodes and regions.
+**Media failure recovery.** A **media failure** is lost or damaged storage — **physical** (dead drive, bad sectors) or **logical** (corruption from software/firmware bugs or malware). Defences: **hot swapping** failed RAID drives while running; **health monitoring** (**SMART** drive telemetry, cloud volume metrics); **data scrubbing** (periodically read every block, verify **checksums** — small fingerprints of the data whose mismatch means corruption — and repair from redundancy: ZFS, Ceph; Postgres detects corrupted pages with `initdb --data-checksums`); **replication** to other nodes and regions.
 
 ### Backup and restoration
 
-A **backup** is an independent copy that can take you **back in time** — replicas can't, they follow the primary instantly. **Restoration** gets data back from it.
+A **backup** is an independent copy that can take you **back in time** — replicas can't, they follow the primary instantly (so a synchronous replica is not a backup). **Restoration** gets data back from it.
 
 | Type | Contains | Backup cost | Restore needs |
 |---|---|---|---|
@@ -983,20 +865,16 @@ A **backup** is an independent copy that can take you **back in time** — repli
 | **Incremental** | Changes since the **last backup of any kind** | Fastest, smallest | Last full + **every** incremental since, in order |
 | **Differential** | Changes since the **last full** | Grows through the week | Last full + the **latest** differential |
 
-**PostgreSQL** (commands in [Chapter 9 — backup and restore](../09-ddl-dml-and-constraints/README.md)): `pg_dump` / `pg_restore` make **logical** backups of one database, portable across versions. `pg_basebackup` plus **continuous WAL archiving** (`archive_mode`, `archive_command`) gives a **physical** backup you can replay to *any moment* — **point-in-time recovery (PITR)** with `recovery_target_time`, the cure for "someone ran `DELETE` without `WHERE` at 14:02". PostgreSQL 17 added incremental base backups (`pg_basebackup --incremental`); pgBackRest and Barman manage all of this.
+**PostgreSQL** (commands in [§9.12](../09-ddl-dml-and-constraints/README.md#912-backup-and-restore)): `pg_dump` / `pg_restore` make **logical** backups of one database, portable across versions. `pg_basebackup` plus **continuous WAL archiving** (`archive_mode`, `archive_command`) gives a **physical** backup replayable to *any moment* — **point-in-time recovery (PITR)** with `recovery_target_time`, the cure for "someone ran `DELETE` without `WHERE` at 14:02". PostgreSQL 17 added incremental base backups (`pg_basebackup --incremental`); pgBackRest and Barman manage all of this.
 
-**Best practices:** backup frequency to match RPO (daily plus continuous WAL for critical data); **off-site** copies following the **3-2-1 rule** (3 copies, 2 media, 1 off-site); **test restores** regularly; **versioning and immutability** (object lock — stored copies can't be changed or deleted for a set period) so **ransomware** (malware that encrypts or deletes data and demands payment) can't destroy every copy. *Example:* a hospital takes a full backup every Sunday, incrementals Monday–Saturday and continuous WAL, stores copies locally and in another cloud region, and each month restores "last Wednesday 15:00" into a test environment and checks row counts.
+**Best practices:** backup frequency matching RPO (daily plus continuous WAL for critical data); **off-site** copies by the **3-2-1 rule** (3 copies, 2 media, 1 off-site); **test restores** regularly; **versioning and immutability** (object lock — copies can't be changed or deleted for a set period) so **ransomware** (malware that encrypts or deletes data for payment) can't destroy every copy. *Example:* a hospital takes a full backup every Sunday, incrementals Monday–Saturday and continuous WAL, stores copies locally and in another cloud region, and monthly restores "last Wednesday 15:00" into a test environment and checks row counts.
 
 ### In the interview
 
 **30-second answer:** "Replication and RAID protect against hardware loss but not bad writes, which replicate too. So I add backups — full plus incremental or differential, off-site, versioned, test-restored. In Postgres that's base backups plus WAL archiving for PITR. Erasure coding gives durable storage at about 1.5× instead of 3× for large, cold data."
 
 - *Accidental `DROP TABLE` at 14:02?* Restore the base backup into a separate instance, replay WAL to 14:01:59, copy the table back.
-
-### Self-check
-
-1. *Which RAID level survives any two disk failures?* RAID 6.
-2. *Why isn't a synchronous replica a backup?* It copies mistakes instantly; there's no going back in time.
+- *Which RAID level survives any two disk failures?* RAID 6.
 
 ### TL;DR
 

@@ -1,31 +1,20 @@
 # Chapter 3 — Functions and Expressions
 
-Chapter 2 selected and filtered stored values. Real reports need to *transform* them: round a price, tidy a messy email, work out how many days an order took to ship, label a product "premium", or show "no email on file" instead of a blank. This chapter covers the building blocks for all of that: SQL's **type system** and conversions, **number**, **string** and **date/time** functions, and the **conditional expressions** `CASE`, `COALESCE`, `NULLIF`, `GREATEST` and `LEAST`.
+Reports need to *transform* stored values: round a price, tidy an email, compute days-to-ship, label a product "premium", show "no email on file" instead of a blank. This chapter covers SQL's **type system** and conversions, **number**, **string** and **date/time** functions, and the **conditional expressions** `CASE`, `COALESCE`, `NULLIF`, `GREATEST` and `LEAST`. Function names differ between databases more than anything else in SQL (the source course used MySQL), so each section ends with a **dialect map** from MySQL (and SQL Server, SQLite) to PostgreSQL.
 
-The SQL course these notes draw on was written for MySQL. Function names differ more between databases than anything else in SQL, so every section ends with a **dialect map** from MySQL (and SQL Server, SQLite) to PostgreSQL.
-
-**What you'll learn**
-
-| # | Topic | You will be able to… |
-|---|---|---|
-| 3.1 | Types and casts | name PostgreSQL's core types, convert with `CAST` / `::`, avoid float surprises |
-| 3.2 | Number functions | round, truncate, take powers/logs/roots, generate random numbers, format numbers |
-| 3.3 | String functions | join, cut, measure, clean, search, pad, split and pattern-replace text |
-| 3.4 | Date and time functions | get "now", do date arithmetic, extract/truncate parts, format/parse, handle time zones |
-| 3.5 | Conditional expressions | use `CASE`, `COALESCE`, `NULLIF`, `GREATEST`/`LEAST` |
-| 3.6 | Worked exercises | combine functions into realistic report columns |
+**Sections:** 3.1 Types and casts · 3.2 Number functions · 3.3 String functions · 3.4 Date and time functions · 3.5 Conditional expressions · 3.6 Worked exercises.
 
 **Setup.** Examples use the `company` sample database ([chapter 1, 1.11](../01-databases-and-the-relational-model/README.md#111-the-sample-database)); code is in [`code/`](code/). Outputs come from PostgreSQL 14.
 
 ### Functions in one paragraph
-A **function** takes zero or more **arguments** and returns one value: `round(9.876, 1)` → `9.9`. Functions that work on one row at a time (everything in this chapter) are **scalar functions**; functions that squash many rows into one (`sum`, `count`, `avg`) are **aggregate functions**, covered in [chapter 4](../04-aggregation/README.md). Functions nest — `lower(trim(email))` — and can appear anywhere an expression can: the `SELECT` list, `WHERE`, `ORDER BY`, `GROUP BY`, `UPDATE … SET`.
+A **function** takes zero or more **arguments** and returns one value: `round(9.876, 1)` → `9.9`. **Scalar functions** work on one row at a time (this chapter); **aggregate functions** squash many rows into one (`sum`, `count`, `avg` — [chapter 4](../04-aggregation/README.md)). Functions nest (`lower(trim(email))`) and go anywhere an expression can: `SELECT`, `WHERE`, `ORDER BY`, `GROUP BY`, `UPDATE … SET`.
 
 ---
 
 ## 3.1 Data types and conversions
 
 ### What it is
-Every value in SQL has a **data type** that decides what it can hold and which operators and functions apply. `'42'` (text) and `42` (integer) look alike but behave differently: `'42' || '1'` is `'421'`, `42 + 1` is `43`. PostgreSQL is **strict**: it rarely converts types silently, which catches bugs early.
+Every value has a **data type** deciding what it holds and which operators apply: `'42' || '1'` is `'421'`, `42 + 1` is `43`. PostgreSQL is **strict** — it rarely converts types silently, which catches bugs early.
 
 ### The core PostgreSQL types
 | Family | Type | Holds | Notes |
@@ -45,7 +34,7 @@ Every value in SQL has a **data type** that decides what it can hold and which o
 | Boolean | `boolean` | `TINYINT(1)` alias `BOOLEAN` | `BIT` | integer 0/1 |
 | Timestamp with zone | `timestamptz` | `TIMESTAMP` (converted to UTC, the world reference time) | `DATETIMEOFFSET` | text or number, by convention |
 
-(SQLite is the outlier: a column's type is only a *preference* — it will store text in an integer column. The full DDL (Data Definition Language — the `CREATE`/`ALTER` statements that define tables) story is in [chapter 9](../09-ddl-dml-and-constraints/README.md).)
+(SQLite's column type is only a *preference* — it will store text in an integer column. DDL (Data Definition Language, `CREATE`/`ALTER`) types in full: [chapter 9](../09-ddl-dml-and-constraints/README.md).)
 
 ### How it works — asking for and changing types
 `pg_typeof(x)` reports a value's type:
@@ -68,7 +57,7 @@ Output:
  numeric | date      | text
 (1 row)
 ```
-Notice: `42.0` is `numeric` (exact), not a float, and a quoted literal starts out as type `unknown` — PostgreSQL decides its type from context. That's why `WHERE hire_date >= '2023-01-01'` works: the string is read as a `date` because it's compared with one.
+`42.0` is `numeric` (exact), not a float; a quoted literal starts as `unknown` and takes its type from context — why `WHERE hire_date >= '2023-01-01'` reads the string as a `date`.
 
 **Casting** (explicit conversion) has three spellings:
 
@@ -139,18 +128,7 @@ LINE 1: SELECT first_name + 1 FROM employees LIMIT 1;
                           ^
 HINT:  No operator matches the given name and argument types. You might need to add explicit type casts.
 ```
-MySQL would quietly turn `'abc' + 1` into `1` (with a warning) and wrap or clip some overflows (values too big for their type) depending on its SQL mode (a server setting that controls how strict MySQL is). PostgreSQL refuses — annoying for a minute, valuable for years.
-
-Booleans accept several spellings on input:
-```sql
-SELECT 'yes'::boolean AS yes, 'f'::boolean AS f, 'on'::boolean AS on_;
-```
-```
- yes | f | on_
------+---+-----
- t   | f | t
-(1 row)
-```
+MySQL would quietly turn `'abc' + 1` into `1` (with a warning) and wrap or clip some overflows (values too big for their type) depending on its SQL mode (a server strictness setting). PostgreSQL refuses — annoying for a minute, valuable for years. (Booleans accept several input spellings: `'yes'::boolean`, `'on'` → `t`; `'f'` → `f`.)
 
 ### Common mistakes
 - Storing money in `real`/`double precision`.
@@ -158,19 +136,15 @@ SELECT 'yes'::boolean AS yes, 'f'::boolean AS f, 'on'::boolean AS on_;
 - Expecting `::integer` to truncate; it rounds.
 
 ### Self-check
-1. *Type of the literal `42.0` in PostgreSQL?* → `numeric`.
-2. *Portable way to convert text to a date?* → `CAST('2025-03-18' AS date)`.
-3. *Why is `0.1::float8 + 0.2::float8 = 0.3` false?* → Binary floating point can't represent 0.1 or 0.2 exactly.
-
-### TL;DR
-Everything has a type. Use `numeric` for money, `text` for strings, `timestamptz` for instants. Convert with `CAST(x AS t)` or `x::t`. PostgreSQL won't silently coerce (automatically convert) mismatched types — that's a feature.
+1. *Portable way to convert text to a date?* → `CAST('2025-03-18' AS date)`.
+2. *Why is `0.1::float8 + 0.2::float8 = 0.3` false?* → Binary floating point can't represent 0.1 or 0.2 exactly.
 
 ---
 
 ## 3.2 Number functions
 
 ### What it is
-Numeric functions do arithmetic you'd otherwise hand-code: rounding for display, absolute differences, powers and logarithms for growth (a **logarithm** answers "to what power must I raise the base to get this number?" — log base 10 of 1000 is 3), modulo for "every n-th", random numbers for sampling.
+Rounding, absolute differences, powers and logarithms (a **logarithm** answers "to what power must I raise the base to get this number?" — log₁₀ 1000 = 3), modulo for "every n-th", random numbers for sampling.
 
 ### The functions
 | Function (PostgreSQL) | Does | Example → result |
@@ -196,20 +170,7 @@ Numeric functions do arithmetic you'd otherwise hand-code: rounding for display,
 | `to_char(x, fmt)` | format a number as text | `to_char(1234567, 'FM9,999,999.00')` → `1,234,567.00` |
 
 ### How it works — run them
-```sql
--- code/02_number_functions.sql
-SELECT abs(-10) AS abs, round(9.876, 1) AS round_1, round(9.876) AS round_0,
-       round(1234.567, -2) AS round_neg, trunc(9.876, 1) AS trunc_1,
-       ceil(4.3) AS ceil, floor(4.8) AS floor, ceil(-4.3) AS ceil_neg, floor(-4.3) AS floor_neg;
-```
-Output:
-```
- abs | round_1 | round_0 | round_neg | trunc_1 | ceil | floor | ceil_neg | floor_neg
------+---------+---------+-----------+---------+------+-------+----------+-----------
-  10 |     9.9 |      10 |      1200 |     9.8 |    5 |     4 |       -4 |        -5
-(1 row)
-```
-With negative numbers `ceil` moves toward zero and `floor` away from it — `floor(-4.3)` is -5, not -4. `trunc` always moves toward zero.
+Every table example is run in `code/02_number_functions.sql` with the results shown. With negative numbers `ceil` moves toward zero and `floor` away from it — `floor(-4.3)` is -5, not -4; `trunc` always moves toward zero.
 
 **Halfway cases** depend on the type:
 ```sql
@@ -223,42 +184,12 @@ Output:
        3 |          -3 |       2 |       4
 (1 row)
 ```
-`numeric` rounds halves **away from zero** (2.5 → 3); `double precision` typically rounds halves **to the nearest even** number ("banker's rounding", 2.5 → 2, 3.5 → 4) because it uses the platform's floating-point rounding. Another reason to keep money in `numeric`.
+`numeric` rounds halves **away from zero** (2.5 → 3); `double precision` typically rounds halves **to even** ("banker's rounding", 2.5 → 2, 3.5 → 4), following the platform's floating-point rounding. Another reason to keep money in `numeric`.
 
-```sql
-SELECT sqrt(25) AS sqrt, power(2, 3) AS power, 2 ^ 3 AS caret, mod(17, 5) AS mod,
-       17 % 5 AS pct, mod(-17, 5) AS mod_neg, div(17, 5) AS int_div;
-SELECT exp(2) AS exp_2, ln(10) AS ln_10, log(100) AS log_100, log10(100) AS log10_100,
-       log(2, 8) AS log_base2_of_8;
-SELECT sign(-15) AS sign, pi() AS pi, degrees(1.047) AS degrees, radians(60) AS radians;
-SELECT greatest(3, 9, 4) AS greatest, least(3, 9, 4) AS least, gcd(12, 18) AS gcd, lcm(4, 6) AS lcm;
-```
-Output:
-```
- sqrt | power | caret | mod | pct | mod_neg | int_div
-------+-------+-------+-----+-----+---------+---------
-    5 |     8 |     8 |   2 |   2 |      -2 |       3
-(1 row)
-
-      exp_2       |       ln_10       | log_100 | log10_100 |   log_base2_of_8
-------------------+-------------------+---------+-----------+--------------------
- 7.38905609893065 | 2.302585092994046 |       2 |         2 | 3.0000000000000000
-(1 row)
-
- sign |        pi         |      degrees      |      radians
-------+-------------------+-------------------+--------------------
-   -1 | 3.141592653589793 | 59.98868115019719 | 1.0471975511965976
-(1 row)
-
- greatest | least | gcd | lcm
-----------+-------+-----+-----
-        9 |     3 |   6 |  12
-(1 row)
-```
-Two things to remember: the remainder keeps the sign of the **dividend** (the number being divided; `mod(-17, 5)` = -2), and `log(x)` means **base 10** in PostgreSQL but **natural log** in MySQL and SQL Server. Use `ln()` when you mean natural log — it's unambiguous everywhere that has it.
+Remember: the remainder keeps the sign of the **dividend** (the number divided; `mod(-17, 5)` = -2), and `log(x)` is **base 10** in PostgreSQL but **natural log** in MySQL and SQL Server — write `ln()` for natural log.
 
 ### Random numbers
-`random()` returns a new value each call. `setseed()` makes the sequence repeatable for the rest of the session (your current connection to the database) — useful for tests and reproducible samples.
+`random()` returns a new value each call; `setseed()` makes the sequence repeatable for the rest of the session (your current connection) — for tests and reproducible samples.
 ```sql
 SELECT setseed(0.42);
 SELECT round(random()::numeric, 4) AS r1, round(random()::numeric, 4) AS r2;
@@ -293,7 +224,7 @@ Output:
  1,234,567.00 | 0.07%     | 7.25% |  00042
 (1 row)
 ```
-`%` in the pattern is printed literally — it does *not* multiply by 100, so do that yourself. Without `FM`, `to_char` reserves a leading space for the sign (see `' 00042'`). Format only at the very end: the result is text and no longer sorts or sums as a number.
+`%` prints literally — it does *not* multiply by 100. Without `FM`, a leading space is reserved for the sign (`' 00042'`). Format only at the very end: the result is text and no longer sorts or sums as a number.
 
 ### Real use on the sample data
 ```sql
@@ -324,7 +255,7 @@ Output:
  Rahul      |  98000.00 |               8200
 (4 rows)
 ```
-The "divide, round to a unit, multiply back" trick (`ceil(x / 100) * 100`) works for any step size — to the nearest 5 minutes, 1,000 rupees, and so on.
+"Divide, round, multiply back" (`ceil(x / 100) * 100`) works for any step — 5 minutes, 1,000 rupees.
 
 ### Dialect map (numbers)
 | Task | MySQL | PostgreSQL | SQL Server | SQLite |
@@ -346,17 +277,14 @@ The "divide, round to a unit, multiply back" trick (`ceil(x / 100) * 100`) works
 ### Self-check
 1. *`floor(-2.5)`, `ceil(-2.5)`, `trunc(-2.5)`?* → -3, -2, -2.
 2. *`round(123.456, -1)`?* → 120.
-3. *PostgreSQL function for MySQL's `LOG(x)`?* → `ln(x)`.
-
-### TL;DR
-`round/trunc/ceil/floor` for rounding (watch negatives and halves), `power/sqrt/exp/ln/log` for maths (PostgreSQL `log` is base 10), `mod`/`%` for remainders, `random` + `setseed` for repeatable randomness, `to_char` for display only.
+3. *PostgreSQL for MySQL's `LOG(x)`?* → `ln(x)`.
 
 ---
 
 ## 3.3 String functions
 
 ### What it is
-String (text) functions join, cut, measure, clean and search text. They are the tools for turning messy input — stray spaces, mixed case, combined fields — into consistent values.
+String functions join, cut, measure, clean and search text — turning messy input (stray spaces, mixed case, combined fields) into consistent values.
 
 ### The functions
 | Function (PostgreSQL) | Does | Example → result |
@@ -398,36 +326,13 @@ Output:
  ab          | (null)     | Pune, India
 (1 row)
 ```
-In PostgreSQL `concat()` **ignores** NULL arguments, while `||` returns NULL if any part is NULL. `concat_ws` skips NULLs, so it's ideal for addresses with optional parts. **MySQL differs:** its `CONCAT()` returns NULL if any argument is NULL (its `CONCAT_WS` skips them).
+In PostgreSQL `concat()` **ignores** NULL arguments while `||` returns NULL if any part is NULL; `concat_ws` skips NULLs (ideal for addresses with optional parts). **MySQL differs:** `CONCAT()` returns NULL if any argument is NULL (`CONCAT_WS` skips them).
 
 ### Extracting parts
-```sql
-SELECT substring('SQL Functions' FROM 1 FOR 3) AS std_form, substring('SQL Functions', 5) AS from_5,
-       substr('SQL Functions', 5, 4) AS substr, left('Database', 3) AS left_3,
-       right('Postgres', 3) AS right_3, left('Database', -2) AS left_neg;
-```
-Output:
-```
- std_form |  from_5   | substr | left_3 | right_3 | left_neg
-----------+-----------+--------+--------+---------+----------
- SQL      | Functions | Func   | Dat    | res     | Databa
-(1 row)
-```
-String positions in SQL start at **1**, not 0.
+String positions in SQL start at **1**, not 0: `substring('SQL Functions', 5)` → `Functions`, `substr('SQL Functions', 5, 4)` → `Func`, `right('Postgres', 3)` → `res`, `left('Database', -2)` → `Databa` (all run in `code/03_string_functions.sql`).
 
 ### Measuring
-```sql
-SELECT length('Data') AS length, char_length('Data') AS char_length, octet_length('Data') AS bytes,
-       length('  padded  ') AS with_spaces;
-```
-Output:
-```
- length | char_length | bytes | with_spaces
---------+-------------+-------+-------------
-      4 |           4 |     4 |          10
-(1 row)
-```
-For plain ASCII (the 128 basic English letters, digits and symbols, one byte each), characters and bytes are the same. In a UTF-8 database (UTF-8 is the universal character encoding — the rule for storing any language's characters as bytes, using 1 to 4 bytes each) — which is what the book's runner creates (`ENCODING 'UTF8'`, `C` collation) — `é` counts as one character yet occupies two bytes:
+`length` counts spaces too (`length('  padded  ')` → 10). For ASCII (128 basic English letters, digits and symbols, one byte each), characters = bytes. In a UTF-8 database (the universal encoding, 1 to 4 bytes per character — what the book's runner creates, with `C` collation) `é` is one character but two bytes:
 ```sql
 SELECT current_setting('server_encoding') AS encoding, char_length('café') AS chars,
        octet_length('café') AS bytes, upper('café') AS upper_c_collation,
@@ -440,64 +345,18 @@ Output:
  UTF8     |     4 |     5 | CAFé              | CAFÉ
 (1 row)
 ```
-Notice the last two columns: case conversion follows the **collation**, and the plain `C` collation only knows the ASCII letters, so `é` stays lower case. A language-aware collation (here the ICU collation `en-x-icu`, available when PostgreSQL is built with ICU — International Components for Unicode, a widely used library of language rules) converts it properly. (A database created with the legacy `SQL_ASCII` encoding would not understand multibyte characters (characters stored in more than one byte) at all and would report 5 characters — always create databases as UTF-8.)
+Case conversion follows the **collation**: plain `C` only knows ASCII letters, so `é` stays lower case; the ICU collation `en-x-icu` (available when PostgreSQL is built with ICU — International Components for Unicode) converts it. A legacy `SQL_ASCII` database doesn't understand multibyte characters and would report 5 characters — always create databases as UTF-8.
 
 **Portability trap:** MySQL's `LENGTH()` counts **bytes** (use `CHAR_LENGTH()` for characters); SQL Server's `LEN()` counts characters but ignores trailing spaces (`DATALENGTH()` gives bytes).
 
 ### Changing case, replacing, repeating
-```sql
-SELECT upper('hello') AS upper, lower('WORLD') AS lower, initcap('noise-cancelling headphones') AS initcap;
-SELECT replace('I love SQL', 'SQL', 'Postgres') AS replace, translate('2025/01/03', '/', '-') AS translate,
-       reverse('stressed') AS reverse, repeat('La', 3) AS repeat;
-```
-Output:
-```
- upper | lower |           initcap
--------+-------+-----------------------------
- HELLO | world | Noise-Cancelling Headphones
-(1 row)
-
-     replace     | translate  | reverse  | repeat
------------------+------------+----------+--------
- I love Postgres | 2025-01-03 | desserts | LaLaLa
-(1 row)
-```
-`upper`/`lower` are the standard way to compare case-insensitively: `WHERE lower(email) = lower(:input)` (`:input` stands for a value the application supplies). `replace` swaps whole substrings; `translate` maps single characters one-to-one.
+`initcap('noise-cancelling headphones')` → `Noise-Cancelling Headphones` (capitalises after hyphens too); `reverse('stressed')` → `desserts`. `upper`/`lower` are the standard case-insensitive comparison: `WHERE lower(email) = lower(:input)` (`:input` = an application-supplied value). `replace` swaps whole substrings; `translate` maps single characters one-to-one.
 
 ### Trimming
-```sql
-SELECT '[' || trim('   SQL   ') || ']' AS trim, '[' || ltrim('   SQL   ') || ']' AS ltrim,
-       '[' || rtrim('   SQL   ') || ']' AS rtrim, trim(BOTH '*' FROM '**SQL**') AS trim_chars;
-```
-Output:
-```
- trim  |  ltrim   |  rtrim   | trim_chars
--------+----------+----------+------------
- [SQL] | [SQL   ] | [   SQL] | SQL
-(1 row)
-```
-(The brackets make the invisible spaces visible.) `trim` removes only leading and trailing characters, never those in the middle.
+`trim` removes leading and trailing characters (spaces by default), never middle ones: `'[' || ltrim('   SQL   ') || ']'` → `[SQL   ]`, `rtrim` → `[   SQL]`, `trim(BOTH '*' FROM '**SQL**')` → `SQL`.
 
 ### Searching and padding
-```sql
-SELECT position('abc' IN 'xxabcdef') AS position, strpos('Hello World', 'World') AS strpos,
-       position('zzz' IN 'Hello') AS not_found;
-SELECT lpad('SQL', 5, '*') AS lpad, rpad('SQL', 5, '*') AS rpad, lpad('7', 3, '0') AS zero_pad,
-       lpad('Postgres', 3) AS lpad_truncates;
-```
-Output:
-```
- position | strpos | not_found
-----------+--------+-----------
-        3 |      7 |         0
-(1 row)
-
- lpad  | rpad  | zero_pad | lpad_truncates
--------+-------+----------+----------------
- **SQL | SQL** | 007      | Pos
-(1 row)
-```
-`lpad` both pads and **truncates** to the requested length — careful with long values.
+`position('zzz' IN 'Hello')` → 0 (not found). `lpad('SQL', 5, '*')` → `**SQL`, `rpad` → `SQL**`; `lpad` also **truncates** to the requested length — `lpad('Postgres', 3)` → `Pos` — careful with long values.
 
 ### Splitting delimited text
 ```sql
@@ -511,7 +370,7 @@ Output:
  www   | com  | www.example
 (1 row)
 ```
-`split_part` replaces MySQL's `SUBSTRING_INDEX`: `SUBSTRING_INDEX(s, '.', -1)` (text after the last dot) is `split_part(s, '.', -1)`; "everything before the second dot" (`SUBSTRING_INDEX(s, '.', 2)`) needs the array form shown (an **array** is an ordered list of values held in one cell; `[1:2]` takes its first two elements). (Splitting into *rows* uses `string_to_table` / `unnest`, chapter 14.)
+`split_part` replaces MySQL's `SUBSTRING_INDEX`: `SUBSTRING_INDEX(s, '.', -1)` (after the last dot) is `split_part(s, '.', -1)`; "everything before the second dot" (`SUBSTRING_INDEX(s, '.', 2)`) needs the array form (an **array** is an ordered list in one cell; `[1:2]` takes its first two elements). Splitting into *rows*: `string_to_table` / `unnest`, chapter 14.
 
 ### format() and regular expressions
 ```sql
@@ -533,10 +392,10 @@ Output:
  0225550199  | 1042
 (1 row)
 ```
-`%I` and `%L` quote an identifier and a literal safely — the basis of safe dynamic SQL (SQL text built as a string while the program runs, then executed; quoting stops *SQL injection*, where crafted input changes the meaning of the query — chapter 14). `regexp_replace(…, 'g')` replaces all matches (`g` = global); `regexp_match` returns an array of captured groups (the pieces of text matched by each bracketed part of the pattern), and `[2]` picks the second.
+`%I` and `%L` quote an identifier and a literal safely — the basis of safe dynamic SQL (SQL built as a string at run time; quoting stops *SQL injection*, where crafted input changes the query's meaning — chapter 14). `regexp_replace(…, 'g')` replaces all matches (global); `regexp_match` returns an array of captured groups (text matched by each bracketed part), `[2]` picks the second.
 
 ### Cleaning real data
-Our two Anita Shah rows differ only in formatting. Normalising them shows they're the same person:
+The two Anita Shah rows differ only in formatting:
 ```sql
 SELECT customer_id, email AS raw, lower(trim(email)) AS clean, initcap(city) AS city_fixed
 FROM customers WHERE last_name = 'Shah' ORDER BY customer_id;
@@ -549,7 +408,7 @@ Output:
            8 |   Anita.Shah@Mail.example  | anita.shah@mail.example | Mumbai
 (2 rows)
 ```
-Better still, clean on the way *in* (application validation, a `CHECK` constraint — a rule the database tests on every insert — or a unique index on `lower(email)`, which refuses a second row with the same value — chapter 12).
+Better: clean on the way *in* (application validation, a `CHECK` constraint — a rule tested on every insert — or a unique index on `lower(email)`, chapter 12).
 
 Full names and email domains:
 ```sql
@@ -588,19 +447,15 @@ Meera has no email, so the domain is NULL — functions given NULL generally ret
 - Comparing case-insensitively without `lower()`/`ILIKE` in PostgreSQL.
 
 ### Self-check
-1. *Get the text after the `@` in an email in PostgreSQL?* → `split_part(email, '@', 2)`.
-2. *`'a' || NULL` vs `concat('a', NULL)`?* → NULL vs `'a'`.
-3. *Pad an order number 42 to `00042`?* → `lpad(42::text, 5, '0')` (or `to_char(42, 'FM00000')`).
-
-### TL;DR
-`||`/`concat`/`concat_ws` join (mind NULLs), `substring`/`left`/`right`/`split_part` cut, `length`/`octet_length` measure, `lower`/`upper`/`initcap`/`trim`/`replace` clean, `position`/`strpos` search, `lpad`/`rpad` pad, `format` and `regexp_*` for power tasks.
+1. *`'a' || NULL` vs `concat('a', NULL)`?* → NULL vs `'a'`.
+2. *Pad 42 to `00042`?* → `lpad(42::text, 5, '0')` (or `to_char(42, 'FM00000')`).
 
 ---
 
 ## 3.4 Date and time functions
 
 ### What it is
-Time values cause more subtle SQL bugs than any other kind of data: months have different lengths, time zones shift, and "now" depends on when you ask. PostgreSQL has a rich, precise set of types and functions for them.
+Time values cause more subtle bugs than any other data: months differ in length, time zones shift, and "now" depends on when you ask.
 
 ### The types
 | Type | Holds | Example |
@@ -611,10 +466,10 @@ Time values cause more subtle SQL bugs than any other kind of data: months have 
 | `timestamptz` (with time zone) | an absolute **instant** (one exact moment, the same everywhere on Earth); stored in UTC, shown in the session's time zone | `2025-03-18 14:00:00+00` |
 | `interval` | a duration | `3 days`, `1 mon`, `02:30:00` |
 
-Guideline: use `timestamptz` for "when did it happen" (events, orders, logins) and `date` for calendar facts (birthdays, hire dates). Our sample `orders.placed_at` is a plain `timestamp` to keep outputs identical on every machine.
+Use `timestamptz` for "when did it happen" (events, orders, logins), `date` for calendar facts (birthdays, hire dates). Sample `orders.placed_at` is a plain `timestamp` so outputs match on every machine.
 
 ### "Now"
-A **transaction** is a group of statements that succeed or fail together, started with `BEGIN` and ended with `COMMIT` (a single statement on its own is also a transaction). Several "now" functions freeze at the transaction's start:
+A **transaction** is a group of statements that succeed or fail together (`BEGIN` … `COMMIT`; a lone statement is one too). Several "now" functions freeze at its start:
 
 | Function | Returns | Changes within a transaction? |
 |---|---|---|
@@ -638,7 +493,7 @@ Output (from the run that produced this book; yours will show your current time)
  2026-09-28 | 19:15:38.702642+00 | 19:15:38.702642 | 2026-09-28 19:15:38.702642+00 | 2026-09-28 19:15:38.702642
 (1 row)
 ```
-`now()` is frozen for the whole transaction, so every row inserted in one transaction gets the same timestamp — usually what you want. `clock_timestamp()` keeps moving:
+`now()` is frozen for the whole transaction, so rows inserted together share one timestamp — usually what you want. `clock_timestamp()` keeps moving:
 ```sql
 BEGIN;
 SELECT now() AS tx_start, clock_timestamp() AS wall_clock;
@@ -694,7 +549,7 @@ Output:
  2024-01-04  | 2024-01-04 00:00:00 | 2023-12-01 00:00:00 |            4
 (1 row)
 ```
-**Month arithmetic clamps** to the last valid day, which makes it non-reversible:
+**Month arithmetic clamps** to the last valid day, so it is not reversible:
 ```sql
 SELECT date '2025-01-31' + interval '1 month' AS jan31_plus_month,
        date '2024-02-29' + interval '1 year' AS leap_plus_year,
@@ -707,7 +562,7 @@ Output:
  2025-02-28 00:00:00 | 2025-02-28 00:00:00 | 2025-01-28 00:00:00
 (1 row)
 ```
-31 January + 1 month = 28 February, and going back a month lands on 28 January, not the 31st. Billing systems must decide explicitly what "one month later" means.
+Back a month from 28 February lands on 28 January, not the 31st — billing systems must define "one month later" explicitly.
 
 ### Extracting fields: EXTRACT and date_part
 `extract(field FROM value)` is standard SQL; `date_part('field', value)` is PostgreSQL's function form. Since PostgreSQL 14, `extract` returns `numeric`.
@@ -724,10 +579,10 @@ Output:
  2024 |     1 |   1 |         1 |            1 |       3 |        1
 (1 row)
 ```
-1 January 2024 was a **Monday**: `DOW` numbers Sunday 0 … Saturday 6, `ISODOW` numbers Monday 1 … Sunday 7. Other useful fields: `HOUR`, `MINUTE`, `SECOND`, `DOY` (day of year), `EPOCH` (seconds since 1970-01-01 UTC).
+1 January 2024 was a **Monday**: `DOW` is Sunday 0 … Saturday 6, `ISODOW` Monday 1 … Sunday 7. Also: `HOUR`, `MINUTE`, `SECOND`, `DOY` (day of year), `EPOCH` (seconds since 1970-01-01 UTC).
 
 ### Truncating to a period: date_trunc
-`date_trunc(unit, ts)` rounds *down* to the start of the unit — the workhorse of time-series reports (reports of values over time, such as "sales per month"):
+`date_trunc(unit, ts)` rounds *down* to the start of the unit — the workhorse of time-series reports ("sales per month"):
 ```sql
 SELECT placed_at, date_trunc('month', placed_at) AS month_start, date_trunc('week', placed_at) AS week_start,
        date_trunc('hour', placed_at) AS hour_start
@@ -740,7 +595,7 @@ Output:
  2025-03-18 19:30:00 | 2025-03-01 00:00:00 | 2025-03-17 00:00:00 | 2025-03-18 19:00:00
 (1 row)
 ```
-Weeks start on **Monday** (ISO 8601, the international standard for writing dates and times). Grouping by `date_trunc('month', …)` gives one sortable key per month — see exercise E5 in 3.6.
+Weeks start on **Monday** (ISO 8601, the international date-time standard). Grouping by `date_trunc('month', …)` gives one sortable key per month (exercise E5, 3.6).
 
 ### Formatting and parsing
 `to_char(value, pattern)` formats; `to_date` / `to_timestamp` parse; `make_date` / `make_timestamp` build from numbers.
@@ -775,7 +630,7 @@ Output:
  2025-03-18  | 2025-03-18 19:30:00+00 | 2025-03-18
 (1 row)
 ```
-`to_timestamp` returns a `timestamptz` interpreted in the session time zone (UTC here). For ISO strings (`'2025-03-18'`) a plain cast is simpler; use `to_date` for other layouts like `18/03/2025`, which is ambiguous otherwise.
+`to_timestamp` returns a `timestamptz` in the session time zone (UTC here). ISO strings just cast; use `to_date` for layouts like `18/03/2025`, which are otherwise ambiguous.
 
 ### Differences between moments
 ```sql
@@ -795,7 +650,7 @@ Output:
       104 | 2025-02-11 09:05:00 | 2025-02-12 16:45:00 | 1 day 07:40:00 |          31.7 |             1
 (4 rows)
 ```
-Three different answers to "how long did shipping take?": an `interval`, a number of hours (via `EPOCH` seconds ÷ 3600), and the number of calendar-date boundaries crossed. Order 101 took under a day but crossed one midnight. Decide which one the business means.
+Three answers to "how long did shipping take?": an `interval`, hours (`EPOCH` seconds ÷ 3600), and calendar-date boundaries crossed (order 101 took under a day but crossed a midnight). Decide which the business means.
 
 `age()` gives a human-style difference:
 ```sql
@@ -811,22 +666,7 @@ Output:
  Rohan      | 2025-06-02 | 29 days
 (3 rows)
 ```
-`age(x)` with one argument measures from `current_date` at midnight. Whole years of service: `extract(YEAR FROM age(current_date, hire_date))`.
-
-Expected delivery ten days after ordering:
-```sql
-SELECT order_id, placed_at::date AS order_date, (placed_at + interval '10 days')::date AS expected_by
-FROM orders WHERE order_id IN (101, 105, 113) ORDER BY order_id;
-```
-Output:
-```
- order_id | order_date | expected_by
-----------+------------+-------------
-      101 | 2025-01-03 | 2025-01-13
-      105 | 2025-02-28 | 2025-03-10
-      113 | 2025-06-02 | 2025-06-12
-(3 rows)
-```
+`age(x)` with one argument measures from `current_date` at midnight. Whole years of service: `extract(YEAR FROM age(current_date, hire_date))`. Expected delivery ten days after ordering: `(placed_at + interval '10 days')::date` (order 105 of 2025-02-28 → 2025-03-10).
 
 ### Time zones
 A `timestamptz` is one instant; how it *prints* depends on the session's `TimeZone` setting. `AT TIME ZONE` converts between instants and wall-clock readings:
@@ -856,10 +696,10 @@ Output:
  2025-03-18 19:30:00+05:30 | 2025-03-18 10:00:00 | 2025-03-19 01:00:00+05:30
 (1 row)
 ```
-7:30 pm in India is 14:00 UTC and 10:00 in New York (already on daylight-saving time on 18 March). 7:30 pm in London (still on GMT, Greenwich Mean Time — the UK's winter clock, equal to UTC) is 01:00 the next day in India. Use named zones (`'Asia/Kolkata'`), not fixed offsets, so daylight-saving rules are applied.
+7:30 pm in India is 14:00 UTC and 10:00 in New York (already on daylight-saving time on 18 March). 7:30 pm in London (still on GMT — Greenwich Mean Time, the UK winter clock, equal to UTC) is 01:00 next day in India. Use named zones (`'Asia/Kolkata'`), not fixed offsets, so daylight-saving rules apply.
 
 ### A calendar of dates
-`generate_series` produces rows — here, one per day — which is how you build calendars or fill gaps in reports (chapter 7):
+`generate_series` produces rows — one per day here — to build calendars or fill report gaps (chapter 7):
 ```sql
 SELECT d::date AS day, to_char(d, 'Dy') AS weekday
 FROM generate_series(date '2025-03-01', date '2025-03-05', interval '1 day') AS d;
@@ -894,7 +734,7 @@ Note the argument orders: MySQL `DATEDIFF(end, start)` vs SQL Server `DATEDIFF(u
 
 ### Common mistakes
 - Comparing a timestamp column to a date-only upper bound (see chapter 2, 2.4) — use half-open ranges.
-- Applying a function to an indexed column (one with an **index** — a sorted lookup structure that lets the database find rows without reading them all) in `WHERE` (`WHERE date_trunc('month', placed_at) = …`) — it can stop the index being used; rewrite as a range (chapter 12).
+- Wrapping an indexed column (an **index** is a sorted lookup structure for finding rows without reading them all) in a function in `WHERE` (`WHERE date_trunc('month', placed_at) = …`) — can stop the index being used; rewrite as a range (chapter 12).
 - Storing local times in `timestamp` for a multi-time-zone app — use `timestamptz`.
 - Assuming "+1 month" can be undone with "−1 month".
 
@@ -906,19 +746,15 @@ Note the argument orders: MySQL `DATEDIFF(end, start)` vs SQL Server `DATEDIFF(u
 
 ### Self-check
 1. *`date '2025-03-31' - interval '1 month'`?* → `2025-02-28 00:00:00`.
-2. *First day of the month of `placed_at`?* → `date_trunc('month', placed_at)`.
-3. *Why might two `now()` calls in one transaction be equal?* → `now()` returns the transaction start time.
-4. *Hours between two timestamps as a number?* → `extract(EPOCH FROM b - a) / 3600`.
-
-### TL;DR
-`date`, `timestamp`, `timestamptz`, `interval`. `now()` (transaction start) vs `clock_timestamp()`. Add intervals; subtract dates for days; `extract` fields; `date_trunc` to periods; `to_char`/`to_date` to format/parse; `AT TIME ZONE` converts; month maths clamps.
+2. *Why are two `now()` calls in one transaction equal?* → `now()` is the transaction start time.
+3. *Hours between two timestamps as a number?* → `extract(EPOCH FROM b - a) / 3600`.
 
 ---
 
 ## 3.5 Conditional expressions: CASE, COALESCE, NULLIF, GREATEST, LEAST
 
 ### What it is
-Conditional expressions put *if-then-else* logic inside a query. They are expressions, so they return a value and can be used wherever a column can.
+*If-then-else* logic inside a query; being expressions, they return a value and go wherever a column can.
 
 ### CASE
 **Searched CASE** tests conditions in order and returns the result of the first true one:
@@ -935,17 +771,14 @@ Output:
             name             | unit_price | price_band
 -----------------------------+------------+------------
  Laptop Pro 14               |    1299.00 | premium
- Standing Desk               |     499.00 | premium
- Ergonomic Chair             |     349.99 | premium
+ ...
  Noise-Cancelling Headphones |     199.95 | standard
- Mechanical Keyboard         |      89.00 | standard
- Gift Card                   |      50.00 | standard
+ ...
  USB-C Hub                   |      49.50 | budget
- Desk Lamp                   |      35.00 | budget
- Wireless Mouse              |      24.99 | budget
+ ...
 (9 rows)
 ```
-Order matters: a 1,299 laptop is also `>= 50`, but the first matching branch wins. Write branches from most to least specific.
+The first matching branch wins (the 1,299 laptop is also `>= 50`), so order branches most to least specific.
 
 **Simple CASE** compares one expression with a list of values:
 ```sql
@@ -966,12 +799,12 @@ Output:
       113 | pending   | Awaiting dispatch
 (4 rows)
 ```
-**No `ELSE` means `ELSE NULL`** — the cancelled order gets NULL. Always write an `ELSE` unless NULL is really what you want. Also, simple `CASE x WHEN NULL` never matches (it uses `=`); test NULLs with a searched `CASE WHEN x IS NULL`.
+**No `ELSE` means `ELSE NULL`** — the cancelled order gets NULL. Simple `CASE x WHEN NULL` never matches (it uses `=`); use searched `CASE WHEN x IS NULL`.
 
-`CASE` appears everywhere: in `ORDER BY` for custom sort orders (chapter 2, 2.7), inside aggregates for conditional counts (`count(*) FILTER (…)` / `sum(CASE …)`, chapter 4), in `UPDATE … SET` for conditional changes (chapter 9), and for pivots (turning row values into columns, e.g. one column per month; chapter 14).
+`CASE` appears in `ORDER BY` for custom orders (2.7), inside aggregates for conditional counts (`count(*) FILTER (…)` / `sum(CASE …)`, chapter 4), in `UPDATE … SET` (chapter 9), and in pivots (row values into columns, e.g. one per month; chapter 14).
 
 ### COALESCE — first non-NULL
-`coalesce(a, b, c, …)` returns the first argument that isn't NULL (or NULL if all are). It's the standard way to supply defaults.
+`coalesce(a, b, c, …)` returns the first non-NULL argument (NULL if all are) — the standard way to supply defaults.
 ```sql
 SELECT first_name, email, coalesce(email, 'no email on file') AS contact,
        commission_pct, coalesce(commission_pct, 0) AS commission_or_zero
@@ -1004,7 +837,7 @@ Output:
  Sara       |  68000.00 |         (null) |      (null) |    68000.00
 (4 rows)
 ```
-Without `coalesce`, Sara's total pay is unknown. All arguments must share a compatible type — `coalesce(salary, 'n/a')` fails; convert first (`coalesce(salary::text, 'n/a')`).
+Without `coalesce`, Sara's total is unknown. Arguments must share a compatible type — `coalesce(salary, 'n/a')` fails; use `coalesce(salary::text, 'n/a')`.
 
 ### NULLIF — turn a value into NULL
 `nullif(a, b)` returns NULL if `a = b`, otherwise `a`. Two classic uses:
@@ -1032,7 +865,7 @@ Output:
  (null)      | (null)
 (3 rows)
 ```
-`x / 0` raises *division by zero* and aborts the whole query; `x / NULLIF(0, 0)` is `x / NULL` = NULL. Combine them: `coalesce(a / nullif(b, 0), 0)` if a zero is more useful than NULL.
+`x / 0` raises *division by zero* and aborts the query; `x / NULLIF(0, 0)` = NULL. Use `coalesce(a / nullif(b, 0), 0)` if zero is more useful than NULL.
 
 ### CASE with dates and NULLs together
 ```sql
@@ -1054,7 +887,7 @@ Output:
 ```
 
 ### GREATEST and LEAST
-Return the largest / smallest of their arguments (not across rows — that's `max`/`min`, chapter 4). In PostgreSQL they **ignore NULLs**:
+Largest / smallest of their arguments (across rows is `max`/`min`, chapter 4). In PostgreSQL they **ignore NULLs**:
 ```sql
 SELECT greatest(1, NULL, 3) AS greatest, least(1, NULL, 3) AS least;
 ```
@@ -1089,18 +922,14 @@ Prefer the standard forms (`CASE`, `COALESCE`, `NULLIF`) — they work everywher
 - *`ISNULL` vs `COALESCE` in SQL Server?* → `ISNULL` takes two arguments and uses the first argument's type; `COALESCE` is standard, takes many, and uses type precedence (the rule for which type wins when arguments differ).
 
 ### Self-check
-1. *What does a CASE return when no branch matches and there's no ELSE?* → NULL.
-2. *Safe average price per item when quantity may be 0?* → `total / NULLIF(quantity, 0)`.
-3. *`coalesce(NULL, NULL, 'x', 'y')`?* → `'x'`.
-
-### TL;DR
-`CASE` = if/else (first true branch wins; no `ELSE` → NULL). `COALESCE` = first non-NULL (defaults). `NULLIF` = value → NULL (safe division, blank → NULL). `GREATEST`/`LEAST` compare arguments (PostgreSQL skips NULLs).
+1. *Safe average price per item when quantity may be 0?* → `total / NULLIF(quantity, 0)`.
+2. *`coalesce(NULL, NULL, 'x', 'y')`?* → `'x'`.
 
 ---
 
 ## 3.6 Worked exercises
 
-Try each before reading the solution. They combine this chapter with a preview of aggregates (`sum`, `count`, `GROUP BY` — [chapter 4](../04-aggregation/README.md)) and a simple join (`JOIN … USING` — a **join** pairs rows of two tables whose shared column, here `order_id`, matches; [chapter 5](../05-joins/README.md)).
+Try each first. They preview aggregates (`sum`, `count`, `GROUP BY` — [chapter 4](../04-aggregation/README.md)) and a simple join (`JOIN … USING` pairs rows of two tables whose shared column, here `order_id`, matches; [chapter 5](../05-joins/README.md)).
 
 **E1. Total value of all delivered orders**, rounded to 2 decimals and shown with thousands separators.
 ```sql
@@ -1130,7 +959,7 @@ FROM order_items;
       4.690 |     9.2130
 (1 row)
 ```
-`sqrt` of an integer returns `double precision`, and `round(x, d)` with a decimal-places argument needs `numeric` — hence the cast. Note `ln`, not `log`, for the natural logarithm.
+`sqrt` returns `double precision`, and `round(x, d)` needs `numeric` — hence the cast. `ln`, not `log`, for natural log.
 
 **E3. Customer display names like "Shah, A." and lower-case email domains.**
 ```sql
@@ -1193,12 +1022,12 @@ ORDER BY date_trunc('month', o.placed_at);
  2025-06 |      2
 (6 rows)
 ```
-Grouping by `date_trunc` keeps a real timestamp for sorting; `to_char` only dresses it up for display. The expected-delivery exercise (order date + 10 days) is in 3.4.
+Grouping by `date_trunc` keeps a real timestamp for sorting; `to_char` only dresses it for display. (Expected delivery, order date + 10 days, is in 3.4.)
 
 ---
 
 ## Chapter 3 TL;DR
-- **Types:** everything has one; `numeric` for money, `text` for strings, `date`/`timestamptz` for time; convert with `CAST(x AS t)` or `x::t`; PostgreSQL refuses silent coercions.
+- **Types:** everything has one; `numeric` for money, `text` for strings, `date`/`timestamptz` for time; convert with `CAST(x AS t)` or `x::t`; PostgreSQL refuses silent coercions (automatic conversions).
 - **Numbers:** `round`/`trunc`/`ceil`/`floor` (numeric rounds half away from zero, floats to even), `power`, `sqrt`, `exp`, `ln`, `log` (base 10 in PostgreSQL!), `mod`/`%`, `random` + `setseed`, `to_char` for display.
 - **Strings:** `||` vs `concat` (NULL handling), `substring`/`left`/`right`/`split_part`, `length` vs `octet_length`, `lower`/`upper`/`initcap`, `trim`, `replace`/`translate`, `position`/`strpos`, `lpad`/`rpad`, `format`, `regexp_replace`.
 - **Dates:** `now()` vs `clock_timestamp()`, `+ interval`, `date - date`, `age`, `extract`, `date_trunc`, `to_char`/`to_date`, `AT TIME ZONE`; month arithmetic clamps.
