@@ -1,81 +1,58 @@
 # Chapter 3 — Semantic HTML and Accessibility
 
-A page can look perfect and still be unusable for someone who navigates with a keyboard, listens through a screen reader (software that reads the page aloud and lets blind users move around it with keys), zooms to 400 %, or cannot tell red from green. **Accessibility** (often shortened to *a11y*: "a", 11 letters, "y") means building pages that work for all of them — and the single most effective tool for it is **semantic HTML**: using the element whose meaning matches the content. This chapter shows how browsers turn your markup into an *accessibility tree*, how landmarks, headings, alt text (the text alternative for an image), ARIA (extra attributes that describe elements to assistive tools), focus management (controlling which element receives keyboard input) and form labels feed that tree, what WCAG 2.2 (the Web Content Accessibility Guidelines, the standard most laws point to) requires, and how to test.
+A page can look perfect and still be unusable for someone who navigates by keyboard, listens through a **screen reader** (software that reads the page aloud and lets blind users move around it with keys), zooms to 400 %, or can't tell red from green. **Accessibility** (*a11y*: "a", 11 letters, "y") means building pages that work for all of them, and the most effective tool is **semantic HTML**: using the element whose meaning matches the content. This chapter covers the *accessibility tree*, landmarks, headings, alt text, ARIA, focus management, form labels, WCAG 2.2 and testing.
 
-**What you'll learn**
+**In this chapter:** 3.1 Why semantics and accessibility · 3.2 Landmarks · 3.3 Headings and outline · 3.4 The accessibility tree · 3.5 Alt text · 3.6 ARIA · 3.7 Keyboard and focus · 3.8 Accessible forms · 3.9 WCAG 2.2 · 3.10 Testing tools.
 
-| # | Topic | You will be able to… |
-|---|---|---|
-| 3.1 | Why semantics and accessibility | explain who benefits, what goes wrong most often, and the legal picture |
-| 3.2 | Landmarks | structure a page with `header`, `nav`, `main`, `article`, `section`, `aside`, `footer`, `search` |
-| 3.3 | Headings and outline | produce a heading outline screen-reader users can navigate |
-| 3.4 | The accessibility tree | describe role, name, state and value, and how the name is computed |
-| 3.5 | Alt text | write the right `alt` for informative, decorative, functional and complex images |
-| 3.6 | ARIA | apply the first rule of ARIA and use labels, descriptions, states and live regions correctly |
-| 3.7 | Keyboard and focus | keep everything reachable, visible and in order; build skip links; manage focus |
-| 3.8 | Accessible forms | label, group, describe and report errors for form fields |
-| 3.9 | WCAG 2.2 | use POUR, the A/AA/AAA levels, the new 2.2 criteria and the contrast formula |
-| 3.10 | Testing tools | combine automated checkers, a keyboard test and a screen reader |
-
-Code is in [`code/`](code/). The `.html` files are shown as screenshots. Most scripts open those files in **real headless Chrome** (Chrome without a window, driven by a script via `puppeteer-core`, a Node.js library for remote-controlling Chrome; helper [`code/a11y_lib.mjs`](code/a11y_lib.mjs)) and print Chrome's own accessibility tree — the same data a screen reader receives. `06_mini_audit.mjs` uses jsdom (a browser-like DOM that runs in Node.js) and `dom-accessibility-api`.
+Code is in [`code/`](code/). Most scripts open the `.html` files in **real headless Chrome** via `puppeteer-core` (a Node.js library that remote-controls Chrome; helper [`code/a11y_lib.mjs`](code/a11y_lib.mjs)) and print Chrome's own accessibility tree — the data a screen reader receives. `06_mini_audit.mjs` uses jsdom and `dom-accessibility-api`.
 
 ---
 
 ## 3.1 Why semantics and accessibility
 
 ### What it is
-**Semantic HTML** means choosing elements for what content *is* — a `<button>` for a button, `<nav>` for navigation, `<h2>` for a section heading — rather than for how it looks. **Accessibility** means people with disabilities can perceive, understand, navigate and interact with the page. The two are linked because browsers expose the semantics of your HTML to **assistive technologies** (AT): screen readers, screen magnifiers (enlarge part of the screen), voice control, switch devices (one or two big buttons that replace a keyboard and mouse), braille displays (a strip of raised pins that shows text as braille).
-
-Analogy: semantic HTML is the signage in a building. Sighted visitors may find the exit by looking around; a blind visitor depends on the signs being real (braille, announced floors). A `<div>` styled to look like a button is a painted-on door.
+**Semantic HTML** = choosing elements for what content *is* (`<button>` for a button, `<nav>` for navigation, `<h2>` for a section heading), not how it looks. **Accessibility** = people with disabilities can perceive, understand, navigate and interact with the page. They are linked because browsers expose your HTML's semantics to **assistive technologies** (AT): screen readers, screen magnifiers, voice control, switch devices (one or two big buttons replacing keyboard and mouse), braille displays (raised pins showing text as braille). A `<div>` styled as a button is a painted-on door.
 
 ### Who benefits
 
 | Group | Examples | What they rely on |
 |---|---|---|
-| Blind and low-vision users | Screen readers (JAWS, NVDA, VoiceOver, TalkBack), magnifiers, high zoom | Roles and names, headings, alt text, contrast (difference in brightness between text and background), reflow (content rewrapping to fit a narrow, zoomed view) |
+| Blind and low-vision users | Screen readers (JAWS, NVDA, VoiceOver, TalkBack), magnifiers, high zoom | Roles and names, headings, alt text, contrast (text vs background brightness), reflow (content rewrapping at high zoom) |
 | Motor impairments | Keyboard only, switch access, voice control ("click Submit") | Focusable controls, visible focus, big targets, visible labels that match names |
-| Deaf and hard of hearing | Captions (on-screen text of what is said), transcripts (the full text of an audio/video) | Media alternatives ([Chapter 4](../04-images-media-and-embeds/README.md)) |
+| Deaf and hard of hearing | Captions (on-screen speech text), transcripts (full text of audio/video) | Media alternatives ([Chapter 4](../04-images-media-and-embeds/README.md)) |
 | Cognitive and learning disabilities | Clear language, consistent layout, no time pressure | Predictable structure, clear errors, no memory tests |
-| Everyone, sometimes ("situational") | Broken arm, bright sunlight, noisy train, slow network, old age | All of the above |
+| Everyone, sometimes ("situational") | Broken arm, bright sun, noisy train, slow network, old age | All of the above |
 
-The World Health Organization estimates that about 1.3 billion people — roughly one in six — live with a significant disability.
+The WHO estimates about 1.3 billion people — roughly one in six — live with a significant disability.
 
 ### Why it matters
-- **It is mostly not happening.** The WebAIM Million survey of the top one million home pages (February 2026) found detectable WCAG failures on 95.9 % of them, about 56 errors per page. Six problem types made up 96 % of errors: low-contrast text (83.9 % of pages), missing image alt text, missing form labels, empty links, empty buttons, and missing page language. Every one of those is fixed with the basics in this chapter; §3.10 builds a small checker for exactly those six.
-- **It is often the law.** The US ADA (Americans with Disabilities Act) and Section 508 (the US rule for government websites), the European Accessibility Act (applying since 28 June 2025) and similar laws elsewhere require accessible digital services, usually by reference to WCAG level AA.
-- **It is better engineering.** Semantic HTML gives you keyboard support, focus handling and screen-reader output *for free*; it also improves SEO (search engine optimisation — being found in search results), reader modes, voice assistants, automated testing (Testing Library, a popular testing tool, finds elements by role — see the React book), and code readability.
-
-### Self-check
-1. What is assistive technology? → Software/hardware that helps people with disabilities use computers: screen readers, magnifiers, switch devices, voice control.
-2. What is the most common accessibility failure on the web? → Low-contrast text.
-3. Why does semantic HTML help accessibility? → Browsers expose its built-in roles, names, states and keyboard behaviour to assistive technology automatically.
+- **It is mostly not happening.** The WebAIM Million (top one million home pages, February 2026) found detectable WCAG failures on 95.9 % of them, ~56 errors per page. Six types made up 96 % of errors: low-contrast text (83.9 % of pages — the most common failure), missing alt text, missing form labels, empty links, empty buttons, missing page language. All are fixed by this chapter's basics; §3.10 builds a checker for exactly those six.
+- **It is often the law.** The US ADA (Americans with Disabilities Act) and Section 508 (US government sites), the European Accessibility Act (applying since 28 June 2025) and similar laws require accessible services, usually by reference to WCAG level AA.
+- **It is better engineering.** Semantic HTML gives keyboard support, focus handling and screen-reader output *for free*, and improves SEO, reader modes, voice assistants, testing (Testing Library finds elements by role — React book) and readability.
 
 ---
 
 ## 3.2 Landmarks
 
 ### What it is
-**Landmarks** are the big regions of a page — banner, navigation, main content, sidebar, footer. Screen-reader users can list them and jump straight to one (e.g. NVDA's `D` key, VoiceOver's rotor — a menu that lists headings, links or landmarks to jump to), the way a sighted user glances at a layout. HTML's **sectioning elements** (the elements that mark out large page regions) create landmarks automatically. The **role** in the table is the *kind* of thing a screen reader announces it as:
+**Landmarks** are a page's big regions — banner, navigation, main, sidebar, footer. Screen-reader users list them and jump straight to one (NVDA's `D` key; VoiceOver's **rotor**, a menu of headings, links or landmarks). HTML's **sectioning elements** create landmarks automatically; the **role** is what a screen reader announces:
 
 | Element | Landmark role (ARIA) | Rules |
 |---|---|---|
-| `<header>` | `banner` — only when it is *not* inside `article`, `aside`, `main`, `nav` or `section` | Site header: logo, site nav, search. Inside an article it is just that article's header. |
-| `<nav>` | `navigation` | Major navigation blocks only (not every group of links). With several, label each: `aria-label="Main"`, `"Breadcrumb"` |
-| `<search>` | `search` | Wraps a search/filter form. Baseline 2023, widely available since April 2026. (Before it existed: `<form role="search">`.) |
+| `<header>` | `banner` — only when *not* inside `article`, `aside`, `main`, `nav` or `section` | Site header: logo, site nav, search. Inside an article it's just that article's header. |
+| `<nav>` | `navigation` | Major navigation blocks only. With several, label each: `aria-label="Main"`, `"Breadcrumb"` (the Home › Shop › Boots trail showing where a page sits) |
+| `<search>` | `search` | Wraps a search/filter form. Baseline 2023, widely available since April 2026 (before: `<form role="search">`). |
 | `<main>` | `main` | The primary content, **one visible per page**; target of the skip link |
-| `<aside>` | `complementary` | Related but separable content: sidebar, related links, pull quote (a short quote repeated in large type as decoration) |
+| `<aside>` | `complementary` | Related but separable: sidebar, related links, pull quote |
 | `<footer>` | `contentinfo` — only when not inside `article`, `aside`, `main`, `nav` or `section` | Site footer: copyright, contact, legal links |
-| `<section>` | `region` — **only if it has an accessible name** (the label a screen reader reads; here via `aria-labelledby` pointing at its heading) | A thematic group with its own heading |
+| `<section>` | `region` — **only if it has an accessible name** (the label a screen reader reads, e.g. via `aria-labelledby` pointing at its heading) | A thematic group with its own heading |
 | `<form>` | `form` — only if it has an accessible name | |
-| `<article>` | `article` (a document structure role, not a landmark) | A self-contained piece that would make sense on its own: blog post, product card, comment, news story |
+| `<article>` | `article` (a document-structure role, not a landmark) | Self-contained: blog post, product card, comment, news story |
 
-`<section>` vs `<article>` vs `<div>`:
-- **article** — could be syndicated (republished on other sites or in a feed) or reused elsewhere by itself (a post, a comment, a card).
-- **section** — a chunk of something bigger that has its own heading (a chapter, a tab panel, "Reviews" on a product page).
-- **div** — no meaning; just a wrapper for layout or styling. When unsure between `section` and `div`, ask "would this appear in a table of contents?" If not, use `div`.
+**article** could be syndicated (republished in a feed) or reused alone; **section** is a chunk of something bigger with its own heading (a chapter, tab panel, "Reviews"); **div** has no meaning. Unsure between `section` and `div`? Ask "would this appear in a table of contents?" If not, `div`.
 
 ### Example
-[`code/landmarks.html`](code/landmarks.html) is a small news page. The yellow tags are visual labels for this book (marked `aria-hidden="true"` so they don't pollute the names):
+[`code/landmarks.html`](code/landmarks.html), a small news page (the yellow tags in the screenshot are `aria-hidden="true"` labels for this book):
 
 ```html
 <a class="skip" href="#main">Skip to main content</a>
@@ -119,17 +96,8 @@ The World Health Organization estimates that about 1.3 billion people — roughl
 ![A news page with a dark blue site header containing logo, nav and search, a main column with an article card, a dashed sidebar called Upcoming, and a dark footer; small yellow tags name each element's landmark role](img/landmarks.png)
 *Figure 3.1 — `code/landmarks.html`. The layout is CSS; the landmarks come from the elements.*
 
-Now the same page as Chrome's accessibility tree ([`code/01_landmarks_tree.mjs`](code/01_landmarks_tree.mjs)):
+Chrome's accessibility tree and heading outline ([`code/01_landmarks_tree.mjs`](code/01_landmarks_tree.mjs), text and generic nodes skipped):
 
-```js
-import { openPage, printTree, fullTree } from './a11y_lib.mjs';
-const { browser, page } = await openPage('landmarks.html');
-printTree(await fullTree(page), { skipRoles: ['StaticText', 'generic', 'none', 'InlineTextBox', 'LineBreak', 'ListMarker', 'LabelText', 'listitem', 'time'] });
-const outline = await page.$$eval('h1,h2,h3,h4,h5,h6', hs => hs.map(h => '  '.repeat(+h.tagName[1] - 1) + h.tagName.toLowerCase() + ' ' + h.firstChild.textContent.trim()));
-console.log('\nHeading outline:\n' + outline.join('\n'));
-```
-
-Output:
 ```
 RootWebArea "Trail news — Mountain Club"
   link "Skip to main content"
@@ -164,103 +132,72 @@ h1 Trail news
   h2 Upcoming
 ```
 
-Notice:
-1. The top-level `<header>` became `banner` and the top-level `<footer>` became `contentinfo`; the article's own header and footer did *not* (Chrome calls them `sectionheader`/`sectionfooter`, which are not landmarks).
-2. `<section>` became a `region` landmark because `aria-labelledby` gave it a name; `<aside>` got its name "Upcoming" the same way.
-3. The `<nav>` is announced as "Main navigation" thanks to `aria-label`; `aria-current="page"` tells users which link is the current page. (`Breadcrumb`, used below, is the trail of links such as Home › Shop › Boots that shows where a page sits in a site.)
-4. Everything except the skip link sits inside a landmark — a good rule to aim for, so nothing is "orphaned" outside the regions users jump between.
+1. Top-level `<header>`/`<footer>` became `banner`/`contentinfo`; the article's own header and footer did *not* (`sectionheader`/`sectionfooter` aren't landmarks).
+2. `<section>` became a `region` because `aria-labelledby` named it; `<aside>` got "Upcoming" the same way.
+3. The `<nav>` is "Main navigation" thanks to `aria-label`; `aria-current="page"` marks the current link.
+4. Everything except the skip link sits inside a landmark — aim for that, so nothing is orphaned outside the regions users jump between.
 
 ### Common mistakes
-- "Div soup": a page built only from `<div class="header">`, `<div class="nav">` — zero landmarks.
+- "Div soup": `<div class="header">`, `<div class="nav">` — zero landmarks.
 - Several `<main>` elements, or none.
-- Wrapping every block in `<section>` "because HTML5" — sections without headings add noise, not structure.
-- Several unlabelled `<nav>`s: users hear "navigation, navigation, navigation".
+- `<section>` everywhere "because HTML5" — sections without headings add noise.
+- Several unlabelled `<nav>`s: "navigation, navigation, navigation".
 
-### Real-world examples
-GOV.UK, the BBC and GitHub use exactly this skeleton: skip link → `header` (banner) with `nav` → `main` → `footer` (contentinfo). Try it: open a site, turn on VoiceOver (Cmd+F5 on macOS) and open the rotor (Ctrl+Option+U) → Landmarks.
-
-### Self-check
-1. Which element makes the `main` landmark, and how many per page? → `<main>`, one visible.
-2. When is `<section>` a landmark? → Only when it has an accessible name (e.g. `aria-labelledby` its heading).
-3. Is a `<header>` inside an `<article>` a banner? → No.
-4. `<article>` or `<section>` for a product card in a grid? → `<article>` — it stands on its own.
+GOV.UK, the BBC and GitHub use this exact skeleton (skip link → `header` with `nav` → `main` → `footer`).
 
 ---
 
 ## 3.3 Headings and the outline
 
-Headings are the other main navigation tool: screen-reader users press `H` (NVDA/JAWS) or use the rotor to jump heading to heading, or pull up a list of all headings as a table of contents. The outline printed above is exactly that list. The rules from [§2.4](../02-html-structure-and-text/README.md) apply: one `h1`, don't skip levels going down, choose levels by structure, and remember that `<section>` does not reset levels (the old "outline algorithm" was never implemented and has been removed from the spec).
+Headings are the other main navigation tool: users press `H` (NVDA/JAWS) or use the rotor to jump heading to heading, or list all headings as a table of contents (the outline above). The rules of [§2.4](../02-html-structure-and-text/README.md) apply: one `h1`, no skipped levels going down, levels by structure, and `<section>`/`<article>` don't reset levels (the "outline algorithm" was never implemented and was removed).
 
-Two accessibility-specific points:
-- Each landmark region usually starts with a heading, which is why naming a `section` or `aside` with `aria-labelledby` pointing at its heading is so common.
-- If a region has no visible heading (a site's main nav, for example), give it a label with `aria-label` instead of adding a fake heading.
-
-### Self-check
-1. How do screen-reader users skim a page? → By landmarks and by headings (and by links/form fields lists).
-2. Does starting a new `<article>` reset heading levels? → No; levels are what the numbers say.
+Accessibility-specific points:
+- Each landmark usually starts with a heading — hence naming a `section` or `aside` with `aria-labelledby` pointing at it.
+- A region with no visible heading (the main nav) gets `aria-label`, not a fake heading.
 
 ---
 
 ## 3.4 The accessibility tree
 
 ### What it is
-Alongside the DOM, browsers build an **accessibility tree**: a simplified tree containing only what matters to assistive technology, exposed through the operating system's accessibility API (API = application programming interface, a defined way for one program to ask another for data; here UI Automation on Windows, NSAccessibility on macOS, AT-SPI on Linux). Screen readers never read your HTML; they read this tree.
-
-Each node has:
+Alongside the DOM, browsers build an **accessibility tree** — only what matters to AT — exposed through the OS accessibility API (UI Automation on Windows, NSAccessibility on macOS, AT-SPI on Linux). Screen readers never read your HTML; they read this tree.
 
 | Property | Question it answers | From |
 |---|---|---|
-| **Role** | What is it? (button, link, heading, textbox, checkbox, navigation…) | The element's implicit role (the one it has automatically, e.g. `<button>` → button), or an ARIA `role` |
+| **Role** | What is it? (button, link, heading, textbox, checkbox, navigation…) | The element's implicit role (`<button>` → button) or an ARIA `role` |
 | **Name** | What is it called? ("Save", "Search", "Close") | Content, `<label>`, `alt`, `aria-label`, `aria-labelledby`… |
 | **Description** | Extra help text | `aria-describedby`, sometimes `title` |
-| **State / properties** | What condition is it in? (checked, expanded, disabled, invalid, required, level 2, current page) | Native attributes (`checked`, `disabled`, `required`) or ARIA states |
-| **Value** | Current value of a field, slider or progress bar | The control's value |
+| **State / properties** | What condition? (checked, expanded, disabled, invalid, required, level 2, current page) | Native attributes (`checked`, `disabled`, `required`) or ARIA states |
+| **Value** | Current value of a field, slider, progress bar | The control's value |
 
-A screen reader turns that into speech such as: *"Email, edit text, required, invalid entry, We only use it for your receipt."*
+A screen reader speaks it as: *"Email, edit text, required, invalid entry, We only use it for your receipt."*
 
 ### How the accessible name is computed
-The W3C *Accessible Name and Description Computation* spec defines an order of precedence. Simplified, the first of these that yields text wins:
+The W3C *Accessible Name and Description Computation* spec; simplified, the first that yields text wins:
 
-1. `aria-labelledby` — text of the referenced element(s), in order (can combine several ids).
+1. `aria-labelledby` — text of the referenced element(s), in order (several ids allowed).
 2. `aria-label` — a string on the element.
-3. The native labelling mechanism: `<label>` for form fields, `alt` for images, `<caption>` for tables, `<legend>` for fieldsets, `<figcaption>` for figures.
-4. The element's content, for roles that allow "name from content" (buttons, links, headings, cells…).
-5. `title` (and, for inputs, `placeholder`) as a last resort.
+3. The native label: `<label>` for fields, `alt` for images, `<caption>` for tables, `<legend>` for fieldsets, `<figcaption>` for figures.
+4. The element's content, for roles with "name from content" (buttons, links, headings, cells…).
+5. `title` (and for inputs `placeholder`) as a last resort.
 
-Hidden content (`display: none`, `hidden`, `aria-hidden="true"`) is left out — unless you reference it directly with `aria-labelledby`.
+Hidden content (`display: none`, `hidden`, `aria-hidden="true"`) is left out — unless referenced directly by `aria-labelledby`.
 
-The examples in [`code/aria.html`](code/aria.html) (discussed in §3.6) show each rule; here is what Chrome computed ([`code/03_names_and_states.mjs`](code/03_names_and_states.mjs)):
+Chrome's computation for [`code/aria.html`](code/aria.html) (§3.6), from [`code/03_names_and_states.mjs`](code/03_names_and_states.mjs) (`StaticText` nodes omitted; the visually hidden "Rated 4 out of 5" text is one of them):
 
 ```
 --- aria.html
 RootWebArea "ARIA patterns"
-  StaticText "1. Icon-only button:"
   button "Close"
-    StaticText "✕"
-  StaticText "2."
-  StaticText "Shopping cart"
-  StaticText ":"
   button "Shopping cart 3 items"
-  StaticText "3."
-  StaticText "Password"
   textbox "Password"  description="At least 12 characters."
-  StaticText "At least 12 characters."
-  StaticText "4."
   button "Shipping details"  expanded=true
-  StaticText "Ships in 2 business days."
-  StaticText "5."
   navigation "Breadcrumb"
     link "Home"
-    StaticText "›"
     link "Shop"
-    StaticText "›"
     link "Boots"
-  StaticText "6."
   button "Add to cart"
   status
-  StaticText "7."
-  StaticText "Rated 4 out of 5"
-  StaticText "(stars hidden, text for screen readers)"
 
 after clicking "Shipping details" and "Add to cart": {
   expanded: 'false',
@@ -269,41 +206,36 @@ after clicking "Shipping details" and "Add to cart": {
 }
 ```
 
-- The "✕" button's name is **"Close"** (`aria-label` beat the content).
-- The cart button's name combines two elements via `aria-labelledby`: **"Shopping cart 3 items"**.
-- The password field's name comes from its `<label>`; its **description** comes from `aria-describedby`.
-- The stars were hidden with `aria-hidden="true"`, so only the visually hidden text "Rated 4 out of 5" is in the tree.
+- The "✕" button is named **"Close"** (`aria-label` beat the content).
+- The cart button combines two elements via `aria-labelledby`: **"Shopping cart 3 items"**.
+- The password field's name is its `<label>`; its **description** comes from `aria-describedby`.
+- The `aria-hidden` stars are gone; only the visually hidden text remains.
 
 ### Inspecting it yourself
-Chrome DevTools → Elements → **Accessibility** pane (or enable the full-page accessibility tree view); Firefox DevTools → **Accessibility** panel; Safari → Elements → Node → Accessibility. These show role, name, and states for any element.
+Chrome DevTools → Elements → **Accessibility** pane (or the full-page tree view); Firefox → **Accessibility** panel; Safari → Elements → Node → Accessibility.
 
 ### In the interview
-**30-second answer:** "Browsers derive an accessibility tree from the DOM — each node has a role, an accessible name, maybe a description, states and a value — and expose it to screen readers through OS accessibility APIs. Native elements fill this in correctly by default; ARIA can override or add to it. The name comes, in order, from `aria-labelledby`, `aria-label`, native labels like `<label>` or `alt`, the content, and finally `title` or placeholder."
+**30-second answer:** "Browsers derive an accessibility tree from the DOM — each node has a role, an accessible name, maybe a description, states and a value — and expose it to screen readers through OS accessibility APIs. Native elements fill it in correctly; ARIA can override or add. The name comes, in order, from `aria-labelledby`, `aria-label`, native labels like `<label>` or `alt`, the content, and finally `title` or placeholder."
 
-- *Does CSS affect the accessibility tree?* → Yes: `display: none` and `visibility: hidden` remove nodes; generated content (text added by CSS with `::before`/`::after`, Chapter 6) can become part of names; `opacity: 0` does not hide anything.
-- *Can a screen reader see a `<div>` with a click handler (a JavaScript function run when the element is clicked) as a button?* → No; it has no role, no name-as-button, and is not focusable (demonstrated in §3.7).
-
-### Self-check
-1. Name the four main things a node in the accessibility tree has. → Role, name, state(s)/properties, value (plus description).
-2. A button has text "✕" and `aria-label="Close"`. What is its name? → "Close".
-3. Where do screen readers get their information from? → The accessibility tree via the OS accessibility API, not the raw HTML.
+- *Does CSS affect the accessibility tree?* → Yes: `display: none` and `visibility: hidden` remove nodes; generated content (`::before`/`::after`, Chapter 6) can become part of names; `opacity: 0` hides nothing.
+- *Is a `<div>` with a click handler a button to a screen reader?* → No: no role, no button name, not focusable (§3.7).
 
 ---
 
 ## 3.5 Alt text
 
 ### What it is
-The `alt` attribute gives an image its **text alternative**: what a screen reader speaks, what search engines index, and what shows if the image fails to load. It is WCAG success criterion (a single testable rule, §3.9) 1.1.1 (Non-text Content, level A) and one of the six most common failures.
+`alt` is an image's **text alternative**: what a screen reader speaks, what search engines index, what shows if the image fails. It is WCAG success criterion 1.1.1 (Non-text Content, level A) and a top-six failure.
 
 ### How to decide — ask "what is this image *for*?"
 
 | Ask in order | If yes → |
 |---|---|
-| 1. Is it purely decorative, or does nearby text already say the same thing? | `alt=""` (empty — the image is ignored) |
-| 2. Is it the content of a link or button? | Describe the **destination or action** ("Mountain Club home", "Search") |
-| 3. Is it complex (chart, diagram, map)? | A short `alt` naming it, plus the full information in nearby text or a `<figcaption>` |
-| 4. Is it an image of text? | `alt` repeats the text — better still, use real text styled with CSS |
-| 5. Otherwise (a photo or illustration that carries meaning) | Describe what matters about it **in this context**, briefly |
+| 1. Purely decorative, or nearby text already says it? | `alt=""` (empty — image ignored) |
+| 2. Content of a link or button? | Describe the **destination or action** ("Mountain Club home", "Search") |
+| 3. Complex (chart, diagram, map)? | Short `alt` naming it + the full information in nearby text or `<figcaption>` |
+| 4. An image of text? | `alt` repeats the text — better, use real text styled with CSS |
+| 5. Otherwise (a meaningful photo/illustration) | What matters about it **in this context**, briefly |
 
 ![Four cards: an informative landscape picture with a descriptive alt, a decorative squiggle with empty alt, a logo image inside a link with alt describing the destination, and a bar chart with a short alt and a text caption holding the data](img/alt-text.png)
 *Figure 3.2 — `code/alt-text.html`: the four most common cases.*
@@ -318,7 +250,7 @@ The `alt` attribute gives an image its **text alternative**: what a screen reade
 </figure>
 ```
 
-Chrome's view of those images (from `03_names_and_states.mjs`):
+Chrome's view (from `03_names_and_states.mjs`):
 ```
 --- alt-text.html (images only)
 image "Rocky ridge trail under a clear sky, late afternoon"
@@ -326,50 +258,45 @@ image "Mountain Club home"  (inside link "Mountain Club home")
 image "Bar chart of club members per season"
 decorative <img alt=""> in tree? false
 ```
-The empty-alt image is gone from the tree entirely — exactly what you want for decoration. The linked image gives its name to the link.
+The empty-alt image is gone from the tree; the linked image names the link.
 
 ### Rules of thumb
-- **Missing `alt`** is different from **empty `alt`**. Missing: screen readers may read the file name ("IMG underscore 2041 dot jpg"). Empty: the image is skipped.
-- Don't start with "Image of…" or "Picture of…" — the role already says "image". (Do say "Photo", "Illustration", "Screenshot" when the *type* matters.)
-- Keep it short (a sentence or so); describe what matters **in this context**. The same photo of a person might be "Dr. Ana Ruiz" on a staff page and "Ana Ruiz holding the award trophy" in a news story.
-- Don't repeat the caption or adjacent text word for word; if the text already says it, use `alt=""`.
-- Icons next to visible text ("🗑 Delete") are decorative; icon-only buttons need a name on the button (`aria-label`), not just on the icon.
+- **Missing `alt`** ≠ **empty `alt`**: missing → screen readers may read the file name ("IMG underscore 2041 dot jpg"); empty → skipped.
+- Don't start with "Image of…" — the role already says "image" (do say "Photo", "Screenshot" when the *type* matters).
+- Short; what matters **in context** — the same photo is "Dr. Ana Ruiz" on a staff page, "Ana Ruiz holding the award trophy" in a news story.
+- Don't repeat the caption or adjacent text; if the text already says it, `alt=""`.
+- Icons beside visible text ("🗑 Delete") are decorative; icon-only buttons need a name on the button (`aria-label`).
 - CSS background images have no alt: never put meaningful content in them.
-- Inline `<svg>` needs `role="img"` plus `aria-label` (or a `<title>` child) when it is informative, `aria-hidden="true"` when decorative ([Chapter 4](../04-images-media-and-embeds/README.md)).
-
-### Self-check
-1. A decorative divider image: what `alt`? → `alt=""`.
-2. A magnifying-glass image that is the only content of a search button? → `alt="Search"` (the action).
-3. What is the difference between no `alt` and `alt=""`? → No alt = screen readers may announce the file name; empty = image ignored.
+- Inline `<svg>`: `role="img"` + `aria-label` (or a `<title>` child) when informative, `aria-hidden="true"` when decorative ([Chapter 4](../04-images-media-and-embeds/README.md)).
 
 ---
 
 ## 3.6 ARIA
 
 ### What it is
-**WAI-ARIA** (Web Accessibility Initiative — Accessible Rich Internet Applications; usually just "ARIA") is a set of HTML attributes that change or add to what the accessibility tree says about an element:
+**WAI-ARIA** (Web Accessibility Initiative — Accessible Rich Internet Applications; "ARIA") is a set of attributes that change or add to what the accessibility tree says:
 
-- **Roles** — `role="button"`, `role="tablist"`, `role="dialog"`, `role="alert"`…
-- **Properties** — mostly stable facts: `aria-label`, `aria-labelledby`, `aria-describedby`, `aria-controls`, `aria-required`, `aria-haspopup`…
-- **States** — things that change with interaction: `aria-expanded`, `aria-checked`, `aria-pressed`, `aria-selected`, `aria-invalid`, `aria-disabled`, `aria-current`, `aria-hidden`…
+- **Roles** — `role="button"`, `"tablist"`, `"dialog"`, `"alert"`…
+- **Properties** (mostly stable facts) — `aria-label`, `aria-labelledby`, `aria-describedby`, `aria-controls`, `aria-required`, `aria-haspopup`…
+- **States** (change with interaction) — `aria-expanded`, `aria-checked`, `aria-pressed`, `aria-selected`, `aria-invalid`, `aria-disabled`, `aria-current`, `aria-hidden`…
 
-The crucial fact: **ARIA only changes what is announced. It adds no behaviour** — no focusability, no keyboard handling, no styling. `role="button"` on a `<div>` makes a screen reader *say* "button"; you still have to make it focusable and respond to Enter and Space yourself.
+The crucial fact: **ARIA only changes what is announced. It adds no behaviour** — no focusability, keyboard handling or styling. `role="button"` on a `<div>` makes a screen reader *say* "button"; you still must make it focusable and handle Enter and Space.
 
 ### The first rule of ARIA (and the other four)
-The W3C "Using ARIA" note sets five rules. In short:
+From the W3C "Using ARIA" note:
 
-1. **Use native HTML first.** If an element or attribute with the meaning and behaviour you need exists (`<button>`, `<a href>`, `<input type="checkbox">`, `<details>`, `<dialog>`, `required`, `disabled`), use it instead of re-creating it with ARIA.
-2. **Don't change native semantics** unless you really must (`<h2 role="tab">` is wrong; put a `<button role="tab">` inside the `<h2>` or restructure).
-3. **Every interactive ARIA control (a *widget* — a custom interactive component such as a tab set or menu) must work with the keyboard.**
+1. **Use native HTML first.** If an element/attribute with the needed meaning and behaviour exists (`<button>`, `<a href>`, `<input type="checkbox">`, `<details>`, `<dialog>`, `required`, `disabled`), use it.
+2. **Don't change native semantics** unless you must (`<h2 role="tab">` is wrong; put a `<button role="tab">` inside the `<h2>`).
+3. **Every interactive ARIA control (*widget* — a custom component such as tabs or a menu) must work with the keyboard.**
 4. **Never put `role="presentation"`/`"none"` or `aria-hidden="true"` on a focusable element** — users would tab to something that "doesn't exist".
 5. **Every interactive element must have an accessible name.**
 
-A popular summary: *no ARIA is better than bad ARIA*. WebAIM's surveys consistently find that home pages *with* ARIA have more detected errors on average than pages without it — usually because it is used to patch div-based widgets instead of using native elements (the built-in HTML elements such as `<button>`).
+*No ARIA is better than bad ARIA*: WebAIM's surveys consistently find home pages *with* ARIA have more detected errors on average than pages without — usually ARIA patching div-based widgets instead of native elements.
 
 ### Useful ARIA — the patterns in `aria.html`
 
 ![Seven ARIA examples: an icon-only close button, a cart button, a password field with a hint, a disclosure button with its panel, a breadcrumb nav, an add-to-cart button with a status message area, and a star rating](img/aria.png)
-*Figure 3.3 — `code/aria.html`. Visually ordinary — the differences are all in the accessibility tree shown in §3.4.*
+*Figure 3.3 — `code/aria.html`. Visually ordinary — the differences are in the accessibility tree (§3.4).*
 
 ```html
 <!-- 1. Name an icon-only control -->
@@ -406,16 +333,18 @@ document.getElementById('add').addEventListener('click', () => { live.textConten
 
 | Attribute | Use when | Watch out |
 |---|---|---|
-| `aria-label` | No visible text exists (icon buttons, several `<nav>`s) | Not translated by some translation tools; voice-control users can't see it — prefer visible text when possible |
-| `aria-labelledby` | Visible text elsewhere already names it | Takes ids; overrides everything else |
+| `aria-label` | No visible text (icon buttons, several `<nav>`s) | Some translation tools skip it; voice-control users can't see it — prefer visible text |
+| `aria-labelledby` | Visible text elsewhere names it | Takes ids; overrides everything else (wins over `aria-label`) |
 | `aria-describedby` | Hints, format rules, error messages | Read after the name, sometimes after a pause |
-| `aria-expanded` | Buttons that show/hide something (menus, accordions — stacks of headings that expand to reveal content) | Must be updated by your script |
-| `aria-current` | Current page/step/date in a set | Values: `page`, `step`, `location`, `date`, `time`, `true` |
-| `aria-hidden="true"` | Decorative or duplicated content | Hides the whole subtree; never on focusable things |
-| `aria-live` / `role="status"` / `role="alert"` | Content that changes without a page load (toasts — small pop-up notices that vanish on their own — counters, errors) | The region must **exist before** the text changes; `status` = polite (waits), `alert` = assertive (interrupts) — use `alert` sparingly |
-| `aria-invalid`, `aria-required` | Form errors / required fields when native attributes don't fit | Native `required` already implies `aria-required` |
+| `aria-expanded` | Buttons that show/hide something (menus, accordions, disclosures) | Your script must update it |
+| `aria-current` | Current page/step/date in a set | `page`, `step`, `location`, `date`, `time`, `true` |
+| `aria-hidden="true"` | Decorative or duplicated content | Removes the whole subtree from the tree; doesn't hide visually or stop focus — never on focusable things |
+| `aria-live` / `role="status"` / `role="alert"` | Content changing without a page load (toasts, counters, errors) | Region must **exist before** the text changes; `status` = polite (waits until idle), `alert` = assertive (interrupts) — urgent errors only |
+| `aria-invalid`, `aria-required` | Errors / required fields when native attributes don't fit | Native `required` already implies `aria-required` |
 
-The **visually-hidden** pattern (often a `.visually-hidden` or `.sr-only` class) hides text on screen but keeps it in the accessibility tree:
+> **Key term — live region:** an element whose text changes are read out automatically while focus stays put (`aria-live`, `role="status"`, `role="alert"`, changed later by JS). It's how a blind user hears "Item added" or "Saved" after an AJAX save (a background request without reload) without being moved around the page.
+
+The **visually-hidden** pattern (`.visually-hidden` / `.sr-only`) hides text on screen but keeps it in the accessibility tree:
 
 ```css
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden;
@@ -423,36 +352,29 @@ The **visually-hidden** pattern (often a `.visually-hidden` or `.sr-only` class)
 ```
 
 ### When not to use it
-- To re-create a native control (`<div role="checkbox">` instead of `<input type="checkbox">`).
-- To "fix" a heading structure (`<div role="heading" aria-level="2">`) when you can edit the HTML.
-- `aria-label` on a `<div>` or `<span>` with no role: many screen readers ignore names on generic elements.
-- `role="application"` — it switches off the screen reader's normal reading keys; almost never appropriate.
-
-> **Key term — live region:** A *live region* is an element whose text changes are read out automatically by screen readers, even though focus stays where it is. You mark it with `aria-live`, `role="status"` or `role="alert"`, and later change its text with JavaScript. It is how a blind user learns that "Item added" or "3 results found" without being moved around the page.
+- To re-create a native control (`<div role="checkbox">`).
+- To "fix" headings (`<div role="heading" aria-level="2">`) when you can edit the HTML.
+- `aria-label` on a role-less `<div>`/`<span>`: many screen readers ignore names on generic elements.
+- `role="application"` — switches off the screen reader's normal reading keys; almost never appropriate.
 
 ### In the interview
-**30-second answer:** "ARIA lets me set roles, states and properties in the accessibility tree when HTML alone can't express something — like `aria-expanded` on a disclosure button (a button that shows or hides a panel), `aria-live` regions, or naming an icon button. But the first rule of ARIA is to use native HTML when it exists, because ARIA only changes semantics: it adds no focus, keyboard or behaviour. A `<button>` gives me all of that for free."
+**30-second answer:** "ARIA sets roles, states and properties in the accessibility tree when HTML can't express something — `aria-expanded` on a disclosure button, `aria-live` regions, naming an icon button. But the first rule is to use native HTML when it exists, because ARIA only changes semantics: no focus, keyboard or behaviour. A `<button>` gives me all of that free."
 
-- *`aria-label` vs `aria-labelledby`?* → `aria-label` is a string on the element; `aria-labelledby` points at other elements' visible text (and wins if both exist).
-- *`role="status"` vs `role="alert"`?* → Both are live regions; status is polite (announced when the user is idle), alert is assertive (interrupts) — for urgent errors only.
-- *What does `aria-hidden="true"` do?* → Removes the element and its descendants from the accessibility tree; it doesn't hide it visually or stop focus.
-
-### Self-check
-1. Does `role="button"` make a `<div>` keyboard accessible? → No — it only changes the announced role.
-2. How do you announce "Saved" after an AJAX save (saving with a background request, without reloading the page) without moving focus? → Update the text of an existing `role="status"` (polite live region).
-3. What is the first rule of ARIA? → Use a native HTML element/attribute with the needed semantics and behaviour instead of ARIA whenever possible.
+- *`aria-label` vs `aria-labelledby`?* → A string on the element vs a pointer to other elements' visible text (wins if both exist).
+- *`role="status"` vs `role="alert"`?* → Both live regions; status is polite, alert assertive — urgent errors only.
+- *What does `aria-hidden="true"` do?* → Removes the element and descendants from the accessibility tree only.
 
 ---
 
 ## 3.7 Keyboard and focus
 
 ### What it is
-Many people never use a mouse: keyboard-only users, screen-reader users (screen readers are keyboard-driven), switch and voice users whose tools emulate keys. **Focus** is the element that receives keyboard input; **Tab** moves focus forward, **Shift+Tab** backwards, **Enter** activates links and buttons, **Space** activates buttons and toggles checkboxes, **arrow keys** move within composite widgets (controls made of several parts, such as radio groups, menus, tabs, selects), **Escape** closes dialogs and popups.
+Keyboard-only users, screen-reader users (screen readers are keyboard-driven), and switch and voice users (whose tools emulate keys) never use a mouse. **Focus** is the element receiving keyboard input: **Tab** forward, **Shift+Tab** back, **Enter** activates links and buttons, **Space** activates buttons and toggles checkboxes, **arrows** move within composite widgets (radio groups, menus, tabs, selects), **Escape** closes dialogs and popups.
 
-WCAG requires that everything work from a keyboard (2.1.1), with no keyboard traps (2.1.2 — places where Tab cannot get you out again), in a logical order (2.4.3), with a visible focus indicator (2.4.7) that is not hidden behind sticky headers (2.4.11, new in 2.2 — headers that stay fixed at the top while you scroll).
+WCAG requires everything to work by keyboard (2.1.1), no keyboard traps (2.1.2 — places Tab can't leave), logical order (2.4.3), and a visible focus indicator (2.4.7) not hidden behind sticky headers (2.4.11, new in 2.2).
 
 ### The div-button problem, measured
-[`code/div-vs-button.html`](code/div-vs-button.html) has three controls that look identical:
+[`code/div-vs-button.html`](code/div-vs-button.html) has three identical-looking controls:
 
 ```html
 <div class="btn" onclick="save()">Save (div)</div>
@@ -462,17 +384,10 @@ WCAG requires that everything work from a keyboard (2.1.1), with no keyboard tra
 ```
 
 ![Three identical blue Save buttons](img/div-vs-button.png)
-*Figure 3.4 — Pixel-identical. The screenshot cannot tell you which one works.*
+*Figure 3.4 — Pixel-identical. The screenshot can't tell you which one works.*
 
-[`code/02_div_vs_button.mjs`](code/02_div_vs_button.mjs) asks Chrome, then presses keys like a keyboard user:
+[`code/02_div_vs_button.mjs`](code/02_div_vs_button.mjs) prints Chrome's tree, presses Tab four times, then presses Enter/Space on the `<button>` and Enter on the role=button div:
 
-```js
-printTree(await fullTree(page));
-for (let i = 1; i <= 4; i++) { await page.keyboard.press('Tab'); /* print document.activeElement */ }
-// focus the <button>, press Enter, then Space; focus the role=button div, press Enter; print the status text
-```
-
-Output:
 ```
 Accessibility tree:
 RootWebArea "div vs button"
@@ -495,34 +410,33 @@ button     + Space: status = "Saved!"
 div + role + Enter: status = ""
 ```
 
-What this proves:
-1. The plain `<div>` is **just text** to a screen reader and can **never be reached** with Tab.
-2. The `<button>` is announced as a button, is focusable, and works with **both Enter and Space** — all for free.
-3. The `div` with `role` and `tabindex` is announced and focusable, but **pressing Enter does nothing**: `onclick` on a div only fires for pointer clicks (mouse, touch, pen), never for keys. To finish it you'd need a `keydown` handler (code that runs when a key is pressed) for Enter *and* Space, disabled-state handling, and form-submission behaviour. Or you could just use `<button>`.
+1. The plain `<div>` is **just text** and **never reachable** by Tab.
+2. The `<button>` is announced, focusable, and works with **Enter and Space** — free.
+3. The `div` with `role` + `tabindex` is announced and focusable, but **Enter does nothing**: `onclick` on a div fires only for pointer clicks (mouse, touch, pen). You'd need a `keydown` handler for Enter *and* Space, disabled-state handling and form-submission behaviour — or just `<button>`.
 
 ### `tabindex`
 
 | Value | Effect | Use |
 |---|---|---|
 | (none) | Natively interactive elements (`a[href]`, `button`, `input`, `select`, `textarea`, `summary`…) are focusable in DOM order | Default — keep DOM order = visual order |
-| `tabindex="0"` | Adds a non-interactive element to the Tab order at its DOM position | Custom widgets (with a role and keyboard handlers), scrollable regions |
-| `tabindex="-1"` | Focusable by script (`el.focus()`) or link target, but not by Tab | Skip-link targets, headings you move focus to, items inside roving-focus widgets (only one item is tabbable; arrows move between the rest), dialog containers |
-| `tabindex="1"` or more | Jumps ahead of everything else in the Tab order | **Never** — it breaks the natural order and is nearly impossible to maintain |
+| `tabindex="0"` | Adds a non-interactive element to the Tab order at its DOM position | Custom widgets (with role and key handlers), scrollable regions |
+| `tabindex="-1"` | Focusable by script (`el.focus()`) or as a link target, not by Tab | Skip-link targets, headings you move focus to, items in roving-focus widgets (one item tabbable, arrows move among the rest), dialog containers |
+| `tabindex="1"`+ | Jumps ahead of everything in the Tab order | **Never** — breaks natural order, unmaintainable |
 
-Also keep the **DOM order** (the order elements appear in the HTML source) **equal to the visual order**: CSS `order`, `flex-direction: row-reverse`, grid placement and absolute positioning move boxes visually but not in the Tab sequence ([Chapters 8–9](../08-flexbox/README.md)).
+Keep **DOM order** (source order) **= visual order**: CSS `order`, `flex-direction: row-reverse`, grid placement and absolute positioning move boxes but not the Tab sequence ([Chapters 8–9](../08-flexbox/README.md)).
 
 ### Visible focus
-Browsers draw a focus ring by default. The most common way to break keyboard access is `outline: none` in a reset stylesheet (a starter CSS file that removes browsers' default styles). Instead, style it with **`:focus-visible`**, which matches when the browser decides a focus indicator is useful (keyboard navigation) but not for mouse clicks on buttons:
+Browsers draw a focus ring by default; the commonest way to break keyboard access is `outline: none` in a reset stylesheet. Style it with **`:focus-visible`** instead — it matches when the browser's heuristics say an indicator is useful (keyboard navigation), not mouse clicks on buttons; `:focus` matches any focus:
 
 ```css
 :focus-visible { outline: 3px solid #c2410c; outline-offset: 2px; }
 .bad:focus { outline: none; }     /* never do this without a replacement */
 ```
 
-For the ring itself, aim for at least 3:1 contrast (a ratio of brightness, explained in §3.9) against the background (non-text contrast, 1.4.11) — the dark orange here is about 5:1 on white, whereas a light amber would be around 2:1.
+The ring needs ≥ 3:1 contrast against the background (non-text contrast, 1.4.11; §3.9) — this dark orange is ~5:1 on white; a light amber would be ~2:1.
 
 ### Skip links
-Keyboard users would otherwise have to Tab through the whole header on every page. A **skip link** is the first focusable element and jumps to `<main>`:
+A **skip link** — the first focusable element — jumps past the header to `<main>`, so keyboard users don't Tab through it on every page (WCAG 2.4.1 Bypass Blocks; landmarks and headings help too):
 
 ```html
 <a class="skip" href="#main">Skip to main content</a>
@@ -535,41 +449,31 @@ Keyboard users would otherwise have to Tab through the whole header on every pag
 ```
 
 ![A dark blue Skip to main content link visible at the top of the page with a dark orange focus ring, above two buttons and a Main content heading](img/focus.png)
-*Figure 3.5 — `code/focus.html` with the skip link focused (the page focuses it on load for this screenshot). Without focus it is off-screen.*
-
-The skip link satisfies WCAG 2.4.1 (Bypass Blocks); landmarks and headings help too.
+*Figure 3.5 — `code/focus.html` with the skip link focused (focused on load for the screenshot).*
 
 ### Managing focus in dynamic UIs
-- **Opening a dialog**: move focus into it; keep Tab inside it while open; Escape closes; return focus to the button that opened it. The native `<dialog>` element opened with `showModal()` makes the rest of the page inert and handles Escape for you.
-- **`inert` attribute**: makes a whole subtree unfocusable and hidden from AT — for content behind a custom modal (a dialog that blocks the page behind it) or an off-canvas menu (a menu that slides in from the screen edge).
-- **Single-page app navigation** (in a single-page app, JavaScript swaps the page content instead of loading a new HTML page): after a route change (moving to a new "page" URL inside the app), move focus to the new page's `<h1>` (with `tabindex="-1"`) or announce the change; otherwise screen-reader users don't know anything happened (see the React book).
-- **Deleting the focused item**: move focus to a sensible neighbour, not the top of the page.
-- **Target size**: WCAG 2.2 (2.5.8, AA) asks for pointer targets (things you click or tap with a mouse, finger or pen) of at least **24×24 CSS pixels** (or enough spacing around smaller ones).
+- **Dialogs**: move focus in; keep Tab inside while open; Escape closes; return focus to the opener. Native `<dialog>` with `showModal()` makes the rest inert and handles Escape.
+- **`inert`**: makes a subtree unfocusable and hidden from AT — content behind a custom modal or an off-canvas (slide-in) menu.
+- **Single-page app navigation** (JS swaps content instead of loading a page): after a route change, move focus to the new `<h1>` (`tabindex="-1"`) or announce it; otherwise screen-reader users don't know anything happened (React book).
+- **Deleting the focused item**: move focus to a sensible neighbour, not the page top.
+- **Target size**: WCAG 2.2 2.5.8 (AA) — pointer targets ≥ **24×24 CSS px** (or enough spacing).
 
 ### Common mistakes
-- `outline: none` with no replacement.
-- Clickable `div`s and `span`s; links used as buttons and vice versa.
-- Positive `tabindex`.
-- Custom dropdowns that can't be opened with the keyboard or trap focus.
-- Hover-only menus that never open on focus.
+- `outline: none` with no replacement; positive `tabindex`.
+- Clickable `div`s/`span`s; links used as buttons and vice versa.
+- Custom dropdowns that can't open by keyboard or trap focus; hover-only menus that never open on focus.
 
 ### In the interview
-**30-second answer:** "Everything interactive must be reachable and operable by keyboard, in a logical order, with a visible focus indicator. Native elements give me that; I only use `tabindex=0` for genuine custom widgets and `-1` for programmatic focus targets, never positive values. I style focus with `:focus-visible` instead of removing outlines, add a skip link, and manage focus explicitly for dialogs and route changes."
+**30-second answer:** "Everything interactive must be reachable and operable by keyboard, in a logical order, with visible focus. Native elements give me that; I use `tabindex=0` only for genuine custom widgets and `-1` for programmatic focus targets, never positive values. I style focus with `:focus-visible` instead of removing outlines, add a skip link, and manage focus for dialogs and route changes."
 
-- *Why not `tabindex="5"`?* → It pulls the element ahead of all `tabindex=0`/native elements, creating an order that no longer matches the page.
-- *`:focus` vs `:focus-visible`?* → `:focus` matches any focus; `:focus-visible` matches when the browser heuristics (built-in rules of thumb) say a visible indicator is needed, typically keyboard focus.
-- *How do you test keyboard access?* → Unplug the mouse: Tab through the whole page, operate every control, open and close every popup, and watch where focus goes.
-
-### Self-check
-1. Which keys activate a `<button>`? A link? → Button: Enter and Space. Link: Enter.
-2. What does `tabindex="-1"` do? → Makes an element focusable by script or fragment navigation but not by Tab.
-3. Why is `onclick` on a `<div>` not enough, even with `role="button"` and `tabindex="0"`? → Keyboard activation (Enter/Space) doesn't fire `click` on a div; you must add key handling.
+- *Why not `tabindex="5"`?* → It jumps ahead of all `tabindex=0`/native elements, so order no longer matches the page.
+- *How do you test keyboard access?* → Unplug the mouse and run the 5-minute test (§3.10).
 
 ---
 
 ## 3.8 Accessible forms
 
-Forms are where accessibility failures cost the most — a user who can't identify a field cannot sign up, pay or apply. Full form coverage is in [Chapter 5](../05-tables-and-forms/README.md); these are the accessibility essentials.
+Forms are where failures cost most — a user who can't identify a field can't sign up, pay or apply. Full coverage in [Chapter 5](../05-tables-and-forms/README.md); the accessibility essentials:
 
 ![A form with Full name and Email fields (the email field has a red border, a hint above and an error message below), a Delivery speed fieldset with two radio buttons, a dashed red box showing a placeholder-only phone field as a bad example, and a Place order button](img/form-a11y.png)
 *Figure 3.6 — `code/form-a11y.html`.*
@@ -610,84 +514,77 @@ RootWebArea "Accessible form"
 After typing into the placeholder-only field, the visible hint is gone: { value: '555', placeholderShown: false }
 ```
 
-The rules behind that output:
-1. **Every field has a `<label>`** tied by `for`/`id` (or by wrapping the input). The label becomes the name *and* enlarges the click target — clicking "Standard" checks the radio.
-2. **Group related controls** (radio buttons, checkboxes, address parts) in `<fieldset>` with a `<legend>`; the legend names the group ("Delivery speed, grouping").
-3. **Hints and errors** are linked with `aria-describedby` so they are read with the field; `aria-invalid="true"` marks the error state. Error text should say what is wrong and how to fix it, and should not rely on colour alone (the word "Error:" and the thicker border help — WCAG 1.4.1 Use of Color, 3.3.1 Error Identification, 3.3.3 Error Suggestion).
-4. **Required**: use the native `required` attribute (exposed as `required=true`); a visual `*` is decorative for AT (`aria-hidden`) because the state is already announced — explain the asterisk once at the top of the form.
-5. **Placeholders are not labels.** Chrome falls back to the placeholder as a name, but the hint vanishes as soon as the user types (see the output), placeholder text is usually low-contrast, and some AT ignores it.
-6. **`autocomplete`** tokens (`name`, `email`, `street-address`, `one-time-code`…) let browsers and password managers (apps that store and fill in your passwords) fill fields — WCAG 1.3.5 (Identify Input Purpose), and a big help for users with motor or memory impairments. WCAG 2.2 adds 3.3.7 Redundant Entry (don't make people type the same information twice) and 3.3.8 Accessible Authentication (don't block password managers or paste; no memory/puzzle tests without an alternative).
+1. **Every field has a `<label>`**, tied by `for`/`id` or by wrapping the input. It becomes the name *and* enlarges the click target (clicking "Standard" checks the radio).
+2. **Group related controls** (radios, checkboxes, address parts) in `<fieldset>` + `<legend>`; the legend names the group ("Delivery speed, grouping").
+3. **Hints and errors** link via `aria-describedby`; `aria-invalid="true"` marks the error. Error text says what's wrong and how to fix it, not by colour alone (the word "Error:" and the thicker border — WCAG 1.4.1 Use of Color, 3.3.1 Error Identification, 3.3.3 Error Suggestion).
+4. **Required**: native `required` (exposed as `required=true`); the visual `*` is `aria-hidden` because the state is already announced — explain the asterisk once at the top.
+5. **Placeholders are not labels.** Chrome falls back to the placeholder as a name, but it vanishes on typing (see output), is usually low-contrast, and some AT ignores it.
+6. **`autocomplete`** tokens (`name`, `email`, `street-address`, `one-time-code`…) let browsers and password managers fill fields — WCAG 1.3.5 (Identify Input Purpose), a big help for motor and memory impairments. WCAG 2.2 adds 3.3.7 Redundant Entry (don't make people retype information) and 3.3.8 Accessible Authentication (allow password managers and paste; no memory/puzzle tests without an alternative).
 7. On submit with errors, move focus to an error summary or the first invalid field.
-
-### Self-check
-1. Two ways to associate a label with an input? → `<label for="id">` + `id` on the input, or wrap the input inside the `<label>`.
-2. How do you name a group of radio buttons? → `<fieldset>` with a `<legend>`.
-3. Why isn't a placeholder a label? → It disappears on input, is often low contrast, and isn't reliably announced.
 
 ---
 
 ## 3.9 WCAG 2.2
 
 ### What it is
-The **Web Content Accessibility Guidelines** (WCAG) from the W3C are the international standard that laws and contracts point to. **WCAG 2.2** became a W3C Recommendation (the W3C's final, official standard status) on 5 October 2023. It is backwards compatible (nothing that passed before now fails): a page that meets 2.2 also meets 2.1 and 2.0.
+The **Web Content Accessibility Guidelines** (WCAG, W3C) are the international standard laws and contracts point to. **WCAG 2.2** became a W3C Recommendation (final standard status) on 5 October 2023. It is backwards compatible: meeting 2.2 also meets 2.1 and 2.0.
 
-Structure:
-- **4 principles — POUR**: content must be **Perceivable**, **Operable**, **Understandable**, **Robust**.
-- **13 guidelines** under those principles (e.g. 1.1 Text Alternatives, 2.1 Keyboard Accessible, 3.3 Input Assistance).
-- **Success criteria** — testable statements, numbered like `1.4.3`, each at a **level**:
-  - **A** — the minimum; without it some users are completely blocked.
-  - **AA** — the usual target for laws and company policies. "Conform to WCAG 2.2 AA" means meeting every A and AA criterion.
-  - **AAA** — enhanced; not recommended as a blanket requirement for whole sites because some criteria cannot be met for all content.
+- **4 principles — POUR**: **Perceivable**, **Operable**, **Understandable**, **Robust**.
+- **13 guidelines** (e.g. 1.1 Text Alternatives, 2.1 Keyboard Accessible, 3.3 Input Assistance).
+- **Success criteria** (SC) — testable statements numbered like `1.4.3`, each at a **level**:
+  - **A** — minimum; without it some users are completely blocked.
+  - **AA** — the usual target for laws and policies; "conform to WCAG 2.2 AA" = every A and AA criterion.
+  - **AAA** — enhanced; not recommended as a blanket site requirement because some criteria can't be met for all content.
 
 ### Criteria you will meet most often
 
 | Principle | SC | Level | In plain words |
 |---|---|---|---|
 | Perceivable | 1.1.1 Non-text Content | A | Images, icons and controls have text alternatives (§3.5) |
-| | 1.3.1 Info and Relationships | A | Structure shown visually is in the markup too: headings, lists, labels, tables |
+| | 1.3.1 Info and Relationships | A | Visual structure is in the markup: headings, lists, labels, tables |
 | | 1.3.5 Identify Input Purpose | AA | Personal-data fields use `autocomplete` |
-| | 1.4.1 Use of Color | A | Colour is not the only way information is shown |
-| | 1.4.3 Contrast (Minimum) | AA | Text contrast ≥ 4.5:1 (large text ≥ 3:1) |
+| | 1.4.1 Use of Color | A | Colour is not the only signal |
+| | 1.4.3 Contrast (Minimum) | AA | Text ≥ 4.5:1 (large text ≥ 3:1) |
 | | 1.4.4 Resize Text | AA | Works at 200 % text size |
-| | 1.4.10 Reflow | AA | Usable at 320 CSS px (browser pixels) wide (400 % zoom) without horizontal scrolling |
-| | 1.4.11 Non-text Contrast | AA | UI parts and meaningful graphics (borders of inputs, focus rings, icons) ≥ 3:1 |
+| | 1.4.10 Reflow | AA | Usable at 320 CSS px wide (400 % zoom) without horizontal scrolling |
+| | 1.4.11 Non-text Contrast | AA | UI parts and meaningful graphics (input borders, focus rings, icons) ≥ 3:1 |
 | Operable | 2.1.1 Keyboard | A | Everything works from a keyboard |
 | | 2.1.2 No Keyboard Trap | A | Focus can always move away |
 | | 2.4.1 Bypass Blocks | A | Skip links / landmarks |
 | | 2.4.2 Page Titled | A | Descriptive `<title>` |
 | | 2.4.3 Focus Order | A | Logical Tab order |
 | | 2.4.4 Link Purpose (In Context) | A | Link text makes sense |
-| | 2.4.6 Headings and Labels | AA | Headings and labels describe their topic or purpose |
+| | 2.4.6 Headings and Labels | AA | Headings and labels describe topic or purpose |
 | | 2.4.7 Focus Visible | AA | A visible focus indicator |
 | Understandable | 3.1.1 Language of Page | A | `<html lang>` |
-| | 3.3.1 Error Identification | A | Errors are described in text |
+| | 3.3.1 Error Identification | A | Errors described in text |
 | | 3.3.2 Labels or Instructions | A | Inputs have labels/instructions |
-| Robust | 4.1.2 Name, Role, Value | A | Every UI component exposes a correct name, role and state (§3.4) |
-| | 4.1.3 Status Messages | AA | Status messages are announced without moving focus (live regions) |
+| Robust | 4.1.2 Name, Role, Value | A | Every UI component exposes correct name, role, state (§3.4) |
+| | 4.1.3 Status Messages | AA | Status messages announced without moving focus (live regions) |
 
 ### What's new in WCAG 2.2
 Nine new success criteria:
 
 | SC | Level | Requirement |
 |---|---|---|
-| 2.4.11 Focus Not Obscured (Minimum) | AA | A focused element is not entirely hidden by sticky headers, cookie banners, etc. |
+| 2.4.11 Focus Not Obscured (Minimum) | AA | A focused element isn't entirely hidden by sticky headers, cookie banners, etc. |
 | 2.4.12 Focus Not Obscured (Enhanced) | AAA | …not hidden at all |
-| 2.4.13 Focus Appearance | AAA | The focus indicator is big enough and has enough contrast |
-| 2.5.7 Dragging Movements | AA | Anything done by dragging can also be done with single clicks/taps |
-| 2.5.8 Target Size (Minimum) | AA | Pointer targets at least 24×24 CSS px (or enough spacing) |
-| 3.2.6 Consistent Help | A | Help links/contact info appear in the same place across pages |
+| 2.4.13 Focus Appearance | AAA | Focus indicator big enough with enough contrast |
+| 2.5.7 Dragging Movements | AA | Anything done by dragging also works with single clicks/taps |
+| 2.5.8 Target Size (Minimum) | AA | Pointer targets ≥ 24×24 CSS px (or enough spacing) |
+| 3.2.6 Consistent Help | A | Help links/contact info in the same place across pages |
 | 3.3.7 Redundant Entry | A | Don't ask for the same information twice in a process |
-| 3.3.8 Accessible Authentication (Minimum) | AA | No cognitive tests (remembering, transcribing, puzzles) to log in (authentication = proving who you are) unless an alternative or aid exists — allow paste and password managers |
-| 3.3.9 Accessible Authentication (Enhanced) | AAA | Stricter version (no object/image recognition exceptions) |
+| 3.3.8 Accessible Authentication (Minimum) | AA | No cognitive tests (remembering, transcribing, puzzles) to log in unless an alternative or aid exists — allow paste and password managers |
+| 3.3.9 Accessible Authentication (Enhanced) | AAA | Stricter (no object/image recognition exceptions) |
 
-And one removal: **4.1.1 Parsing** is obsolete — browsers and AT now handle markup errors consistently (the parsing algorithm from Chapter 1), so it no longer needs a criterion. Validation remains good practice (§2.10).
+One removal: **4.1.1 Parsing** is obsolete — browsers and AT now handle markup errors consistently (Chapter 1's parsing algorithm). Validation is still good practice (§2.10).
 
 ### Colour contrast — the formula
-Contrast ratio compares the **relative luminance** (perceived brightness, from 0 = black to 1 = white) of text and background:
+Contrast ratio compares the **relative luminance** (perceived brightness, 0 = black to 1 = white) of text and background:
 
-1. Convert each sRGB channel (sRGB is the standard colour space of screens; a channel is the red, green or blue part) from 0–255 to 0–1 and undo the gamma curve (screens store brightness on a curve, not a straight line, so this step turns it back into real light intensity): `c ≤ 0.04045 ? c/12.92 : ((c+0.055)/1.055)^2.4`.
-2. Luminance `L = 0.2126 R + 0.7152 G + 0.0722 B` — green counts most because our eyes are most sensitive to it.
-3. Ratio = `(L_lighter + 0.05) / (L_darker + 0.05)`, from 1:1 (same colour) to 21:1 (black on white).
+1. Convert each sRGB channel (the screen colour space's red/green/blue parts) from 0–255 to 0–1 and undo the gamma curve (screens store brightness on a curve; this recovers linear light): `c ≤ 0.04045 ? c/12.92 : ((c+0.055)/1.055)^2.4`.
+2. `L = 0.2126 R + 0.7152 G + 0.0722 B` — green weighs most because eyes are most sensitive to it.
+3. Ratio = `(L_lighter + 0.05) / (L_darker + 0.05)`, from 1:1 to 21:1 (black on white).
 
 | Level | Normal text | Large text (≥ 24 px, or ≥ 18.66 px bold) | UI components & graphics |
 |---|---|---|---|
@@ -723,74 +620,53 @@ white on amber           2.15:1  FAIL          FAIL
 ![Seven colour swatches with sample text and their computed contrast ratios, from 21:1 black on white down to 2.15:1 white on amber](img/contrast.png)
 *Figure 3.7 — `code/contrast.html` computes each ratio in the browser with the same formula.*
 
-Lessons from the numbers: `#767676` is the lightest grey that passes AA on white (4.54:1); one step lighter fails. White text on a mid-blue (`#3b82f6`, a very common button colour) fails for normal text — this book's own Chapter 1 page originally used it and was switched to the darker `#1d4ed8`. White on amber/yellow almost always fails. The ratio thresholds are strict: 4.49:1 is a fail. DevTools' colour picker shows the ratio and AA/AAA lines as you adjust a colour.
+Lessons: `#767676` is the lightest grey passing AA on white (4.54:1); one step lighter fails. White on mid-blue `#3b82f6` (a very common button colour) fails for normal text — this book's Chapter 1 page used it and switched to `#1d4ed8`. White on amber/yellow almost always fails. Thresholds are strict: 4.49:1 fails. DevTools' colour picker shows the ratio and AA/AAA lines live.
 
 ### Self-check
-1. What does POUR stand for? → Perceivable, Operable, Understandable, Robust.
-2. Which level do most laws require? → AA.
-3. Minimum contrast for 16 px body text at AA? → 4.5:1.
-4. Name two criteria new in 2.2. → Target Size (Minimum) 2.5.8, Focus Not Obscured (Minimum) 2.4.11 (also Dragging Movements, Consistent Help, Redundant Entry, Accessible Authentication).
-5. Which criterion was removed in 2.2? → 4.1.1 Parsing.
+1. Minimum contrast for 16 px body text at AA? → 4.5:1.
+2. Name two criteria new in 2.2, and the one removed. → Target Size (Minimum) 2.5.8, Focus Not Obscured (Minimum) 2.4.11 (also Dragging Movements, Consistent Help, Redundant Entry, Accessible Authentication); 4.1.1 Parsing removed.
 
 ---
 
 ## 3.10 Testing tools
 
 ### How it works — three layers
-1. **Automated checkers** find the mechanical problems quickly: missing alt, missing labels, contrast, empty links/buttons, invalid ARIA, missing `lang`. They cannot judge whether alt text is *good*, whether focus order makes sense, or whether a custom widget is usable — only part of the problems can be detected automatically (estimates range from roughly a third of WCAG success criteria to just over half of real-world issues by volume).
+1. **Automated checkers** quickly find mechanical problems: missing alt/labels/`lang`, contrast, empty links/buttons, invalid ARIA. They can't judge whether alt text is *good*, focus order sensible, or a custom widget usable — estimates range from roughly a third of WCAG criteria to just over half of real-world issues by volume.
 2. **Manual keyboard testing** — no tools needed.
 3. **Screen-reader testing** — hear what users hear.
 
 | Tool | Type | Notes |
 |---|---|---|
-| **axe DevTools** / **axe-core** (Deque) | Browser extension; JS library for CI (continuous integration — automatic checks on every code change), e.g. with Playwright, Cypress, Jest (`jest-axe`) testing tools | The engine behind many other tools; designed for no false positives (no false alarms) |
-| **Lighthouse** | Built into Chrome DevTools | Accessibility score uses a subset of axe rules; also performance/SEO ([Chapter 14](../14-performance-seo-interview-and-cheatsheet/README.md)) |
-| **WAVE** (WebAIM) | Extension / website | Shows icons on the page itself — good for learning |
-| **DevTools Accessibility pane** | Chrome/Firefox/Safari | Inspect role, name, states; Firefox can simulate colour-vision deficiencies (colour blindness) and show Tab order |
+| **axe DevTools** / **axe-core** (Deque) | Extension; JS library for CI with Playwright, Cypress, Jest (`jest-axe`) | The engine behind many tools; designed for no false positives |
+| **Lighthouse** | Built into Chrome DevTools | Accessibility score from a subset of axe rules; also performance/SEO ([Chapter 14](../14-performance-seo-interview-and-cheatsheet/README.md)) |
+| **WAVE** (WebAIM) | Extension / website | Icons drawn on the page — good for learning |
+| **DevTools Accessibility pane** | Chrome/Firefox/Safari | Role, name, states; Firefox simulates colour-vision deficiencies and shows Tab order |
 | **W3C Nu checker / html-validate** | Validators | Structural errors (§2.10) |
-| **eslint-plugin-jsx-a11y** (a lint rule set — automatic code-style checks), **Testing Library** `getByRole` | Dev-time | Catch issues in React code; tests that query by role double as accessibility tests |
+| **eslint-plugin-jsx-a11y** (lint rules), **Testing Library** `getByRole` | Dev-time | Catch issues in React code; role-based test queries double as accessibility tests |
 
 | Screen reader | Platform | Cost | Start / key tips |
 |---|---|---|---|
-| **NVDA** | Windows | Free (open source — its code is public) | `Insert` or `CapsLock` is the NVDA key; `H` next heading, `D` next landmark, `Tab` next focusable |
-| **JAWS** | Windows | Commercial | Similar single-key navigation; widely used in workplaces |
-| **VoiceOver** | macOS, iOS | Built in | macOS: Cmd+F5 to toggle; VO = Ctrl+Option; VO+U opens the rotor (headings, landmarks, links) |
+| **NVDA** | Windows | Free (open source) | `Insert` or `CapsLock` = NVDA key; `H` next heading, `D` next landmark, `Tab` next focusable |
+| **JAWS** | Windows | Commercial | Similar single-key navigation; common in workplaces |
+| **VoiceOver** | macOS, iOS | Built in | macOS: Cmd+F5 toggles; VO = Ctrl+Option; VO+U opens the rotor (headings, landmarks, links) |
 | **TalkBack** | Android | Built in | Swipe right/left to move; double-tap to activate |
 | **Narrator** | Windows | Built in | Basic testing |
 
-Test with the common pairings: NVDA or JAWS with Chrome/Firefox/Edge, VoiceOver with Safari.
+Test the common pairings: NVDA or JAWS with Chrome/Firefox/Edge, VoiceOver with Safari.
 
 ### A 5-minute keyboard test
-1. Click the address bar, then press Tab repeatedly. Is the first stop a skip link? Does it work?
+1. Click the address bar, then Tab. Is the first stop a working skip link?
 2. Can you **see** focus at every step? Is it ever hidden behind a sticky header?
 3. Does the order follow the visual layout?
 4. Can you operate every control (Enter/Space/arrows), open and close every menu and dialog (Escape), and never get stuck?
-5. Zoom to 200 % and 400 %: does anything overlap or require horizontal scrolling?
+5. Zoom to 200 % and 400 %: any overlap or horizontal scrolling?
 
 ### A mini automated audit
-To see how automated tools work, [`code/06_mini_audit.mjs`](code/06_mini_audit.mjs) implements a handful of axe-style rules — including checks for all six WebAIM Million top failures — using jsdom and `dom-accessibility-api` (a JavaScript implementation of the accessible-name spec, the same library Testing Library uses). It runs against a deliberately bad sign-up form:
+[`code/06_mini_audit.mjs`](code/06_mini_audit.mjs) implements a handful of axe-style rules — covering all six WebAIM Million top failures — with jsdom and `dom-accessibility-api` (a JS implementation of the accessible-name spec, used by Testing Library): for each interactive element it calls `computeAccessibleName()` and `getRole()` and flags missing names, placeholder-only fields, positive `tabindex`, unfocusable `role=button`, and focusables inside `aria-hidden`; plus `html lang`, empty headings, `img` alt, broken `aria-describedby`/`labelledby` ids, orphan labels and inline-colour contrast. Run against a deliberately bad sign-up form:
 
 ![A small sign-up page with an empty space where the h1 should be, a blue rectangle image, faint grey hint text, an Email placeholder field, a password field, a magnifying-glass button, a green Sign up box, a Help link and an unchecked checkbox with I accept the terms](img/bad-a11y.png)
 *Figure 3.8 — `code/bad-a11y.html`. Looks usable — with a mouse and good eyesight.*
 
-```js
-// code/06_mini_audit.mjs (key parts)
-import { computeAccessibleName, getRole } from 'dom-accessibility-api';
-import { contrast } from './contrast_lib.mjs';
-// ...
-for (const el of doc.querySelectorAll(interactive)) {
-  const name = computeAccessibleName(el);
-  const role = getRole(el) ?? `${el.type} field`;          // <input type=password> has no ARIA role
-  if (el.closest('[aria-hidden="true"]')) { add('aria-hidden-focus', '4.1.2', el, 'focusable element inside aria-hidden'); continue; }
-  if (!name.trim() && el.placeholder) add('label', '3.3.2', el, `only a placeholder ("${el.placeholder}"), no label`);
-  else if (!name.trim()) add('accessible-name', '4.1.2', el, `${role} has no accessible name`);
-  if (el.tabIndex > 0) add('tabindex', '2.4.3', el, `tabindex="${el.tabIndex}" breaks the natural focus order`);
-  if (el.matches('[role=button]:not([tabindex])')) add('focusable-role', '2.1.1', el, 'role="button" but not keyboard-focusable');
-}
-// ... plus: html lang, empty headings, img alt, broken aria-describedby/labelledby ids, orphan labels, inline-colour contrast
-```
-
-Output:
 ```
 bad-a11y.html: 12 issue(s)
 rule                 WCAG    element / problem
@@ -812,31 +688,26 @@ rule                 WCAG    element / problem
 label                3.3.2   <input> only a placeholder ("Phone number"), no label
 ```
 
-(`BP` = best practice rather than a specific success criterion.) The good form's only finding is the "Don't" example we put in on purpose. Note what the tool **cannot** know: whether "🔍" is a good name for the search button (a screen reader may say "magnifying glass tilted left"), whether the alt texts are meaningful, or whether the Tab order matches the layout. That is what the keyboard and screen-reader passes are for. In real projects, use axe-core rather than hand-written rules.
+(`BP` = best practice, not a specific criterion.) The good form's only finding is its deliberate "Don't" example. The tool **cannot** know whether "🔍" is a good button name (a screen reader may say "magnifying glass tilted left"), whether alt texts are meaningful, or whether Tab order matches the layout — that's what the keyboard and screen-reader passes are for. In real projects use axe-core, not hand-written rules.
 
 ### In the interview
-**30-second answer:** "I layer it: automated checks with axe or Lighthouse in development and CI catch things like missing labels, alt text and contrast; then a manual keyboard pass for focus order, visibility and traps; then a screen-reader pass — VoiceOver with Safari, NVDA with Chrome or Firefox — on key flows. Automation only finds part of the issues, so the manual steps are not optional."
+**30-second answer:** "I layer it: axe or Lighthouse in development and CI catch missing labels, alt text and contrast; then a manual keyboard pass for focus order, visibility and traps; then a screen-reader pass — VoiceOver with Safari, NVDA with Chrome or Firefox — on key flows. Automation only finds part of the issues, so the manual steps aren't optional."
 
 - *Can Lighthouse give 100 and the page still be inaccessible?* → Yes; it checks a subset of rules and nothing about meaning, order or usability.
-- *How do you keep regressions (things that used to work breaking again) out?* → axe-core in component/end-to-end tests (tests that drive the real app like a user would), lint rules, role-based queries in tests, and accessibility in the definition of done (the checklist a task must meet before it counts as finished).
-
-### Self-check
-1. Name one thing automated tools can't check. → Quality of alt text; logical focus order; whether a custom widget is actually usable.
-2. Which free screen reader runs on Windows? → NVDA.
-3. How do you open VoiceOver's list of headings and landmarks? → VO+U (Ctrl+Option+U), the rotor.
+- *How do you keep regressions out?* → axe-core in component/end-to-end tests, lint rules, role-based test queries, and accessibility in the definition of done.
 
 ---
 
 ## Chapter 3 TL;DR
 
-- **Semantic HTML is the foundation of accessibility**: native elements come with roles, names, states, focus and keyboard behaviour that assistive technology understands.
+- **Semantic HTML is the foundation of accessibility**: native elements bring roles, names, states, focus and keyboard behaviour that assistive technology understands.
 - **Landmarks**: top-level `header` → banner, `nav` → navigation (label multiples), `search`, one `main`, `aside` → complementary, top-level `footer` → contentinfo; `section` is a region only when named; `article` = self-contained.
 - **Headings** form the navigable outline; no outline algorithm exists.
 - **Accessibility tree** = role + name + description + states + value; names come from `aria-labelledby` → `aria-label` → native label/`alt` → content → `title`/placeholder.
-- **Alt text**: describe purpose in context; `alt=""` for decoration; describe the destination for linked images; give complex images a text equivalent.
-- **ARIA**: first rule — use native HTML. ARIA changes semantics only, never behaviour. Use it for names (`aria-label`/`labelledby`), descriptions, states (`aria-expanded`, `aria-current`, `aria-invalid`), live regions (`role="status"`), and hiding decoration (`aria-hidden`).
+- **Alt text**: purpose in context; `alt=""` for decoration; destination for linked images; complex images get a text equivalent.
+- **ARIA**: first rule — use native HTML. ARIA changes semantics only, never behaviour. Use it for names, descriptions, states (`aria-expanded`, `aria-current`, `aria-invalid`), live regions (`role="status"`), and hiding decoration (`aria-hidden`).
 - **Keyboard**: everything reachable and operable; DOM order = visual order; `tabindex` 0 / -1 only; `:focus-visible` rings with ≥ 3:1 contrast; skip link; manage focus for dialogs and route changes; targets ≥ 24×24 px.
-- **Forms**: real `<label>`s, `fieldset`/`legend` for groups, `aria-describedby` for hints and errors, `aria-invalid`, native `required`, `autocomplete`; placeholders are not labels.
+- **Forms**: real `<label>`s, `fieldset`/`legend`, `aria-describedby` for hints and errors, `aria-invalid`, native `required`, `autocomplete`; placeholders are not labels.
 - **WCAG 2.2 AA** is the usual target: POUR, 13 guidelines, A/AA/AAA; contrast 4.5:1 text, 3:1 large text and UI; nine new criteria, 4.1.1 removed.
 - **Test in layers**: axe/Lighthouse/WAVE → keyboard pass → screen reader (NVDA, JAWS, VoiceOver, TalkBack).
 

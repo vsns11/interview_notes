@@ -1,28 +1,17 @@
 # Chapter 8 — Flexbox
 
-Normal flow (the default layout you get with no layout CSS, [Chapter 7](../07-box-model-and-layout-basics/README.md)) stacks blocks and wraps text, and that's all it does. For years, putting three boxes side by side, making them equal height, or centring something vertically meant floats (boxes pushed to one side with text wrapping around them), tables or negative-margin hacks (workarounds that pull boxes into place with margins below zero). **Flexbox** (the CSS Flexible Box Layout module, a W3C Candidate Recommendation — a near-final stage of a web standard — supported in every browser for about a decade) solves the one-dimensional case (one direction at a time): lay out a set of items in a **row or a column**, share out the spare space, and align them. It is the tool for navbars (the row of navigation links at the top of a site), toolbars, button groups, cards, form rows and centring. For two-dimensional layouts (rows *and* columns at once) use Grid ([Chapter 9](../09-grid/README.md)).
+Normal flow ([Chapter 7](../07-box-model-and-layout-basics/README.md)) stacks blocks and wraps text, nothing more. Side-by-side boxes, equal heights or vertical centring used to need floats, tables or negative-margin hacks. **Flexbox** (the CSS Flexible Box Layout module, a W3C Candidate Recommendation supported everywhere for about a decade) solves the **one-dimensional** case: lay items out in a **row or a column**, share out spare space, and align them — navbars, toolbars, button groups, cards, form rows, centring. For two-dimensional layouts (rows *and* columns) use Grid ([Chapter 9](../09-grid/README.md)).
 
-**What you'll learn**
+**In this chapter:** 8.1 Container and items · 8.2 The two axes, direction and `order` · 8.3 `flex-grow`/`flex-shrink`/`flex-basis` (calculated by hand, verified in Chrome) · 8.4 The `flex` shorthand and `min-width: auto` · 8.5 Alignment and auto margins · 8.6 Wrapping and `gap` · 8.7 Common patterns · 8.8 Pitfalls, debugging and interview prep.
 
-| # | Topic | You will be able to… |
-|---|---|---|
-| 8.1 | Container and items | turn on flexbox and know which properties go on which element |
-| 8.2 | The two axes, direction and order | reason in "main axis / cross axis" instead of left/right/top/bottom |
-| 8.3 | `flex-grow`, `flex-shrink`, `flex-basis` | calculate item sizes by hand — verified against Chrome to the pixel |
-| 8.4 | The `flex` shorthand and minimum sizes | choose between `flex: 1`, `auto`, `none`; fix the `min-width: auto` overflow |
-| 8.5 | Alignment | use `justify-content`, `align-items`, `align-self`, `align-content` and auto margins |
-| 8.6 | Wrapping and `gap` | build rows that wrap, and know when wrapping flex should be grid instead |
-| 8.7 | Common patterns | build a navbar, centring, equal-height cards, sticky footer (a footer that stays at the bottom of short pages), media object (image beside text), input group (a text box joined to a button) |
-| 8.8 | Pitfalls, debugging and interview prep | recognise the classic flexbox bugs and explain flexbox in an interview |
-
-Every example is a page in [`code/`](code/) with its screenshot in [`img/`](img/). Flex containers are drawn with a **dashed purple border**, items with a **solid blue outline**, and item widths printed in **red** are measured by the page itself after layout. The sizing maths is implemented step by step in [`code/flex_algorithm.mjs`](code/flex_algorithm.mjs) and checked against real headless Chrome (Chrome driven by a script, with no window) by [`code/03_flex_measure.mjs`](code/03_flex_measure.mjs).
+Every example is a page in [`code/`](code/) with its screenshot in [`img/`](img/): containers have a **dashed purple border**, items a **solid blue outline**, and widths in **red** are measured by the page after layout. The sizing maths is implemented in [`code/flex_algorithm.mjs`](code/flex_algorithm.mjs) and checked against headless Chrome by [`code/03_flex_measure.mjs`](code/03_flex_measure.mjs).
 
 ---
 
 ## 8.1 Flex container and flex items
 
 ### What it is
-Writing `display: flex` on an element makes it a **flex container**. Its **direct children** become **flex items** and are laid out by the flexbox rules instead of normal flow. Grandchildren are not affected — each level decides for itself.
+`display: flex` makes an element a **flex container**; its **direct children** become **flex items**, laid out by flexbox instead of normal flow. Grandchildren are unaffected — each level decides for itself (so `display: flex` on a `<ul>` makes the `<li>`s items, not the `<a>`s inside them).
 
 ```html
 <nav class="toolbar">          <!-- flex container -->
@@ -34,10 +23,10 @@ Writing `display: flex` on an element makes it a **flex container**. Its **direc
 
 ```css
 .toolbar { display: flex; }          /* block-level container (takes a full line) */
-.badge   { display: inline-flex; }   /* inline-level container (sits in text) */
+.badge   { display: inline-flex; }   /* inline-level container (sits in text); also `inline flex` */
 ```
 
-Even a bare run of text directly inside the container becomes an **anonymous flex item** (an item the browser creates for you, with no element of its own, so you cannot target it with CSS).
+A bare run of text directly inside the container becomes an **anonymous flex item** (browser-created, no element, so not targetable by CSS).
 
 ### Which properties go where
 
@@ -52,162 +41,106 @@ Even a bare run of text directly inside the container becomes an **anonymous fle
 | `gap`, `row-gap`, `column-gap` | |
 
 ### What changes for the children
-- Items no longer care about `display: block`/`inline`: every item is "blockified" (a `<span>` item accepts width and height).
-- `float` and `clear` are ignored on items; `vertical-align` has no effect.
-- Margins of adjacent items **do not collapse** ([Chapter 7, §7.3](../07-box-model-and-layout-basics/README.md)).
-- An item with `z-index` creates a stacking context (a group of boxes layered together as one unit) even without `position` ([§7.8](../07-box-model-and-layout-basics/README.md)).
-- By default items sit in a row, are as wide as their content, may shrink but not grow, and **stretch** to the container's height.
-
-### Self-check
-1. `display: flex` on `<ul>` — are the `<a>` elements inside the `<li>`s flex items? → No, only the `<li>`s (direct children).
-2. Which property turns a flex container inline? → `display: inline-flex` (or `display: inline flex`).
+- Items are "blockified": `display: block`/`inline` no longer matters (a `<span>` item accepts width and height).
+- `float` and `clear` are ignored; `vertical-align` has no effect.
+- Margins of adjacent items **do not collapse** ([§7.3](../07-box-model-and-layout-basics/README.md)).
+- An item with `z-index` creates a stacking context even without `position` ([§7.8](../07-box-model-and-layout-basics/README.md)).
+- By default items sit in a row, are content-width, may shrink but not grow, and **stretch** to the container's height.
 
 ---
 
 ## 8.2 The two axes, `flex-direction` and `order`
 
 ### What it is
-Flexbox never talks about "horizontal" and "vertical". It uses two **axes**:
-- The **main axis** — the direction items are placed one after another. Its start and end are **main-start** and **main-end**.
-- The **cross axis** — perpendicular (at a right angle) to it. **cross-start** / **cross-end**.
+Flexbox never says "horizontal"/"vertical". It uses two **axes**:
+- The **main axis** — the direction items are placed in, from **main-start** to **main-end**.
+- The **cross axis** — perpendicular to it, **cross-start** / **cross-end**.
 
-`flex-direction` sets the main axis:
-
-| Value | Main axis (English, left-to-right text) | Cross axis |
+| `flex-direction` | Main axis (English, left-to-right text) | Cross axis |
 |---|---|---|
-| `row` (default) | left → right (follows the text direction; right → left in Arabic or Hebrew) | top → bottom |
+| `row` (default) | left → right (follows text direction; right → left in Arabic or Hebrew) | top → bottom |
 | `row-reverse` | right → left | top → bottom |
 | `column` | top → bottom | left → right |
 | `column-reverse` | bottom → top | left → right |
 
 ![Four dashed flex containers with red main-axis and green cross-axis labels: row puts items 1 2 3 left to right; row-reverse puts 3 2 1 from the right; column stacks 1 2 3 downward; row with order -1 on item 3 shows 3 1 2](img/01_axes.png)
 
-*Figure 8.1 — [`code/01_axes.html`](code/01_axes.html). The red arrow is the main axis, the green one the cross axis; the labels are drawn with `::before`/`::after`.*
+*Figure 8.1 — [`code/01_axes.html`](code/01_axes.html). Red arrow = main axis, green = cross axis (drawn with `::before`/`::after`).*
 
 ### Why it matters
-Every alignment property is defined per axis: **`justify-content` works on the main axis; `align-items`, `align-self` and `align-content` work on the cross axis.** Switch `flex-direction` from `row` to `column` and `justify-content: center` now centres *vertically*. If you remember only one thing about flexbox, remember this.
+**`justify-content` works on the main axis; `align-items`, `align-self` and `align-content` on the cross axis.** Switch to `flex-direction: column` and `justify-content: center` centres *vertically*, while `align-items: center` now centres horizontally. If you remember one thing about flexbox, remember this.
 
 ### `order`
-`order: <integer>` (default `0`) changes the **visual** position of an item: items are placed by ascending `order`, ties in source order. In the fourth demo, `order: -1` moves item 3 to the front.
+`order: <integer>` (default `0`) changes **visual** position: ascending `order`, ties in source order (values 2, −1, 0, 0 → the −1 first, then the 0s, then 2). In the fourth demo `order: -1` moves item 3 to the front.
 
 ### When not to use it (accessibility)
-`order`, `row-reverse` and `column-reverse` change only what is *drawn*. The **Tab order (the order the Tab key moves through links and controls) and the screen-reader reading order still follow the DOM** (the element order in the HTML), so a keyboard user sees focus (the highlight on the element receiving keyboard input) jump around. WCAG 2.2 (the Web Content Accessibility Guidelines) success criteria 1.3.2 (Meaningful Sequence) and 2.4.3 (Focus Order) cover this ([Chapter 3](../03-semantic-html-and-accessibility/README.md)). Rules of thumb:
-- Change the HTML order when the order means something; use `order` only for purely visual tweaks (e.g. an image before or after its text in alternating rows).
-- The new CSS `reading-flow` property lets focus and reading order follow the visual flex/grid order, but as of 2026 it ships only in Chromium browsers (those built on Google's open-source engine: Chrome/Edge 137+) — not Baseline (the label for features that work in all major browsers), so don't rely on it.
-
-### Self-check
-1. With `flex-direction: column`, which property centres items horizontally? → `align-items: center` (horizontal is now the cross axis).
-2. Does `row-reverse` change the Tab order? → No.
-3. Items have `order` values 2, −1, 0, 0. Which is drawn first? → The one with −1, then the two 0s in source order, then 2.
+`order`, `row-reverse` and `column-reverse` change only what is *drawn*. **Tab order and screen-reader reading order still follow the DOM**, so keyboard focus jumps around — WCAG 2.2 SC 1.3.2 (Meaningful Sequence) and 2.4.3 (Focus Order) ([Chapter 3](../03-semantic-html-and-accessibility/README.md)).
+- Change the HTML when the order means something; use `order` only for purely visual tweaks (an image before/after its text in alternating rows).
+- The new CSS `reading-flow` property makes focus and reading order follow the visual flex/grid order, but as of 2026 only Chromium (Chrome/Edge 137+) ships it — not Baseline, so don't rely on it.
 
 ---
 
 ## 8.3 `flex-grow`, `flex-shrink` and `flex-basis`
 
-This is the part that makes flexbox "flexible" — and the part most people guess at. Let's calculate it properly.
-
 ### What it is
-Each item has three sizing properties, always read **along the main axis** (width in a row, height in a column):
+Three sizing properties, read **along the main axis** (width in a row, height in a column):
 
 | Property | Meaning | Default |
 |---|---|---|
-| **`flex-basis`** | The item's starting size before free space is shared: a length (`200px`, `30%`), `0`, `content`, or `auto` (= use `width`/`height` if set, else the content size) | `auto` |
+| **`flex-basis`** | Starting size before free space is shared: a length (`200px`, `30%`), `0`, `content`, or `auto` (= `width`/`height` if set, else content size) | `auto` |
 | **`flex-grow`** | How many *shares* of **positive free space** the item takes | `0` (don't grow) |
 | **`flex-shrink`** | How strongly the item gives up space when there is **negative free space** (overflow), weighted by its basis | `1` (may shrink) |
 
-**Free space** = container's inner main size − the sum of the items' flex base sizes (and margins, borders, padding) − gaps. Positive → the items can grow. Negative → they must shrink.
-
-Analogy: a restaurant bill. `flex-basis` is what each person ordered. If the group has budget left over (positive free space), it is split by `flex-grow` "shares". If the bill is over budget (negative free space), each person pays back in proportion to `flex-shrink × what they ordered` — people who ordered more give back more.
+**Free space** = container's inner main size − Σ items' flex base sizes (plus margins, borders, padding) − gaps. Positive → grow; negative → shrink. (Like splitting a bill: leftover budget is shared by grow "shares"; an overspend is paid back in proportion to shrink × what each ordered.)
 
 ### How it works — the algorithm, simplified
-The CSS spec calls this "resolving the flexible lengths" (Flexbox Level 1, §9.7). For one line of items:
+"Resolving the flexible lengths" (Flexbox Level 1, §9.7), for one line:
 
-1. **Base sizes.** Work out each item's flex base size from `flex-basis`, then clamp it (force it inside the allowed range) by its `min-*`/`max-*` to get its *hypothetical* size (the size it would have before any growing or shrinking).
-2. **Grow or shrink?** Sum the hypothetical sizes, gaps, margins, padding and borders. If less than the container, use `flex-grow`; otherwise use `flex-shrink`.
-3. **Freeze inflexible items** — those whose factor is 0 — at their hypothetical size ("frozen" means the size is final and no longer changes in later rounds).
-4. **Distribute** the remaining free space among the unfrozen items:
+1. **Base sizes.** Each item's flex base size from `flex-basis`, clamped by `min-*`/`max-*` → its *hypothetical* size.
+2. **Grow or shrink?** If Σ hypothetical sizes + gaps + margins/padding/borders < container, use `flex-grow`; otherwise `flex-shrink`.
+3. **Freeze inflexible items** (factor 0) at their hypothetical size ("frozen" = final).
+4. **Distribute** remaining free space among unfrozen items:
    - growing: `size = basis + free × grow / Σgrow`
    - shrinking: `size = basis − overflow × (shrink × basis) / Σ(shrink × basis)`
-   - special case: if the unfrozen factors add up to **less than 1**, only that fraction of the free space is handed out.
-5. **Clamp** each result to its `min-*`/`max-*`. If anything was clamped, **freeze** those items at the clamped size and go back to step 4 with the space that is left.
+   - if unfrozen factors sum to **less than 1**, only that fraction of the free space is handed out.
+5. **Clamp** each to `min-*`/`max-*`; if anything was clamped, **freeze** it there and redo step 4 with the remaining space.
 6. Stop when every item is frozen.
 
 ![Seven rows of flex containers with red measured widths: G1 175/300/125; G2 214.281/142.859/42.859; G3 with gaps 165/280/115; G4 100/250/250; G5 flex 1 gives 200/200/200 while flex auto gives 160/253/187; G6 a long URL keeps its item 251.672px wide until min-width 0 makes it 150/150; G7 grow factors of 0.25 give 200/200](img/02_grow_shrink.png)
 
-*Figure 8.2 — [`code/02_grow_shrink.html`](code/02_grow_shrink.html). Items have no padding or border, so each item's width is exactly its flex size. A small script at the bottom of the page reads each width with `getBoundingClientRect()` and writes it underneath — the labels are absolutely positioned children of the container, so they take no part in the layout they report on.*
+*Figure 8.2 — [`code/02_grow_shrink.html`](code/02_grow_shrink.html). Items have no padding/border, so width = flex size. A script writes each `getBoundingClientRect()` width underneath (labels are absolutely positioned, so they don't affect the layout they report).*
 
 ### Worked example 1 — growing (G1)
-Container 600px. Items: `flex: 1 1 100px`, `flex: 2 1 150px`, `flex: 1 1 50px`.
+Container 600px; items `flex: 1 1 100px`, `flex: 2 1 150px`, `flex: 1 1 50px`.
+1. Bases 300 → free **+300** → grow.
+2. Shares 1 + 2 + 1 = 4 → one share = 75px.
+3. A = 100 + 75 = **175**; B = 150 + 150 = **300**; C = 50 + 75 = **125**. ✓ 600.
 
-1. Base sizes 100 + 150 + 50 = 300. Free space = 600 − 300 = **+300** → grow.
-2. Total grow shares = 1 + 2 + 1 = 4, so one share = 300 / 4 = 75px.
-3. A = 100 + 1×75 = **175**; B = 150 + 2×75 = **300**; C = 50 + 1×75 = **125**. Total 600. ✓
-
-Note that B ends up **300**, not "twice as wide as A" — `flex-grow` divides the *free space*, not the final widths. Only when all bases are 0 (next examples) do grow factors become width ratios.
+B is **not** twice A — `flex-grow` divides the *free space*, not final widths; grow factors become width ratios only when all bases are 0.
 
 ### Worked example 2 — shrinking (G2)
-Container 400px. Items: `flex: 0 1 300px`, `flex: 0 1 200px`, `flex: 0 2 100px`.
+Container 400px; items `flex: 0 1 300px`, `flex: 0 1 200px`, `flex: 0 2 100px`.
+1. Bases 600 → free **−200** → shrink.
+2. Scaled factors (shrink × basis): 300, 200, 200 → Σ **700**.
+3. A loses 200 × 300/700 = 85.714 → **214.286**; B loses 57.143 → **142.857**; C loses 57.143 → **42.857**.
 
-1. Bases 300 + 200 + 100 = 600. Free space = 400 − 600 = **−200** → shrink.
-2. Scaled shrink factors (shrink × basis): A = 1×300 = 300, B = 1×200 = 200, C = 2×100 = 200. Sum = **700**.
-3. A loses 200 × 300/700 = 85.714 → **214.286**. B loses 200 × 200/700 = 57.143 → **142.857**. C loses 200 × 200/700 = 57.143 → **42.857**.
-
-C has *twice* the shrink factor of B yet loses the *same* amount, because its basis is half as big. Shrinking is weighted by size so small items don't get crushed to zero first.
+C has *twice* B's shrink factor yet loses the *same* amount, because its basis is half — weighting by size stops small items being crushed first.
 
 ### Worked example 3 — gaps (G3)
-Same items as G1 with `gap: 20px`: two gaps take 40px first. Free space = 600 − 300 − 40 = 260 → one share = 65 → **165 / 280 / 115**.
+G1 with `gap: 20px`: two gaps take 40px first → free 260 → share 65 → **165 / 280 / 115**.
 
 ### Worked example 4 — a max-width freezes an item (G4)
-Container 600px, all items `flex: 1 1 0`, A has `max-width: 100px`.
+Container 600px, all `flex: 1 1 0`, A has `max-width: 100px`.
+1. Round 1: each gets 200; A violates its max → clamped to 100, **frozen**.
+2. Round 2: 500 left for B and C → **250** each.
 
-1. Round 1: free space 600, each gets 200. A violates its max → clamped to 100 and **frozen**.
-2. Round 2: free space 600 − 100 = 500 shared by B and C → **250** each.
-
-Result **100 / 250 / 250** — not 100/200/200 with 100px left over. The loop in step 5 is why.
+Result **100 / 250 / 250**, not 100/200/200 with 100px wasted — that's the step-5 loop.
 
 ### Worked example 5 — factors below 1 (G7)
-Container 600px, two items `flex: 0.25 1 100px`. Free space = 400. The factors add up to 0.5, so only half the free space (200) is handed out: each item gets 100 more → **200 / 200**, leaving 200px empty. (With `flex-grow: 1` each they would be 300 / 300.)
+Container 600px, two items `flex: 0.25 1 100px`: free 400, factors sum 0.5 → only 200 handed out → **200 / 200**, 200px left empty (with `flex-grow: 1` each: 300 / 300).
 
 ### Verified — the maths vs. Chrome
-[`code/02_flex_math.mjs`](code/02_flex_math.mjs) runs the algorithm with logging (key part of [`flex_algorithm.mjs`](code/flex_algorithm.mjs)):
-
-```js
-if (growing) {
-  const sum = open.reduce((s, i) => s + i.grow, 0);
-  for (const i of open) i.target = i.basis + free * i.grow / sum;
-} else {
-  const sum = open.reduce((s, i) => s + i.shrink * i.basis, 0);          // scaled shrink factors
-  for (const i of open) i.target = i.basis + free * (i.shrink * i.basis) / sum;   // free < 0 here
-}
-// ...then clamp to min/max, freeze violators, repeat
-```
-
-Output (G2 and G4):
-```
-== G2 shrink
-  space used by hypothetical sizes = 300 + 200 + 100 = 600
-  container = 400  ->  overflow, use flex-shrink
-  round 1: free space = -200 shared by A, B, C
-    A: 300 − 200 × (1×300)/700 = 214.286
-    B: 200 − 200 × (1×200)/700 = 142.857
-    C: 100 − 200 × (2×100)/700 = 42.857
-  result: A=214.286  B=142.857  C=42.857
-
-== G4 flex 1 1 0, A max 100
-  space used by hypothetical sizes = 0 + 0 + 0 = 0
-  container = 600  ->  free space, use flex-grow
-  round 1: free space = 600 shared by A, B, C
-    A: 0 + 600 × 1/3 = 200
-    B: 0 + 600 × 1/3 = 200
-    C: 0 + 600 × 1/3 = 200
-    A violates its max -> clamped to 100
-  round 2: free space = 500 shared by B, C
-    B: 0 + 500 × 1/2 = 250
-    C: 0 + 500 × 1/2 = 250
-  result: A=100  B=250  C=250
-```
-
-Then [`code/03_flex_measure.mjs`](code/03_flex_measure.mjs) opens `02_grow_shrink.html` in headless Chrome, reads every item's `getBoundingClientRect().width`, and compares it with the algorithm. For G5 and G6 it first measures each item's content size (min-content — the narrowest it can be without overflowing, roughly its longest word — and max-content — its width with no line breaks at all) with a hidden clone (a copy of the element), because those cases depend on text width:
+[`code/02_flex_math.mjs`](code/02_flex_math.mjs) runs `flex_algorithm.mjs` with a per-round log (the core is the two distribution formulas above, then clamp-freeze-repeat). [`code/03_flex_measure.mjs`](code/03_flex_measure.mjs) then reads every item's `getBoundingClientRect().width` in headless Chrome and compares; for G5 and G6 it first measures content sizes — **min-content** (narrowest without overflow, roughly the longest word) and **max-content** (width with no line breaks) — on a hidden clone:
 
 ```
 case   predicted (spec algorithm)            measured in Chrome                   diff
@@ -226,25 +159,23 @@ content sizes used above (min-content / max-content):
   g6a 251.672 / 251.672  |  6.625 / 6.625
 ```
 
-Every case matches. The tiny G2 difference is not an error in the maths: Chrome stores layout positions in **1/64-pixel units**, so 214.2857… is stored as 13714/64 = 214.28125, and the rounding leftovers are pushed onto the neighbours so the three still add up to exactly 400.
+Every case matches. The tiny G2 difference: Chrome stores layout positions in **1/64-pixel units** (214.2857… → 13714/64 = 214.28125), pushing rounding leftovers onto neighbours so the three still sum to exactly 400.
 
 ### Common mistakes
-- Expecting `flex-grow: 2` to make an item twice as wide as a `flex-grow: 1` sibling. Only true when their bases are equal (typically 0).
-- Forgetting that padding and border count toward the base: an item with `flex: 1` (basis 0) and `padding: 0 40px` still ends up 80px wider than an unpadded sibling.
-- Giving everything `flex-shrink: 0` and then wondering why the row overflows on phones.
+- Expecting `flex-grow: 2` to be twice as wide as a `flex-grow: 1` sibling — true only with equal (typically 0) bases.
+- Forgetting padding and border count toward the base: a `flex: 1` item with `padding: 0 40px` ends up 80px wider than an unpadded sibling.
+- `flex-shrink: 0` on everything, then a row overflowing on phones.
 
 ### Self-check
-1. Container 500px, items `flex: 1 1 100px` and `flex: 3 1 100px`. Widths? → free 300; shares 4 → 75 each → **175 and 325**.
-2. Container 300px, items `flex: 0 1 200px` and `flex: 0 1 200px`. Widths? → overflow 100, equal scaled factors → **150 and 150**.
-3. Container 300px, items `flex: 0 1 200px` and `flex: 0 3 200px`. Widths? → scaled 200 and 600 (sum 800); losses 25 and 75 → **175 and 125**.
-4. Why did G4 give 250 to B and C instead of 200? → A was frozen at its max after round 1 and the leftover was redistributed.
+1. Container 500px, items `flex: 1 1 100px` and `flex: 3 1 100px`? → free 300, 4 shares of 75 → **175 and 325**.
+2. Container 300px, items `flex: 0 1 200px` and `flex: 0 3 200px`? → scaled 200 and 600 (Σ 800); losses 25 and 75 → **175 and 125**.
 
 ---
 
 ## 8.4 The `flex` shorthand and minimum sizes
 
 ### The shorthand
-Always prefer `flex` over the three longhands (the individual properties a shorthand stands for): it sets them together and has sensible defaults for the parts you omit (omitted `flex-shrink` → 1, omitted `flex-basis` → **0%**, not `auto`).
+Prefer `flex` over the three longhands: it sets them together with sensible defaults for omitted parts (omitted `flex-shrink` → 1, omitted `flex-basis` → **0%**, not `auto`).
 
 | You write | Means (grow shrink basis) | Behaviour | Typical use |
 |---|---|---|---|
@@ -252,16 +183,16 @@ Always prefer `flex` over the three longhands (the individual properties a short
 | `flex: 1` | `1 1 0%` | Ignore content size, share **all** space equally | Equal columns, "fill the rest" |
 | `flex: 2` | `2 1 0%` | Twice the share of a `flex: 1` sibling | Proportional columns |
 | `flex: auto` | `1 1 auto` | Start from content size, share the **leftover** equally | Nav tabs that grow but keep content differences |
-| `flex: none` | `0 0 auto` | Rigid: never grows or shrinks | Icons, avatars (small user profile pictures), buttons |
+| `flex: none` | `0 0 auto` | Rigid: never grows or shrinks | Icons, avatars, buttons |
 | `flex: 200px` | `1 1 200px` | Start at 200px, grow/shrink from there | Wrapping card rows |
 | `flex: 0 0 200px` | exactly that | Fixed 200px | Sidebars |
 
-**G5 in Figure 8.2** shows the `flex: 1` vs `flex: auto` difference with the same three labels: `flex: 1` gives 200/200/200 regardless of text; `flex: auto` starts from the text widths (33.1, 125.8, 59.6) and adds an equal 127.1px to each, giving 160.3 / 253.0 / 186.8.
+**G5** shows `flex: 1` vs `flex: auto` with the same three labels: `flex: 1` gives 200/200/200 regardless of text; `flex: auto` starts from the text widths (33.1, 125.8, 59.6) and adds an equal 127.1px each → 160.3 / 253.0 / 186.8.
 
 ### `min-width: auto` — the hidden minimum
-Flex items have `min-width: auto` (in a column, `min-height: auto`), and for flex items `auto` means **"never shrink below my min-content size"** — the width of the longest word, URL or unshrinkable child. This protects text from being crushed, but it is also the cause of the most common flexbox bug: *"my flex item overflows its container even though it has `flex: 1`"*.
+Flex items have `min-width: auto` (`min-height: auto` in a column), which for flex items means **"never shrink below my min-content size"** — the longest word, URL or unshrinkable child. It protects text, but causes the most common flexbox bug: *"my `flex: 1` item overflows its container"*.
 
-**G6** shows it: two items with `flex: 1` in a 300px container should be 150/150, but the first contains an unbreakable URL whose min-content width is 251.672px. The browser refuses to go below that, so the second item gets only 48.328px and the text looks broken. The fix is one line:
+**G6**: two `flex: 1` items in 300px should be 150/150, but the first contains an unbreakable URL with min-content 251.672px, so the second gets only 48.328px. The fix:
 
 ```css
 .item { flex: 1; min-width: 0; }            /* allow shrinking below content size */
@@ -269,19 +200,14 @@ Flex items have `min-width: auto` (in a column, `min-height: auto`), and for fle
 .item { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }  /* or overflow-wrap: anywhere */
 ```
 
-Typical places this bites: a code block or table inside a flex column, a long file name in a list row, a chart inside a flex child, nested flex layouts where an inner item contains a wide `<pre>`. Making the item a scroll container (a box that clips and can scroll its content: `overflow: hidden`, `auto` or `scroll`) also removes the automatic minimum (`overflow: clip` does not — it isn't a scroll container).
-
-### Self-check
-1. What is the basis in `flex: 1`? → `0%`.
-2. Two items with `flex: auto` and different text lengths — equal widths? → No; each gets its content width plus an equal share of the leftover.
-3. A `flex: 1` sidebar containing a 900px-wide `<pre>` pushes the page wider than the screen. Fix? → `min-width: 0` on the flex item (and `overflow: auto` on the `<pre>`).
+Where it bites: a code block or table in a flex column, a long file name in a list row, a chart in a flex child, nested flex layouts with a wide `<pre>` (fix: `min-width: 0` on the item, `overflow: auto` on the `<pre>`). Making the item a scroll container (`overflow: hidden/auto/scroll`) also removes the automatic minimum; `overflow: clip` doesn't (not a scroll container).
 
 ---
 
 ## 8.5 Alignment
 
 ### What it is
-Once item sizes are known, there may still be **free space** — along the main axis (items don't fill the line) and on the cross axis (items shorter than the line). Alignment properties decide where that space goes. They come from the CSS Box Alignment module (the part of the CSS spec that defines these alignment properties), which Grid shares.
+After sizing there may still be **free space** — on the main axis (items don't fill the line) and the cross axis (items shorter than the line). Alignment properties (from the CSS Box Alignment module, shared with Grid) decide where it goes.
 
 ![Three groups of dashed containers. justify-content: flex-start, center, flex-end, space-between, space-around, space-evenly. align-items: stretch, flex-start, center, flex-end, baseline, and a combination with align-self and margin-left auto. align-content in a wrapping container: normal, flex-start, center, space-between](img/04_alignment.png)
 
@@ -298,39 +224,34 @@ Once item sizes are known, there may still be **free space** — along the main 
 | `space-around` | Equal space around each item, so edges get **half** a gap |
 | `space-evenly` | Equal gaps everywhere, edges included |
 
-`start`/`end` also work (they follow the writing direction — left-to-right or right-to-left, depending on the language — rather than the flex direction, which matters only with `row-reverse`/`column-reverse`). `justify-content` does nothing if any item has `flex-grow` > 0 and there's no max-size limit — there is no free space left to distribute.
+`start`/`end` follow the writing direction rather than the flex direction (matters only with `*-reverse`). `justify-content` does nothing if an item has `flex-grow` > 0 with no max-size — no free space remains.
 
 ### `align-items` and `align-self` — cross axis, per line
 
 | Value | Effect on each item |
 |---|---|
-| `stretch` (default — `normal` behaves like it) | Items fill the line's cross size — **only if** their cross size (`height` in a row) is `auto` |
+| `stretch` (default — `normal` behaves like it) | Items fill the line's cross size — **only if** their cross size (`height` in a row) is `auto` (a `height: 50px` item stays 50px) |
 | `flex-start` / `start` | Top of the line (in a row) |
 | `flex-end` / `end` | Bottom |
 | `center` | Middle |
-| `baseline` | Items shifted so the **first line of text** in each shares one baseline (the invisible line letters sit on) — perfect for a label next to a big number or mixed font sizes |
+| `baseline` | Items shifted so each one's **first line of text** shares a baseline — for a label beside a big number or mixed font sizes |
 
-`align-items` sets the default for all items; **`align-self`** on one item overrides it. There is **no `justify-self`** in flexbox — the main axis is shared, so you can't align one item alone on it. Use an **auto margin** instead.
+`align-items` sets the default; **`align-self`** overrides it per item. There is **no `justify-self`** in flexbox — the main axis is shared — use an **auto margin**.
 
 ### Auto margins
-In flexbox, `margin: auto` absorbs free space *before* `justify-content` and in either axis:
-- `margin-left: auto` (or `margin-inline-start: auto`) on an item pushes it — and everything after it — to the end. The classic "logo left, links left, Sign in far right".
-- `margin-top: auto` on the last item in a column pushes it to the bottom (a card's button).
-- `margin: auto` on the only item centres it both ways.
+`margin: auto` absorbs free space *before* `justify-content`, in either axis:
+- `margin-left: auto` (or `margin-inline-start: auto`) pushes the item — and everything after — to the end ("logo and links left, Sign in far right").
+- `margin-top: auto` on a column's last item pushes it to the bottom (a card's button).
+- `margin: auto` on an only child centres it both ways.
 
 ### `align-content` — distributing the lines
-With `flex-wrap: wrap` there may be several **flex lines** (rows of items, when items wrap onto more than one row); `align-content` distributes them on the cross axis like `justify-content` does for items (`flex-start`, `center`, `space-between`, `space-around`, `space-evenly`, `stretch`). The default `normal` behaves as `stretch`: lines grow to fill the container. It has **no effect on a single-line (`nowrap`) container**.
+With `flex-wrap: wrap` there can be several **flex lines**; `align-content` distributes them on the cross axis (`flex-start`, `center`, `space-between`, `space-around`, `space-evenly`, `stretch`). Default `normal` behaves as `stretch`. **No effect on a single-line (`nowrap`) container.**
 
 ### Common mistakes
-- Trying `align-items: center` to centre items horizontally in a row (that's `justify-content`).
-- Setting a `height` on items and wondering why `stretch` stopped working.
-- Using `align-content` on a non-wrapping container.
-- `justify-content: center` on a row that overflows: content spills off *both* sides and the left part can't be scrolled to. `justify-content: safe center` falls back to start when overflowing (Baseline since 2024 — Chrome 115, Firefox 63, Safari 17.6), or use `margin: auto` on the items, which never pushes content past the start edge.
-
-### Self-check
-1. Three items, `justify-content: space-between` — is there space before the first? → No.
-2. How do you push only the last button of a toolbar to the right? → `margin-left: auto` on it.
-3. Which property aligns the lines of a wrapping flex container? → `align-content`.
+- `align-items: center` to centre horizontally in a row (that's `justify-content`).
+- A `height` on items, then wondering why `stretch` stopped.
+- `align-content` on a non-wrapping container.
+- `justify-content: center` on an overflowing row: content spills off *both* sides and the left part can't be scrolled to. `justify-content: safe center` falls back to start on overflow (Baseline since 2024 — Chrome 115, Firefox 63, Safari 17.6); or `margin: auto` on items, which never pushes content past the start.
 
 ---
 
@@ -340,22 +261,20 @@ With `flex-wrap: wrap` there may be several **flex lines** (rows of items, when 
 
 | Value | Behaviour |
 |---|---|
-| `nowrap` (default) | One line. Items shrink (if allowed) and then **overflow** |
-| `wrap` | New lines are added when the next item doesn't fit; lines stack along the cross axis |
+| `nowrap` (default) | One line. Items shrink (if allowed), then **overflow** |
+| `wrap` | New lines when the next item doesn't fit; lines stack along the cross axis |
 | `wrap-reverse` | Same, but new lines go *above* (cross-start and cross-end swap) |
 
-`flex-flow: row wrap` is the shorthand for `flex-direction` + `flex-wrap`.
-
-Each line is sized **independently**: the grow/shrink maths of 8.3 runs once per line, on the items in that line. Items are placed into a line using their *hypothetical* sizes (basis clamped by min/max) — as many as fit, then a new line.
+`flex-flow: row wrap` = `flex-direction` + `flex-wrap`. Each line is sized **independently**: items are placed by *hypothetical* size (basis clamped by min/max) — as many as fit — then the 8.3 maths runs per line.
 
 ### `gap`
-`gap: <row-gap> <column-gap>` (or `gap: 12px` for both) puts fixed space **between** items and between lines — never on the outer edges. It is not a margin, never collapses, and is subtracted before free space is shared (G3). `gap` in flexbox has been Baseline (working in all major browsers) since 2021; before that people used margins on items plus a negative margin on the container.
+`gap: <row-gap> <column-gap>` (or one value) puts fixed space **between** items and lines — never on the outer edges. Not a margin, never collapses, subtracted before free space is shared (G3). Baseline for flexbox since 2021 (before: item margins plus a negative container margin).
 
 ![Four containers: five 150px items overflowing a 640px nowrap container; the same items squeezed to 128px when allowed to shrink; seven wrapping cards with flex 1 1 180px and a 12px gap — three per line and the seventh stretched full width; fixed 120px items with a 20px row gap and 8px column gap](img/05_wrap_gap.png)
 
 *Figure 8.4 — [`code/05_wrap_gap.html`](code/05_wrap_gap.html).*
 
-[`code/05_wrap_gap.mjs`](code/05_wrap_gap.mjs) groups the cards by their top edge to count items per line, at two container widths:
+[`code/05_wrap_gap.mjs`](code/05_wrap_gap.mjs) groups cards by top edge to count items per line:
 
 ```
 container 640px (flex: 1 1 180px, gap 12px):
@@ -370,15 +289,10 @@ container 400px (flex: 1 1 180px, gap 12px):
 nowrap + flex: 0 1 150px in 640px: 128, 128, 128, 128, 128
 ```
 
-Check the first line by hand: 3 × 180 + 2 × 12 = 564 ≤ 640, but 4 × 180 + 3 × 12 = 756 > 640, so 3 fit. Free space 640 − 564 = 76 → +25.33 each → 205.33. The last card is alone on its line, so it takes all 640px. The shrink row: overflow 750 − 640 = 110, equal scaled factors → each loses 22 → 128.
+By hand: 3 × 180 + 2 × 12 = 564 ≤ 640, but 4 × 180 + 3 × 12 = 756 > 640, so 3 fit; free 76 → +25.33 each → 205.33. The lone last card takes all 640px. Shrink row: overflow 750 − 640 = 110, equal weights → each loses 22 → 128.
 
 ### The "last row" problem — and when to switch to grid
-A wrapping flex row is **content-out** (sizes are driven by the content): each line decides its own sizes, so items on a short last line grow wider than the ones above (the 640px card). That is great for tags or buttons of different lengths, and wrong for a uniform card grid. For equal columns that wrap, use Grid's `repeat(auto-fill, minmax(180px, 1fr))` ([Chapter 9](../09-grid/README.md)), which is **layout-in**: tracks (the rows and columns of a grid) are defined first and items drop into them. (A flex workaround is `flex-grow: 0` with a fixed basis, at the cost of an uneven right edge.)
-
-### Self-check
-1. Container 500px, items `flex: 1 1 150px`, `gap: 10px`. Items per line? → 3 (3×150 + 2×10 = 470 ≤ 500; 4 would need 630).
-2. Does `gap` add space before the first item? → No, only between items and lines.
-3. Why does the last card grow wider than the rest? → Each flex line distributes its own free space; a lone item gets all of it.
+Wrapping flex is **content-out** (content drives sizes): each line shares its own free space, so items on a short last line grow wider than those above. Great for tags or buttons of different lengths; wrong for a uniform card grid. For equal wrapping columns use Grid's `repeat(auto-fill, minmax(180px, 1fr))` ([Chapter 9](../09-grid/README.md)), which is **layout-in**: tracks are defined first and items drop into them. (Flex workaround: `flex-grow: 0` with a fixed basis, at the cost of an uneven right edge.)
 
 ---
 
@@ -386,7 +300,7 @@ A wrapping flex row is **content-out** (sizes are driven by the content): each l
 
 ![Six patterns: a dark navbar with the Sign in button pushed to the right; a centred dialog; three equal-height pricing cards with buttons aligned at the bottom; a page with the footer at the bottom; a media object with a round avatar and wrapping text; a search input that grows next to a fixed button](img/06_patterns.png)
 
-*Figure 8.5 — [`code/06_patterns.html`](code/06_patterns.html). Each flex container has a dashed purple outline.*
+*Figure 8.5 — [`code/06_patterns.html`](code/06_patterns.html).*
 
 ```css
 /* 1. Navbar */
@@ -427,16 +341,15 @@ media  : avatar width 56px (flex: none, never shrinks)
 input  : input 359.875px + button 68.125px = form 428px
 ```
 
-Notes on each:
-- **Navbar**: use a real `<nav>` with a list of links in production ([Chapter 3](../03-semantic-html-and-accessibility/README.md)); the `<ul>` becomes the flex container. Add `flex-wrap: wrap` or a menu button for narrow screens ([Chapter 10](../10-responsive-design/README.md)).
-- **Centring**: works for unknown sizes on both axes — the thing that took hacks before flexbox. If the centred child can be taller than the container, prefer `margin: auto` on the child so it can't overflow off the top.
-- **Cards**: equal heights come free from `align-items: stretch`; the column + `margin-top: auto` keeps buttons in one line. If you also need the *titles and paragraphs* aligned across cards, that is a job for `subgrid` (letting a nested grid reuse its parent's rows) ([Chapter 9](../09-grid/README.md)).
-- **Sticky footer**: `100dvh` is the *dynamic* viewport height (the viewport is the visible browser area), which accounts for mobile browser toolbars; `100vh` can be too tall on phones ([Chapter 10](../10-responsive-design/README.md)).
-- **Media object**: `flex: none` keeps the avatar from being squashed; `min-width: 0` lets long names truncate.
-- **Input group**: `<input>` has a built-in default width (from its `size` attribute), so without `min-width: 0` it can refuse to shrink on small screens.
+- **Navbar**: in production a real `<nav>` with a list; the `<ul>` is the flex container ([Chapter 3](../03-semantic-html-and-accessibility/README.md)). Add `flex-wrap: wrap` or a menu button for narrow screens ([Chapter 10](../10-responsive-design/README.md)).
+- **Centring**: works for unknown sizes on both axes. If the child can be taller than the container, prefer `margin: auto` on it so it can't overflow off the top.
+- **Cards**: equal heights from `align-items: stretch`; column + `margin-top: auto` aligns buttons. Aligning *titles and paragraphs* across cards needs `subgrid` ([Chapter 9](../09-grid/README.md)).
+- **Sticky footer** (footer at the bottom of short pages): `100dvh` = *dynamic* viewport height, accounting for mobile toolbars; `100vh` can be too tall on phones ([Chapter 10](../10-responsive-design/README.md)).
+- **Media object** (image beside text): `flex: none` keeps the avatar unsquashed; `min-width: 0` lets long names truncate.
+- **Input group** (text box joined to a button): `<input>` has a default width from its `size` attribute, so without `min-width: 0` it may refuse to shrink.
 
 ### Real-world examples
-GitHub's repository header, most site navbars, Bootstrap 5's `.d-flex`/`.justify-content-between` utilities and Tailwind's `flex`, `items-center`, `justify-between`, `gap-4` classes (Bootstrap and Tailwind are popular CSS frameworks; their *utility classes* each apply one CSS property) all map one-to-one to the properties in this chapter.
+GitHub's repository header, most navbars, Bootstrap 5's `.d-flex`/`.justify-content-between` and Tailwind's `flex`, `items-center`, `justify-between`, `gap-4` (utility classes, one property each) map one-to-one to this chapter's properties.
 
 ---
 
@@ -447,44 +360,38 @@ GitHub's repository header, most site navbars, Bootstrap 5's `.d-flex`/`.justify
 | Symptom | Cause | Fix |
 |---|---|---|
 | Item with `flex: 1` overflows / text doesn't truncate | `min-width: auto` = min-content | `min-width: 0` (and `overflow`/`text-overflow` on the content) |
-| Image in a flex row is squashed | Images shrink like any item | `flex: none` or `flex-shrink: 0` on it |
-| Image in a row becomes tall and distorted or overflows | `align-items: stretch` stretches images to the line height (a 100×50 image in a 300px-tall row became 600×300 in Chrome) | `align-self: flex-start` (or `center`) on the image |
+| Image in a flex row is squashed | Images shrink like any item | `flex: none` or `flex-shrink: 0` |
+| Image in a row becomes tall and distorted or overflows | `align-items: stretch` stretches it to the line (a 100×50 image in a 300px-tall row became 600×300 in Chrome) | `align-self: flex-start` (or `center`) |
 | `align-items: stretch` has no effect | Item has an explicit `height` | Remove it or use `min-height` |
-| `height: 100%` on an item's child doesn't work | Parent's height is not definite (not fixed in advance) | Make the item a flex container too, or use `flex: 1` down the chain |
+| `height: 100%` on an item's child doesn't work | Parent's height isn't definite (fixed in advance) | Make the item a flex container too, or `flex: 1` down the chain |
 | `justify-content` does nothing | An item has `flex-grow`, so no free space remains | Remove the grow, or use `max-width` |
 | Last row of wrapped cards is wider | Per-line sizing | Use grid |
 | Tab order doesn't match what users see | `order` / `*-reverse` | Change the HTML instead |
-| Space appears between items that you didn't add | `justify-content: space-*` or leftover `margin` | Inspect in DevTools |
+| Unexpected space between items | `justify-content: space-*` or leftover `margin` | Inspect in DevTools |
 
 ### Debugging with DevTools
-Chrome, Edge and Firefox show a **flex badge** next to flex containers in the Elements panel of DevTools (the built-in developer tools, opened with F12). Clicking it overlays the container, items, free space and gaps; the **Flexbox editor** (icon next to `display: flex` in the Styles pane) lets you click through `justify-content`/`align-items` values. Firefox's Layout panel also explains *why* an item has its size: its base size, how much it grew or shrank, and whether a min/max clamp kicked in.
+Chrome, Edge and Firefox show a **flex badge** beside flex containers in the Elements panel (F12); clicking it overlays container, items, free space and gaps. The **Flexbox editor** (icon by `display: flex` in Styles) clicks through `justify-content`/`align-items` values. Firefox's Layout panel explains *why* an item has its size: base size, growth/shrink, and any min/max clamp.
 
 ### In the interview
-**30-second answer:** "Flexbox is one-dimensional layout. `display: flex` makes direct children flex items, placed along a main axis set by `flex-direction`; the cross axis is perpendicular. `justify-content` distributes space on the main axis, `align-items` and `align-self` align on the cross axis, and `align-content` distributes wrapped lines. Item sizes come from `flex-basis`, then positive free space is shared by `flex-grow` ratios and overflow is taken back in proportion to `flex-shrink` times the basis, with min/max clamps. `flex: 1` means `1 1 0%`, so items share all the space equally. The classic bug is `min-width: auto`, which stops items shrinking below their content — fix with `min-width: 0`."
+**30-second answer:** "Flexbox is one-dimensional layout. `display: flex` makes direct children flex items, placed along a main axis set by `flex-direction`; the cross axis is perpendicular. `justify-content` distributes space on the main axis, `align-items`/`align-self` align on the cross axis, and `align-content` distributes wrapped lines. Sizes start from `flex-basis`; positive free space is shared by `flex-grow` ratios and overflow taken back in proportion to `flex-shrink` × basis, with min/max clamps. `flex: 1` means `1 1 0%`, so items share all the space equally. The classic bug is `min-width: auto`, which stops items shrinking below their content — fix with `min-width: 0`."
 
-Follow-ups:
-- *What's the difference between `flex: 1` and `flex: auto`?* → Basis 0% vs basis auto: `flex: 1` ignores content size and splits everything; `flex: auto` keeps content differences and splits only the leftover (G5).
+- *`flex: 1` vs `flex: auto`?* → Basis 0% vs auto: `flex: 1` ignores content size and splits everything; `flex: auto` keeps content differences and splits only the leftover (G5).
 - *How is shrinking calculated?* → Overflow × (shrink × basis) / Σ(shrink × basis) — weighted by basis so small items don't vanish (G2: 214.29 / 142.86 / 42.86).
-- *Flexbox or grid for a page layout?* → Grid for two-dimensional page structure and uniform card grids; flexbox inside components for rows of things whose size depends on content. They are often nested.
+- *Flexbox or grid for a page layout?* → Grid for 2-D page structure and uniform card grids; flexbox inside components for content-sized rows. Often nested.
 - *How do you centre a div?* → `display: flex; justify-content: center; align-items: center` on the parent, or `display: grid; place-items: center`.
-
-### Self-check
-1. An item in a row has `height: 50px`; the container is 200px tall with `align-items: stretch`. How tall is the item? → 50px — stretch only applies to `auto` cross sizes.
-2. Which one-liner shrinks a flex item below its longest word? → `min-width: 0`.
-3. What is `flex: none` in longhand? → `0 0 auto`.
 
 ---
 
 ## Chapter 8 TL;DR
 
 - `display: flex` → direct children become **flex items**; no margin collapsing, floats ignored, items blockified.
-- **Main axis** = `flex-direction` (`row` default). `justify-content` → main axis. `align-items` / `align-self` / `align-content` → cross axis. Swap direction and the meanings swap with it.
+- **Main axis** = `flex-direction` (`row` default). `justify-content` → main axis. `align-items` / `align-self` / `align-content` → cross axis. Swap direction and the meanings swap.
 - `order` and `*-reverse` change only visuals, not Tab or reading order (`reading-flow` is Chromium-only, not Baseline).
 - **Sizing**: start from `flex-basis`; positive free space split by `flex-grow` shares (`basis + free × grow/Σgrow`); overflow taken back by `flex-shrink × basis` weights; clamp to min/max, freeze, repeat. Verified: 175/300/125 (grow), 214.29/142.86/42.86 (shrink), 100/250/250 (max-width freeze). Chrome stores sizes in 1/64 px.
 - **Shorthand**: `flex: 1` = `1 1 0%`, `auto` = `1 1 auto`, `none` = `0 0 auto`, default `0 1 auto`, `flex: 200px` = `1 1 200px`.
 - **`min-width: auto`** = min-content for flex items → overflowing `flex: 1` items; fix with `min-width: 0`.
 - **Auto margins** absorb free space: `margin-left: auto` pushes right, `margin-top: auto` pushes down, `margin: auto` centres.
-- **Wrap + gap**: lines are sized independently; `gap` only between items; wrapped card grids with an even last row → use grid.
+- **Wrap + gap**: lines are sized independently; `gap` only between items; for an even last row use grid.
 - **Patterns**: navbar, centring, equal-height cards with bottom-aligned buttons, sticky footer (`min-height: 100dvh` + `main { flex: 1 }`), media object, input group.
 
 Next: [Chapter 9 — CSS Grid](../09-grid/README.md).

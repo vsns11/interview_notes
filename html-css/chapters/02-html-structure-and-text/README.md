@@ -1,30 +1,17 @@
 # Chapter 2 — HTML Structure and Text
 
-HTML is the skeleton of every page. This chapter teaches the grammar of the language (elements, attributes, nesting), the fixed structure every document needs, the `<head>` **metadata** (data *about* the page — its title, language, character set — rather than the content itself) that browsers, search engines and social networks read, and the elements you use for text: headings, paragraphs, inline meaning, lists and links. It closes with character references, comments and validation — how to check that what you wrote is what you meant.
+HTML is the skeleton of every page. This chapter covers the grammar (elements, attributes, nesting), the fixed document structure, the `<head>` **metadata** (data *about* the page — title, language, character set) that browsers, search engines and social networks read, the elements for text (headings, paragraphs, inline meaning, lists, links), and finally character references, comments and validation.
 
-**What you'll learn**
+**In this chapter:** 2.1 Elements, tags and attributes · 2.2 Document structure and the doctype · 2.3 The `<head>` · 2.4 Headings · 2.5 Paragraphs and text blocks · 2.6 Text-level semantics · 2.7 Lists · 2.8 Links · 2.9 Character references and comments · 2.10 Validation.
 
-| # | Topic | You will be able to… |
-|---|---|---|
-| 2.1 | Elements, tags and attributes | read and write any HTML element correctly, including void and boolean ones |
-| 2.2 | Document structure and the doctype | write a valid page skeleton from memory |
-| 2.3 | The `<head>`: charset, viewport, title, description, links | choose the right metadata for every page |
-| 2.4 | Headings | build a heading hierarchy that works for people, screen readers (software that reads pages aloud for blind users) and search |
-| 2.5 | Paragraphs and text blocks | use `p`, `br`, `hr`, `pre`, `blockquote`, `address` and understand whitespace |
-| 2.6 | Text-level semantics | pick between `strong`/`b`, `em`/`i`, `mark`, `code`, `time`… |
-| 2.7 | Lists | use `ul`, `ol` (with `start`, `reversed`, `type`), nested lists and `dl` |
-| 2.8 | Links | write absolute, relative, fragment, `mailto:`/`tel:` and download links; use `target` and `rel` safely |
-| 2.9 | Character references and comments | escape `<`, `&` and quotes; comment your markup |
-| 2.10 | Validation | find mistakes the browser silently repairs |
-
-Examples are in [`code/`](code/). Each `.html` file is shown as a screenshot from headless Chrome (Chrome run by a script, with no window); the `.mjs` scripts parse those same files with jsdom, a Node.js library that builds a browser-like DOM without a browser (`node code/01_head.mjs`).
+Examples are in [`code/`](code/). Each `.html` file is shown as a headless-Chrome screenshot; the `.mjs` scripts parse the same files with jsdom (a Node.js library that builds a browser-like DOM without a browser): `node code/01_head.mjs`.
 
 ---
 
 ## 2.1 Elements, tags and attributes
 
 ### What it is
-HTML (HyperText Markup Language) **marks up** plain text (adds labels to it that describe its structure — the labels are the *markup*): you wrap pieces of content in **tags** to say what each piece *is*.
+HTML (HyperText Markup Language) **marks up** plain text: you wrap content in **tags** that say what each piece *is*.
 
 ```html
 <a href="https://example.com" title="Opens the example site">Visit Example</a>
@@ -38,52 +25,45 @@ HTML (HyperText Markup Language) **marks up** plain text (adds labels to it that
 | Content | `Visit Example` |
 | End tag | `</a>` |
 
-- An **element** = start tag + content + end tag (`<p>Hello</p>`). Elements nest to form a tree (the DOM, [Chapter 1](../01-how-the-web-works/README.md)).
-- An **attribute** adds information to an element: `name="value"`. Quote values (double quotes are the convention); names are case-insensitive, but write them in lower case.
-- **Void elements** have no content and no end tag: `area`, `base`, `br`, `col`, `embed`, `hr`, `img`, `input`, `link`, `meta`, `source`, `track`, `wbr`. A trailing slash (`<br />`) is allowed and ignored — it is a habit from XHTML (a stricter, XML-based variant of HTML popular in the 2000s), not required.
-- **Boolean attributes** are true when present, false when absent: `<input disabled>`, `<ol reversed>`. `disabled="false"` still means *disabled* — the value is irrelevant.
-- **Nesting** must be proper: close inner elements before outer ones (`<b><i>…</i></b>`, not `<b><i>…</b></i>`).
-
-Analogy: tags are labels on moving boxes ("kitchen — fragile"). The contents are the same; the labels tell everyone how to treat them.
+- An **element** = start tag + content + end tag (`<p>Hello</p>`) — and the DOM node it becomes; a *tag* is just the `<p>`/`</p>` text. Elements nest into a tree (the DOM, [Chapter 1](../01-how-the-web-works/README.md)).
+- An **attribute** adds information: `name="value"`. Quote values (double quotes by convention); names are case-insensitive but write them lower-case.
+- **Void elements** have no content and no end tag: `area`, `base`, `br`, `col`, `embed`, `hr`, `img`, `input`, `link`, `meta`, `source`, `track`, `wbr`. A trailing slash (`<br />`) is allowed and ignored — an XHTML habit (the stricter XML-based HTML of the 2000s).
+- **Boolean attributes** are true when present, false when absent: `<input disabled>`, `<ol reversed>`. `disabled="false"` and `required="no"` still mean *on*.
+- **Nesting** must be proper: `<b><i>…</i></b>`, not `<b><i>…</b></i>`.
 
 ### Global attributes (usable on any element)
 
 | Attribute | Purpose |
 |---|---|
-| `id` | Unique identifier in the page: link target (`#id`), label/ARIA references (ARIA = extra accessibility attributes, Chapter 3), JS hook (a handle scripts use to find the element) |
-| `class` | Space-separated names for CSS and JS; many elements can share one |
-| `style` | Inline CSS — styles written directly on one element (avoid except for quick tests or dynamic values) |
-| `title` | Advisory tooltip text (a small label that pops up on mouse hover); not reliably shown on touch or read by screen readers — never put essential info only here |
-| `lang` | Language of the content (`en`, `fr-CA`) — affects pronunciation, hyphenation (splitting words across lines with a hyphen), fonts, translation |
-| `dir` | Text direction: `ltr` (left-to-right), `rtl` (right-to-left, e.g. Arabic), `auto` |
-| `hidden` | Not rendered (acts like `display: none`) |
-| `tabindex` | Focus order control — *focus* is which element currently receives keyboard input ([Chapter 3](../03-semantic-html-and-accessibility/README.md)) |
+| `id` | Unique identifier: link target (`#id`), label/ARIA references (ARIA = extra accessibility attributes, Chapter 3), JS hook |
+| `class` | Space-separated names for CSS and JS; shared by many elements |
+| `style` | Inline CSS on one element (avoid except quick tests or dynamic values) |
+| `title` | Advisory hover tooltip; not reliably shown on touch or read by screen readers — never the only place for essential info |
+| `lang` | Content language (`en`, `fr-CA`) — affects pronunciation, hyphenation, fonts, translation |
+| `dir` | Text direction: `ltr`, `rtl` (e.g. Arabic), `auto` |
+| `hidden` | Not rendered (like `display: none`) |
+| `tabindex` | Focus order — *focus* = the element receiving keyboard input ([Chapter 3](../03-semantic-html-and-accessibility/README.md)) |
 | `data-*` | Your own data for scripts: `data-product-id="42"` → `el.dataset.productId` |
-| `inert` | Makes a subtree (an element and everything inside it) unfocusable and unclickable (e.g. content behind a modal — a dialog that blocks the rest of the page) |
+| `inert` | Makes a subtree unfocusable and unclickable (e.g. content behind a modal dialog) |
 | `translate`, `spellcheck`, `contenteditable` | Translation hints, spell-check, in-place editing |
 
 ### Block-level and inline — how elements flow
-By default some elements start on a new line and take the full width (**block**: `p`, `h1`, `ul`, `div`, `section`), while others sit inside a line of text (**inline**: `a`, `strong`, `em`, `span`, `code`). This is purely a *default CSS `display` value* (the CSS property that decides how an element's box takes part in layout; [Chapter 7](../07-box-model-and-layout-basics/README.md)); the spec itself groups elements into **content categories** — *flow content* (almost everything in `body`) and *phrasing content* (text and inline-level markup). Each element has a **content model** saying what it may contain: a `<p>` may only contain phrasing content, so a `<div>` or `<ul>` inside a `<p>` is invalid (the parser actually closes the `<p>` first). An `<a>` is *transparent* (its allowed content is whatever its parent allows): it may wrap blocks (a whole card) as long as it contains no other interactive element (something users can click or type into, such as a link, button or input).
+Some elements start on a new line at full width (**block**: `p`, `h1`, `ul`, `div`, `section`); others sit inside a line (**inline**: `a`, `strong`, `em`, `span`, `code`). That is only the *default CSS `display` value* ([Chapter 7](../07-box-model-and-layout-basics/README.md)). The spec instead uses **content categories** — *flow content* (almost everything in `body`) and *phrasing content* (text and inline markup) — and each element's **content model** says what it may contain. A `<p>` takes only phrasing content, so a `<div>` or `<ul>` inside it is invalid (the parser closes the `<p>` first). An `<a>` is *transparent* (allowed content = whatever its parent allows): it may wrap blocks (a whole card) as long as it contains no other interactive element (link, button, input).
 
-`<div>` (block) and `<span>` (inline) are the generic containers: they mean nothing and exist only as hooks for CSS and JS. Use them when no meaningful element fits.
+`<div>` (block) and `<span>` (inline) are generic containers with no meaning — hooks for CSS and JS when nothing meaningful fits.
 
 ### Common mistakes
-- Unquoted attribute values with spaces: `class=big red` gives class `big` and a stray attribute `red`.
-- Repeating an `id` — ids must be unique; use `class` for groups.
-- Writing `<br></br>` or `<img></img>` — void elements have no end tag.
-- Choosing elements for their default look ("I need bold, so `<h3>`"). Choose for meaning; CSS handles looks.
-
-### Self-check
-1. Is `<input required="no">` required? → Yes — boolean attributes are on whenever present.
-2. What is the difference between an element and a tag? → A tag is the `<p>` / `</p>` text; the element is the whole thing including content (and the DOM node it becomes).
-3. Can a `<p>` contain a `<ul>`? → No; the parser would close the paragraph before the list.
+- Unquoted values with spaces: `class=big red` gives class `big` and a stray attribute `red`.
+- Repeating an `id` — use `class` for groups.
+- `<br></br>` or `<img></img>` — void elements have no end tag.
+- Choosing elements for their default look ("I need bold, so `<h3>`"). Choose by meaning; CSS handles looks.
 
 ---
 
 ## 2.2 Document structure and the doctype
 
 ### What it is
-Every HTML document has the same outer shape:
+Every document has the same outer shape:
 
 ```html
 <!DOCTYPE html>
@@ -97,14 +77,14 @@ Every HTML document has the same outer shape:
 
 | Part | Role |
 |---|---|
-| `<!DOCTYPE html>` | Must be first. Switches the browser to **standards mode**; without it you get **quirks mode**, which emulates old browser bugs (Chapter 1 showed a table ending up *inside* a paragraph). It is case-insensitive and is not an element. |
-| `<html lang="en">` | The **root element**. `lang` tells screen readers which voice/pronunciation to use, lets browsers offer translation and hyphenate correctly. It is also a WCAG requirement (WCAG = Web Content Accessibility Guidelines, the international accessibility standard; success criterion 3.1.1 Language of Page). |
-| `<head>` | Metadata: character set (how bytes map to letters), title, viewport (the visible screen area), links to CSS, scripts, icons, social previews (the card shown when a link is shared). |
+| `<!DOCTYPE html>` | Must be first. Switches on **standards mode**; without it, **quirks mode** emulates old browser bugs (Chapter 1 showed a table ending up *inside* a paragraph). Case-insensitive; not an element. |
+| `<html lang="en">` | The **root element**. `lang` sets screen-reader pronunciation, enables translation and correct hyphenation; required by WCAG (Web Content Accessibility Guidelines) success criterion 3.1.1 Language of Page. |
+| `<head>` | Metadata: character set (how bytes map to letters), title, viewport, CSS, scripts, icons, social previews (the card shown when a link is shared). |
 | `<body>` | Content. |
 
-The `html`, `head` and `body` tags are technically optional (the parser creates the elements anyway), but always write them — explicit structure is easier to read and tools expect it.
+The `html`, `head` and `body` tags are technically optional (the parser creates them), but always write them.
 
-The whole skeleton, with a realistic head, is [`code/skeleton.html`](code/skeleton.html):
+The full skeleton with a realistic head is [`code/skeleton.html`](code/skeleton.html):
 
 ```html
 <!DOCTYPE html>
@@ -131,41 +111,22 @@ The whole skeleton, with a realistic head, is [`code/skeleton.html`](code/skelet
 ```
 
 ![The skeleton page: a heading and two paragraphs; the head content is not visible](img/skeleton.png)
-*Figure 2.1 — Only the `<body>` is drawn. The head's work shows up elsewhere: the tab title and icon, search snippets, link previews.*
+*Figure 2.1 — Only the `<body>` is drawn. The head shows up elsewhere: tab title and icon, search snippets, link previews.*
 
-Older doctypes such as `<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" ...>` (DTD = Document Type Definition, the old formal grammar of a markup language) mostly still trigger standards (or "almost standards") mode — though a few legacy ones, such as HTML 4.01 Transitional without its URL, switch on quirks mode — so there is no reason to write them today.
+Old doctypes such as `<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" ...>` (DTD = Document Type Definition, the old formal grammar) mostly still trigger standards or "almost standards" mode — a few, such as HTML 4.01 Transitional without its URL, trigger quirks — so never write them today.
 
 ### Self-check
-1. What happens without a doctype? → Quirks mode: legacy layout behaviour you do not want.
-2. Why set `lang` on `<html>`? → Correct screen-reader pronunciation, translation, hyphenation; WCAG 3.1.1.
-3. Where does the `<title>` appear? → Tab/window title, bookmarks, history, search result headline — not in the page body.
+1. Where does the `<title>` appear? → Tab/window title, bookmarks, history, search-result headline — not in the page body.
 
 ---
 
 ## 2.3 The `<head>`: metadata that matters
 
 ### How it works
-The browser reads the head top to bottom before rendering. Order matters for two items: `charset` must come first, and render-blocking CSS (CSS the browser must have before it draws anything, Chapter 1) should be early so it downloads early.
+The browser reads the head top to bottom before rendering. Order matters twice: `charset` first, and render-blocking CSS (Chapter 1) early so it downloads early.
 
-The script below parses `skeleton.html` and prints what a browser, a search engine or a social network would learn from it:
+[`code/01_head.mjs`](code/01_head.mjs) parses `skeleton.html` with jsdom (as if served from `https://club.example.org/guides/trail-running`) and prints what a browser, search engine or social network learns — doctype mode, `lang`, `characterSet`, title, every `meta[name]`/`meta[property]` and `link`, comments and head children:
 
-```js
-// code/01_head.mjs
-const source = fs.readFileSync('skeleton.html');
-const { window } = new JSDOM(source, { url: 'https://club.example.org/guides/trail-running' });
-const doc = window.document;
-console.log('doctype   :', `<!DOCTYPE ${doc.doctype?.name}>`, '->', doc.compatMode);
-console.log('lang      :', doc.documentElement.lang);
-console.log('charset   :', doc.characterSet, `(declared at byte ${source.indexOf('charset')} — must be within the first 1024)`);
-console.log('title     :', doc.title);
-for (const m of doc.head.querySelectorAll('meta[name], meta[property]'))
-  console.log('meta      :', (m.name || m.getAttribute('property')).padEnd(12), '=', m.content.slice(0, 60));
-for (const l of doc.head.querySelectorAll('link'))
-  console.log('link      :', l.rel.padEnd(12), '->', l.href.slice(0, 60));
-// ... comments and head children
-```
-
-Output:
 ```
 doctype   : <!DOCTYPE html> -> CSS1Compat
 lang      : en
@@ -188,66 +149,55 @@ head children: meta, meta, title, meta, link, link, meta, meta, meta, style
 
 | Element | Example | Why |
 |---|---|---|
-| `<meta charset="utf-8">` | — | Tells the browser how to turn bytes into characters. Must appear within the **first 1024 bytes**. UTF-8 (the universal encoding that covers every language and emoji) is the only encoding you should use; without it accented letters and emoji can turn into garbage ("cafÃ©"). An HTTP `Content-Type: …; charset=` header overrides it. |
-| `<meta name="viewport">` | `content="width=device-width, initial-scale=1"` | Without it, phones pretend the screen is ~980 px wide and shrink the page. This line makes CSS pixels (the browser's logical pixel unit, which may span several physical screen dots) match the device width — the foundation of responsive design (layouts that adapt to any screen size, [Chapter 10](../10-responsive-design/README.md)). Do **not** add `maximum-scale=1` or `user-scalable=no`: blocking zoom fails WCAG 1.4.4 (Resize Text). |
-| `<title>` | `Trail Running Basics — Mountain Club` | Required. Unique and descriptive per page, most specific part first. It is the first thing a screen reader announces and the headline in search results. |
-| `<meta name="description">` | one or two sentences | Often used as the search-result snippet (the short summary under the link; search engines may choose other text). Snippets are usually cut at about 150–160 characters. Not a ranking trick (it does not move you up the results); it is a sales pitch for the click. |
+| `<meta charset="utf-8">` | — | How to turn bytes into characters. Must be within the **first 1024 bytes**. Use UTF-8 (the universal encoding covering every language and emoji) only; otherwise accents turn to garbage ("cafÃ©"). An HTTP `Content-Type: …; charset=` header overrides it. |
+| `<meta name="viewport">` | `content="width=device-width, initial-scale=1"` | Without it phones lay out at ~980 px and shrink the page. Makes CSS pixels (logical pixels, possibly several device dots each) match the device width — the foundation of responsive design ([Chapter 10](../10-responsive-design/README.md)). Never add `maximum-scale=1` or `user-scalable=no`: blocking zoom fails WCAG 1.4.4 (Resize Text). |
+| `<title>` | `Trail Running Basics — Mountain Club` | Required. Unique per page, most specific part first. First thing a screen reader announces; the search-result headline. |
+| `<meta name="description">` | one or two sentences | Often the search snippet (engines may pick other text), usually cut at ~150–160 characters. Not a ranking factor — a pitch for the click. Not visible on the page. |
 | `<link rel="stylesheet">` | `href="css/style.css"` | Loads CSS (render-blocking). |
 | `<script src defer>` / `type="module"` | `src="js/app.js"` | Loads JS without blocking the parser (Chapter 1). |
-| `<link rel="icon">` | `.ico`, `.png` or `.svg` (SVG = a vector image format, Chapter 4) | The tab icon (favicon). Add `rel="apple-touch-icon"` for iOS home screens. |
-| `<link rel="canonical">` | full URL | Tells search engines the preferred ("canonical" = official) URL when the same content is reachable at several addresses. |
-| Open Graph (a metadata format started by Facebook) / Twitter Card metas | `property="og:title"`, `og:description`, `og:image` | Control the preview card when the link is shared on social networks and chat apps. |
-| `<meta name="theme-color">` | `#f97316` (a hex colour code) | Tints the browser UI (user interface — its toolbars and address bar) on some mobile browsers. |
+| `<link rel="icon">` | `.ico`, `.png` or `.svg` (Chapter 4) | The tab icon (favicon). Add `rel="apple-touch-icon"` for iOS home screens. |
+| `<link rel="canonical">` | full URL | The preferred ("official") URL when the same content lives at several addresses. |
+| Open Graph (Facebook-originated) / Twitter Card metas | `property="og:title"`, `og:description`, `og:image` | The preview card on social networks and chat apps. |
+| `<meta name="theme-color">` | `#f97316` | Tints the browser UI on some mobile browsers. |
 | `<meta name="robots">` | `content="noindex"` | Keeps a page out of search results. |
-| `<base href>` | `href="/docs/"` | Changes the base for *all* relative URLs on the page. Rarely a good idea — it surprises people. |
-| `<link rel="preload">`, `rel="preconnect"` | fonts, hero image (the large banner image at the top), CDN origin | Performance hints ("fetch this early", "connect to this server early") ([Chapter 14](../14-performance-seo-interview-and-cheatsheet/README.md)). |
+| `<base href>` | `href="/docs/"` | Changes the base for *all* relative URLs. Rarely a good idea — it surprises people. |
+| `<link rel="preload">`, `rel="preconnect"` | fonts, hero image, CDN origin | "Fetch this early" / "connect early" hints ([Chapter 14](../14-performance-seo-interview-and-cheatsheet/README.md)). |
 
-A useful habit is a **template** you copy for every new page: doctype, `lang`, charset, viewport, title, description, stylesheet, deferred script.
+Keep a copy-paste **template**: doctype, `lang`, charset, viewport, title, description, stylesheet, deferred script.
 
 ### Common mistakes
-- `<meta charset>` placed after a long comment or `<title>` with non-ASCII characters (anything outside basic English letters, digits and punctuation, such as é or emoji) — it may fall outside the first 1024 bytes.
-- The same `<title>` ("Home") on every page — useless in tabs, bookmarks and search results.
-- Putting visible content in the head: the parser moves it into the body anyway.
+- `<meta charset>` after a long comment or a non-ASCII `<title>` (é, emoji…) — it may fall outside the first 1024 bytes.
+- The same `<title>` ("Home") on every page.
+- Visible content in the head: the parser moves it into the body.
 - Disabling zoom in the viewport tag.
-
-### Self-check
-1. Which head element must come first, and why? → `<meta charset>`, because the browser needs the encoding before interpreting the rest (within 1024 bytes).
-2. What breaks on a phone without the viewport meta? → The page lays out at ~980 px and is shrunk, so text is tiny.
-3. Is the meta description visible on the page? → No; it may appear in search snippets.
 
 ---
 
 ## 2.4 Headings
 
 ### What it is
-`<h1>`…`<h6>` are section headings, `h1` the most important. Together they form the page's **outline** — its table of contents.
+`<h1>`…`<h6>` are section headings, `h1` most important; together they form the page's **outline**.
 
 ### Why it matters
-- **Screen-reader users** navigate by headings: in WebAIM's (a US non-profit accessibility organisation) screen-reader user surveys, a large majority say that jumping through the headings is the first thing they do to find information on a long page. A clean hierarchy is the fastest way through your content ([Chapter 3](../03-semantic-html-and-accessibility/README.md)).
-- **Everyone** skims headings before reading.
-- **Search engines** use headings to understand what each part of a page is about.
+- **Screen-reader users** navigate by headings: in WebAIM's (a US accessibility non-profit) surveys, a large majority say jumping through headings is how they first find information on a long page ([Chapter 3](../03-semantic-html-and-accessibility/README.md)).
+- **Everyone** skims headings; **search engines** use them to understand each part of the page.
 
 ![Headings h1 to h6 at decreasing default sizes, followed by paragraph, br, hr, pre, blockquote and address examples](img/text-blocks.png)
-*Figure 2.2 — `code/text-blocks.html`: the six heading levels at their default sizes, then the block text elements from §2.5.*
+*Figure 2.2 — `code/text-blocks.html`: the six heading levels at default sizes, then the block text elements from §2.5.*
 
 ### Rules that work
-1. **One `<h1>` per page** describing the page (usually close to the `<title>`). The spec allows more, but a single `h1` is the clear best practice.
-2. **Don't skip levels going down**: after `h2`, the next subheading is `h3`, not `h4`. Going back up any number of levels is fine (`h4` → `h2`).
-3. **Choose the level by structure, never by size.** Want a small `h2`? Style it with CSS.
-4. **Don't use headings for non-headings** (a big bold slogan is a `<p>` with a class).
-5. A heading plus a subtitle/tagline: wrap them in `<hgroup>` — `<hgroup><h1>Title</h1><p>Tagline</p></hgroup>` — so the tagline is not a fake heading.
+1. **One `<h1>` per page**, describing it (usually close to the `<title>`). The spec allows more; one is clear best practice.
+2. **Don't skip levels going down** (`h2` → `h3`, not `h4`). Going back up any number (`h4` → `h2`) is fine — it starts a new major section.
+3. **Choose the level by structure, never size.** Want a small `h2`? Use CSS.
+4. **Don't use headings for non-headings** (a big slogan is a `<p>` with a class).
+5. Heading + tagline: `<hgroup><h1>Title</h1><p>Tagline</p></hgroup>` — so the tagline isn't a fake heading.
 
-**There is no "document outline algorithm".** Older HTML5 drafts described one in which every `<section>` restarted heading levels, so each section could use its own `h1`. No browser or screen reader ever implemented it, and the WHATWG removed it from the spec in 2022. Heading levels are simply what the numbers say.
+**There is no "document outline algorithm".** Old HTML5 drafts let each `<section>` restart heading levels (so every section could use `h1`). No browser or screen reader implemented it and the WHATWG removed it in 2022: heading levels are what the numbers say, and `<section>` doesn't change them.
 
 ### Common mistakes
-- Using `<h4>` because it "looks right" — a screen reader announces "heading level 4" and users assume there are missing sections.
+- `<h4>` because it "looks right" — a screen reader announces "heading level 4" and users assume missing sections.
 - Several `h1`s in a template (logo *and* page title).
-- Headings made from `<div class="title">` — they look like headings but do not appear in any heading list.
-
-### Self-check
-1. After an `h2`, may the next heading be an `h4`? → Not for a subsection (skip). Use `h3`.
-2. After an `h4`, may the next heading be an `h2`? → Yes — it starts a new major section.
-3. Does wrapping content in `<section>` change heading levels? → No; there is no outline algorithm.
+- `<div class="title">` headings — they appear in no heading list.
 
 ---
 
@@ -256,28 +206,23 @@ A useful habit is a **template** you copy for every new page: doctype, `lang`, c
 ### What it is
 | Element | Meaning | Notes |
 |---|---|---|
-| `<p>` | A paragraph | The workhorse. Don't use empty `<p>`s for spacing — use CSS `margin`. |
-| `<br>` | A line break that is part of the content | Addresses, poems, song lyrics. Never for layout spacing. |
-| `<hr>` | A thematic break between paragraphs (topic change, scene change) | Drawn as a line; screen readers may announce a separator. For a purely decorative line, use a CSS border. |
-| `<pre>` | Preformatted text: whitespace and line breaks kept, monospace font (every character the same width) | Code blocks (`<pre><code>…</code></pre>`), ASCII art (pictures drawn with keyboard characters) |
-| `<blockquote>` | A long quotation from another source | Optional `cite="URL"` attribute (not shown); put the visible attribution outside or in a `<figcaption>` (a caption element, Chapter 4) |
-| `<address>` | Contact information for the nearest `<article>` or the whole page | Not for any postal address in text |
-| `<div>` | Generic block container, no meaning | Use when nothing else fits |
+| `<p>` | A paragraph | Don't use empty `<p>`s for spacing — use CSS `margin`. |
+| `<br>` | A line break that is part of the content | Addresses, poems, lyrics. Never for layout spacing. |
+| `<hr>` | A thematic break (topic or scene change) | Drawn as a line; may be announced as a separator. Decorative lines → CSS border. |
+| `<pre>` | Preformatted text: whitespace and line breaks kept, monospace font | Code blocks (`<pre><code>…</code></pre>`), ASCII art |
+| `<blockquote>` | A long quotation from another source | Optional `cite="URL"` (not shown); visible attribution outside it or in a `<figcaption>` (Chapter 4) |
+| `<address>` | Contact information for the nearest `<article>` or the page | Not for any postal address in text |
+| `<div>` | Generic block container, no meaning | When nothing else fits |
 
 ### Whitespace collapsing
-In normal text, HTML **collapses whitespace**: any run of spaces, tabs and newlines becomes a single space, and leading/trailing whitespace in a line is dropped. That is why the paragraph in Figure 2.2 shows single spaces even though the source has many. You can indent your HTML freely. To keep whitespace, use `<pre>` or the CSS `white-space` property; to force a space that never breaks a line, use `&nbsp;` (§2.9).
-
-### Self-check
-1. How do you add space between two paragraphs? → CSS `margin`, not `<br>` or empty paragraphs.
-2. When is `<br>` correct? → When the line break is part of the content itself (poem, address).
-3. Why do five spaces in your source show as one? → Whitespace collapsing.
+In normal text any run of spaces, tabs and newlines **collapses** to one space, and leading/trailing whitespace in a line is dropped — so you can indent HTML freely. To keep whitespace use `<pre>` or CSS `white-space`; for a space that never breaks a line use `&nbsp;` (§2.9).
 
 ---
 
 ## 2.6 Text-level semantics
 
 ### What it is
-Inline elements that say what a *phrase* is. Browsers give most of them a default look (bold, italic, monospace), but the look is secondary: choose by meaning, then style with CSS.
+Inline elements that say what a *phrase* is. Most have a default look, but choose by meaning, then style with CSS.
 
 ![A table showing each inline element with a rendered example: strong, em, b, i, mark, small, s, del and ins, sub and sup, code, kbd, samp, var, abbr, dfn, cite, q, time, data, u, bdi, wbr, span](img/inline-semantics.png)
 *Figure 2.3 — `code/inline-semantics.html`: every common text-level element with its default rendering.*
@@ -285,41 +230,36 @@ Inline elements that say what a *phrase* is. Browsers give most of them a defaul
 | Element | Means | Use for | Not for |
 |---|---|---|---|
 | `<strong>` | Strong importance, seriousness or urgency | Warnings, key facts | Headings, general "make it bold" |
-| `<em>` | Stress emphasis that changes the meaning of the sentence | "I *said* tomorrow" | Titles, foreign words |
+| `<em>` | Stress emphasis that changes the meaning | "I *said* tomorrow" | Titles, foreign words |
 | `<b>` | Draw attention without extra importance | Keywords, product names in a review, lead sentence | Importance (use `strong`) |
 | `<i>` | Different voice or mood | Technical terms, foreign phrases (`<i lang="fr">`), ship names, thoughts | Emphasis (use `em`), icons |
-| `<mark>` | Highlighted because of relevance to the current context | Search matches | General highlighting for style |
+| `<mark>` | Highlighted for relevance to the current context | Search matches | Style-only highlighting |
 | `<small>` | Side comments, fine print | Copyright, legal notes | Making text small for design |
 | `<s>` | No longer accurate or relevant | Old price | Document edits (use `del`) |
 | `<del>` / `<ins>` | Removed / added text in an edit | Change tracking; optional `datetime`, `cite` | — |
 | `<sub>` / `<sup>` | Subscript / superscript required by typography | H₂O, footnote markers, 1st | Pure visual offsets |
-| `<code>` | A fragment of computer code | Inline code; blocks in `<pre><code>` | — |
-| `<kbd>` | User input (keys, commands to type) | <kbd>Ctrl</kbd>+<kbd>C</kbd> | — |
-| `<samp>` | Sample output from a program | Error messages | — |
-| `<var>` | A variable in maths or programming | *x*, *w* × *h* | — |
-| `<abbr>` | Abbreviation or acronym; `title` gives the expansion | First use of "HTML" — but also write the expansion in the text once, since `title` is not reliably exposed | — |
-| `<dfn>` | The defining instance of a term | Where a term is first defined | Every later mention |
+| `<code>` | Computer code fragment | Inline code; blocks in `<pre><code>` | — |
+| `<kbd>` | User input (keys, commands) | <kbd>Ctrl</kbd>+<kbd>C</kbd> | — |
+| `<samp>` | Sample program output | Error messages | — |
+| `<var>` | A maths/programming variable | *x*, *w* × *h* | — |
+| `<abbr>` | Abbreviation; `title` gives the expansion | First use of "HTML" — also write the expansion in text, since `title` is not reliably exposed | — |
+| `<dfn>` | The defining instance of a term | Where a term is first defined | Later mentions |
 | `<cite>` | Title of a creative work | Books, films, papers | People's names |
-| `<q>` | Short inline quotation; browser adds quotation marks | "She said *ship it*" | Long quotes (`blockquote`) |
-| `<time>` | A date/time with a machine-readable `datetime` | `<time datetime="2026-10-03T19:00">Saturday at 7 pm</time>` | — |
+| `<q>` | Short inline quotation; browser adds quote marks | "She said *ship it*" | Long quotes (`blockquote`) |
+| `<time>` | Date/time with a machine-readable `datetime` | `<time datetime="2026-10-03T19:00">Saturday at 7 pm</time>` | — |
 | `<data>` | Content with a machine-readable `value` | Product IDs, numbers | Dates (use `time`) |
-| `<u>` | Unarticulated, non-textual annotation | Spelling-error squiggles, Chinese proper-name marks | Links look alike — avoid in normal text |
-| `<bdi>` | Isolate text whose direction is unknown | User names that may be Arabic/Hebrew in an LTR (left-to-right) page | — |
-| `<wbr>` | A place where a long word *may* break | Long URLs, compound words | — |
-| `<span>` | Nothing — a styling/scripting hook | When no element above fits | — |
+| `<u>` | Unarticulated, non-textual annotation | Spelling-error squiggles, Chinese proper-name marks | Normal text (looks like a link) |
+| `<bdi>` | Isolates text of unknown direction | User names that may be Arabic/Hebrew in an LTR page | — |
+| `<wbr>` | Where a long word *may* break | Long URLs, compound words | — |
+| `<span>` | Nothing — styling/scripting hook | When nothing above fits | — |
 
 ### Why it matters
-Semantics feed machines: `<time datetime>` lets calendars and search engines read dates; `<code>` gets monospace in reader modes; `<abbr>`, `<dfn>` and `lang` help translation and screen readers. Note that most screen readers **do not** announce `<strong>` or `<em>` by default, so never rely on them alone to convey critical information — say it in words too ("Warning: …").
+`<time datetime>` lets calendars and search engines read dates; `<code>` stays monospace in reader modes; `<abbr>`, `<dfn>` and `lang` help translation and screen readers. Most screen readers **do not** announce `<strong>`/`<em>` by default, so state critical information in words too ("Warning: …").
 
 ### Common mistakes
-- Using `<i>` for icons (`<i class="icon-star">`): it is a legacy habit from icon fonts (fonts whose "letters" are pictures); use `<span aria-hidden="true">` (hidden from screen readers) or an SVG.
-- Wrapping whole paragraphs in `<strong>`: if everything is important, nothing is.
+- `<i class="icon-star">` for icons — a legacy icon-font habit; use `<span aria-hidden="true">` (hidden from screen readers) or an SVG.
+- Whole paragraphs in `<strong>`: if everything is important, nothing is.
 - `<cite>` around a person's name.
-
-### Self-check
-1. `<b>` or `<strong>` for "Warning: this deletes your account"? → `<strong>` (importance).
-2. How do you mark a date so machines can read it? → `<time datetime="2026-10-03">…</time>`.
-3. Which element shows keyboard keys? → `<kbd>`.
 
 ---
 
@@ -331,16 +271,14 @@ Semantics feed machines: `<time datetime>` lets calendars and search engines rea
 |---|---|---|
 | `<ul>` | Order doesn't matter (shopping list, nav links, features) | `<li>` |
 | `<ol>` | Order matters (steps, rankings, legal clauses) | `<li>` |
-| `<dl>` | Name–value groups (glossary, metadata, FAQ) | `<dt>` term(s) + `<dd>` description(s); groups may be wrapped in a `<div>` for styling |
+| `<dl>` | Name–value groups (glossary, metadata, FAQ) | `<dt>` term(s) + `<dd>` description(s); groups may be wrapped in a `<div>` |
 | `<menu>` | A toolbar of commands | Semantically the same as `<ul>` |
 
-`<ol>` attributes:
-
-| Attribute | Effect |
+| `<ol>` attribute | Effect |
 |---|---|
 | `start="4"` | First number is 4 |
 | `reversed` | Counts down |
-| `type="1 | a | A | i | I"` | Numbering style (use it only when the style is part of the meaning, e.g. legal clause "(a)"; otherwise CSS `list-style-type`) |
+| `type="1 | a | A | i | I"` | Numbering style (only when part of the meaning, e.g. legal "(a)"; otherwise CSS `list-style-type`) |
 | `<li value="10">` | Sets this item's number; later items continue from it |
 
 ```html
@@ -366,25 +304,20 @@ Semantics feed machines: `<time datetime>` lets calendars and search engines rea
 *Figure 2.4 — `code/lists.html` in Chrome.*
 
 ### Why it matters
-Screen readers announce "list, 3 items" and let users jump between lists and items, so a real list tells users how much is coming. Navigation menus are usually `<nav><ul>…</ul></nav>`.
+Screen readers announce "list, 3 items" and let users jump between lists and items. Navigation menus are usually `<nav><ul>…</ul></nav>`.
 
 ### Common mistakes
-- Putting anything other than `<li>` directly inside `<ul>`/`<ol>` (a `<p>` or `<div>`) — invalid, and the list semantics break.
-- Nesting a sub-list as a sibling of `<li>` instead of inside one.
-- Faking lists with `<br>` and "•" characters.
-- Removing bullets with `list-style: none` — fine visually, but Safari/VoiceOver (Apple's built-in screen reader) then stops announcing it as a list; add `role="list"` (an ARIA attribute that states what the element is, Chapter 3) to the `<ul>` if the count matters.
-
-### Self-check
-1. Recipe steps: `ul` or `ol`? → `ol`.
-2. Where does a nested list go? → Inside the parent `<li>`.
-3. What pairs make up a `<dl>`? → `<dt>` terms and `<dd>` descriptions.
+- Anything other than `<li>` directly inside `<ul>`/`<ol>` (a `<p>`, `<div>`) — invalid; list semantics break.
+- A sub-list as a sibling of `<li>` instead of inside one.
+- Fake lists with `<br>` and "•".
+- `list-style: none` — then Safari/VoiceOver (Apple's screen reader) stops announcing a list; add `role="list"` (ARIA, Chapter 3) if the count matters.
 
 ---
 
 ## 2.8 Links
 
 ### What it is
-`<a href="…">` — the *anchor* element — is the "hyper" in hypertext. Its content (text, image, even a whole card) becomes clickable and keyboard-focusable, and activating it navigates to the `href` URL.
+`<a href="…">` — the *anchor* — is the "hyper" in hypertext. Its content (text, image, a whole card) becomes clickable and keyboard-focusable; activating it navigates to the `href`.
 
 ```html
 <!-- code/links.html (excerpt) -->
@@ -405,20 +338,8 @@ Screen readers announce "list, 3 items" and let users jump between lists and ite
 ![A list of link examples in default blue underlined style; the placeholder link without href is plain black text](img/links.png)
 *Figure 2.5 — `code/links.html`. The `<a>` without `href` is not styled or focusable as a link.*
 
-The next script opens the same file as if it lived at `https://club.example.org/guides/html/links.html` and shows how each `href` resolves:
+[`code/02_links.mjs`](code/02_links.mjs) loads the file as if it lived at `https://club.example.org/guides/html/links.html` and prints how each `href` resolves:
 
-```js
-// code/02_links.mjs (key parts)
-const { window } = new JSDOM(fs.readFileSync('links.html'), { url: 'https://club.example.org/guides/html/links.html' });
-const doc = window.document;
-console.log('attribute vs property:', doc.querySelector('a[href="text-blocks.html"]').getAttribute('href'), '->',
-            doc.querySelector('a[href="text-blocks.html"]').href, '\n');
-for (const a of doc.querySelectorAll('a')) {
-  // prints text, the resolved a.href, protocol, target, rel, download, and same-page jumps
-}
-```
-
-Output:
 ```
 attribute vs property: text-blocks.html -> https://club.example.org/guides/html/text-blocks.html 
 
@@ -435,75 +356,64 @@ Placeholder link (no href) (no href: not in document.links = false)
 Back to top                https://club.example.org/guides/html/links.html#top     https: same-page jump to #top
 ```
 
-The `href` *attribute* holds what you typed; the `.href` *property* is the fully resolved URL (see [§1.2](../01-how-the-web-works/README.md) for the resolution rules).
+The `href` *attribute* holds what you typed; the `.href` *property* is the resolved URL ([§1.2](../01-how-the-web-works/README.md) rules). `href="#faq"` scrolls to `id="faq"` with no request.
 
 ### Link attributes
 
 | Attribute | What it does | Notes |
 |---|---|---|
-| `href` | Destination URL | Without it, `<a>` is a placeholder: not a link, not focusable |
-| `target="_blank"` | Open in a new tab/window | Other values: `_self` (default), `_parent`, `_top`, or a named window |
-| `rel` | Relationship of the target to this page | Space-separated list, see below |
-| `download` | Download instead of navigate; value = suggested file name | Only for same-origin (same scheme, host and port), `blob:` (in-memory file made by JS) or `data:` (file contents inside the URL) URLs |
-| `hreflang`, `type` | Hints about the target's language / MIME type (a label such as `text/html` or `image/png` naming a file's format) | Advisory |
-| `referrerpolicy` | How much of this page's URL to send in `Referer` | e.g. `no-referrer` |
-| `ping` | URLs to notify when the link is followed | Tracking; not supported in every browser |
+| `href` | Destination URL | Without it `<a>` is a placeholder: not a link, not focusable |
+| `target="_blank"` | Open in a new tab/window | Others: `_self` (default), `_parent`, `_top`, a named window |
+| `rel` | Relationship of the target to this page | Space-separated, see below |
+| `download` | Download instead of navigate; value = suggested file name | Only same-origin, `blob:` (in-memory file made by JS) or `data:` URLs; ignored cross-origin (navigates normally) |
+| `hreflang`, `type` | Hints about the target's language / MIME type (format label such as `text/html`) | Advisory |
+| `referrerpolicy` | How much of this URL to send in `Referer` | e.g. `no-referrer` |
+| `ping` | URLs to notify when followed | Tracking; not in every browser |
 
 | `rel` value | Meaning |
 |---|---|
-| `noopener` | The new page gets no `window.opener` reference (a JS handle back to the page that opened it), so it cannot redirect your tab ("reverse tabnabbing" — swapping your original tab for a fake page). Modern browsers apply this automatically to `target="_blank"`; writing it explicitly is harmless. |
-| `noreferrer` | Also don't send the `Referer` header (implies `noopener`) |
-| `nofollow` | "I don't vouch for this link" — search engines treat it as a hint |
-| `sponsored` | Paid or affiliate link (one that earns you commission; search engines ask you to mark these) |
-| `ugc` | User-generated content link (comments, forum posts) |
+| `noopener` | The new page gets no `window.opener` (a JS handle back to your page), so it cannot redirect your tab to a phishing page ("reverse tabnabbing"). Modern browsers apply it automatically to `target="_blank"`; writing it is harmless. |
+| `noreferrer` | Also don't send `Referer` (implies `noopener`) |
+| `nofollow` | "I don't vouch for this link" — a hint to search engines |
+| `sponsored` | Paid or affiliate link (search engines ask you to mark these) |
+| `ugc` | User-generated content link (comments, forums) |
 | `external`, `author`, `license`, `next`, `prev` | Descriptive relations |
 
 ### Opening new tabs — should you?
-Mostly no. Users can choose to open a new tab themselves; forcing one breaks the Back button and can disorient screen-reader and mobile users. Reasonable exceptions: links that would interrupt a form or a playing video, and help pages beside a task. When you do it, say so in the link text ("(opens in new tab)") or with an icon that has a text alternative.
+Mostly no: forcing one breaks Back and can disorient screen-reader and mobile users, who can open tabs themselves. Exceptions: links that would interrupt a form or playing video, help pages beside a task. Then say so ("(opens in new tab)" or an icon with a text alternative).
 
 ### Links vs buttons
-- A **link** goes somewhere (a URL). Keyboard: Enter.
-- A **button** does something on this page (submit, open a menu, toggle). Keyboard: Enter or Space.
-
-`<a href="#" onclick="…">` pretends to be a button: it adds `#` to the URL, scrolls to the top without JS, and screen readers announce "link". Use `<button type="button">` ([Chapter 3](../03-semantic-html-and-accessibility/README.md)).
+A **link** goes somewhere (a URL; Enter activates). A **button** does something on this page (submit, toggle, open a menu; Enter or Space). `<a href="#" onclick="…">` fakes a button: it adds `#` to the URL, jumps to the top without JS, and is announced as "link". Use `<button type="button">` ([Chapter 3](../03-semantic-html-and-accessibility/README.md)).
 
 ### Writing good link text
-Link text must make sense out of context — screen-reader users often pull up a list of all links. "Click here", "read more" and bare URLs are meaningless in that list. Write "Download the 2026 price list (PDF, 2 MB)" instead of "Click here to download". This is WCAG 2.4.4 (Link Purpose (In Context)).
+Link text must make sense out of context — screen-reader users often list all links, where "Click here", "read more" and bare URLs mean nothing. Write "Download the 2026 price list (PDF, 2 MB)". This is WCAG 2.4.4 (Link Purpose (In Context)).
 
 ### Real-world examples
-- "Skip to main content" links at the top of big sites are fragment links (`href="#main"`) — [Chapter 3](../03-semantic-html-and-accessibility/README.md).
-- GitHub and MDN give every heading an `id` so you can link straight to a section.
-- Shops use `tel:` links so mobile users can call with one tap.
+- "Skip to main content" links are fragment links (`href="#main"`) — [Chapter 3](../03-semantic-html-and-accessibility/README.md).
+- GitHub and MDN give every heading an `id` for deep links; shops use `tel:` for one-tap calls.
 
 ### Common mistakes
-- Links with no text (only an icon) — they have no accessible name (the label a screen reader announces for an element).
-- `href="www.example.com"` without `https://` — treated as a *relative* path (`/current/www.example.com`).
-- Two links next to each other going to the same place (image + title of a card) — noisy for keyboard and screen-reader users; wrap both in one link.
+- Icon-only links with no text — no accessible name (the label a screen reader announces).
+- `href="www.example.com"` without `https://` — a *relative* path (`/current/www.example.com`).
+- Two adjacent links to the same place (card image + title) — noisy for keyboard and screen-reader users; wrap both in one link.
 
 ### In the interview
-**30-second answer:** "An anchor with an `href` navigates to a URL — absolute, relative, fragment or another scheme like `mailto:`. I keep link text meaningful out of context, avoid `href="#"` for actions because those should be buttons, and use `target="_blank"` sparingly. `rel` describes the relationship: `noopener`/`noreferrer` for security and privacy, `nofollow`/`sponsored`/`ugc` for search engines."
+**30-second answer:** "An anchor with an `href` navigates to a URL — absolute, relative, fragment or another scheme like `mailto:`. I keep link text meaningful out of context, never use `href="#"` for actions because those are buttons, and use `target="_blank"` sparingly. `rel` describes the relationship: `noopener`/`noreferrer` for security and privacy, `nofollow`/`sponsored`/`ugc` for search engines."
 
-- *Why was `rel="noopener"` needed with `target="_blank"`?* → The opened page could use `window.opener.location` to swap your tab for a phishing page (a fake page that tricks you into typing passwords). Browsers now imply `noopener` for `_blank`.
-- *Link or button for "Add to cart"?* → Button: it performs an action on the current page.
-- *What does `download` do on a cross-origin URL (one on a different origin from the page)?* → It is ignored; the browser navigates normally.
-
-### Self-check
-1. What does `href="#faq"` do? → Scrolls to the element with `id="faq"` on the same page (no request).
-2. Why is "click here" bad link text? → It is meaningless out of context, e.g. in a screen reader's link list (WCAG 2.4.4).
-3. Is `<a>` without `href` keyboard-focusable? → No.
+- *Why was `rel="noopener"` needed with `target="_blank"`?* → The opened page could set `window.opener.location` to swap your tab for a phishing page. Browsers now imply `noopener` for `_blank`.
+- *Link or button for "Add to cart"?* → Button: an action on the current page.
+- *`download` on a cross-origin URL?* → Ignored; the browser navigates normally.
 
 ---
 
 ## 2.9 Character references and comments
 
 ### What it is
-Some characters have special meaning in HTML: `<` starts a tag and `&` starts a **character reference**. To show them as text you write a reference instead:
+`<` starts a tag and `&` starts a **character reference**, so to show them as text you write a reference:
 
-- **Named**: `&lt;` `&gt;` `&amp;` `&quot;` `&nbsp;` `&copy;`
-- **Decimal**: `&#60;` (the Unicode code point in decimal — Unicode is the worldwide catalogue that gives every character a number, its *code point*)
-- **Hexadecimal** (base 16, digits 0–9 and A–F): `&#x3C;`
-
-People often call them "entities" (strictly, *named character references*).
+- **Named**: `&lt;` `&gt;` `&amp;` `&quot;` `&nbsp;` `&copy;` (often called "entities"; strictly *named character references*)
+- **Decimal**: `&#60;` — the Unicode *code point* (each character's number in the Unicode catalogue)
+- **Hexadecimal**: `&#x3C;`
 
 ![A table of character references: less-than, greater-than, ampersand, quotes, non-breaking space, copyright, em dash, euro sign and soft hyphen, with named and numeric forms](img/entities.png)
 *Figure 2.6 — `code/entities.html`: what each reference renders as.*
@@ -512,10 +422,10 @@ With `<meta charset="utf-8">` you can type almost any character directly (©, �
 
 | Character | Where | Reference |
 |---|---|---|
-| `<` | In text | `&lt;` |
-| `&` | In text or attributes, when followed by something that looks like a reference | `&amp;` (always escaping it is simplest) |
+| `<` | In text | `&lt;` (so the text `<br>` is `&lt;br&gt;`, or set via `textContent`) |
+| `&` | In text or attributes, when followed by something that looks like a reference | `&amp;` (always escaping is simplest) |
 | `"` / `'` | Inside an attribute quoted with the same character | `&quot;` / `&#39;` |
-| Invisible characters | Non-breaking space, soft hyphen, zero-width characters | `&nbsp;`, `&shy;`, `&#8203;` — references make them visible in your source |
+| Invisible characters | Non-breaking space, soft hyphen, zero-width characters | `&nbsp;`, `&shy;`, `&#8203;` — visible in your source |
 
 ```js
 // code/03_entities.mjs
@@ -550,33 +460,27 @@ bare &      : AT&T, R&D, a&b=1
 in text     : price©=1 | in href: ?a=1&copy=2
 ```
 
-What it shows:
-1. The parser **decodes** references into ordinary characters; `&copy;`, `&#169;` and `&#xA9;` are the same `©`.
-2. `&nbsp;` is the real character U+00A0 (code `a0`), not a space; use it to keep "10 km" or "Mr. Smith" on one line.
-3. When serialising (turning the DOM back into HTML text, e.g. reading `innerHTML`), the browser escapes `&`, `<`, `>` and non-breaking spaces again.
-4. Setting `textContent` is safe: markup becomes text. Building HTML strings from user input and assigning them to `innerHTML` is how **cross-site scripting (XSS)** happens — an attacker gets their own script to run inside your page — covered in the JavaScript book.
-5. A bare `&` usually survives, but it is fragile: about a hundred legacy names such as `&copy` are decoded even *without* a semicolon, so the text `price&copy=1` shows as `price©=1`. (Inside attributes the parser has a special rule that leaves `&copy=` alone, which is why most query strings survive.) Writing `&amp;` removes all doubt.
+1. The parser **decodes** references; `&copy;`, `&#169;` and `&#xA9;` are the same `©`.
+2. `&nbsp;` is the real character U+00A0 (`a0`), not a space — keeps "10 km" or "Mr. Smith" on one line.
+3. When **serialising** (DOM → HTML text, e.g. reading `innerHTML`) the browser re-escapes `&`, `<`, `>` and non-breaking spaces.
+4. Setting `textContent` is safe: markup becomes text. Assigning user input to `innerHTML` is how **cross-site scripting (XSS)** happens — an attacker's script runs in your page (JavaScript book).
+5. A bare `&` usually survives but is fragile: ~100 legacy names such as `&copy` decode even *without* a semicolon, so `price&copy=1` shows `price©=1`. In attributes a special rule leaves `&copy=` alone, which is why most query strings survive. `&amp;` removes all doubt.
 
 ### Comments
 ```html
 <!-- This is a comment. It can span
      several lines. It is not displayed. -->
 ```
-Comments stay in the DOM as comment nodes (the `01_head.mjs` output above found one) and are **visible to anyone** with View Source — never put passwords, internal URLs or rude notes in them. They cannot be nested, and `--` inside a comment is best avoided. Build tools (programs that process your source files before publishing) usually strip them from production HTML (the version served to real users).
-
-### Self-check
-1. How do you display the text `<br>` on a page? → `&lt;br&gt;` (or set it with `textContent`).
-2. Is `&#169;` the same as `&copy;`? → Yes, both are ©.
-3. Can users see HTML comments? → Yes, in the page source.
+Comments stay in the DOM as comment nodes (`01_head.mjs` found one) and are **visible to anyone** via View Source — never put passwords, internal URLs or rude notes in them. They cannot nest; avoid `--` inside. Build tools usually strip them from production HTML.
 
 ---
 
 ## 2.10 Validation
 
 ### The problem it solves
-Browsers never show HTML errors. They silently repair them ([Chapter 1](../01-how-the-web-works/README.md)) — so a broken page often *looks* fine to you while behaving differently for screen readers, search engines, other browsers, or your CSS and JavaScript.
+Browsers never show HTML errors — they silently repair them ([Chapter 1](../01-how-the-web-works/README.md)), because the spec requires recovery. A broken page can *look* fine while behaving differently for screen readers, search engines, other browsers, or your CSS and JS.
 
-Here is a page with a dozen problems ([`code/broken.html`](code/broken.html)):
+A page with a dozen problems ([`code/broken.html`](code/broken.html)):
 
 ```html
 <html>
@@ -598,28 +502,15 @@ Here is a page with a dozen problems ([`code/broken.html`](code/broken.html)):
 ```
 
 ![The broken page renders without any error: Welcome heading, paragraphs, a blue rectangle, a Click here link and a list — in a Times serif font because it is in quirks mode with no styles](img/broken.png)
-*Figure 2.7 — It renders without complaint. Nothing on screen tells you about the 12 problems below.*
+*Figure 2.7 — It renders without complaint. Nothing on screen reveals the 12 problems below.*
 
 ### How it works — checking
-1. **The W3C Nu HTML Checker** (validator.w3.org/nu) is the reference validator: paste code, upload a file or give a URL. It reports **parse errors** (bad nesting, stray end tags) and **content-model errors** (a `<p>` inside a `<ul>`, duplicate ids, missing required attributes such as `alt`).
-2. **Editor and build tools**: VS Code extensions, `html-validate` or `vnu` (the Nu checker's command-line version) in CI (continuous integration — automated checks that run every time code is pushed).
-3. **Accessibility checkers** (axe, Lighthouse, WAVE — tools that scan a page for barriers to disabled users; [Chapter 3](../03-semantic-html-and-accessibility/README.md)) catch semantic issues validators don't: empty links, poor contrast.
+1. **The W3C Nu HTML Checker** (validator.w3.org/nu) — the reference validator (paste, upload or URL). Reports **parse errors** (bad nesting, stray end tags) and **content-model errors** (`<p>` in `<ul>`, duplicate ids, missing required attributes such as `alt`).
+2. **Editor and build tools**: VS Code extensions, `html-validate` or `vnu` (the Nu checker's CLI) in CI (continuous integration — automated checks on every push).
+3. **Accessibility checkers** (axe, Lighthouse, WAVE; [Chapter 3](../03-semantic-html-and-accessibility/README.md)) catch what validators don't: empty links, poor contrast.
 
-To make the idea concrete, [`code/04_validate.mjs`](code/04_validate.mjs) is a tiny checker that parses a file with jsdom and looks for a dozen of the most common problems:
+[`code/04_validate.mjs`](code/04_validate.mjs) is a tiny jsdom checker for a dozen common problems (doctype, `lang`, charset within 1024 bytes, viewport, title, `h1` count, heading jumps, duplicate ids, `img` without `alt`, `href="#"`/`javascript:` links, vague link text, non-`li` list children, `<b><i></b>` mis-nesting):
 
-```js
-// code/04_validate.mjs (key parts)
-if (!/^\s*<!doctype html>/i.test(src)) problems.push('missing <!DOCTYPE html> -> quirks mode');
-if (!doc.documentElement.hasAttribute('lang')) problems.push('<html> has no lang attribute');
-const charset = src.search(/<meta[^>]+charset/i);
-if (charset < 0 || charset > 1024) problems.push('no <meta charset> in the first 1024 bytes');
-// ... viewport, title, number of h1s, heading-level jumps, duplicate ids, img without alt,
-// ... href="#" / javascript: links, vague link text, non-<li> children of lists, <b><i></b> mis-nesting
-lint('skeleton.html');
-lint('broken.html');
-```
-
-Output:
 ```
 skeleton.html: OK
 broken.html: 12 problem(s)
@@ -637,21 +528,17 @@ broken.html: 12 problem(s)
   - mis-nested tags <b><i>...</b> (parser repaired it)
 ```
 
-Some of these are validity errors (duplicate id, `<p>` in `<ul>`, missing `alt`, missing doctype/title), others are best-practice or accessibility warnings (heading jumps, two `h1`s, vague link text). A real validator plus an accessibility checker covers both.
+Some are validity errors (duplicate id, `<p>` in `<ul>`, missing `alt`, missing doctype/title); others are best-practice or accessibility warnings (heading jumps, two `h1`s, vague link text). A validator plus an accessibility checker covers both.
 
 ### Trade-offs
-Validation is not the goal in itself — a page can be valid and still inaccessible or confusing. But valid HTML is predictable across browsers and tools, and most validator errors point at real bugs. Treat errors as bugs and warnings as review items.
+Validity isn't the goal — a valid page can still be inaccessible. But valid HTML is predictable across browsers and tools, and most errors are real bugs. Treat errors as bugs, warnings as review items.
 
 ### In the interview
-**30-second answer:** "Browsers are forgiving: the HTML parser repairs almost any markup, so errors are invisible. That is exactly why I validate — the repaired DOM may not be what I meant, and assistive technology (screen readers, switch devices and other tools disabled people use), crawlers (search-engine robots) and my CSS selectors all see the repaired tree. I use the Nu HTML Checker or html-validate in CI, plus axe or Lighthouse for accessibility."
+**30-second answer:** "The HTML parser repairs almost any markup, so errors are invisible. That's why I validate — the repaired DOM may not be what I meant, and assistive technology (screen readers, switch devices), crawlers and my CSS selectors all see the repaired tree. I use the Nu HTML Checker or html-validate in CI, plus axe or Lighthouse for accessibility."
 
-- *Name three common validation errors.* → Duplicate ids, block elements inside `<p>`, missing `alt` on `<img>` (also: bad nesting, non-`li` children in lists).
-- *Does invalid HTML affect SEO (search engine optimisation — how well a page is found and ranked)?* → Not directly as a ranking factor, but broken structure can hide content, headings or links from crawlers.
-
-### Self-check
-1. Why won't the browser tell you about invalid HTML? → The spec requires it to recover silently.
-2. Which tool is the official validator? → The W3C Nu HTML Checker.
-3. Does a valid page guarantee accessibility? → No — add accessibility testing.
+- *Name three common validation errors.* → Duplicate ids, block elements inside `<p>`, missing `alt` on `<img>` (also bad nesting, non-`li` children in lists).
+- *Does invalid HTML affect SEO (search engine optimisation)?* → Not directly as a ranking factor, but broken structure can hide content, headings or links from crawlers.
+- *Does a valid page guarantee accessibility?* → No — add accessibility testing.
 
 ---
 
