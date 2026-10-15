@@ -98,6 +98,7 @@ await page.setViewport({ width: 1920, height: 1080 });
 const frames = [];
 const total = script.scenes.length;
 let errors = 0;
+const layoutIssues = [];
 for (const [si, sc] of script.scenes.entries()) {
   const nItems = itemsFor(sc).length;
   for (const [ki, st] of (sc.steps || []).entries()) {
@@ -132,6 +133,24 @@ el.outerHTML=svg}catch(e){el.outerHTML='<div class="caption">diagram error</div>
         s.style.maxWidth = 'none';
       }
     });
+    // automatic layout check: text/diagram pushed past the footer, clipped, or a diagram too small to read
+    const issues = await page.evaluate(() => {
+      const out = [], limit = 1080 - 70;
+      for (const el of document.querySelectorAll('.frame h1, .frame li, .frame table, .frame .caption, .frame .big, .frame .col, .diagram svg')) {
+        const r = el.getBoundingClientRect();
+        if (r.height && r.bottom > limit) out.push('overflows footer: ' + (el.textContent || el.tagName).trim().slice(0, 40));
+        if (r.right > 1920 - 60) out.push('overflows right edge: ' + (el.textContent || el.tagName).trim().slice(0, 40));
+      }
+      for (const s of document.querySelectorAll('.diagram svg')) {
+        const vb = s.viewBox.baseVal, r = s.getBoundingClientRect();
+        const texts = [...s.querySelectorAll('text, foreignObject div, .nodeLabel')];
+        const fs = texts.length ? Math.min(...texts.map(t => parseFloat(getComputedStyle(t).fontSize) || 16)) : 16;
+        const k = vb && vb.width ? r.width / vb.width : 1;
+        if (fs * k < 18) out.push(`diagram text too small (${(fs * k).toFixed(0)}px)`);
+      }
+      return [...new Set(out)];
+    });
+    if (issues.length) { layoutIssues.push({ scene: sc.id, step: ki, issues }); }
     const file = path.join(framesDir, `${sc.id}_${String(ki).padStart(2, '0')}.png`);
     await page.screenshot({ path: file });
     frames.push({ scene: sc.id, step: ki, file, say: st.say });
@@ -139,4 +158,6 @@ el.outerHTML=svg}catch(e){el.outerHTML='<div class="caption">diagram error</div>
 }
 await browser.close();
 fs.writeFileSync(path.join(outDir, 'frames.json'), JSON.stringify(frames, null, 1));
-console.log(`rendered ${frames.length} frames for ${total} scenes — mermaid errors: ${errors}`);
+fs.writeFileSync(path.join(outDir, 'layout_issues.json'), JSON.stringify(layoutIssues, null, 1));
+const bad = [...new Set(layoutIssues.map(x => x.scene))];
+console.log(`rendered ${frames.length} frames for ${total} scenes — mermaid errors: ${errors} — layout issues: ${bad.length}${bad.length ? ' (' + bad.join(', ') + '; details in layout_issues.json)' : ''}`);
