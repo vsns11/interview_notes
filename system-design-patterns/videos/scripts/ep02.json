@@ -1,0 +1,2973 @@
+{
+  "series": "System Design Workshop",
+  "episode": 2,
+  "title": "Fundamentals II: Networking and Communication",
+  "subtitle": "How machines find each other, talk, and share the load",
+  "scenes": [
+    {
+      "layout": "title",
+      "title": "Fundamentals II: Networking and Communication",
+      "subtitle": "How machines find each other, talk, and share the load",
+      "steps": [
+        {
+          "say": "Welcome to episode two of the System Design Workshop: networking and communication. Episode one covered the boxes on a design diagram. Today is about the arrows.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll be able to trace a request from a typed U-R-L to a server and back, pick protocols and A-P-I styles, choose a load-balancing algorithm, and explain C-D-Ns and partitions in an interview.",
+          "reveal": 0
+        },
+        {
+          "say": "Our running example is an online shop, shop dot example dot com, with a support chat. Keep the Part two notes open: each concept matches a section there.",
+          "reveal": 0
+        }
+      ],
+      "id": "s001"
+    },
+    {
+      "layout": "bullets",
+      "title": "Today's map: from address to edge",
+      "bullets": [
+        "Addresses: IP, NAT, ports, sockets",
+        "Names: DNS",
+        "Layers and transports: TCP, UDP, QUIC",
+        "HTTP, TLS and API styles",
+        "Real-time, proxies, load balancers",
+        "CDNs, latency and partitions"
+      ],
+      "steps": [
+        {
+          "say": "A protocol is an agreed set of rules for how two programs talk. Networking is a stack of them. First, addresses.",
+          "reveal": 1
+        },
+        {
+          "say": "Then names: D-N-S.",
+          "reveal": 2
+        },
+        {
+          "say": "Then layers, and the transports that carry bytes.",
+          "reveal": 3
+        },
+        {
+          "say": "Then H-T-T-P, encryption, and A-P-I styles.",
+          "reveal": 4
+        },
+        {
+          "say": "Then real-time push, proxies and load balancers.",
+          "reveal": 5
+        },
+        {
+          "say": "Finally C-D-Ns, latency, and what happens when the network splits.",
+          "reveal": 6
+        }
+      ],
+      "id": "s002"
+    },
+    {
+      "id": "c01",
+      "layout": "section",
+      "kicker": "Concept 1 of 14",
+      "title": "IP addresses, NAT, ports and sockets",
+      "caption": "Book: Fundamentals Part 2 · IP addresses, NAT, ports and sockets",
+      "steps": [
+        {
+          "say": "First question: when your laptop talks to the shop, how does each packet find the right machine, and then the right program on that machine?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 1 of 14",
+      "title": "IP addresses, ports and sockets",
+      "bullets": [
+        "IP address: finds the machine",
+        "IPv4: 32 bits, 93.184.215.14, 4.3 billion",
+        "IPv6: 128 bits, effectively unlimited",
+        "Port 0-65535: finds the program",
+        "Socket = IP + port",
+        "5-tuple: protocol, src IP:port, dst IP:port"
+      ],
+      "steps": [
+        {
+          "say": "An I-P address identifies a machine's network connection, like a street address. Routers forward each packet by reading only that address.",
+          "reveal": 1
+        },
+        {
+          "say": "Version four uses thirty-two bits, four numbers up to two fifty-five. About four point three billion addresses, and they ran out.",
+          "reveal": 2
+        },
+        {
+          "say": "Version six uses a hundred and twenty-eight bits. Effectively unlimited.",
+          "reveal": 3
+        },
+        {
+          "say": "A port picks which program gets the data: the apartment number. Four four three is H-T-T-P-S, fifty-four thirty-two is Postgres.",
+          "reveal": 4
+        },
+        {
+          "say": "A socket is one end of a conversation: address plus port.",
+          "reveal": 5
+        },
+        {
+          "say": "A connection is identified by five values: protocol, source address and port, destination address and port. So one server on port four four three can hold hundreds of thousands of connections. Each client brings a different source.",
+          "reveal": 6
+        }
+      ],
+      "id": "s003"
+    },
+    {
+      "layout": "twocol",
+      "title": "Public versus private addresses",
+      "left": {
+        "heading": "Public IP",
+        "bullets": [
+          "Unique worldwide",
+          "Reachable from anywhere",
+          "Only LB or gateway gets one"
+        ]
+      },
+      "right": {
+        "heading": "Private IP",
+        "bullets": [
+          "10/8, 172.16/12, 192.168/16",
+          "Reused by millions of networks",
+          "Your laptop: 192.168.1.23"
+        ]
+      },
+      "steps": [
+        {
+          "say": "A public address is unique on the whole internet.",
+          "reveal": 1
+        },
+        {
+          "say": "Anyone can reach it.",
+          "reveal": 2
+        },
+        {
+          "say": "In our shop, only the load balancer gets one. Servers sit on private addresses inside a V-P-C, your isolated cloud network. That's the first layer of security.",
+          "reveal": 3
+        },
+        {
+          "say": "Private addresses come from three reserved ranges, starting ten, one seven two sixteen, and one nine two one six eight.",
+          "reveal": 4
+        },
+        {
+          "say": "They only mean something inside one network, so millions of homes reuse them.",
+          "reveal": 5
+        },
+        {
+          "say": "So how does your laptop reach the internet? N-A-T.",
+          "reveal": 6
+        }
+      ],
+      "id": "s004"
+    },
+    {
+      "layout": "diagram",
+      "title": "NAT: many private machines, one public IP",
+      "mermaid": "flowchart LR\n  L[\"Laptop 192.168.1.23 port 51000\"] --> R[\"Home router with NAT\"]\n  R -->|\"rewritten to 81.2.69.160 port 40001\"| I[\"Internet routers\"]\n  I --> S[\"Shop server 93.184.215.14 port 443\"]",
+      "caption": "The router keeps a table and reverses the mapping on replies",
+      "steps": [
+        {
+          "say": "N-A-T, network address translation, lets many private machines share one public address. The router rewrites outgoing packets and remembers what it did. In the cloud, a N-A-T gateway lets private servers download updates without being reachable.",
+          "reveal": 0
+        }
+      ],
+      "id": "s005"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Walkthrough: your laptop opens the shop",
+      "table": {
+        "head": [
+          "Step",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "1. Socket",
+            "OS picks ephemeral port 51000"
+          ],
+          [
+            "2. NAT out",
+            "Source -> 81.2.69.160:40001"
+          ],
+          [
+            "3. Routing",
+            "10-20 routers forward by destination IP"
+          ],
+          [
+            "4. NAT back",
+            "Reply to :40001 mapped back to laptop"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Step one: the operating system picks a temporary source port, an ephemeral port, say fifty-one thousand.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: the router swaps the private source for its public address and port forty thousand and one, and records the mapping.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: ten to twenty routers forward the packet by destination address.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: the reply comes to port forty thousand and one, and the router hands it to your laptop. The catch: the shop can never dial your laptop first, so push systems keep a connection open from the client. And behind carrier-grade N-A-T, thousands of mobile users share one address, so rate limiting by address can block a whole network.",
+          "reveal": 4
+        }
+      ],
+      "id": "s006"
+    },
+    {
+      "id": "c02",
+      "layout": "section",
+      "kicker": "Concept 2 of 14",
+      "title": "DNS: turning names into addresses",
+      "caption": "Book: Fundamentals Part 2 · DNS — the internet's phone book",
+      "steps": [
+        {
+          "say": "Nobody types numbers into a browser. So how does a name become an address? And why can a bad D-N-S day make a healthy site look dead?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 2 of 14",
+      "title": "DNS: the internet's phone book",
+      "bullets": [
+        "Stub resolver: tiny client in your OS",
+        "Recursive resolver: does the legwork, caches",
+        "Root servers: 13 names, ~2,000 copies",
+        "TLD servers: who runs each .com domain",
+        "Authoritative server: the final truth"
+      ],
+      "steps": [
+        {
+          "say": "D-N-S, the domain name system, turns shop dot example dot com into an address. Five players. The stub resolver, in your operating system, just asks someone else.",
+          "reveal": 1
+        },
+        {
+          "say": "The recursive resolver does the legwork and caches. Your I-S-P runs one, or Google's eight dot eight dot eight dot eight.",
+          "reveal": 2
+        },
+        {
+          "say": "Root servers sit at the top: thirteen names, copied to about two thousand places.",
+          "reveal": 3
+        },
+        {
+          "say": "Top-level domain servers, like dot com's, know who runs each domain below them.",
+          "reveal": 4
+        },
+        {
+          "say": "The authoritative server holds the domain's real records. Its answer is final.",
+          "reveal": 5
+        }
+      ],
+      "id": "s007"
+    },
+    {
+      "layout": "diagram",
+      "title": "Resolving shop.example.com",
+      "mermaid": "flowchart LR\n  B[\"Browser and OS cache\"] -->|\"1. recursive query\"| R[\"Recursive resolver\"]\n  R -->|\"2. ask\"| Root[\"Root server\"]\n  R -->|\"3. ask\"| T[\"com TLD server\"]\n  R -->|\"4. ask\"| A[\"Authoritative server\"]\n  A -->|\"93.184.215.14, TTL 300\"| R",
+      "caption": "Root and TLD answers stay cached for days",
+      "steps": [
+        {
+          "say": "The browser asks the resolver for the final answer. The resolver walks down the tree, each server pointing to the next. Let's walk it.",
+          "reveal": 0
+        }
+      ],
+      "id": "s008"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Walkthrough: a cold lookup, step by step",
+      "table": {
+        "head": [
+          "Step",
+          "Shop lookup"
+        ],
+        "rows": [
+          [
+            "1. Local caches",
+            "Browser, then OS and hosts file: miss"
+          ],
+          [
+            "2. Stub -> resolver",
+            "Recursive query to 1.1.1.1"
+          ],
+          [
+            "3. Root",
+            "Referral: ask the .com servers"
+          ],
+          [
+            "4. TLD",
+            "Referral: ask ns1.example-dns.net"
+          ],
+          [
+            "5. Authoritative",
+            "A record 93.184.215.14, TTL 300"
+          ],
+          [
+            "6. Cache",
+            "Next lookup: under 1 ms, or ~20 ms"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Step one: browser cache, then operating system cache. Miss.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: the stub sends a recursive query, give me the final answer, to a resolver.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: the root server replies with a referral: ask the dot com servers.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: dot com refers it to the shop's own name servers.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five: the authoritative server answers with the address, valid three hundred seconds.",
+          "reveal": 5
+        },
+        {
+          "say": "Step six: the resolver caches every step. This cold lookup cost twenty to a hundred and twenty milliseconds. The next is a cache hit.",
+          "reveal": 6
+        }
+      ],
+      "id": "s009"
+    },
+    {
+      "layout": "table",
+      "title": "DNS record types for our shop",
+      "table": {
+        "head": [
+          "Record",
+          "Maps",
+          "Shop example"
+        ],
+        "rows": [
+          [
+            "A",
+            "name -> IPv4",
+            "shop -> 93.184.215.14"
+          ],
+          [
+            "AAAA",
+            "name -> IPv6",
+            "shop -> 2606:2800::1"
+          ],
+          [
+            "CNAME",
+            "name -> another name",
+            "cdn -> shop.cdnprovider.net"
+          ],
+          [
+            "MX",
+            "domain -> mail servers",
+            "10 mail1.example.com"
+          ],
+          [
+            "NS",
+            "domain -> name servers",
+            "ns1.example-dns.net"
+          ],
+          [
+            "TXT",
+            "name -> free text",
+            "SPF rule, ownership proof"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "An A record maps a name to a version four address. That's what our lookup returned.",
+          "reveal": 1
+        },
+        {
+          "say": "Quad A does the same for version six.",
+          "reveal": 2
+        },
+        {
+          "say": "A C-NAME is an alias: our cdn subdomain points at the C-D-N provider's name. It can't sit on the bare domain, so providers offer alias records.",
+          "reveal": 3
+        },
+        {
+          "say": "M-X lists mail servers, with a priority. Lower is tried first.",
+          "reveal": 4
+        },
+        {
+          "say": "N-S names the authoritative servers. It's how dot com knew where to send us.",
+          "reveal": 5
+        },
+        {
+          "say": "T-X-T holds free text, like proof you own the domain.",
+          "reveal": 6
+        }
+      ],
+      "id": "s010"
+    },
+    {
+      "layout": "number",
+      "title": "TTL: how long an answer may be cached",
+      "big": "TTL 300 = reuse for 5 minutes",
+      "caption": "Long TTL: fewer lookups, slow change. Short TTL: fast failover",
+      "steps": [
+        {
+          "say": "Every record has a T-T-L, time to live, in seconds. Three hundred means reuse it for five minutes. Changes are never pushed: old answers live until they expire.",
+          "reveal": 0
+        }
+      ],
+      "id": "s011"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Example: moving the shop to a new server",
+      "bullets": [
+        "Day before: TTL 86,400 -> 60",
+        "Wait one old TTL (24 h)",
+        "Switch A record to new IP",
+        "Within ~60 s most users move",
+        "Raise TTL back to a day"
+      ],
+      "steps": [
+        {
+          "say": "Imagine the shop's record has a one-day T-T-L and you must move servers. A day before, lower it to sixty seconds.",
+          "reveal": 1
+        },
+        {
+          "say": "Wait a day, so every cached one-day copy expires.",
+          "reveal": 2
+        },
+        {
+          "say": "Switch the A record.",
+          "reveal": 3
+        },
+        {
+          "say": "Within about a minute most users move. Some resolvers ignore T-T-Ls, so keep the old server answering a while.",
+          "reveal": 4
+        },
+        {
+          "say": "Then raise the T-T-L again.",
+          "reveal": 5
+        }
+      ],
+      "id": "s012"
+    },
+    {
+      "layout": "bullets",
+      "title": "DNS-based load balancing and GeoDNS",
+      "bullets": [
+        "Round-robin DNS: rotate several A records",
+        "Blind to load unless health-checked",
+        "GeoDNS: Paris -> Frankfurt, Tokyo -> Tokyo",
+        "Latency-based: lowest measured latency",
+        "Coarse and cached, but global, no extra hop"
+      ],
+      "steps": [
+        {
+          "say": "Return three A records and rotate their order. Clients try the first, so load spreads.",
+          "reveal": 1
+        },
+        {
+          "say": "But D-N-S doesn't know a server is dead unless the provider health-checks it.",
+          "reveal": 2
+        },
+        {
+          "say": "GeoDNS answers by location: a shopper in Paris gets Frankfurt, Tokyo gets Tokyo.",
+          "reveal": 3
+        },
+        {
+          "say": "Latency-based routing picks the region with the lowest measured latency.",
+          "reveal": 4
+        },
+        {
+          "say": "In the interview: fail away from a region with health-checked records and a sixty-second T-T-L, and have the failed region fail fast for clients that cached the old answer.",
+          "reveal": 5
+        }
+      ],
+      "id": "s013"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "TTL is 60 s, IP switched. An hour later: old server. Why?",
+      "bullets": [
+        "A. DNS changes are pushed slowly",
+        "B. A resolver or client ignored the TTL",
+        "C. The A record was wrong"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. The answer comes next.",
+          "reveal": 0
+        }
+      ],
+      "id": "s014"
+    },
+    {
+      "id": "c03",
+      "layout": "section",
+      "kicker": "Concept 3 of 14",
+      "title": "Network layers: OSI and TCP/IP",
+      "caption": "Book: Fundamentals Part 2 · Network layers — OSI and TCP/IP models",
+      "steps": [
+        {
+          "say": "Answer: B. Some resolvers and clients ignore T-T-Ls and cache longer, so never rely on D-N-S alone for instant failover. Now, how do bytes actually travel? Networking is split into layers, each doing one job.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 3 of 14",
+      "title": "Network layers: the OSI model",
+      "table": {
+        "head": [
+          "Layer",
+          "Name",
+          "Handles",
+          "Examples"
+        ],
+        "rows": [
+          [
+            "7",
+            "Application",
+            "Meaning of messages",
+            "HTTP, DNS, gRPC"
+          ],
+          [
+            "6",
+            "Presentation",
+            "Encoding, encryption",
+            "TLS, JSON"
+          ],
+          [
+            "5",
+            "Session",
+            "Conversations",
+            "rarely discussed"
+          ],
+          [
+            "4",
+            "Transport",
+            "Ports, process delivery",
+            "TCP, UDP, QUIC"
+          ],
+          [
+            "3",
+            "Network",
+            "Routing between machines",
+            "IP"
+          ],
+          [
+            "2",
+            "Data link",
+            "One local hop",
+            "Ethernet, Wi-Fi, MAC"
+          ],
+          [
+            "1",
+            "Physical",
+            "Bits on wire or radio",
+            "Copper, fibre"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Picture a parcel: a letter inside, an apartment number, a street address, and a delivery van. Each layer reads only its own label. Layer seven, application, is meaning: get the cart page.",
+          "reveal": 1
+        },
+        {
+          "say": "Six, presentation: encoding and encryption.",
+          "reveal": 2
+        },
+        {
+          "say": "Five, session: rarely discussed.",
+          "reveal": 3
+        },
+        {
+          "say": "Four, transport: delivery to a program by port.",
+          "reveal": 4
+        },
+        {
+          "say": "Three, network: routing by I-P address.",
+          "reveal": 5
+        },
+        {
+          "say": "Two, data link: one local hop, using M-A-C hardware addresses.",
+          "reveal": 6
+        },
+        {
+          "say": "One, physical: bits as light or radio. The T-C-P I-P model the internet runs merges these into four: application, transport, internet, link. L-four and L-seven always mean these O-S-I numbers.",
+          "reveal": 7
+        }
+      ],
+      "id": "s015"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "What each layer can see in one shop request",
+      "table": {
+        "head": [
+          "Layer",
+          "Sees in GET /cart",
+          "Can do"
+        ],
+        "rows": [
+          [
+            "L3 router, firewall",
+            "Source and dest IPs",
+            "Allow or block IPs"
+          ],
+          [
+            "L4 load balancer",
+            "Plus ports, TCP state",
+            "Port 443 -> pool"
+          ],
+          [
+            "L7 load balancer",
+            "Path, headers, cookies",
+            "/api -> API pool"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Each layer wraps the data in its own header, so a component's layer decides what it sees. A layer three firewall sees only addresses.",
+          "reveal": 1
+        },
+        {
+          "say": "A layer four balancer also sees ports and connections: send port four four three to these servers.",
+          "reveal": 2
+        },
+        {
+          "say": "A layer seven balancer reads path, headers and cookies, so it can route slash A-P-I separately, at the cost of C-P-U and decrypting T-L-S. In the interview: can it read the request, or only the connection?",
+          "reveal": 3
+        }
+      ],
+      "id": "s016"
+    },
+    {
+      "id": "c04",
+      "layout": "section",
+      "kicker": "Concept 4 of 14",
+      "title": "TCP, UDP and QUIC",
+      "caption": "Book: Fundamentals Part 2 · TCP, UDP and QUIC",
+      "steps": [
+        {
+          "say": "Next, the transport layer. Three protocols carry bytes between two programs: T-C-P, U-D-P and QUIC. Your choice shapes latency, and how the app behaves when packets get lost.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 4 of 14",
+      "title": "TCP: the three-way handshake",
+      "mermaid": "flowchart LR\n  C[\"Client\"] -->|\"1. SYN, my seq starts at x\"| S[\"Server\"]\n  S -->|\"2. SYN-ACK, got x, mine is y\"| C2[\"Client\"]\n  C2 -->|\"3. ACK, got y, then data\"| S2[\"Server\"]",
+      "caption": "One round trip before the first request byte",
+      "steps": [
+        {
+          "say": "T-C-P is a phone call with a careful note-taker: connect first, everything arrives in order. The client sends SYN, the server SYN-ACK, the client ACK, then data.",
+          "reveal": 0
+        },
+        {
+          "say": "That's one round trip, an R-T-T, about seventy milliseconds London to New York, before the request even leaves. So reuse connections.",
+          "reveal": 0
+        }
+      ],
+      "id": "s017"
+    },
+    {
+      "layout": "bullets",
+      "title": "How TCP stays reliable and polite",
+      "bullets": [
+        "Sequence numbers + ACKs + retransmit",
+        "Receiver reorders: clean byte stream",
+        "Flow control: receive window",
+        "Congestion control: slow start, back off",
+        "Close: FIN, then TIME_WAIT ~60 s"
+      ],
+      "steps": [
+        {
+          "say": "T-C-P numbers every byte. The receiver acknowledges, and late acks trigger a retransmit.",
+          "reveal": 1
+        },
+        {
+          "say": "The receiver reorders, so your app reads a clean stream.",
+          "reveal": 2
+        },
+        {
+          "say": "Flow control: the receiver advertises its free buffer, so a fast server can't swamp a slow phone.",
+          "reveal": 3
+        },
+        {
+          "say": "Congestion control protects the network: start small, roughly double each round trip, back off on loss.",
+          "reveal": 4
+        },
+        {
+          "say": "Closing leaves the socket waiting about sixty seconds. Open and close thousands of connections, and you run out of ports.",
+          "reveal": 5
+        }
+      ],
+      "id": "s018"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: why a fresh connection is slow",
+      "table": {
+        "head": [
+          "Round trip",
+          "Packets in flight",
+          "Total sent"
+        ],
+        "rows": [
+          [
+            "1",
+            "10 packets, about 15 KB",
+            "15 KB"
+          ],
+          [
+            "2",
+            "20 packets",
+            "45 KB"
+          ],
+          [
+            "3",
+            "40 packets",
+            "105 KB"
+          ],
+          [
+            "4",
+            "80 packets",
+            "225 KB"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Imagine a two hundred kilobyte product page on a fresh connection. Slow start sends about ten packets, fifteen kilobytes.",
+          "reveal": 1
+        },
+        {
+          "say": "Then twenty.",
+          "reveal": 2
+        },
+        {
+          "say": "Then forty.",
+          "reveal": 3
+        },
+        {
+          "say": "Only round trip four finishes. Nearly three hundred milliseconds that a warm connection would not need. Keep connections warm.",
+          "reveal": 4
+        }
+      ],
+      "id": "s019"
+    },
+    {
+      "layout": "twocol",
+      "title": "UDP: fire and forget",
+      "left": {
+        "heading": "UDP",
+        "bullets": [
+          "No handshake, no ACKs, no order",
+          "8-byte header vs TCP's 20+",
+          "App adds reliability if needed"
+        ]
+      },
+      "right": {
+        "heading": "Used by",
+        "bullets": [
+          "DNS lookups",
+          "Video calls, games",
+          "QUIC underneath"
+        ]
+      },
+      "steps": [
+        {
+          "say": "U-D-P is postcards shouted across a room. No setup, no acks, no order.",
+          "reveal": 1
+        },
+        {
+          "say": "Its header is eight bytes, versus twenty or more for T-C-P.",
+          "reveal": 2
+        },
+        {
+          "say": "Need reliability? Build it yourself.",
+          "reveal": 3
+        },
+        {
+          "say": "D-N-S uses it: one small question, one small answer.",
+          "reveal": 4
+        },
+        {
+          "say": "Video calls and games use it, because a frame three hundred milliseconds late is worthless. Skip it rather than wait.",
+          "reveal": 5
+        },
+        {
+          "say": "And QUIC runs on top of it.",
+          "reveal": 6
+        }
+      ],
+      "id": "s020"
+    },
+    {
+      "layout": "diagram",
+      "title": "Head-of-line blocking",
+      "mermaid": "flowchart LR\n  P1[\"Packet 1 CSS arrives\"] --> P2[\"Packet 2 image LOST\"]\n  P2 --> P3[\"Packet 3 JS arrived, must wait\"]\n  P3 --> P4[\"Packet 4 API reply, must wait\"]\n  P2 -.->|\"retransmit 70 ms later\"| OK[\"All delivered\"]",
+      "caption": "One TCP stream: one loss stalls everything behind it",
+      "steps": [
+        {
+          "say": "T-C-P delivers strictly in order. Imagine the shop page sends C-S-S, an image, JavaScript and an A-P-I reply on one connection, and the image packet is lost. The JavaScript and the A-P-I reply have arrived, but wait seventy milliseconds for the retransmit. That's head-of-line blocking.",
+          "reveal": 0
+        }
+      ],
+      "id": "s021"
+    },
+    {
+      "layout": "bullets",
+      "title": "QUIC: TCP's job, rebuilt on UDP",
+      "bullets": [
+        "1. Transport + TLS 1.3 in 1 RTT, 0-RTT resume",
+        "2. Independent streams: no cross-stream HOL",
+        "3. Connection ID: survives Wi-Fi -> 4G",
+        "4. Always encrypted",
+        "5. User space: evolves fast, more CPU"
+      ],
+      "steps": [
+        {
+          "say": "QUIC runs over U-D-P. One: transport and encryption handshakes are merged, one round trip, and returning clients send data immediately.",
+          "reveal": 1
+        },
+        {
+          "say": "Two: independent streams. The lost image stalls only the image stream.",
+          "reveal": 2
+        },
+        {
+          "say": "Three: connections have an I-D, so a phone moving from Wi-Fi to mobile keeps its connection.",
+          "reveal": 3
+        },
+        {
+          "say": "Four: always encrypted.",
+          "reveal": 4
+        },
+        {
+          "say": "Five: it lives in user space, so it evolves without O-S upgrades. Costs: more C-P-U, and some firewalls block U-D-P, forcing a fallback to T-C-P.",
+          "reveal": 5
+        }
+      ],
+      "id": "s022"
+    },
+    {
+      "id": "c05",
+      "layout": "section",
+      "kicker": "Concept 5 of 14",
+      "title": "HTTP: the language of the web",
+      "caption": "Book: Fundamentals Part 2 · HTTP — the language of the web",
+      "steps": [
+        {
+          "say": "Almost every A-P-I you design in an interview speaks H-T-T-P, the hypertext transfer protocol. Get its methods, status codes and versions right, and your design is predictable, cacheable and safe to retry.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 5 of 14",
+      "title": "HTTP methods: safe and idempotent",
+      "table": {
+        "head": [
+          "Method",
+          "Shop use",
+          "Safe?",
+          "Idempotent?"
+        ],
+        "rows": [
+          [
+            "GET",
+            "GET /products/42",
+            "Yes",
+            "Yes"
+          ],
+          [
+            "POST",
+            "POST /orders (create)",
+            "No",
+            "No"
+          ],
+          [
+            "PUT",
+            "PUT /users/42/address",
+            "No",
+            "Yes"
+          ],
+          [
+            "PATCH",
+            "PATCH /cart/items/3",
+            "No",
+            "Not guaranteed"
+          ],
+          [
+            "DELETE",
+            "DELETE /cart/items/3",
+            "No",
+            "Yes"
+          ],
+          [
+            "HEAD, OPTIONS",
+            "Headers only, CORS check",
+            "Yes",
+            "Yes"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "H-T-T-P is request and response: method, path, headers, body, then status, headers, body. Get reads product forty-two. It's safe: it changes nothing.",
+          "reveal": 1
+        },
+        {
+          "say": "Post creates an order. Not safe, not idempotent.",
+          "reveal": 2
+        },
+        {
+          "say": "Put replaces fully. Idempotent means once or ten times gives the same state: set the address twice, same address.",
+          "reveal": 3
+        },
+        {
+          "say": "Patch changes part. Add one to the quantity twice, and you get two more.",
+          "reveal": 4
+        },
+        {
+          "say": "Delete twice: still gone. The second may return not found.",
+          "reveal": 5
+        },
+        {
+          "say": "Head and options are safe too.",
+          "reveal": 6
+        }
+      ],
+      "id": "s023"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Example: the checkout request times out",
+      "bullets": [
+        "Client sends POST /orders, no reply in 10 s",
+        "Did it run? The client can't know",
+        "Blind retry: two orders, charged twice",
+        "Fix: Idempotency-Key: 7f3a... header",
+        "Server sees key again: returns first result"
+      ],
+      "steps": [
+        {
+          "say": "Imagine a shopper taps pay, and ten seconds pass with no reply.",
+          "reveal": 1
+        },
+        {
+          "say": "Was the request lost, or only the reply? The client can't tell.",
+          "reveal": 2
+        },
+        {
+          "say": "Blindly retrying a post may create two orders and two charges.",
+          "reveal": 3
+        },
+        {
+          "say": "Fix: the app sends an idempotency key.",
+          "reveal": 4
+        },
+        {
+          "say": "The server stores each key with its result and returns the first order to a retry. That's why payment A-P-Is ask for one.",
+          "reveal": 5
+        }
+      ],
+      "id": "s024"
+    },
+    {
+      "layout": "table",
+      "title": "Status codes: the first digit is the category",
+      "table": {
+        "head": [
+          "Range",
+          "Meaning",
+          "Common codes"
+        ],
+        "rows": [
+          [
+            "1xx",
+            "Informational",
+            "101 Switching Protocols"
+          ],
+          [
+            "2xx",
+            "Success",
+            "200, 201 Created, 202, 204"
+          ],
+          [
+            "3xx",
+            "Redirect",
+            "301, 302, 304 Not Modified"
+          ],
+          [
+            "4xx",
+            "Client's fault",
+            "400, 401, 403, 404, 409, 429"
+          ],
+          [
+            "5xx",
+            "Server's fault",
+            "500, 502, 503, 504"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "One hundreds are informational: one-oh-one starts WebSockets.",
+          "reveal": 1
+        },
+        {
+          "say": "Two hundreds succeed: two-oh-one created, two-oh-two accepted for later.",
+          "reveal": 2
+        },
+        {
+          "say": "Three hundreds redirect: three-oh-four means your cached copy is still good.",
+          "reveal": 3
+        },
+        {
+          "say": "Four hundreds are the client's fault. Four-oh-one: we don't know you. Four-oh-three: we know you, and no. Four twenty-nine: too many requests.",
+          "reveal": 4
+        },
+        {
+          "say": "Five hundreds are the server's. Five-oh-two and five-oh-four usually come from a proxy whose backend failed or was too slow. Never return two hundred with an error inside.",
+          "reveal": 5
+        }
+      ],
+      "id": "s025"
+    },
+    {
+      "layout": "bullets",
+      "title": "Headers, statelessness and cookies",
+      "bullets": [
+        "Host: which site (many share one IP)",
+        "Content-Type, Authorization",
+        "Cache-Control, ETag + If-None-Match",
+        "X-Forwarded-For: real client IP",
+        "Stateless: any server can answer",
+        "Cookie: session=abc123 -> Redis"
+      ],
+      "steps": [
+        {
+          "say": "Headers are key-value metadata. Host says which site, since many share an address.",
+          "reveal": 1
+        },
+        {
+          "say": "Content type gives the body's format. Authorization carries credentials.",
+          "reveal": 2
+        },
+        {
+          "say": "Cache control says who may cache, and how long. An E-tag lets the server answer three-oh-four, unchanged.",
+          "reveal": 3
+        },
+        {
+          "say": "Proxies add X forwarded for, the real client address.",
+          "reveal": 4
+        },
+        {
+          "say": "H-T-T-P is stateless, so identical shop servers can sit behind a load balancer.",
+          "reveal": 5
+        },
+        {
+          "say": "Logins and carts use a session cookie, with the session in a shared store like Redis.",
+          "reveal": 6
+        }
+      ],
+      "id": "s026"
+    },
+    {
+      "layout": "table",
+      "title": "HTTP/1.1 vs HTTP/2 vs HTTP/3",
+      "table": {
+        "head": [
+          "",
+          "HTTP/1.1",
+          "HTTP/2",
+          "HTTP/3"
+        ],
+        "rows": [
+          [
+            "Transport",
+            "TCP",
+            "TCP",
+            "QUIC over UDP"
+          ],
+          [
+            "Format",
+            "Text",
+            "Binary frames",
+            "Binary frames"
+          ],
+          [
+            "Parallel",
+            "~6 connections",
+            "Streams on 1 conn",
+            "Streams on 1 conn"
+          ],
+          [
+            "HOL blocking",
+            "HTTP and TCP",
+            "TCP level",
+            "Per stream only"
+          ],
+          [
+            "Encryption",
+            "Optional",
+            "Required by browsers",
+            "Always"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Keep-alive first. H-T-T-P one point oh opened a new connection for every request. One point one keeps it open by default, so later requests skip the handshake. Versions one point one and two run on T-C-P. Three uses QUIC.",
+          "reveal": 1
+        },
+        {
+          "say": "One point one is text. Two and three use binary frames with header compression.",
+          "reveal": 2
+        },
+        {
+          "say": "One point one handles one request at a time per connection, so browsers open six. Two multiplexes many streams over one connection.",
+          "reveal": 3
+        },
+        {
+          "say": "But in version two one lost packet still stalls every stream. Three stalls only one.",
+          "reveal": 4
+        },
+        {
+          "say": "Browsers require encryption for two. Three always encrypts.",
+          "reveal": 5
+        }
+      ],
+      "id": "s027"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: loading a page with 60 assets",
+      "table": {
+        "head": [
+          "Version",
+          "How the 60 requests travel"
+        ],
+        "rows": [
+          [
+            "HTTP/1.1",
+            "6 connections x 10 requests in a row"
+          ],
+          [
+            "HTTP/2",
+            "1 connection, 60 interleaved streams"
+          ],
+          [
+            "HTTP/2, 1 loss",
+            "All 60 streams wait ~70 ms"
+          ],
+          [
+            "HTTP/3, 1 loss",
+            "Only 1 stream waits"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Imagine the shop's home page needs sixty files. One point one: six connections each fetch ten in a row.",
+          "reveal": 1
+        },
+        {
+          "say": "Version two: one connection carries all sixty at once.",
+          "reveal": 2
+        },
+        {
+          "say": "Lose one packet, and all sixty wait.",
+          "reveal": 3
+        },
+        {
+          "say": "Version three: only the stream that lost the packet waits.",
+          "reveal": 4
+        }
+      ],
+      "id": "s028"
+    },
+    {
+      "id": "c06",
+      "layout": "section",
+      "kicker": "Concept 6 of 14",
+      "title": "HTTPS and TLS",
+      "caption": "Book: Fundamentals Part 2 · HTTPS and TLS",
+      "steps": [
+        {
+          "say": "Plain H-T-T-P travels as readable text. Anyone on the same cafe Wi-Fi could read a shopper's password. So we seal it in an envelope.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 6 of 14",
+      "title": "HTTPS and TLS: the sealed envelope",
+      "bullets": [
+        "Confidentiality, integrity, authentication",
+        "Certificate: domain, public key, expiry, CA sig",
+        "Chain: server cert -> intermediate -> root",
+        "Let's Encrypt: free, auto-renewed, 90 days",
+        "Old name SSL; TLS 1.3 current"
+      ],
+      "steps": [
+        {
+          "say": "H-T-T-P-S is H-T-T-P inside T-L-S, transport layer security. Eavesdroppers see gibberish, tampering is detected, and you know it's really the shop. A sealed envelope plus a passport check.",
+          "reveal": 1
+        },
+        {
+          "say": "The passport is a certificate: domain, the server's public key, expiry, and a signature from a certificate authority, a C-A.",
+          "reveal": 2
+        },
+        {
+          "say": "The browser follows the chain: the shop's certificate, signed by an intermediate, signed by a root C-A built into the browser.",
+          "reveal": 3
+        },
+        {
+          "say": "Let's Encrypt issues free certificates, valid ninety days and renewed automatically. Lifetimes keep shrinking, so automate it: expired certificates have caused real outages.",
+          "reveal": 4
+        },
+        {
+          "say": "The old name is S-S-L, which is why people still say S-S-L certificate. The current version is T-L-S one point three, from twenty eighteen. One point two is still common, and anything older is deprecated.",
+          "reveal": 5
+        }
+      ],
+      "id": "s029"
+    },
+    {
+      "layout": "twocol",
+      "title": "Why TLS uses both kinds of encryption",
+      "left": {
+        "heading": "Asymmetric (public key)",
+        "bullets": [
+          "Key pair: private + public",
+          "Slow",
+          "Handshake only: prove identity"
+        ]
+      },
+      "right": {
+        "heading": "Symmetric",
+        "bullets": [
+          "One shared key, e.g. AES-GCM",
+          "Very fast",
+          "Encrypts all the data"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Asymmetric cryptography uses a key pair. The private key signs, the public key verifies.",
+          "reveal": 1
+        },
+        {
+          "say": "It's slow.",
+          "reveal": 2
+        },
+        {
+          "say": "So T-L-S uses it only in the handshake, to prove identity and agree a secret.",
+          "reveal": 3
+        },
+        {
+          "say": "Symmetric encryption uses one shared key, like A-E-S.",
+          "reveal": 4
+        },
+        {
+          "say": "It's fast.",
+          "reveal": 5
+        },
+        {
+          "say": "So it encrypts all the data. Asymmetric solves trust, symmetric does the bulk work.",
+          "reveal": 6
+        }
+      ],
+      "id": "s030"
+    },
+    {
+      "layout": "diagram",
+      "title": "The TLS 1.3 handshake",
+      "mermaid": "flowchart LR\n  C[\"Client\"] -->|\"1. ClientHello: versions, ciphers, key share\"| S[\"Server\"]\n  S -->|\"2. ServerHello: key share, certificate, signature\"| C2[\"Client verifies chain\"]\n  C2 -->|\"3. Finished + encrypted request\"| S2[\"Server\"]",
+      "caption": "1 round trip in TLS 1.3, 2 in TLS 1.2",
+      "steps": [
+        {
+          "say": "Step one: the client sends versions, ciphers and a key share, its half of a Diffie-Hellman exchange, where both sides reach the same key without sending it.",
+          "reveal": 0
+        },
+        {
+          "say": "Step two: the server sends its key share, certificate and a signature. Step three: the client verifies, derives the key, and sends the encrypted request. One round trip. Fresh keys each session give forward secrecy. And the hello carries the host name, S-N-I, so one address can serve many domains.",
+          "reveal": 0
+        }
+      ],
+      "id": "s031"
+    },
+    {
+      "layout": "number",
+      "title": "Example: cost of a fresh HTTPS request",
+      "big": "3 RTT x 70 ms = 210 ms",
+      "caption": "TCP 1 + TLS 1.3 1 + request 1. HTTP/3 merges the first two",
+      "steps": [
+        {
+          "say": "London to New York, seventy milliseconds a round trip. One for T-C-P, one for T-L-S, one for the request. Two hundred and ten milliseconds. QUIC merges the first two. Resumed connections can send immediately, but that early data can be replayed, so allow it only for idempotent requests.",
+          "reveal": 0
+        }
+      ],
+      "id": "s032"
+    },
+    {
+      "id": "c07",
+      "layout": "section",
+      "kicker": "Concept 7 of 14",
+      "title": "API styles: REST, RPC and GraphQL",
+      "caption": "Book: Fundamentals Part 2 · API styles — REST, RPC and gRPC, GraphQL",
+      "steps": [
+        {
+          "say": "The A-P-I is the contract between teams. Pick a poor style and clients over-fetch, downloading data they don't need, or under-fetch, making many calls to build one screen.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 7 of 14",
+      "title": "API styles: REST, gRPC, GraphQL",
+      "table": {
+        "head": [
+          "",
+          "REST",
+          "gRPC",
+          "GraphQL"
+        ],
+        "rows": [
+          [
+            "Model",
+            "Resources + verbs",
+            "Functions",
+            "Typed graph"
+          ],
+          [
+            "Format",
+            "Usually JSON",
+            "Protobuf, binary",
+            "JSON"
+          ],
+          [
+            "Transport",
+            "HTTP/1.1 or 2",
+            "HTTP/2",
+            "HTTP, 1 endpoint"
+          ],
+          [
+            "Best for",
+            "Public APIs, caching",
+            "Internal, streaming",
+            "Many client types"
+          ],
+          [
+            "Weak spot",
+            "Over/under-fetching",
+            "Browsers, debugging",
+            "Caching, query cost"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "An A-P-I is the menu a service offers. Rest models resources with H-T-T-P verbs. R-P-C, remote procedure call, models functions, and g-R-P-C is Google's version. GraphQL lets clients pick fields.",
+          "reveal": 1
+        },
+        {
+          "say": "Rest and GraphQL usually speak Jason. g-R-P-C uses Protocol Buffers, compact binary.",
+          "reveal": 2
+        },
+        {
+          "say": "g-R-P-C needs H-T-T-P two. GraphQL uses one endpoint.",
+          "reveal": 3
+        },
+        {
+          "say": "Rest for public, cacheable A-P-Is. g-R-P-C between services. GraphQL for many client types.",
+          "reveal": 4
+        },
+        {
+          "say": "Weak spots: rest over-fetches or needs many calls per screen. g-R-P-C is hard to debug in a browser. GraphQL breaks normal caching, and queries can get expensive.",
+          "reveal": 5
+        }
+      ],
+      "id": "s033"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: the shop's REST API",
+      "table": {
+        "head": [
+          "Action",
+          "Request",
+          "Response"
+        ],
+        "rows": [
+          [
+            "List products",
+            "GET /products?limit=20",
+            "200 + list"
+          ],
+          [
+            "Read one",
+            "GET /products/42",
+            "200, cacheable"
+          ],
+          [
+            "Place order",
+            "POST /orders + key",
+            "201 + Location"
+          ],
+          [
+            "Change address",
+            "PUT /users/7/address",
+            "200, safe to retry"
+          ],
+          [
+            "Remove item",
+            "DELETE /cart/items/3",
+            "204 No Content"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Rest on the shop. Plural nouns: slash products, never slash get products.",
+          "reveal": 1
+        },
+        {
+          "say": "Get product forty-two is stateless, so a C-D-N can cache it.",
+          "reveal": 2
+        },
+        {
+          "say": "Placing an order returns two-oh-one with a location header.",
+          "reveal": 3
+        },
+        {
+          "say": "Change the address with put, which is safe to retry.",
+          "reveal": 4
+        },
+        {
+          "say": "Delete returns two-oh-four, no content.",
+          "reveal": 5
+        }
+      ],
+      "id": "s034"
+    },
+    {
+      "layout": "twocol",
+      "title": "gRPC and GraphQL in practice",
+      "left": {
+        "heading": "gRPC",
+        "bullets": [
+          "Schema in .proto, tagged fields",
+          "Generated typed client + server",
+          "Unary or streaming, service-to-service"
+        ]
+      },
+      "right": {
+        "heading": "GraphQL",
+        "bullets": [
+          "user(id: 42) { name orders { total } }",
+          "Resolvers fill each field",
+          "Limit depth; batch to avoid N+1"
+        ]
+      },
+      "steps": [
+        {
+          "say": "g-R-P-C defines messages in a proto file. Each field has a number tag, so you can add fields safely. Never reuse a number.",
+          "reveal": 1
+        },
+        {
+          "say": "A generator builds typed client and server code, so calling the inventory service looks local. Messages are several times smaller than Jason.",
+          "reveal": 2
+        },
+        {
+          "say": "Calls are single or streaming, mostly inside the data centre.",
+          "reveal": 3
+        },
+        {
+          "say": "GraphQL: one query asks for user forty-two's name and order totals, and gets exactly that shape in one round trip.",
+          "reveal": 4
+        },
+        {
+          "say": "A resolver function fills each field.",
+          "reveal": 5
+        },
+        {
+          "say": "Naive resolvers cause N plus one queries. Batch them, and cap query depth.",
+          "reveal": 6
+        }
+      ],
+      "id": "s035"
+    },
+    {
+      "layout": "table",
+      "title": "RPC internals: the five parts",
+      "table": {
+        "head": [
+          "Part",
+          "Job",
+          "In gRPC"
+        ],
+        "rows": [
+          [
+            "Interface (IDL)",
+            "Language-neutral signatures",
+            "The .proto file"
+          ],
+          [
+            "Client stub",
+            "Pack args, wait, unpack",
+            "Generated client"
+          ],
+          [
+            "Server stub",
+            "Unpack, call, pack result",
+            "Generated base class"
+          ],
+          [
+            "Marshalling",
+            "Args <-> bytes, no pointers",
+            "Protobuf encoding"
+          ],
+          [
+            "Runtime + binding",
+            "Connections, call IDs, discovery",
+            "HTTP/2, name resolver"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "R-P-C makes a remote call look local, using five parts. First, an interface definition both sides compile against.",
+          "reveal": 1
+        },
+        {
+          "say": "Second, the client stub: same signature as the remote function. It packs arguments, sends, waits, unpacks.",
+          "reveal": 2
+        },
+        {
+          "say": "Third, the server stub: unpack, call the real function, pack the result.",
+          "reveal": 3
+        },
+        {
+          "say": "Fourth, marshalling: arguments to bytes and back. No pointers, so linked data is copied.",
+          "reveal": 4
+        },
+        {
+          "say": "Fifth, the runtime matches replies to calls by I-D. Binding finds the server: config, a directory, D-N-S or a service registry.",
+          "reveal": 5
+        }
+      ],
+      "id": "s036"
+    },
+    {
+      "layout": "diagram",
+      "title": "One RPC call: chargeCard(order 7, 40 dollars)",
+      "mermaid": "flowchart TD\n  A[\"Checkout calls chargeCard(7, 40)\"] --> CS[\"Client stub: marshal, call id 17\"]\n  CS --> RT[\"Runtime sends bytes over network\"]\n  RT --> SS[\"Server stub: unmarshal\"]\n  SS --> P[\"Real chargeCard runs\"]\n  P --> R[\"Reply tagged call id 17, unmarshalled\"]",
+      "caption": "Thousands of times slower than a local call, and it can fail halfway",
+      "steps": [
+        {
+          "say": "Checkout calls charge card for order seven, forty dollars. The stub marshals it as call seventeen, the server stub unpacks it and runs the real function, and the result comes back tagged seventeen.",
+          "reveal": 0
+        },
+        {
+          "say": "But it's half a millisecond, not nanoseconds, and it can fail partially. If the reply is lost, the caller cannot know whether the card was charged.",
+          "reveal": 0
+        }
+      ],
+      "id": "s037"
+    },
+    {
+      "layout": "table",
+      "title": "RPC call semantics: what a timeout means",
+      "table": {
+        "head": [
+          "Semantics",
+          "Guarantee",
+          "Built by",
+          "Safe for"
+        ],
+        "rows": [
+          [
+            "Maybe",
+            "Ran once or not at all",
+            "Send once, give up",
+            "Hints, metrics"
+          ],
+          [
+            "At-least-once",
+            "Ran 1+ times",
+            "Retry until reply",
+            "Idempotent ops"
+          ],
+          [
+            "At-most-once",
+            "Never twice, maybe 0",
+            "Server dedups call IDs",
+            "Non-idempotent"
+          ],
+          [
+            "Exactly-once",
+            "Ran exactly once",
+            "Retries + durable dedup",
+            "Payments, orders"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "So each R-P-C system states its call semantics. Maybe: send once, give up. Fine for metrics.",
+          "reveal": 1
+        },
+        {
+          "say": "At least once: retry until a reply. It may run twice, so only for idempotent calls.",
+          "reveal": 2
+        },
+        {
+          "say": "At most once: the server remembers call I-Ds and returns the saved reply to a duplicate. Never twice, maybe never.",
+          "reveal": 3
+        },
+        {
+          "say": "Exactly once isn't achievable in general. Approximate it with client retries plus durable server deduplication.",
+          "reveal": 4
+        }
+      ],
+      "id": "s038"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Example: chargeCard times out",
+      "bullets": [
+        "Timeout: outcome unknown",
+        "Client generates key pay-7-a1b2",
+        "Server stores key + result durably",
+        "Attempt 1: card charged $40, reply lost",
+        "Retry: key seen, saved result returned",
+        "Net effect: exactly one charge"
+      ],
+      "steps": [
+        {
+          "say": "Charge card times out. Tell the caller: outcome unknown.",
+          "reveal": 1
+        },
+        {
+          "say": "The client generates an idempotency key.",
+          "reveal": 2
+        },
+        {
+          "say": "The server stores the key with the result, in the same transaction as the charge.",
+          "reveal": 3
+        },
+        {
+          "say": "Attempt one charges forty dollars, but the reply is lost.",
+          "reveal": 4
+        },
+        {
+          "say": "The retry carries the same key, so the server skips the charge and returns the saved result.",
+          "reveal": 5
+        },
+        {
+          "say": "Exactly one charge. Also: g-R-P-C has no deadline by default. Always set one.",
+          "reveal": 6
+        }
+      ],
+      "id": "s039"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Mobile app backend plus internal ranking service: styles?",
+      "bullets": [
+        "A. gRPC for both",
+        "B. REST or GraphQL outside, gRPC inside",
+        "C. GraphQL for both"
+      ],
+      "steps": [
+        {
+          "say": "Pause and pick one.",
+          "reveal": 0
+        }
+      ],
+      "id": "s040"
+    },
+    {
+      "id": "c08",
+      "layout": "section",
+      "kicker": "Concept 8 of 14",
+      "title": "Real-time: pushing news to clients",
+      "caption": "Book: Fundamentals Part 2 · Real-time communication",
+      "steps": [
+        {
+          "say": "Answer: B. Rest, or GraphQL if screens need many related objects, for the public mobile A-P-I: easy to consume, cache and debug. g-R-P-C inside, for compact typed messages and streaming. Now real time: how does the server tell a client the moment something happens?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 8 of 14",
+      "title": "Real-time: five ways to push news",
+      "table": {
+        "head": [
+          "Technique",
+          "Direction",
+          "Use when"
+        ],
+        "rows": [
+          [
+            "Short polling",
+            "Client pulls every N s",
+            "Rare updates, simplicity"
+          ],
+          [
+            "Long polling",
+            "Server holds request",
+            "Fallback, WebSockets blocked"
+          ],
+          [
+            "WebSocket",
+            "Two-way, long-lived",
+            "Chat, games, collaboration"
+          ],
+          [
+            "SSE",
+            "Server to client stream",
+            "Feeds, scores, AI tokens"
+          ],
+          [
+            "Webhook",
+            "Server POSTs to server",
+            "Payment and Git events"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The client sits behind N-A-T and can't be dialled, so every option keeps a channel open from the client side. Short polling asks, anything new, every few seconds.",
+          "reveal": 1
+        },
+        {
+          "say": "Long polling: the server holds the request until there's news or about thirty seconds pass.",
+          "reveal": 2
+        },
+        {
+          "say": "A WebSocket: one long-lived, two-way connection. An open phone line.",
+          "reveal": 3
+        },
+        {
+          "say": "Server-sent events, S-S-E: one response the server keeps writing into. A radio broadcast.",
+          "reveal": 4
+        },
+        {
+          "say": "A webhook: server A posts to a U-R-L that server B registered. The shop calls you back.",
+          "reveal": 5
+        }
+      ],
+      "id": "s041"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: support chat for 1 million online shoppers",
+      "table": {
+        "head": [
+          "Option",
+          "Cost"
+        ],
+        "rows": [
+          [
+            "Short poll every 1 s",
+            "1,000,000 req/s, mostly nothing new"
+          ],
+          [
+            "Short poll every 10 s",
+            "100,000 req/s, up to 10 s delay"
+          ],
+          [
+            "WebSockets",
+            "~20 servers x 50,000 connections"
+          ],
+          [
+            "Plus",
+            "Registry user -> server, pub/sub"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Imagine a million shoppers in support chat. Polling every second is a million requests a second, nearly all empty.",
+          "reveal": 1
+        },
+        {
+          "say": "Every ten seconds: a hundred thousand a second, and ten-second delays.",
+          "reveal": 2
+        },
+        {
+          "say": "WebSockets: about fifty thousand connections per server, so twenty servers. The limit becomes open connections, not requests.",
+          "reveal": 3
+        },
+        {
+          "say": "But servers are now stateful. A registry maps users to servers, and pub-sub, like Redis or Kafka, routes each message.",
+          "reveal": 4
+        }
+      ],
+      "id": "s042"
+    },
+    {
+      "layout": "diagram",
+      "title": "WebSocket upgrade",
+      "mermaid": "flowchart LR\n  C[\"Browser\"] -->|\"1. GET /chat, Upgrade: websocket\"| S[\"Chat server\"]\n  S -->|\"2. 101 Switching Protocols\"| C2[\"Same TCP connection\"]\n  C2 -->|\"3. frames both ways\"| S2[\"Chat server\"]\n  C2 -->|\"4. ping/pong every 30 s\"| S2",
+      "caption": "Starts as plain HTTP, so it passes normal ports and proxies",
+      "steps": [
+        {
+          "say": "One: a normal get with an upgrade header. Two: the server answers one-oh-one. Three: small frames flow both ways, messages and typing indicators.",
+          "reveal": 0
+        },
+        {
+          "say": "Four: heartbeats every twenty to sixty seconds, or a load balancer's idle timeout cuts quiet connections. Clients reconnect with backoff and fetch missed messages.",
+          "reveal": 0
+        }
+      ],
+      "id": "s043"
+    },
+    {
+      "layout": "twocol",
+      "title": "SSE and webhooks",
+      "left": {
+        "heading": "SSE",
+        "bullets": [
+          "GET /events, text/event-stream",
+          "Auto-reconnect, Last-Event-ID",
+          "Plain HTTP: works with HTTP/2"
+        ]
+      },
+      "right": {
+        "heading": "Webhooks",
+        "bullets": [
+          "Register /hooks/payments",
+          "Sign with HMAC; retry with backoff",
+          "Receiver idempotent: may arrive twice"
+        ]
+      },
+      "steps": [
+        {
+          "say": "S-S-E: the browser opens an event stream, and the server never finishes the response.",
+          "reveal": 1
+        },
+        {
+          "say": "The browser reconnects automatically, resuming from the last event I-D.",
+          "reveal": 2
+        },
+        {
+          "say": "It's plain H-T-T-P. Choose it over WebSockets when only the server pushes, like streaming A-I tokens.",
+          "reveal": 3
+        },
+        {
+          "say": "Webhooks: the shop registers a U-R-L with its payment provider, which posts each payment event there.",
+          "reveal": 4
+        },
+        {
+          "say": "Each is signed with an H-MAC, a hash using a shared secret, and retried on failure.",
+          "reveal": 5
+        },
+        {
+          "say": "So the receiver must be idempotent: events can arrive twice, or out of order.",
+          "reveal": 6
+        }
+      ],
+      "id": "s044"
+    },
+    {
+      "id": "c09",
+      "layout": "section",
+      "kicker": "Concept 9 of 14",
+      "title": "API design basics",
+      "caption": "Book: Fundamentals Part 2 · API design basics",
+      "steps": [
+        {
+          "say": "Once thousands of clients depend on your A-P-I, you can't change it freely. A few habits keep it safe to evolve and protect your servers.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 9 of 14",
+      "title": "API design basics",
+      "bullets": [
+        "Resources: plural nouns, /orders/7",
+        "Version only breaking changes: /v2/orders",
+        "Prefer additive changes; ignore unknown fields",
+        "Paginate every list",
+        "Errors: real status + code + message",
+        "Idempotency keys; 429 + Retry-After"
+      ],
+      "steps": [
+        {
+          "say": "Name resources with plural nouns, and filter with query parameters.",
+          "reveal": 1
+        },
+        {
+          "say": "Version only for breaking changes, like renaming a field. Most A-P-Is put the version in the path, slash v-two slash orders, and keep v-one alive for a while. Some use a header instead, and Stripe pins each account to a dated version.",
+          "reveal": 2
+        },
+        {
+          "say": "Better: additive changes, with clients ignoring unknown fields.",
+          "reveal": 3
+        },
+        {
+          "say": "Never return an unbounded list.",
+          "reveal": 4
+        },
+        {
+          "say": "Use real status codes plus a machine-readable error code. Bad input is four hundred, not five hundred.",
+          "reveal": 5
+        },
+        {
+          "say": "Idempotency keys on posts. Over the limit? Four twenty-nine with retry-after.",
+          "reveal": 6
+        }
+      ],
+      "id": "s045"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: paginating the shop's order history",
+      "table": {
+        "head": [
+          "",
+          "Offset",
+          "Cursor"
+        ],
+        "rows": [
+          [
+            "Request",
+            "?limit=20&offset=40",
+            "?limit=20&after=eyJpZC..."
+          ],
+          [
+            "Query",
+            "skip 40, read 20",
+            "WHERE id < 1234 LIMIT 20"
+          ],
+          [
+            "Page 50,000",
+            "Reads 1M rows: slow",
+            "Index seek: constant"
+          ],
+          [
+            "New orders arrive",
+            "Duplicates or misses",
+            "Stable"
+          ],
+          [
+            "Jump to page 5",
+            "Yes",
+            "No"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Imagine a seller with a million orders. Offset skips forty, reads twenty. A cursor passes an opaque token for the last I-D seen.",
+          "reveal": 1
+        },
+        {
+          "say": "The cursor query says: I-Ds below twelve thirty-four, twenty of them.",
+          "reveal": 2
+        },
+        {
+          "say": "On page fifty thousand, offset reads a million rows. The cursor is one index seek.",
+          "reveal": 3
+        },
+        {
+          "say": "New orders shift offsets, causing duplicates. Cursors stay stable.",
+          "reveal": 4
+        },
+        {
+          "say": "Offset can jump to page five. So offset for small admin tables, cursors for feeds.",
+          "reveal": 5
+        }
+      ],
+      "id": "s046"
+    },
+    {
+      "id": "c10",
+      "layout": "section",
+      "kicker": "Concept 10 of 14",
+      "title": "Proxies and API gateways",
+      "caption": "Book: Fundamentals Part 2 · Proxies and API gateways",
+      "steps": [
+        {
+          "say": "A proxy is a middleman that receives a request and forwards it on someone else's behalf. The only question is: whose behalf?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 10 of 14",
+      "title": "Forward proxy versus reverse proxy",
+      "mermaid": "flowchart LR\n  C1[\"Office laptops\"] --> FP[\"Forward proxy, acts for clients\"]\n  FP --> NET[\"Internet\"]\n  NET --> RP[\"Reverse proxy, acts for servers\"]\n  RP --> S1[\"Shop server 1\"]\n  RP --> S2[\"Shop server 2\"]",
+      "caption": "Ask: does it represent the client or the server?",
+      "steps": [
+        {
+          "say": "A forward proxy acts for clients. An office routes browsing through one, and the internet sees the proxy, not the laptop.",
+          "reveal": 0
+        },
+        {
+          "say": "A reverse proxy acts for servers. Shoppers think they reach the shop, but the proxy forwards to hidden servers, doing load balancing, T-L-S and caching. Ask: does it represent the client, or the server?",
+          "reveal": 0
+        }
+      ],
+      "id": "s047"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: API gateway handles GET /orders/7",
+      "table": {
+        "head": [
+          "Step",
+          "What the gateway does"
+        ],
+        "rows": [
+          [
+            "1. Terminate TLS",
+            "Decrypt once, at the front door"
+          ],
+          [
+            "2. Authenticate",
+            "Verify JWT or API key"
+          ],
+          [
+            "3. Rate limit",
+            "Mobile app: 100 req/s quota"
+          ],
+          [
+            "4. Route",
+            "/orders/* -> order service"
+          ],
+          [
+            "5. Transform",
+            "REST -> gRPC, add request ID"
+          ],
+          [
+            "6. Observe",
+            "Log, metrics, trace; return 200"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "An A-P-I gateway is a reverse proxy for A-P-Is: one front door to many services. Follow get order seven. One: decrypt T-L-S.",
+          "reveal": 1
+        },
+        {
+          "say": "Two: verify the caller's J-W-T, a signed identity token, or A-P-I key.",
+          "reveal": 2
+        },
+        {
+          "say": "Three: apply the client's limit, say a hundred requests a second.",
+          "reveal": 3
+        },
+        {
+          "say": "Four: route slash orders to the order service.",
+          "reveal": 4
+        },
+        {
+          "say": "Five: optionally translate rest to g-R-P-C and add a request I-D.",
+          "reveal": 5
+        },
+        {
+          "say": "Six: log, measure, trace, respond. Keep business rules out, and run several gateways: each proxy is a hop and a possible single point of failure.",
+          "reveal": 6
+        }
+      ],
+      "id": "s048"
+    },
+    {
+      "id": "c11",
+      "layout": "section",
+      "kicker": "Concept 11 of 14",
+      "title": "Load balancers",
+      "caption": "Book: Fundamentals Part 2 · Load balancers",
+      "steps": [
+        {
+          "say": "One server can't run the whole shop. A load balancer lets three, or three thousand, servers hide behind one address. This is the biggest concept today, so we'll take it slowly.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 11 of 14",
+      "title": "Load balancers: why they matter",
+      "bullets": [
+        "Scalability: add servers, clients unchanged",
+        "Availability: skip failed servers",
+        "Zero-downtime deploys",
+        "Shared work: TLS, compression, logs",
+        "Hide the backend: only LB is public"
+      ],
+      "steps": [
+        {
+          "say": "A load balancer spreads traffic over healthy servers, like a restaurant host skipping the waiter who went home sick. One: add servers, clients notice nothing.",
+          "reveal": 1
+        },
+        {
+          "say": "Two: dead servers get skipped.",
+          "reveal": 2
+        },
+        {
+          "say": "Three: deploy by taking servers out one at a time.",
+          "reveal": 3
+        },
+        {
+          "say": "Four: T-L-S and compression in one place.",
+          "reveal": 4
+        },
+        {
+          "say": "Five: only the balancer is public.",
+          "reveal": 5
+        }
+      ],
+      "id": "s049"
+    },
+    {
+      "layout": "diagram",
+      "title": "One request through the load balancer",
+      "mermaid": "flowchart LR\n  U[\"Shoppers\"] -->|\"DNS -> virtual IP\"| LB[\"Load balancer, TLS\"]\n  LB --> A[\"Server A, healthy\"]\n  LB --> B[\"Server B, healthy\"]\n  LB -.->|\"failed health check\"| C[\"Server C, down\"]\n  A --> DB[\"Shared DB and Redis\"]\n  B --> DB",
+      "caption": "Any server may get any request, so keep servers stateless",
+      "steps": [
+        {
+          "say": "D-N-S points to the balancer's virtual I-P, owned by the service, not one machine. The balancer picks a backend by its algorithm among servers passing health checks. C failed, so it gets nothing. Since any server may get any request, carts live in the shared database and Redis.",
+          "reveal": 0
+        }
+      ],
+      "id": "s050"
+    },
+    {
+      "layout": "table",
+      "title": "L4 versus L7 load balancers",
+      "table": {
+        "head": [
+          "",
+          "L4",
+          "L7"
+        ],
+        "rows": [
+          [
+            "Sees",
+            "IPs, ports, TCP/UDP",
+            "Full HTTP request"
+          ],
+          [
+            "Decides per",
+            "Connection",
+            "Request"
+          ],
+          [
+            "Routes by URL, cookie",
+            "No",
+            "Yes"
+          ],
+          [
+            "Speed and cost",
+            "Microseconds, cheap",
+            "~1 ms, more CPU"
+          ],
+          [
+            "Protocols",
+            "Any TCP/UDP",
+            "HTTP, gRPC, WebSocket"
+          ],
+          [
+            "AWS",
+            "NLB",
+            "ALB"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Layer four sees connections, addresses and ports. Layer seven parses the whole H-T-T-P request.",
+          "reveal": 1
+        },
+        {
+          "say": "Layer four decides once per connection. Layer seven, per request.",
+          "reveal": 2
+        },
+        {
+          "say": "So only layer seven can send slash images to one pool and slash A-P-I to another.",
+          "reveal": 3
+        },
+        {
+          "say": "Layer four adds microseconds. Layer seven about a millisecond, and holds T-L-S keys.",
+          "reveal": 4
+        },
+        {
+          "say": "Layer four carries any protocol: databases, games. Layer seven, the H-T-T-P family.",
+          "reveal": 5
+        },
+        {
+          "say": "On Amazon, N-L-B and A-L-B. A common setup: layer four in front, then layer seven proxies.",
+          "reveal": 6
+        }
+      ],
+      "id": "s051"
+    },
+    {
+      "layout": "twocol",
+      "title": "Hardware, software, cloud and global",
+      "left": {
+        "heading": "Box or program",
+        "bullets": [
+          "Hardware: F5, NetScaler; fast, $$$",
+          "Software: NGINX, HAProxy, Envoy",
+          "Cloud managed: ALB, NLB, GCP LB"
+        ]
+      },
+      "right": {
+        "heading": "Wider reach",
+        "bullets": [
+          "DNS: round robin, GeoDNS",
+          "GSLB: pick region, fail over region",
+          "Client-side: gRPC, mesh sidecars"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Hardware balancers are special appliances. Very fast, tens of thousands of dollars each. Common in banks.",
+          "reveal": 1
+        },
+        {
+          "say": "Software balancers run on ordinary servers, configured as code. Google's Maglev is software too.",
+          "reveal": 2
+        },
+        {
+          "say": "Cloud balancers are run and scaled for you, paid per hour.",
+          "reveal": 3
+        },
+        {
+          "say": "D-N-S balancing is coarse but global.",
+          "reveal": 4
+        },
+        {
+          "say": "Global server load balancing picks a region and fails over whole regions.",
+          "reveal": 5
+        },
+        {
+          "say": "Client-side balancing lets each client pick from a registry, saving a hop.",
+          "reveal": 6
+        }
+      ],
+      "id": "s052"
+    },
+    {
+      "layout": "table",
+      "title": "Load-balancing algorithms",
+      "table": {
+        "head": [
+          "Algorithm",
+          "Rule",
+          "Best for"
+        ],
+        "rows": [
+          [
+            "Round robin",
+            "A, B, C, A, B, C",
+            "Identical servers"
+          ],
+          [
+            "Weighted RR",
+            "A=3, B=1: A gets 3 of 4",
+            "Mixed sizes, canaries"
+          ],
+          [
+            "Least connections",
+            "Fewest active now",
+            "Long or uneven requests"
+          ],
+          [
+            "Least response time",
+            "Lowest recent latency",
+            "Avoiding slow servers"
+          ],
+          [
+            "IP hash",
+            "hash(IP) mod N",
+            "Simple stickiness"
+          ],
+          [
+            "Consistent hashing",
+            "Next node on a ring",
+            "Cache affinity"
+          ],
+          [
+            "Power of two choices",
+            "Pick 2 random, less loaded",
+            "Large fleets"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Round robin takes turns. Fair for identical servers, blind to load.",
+          "reveal": 1
+        },
+        {
+          "say": "Weighted round robin gives bigger servers more turns, and enables canaries.",
+          "reveal": 2
+        },
+        {
+          "say": "Least connections picks the server with fewest active connections.",
+          "reveal": 3
+        },
+        {
+          "say": "Least response time prefers the fastest server, but everyone rushing there causes herding, so it smooths the numbers.",
+          "reveal": 4
+        },
+        {
+          "say": "I-P hash: same client, same server. But an office behind N-A-T lands on one server, and resizing remaps everyone.",
+          "reveal": 5
+        },
+        {
+          "say": "Consistent hashing puts servers on a ring. Add one, and only about one in N keys move.",
+          "reveal": 6
+        },
+        {
+          "say": "Power of two choices: sample two at random, take the less loaded. It cuts worst-case load with no herding.",
+          "reveal": 7
+        }
+      ],
+      "id": "s053"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: picking algorithms for the shop",
+      "table": {
+        "head": [
+          "Tier",
+          "Choice and why"
+        ],
+        "rows": [
+          [
+            "Web/API servers",
+            "P2C: B has 12 active, E has 4 -> E"
+          ],
+          [
+            "Support chat sockets",
+            "Least connections: hours-long sockets"
+          ],
+          [
+            "New checkout version",
+            "Weighted: 1% new, 99% old"
+          ],
+          [
+            "Product-image cache",
+            "Consistent hash on URL: 1/N moves"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Shop A-P-I servers: power of two choices. Sample B and E. B has twelve active, E has four. Send to E.",
+          "reveal": 1
+        },
+        {
+          "say": "Chat WebSockets last hours, so use least connections.",
+          "reveal": 2
+        },
+        {
+          "say": "New checkout: weight it one percent, watch errors, then raise it.",
+          "reveal": 3
+        },
+        {
+          "say": "Image cache: consistent hashing on the U-R-L. Grow from ten nodes to eleven, and only about a tenth of images move.",
+          "reveal": 4
+        }
+      ],
+      "id": "s054"
+    },
+    {
+      "layout": "bullets",
+      "title": "Health checks",
+      "bullets": [
+        "Active: GET /health every 10 s, 5 s timeout",
+        "Unhealthy after 2-3 fails, healthy after 2-5 OK",
+        "Passive: eject after repeated 5xx, ~30 s",
+        "Liveness: running. Readiness: can serve",
+        "Fail open if every backend looks dead"
+      ],
+      "steps": [
+        {
+          "say": "Active checks probe each server, say get slash health every ten seconds, with a five-second timeout.",
+          "reveal": 1
+        },
+        {
+          "say": "Two or three failures mark it unhealthy. Several successes bring it back, so blips don't flap.",
+          "reveal": 2
+        },
+        {
+          "say": "Passive checks watch real traffic, ejecting a server after repeated errors for about thirty seconds.",
+          "reveal": 3
+        },
+        {
+          "say": "Liveness means running. Readiness means able to serve: database reachable, caches warm.",
+          "reveal": 4
+        },
+        {
+          "say": "Avoid deep checks on shared things. If the database blips and every check fails, the balancer would remove everything, so many fail open and keep sending to all.",
+          "reveal": 5
+        }
+      ],
+      "id": "s055"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: server C dies at 12:00:00",
+      "table": {
+        "head": [
+          "Time",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "12:00:00",
+            "Server C's process crashes"
+          ],
+          [
+            "12:00:05",
+            "Check 1 times out (5 s)"
+          ],
+          [
+            "12:00:15",
+            "Check 2 fails: marked unhealthy"
+          ],
+          [
+            "12:00:15+",
+            "Traffic goes to A and B only"
+          ],
+          [
+            "12:03:00",
+            "C restarted; 2 checks pass -> back in"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Server C crashes at noon.",
+          "reveal": 1
+        },
+        {
+          "say": "Its next check times out after five seconds.",
+          "reveal": 2
+        },
+        {
+          "say": "Ten seconds later the second fails. C is unhealthy.",
+          "reveal": 3
+        },
+        {
+          "say": "Traffic now goes to A and B.",
+          "reveal": 4
+        },
+        {
+          "say": "C restarts, passes two checks, rejoins. Users saw at most fifteen seconds of errors, on a third of requests.",
+          "reveal": 5
+        }
+      ],
+      "id": "s056"
+    },
+    {
+      "layout": "twocol",
+      "title": "Sticky sessions and TLS termination",
+      "left": {
+        "heading": "Sticky sessions",
+        "bullets": [
+          "Same user -> same server",
+          "Cookie (AWSALB) or IP hash",
+          "Uneven load, lost on failure"
+        ]
+      },
+      "right": {
+        "heading": "TLS at the LB",
+        "bullets": [
+          "Terminate: decrypt, plain HTTP inside",
+          "Re-encrypt: inspect, new TLS",
+          "Passthrough: backend decrypts, SNI only"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Sticky sessions send one user's requests to the same server.",
+          "reveal": 1
+        },
+        {
+          "say": "Using a balancer cookie, or a hash of the client address.",
+          "reveal": 2
+        },
+        {
+          "say": "Costs: uneven load, and sessions lost when a server dies. Prefer Redis. Use stickiness only where state is unavoidable, like WebSockets.",
+          "reveal": 3
+        },
+        {
+          "say": "T-L-S termination: the balancer decrypts and sends plain H-T-T-P inside the private network. One place for certificates, and content routing.",
+          "reveal": 4
+        },
+        {
+          "say": "Re-encryption opens new T-L-S to the backend: end to end, more C-P-U. For regulated data.",
+          "reveal": 5
+        },
+        {
+          "say": "Passthrough never decrypts. The backend keeps the keys, and routing uses only the S-N-I host name.",
+          "reveal": 6
+        }
+      ],
+      "id": "s057"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Example: deploying with connection draining",
+      "bullets": [
+        "1. Deregister server A: no new requests",
+        "2. In-flight requests finish (up to 30-60 s)",
+        "3. Update A, start it",
+        "4. Readiness checks pass: re-register",
+        "5. Repeat for B, C... users see nothing"
+      ],
+      "steps": [
+        {
+          "say": "Deploying to ten servers. One: deregister A. No new requests. Amazon calls this the deregistration delay, three hundred seconds by default, often cut to thirty to sixty.",
+          "reveal": 1
+        },
+        {
+          "say": "Two: in-flight checkouts finish. Long WebSockets are told to reconnect elsewhere.",
+          "reveal": 2
+        },
+        {
+          "say": "Three: update A.",
+          "reveal": 3
+        },
+        {
+          "say": "Four: when readiness passes, re-register.",
+          "reveal": 4
+        },
+        {
+          "say": "Five: repeat. Shoppers notice nothing.",
+          "reveal": 5
+        }
+      ],
+      "id": "s058"
+    },
+    {
+      "layout": "diagram",
+      "title": "Making the load balancer highly available",
+      "mermaid": "flowchart LR\n  VIP[\"Virtual IP 203.0.113.10\"] --> LB1[\"LB node 1, active\"]\n  VIP -.->|\"takes over on heartbeat loss\"| LB2[\"LB node 2, standby\"]\n  LB1 --> P[\"Server pool\"]\n  LB2 -.-> P",
+      "caption": "Active-passive with VRRP, or active-active with DNS, anycast or ECMP",
+      "steps": [
+        {
+          "say": "One balancer is a single point of failure. Active-passive: two nodes share a virtual I-P, and the standby takes it over when heartbeats stop. Simple, but half the hardware idles.",
+          "reveal": 0
+        },
+        {
+          "say": "Active-active: all nodes serve, spread by D-N-S, anycast, or E-C-M-P routing across machines announcing one address. Cloud balancers do this across zones. Never draw one balancer box without saying how it's redundant.",
+          "reveal": 0
+        }
+      ],
+      "id": "s059"
+    },
+    {
+      "layout": "diagram",
+      "title": "Direct server return",
+      "mermaid": "flowchart LR\n  C[\"Client\"] -->|\"small request\"| LB[\"L4 load balancer\"]\n  LB -->|\"forward packets\"| S[\"Server\"]\n  S -->|\"large response, straight back\"| C",
+      "caption": "The LB carries only the small inbound half",
+      "steps": [
+        {
+          "say": "Responses dwarf requests: a tiny request for a two megabyte video chunk. With direct server return, the server replies straight to the client, so the balancer carries only the small half and fronts far more traffic.",
+          "reveal": 0
+        }
+      ],
+      "id": "s060"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "gRPC behind an L4 LB: one server at 95% CPU. Why?",
+      "bullets": [
+        "A. Round robin is broken",
+        "B. Long gRPC connections pin requests to one backend",
+        "C. Health checks failed"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think.",
+          "reveal": 0
+        }
+      ],
+      "id": "s061"
+    },
+    {
+      "id": "c12",
+      "layout": "section",
+      "kicker": "Concept 12 of 14",
+      "title": "CDNs and anycast",
+      "caption": "Book: Fundamentals Part 2 · CDNs and anycast",
+      "steps": [
+        {
+          "say": "Answer: B. Layer four balances per connection, and g-R-P-C keeps one long connection carrying many requests, so they all pin to one backend. Use layer seven or client-side balancing, which decide per request. Next: moving content physically close to users.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 12 of 14",
+      "title": "CDNs: content near the user",
+      "mermaid": "flowchart LR\n  U[\"Shopper in Sydney\"] -->|\"GET /img/shoe.jpg\"| E[\"Sydney edge PoP\"]\n  E -->|\"hit: about 5 ms\"| U\n  E -->|\"miss\"| SH[\"Origin shield\"]\n  SH -->|\"only if shield misses\"| O[\"Origin in Virginia\"]",
+      "caption": "Cache-Control: public, max-age=86400 tells edges how long to keep it",
+      "steps": [
+        {
+          "say": "A C-D-N, content delivery network, is a worldwide set of caching servers. A Sydney shopper gets the shoe photo from a Sydney edge in about five milliseconds, not a two hundred millisecond round trip to Virginia.",
+          "reveal": 0
+        },
+        {
+          "say": "A P-o-P is a C-D-N site in a city. On a miss, the edge asks an origin shield, a middle cache, which asks the origin only if it misses too. The origin's cache-control header says how long to keep copies.",
+          "reveal": 0
+        }
+      ],
+      "id": "s062"
+    },
+    {
+      "layout": "twocol",
+      "title": "Pull CDN versus push CDN",
+      "left": {
+        "heading": "Pull (origin pull)",
+        "bullets": [
+          "Fetched on first miss",
+          "Zero upload effort",
+          "Websites, mixed traffic"
+        ]
+      },
+      "right": {
+        "heading": "Push",
+        "bullets": [
+          "Uploaded in advance",
+          "You manage and pay for storage",
+          "Game patches, video libraries"
+        ]
+      },
+      "steps": [
+        {
+          "say": "A pull C-D-N fetches from the origin the first time it's asked.",
+          "reveal": 1
+        },
+        {
+          "say": "No upload work, but the first shopper at each site waits.",
+          "reveal": 2
+        },
+        {
+          "say": "Most websites, like our shop, use pull.",
+          "reveal": 3
+        },
+        {
+          "say": "Push means uploading content ahead of time.",
+          "reveal": 4
+        },
+        {
+          "say": "You manage and pay for storage.",
+          "reveal": 5
+        },
+        {
+          "say": "It suits known big files, like a launch-day game patch.",
+          "reveal": 6
+        }
+      ],
+      "id": "s063"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: the shop's CDN in numbers",
+      "table": {
+        "head": [
+          "Situation",
+          "Result"
+        ],
+        "rows": [
+          [
+            "Hit ratio 95%",
+            "1 in 20 requests reaches origin"
+          ],
+          [
+            "100,000 req/s at edges",
+            "Origin sees 5,000 req/s: 20x less"
+          ],
+          [
+            "Viral item, 300 PoPs, no shield",
+            "300 origin fetches"
+          ],
+          [
+            "Same, with origin shield",
+            "About 1 origin fetch"
+          ],
+          [
+            "Deploy app.js, TTL 1 year",
+            "Ship app.3f9a1c.js: new URL"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "At a ninety-five percent hit ratio, one request in twenty reaches the origin.",
+          "reveal": 1
+        },
+        {
+          "say": "A hundred thousand a second at the edges becomes five thousand at the origin.",
+          "reveal": 2
+        },
+        {
+          "say": "A product goes viral: without a shield, three hundred sites each fetch from the origin.",
+          "reveal": 3
+        },
+        {
+          "say": "With a shield, the origin sees about one.",
+          "reveal": 4
+        },
+        {
+          "say": "Overwrite app dot J-S with a one-year T-T-L, and users keep the old file. Instead, ship a new hashed file name. Nothing to purge. And never cache personal pages under a shared key.",
+          "reveal": 5
+        }
+      ],
+      "id": "s064"
+    },
+    {
+      "layout": "bullets",
+      "title": "Anycast: one IP, many places",
+      "bullets": [
+        "Unicast: one IP, one location",
+        "Anycast: same IP announced from many sites",
+        "BGP routes each user to the 'nearest'",
+        "Spreads DDoS, fast failover",
+        "Used by Cloudflare, 8.8.8.8, root servers"
+      ],
+      "steps": [
+        {
+          "say": "Normally one address means one place: unicast.",
+          "reveal": 1
+        },
+        {
+          "say": "Anycast announces the same address from many places.",
+          "reveal": 2
+        },
+        {
+          "say": "B-G-P, how networks share routes, sends each user to the nearest site in network terms. Usually the fastest, not always.",
+          "reveal": 3
+        },
+        {
+          "say": "Attacks get spread across every site, and a failing site just stops announcing.",
+          "reveal": 4
+        },
+        {
+          "say": "Cloudflare, Google's resolver and the root servers all use it.",
+          "reveal": 5
+        }
+      ],
+      "id": "s065"
+    },
+    {
+      "id": "c13",
+      "layout": "section",
+      "kicker": "Concept 13 of 14",
+      "title": "Bandwidth versus latency",
+      "caption": "Book: Fundamentals Part 2 · Bandwidth vs latency",
+      "steps": [
+        {
+          "say": "Two last ideas. People often mix up how wide the pipe is with how long the trip takes.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "layout": "number",
+      "kicker": "Concept 13 of 14",
+      "title": "Bandwidth versus latency",
+      "big": "10 x 70 ms = 700 ms",
+      "caption": "But 10 TB over 1 Gbps takes about 22 hours: bandwidth-bound",
+      "steps": [
+        {
+          "say": "Bandwidth is how much a link carries per second. One gigabit per second is about a hundred and twenty-five megabytes a second. Latency is how long one piece takes to arrive. A wider road doesn't shorten the trip.",
+          "reveal": 0
+        },
+        {
+          "say": "Ten sequential trans-Atlantic round trips take seven hundred milliseconds, however fat the pipe. Light in fibre covers about two hundred kilometres per millisecond, and no protocol beats that. So cut round trips and move data closer.",
+          "reveal": 0
+        },
+        {
+          "say": "Copying ten terabytes over one gigabit per second: eighty thousand seconds, about twenty-two hours. That's bandwidth-bound.",
+          "reveal": 0
+        },
+        {
+          "say": "In the interview: slow in Asia but fine in the U-S? Don't buy bandwidth. Cut round trips, add a C-D-N, deploy regionally.",
+          "reveal": 0
+        }
+      ],
+      "id": "s066"
+    },
+    {
+      "id": "c14",
+      "layout": "section",
+      "kicker": "Concept 14 of 14",
+      "title": "Network partitions",
+      "caption": "Book: Fundamentals Pt 2 · Bandwidth vs latency, and network partitions",
+      "steps": [
+        {
+          "say": "And finally: what happens when the network itself breaks, and every machine is still running?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 14 of 14",
+      "title": "Network partitions",
+      "mermaid": "flowchart LR\n  subgraph DC1[\"Data centre 1\"]\n    A[\"Node A\"]\n    B[\"Node B\"]\n  end\n  subgraph DC2[\"Data centre 2\"]\n    C[\"Node C\"]\n  end\n  A --- B\n  B -.-x|\"link cut, partition\"| C",
+      "caption": "Crashed and unreachable look identical: silence",
+      "steps": [
+        {
+          "say": "A partition is when the network splits, and healthy machines can't reach each other. A failed switch, a cut cable. At scale, it happens.",
+          "reveal": 0
+        },
+        {
+          "say": "Imagine the order database on A and B in one data centre and C in another, and the link is cut. C can't tell crashed from unreachable: both are silence. Timeouts and heartbeats detect it, then the system must choose.",
+          "reveal": 0
+        }
+      ],
+      "id": "s067"
+    },
+    {
+      "layout": "twocol",
+      "title": "During a partition: choose",
+      "left": {
+        "heading": "Stay consistent",
+        "bullets": [
+          "Minority side (C) refuses writes",
+          "Data never diverges",
+          "C is unavailable for a while"
+        ]
+      },
+      "right": {
+        "heading": "Stay available",
+        "bullets": [
+          "Both sides keep taking orders",
+          "Reconcile after healing",
+          "Risk: split brain, conflicts"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Stay consistent: A and B are a majority, so they continue. C refuses writes.",
+          "reveal": 1
+        },
+        {
+          "say": "Data never diverges.",
+          "reveal": 2
+        },
+        {
+          "say": "But shoppers on C get errors until it heals.",
+          "reveal": 3
+        },
+        {
+          "say": "Stay available: both sides keep taking orders.",
+          "reveal": 4
+        },
+        {
+          "say": "They reconcile afterwards.",
+          "reveal": 5
+        },
+        {
+          "say": "Risk: split brain, two leaders selling the last pair of shoes twice. Majority quorums prevent it, covered in later episodes with the CAP theorem. And remember: a timeout doesn't prove failure.",
+          "reveal": 6
+        }
+      ],
+      "id": "s068"
+    },
+    {
+      "layout": "recap",
+      "kicker": "Episode 2 complete",
+      "title": "Episode 2 recap",
+      "bullets": [
+        "IP finds machine, port finds program; NAT",
+        "DNS: root, TLD, authoritative; TTL; GeoDNS",
+        "TCP reliable + HOL; UDP; QUIC; HTTP/1.1-2-3",
+        "TLS 1 RTT; REST, gRPC, GraphQL; idempotency",
+        "WebSocket, SSE, webhook; proxies, gateway",
+        "LB: L4/L7, algorithms, health, HA; CDN; partitions"
+      ],
+      "steps": [
+        {
+          "say": "Addresses find machines, ports find programs, and N-A-T hides private networks.",
+          "reveal": 1
+        },
+        {
+          "say": "D-N-S walks root, top-level and authoritative servers, cached by T-T-L.",
+          "reveal": 2
+        },
+        {
+          "say": "T-C-P is reliable but blocks at the head of the line. U-D-P fires and forgets. QUIC powers H-T-T-P three.",
+          "reveal": 3
+        },
+        {
+          "say": "T-L-S costs one round trip. Pick rest, g-R-P-C or GraphQL by audience, and make retries safe with idempotency keys.",
+          "reveal": 4
+        },
+        {
+          "say": "Push with WebSockets, S-S-E or webhooks. Gateways guard the front door.",
+          "reveal": 5
+        },
+        {
+          "say": "Balancers need the right layer, algorithm, health checks and redundancy. C-D-Ns bring content close, and partitions force a choice. Next time, episode three, Fundamentals three: data storage. See you there.",
+          "reveal": 6
+        }
+      ],
+      "id": "s069"
+    }
+  ]
+}

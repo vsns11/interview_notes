@@ -1,0 +1,1624 @@
+{
+  "series": "System Design Workshop",
+  "episode": 18,
+  "title": "Algorithms II: Storage, Search, Ranking",
+  "subtitle": "Trending, LSM and B+-trees, MVCC, caches, timers, snapshots, search, vectors, maps, feeds",
+  "scenes": [
+    {
+      "layout": "title",
+      "title": "Algorithms II: Storage, Search, Ranking",
+      "subtitle": "Trending, LSM and B+-trees, MVCC, caches, timers, snapshots, search, vectors, maps, feeds",
+      "steps": [
+        {
+          "say": "Welcome to episode eighteen of the System Design Workshop: Algorithms Two, storage, search and ranking.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll be able to explain how databases store and version rows, how caches and timers stay cheap, how search engines find and rank documents, how maps find routes, and how a feed picks what you see.",
+          "reveal": 0
+        },
+        {
+          "say": "Keep the module nineteen notes PDF open beside the video. When I say pause and think, pause, and answer before I do.",
+          "reveal": 0
+        }
+      ],
+      "id": "s001"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 1 of 15",
+      "title": "Trending: unusual for this item, not just big",
+      "steps": [
+        {
+          "say": "Concept one: trending detection. Here's the question. A World Cup hashtag gets fifty thousand mentions an hour, every hour. A small band jumps from twenty mentions to two thousand. Which one is trending?",
+          "reveal": 0
+        },
+        {
+          "say": "The band. Popular means big. Trending means much bigger than its own normal. Raw counts would show the same giants forever.",
+          "reveal": 0
+        }
+      ],
+      "id": "s002",
+      "caption": "Book: Module 19 · Trending detection with decayed counts and z-scores"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 1 of 15",
+      "title": "Trending, step by step",
+      "bullets": [
+        "1. Decayed count: c halves every half-life",
+        "2. EWMA baseline: running mean and variance",
+        "3. z-score: (x - mean) / std dev, flag above 3",
+        "4. Small-number guards: minimum volume",
+        "5. Scale: heavy-hitter front end, partition"
+      ],
+      "steps": [
+        {
+          "say": "Step one, the decayed count. Per hashtag keep one number and one timestamp. With a ten minute half-life, a thousand mentions at noon read five hundred at ten past, two fifty at twenty past. No window to expire, and no cliff when an hour passes.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, the baseline. Each minute, update an exponentially weighted moving average, E-W-M-A for short, of the count and its variance. It's a running normal that slowly forgets the past.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, the z-score: this minute's count minus the mean, divided by the standard deviation. It says how many standard deviations above normal we are. Flag above three.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, guards. Two mentions jumping to six is a z of four, but it's noise. So require a minimum count, like fifty a minute.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, scale. Partition by hashtag across workers, track only candidates found by a heavy-hitter sketch, and merge each worker's top list at a coordinator every few seconds.",
+          "reveal": 5
+        }
+      ],
+      "id": "s003"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: band versus World Cup",
+      "table": {
+        "head": [
+          "Topic",
+          "Mean",
+          "Std dev",
+          "This minute",
+          "z"
+        ],
+        "rows": [
+          [
+            "Small band",
+            "100",
+            "20",
+            "180",
+            "4.0, trending"
+          ],
+          [
+            "Same band, next minute",
+            "116",
+            "36.7",
+            "260",
+            "3.9, trending"
+          ],
+          [
+            "World Cup",
+            "10,000",
+            "1,000",
+            "10,500",
+            "0.5, not trending"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's run it. The band normally does a hundred a minute, standard deviation twenty. This minute it does a hundred and eighty. Eighty over twenty is a z of four. Trending.",
+          "reveal": 1
+        },
+        {
+          "say": "The baseline updates: mean rises to a hundred and sixteen, deviation to about thirty seven. Next minute two hundred and sixty gives z about three point nine. Still trending, but the baseline is catching up, so a surge lasting hours eventually stops trending. That's intended.",
+          "reveal": 2
+        },
+        {
+          "say": "The World Cup does ten thousand five hundred, far more, but its z is only half a standard deviation. Not trending. In the interview, say: decayed counts, E-W-M-A baseline, z with a volume floor, count distinct users to resist bots.",
+          "reveal": 3
+        }
+      ],
+      "id": "s004"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 2 of 15",
+      "title": "LSM trees: write now, sort later",
+      "steps": [
+        {
+          "say": "Concept two: the L-S-M tree, short for log-structured merge tree. It powers RocksDB, Cassandra and HBase. The idea: turn every write into a fast sequential append, and do the sorting later in the background.",
+          "reveal": 0
+        },
+        {
+          "say": "Why? A classic B-tree changes a hundred-byte row by rewriting a sixteen kilobyte page at a random spot on disk. For write-heavy work like metrics or chat, that's slow and wears out SSDs.",
+          "reveal": 0
+        }
+      ],
+      "id": "s005",
+      "caption": "Book: Module 19 · LSM trees in depth"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 2 of 15",
+      "title": "LSM write path and levels",
+      "mermaid": "flowchart TD\n  W[\"Write: put key value\"] --> WAL[\"WAL append on disk\"]\n  W --> M[\"Memtable in RAM, sorted\"]\n  M -->|\"full: flush\"| L0[\"L0: overlapping SSTables\"]\n  L0 -->|\"compact\"| L1[\"L1: one sorted run, 256 MB\"]\n  L1 -->|\"compact\"| L2[\"L2: about 10x bigger\"]\n  L2 -->|\"compact\"| L3[\"L3: about 10x bigger again\"]",
+      "caption": "Sequential appends now, background merges later",
+      "steps": [
+        {
+          "say": "Follow a write, put user forty two equals Ana, for our chat app. First it's appended to the write-ahead log, the W-A-L, so a crash can't lose it. Then it goes into the memtable, a sorted structure in memory. That's it, acknowledged.",
+          "reveal": 0
+        },
+        {
+          "say": "When the memtable reaches sixty four megabytes, it's frozen and flushed as an S-S-Table, a sorted string table: an immutable, key-sorted file that is never edited. Compaction then merges files down into levels, each about ten times bigger, dropping overwritten values.",
+          "reveal": 0
+        }
+      ],
+      "id": "s006"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 2 of 15",
+      "title": "LSM parts, one by one",
+      "bullets": [
+        "1. Memtable: sorted, in memory, takes writes",
+        "2. SSTable: immutable sorted file on disk",
+        "3. Delete = tombstone, removed at compaction",
+        "4. Read: memtable, then newest file to oldest",
+        "5. Bloom filter: skip files without the key",
+        "6. Compaction: leveled or size-tiered"
+      ],
+      "steps": [
+        {
+          "say": "Part one, the memtable. Every write lands here, sorted, usually as a skip list, which is concept six.",
+          "reveal": 1
+        },
+        {
+          "say": "Part two, the S-S-Table. Written once in key order with a small index, then never changed. Newer files override older ones.",
+          "reveal": 2
+        },
+        {
+          "say": "Part three, deletes. You can't edit a file, so a delete writes a tombstone, a marker that says gone. The old value disappears only when compaction merges the two.",
+          "reveal": 3
+        },
+        {
+          "say": "Part four, reads. Check the memtable first, then files from newest to oldest. The first hit wins.",
+          "reveal": 4
+        },
+        {
+          "say": "Part five, the Bloom filter. Each file has one, about ten bits per key, answering definitely not here, or maybe. Looking up a missing key across eight files would cost eight disk reads. With one percent false positives, it costs eight hundredths of a read on average.",
+          "reveal": 5
+        },
+        {
+          "say": "Part six, compaction. Leveled keeps one sorted run per level, good for reads and space. Size-tiered merges four similar files into one bigger file, which rewrites less, so it's better for writes.",
+          "reveal": 6
+        }
+      ],
+      "id": "s007"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: compaction trade-offs",
+      "table": {
+        "head": [
+          "Measure",
+          "Leveled",
+          "Size-tiered"
+        ],
+        "rows": [
+          [
+            "Write amplification",
+            "High, tens of rewrites",
+            "Low"
+          ],
+          [
+            "Read amplification",
+            "One file per level",
+            "Many overlapping files"
+          ],
+          [
+            "Space amplification",
+            "About 1.1x",
+            "Up to 3x during merges"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Three amplifications compare engines. Write amplification is disk bytes written per user byte. Leveled can rewrite each byte tens of times as it moves down four or five levels. Size-tiered rewrites it about once per tier.",
+          "reveal": 1
+        },
+        {
+          "say": "Read amplification is disk reads per query. Leveled guarantees at most one file per level. Size-tiered may check many overlapping files.",
+          "reveal": 2
+        },
+        {
+          "say": "Space amplification is disk used over live data. Leveled with L one at two fifty six megabytes and a ten times multiplier puts ninety percent of data on the last level, so about eleven percent overhead. Size-tiered can need three times the space mid-merge. In the interview: write-heavy metrics, size-tiered. Read-heavy, leveled.",
+          "reveal": 3
+        }
+      ],
+      "id": "s008"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 3 of 15",
+      "title": "B+-trees: short, wide trees of pages",
+      "steps": [
+        {
+          "say": "Concept three: the B-plus tree, the index inside MySQL InnoDB and PostgreSQL. Disks and SSDs read whole pages, sixteen kilobytes in InnoDB. So the trick is packing hundreds of keys into each node, making the tree wide and shallow.",
+          "reveal": 0
+        },
+        {
+          "say": "All the rows live in the leaves, which are linked left to right. Inner nodes hold only separator keys that steer the search.",
+          "reveal": 0
+        }
+      ],
+      "id": "s009",
+      "caption": "Book: Module 19 · B+-trees"
+    },
+    {
+      "layout": "number",
+      "kicker": "Concept 3 of 15",
+      "title": "Fan-out: 3 to 4 page reads for billions",
+      "big": "16 KB / 14 B = 1,170 children",
+      "caption": "Height 3 holds about 20 million rows, height 4 about 24 billion",
+      "steps": [
+        {
+          "say": "Let's do the fan-out math. An inner entry is an eight-byte key plus a six-byte page number, about fourteen bytes. A sixteen kilobyte page holds about eleven hundred seventy children.",
+          "reveal": 0
+        },
+        {
+          "say": "With about fifteen one-kilobyte rows per leaf, height three holds about twenty million rows, and height four about twenty four billion. A binary tree would need about thirty page reads to find one row in a billion. A B-plus tree needs three or four, and the top levels are almost always cached.",
+          "reveal": 0
+        }
+      ],
+      "id": "s010"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 3 of 15",
+      "title": "Insert with a page split: insert 25",
+      "bullets": [
+        "1. Find the leaf: A = [10, 20, 30, 40]",
+        "2. Room? Insert in order. Here A is full",
+        "3. Split: A = [10, 20], new B = [25, 30, 40]",
+        "4. Fix sibling links: A to B to old neighbour",
+        "5. Push separator 25 into the parent",
+        "6. Full parent splits too; root split = taller"
+      ],
+      "steps": [
+        {
+          "say": "Example, with at most four keys per leaf. Step one: search down to the leaf. Leaf A holds ten, twenty, thirty, forty, and we insert twenty five.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: if there's room, insert in order and stop. Here A is full.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, split. Make a new leaf B. A keeps ten and twenty. B gets twenty five, thirty and forty.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, fix the links so a range scan can still walk A, then B, then A's old right neighbour.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, insert separator twenty five and a pointer to B into the parent. Searches for twenty five or more now go right.",
+          "reveal": 5
+        },
+        {
+          "say": "Step six, if the parent is full it splits too, pushing a key up. A root split creates a new root, the only way the tree grows taller, so every leaf stays at the same depth.",
+          "reveal": 6
+        }
+      ],
+      "id": "s011"
+    },
+    {
+      "layout": "twocol",
+      "kicker": "Concept 3 of 15",
+      "title": "B+-tree in practice",
+      "left": {
+        "heading": "Why it wins",
+        "bullets": [
+          "Range scans: find start, walk leaves",
+          "Predictable latency, no compaction",
+          "Fill factor 90 leaves room for inserts"
+        ]
+      },
+      "right": {
+        "heading": "Watch out",
+        "bullets": [
+          "Random UUID keys: splits everywhere",
+          "Half-full pages, bigger index",
+          "Use auto-increment or UUID version 7"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Why it wins: a query for orders created this week finds the start leaf and walks sideways.",
+          "reveal": 1
+        },
+        {
+          "say": "Latency is predictable, because there's no background compaction stealing disk.",
+          "reveal": 2
+        },
+        {
+          "say": "Fill factor leaves free space. PostgreSQL packs leaves to ninety percent, so later inserts land without splitting.",
+          "reveal": 3
+        },
+        {
+          "say": "Now the trap. A random UUID primary key in InnoDB inserts into random leaves, causing splits all over the index.",
+          "reveal": 4
+        },
+        {
+          "say": "Each split leaves two half-full pages, so the index is bigger and cache misses rise.",
+          "reveal": 5
+        },
+        {
+          "say": "A monotonic key, like auto-increment or a time-ordered UUID version seven, always appends at the right edge. In the interview: B-plus tree for read-heavy, range-heavy work. L-S-M for write-heavy.",
+          "reveal": 6
+        }
+      ],
+      "id": "s012"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Write-heavy metrics store: LSM or B+-tree?",
+      "bullets": [
+        "A. B+-tree, it has predictable latency",
+        "B. LSM with size-tiered compaction",
+        "C. LSM with leveled compaction"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. You're storing millions of metric points a second, mostly appends, read in recent time ranges.",
+          "reveal": 0
+        }
+      ],
+      "id": "s013"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 4 of 15",
+      "title": "Answer: B. Now, MVCC",
+      "steps": [
+        {
+          "say": "The answer is B. An L-S-M absorbs the writes, and size-tiered keeps write amplification low.",
+          "reveal": 0
+        },
+        {
+          "say": "Concept four: M-V-C-C, multi-version concurrency control. The problem: a long report reading a million rows would block every update if it held read locks. M-V-C-C keeps several versions of each row, so readers see a frozen snapshot and writers create new versions. Readers never block writers.",
+          "reveal": 0
+        }
+      ],
+      "id": "s014",
+      "caption": "Book: Module 19 · MVCC step by step"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: PostgreSQL versions of account 7",
+      "table": {
+        "head": [
+          "Step",
+          "What happens",
+          "Who sees what"
+        ],
+        "rows": [
+          [
+            "1",
+            "T100 starts, takes a snapshot",
+            "Committed below 100 visible"
+          ],
+          [
+            "2",
+            "T101 sets balance 100 to 80, commits",
+            "Old: xmax 101. New: xmin 101"
+          ],
+          [
+            "3",
+            "T100 reads account 7",
+            "Sees 100: deleter 101 is too new"
+          ],
+          [
+            "4",
+            "T102 starts after T101 committed",
+            "Sees 80"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Each transaction gets an increasing I-D. In PostgreSQL every row version stores x-min, who created it, and x-max, who deleted or replaced it. Account seven holds a balance of a hundred. Step one: transaction one hundred starts and takes a snapshot.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: transaction one oh one updates the balance to eighty. It doesn't overwrite. It stamps x-max one oh one on the old version and writes a new version with x-min one oh one. Then it commits.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: transaction one hundred reads. The old version's creator is long committed, and its deleter, one oh one, wasn't committed when the snapshot was taken. So it's visible. One hundred keeps seeing a hundred, consistently.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: a new transaction, one oh two, sees eighty. That's the visibility rule: creator committed before my snapshot, deleter empty or not yet committed.",
+          "reveal": 4
+        }
+      ],
+      "id": "s015"
+    },
+    {
+      "layout": "twocol",
+      "kicker": "Concept 4 of 15",
+      "title": "Two ways to store versions",
+      "left": {
+        "heading": "PostgreSQL",
+        "bullets": [
+          "New version written into the table",
+          "VACUUM removes dead versions later",
+          "Freeze old rows before XID wraparound"
+        ]
+      },
+      "right": {
+        "heading": "MySQL InnoDB",
+        "bullets": [
+          "Update in place, old version in undo log",
+          "Old snapshots walk the undo chain back",
+          "Purge thread cleans undo later"
+        ]
+      },
+      "steps": [
+        {
+          "say": "PostgreSQL appends every new version to the table itself.",
+          "reveal": 1
+        },
+        {
+          "say": "So tables bloat until VACUUM removes versions no snapshot can see.",
+          "reveal": 2
+        },
+        {
+          "say": "Its transaction I-Ds are thirty two bits and wrap after about two billion, so vacuum also freezes old rows as visible forever.",
+          "reveal": 3
+        },
+        {
+          "say": "InnoDB updates the row in place, and keeps the previous version in an undo log, linked by a roll pointer.",
+          "reveal": 4
+        },
+        {
+          "say": "An old snapshot walks that chain back: sixty, then eighty, then a hundred, until it finds a version it can see.",
+          "reveal": 5
+        },
+        {
+          "say": "A purge thread deletes undo when nobody needs it. In both, one forgotten long transaction pins every old version and blocks cleanup for everyone. Say that in the interview.",
+          "reveal": 6
+        }
+      ],
+      "id": "s016"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 5 of 15",
+      "title": "Write skew: the doctors on call",
+      "steps": [
+        {
+          "say": "Concept five: two-phase locking and Serializable Snapshot Isolation. Both give serializability: the result equals some one-at-a-time order.",
+          "reveal": 0
+        },
+        {
+          "say": "Why not just snapshots? Imagine a rule: at least one doctor must be on call. Alice and Bob both are. At the same moment, each sees two on call and takes themselves off. Different rows, so snapshot isolation sees no conflict. Both commit, and nobody is on call. That's write skew.",
+          "reveal": 0
+        }
+      ],
+      "id": "s017",
+      "caption": "Book: Module 19 · Two-phase locking and SSI"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 5 of 15",
+      "title": "Two-phase locking, step by step",
+      "bullets": [
+        "1. Shared lock to read, exclusive to write",
+        "2. Growing phase, then shrinking phase",
+        "3. Strict: hold all locks until commit",
+        "4. Range locks stop phantom rows",
+        "5. Deadlock: detect the cycle, abort one"
+      ],
+      "steps": [
+        {
+          "say": "Two-phase locking, or two P L, is the pessimistic way. Step one: take a shared lock before reading, which many can hold, and an exclusive lock before writing, which only one can hold.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: a growing phase where you only acquire locks, then a shrinking phase where you only release.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: databases use strict two P L, holding everything until commit, so nobody reads uncommitted data.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: to stop phantoms, new rows that match your query, lock ranges of the index, like InnoDB's gap locks.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, the doctors. Both hold shared locks on both rows. Alice's update waits for Bob's lock, Bob's waits for Alice's. Deadlock. The database finds the cycle and aborts one. Correct, but blocking.",
+          "reveal": 5
+        }
+      ],
+      "id": "s018"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 5 of 15",
+      "title": "SSI: spot the dangerous structure",
+      "mermaid": "flowchart LR\n  T1[\"T1 Alice: read both, update own\"] -->|\"rw: T1 read what T2 wrote\"| T2[\"T2 Bob: read both, update own\"]\n  T2 -->|\"rw: T2 read what T1 wrote\"| T1\n  T2 --> X[\"Two rw edges: abort one, app retries\"]",
+      "caption": "Optimistic: nobody waits, one transaction retries",
+      "steps": [
+        {
+          "say": "Serializable Snapshot Isolation, S-S-I, is optimistic. Everyone reads from a snapshot, nobody blocks. Reads leave non-blocking markers. When someone writes a row a concurrent transaction read, the database records a read-write edge.",
+          "reveal": 0
+        },
+        {
+          "say": "Alice read Bob's row, which Bob wrote: one edge. Bob read Alice's row, which Alice wrote: a second edge. Two consecutive read-write edges is the dangerous structure. One transaction fails with error forty zero zero one, and the app retries. That's PostgreSQL's serializable level. In the interview: two P L pays in waiting, S-S-I pays in retries, so the app must retry.",
+          "reveal": 0
+        }
+      ],
+      "id": "s019"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 6 of 15",
+      "title": "Skip lists: a sorted list with express lanes",
+      "steps": [
+        {
+          "say": "Concept six: the skip list. A sorted linked list takes order n steps to search. Balanced trees fix that but need fiddly rotations. A skip list adds random express lanes: each node is promoted up a level with probability one quarter, so level one links about every fourth node, level two every sixteenth.",
+          "reveal": 0
+        }
+      ],
+      "id": "s020",
+      "caption": "Book: Module 19 · Skip lists"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 6 of 15",
+      "title": "Search for 70",
+      "bullets": [
+        "Keys 10 25 40 55 70 85; 40 on L2, 85 on L1",
+        "1. Head, level 2: next is 40, less, move",
+        "2. At 40, level 2: nothing next, drop",
+        "3. Level 1: next is 85, too far, drop",
+        "4. Level 0: 55, move; next is 70, found",
+        "Height about log base 4 of n: 10 for 1 million"
+      ],
+      "steps": [
+        {
+          "say": "Our list holds ten, twenty five, forty, fifty five, seventy and eighty five. Forty reached level two, and eighty five reached level one.",
+          "reveal": 1
+        },
+        {
+          "say": "Step one: start at the head on the top lane. The next node is forty, smaller than seventy, so move to it.",
+          "reveal": 2
+        },
+        {
+          "say": "Step two: at forty on level two, nothing follows, so drop a level.",
+          "reveal": 3
+        },
+        {
+          "say": "Step three: on level one, next is eighty five, which overshoots. Drop again.",
+          "reveal": 4
+        },
+        {
+          "say": "Step four: on level zero, fifty five is smaller, move. Next is seventy. Found, after touching three nodes instead of walking from ten.",
+          "reveal": 5
+        },
+        {
+          "say": "Insert does the same search, remembers the last node on each level, flips coins for a height and splices in. Expected cost is log n, about ten levels for a million items.",
+          "reveal": 6
+        }
+      ],
+      "id": "s021"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Example: a Redis game leaderboard",
+      "bullets": [
+        "ZADD: update a player's score, log n",
+        "ZREVRANGE 0 9: top 10 in order",
+        "ZREVRANK: my rank, via stored spans",
+        "Plus a hash table: member to score in O(1)"
+      ],
+      "steps": [
+        {
+          "say": "Where's it used? Redis sorted sets, the classic leaderboard. Z-ADD updates a player's score in log n time.",
+          "reveal": 1
+        },
+        {
+          "say": "Z-REV-RANGE zero to nine walks the bottom level to return the top ten.",
+          "reveal": 2
+        },
+        {
+          "say": "Z-REV-RANK gives my rank. Each pointer stores a span, how many nodes it jumps, and summing spans along the search path gives the rank.",
+          "reveal": 3
+        },
+        {
+          "say": "Redis pairs the skip list with a hash table so a score lookup is constant time. The same structure is the default memtable in RocksDB. In the interview: simpler than a balanced tree, no rebalancing, ordered scans for free.",
+          "reveal": 4
+        }
+      ],
+      "id": "s022"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 7 of 15",
+      "title": "Cache eviction beyond LRU",
+      "steps": [
+        {
+          "say": "Concept seven. L-R-U, least recently used, evicts what was touched longest ago. Two problems. Every hit moves the item to the list front, which needs a lock on every read. And one big scan, like a nightly backup reading ten thousand cold keys once, pushes out all your popular items. L-R-U knows recency, not frequency.",
+          "reveal": 0
+        }
+      ],
+      "id": "s023",
+      "caption": "Book: Module 19 · Cache eviction beyond LRU"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 7 of 15",
+      "title": "Three better policies",
+      "bullets": [
+        "CLOCK: reference bit plus a sweeping hand",
+        "ARC: recency list T1, frequency list T2",
+        "ARC ghosts B1, B2 tune the split p",
+        "TinyLFU: admit only if more frequent",
+        "W-TinyLFU: 1% window, then 99% SLRU main"
+      ],
+      "steps": [
+        {
+          "say": "Clock. Slots sit in a circle with one reference bit each. A hit just sets the bit, nothing moves. To evict, look under the hand: bit one, clear it and move on, a second chance. Bit zero, evict. With A one, B zero, C one, the hand clears A and evicts B.",
+          "reveal": 1
+        },
+        {
+          "say": "Ark, the adaptive replacement cache, written A-R-C. List T one holds pages seen once recently. List T two holds pages seen at least twice. A one-off scan only touches T one, so it can't flush T two.",
+          "reveal": 2
+        },
+        {
+          "say": "Ark also keeps ghost lists, keys only, of recently evicted pages. A miss found in the T one ghost means recency pages were evicted too early, so T one's target grows. A T two ghost hit shrinks it. It tunes itself.",
+          "reveal": 3
+        },
+        {
+          "say": "TinyLFU is an admission filter. Every access bumps a count-min sketch of small counters, halved periodically so old fame fades. When the cache is full, a newcomer gets in only if it's estimated more frequent than the victim.",
+          "reveal": 4
+        },
+        {
+          "say": "W-TinyLFU, used by the Java library Caffeine, puts a tiny one percent L-R-U window in front, so brand new bursts get a chance, then a main cache split into probation and protected segments.",
+          "reveal": 5
+        }
+      ],
+      "id": "s024"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 7 of 15",
+      "title": "W-TinyLFU flow",
+      "mermaid": "flowchart LR\n  N[\"New item\"] --> WIN[\"Window LRU, 1 percent\"]\n  WIN -->|\"evicted candidate\"| F[\"TinyLFU: more frequent than victim?\"]\n  PROB[\"Probation, 20 percent\"] -->|\"victim\"| F\n  F -->|\"yes: admit\"| PROB\n  F -->|\"no\"| D[\"Discarded\"]\n  PROB -->|\"hit: promote\"| PROT[\"Protected, 80 percent\"]",
+      "caption": "The backup scan dies at the admission check",
+      "steps": [
+        {
+          "say": "Example: a hundred-item cache, a one-item window, twenty in probation, seventy nine protected. The backup reads ten thousand cold keys. Each passes through the window and becomes a candidate with an estimated frequency of about one, against a probation victim with frequency six. Every one is rejected. The hot set survives.",
+          "reveal": 0
+        },
+        {
+          "say": "In the interview: L-R-U treats one access like many, so scans evict hot items. Fix it with frequency, through Ark's two lists or a TinyLFU admission filter. And Clock scales under concurrency because a hit only sets a bit.",
+          "reveal": 0
+        }
+      ],
+      "id": "s025"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "10 million idle timeouts, mostly reset. Heap?",
+      "bullets": [
+        "A. Yes, a min-heap by deadline",
+        "B. A timing wheel",
+        "C. A sorted array"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Ten million connections each have an idle timeout, and almost every timer is cancelled and reset before it fires. What structure do you use?",
+          "reveal": 0
+        }
+      ],
+      "id": "s026"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 8 of 15",
+      "title": "Answer: B. Hierarchical timing wheels",
+      "steps": [
+        {
+          "say": "The answer is B. A heap costs log n for every add and cancel, and here we cancel constantly.",
+          "reveal": 0
+        },
+        {
+          "say": "Concept eight: the timing wheel. Picture a clock face of slots. Each slot holds a list of timers due in that tick. A pointer advances one slot per tick, say one millisecond, and fires that slot's list. Adding a timer is dropping it into a slot, and cancelling is unlinking it. Both constant time.",
+          "reveal": 0
+        }
+      ],
+      "id": "s027",
+      "caption": "Book: Module 19 · Hierarchical timing wheels"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 8 of 15",
+      "title": "Kafka's wheels: a timer due in 350 ms",
+      "bullets": [
+        "Level 0: 20 slots x 1 ms = 20 ms",
+        "Level 1: 20 slots x 20 ms = 400 ms",
+        "Level 2: 20 slots x 400 ms = 8 s",
+        "1. Too far for level 0: level 1, slot 17",
+        "2. At 340 ms: re-insert, 10 ms left, level 0",
+        "3. At 350 ms: fire"
+      ],
+      "steps": [
+        {
+          "say": "One wheel only covers slots times tick. So stack wheels, like a clock's seconds, minutes and hours hands. Kafka's level zero has twenty one-millisecond slots, covering twenty milliseconds.",
+          "reveal": 1
+        },
+        {
+          "say": "Level one has twenty slots of twenty milliseconds each, covering four hundred.",
+          "reveal": 2
+        },
+        {
+          "say": "Level two covers eight seconds, and Kafka adds higher wheels on demand.",
+          "reveal": 3
+        },
+        {
+          "say": "Now a request timeout due in three hundred fifty milliseconds. Step one: it's too far for level zero, so it goes into level one, slot seventeen, which covers three forty to three fifty nine.",
+          "reveal": 4
+        },
+        {
+          "say": "Step two: at three forty that bucket comes due. Its timers are re-inserted with their remaining time, so ours, with ten milliseconds left, drops into level zero.",
+          "reveal": 5
+        },
+        {
+          "say": "Step three: at three fifty it fires. Each timer cascades down at most once per level. To avoid ticking when nothing is due, Kafka keeps the buckets in a delay queue and sleeps until the next one.",
+          "reveal": 6
+        }
+      ],
+      "id": "s028"
+    },
+    {
+      "layout": "number",
+      "kicker": "Concept 8 of 15",
+      "title": "Kafka purgatory, before and after",
+      "big": "25,000 to 105,000 req/s",
+      "caption": "Same hardware, timers moved to hierarchical wheels",
+      "steps": [
+        {
+          "say": "Real numbers. Kafka's purgatory holds requests waiting for acknowledgements. In Confluent's high-timeout benchmark, the old design saturated at about twenty five thousand requests a second. With hierarchical timing wheels, about a hundred and five thousand.",
+          "reveal": 0
+        },
+        {
+          "say": "The trade-off: precision is one tick, so it's right for timeouts and wrong for exact scheduling. Netty and the Linux kernel use wheels for the same reason.",
+          "reveal": 0
+        }
+      ],
+      "id": "s029"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 9 of 15",
+      "title": "Distributed snapshots without stopping",
+      "steps": [
+        {
+          "say": "Concept nine: distributed snapshots. There's no global clock, so you can't tell every node to record at noon. Imagine two bank branches, P and Q, each holding a hundred dollars. P sends ten to Q. If P records after sending, ninety, and Q records before receiving, a hundred, ten dollars vanish. We need a consistent cut: no message recorded as received but not sent.",
+          "reveal": 0
+        }
+      ],
+      "id": "s030",
+      "caption": "Book: Module 19 · Distributed snapshots: Chandy-Lamport and Flink"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 9 of 15",
+      "title": "Chandy-Lamport, step by step",
+      "bullets": [
+        "1. Initiator records state, sends markers",
+        "2. First marker: record state, forward markers",
+        "3. Record messages on other incoming channels",
+        "4. Later marker on a channel: stop recording",
+        "Bank: P = 90, Q = 105, in flight 5. Total 200"
+      ],
+      "steps": [
+        {
+          "say": "The Chandy-Lamport algorithm assumes first-in first-out channels. Step one: the initiator, P, records its state and sends a marker on every outgoing channel. P had just sent ten to Q, so P records ninety.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: when a process sees its first marker, it records its own state and forwards markers. Q received the ten, then the marker, in order. Q records a hundred and five. Meanwhile, before seeing the marker, Q had sent five dollars to P.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: after recording, a process records messages arriving on its other incoming channels. P recorded itself already, so it starts recording the channel from Q. The five dollars arrives: that's in flight.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: when Q's marker reaches P, P stops recording that channel. The snapshot is done.",
+          "reveal": 4
+        },
+        {
+          "say": "Add it up: ninety plus a hundred and five plus five in flight is two hundred. Consistent, and nobody stopped.",
+          "reveal": 5
+        }
+      ],
+      "id": "s031"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 9 of 15",
+      "title": "Flink checkpoint barriers",
+      "mermaid": "flowchart LR\n  C[\"Checkpoint coordinator\"] --> S1[\"Source A: save offset, inject barrier\"]\n  C --> S2[\"Source B: save offset, inject barrier\"]\n  S1 --> J[\"Join: align barriers, buffer early input\"]\n  S2 --> J\n  J --> SNAP[\"Snapshot state to S3\"]\n  SNAP --> K[\"Sink acks: checkpoint complete\"]",
+      "caption": "Barriers flow with records and never overtake them",
+      "steps": [
+        {
+          "say": "Apache Flink uses the same idea for streaming. Example: a job joining orders and payments from Kafka. The coordinator starts checkpoint n. Each source saves its Kafka offset and injects barrier n into its stream.",
+          "reveal": 0
+        },
+        {
+          "say": "The join has two inputs. When barrier n arrives on orders first, the join buffers further orders until barrier n arrives on payments too. That's alignment. Then it snapshots its state to durable storage like S three and forwards the barrier. When every sink acknowledges, checkpoint n is complete.",
+          "reveal": 0
+        },
+        {
+          "say": "On failure, everyone restores the last complete checkpoint and sources rewind to the saved offsets. Exactly-once state. Under backpressure, alignment can stall, so unaligned checkpoints let the barrier overtake buffered data and save that data in the snapshot. Faster checkpoints, but bigger ones.",
+          "reveal": 0
+        }
+      ],
+      "id": "s032"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 10 of 15",
+      "title": "Inverted index: the back of the book",
+      "steps": [
+        {
+          "say": "Concept ten: the inverted index, behind almost every search box. Scanning a billion ten-kilobyte documents, ten terabytes, at one gigabyte a second takes almost three hours per query. An inverted index maps each word to the sorted list of documents containing it, like a textbook's back-of-book index.",
+          "reveal": 0
+        }
+      ],
+      "id": "s033",
+      "caption": "Book: Module 19 · Inverted index"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: build and query",
+      "table": {
+        "head": [
+          "Term",
+          "Posting list"
+        ],
+        "rows": [
+          [
+            "apple",
+            "1, 2"
+          ],
+          [
+            "car",
+            "3"
+          ],
+          [
+            "green",
+            "2"
+          ],
+          [
+            "pie",
+            "1"
+          ],
+          [
+            "red",
+            "1, 3"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Three documents. One: red apple pie. Two: green apple. Three: red car. First an analyser splits words, lower-cases them and stems apples to apple. Apple appears in documents one and two.",
+          "reveal": 1
+        },
+        {
+          "say": "Car is only in three.",
+          "reveal": 2
+        },
+        {
+          "say": "Green, only two.",
+          "reveal": 3
+        },
+        {
+          "say": "Pie, only one.",
+          "reveal": 4
+        },
+        {
+          "say": "Red is in one and three. Now the query red AND apple: walk two pointers along one, three and one, two. They meet at one. Sorted lists make intersection linear.",
+          "reveal": 5
+        }
+      ],
+      "id": "s034"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 10 of 15",
+      "title": "How real engines run it",
+      "bullets": [
+        "1. Immutable segments flushed from a buffer",
+        "2. Background merges drop deleted docs",
+        "3. Delta encoding: store gaps between IDs",
+        "4. Varint: 1 byte for numbers under 128",
+        "5. Shard by document, scatter and gather"
+      ],
+      "steps": [
+        {
+          "say": "Step one: Lucene, under Elasticsearch, buffers new documents and flushes them as small immutable segments, mini indexes that are never edited. A delete just marks a bit.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: a background merge combines small segments into bigger ones and drops deleted documents. Each document gets rewritten about three times.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, compression. Posting list three, seven, one fifty, one fifty two, one thousand becomes gaps: three, four, one forty three, two, eight forty eight.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: varint encoding uses seven bits per byte. Three, four and two take one byte each, the others two bytes. Seven bytes instead of twenty. Modern Lucene packs gaps in blocks of a hundred twenty eight for faster decoding.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five: shard by document. A billion documents on a hundred shards, each query fans out to all hundred, each returns its top ten, and a coordinator merges. Sharding by term creates hot spots for popular words.",
+          "reveal": 5
+        }
+      ],
+      "id": "s035"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 11 of 15",
+      "title": "Ranking matches: TF-IDF and BM25",
+      "steps": [
+        {
+          "say": "Concept eleven. The index finds a million pages for apple pie, but users read the first few, so order is the product. Three ideas. Term frequency: five mentions of apple say more than one. Inverse document frequency: a rare word matters more than a common one. And, for BM twenty five only, long documents mention everything, so discount length.",
+          "reveal": 0
+        }
+      ],
+      "id": "s036",
+      "caption": "Book: Module 19 · Ranking with TF-IDF and BM25"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: query apple pie, 4 documents",
+      "table": {
+        "head": [
+          "Doc",
+          "Text",
+          "TF-IDF",
+          "BM25"
+        ],
+        "rows": [
+          [
+            "D1",
+            "apple pie recipe apple",
+            "0.727",
+            "1.28"
+          ],
+          [
+            "D2",
+            "apple phone review",
+            "0.301",
+            "0.755"
+          ],
+          [
+            "D3",
+            "cherry pie",
+            "0.125",
+            "0.441"
+          ],
+          [
+            "D4",
+            "best pie shop in town today",
+            "0.125",
+            "0.286"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Four documents. Apple appears in two, pie in three. T-F-I-D-F multiplies the term count by the log of N, the number of documents, over the term's document frequency. Apple's I-D-F is zero point three, pie's zero point one two five. D one has apple twice plus pie: zero point seven two seven.",
+          "reveal": 1
+        },
+        {
+          "say": "D two has apple once: zero point three.",
+          "reveal": 2
+        },
+        {
+          "say": "D three, cherry pie, two words squarely about pie, scores zero point one two five.",
+          "reveal": 3
+        },
+        {
+          "say": "D four, six words with a passing mention of pie, ties D three exactly. That's the problem. BM twenty five adds a length factor, so D three at zero point four four beats D four at zero point two nine. The short, focused document wins.",
+          "reveal": 4
+        }
+      ],
+      "id": "s037"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 11 of 15",
+      "title": "BM25's two knobs",
+      "bullets": [
+        "k1 = 1.2: how fast repetition saturates",
+        "tf 1: 0.97, tf 2: 1.35, tf 10: 1.95, cap 2.2",
+        "b = 0.75: how much length matters",
+        "First stage: top few hundred, then ML re-rank"
+      ],
+      "steps": [
+        {
+          "say": "B-M twenty five has two knobs. k one, default one point two, controls saturation.",
+          "reveal": 1
+        },
+        {
+          "say": "For D one, one mention scores about one, two mentions one point three five, ten mentions only one point nine five, and it can never pass two point two. Keyword stuffing stops paying. Under T-F-I-D-F, fifty mentions would score twenty five times higher.",
+          "reveal": 2
+        },
+        {
+          "say": "b, default zero point seven five, controls length normalisation. Zero ignores length, which suits short fixed fields like titles.",
+          "reveal": 3
+        },
+        {
+          "say": "In the interview: B-M twenty five is the cheap first stage, Lucene's default since version six. It pulls the top few hundred in milliseconds, then a learned model re-ranks. It can't match car to automobile, so pair it with vector search.",
+          "reveal": 4
+        }
+      ],
+      "id": "s038"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "SimHash bits differ by 1. MinHash 3 of 4 match. Meaning?",
+      "bullets": [
+        "A. Both documents are exact copies",
+        "B. Both pairs are probably near-duplicates",
+        "C. Neither tells you anything"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think as we start concept twelve. Two documents' fingerprints differ in one bit out of eight, and another pair's signatures agree in three of four positions. What do those numbers tell you?",
+          "reveal": 0
+        }
+      ],
+      "id": "s039"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 12 of 15",
+      "title": "Answer: B. Near-duplicate detection",
+      "steps": [
+        {
+          "say": "The answer is B: likely near-duplicates. Let's see why. A crawler meets the same news story with different ads, under many U-R-Ls. A normal hash like SHA two fifty six changes completely if one character changes. We want hashes where similar inputs give similar outputs. And comparing all pairs of a billion pages is five times ten to the seventeen comparisons, so we also need buckets.",
+          "reveal": 0
+        }
+      ],
+      "id": "s040",
+      "caption": "Book: Module 19 · Near-duplicate detection: SimHash, MinHash, LSH"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 12 of 15",
+      "title": "SimHash on a toy 8-bit example",
+      "bullets": [
+        "Features: apple (weight 2), pie, recipe",
+        "1. Hash each feature to 8 bits",
+        "2. Per bit: add weight if 1, subtract if 0",
+        "3. Sums +2 -2 +2 +4 -2 -2 0 -2 -> 10110000",
+        "4. Swap recipe for easy: 00110000",
+        "Hamming distance 1: near-duplicate"
+      ],
+      "steps": [
+        {
+          "say": "Sim-Hash. First split the text into features, usually shingles, which are overlapping runs of words. Here: apple with weight two, pie and recipe with weight one.",
+          "reveal": 1
+        },
+        {
+          "say": "Step one: hash each feature to bits. Real systems use sixty four bits. We use eight.",
+          "reveal": 2
+        },
+        {
+          "say": "Step two: keep one counter per bit position. For each feature, add its weight where its bit is one, and subtract where it's zero.",
+          "reveal": 3
+        },
+        {
+          "say": "Step three: the sums are plus two, minus two, plus two, plus four, minus two, minus two, zero, minus two. Write one wherever it's positive: one zero one one zero zero zero zero.",
+          "reveal": 4
+        },
+        {
+          "say": "Step four: a second document swaps recipe for easy. Its fingerprint is zero zero one one zero zero zero zero.",
+          "reveal": 5
+        },
+        {
+          "say": "They differ in one bit, a Hamming distance of one. Unrelated documents differ in about half the bits. Google used sixty four bits with a threshold of three across eight billion pages.",
+          "reveal": 6
+        }
+      ],
+      "id": "s041"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "MinHash: A = {a,b,c,d}, B = {b,c,d,e}",
+      "table": {
+        "head": [
+          "Hash",
+          "min of A",
+          "min of B",
+          "Match?"
+        ],
+        "rows": [
+          [
+            "h1",
+            "1 (c)",
+            "1 (c)",
+            "yes"
+          ],
+          [
+            "h2",
+            "2 (a)",
+            "1 (e)",
+            "no"
+          ],
+          [
+            "h3",
+            "2 (b)",
+            "2 (b)",
+            "yes"
+          ],
+          [
+            "h4",
+            "3 (d)",
+            "3 (d)",
+            "yes"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Min-Hash estimates Jaccard similarity: overlap over union. These two shingle sets share three of five, so Jaccard is zero point six. For each hash function, a document's Min-Hash is its smallest shingle hash. Under h one, both minimums are shingle c. Match.",
+          "reveal": 1
+        },
+        {
+          "say": "Under h two, A's minimum is a, B's is e. No match.",
+          "reveal": 2
+        },
+        {
+          "say": "h three: both b. Match.",
+          "reveal": 3
+        },
+        {
+          "say": "h four: both d. Match. Three of four is zero point seven five, a noisy estimate of zero point six. With a hundred hashes, the error drops to about zero point zero five. The chance two sets share a minimum is exactly their Jaccard similarity.",
+          "reveal": 4
+        }
+      ],
+      "id": "s042"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 12 of 15",
+      "title": "LSH banding: 20 bands of 5 rows",
+      "table": {
+        "head": [
+          "Similarity",
+          "Chance of becoming a candidate"
+        ],
+        "rows": [
+          [
+            "0.3",
+            "About 5%"
+          ],
+          [
+            "0.5",
+            "About 47%"
+          ],
+          [
+            "0.8",
+            "99.96%"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Locality-sensitive hashing, L-S-H, avoids comparing all pairs. Split each hundred-number signature into twenty bands of five numbers, and hash each band to a bucket. Documents sharing any bucket become a candidate pair. Pairs with similarity zero point three get compared only about five percent of the time.",
+          "reveal": 1
+        },
+        {
+          "say": "At zero point five, about half.",
+          "reveal": 2
+        },
+        {
+          "say": "At zero point eight, almost always. It's an S-curve, steep near zero point five five. More rows per band raises that threshold, more bands lowers it. Only candidates get verified, so the job becomes near-linear. L-L-M training pipelines dedupe web text exactly this way.",
+          "reveal": 3
+        }
+      ],
+      "id": "s043"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 13 of 15",
+      "title": "Vector search: nearest in meaning",
+      "steps": [
+        {
+          "say": "Concept thirteen. An embedding is a list of numbers, say seven hundred sixty eight, that a model produces so similar meanings land close together. A hundred million of them is three hundred seven gigabytes, and brute force costs seventy seven billion multiply-adds per query. Approximate nearest neighbour search trades a little recall for huge speed. Recall at ten of zero point nine five means we return nine and a half of the true top ten on average.",
+          "reveal": 0
+        }
+      ],
+      "id": "s044",
+      "caption": "Book: Module 19 · Vector search with HNSW, IVF and PQ"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 13 of 15",
+      "title": "IVF and product quantization",
+      "bullets": [
+        "IVF 1. k-means: 1,000 centres for 1 million",
+        "IVF 2. Each vector joins its nearest list",
+        "IVF 3. Query: scan nprobe = 10 lists, ~1%",
+        "PQ 1. Split vector into m sub-vectors",
+        "PQ 2. Store each sub-vector's centre ID",
+        "PQ 3. 3,072 bytes -> 96 bytes, 32x smaller"
+      ],
+      "steps": [
+        {
+          "say": "I-V-F, the inverted file index. Step one: run k-means on a million vectors to find a thousand cluster centres.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: put each vector in its nearest centre's list, about a thousand per list.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: at query time compare with the thousand centres, then scan only the nearest ten lists. That's about one percent of brute-force work. N-probe is the dial: more lists, better recall, more latency.",
+          "reveal": 3
+        },
+        {
+          "say": "Product quantization, P-Q, compresses. Split each seven hundred sixty eight dimension vector into ninety six chunks of eight numbers.",
+          "reveal": 4
+        },
+        {
+          "say": "For each chunk position, learn two hundred fifty six centres, and store just the nearest centre's number, one byte. Distances become table lookups.",
+          "reveal": 5
+        },
+        {
+          "say": "Each vector shrinks from three thousand seventy two bytes to ninety six. A hundred million vectors drop from three hundred seven gigabytes to about nine point six, fitting one server.",
+          "reveal": 6
+        }
+      ],
+      "id": "s045"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 13 of 15",
+      "title": "HNSW: a skip list made of neighbours",
+      "mermaid": "flowchart TD\n  Q[\"Query embedding\"] --> T[\"Top layer: few nodes, long hops\"]\n  T -->|\"greedy: hop to closer neighbour\"| M[\"Middle layer\"]\n  M -->|\"drop when no neighbour is closer\"| B[\"Bottom layer: all nodes\"]\n  B -->|\"efSearch = 64 candidates\"| R[\"Top-k results\"]",
+      "caption": "Each node links to about M = 16 neighbours",
+      "steps": [
+        {
+          "say": "H-N-S-W, hierarchical navigable small world, is a layered graph. Each vector links to about sixteen near neighbours, and gets a random top layer, exponentially fewer nodes higher up, just like a skip list's express lanes.",
+          "reveal": 0
+        },
+        {
+          "say": "Search starts at the top, greedily hopping to whichever neighbour is closer to the query until none is, then drops a layer. On the bottom it keeps ef-search candidates, say sixty four, and returns the best. It usually gives the best recall for a given latency in memory.",
+          "reveal": 0
+        },
+        {
+          "say": "In the interview, for a billion seven hundred sixty eight dimension embeddings: raw floats are three terabytes, so use I-V-F with P-Q codes, shard across a few machines, and re-rank the top few hundred with full vectors from S-S-D. Measure recall against brute force on real queries.",
+          "reveal": 0
+        }
+      ],
+      "id": "s046"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 14 of 15",
+      "title": "Shortest paths for maps",
+      "steps": [
+        {
+          "say": "Concept fourteen. A road map is a graph: intersections are nodes, roads are edges weighted in minutes. Plain search from London to Rome settles millions of nodes and takes seconds. Navigation and ride-hailing need milliseconds. Let's walk one small graph with three algorithms.",
+          "reveal": 0
+        }
+      ],
+      "id": "s047",
+      "caption": "Book: Module 19 · Shortest paths for maps"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 14 of 15",
+      "title": "Our map: A to E",
+      "mermaid": "flowchart LR\n  A((\"A\")) ---|\"4\"| B((\"B\"))\n  A ---|\"2\"| C((\"C\"))\n  C ---|\"1\"| B\n  B ---|\"5\"| D((\"D\"))\n  C ---|\"8\"| D\n  C ---|\"10\"| E((\"E\"))\n  D ---|\"2\"| E",
+      "caption": "Edge weights are minutes",
+      "steps": [
+        {
+          "say": "From A, B is four minutes direct, C is two. C to B is one. B to D is five, C to D eight, C to E ten, and D to E two. We want the fastest route from A to E.",
+          "reveal": 0
+        }
+      ],
+      "id": "s048"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Dijkstra: pop the closest unsettled node",
+      "table": {
+        "head": [
+          "Pop",
+          "Distance",
+          "Updates"
+        ],
+        "rows": [
+          [
+            "A",
+            "0",
+            "B = 4, C = 2"
+          ],
+          [
+            "C",
+            "2",
+            "B = 3 (via C), D = 10, E = 12"
+          ],
+          [
+            "B",
+            "3",
+            "D = 8 (3 + 5)"
+          ],
+          [
+            "D",
+            "8",
+            "E = 10 (8 + 2)"
+          ],
+          [
+            "E",
+            "10",
+            "done: A-C-B-D-E"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Dijkstra's algorithm keeps tentative distances in a min-heap and always settles the closest node. Pop A at zero. Its neighbours get B four and C two.",
+          "reveal": 1
+        },
+        {
+          "say": "Pop C at two. Through C, B costs three, beating four. D becomes ten, E twelve.",
+          "reveal": 2
+        },
+        {
+          "say": "Pop B at three. D through B is eight, beating ten.",
+          "reveal": 3
+        },
+        {
+          "say": "Pop D at eight. E through D is ten, beating twelve.",
+          "reveal": 4
+        },
+        {
+          "say": "Pop E at ten. Done. Following back-pointers gives A, C, B, D, E in ten minutes. The direct A to B road lost to the detour.",
+          "reveal": 5
+        }
+      ],
+      "id": "s049"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 14 of 15",
+      "title": "A* and contraction hierarchies",
+      "bullets": [
+        "A*: pop by g + h, h = straight-line estimate",
+        "Admissible h never overestimates: optimal",
+        "CH 1. Order nodes by importance",
+        "CH 2. Contract C: add shortcut A-B = 3",
+        "CH 3. Query: bidirectional, upward-only",
+        "CH 4. Unpack shortcut A-B into A-C-B"
+      ],
+      "steps": [
+        {
+          "say": "A-star is Dijkstra plus a heuristic. It pops by g, distance so far, plus h, an estimate of what remains, usually straight-line distance over top speed. Dijkstra explores a disc around the start. A-star explores an ellipse stretched toward the goal.",
+          "reveal": 1
+        },
+        {
+          "say": "If h never overestimates, it's admissible, and A-star still finds the optimal route. Overestimate and it's faster but can return a worse route. On our map, estimates like seven at A, two at D and zero at E never overestimate, so A-star returns the same ten-minute route.",
+          "reveal": 2
+        },
+        {
+          "say": "Contraction hierarchies, C-H, precompute once. Step one: rank nodes by importance. Motorway junctions are high, dead ends low. In our map, C ranks lowest.",
+          "reveal": 3
+        },
+        {
+          "say": "Step two: contract nodes from least important up. Removing C, the path A to B through C costs three, beating the direct four, and no other path matches it. So add a shortcut A to B of three. Other pairs have witness paths, so no shortcut.",
+          "reveal": 4
+        },
+        {
+          "say": "Step three: a query runs Dijkstra from both ends, following only edges to higher-ranked nodes. From A: shortcut to B, three, then D, eight, then E, ten.",
+          "reveal": 5
+        },
+        {
+          "say": "Step four: unpack the shortcut into real roads. On continental maps that's a few hundred nodes visited, under a millisecond. With live traffic, weights change, so systems use customisable variants like O-S-R-M's multi-level Dijkstra.",
+          "reveal": 6
+        }
+      ],
+      "id": "s050"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 15 of 15",
+      "title": "Feed ranking: a funnel",
+      "steps": [
+        {
+          "say": "Concept fifteen, the last one: feed ranking. You follow five hundred accounts, there are thousands of unseen posts plus hundreds of millions of recommendations, and you'll scroll maybe thirty. A big model can't score millions inside two hundred milliseconds. So we use a funnel: each stage handles fewer items with a costlier model.",
+          "reveal": 0
+        }
+      ],
+      "id": "s051",
+      "caption": "Book: Module 19 · Feed ranking"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 15 of 15",
+      "title": "The feed funnel",
+      "mermaid": "flowchart TD\n  U[\"User opens app\"] --> CG[\"Candidates: follows, two-tower ANN, trending\"]\n  CG -->|\"about 1500\"| LR[\"Light ranker\"]\n  LR -->|\"about 500\"| HR[\"Heavy ranker: P like, comment, share, hide\"]\n  HR --> RR[\"Re-rank: author caps, diversity, filters, ads\"]\n  RR -->|\"top 50\"| F[\"Feed served\"]\n  F --> L[\"Log impressions as training data\"]",
+      "caption": "Retrieve wide and cheap, rank narrow and expensive",
+      "steps": [
+        {
+          "say": "Step one, candidate generation. Several cheap sources each return a few hundred posts: recent posts from people you follow, posts near your embedding in an A-N-N index from a two-tower model, and trending posts. That's concept thirteen and concept one at work. Twitter's open-sourced pipeline gathered about fifteen hundred.",
+          "reveal": 0
+        },
+        {
+          "say": "Step two, a light ranker, a small model on cheap features, trims to about five hundred. Step three, a heavy model predicts the chance you'll like, comment, share or hide each one. Step four, re-ranking. Then serve, and log every impression as tomorrow's training data.",
+          "reveal": 0
+        }
+      ],
+      "id": "s052"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: weighted value score",
+      "table": {
+        "head": [
+          "Post",
+          "Like",
+          "Comment",
+          "Share",
+          "Hide",
+          "Score"
+        ],
+        "rows": [
+          [
+            "Friend's photo",
+            "0.30",
+            "0.05",
+            "0.01",
+            "0.001",
+            "0.60"
+          ],
+          [
+            "Viral meme",
+            "0.40",
+            "0.02",
+            "0.03",
+            "0.005",
+            "0.55"
+          ],
+          [
+            "Brand post",
+            "0.10",
+            "0.01",
+            "0.00",
+            "0.002",
+            "0.05"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Combine predictions with business weights: one times like, plus five times comment, plus ten times share, minus fifty times hide. The friend's photo: point three plus point two five plus point one minus point zero five, zero point six.",
+          "reveal": 1
+        },
+        {
+          "say": "The viral meme has the highest like chance, point four, but more people hide it. It scores point five five and loses to the photo.",
+          "reveal": 2
+        },
+        {
+          "say": "The brand post scores point zero five. Notice the weights decide what the platform optimises. That's a product decision, not just engineering. Facebook's early EdgeRank did the same with affinity, edge weight and time decay.",
+          "reveal": 3
+        }
+      ],
+      "id": "s053"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 15 of 15",
+      "title": "Re-ranking, then the interview answer",
+      "bullets": [
+        "Author cap: max 2 in a row",
+        "A1 A2 A3 B1 C1 -> A1 A2 B1 A3 C1",
+        "MMR: score minus similarity to chosen items",
+        "Filters: blocked, seen, policy; ads in slots"
+      ],
+      "steps": [
+        {
+          "say": "Score order can show five posts from one prolific author in a row. An author cap allows at most two in a row.",
+          "reveal": 1
+        },
+        {
+          "say": "So A one, A two, A three, B one, C one becomes A one, A two, B one, A three, C one.",
+          "reveal": 2
+        },
+        {
+          "say": "Maximal marginal relevance, M-M-R, picks each next item by its score minus how similar it is to items already chosen.",
+          "reveal": 3
+        },
+        {
+          "say": "Then filter blocked users, already-seen posts and policy violations, and insert ads at fixed slots. In the interview: stages exist because of cost, the weights are a product choice, and you log every impression with its position for the next model.",
+          "reveal": 4
+        }
+      ],
+      "id": "s054"
+    },
+    {
+      "layout": "recap",
+      "kicker": "Episode 18 complete",
+      "title": "Episode 18 recap",
+      "bullets": [
+        "Trending: decayed counts, EWMA, z above 3",
+        "Storage: LSM for writes, B+-tree for reads",
+        "MVCC snapshots; 2PL waits, SSI retries",
+        "Skip lists, W-TinyLFU, timing wheels",
+        "Snapshots: markers and aligned barriers",
+        "Search: index, BM25, MinHash, HNSW, CH, feeds"
+      ],
+      "steps": [
+        {
+          "say": "Let's recap. Trending means unusual for this item: decayed counts, an E-W-M-A baseline, a z-score above three, with a volume floor.",
+          "reveal": 1
+        },
+        {
+          "say": "Storage: L-S-M trees append and compact, with Bloom filters for reads. B-plus trees are short, wide trees of pages that split as they grow.",
+          "reveal": 2
+        },
+        {
+          "say": "M-V-C-C gives every reader a snapshot. Two-phase locking pays for serializability in waiting, S-S-I pays in retries.",
+          "reveal": 3
+        },
+        {
+          "say": "Skip lists give log n with coin flips. W-TinyLFU admits only items more frequent than the victim. Timing wheels make timers constant time.",
+          "reveal": 4
+        },
+        {
+          "say": "Chandy-Lamport markers and Flink's aligned barriers take consistent snapshots without stopping.",
+          "reveal": 5
+        },
+        {
+          "say": "And search: inverted indexes, B-M twenty five ranking, Sim-Hash and Min-Hash with L-S-H for duplicates, H-N-S-W and I-V-F-P-Q for vectors, contraction hierarchies for maps, and a funnel for feeds. Next time, in episode nineteen: Capstones, Composing Everything. See you there.",
+          "reveal": 6
+        }
+      ],
+      "id": "s055"
+    }
+  ]
+}

@@ -1,0 +1,1463 @@
+{
+  "series": "System Design Workshop",
+  "episode": 29,
+  "title": "Case Studies: Edge Blocks and AI Systems",
+  "subtitle": "A CDN, a rate limiter, a pub-sub service, then a code assistant, a support bot and ML data infrastructure",
+  "scenes": [
+    {
+      "layout": "title",
+      "title": "Case Studies: Edge Blocks and AI Systems",
+      "subtitle": "A CDN, a rate limiter, a pub-sub service, then a code assistant, a support bot and ML data infrastructure",
+      "steps": [
+        {
+          "say": "Welcome to episode twenty-nine of the System Design Workshop: Case Studies on edge building blocks and A-I systems.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll be able to design a C-D-N, a shared rate limiter, and a managed pub-sub service as real platforms. Then you'll design three A-I systems: a code assistant, a customer support bot, and the data platform that feeds model training.",
+          "reveal": 0
+        },
+        {
+          "say": "Keep Modules twenty-three and twenty-four of the notes open. Each concept's first slide names the section to reread. When I say pause, answer on paper first.",
+          "reveal": 0
+        }
+      ],
+      "id": "s001"
+    },
+    {
+      "layout": "table",
+      "title": "Six designs, six hard parts",
+      "table": {
+        "head": [
+          "Design",
+          "The hard part"
+        ],
+        "rows": [
+          [
+            "CDN",
+            "Route, cache and purge across 300 sites"
+          ],
+          [
+            "Rate limiter",
+            "9M checks/s under 1 ms, no races"
+          ],
+          [
+            "Pub-sub",
+            "Fan out without copies, 2M acks/s"
+          ],
+          [
+            "Code assistant",
+            "Right context in a 250 ms loop"
+          ],
+          [
+            "Support bot",
+            "Correct promises, clean human handoff"
+          ],
+          [
+            "ML data platform",
+            "Reproducible data, busy GPUs"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's the map. A C-D-N, or content delivery network, must route users, cache, and purge across three hundred sites.",
+          "reveal": 1
+        },
+        {
+          "say": "A rate limiter must answer nine million checks a second, in under a millisecond, without races.",
+          "reveal": 2
+        },
+        {
+          "say": "Pub-sub must fan out to thousands of subscribers without copying, and track two million acknowledgements a second.",
+          "reveal": 3
+        },
+        {
+          "say": "The code assistant has to find the right context inside a two hundred fifty millisecond loop.",
+          "reveal": 4
+        },
+        {
+          "say": "The support bot must never promise what it can't deliver, and hand off to humans cleanly.",
+          "reveal": 5
+        },
+        {
+          "say": "And the M-L data platform must make datasets reproducible while keeping G-P-Us busy.",
+          "reveal": 6
+        }
+      ],
+      "id": "s002"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 1 of 7",
+      "title": "Design a CDN",
+      "steps": [
+        {
+          "say": "Concept one. Imagine you run a C-D-N like Cloudflare or Akamai. Customers point a hostname at you, and you serve their files, video and A-P-I responses from about three hundred sites. Our running example: an online shop whose product images and pages you serve.",
+          "reveal": 0
+        }
+      ],
+      "id": "s003",
+      "caption": "Book: Module 23 · Case 1 — Design a CDN"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "The numbers that size a CDN",
+      "table": {
+        "head": [
+          "Quantity",
+          "Value"
+        ],
+        "rows": [
+          [
+            "Sites (PoPs)",
+            "300"
+          ],
+          [
+            "Peak egress",
+            "50 Tbps, about 40M requests/s"
+          ],
+          [
+            "Biggest PoP",
+            "1 Tbps, 16 servers x 30 TB disk"
+          ],
+          [
+            "Origin traffic",
+            "1 Tbps total: 98% offload"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "First the numbers. Each site is a PoP, a point of presence: a rack or more of servers.",
+          "reveal": 1
+        },
+        {
+          "say": "Peak traffic leaving the network is fifty terabits per second. At about a hundred fifty kilobytes per response, that's about forty million requests a second.",
+          "reveal": 2
+        },
+        {
+          "say": "The biggest PoP carries about two percent, one terabit a second. At eighty gigabits per server that's thirteen servers, so sixteen with spares, each with thirty terabytes of cache.",
+          "reveal": 3
+        },
+        {
+          "say": "Edges hit ninety percent of bytes, a regional parent tier hits eighty percent of the rest, so only one terabit reaches all origins. That's ninety-eight percent offload. Bandwidth and disk pick the hardware; hit ratio sets the origin bill.",
+          "reveal": 4
+        }
+      ],
+      "id": "s004"
+    },
+    {
+      "layout": "table",
+      "title": "Routing: three ways to pick a PoP",
+      "table": {
+        "head": [
+          "Method",
+          "How",
+          "Weak spot"
+        ],
+        "rows": [
+          [
+            "DNS mapping",
+            "DNS answers with best PoP's IP",
+            "Answers cached 20 to 60 s"
+          ],
+          [
+            "Anycast",
+            "All PoPs announce one IP via BGP",
+            "BGP knows no load or latency"
+          ],
+          [
+            "URL steering",
+            "Service returns ranked server URLs",
+            "Needs your own client"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "How does a shopper in Paris reach a nearby, healthy PoP? Way one, D-N-S mapping. Your D-N-S server returns the best PoP's address, using live load and latency, and the user's subnet if the resolver sends it. You drain a PoP by changing answers. Weak spot: answers stay cached for twenty to sixty seconds.",
+          "reveal": 1
+        },
+        {
+          "say": "Way two, anycast. Every PoP announces the same I-P over B-G-P, the internet's routing protocol, and routers deliver to the nearest. Failover is instant, and a D-DoS flood spreads over all three hundred sites. But B-G-P ignores load; Microsoft measured about twenty percent of Bing clients sent somewhere suboptimal.",
+          "reveal": 2
+        },
+        {
+          "say": "Way three, U-R-L steering, like Netflix. The player asks a steering service, which returns ranked U-R-Ls of servers that actually hold the file. Precise, but only for apps you control. The real answer combines all three: anycast for small objects, D-N-S mapping for bulk, steering for video.",
+          "reveal": 3
+        }
+      ],
+      "id": "s005"
+    },
+    {
+      "layout": "table",
+      "title": "Inside the CDN",
+      "caption": "Hit path stays inside one PoP",
+      "steps": [
+        {
+          "say": "Follow one request for a shoe photo. Mapping picks a PoP. The edge server ends T-L-S, applies the shop's rules, and computes a cache key from host, path and normalized query.",
+          "reveal": 2
+        },
+        {
+          "say": "If another server in the PoP owns that key, it asks the owner. On a miss, the owner asks the regional parent tier, which merges a thousand identical misses into one origin fetch. That's request coalescing.",
+          "reveal": 4
+        },
+        {
+          "say": "Off to the side, the control plane ships config and purges to every PoP. Notice the hit path never leaves the PoP.",
+          "reveal": 5
+        }
+      ],
+      "id": "s006",
+      "table": {
+        "head": [
+          "Hop",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "Mapping",
+            "DNS or anycast picks a PoP"
+          ],
+          [
+            "Edge server",
+            "Ends TLS, applies rules, computes cache key"
+          ],
+          [
+            "Owner server",
+            "The one server in the PoP that holds the key"
+          ],
+          [
+            "Parent tier",
+            "Coalesces misses into one origin fetch"
+          ],
+          [
+            "Control plane",
+            "Ships config and purges to every PoP"
+          ]
+        ]
+      }
+    },
+    {
+      "layout": "bullets",
+      "title": "Making 16 disks act like one cache",
+      "bullets": [
+        "Hash each key to one owner server: 480 TB, not 30 TB",
+        "Hot keys: count requests, copy top keys everywhere",
+        "Admit on second request; evict by frequency",
+        "Two tiers: edge plus regional parent"
+      ],
+      "steps": [
+        {
+          "say": "If every server caches what it sees, a popular photo sits on all sixteen, and the PoP holds only thirty terabytes of distinct content. Instead, hash the key onto a consistent hashing ring, so each key has one owner. Now sixteen times thirty is four hundred eighty terabytes, and losing a server remaps only one sixteenth of keys.",
+          "reveal": 1
+        },
+        {
+          "say": "But a viral sneaker launch would melt its one owner. So count requests per key with a heavy-hitters sketch, and let every server copy the top few thousand keys.",
+          "reveal": 2
+        },
+        {
+          "say": "Many objects are asked for only once, so admit to disk only on the second request, and evict with a frequency-aware policy like TinyLFU.",
+          "reveal": 3
+        },
+        {
+          "say": "Finally, two tiers is the sweet spot. A third tier adds miss latency without many extra hits.",
+          "reveal": 4
+        }
+      ],
+      "id": "s007"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Freshness: TTLs, leases and purge",
+      "bullets": [
+        "TTL plus revalidation: cheap 304 replies",
+        "Leases: notify only current lease holders",
+        "Push purge: sequenced log, about 150 ms",
+        "Lagging PoP pulls the gap or leaves rotation",
+        "Generation number for broad purges; soft purge"
+      ],
+      "steps": [
+        {
+          "say": "The shop changes a price. How does the old page disappear? Default answer: a T-T-L, time to live. Serve while fresh, then ask the origin if it changed, and accept a cheap three-oh-four Not Modified reply.",
+          "reveal": 1
+        },
+        {
+          "say": "Leases: the parent promises to notify a child of changes for the lease's duration. A child that loses contact lets the lease expire and revalidates. Bounded staleness, no broadcast.",
+          "reveal": 2
+        },
+        {
+          "say": "Customers still expect a purge to be gone in seconds. So the control plane appends to a purge log, each entry with a sequence number, and a fan-out tree pushes batches. Fastly and Cloudflare report about a hundred fifty milliseconds globally.",
+          "reveal": 3
+        },
+        {
+          "say": "The hard case: a PoP was cut off while purge seventy-two went out. Each PoP applies purges in order and reports its last applied number. On reconnect it pulls the gap. If it lags more than thirty seconds, mapping removes it from rotation. Better twenty milliseconds farther than recalled content.",
+          "reveal": 4
+        },
+        {
+          "say": "Purge everything for the shop? Bump a generation number in the cache key, v-seven to v-eight, and old entries age out. Soft purge marks entries stale so one request revalidates and the origin sees no stampede.",
+          "reveal": 5
+        }
+      ],
+      "id": "s008"
+    },
+    {
+      "layout": "bullets",
+      "title": "Dynamic content, edge code, large files",
+      "bullets": [
+        "Uncacheable still wins: near TLS, warm origin links",
+        "Microcache 1 s: 5,000 req/s becomes 1 per PoP",
+        "Edge compute in V8 isolates: auth, A/B, redirects",
+        "Big files in 2 MB slices; track byte hit ratio",
+        "Danger: one bad global config breaks everything"
+      ],
+      "steps": [
+        {
+          "say": "What about a shopping cart, which can't be cached? It still gets faster. T-L-S ends fifteen milliseconds away instead of two hundred, and the edge keeps warm connections to the origin.",
+          "reveal": 1
+        },
+        {
+          "say": "A live scoreboard is technically uncacheable, but cache it for one second. At five thousand requests a second for that U-R-L, the origin sees one per second per PoP. That's microcaching.",
+          "reveal": 2
+        },
+        {
+          "say": "Edge compute runs customer code for auth checks, A-B buckets and redirects. Cloudflare runs it in V-eight isolates, sandboxes inside one process, which start far faster than containers.",
+          "reveal": 3
+        },
+        {
+          "say": "A four gigabyte video is cached in two megabyte slices, so the popular first minutes stay hot alone. Measure request hit ratio and byte hit ratio separately; small files dominate requests, video dominates bytes.",
+          "reveal": 4
+        },
+        {
+          "say": "And remember the classic outage: Fastly in twenty twenty-one, eighty-five percent of the network returned errors after one config. Validate, canary by PoP, roll back fast. In the interview, say: anycast plus load-aware D-N-S, hash keys to owners, a coalescing parent tier, and purges as a sequenced log.",
+          "reveal": 5
+        }
+      ],
+      "id": "s009"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 2 of 7",
+      "title": "Design a Rate Limiter",
+      "steps": [
+        {
+          "say": "Concept two. One rate-limiting service that every A-P-I gateway calls. Teams write rules like a hundred requests a second per A-P-I key on search, or five logins a minute per account. Three million requests a second, about three rules each, so nine million counter checks a second, in under a millisecond.",
+          "reveal": 0
+        }
+      ],
+      "id": "s010",
+      "caption": "Book: Module 23 · Case 2 — Design a Rate Limiter"
+    },
+    {
+      "layout": "number",
+      "title": "GCRA stores one number per key",
+      "big": "T = 0.1 s, tau = 0.4 s",
+      "caption": "Rate 10/s, burst 5: allow if TAT - tau <= now",
+      "steps": [
+        {
+          "say": "G-C-R-A, the generic cell rate algorithm, behaves like a token bucket but stores one timestamp per key: the T-A-T, theoretical arrival time, when the key would next be on schedule.",
+          "reveal": 0
+        },
+        {
+          "say": "Two constants. The emission interval T is period over rate. At ten a second, that's a hundred milliseconds. Burst tolerance tau is T times burst minus one. With burst five, that's four hundred milliseconds.",
+          "reveal": 0
+        }
+      ],
+      "id": "s011"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: six requests at t = 0",
+      "table": {
+        "head": [
+          "Request",
+          "TAT before",
+          "TAT - tau <= now?",
+          "Result"
+        ],
+        "rows": [
+          [
+            "1",
+            "0",
+            "-400 <= 0",
+            "Allow, TAT = 100"
+          ],
+          [
+            "2 to 4",
+            "100 to 300",
+            "yes",
+            "Allow, TAT = 400"
+          ],
+          [
+            "5",
+            "400",
+            "0 <= 0",
+            "Allow, TAT = 500"
+          ],
+          [
+            "6",
+            "500",
+            "100 > 0",
+            "Reject, retry in 100 ms"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Our running example: an A-P-I key on search, ten a second, burst five. The key is idle, so T-A-T is zero. Request one: zero minus four hundred is below now, so allow, and T-A-T moves to one hundred.",
+          "reveal": 1
+        },
+        {
+          "say": "Requests two to four do the same. T-A-T walks to two hundred, three hundred, four hundred.",
+          "reveal": 2
+        },
+        {
+          "say": "Request five: four hundred minus four hundred is zero, which equals now. Allowed, T-A-T becomes five hundred.",
+          "reveal": 3
+        },
+        {
+          "say": "Request six: five hundred minus four hundred is one hundred, beyond now. Reject, with Retry-After of one hundred milliseconds, for free. Let's Encrypt rebuilt its limits on exactly this in twenty twenty-five.",
+          "reveal": 4
+        }
+      ],
+      "id": "s012"
+    },
+    {
+      "layout": "bullets",
+      "title": "Races and clocks",
+      "bullets": [
+        "Race: two gateways read 1 token, both allow",
+        "Fix: read, decide, write in one script in the store",
+        "One clock: the store's time, not the app's",
+        "Own cluster: other data must not evict counters"
+      ],
+      "steps": [
+        {
+          "say": "Here's the race. Gateways A and B both read tokens equals one, both allow, both write zero. Two requests spent one token, and under load that overshoot is systematic.",
+          "reveal": 1
+        },
+        {
+          "say": "The fix: do read, decide and write inside the store as one atomic step, like a Lua script in Redis. No locks needed. GitHub's limiter works this way.",
+          "reveal": 2
+        },
+        {
+          "say": "Use one clock, the store's. GitHub saw its reset header wobble by a second when part of the math used app server clocks.",
+          "reveal": 3
+        },
+        {
+          "say": "And give counters their own cluster. GitHub left Memcached partly because other data evicted live counters, letting users exceed limits.",
+          "reveal": 4
+        }
+      ],
+      "id": "s013"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Local versus global counting",
+      "table": {
+        "head": [
+          "Strategy",
+          "Hop",
+          "Error",
+          "Use for"
+        ],
+        "rows": [
+          [
+            "Central counter",
+            "every request",
+            "exact",
+            "Login, security"
+          ],
+          [
+            "Token leasing",
+            "per batch",
+            "unspent leases",
+            "Hot keys"
+          ],
+          [
+            "Local + sync 100 ms",
+            "none",
+            "gateways x rate x interval",
+            "Edge, DDoS"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "A remote check costs about half a millisecond per request. Strategy one: always central. Exact, so use it for logins and other low-rate security rules.",
+          "reveal": 1
+        },
+        {
+          "say": "Strategy two, token leasing. A gateway takes a batch, say a hundred tokens, and spends them locally. One tenant at two hundred thousand requests a second becomes about two thousand batch fetches.",
+          "reveal": 2
+        },
+        {
+          "say": "Strategy three, count locally and sync every hundred milliseconds. Worked bound: fifty gateways, a limit of a thousand a second. Each may admit a hundred before it hears the global count, so up to five thousand extra per interval. Too loose for most rules, fine at the edge.",
+          "reveal": 3
+        }
+      ],
+      "id": "s014"
+    },
+    {
+      "layout": "bullets",
+      "title": "Multi-region and dangerous rules",
+      "bullets": [
+        "Per-region budgets, e.g. 50/30/20%, re-weighted",
+        "Or gossip counts; sync global only for rare quotas",
+        "Validate, then shadow mode: log would-rejects",
+        "Canary region, kill switch, rollback",
+        "Fail open; fail closed for security rules"
+      ],
+      "steps": [
+        {
+          "say": "Regions are seventy milliseconds apart. Default: split each global limit by traffic share, say fifty, thirty and twenty percent, re-weighted every minute. No cross-region hop.",
+          "reveal": 1
+        },
+        {
+          "say": "Alternatively, each region counts locally and gossips counts, so overshoot is bounded by replication lag. A synchronous global counter only for rare limits, like a daily quota checked once per job.",
+          "reveal": 2
+        },
+        {
+          "say": "Now the scary part. A rule is config, and one bad rule can reject everyone. So validate it, then run it in shadow mode, where it only logs what it would have rejected.",
+          "reveal": 3
+        },
+        {
+          "say": "Then roll it to one canary region, with a kill switch and one-step rollback to the previous bundle.",
+          "reveal": 4
+        },
+        {
+          "say": "And if the limiter itself breaks? It's protection, not correctness, so fail open to a local fallback. Except security rules like login, which fail closed. In the interview, say: GCRA in an atomic script, leasing for hot keys, regional budgets, shadow first.",
+          "reveal": 5
+        }
+      ],
+      "id": "s015"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "10,000 subscriptions: what does one publish write?",
+      "bullets": [
+        "A. 10,000 copies, 20 MB of writes",
+        "B. One write, plus 10,000 cursors",
+        "C. One write per delivery server"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think before concept three. A topic has ten thousand subscriptions. You publish one two-kilobyte message. What should the service write? A, ten thousand copies. B, one write, and ten thousand cursors over it. C, one write per delivery server.",
+          "reveal": 0
+        }
+      ],
+      "id": "s016"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 3 of 7",
+      "title": "Design a Pub-Sub Service",
+      "steps": [
+        {
+          "say": "The answer is B. That's concept three, a managed pub-sub service like Google Cloud Pub-Sub. Publishers send to a topic. Each subscription gets every message, by pull or by push to an H-T-T-P-S endpoint, with per-message acks, redelivery, dead letters, ordering keys and seven-day replay. Running example: an order-events topic.",
+          "reveal": 0
+        }
+      ],
+      "id": "s017",
+      "caption": "Book: Module 23 · Case 3 — Design a Pub-Sub Service"
+    },
+    {
+      "layout": "number",
+      "title": "Store once, fan out by cursor",
+      "big": "2 KB x 10,000 = 20 MB vs 2 KB",
+      "caption": "A subscription is ack state over one shared log",
+      "steps": [
+        {
+          "say": "A copy per subscription turns one two-kilobyte publish into twenty megabytes of writes. Instead, write once to a replicated per-topic log, and ack the publisher after a majority of zones have it.",
+          "reveal": 0
+        },
+        {
+          "say": "A subscription is just its ack state over that shared log. Creating one costs a metadata row. Delivery servers read the hot tail into memory once and serve every subscription they own from that copy. At five hundred thousand publishes a second, seven days of retention is about six hundred terabytes, times three replicas, stored once, not four times.",
+          "reveal": 0
+        }
+      ],
+      "id": "s018"
+    },
+    {
+      "layout": "diagram",
+      "title": "Pub-sub architecture",
+      "mermaid": "flowchart LR\n  PUB[\"Publishers\"] --> FE[\"Frontends\"]\n  FE --> PS[\"Publish server\"]\n  PS --> LOG[(\"Partition log\")]\n  PS --> DS[\"Delivery server\"]\n  DS --> SUB[\"Pull subscribers\"]\n  DS --> EP[\"Push endpoints\"]\n  DS --> DLQ[\"Dead-letter topic\"]",
+      "caption": "Publish path writes once; delivery path tracks acks",
+      "steps": [
+        {
+          "say": "Frontends authenticate, apply quotas, and route by topic and partition. The owning publish server appends and replicates, then acks after a majority write.",
+          "reveal": 0
+        },
+        {
+          "say": "Delivery servers own subscriptions and their ack state. They lease messages to pull subscribers, post to push endpoints, redeliver on expiry, and move poison messages to a dead-letter topic.",
+          "reveal": 0
+        }
+      ],
+      "id": "s019"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: acks for offsets 1000 to 1019",
+      "table": {
+        "head": [
+          "Event",
+          "Ack state"
+        ],
+        "rows": [
+          [
+            "Acks for 1000-1002",
+            "floor = 1003"
+          ],
+          [
+            "Acks for 1005-1010",
+            "ranges = {1005-1010}"
+          ],
+          [
+            "1003, 1004 expire",
+            "redeliver, attempt 2, after backoff"
+          ],
+          [
+            "1004 fails 5 times",
+            "publish to dead-letter, ack original"
+          ],
+          [
+            "1003 acked",
+            "floor jumps to 1011"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Each delivery is a lease with a deadline, ten seconds by default. Twenty orders, offsets one thousand to one thousand nineteen, are out. Acks arrive for the first three, so the ack floor, below which everything is done, moves to one thousand three.",
+          "reveal": 1
+        },
+        {
+          "say": "Acks for one thousand five to ten arrive out of order. We store that as one range, not six rows. That's how two million acks a second stays cheap.",
+          "reveal": 2
+        },
+        {
+          "say": "Offsets one thousand three and four miss their deadline, so they're redelivered with delivery attempt two, after a backoff.",
+          "reveal": 3
+        },
+        {
+          "say": "One thousand four keeps crashing the consumer. After five attempts it's published to the dead-letter topic and acked on the original. Alert on the dead-letter rate, not each message.",
+          "reveal": 4
+        },
+        {
+          "say": "Finally one thousand three is acked, and the floor jumps over the range to one thousand eleven. Duplicates can happen, because a consumer can finish work and crash before acking, so consumers must be idempotent.",
+          "reveal": 5
+        }
+      ],
+      "id": "s020"
+    },
+    {
+      "layout": "bullets",
+      "title": "Push isolation, ordering, replay",
+      "bullets": [
+        "Push window per subscription: grow on 2xx, halve on errors",
+        "Bulkhead: a 50M backlog costs disk, not others' latency",
+        "Ordering key: same partition, one unacked batch per key",
+        "Price of order: a failing message blocks its key",
+        "Seek(time) moves the floor; snapshots before deploys"
+      ],
+      "steps": [
+        {
+          "say": "Push delivery hits endpoints you don't control. Each push subscription has its own window of in-flight messages. It grows while the endpoint answers quickly with two hundreds, and halves on errors, like T-C-P.",
+          "reveal": 1
+        },
+        {
+          "say": "Own state, own window, own timers: a bulkhead. If the shipping team's endpoint is down for three days, its fifty million message backlog costs only disk. The billing team's subscription still reads from memory.",
+          "reveal": 2
+        },
+        {
+          "say": "Ordering keys. All events for order forty-two share a key, hash to one partition, and keep at most one unacked batch in flight, so a redelivery can't overtake a later event. Different keys run in parallel.",
+          "reveal": 3
+        },
+        {
+          "say": "The price: if one message keeps failing, its key is blocked until it's acked or dead-lettered.",
+          "reveal": 4
+        },
+        {
+          "say": "Retention and replay. Seek to a time moves the floor back to the first offset at that time. Take a snapshot before a deploy, and if version two is buggy, reprocess from before it. In the interview, say: one log, ack state as floor plus ranges plus leases, windowed push, dead letters after N attempts.",
+          "reveal": 5
+        }
+      ],
+      "id": "s021"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 4 of 7",
+      "title": "How AI reshaped system design",
+      "steps": [
+        {
+          "say": "Concept four. An A-I product is still an ordinary distributed system. But a handful of constants changed, and each one moves a design decision. Let's walk them.",
+          "reveal": 0
+        }
+      ],
+      "id": "s022",
+      "caption": "Book: Module 24 · How AI reshaped system design"
+    },
+    {
+      "layout": "table",
+      "title": "What changed, constant by constant",
+      "table": {
+        "head": [
+          "Constant",
+          "AI service",
+          "Consequence"
+        ],
+        "rows": [
+          [
+            "Unit of work",
+            "Tokens; cost varies 100x",
+            "Limit and plan in tokens"
+          ],
+          [
+            "Cost centre",
+            "GPU time",
+            "Score tokens per GPU-second"
+          ],
+          [
+            "Latency",
+            "Time to first token + rate",
+            "Stream, cancel, small models"
+          ],
+          [
+            "Correctness",
+            "Non-deterministic",
+            "Eval sets, guardrails"
+          ],
+          [
+            "State",
+            "KV and prefix caches",
+            "Cache-aware routing"
+          ],
+          [
+            "Security",
+            "Text acts as instructions",
+            "Authorize in the runtime"
+          ],
+          [
+            "Data",
+            "The raw material",
+            "Versioned datasets, lineage"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "One, the unit of work is the token, a word piece, about three quarters of a word. One request can cost a hundred times its neighbour, so rate limits and capacity count tokens, not requests.",
+          "reveal": 1
+        },
+        {
+          "say": "Two, the cost centre is G-P-U time. Every design choice is scored in tokens per G-P-U second, or tokens you avoid computing.",
+          "reveal": 2
+        },
+        {
+          "say": "Three, latency has a shape: time to first token, then a per-token rate. That pushes you to streaming, cancellation, and small fast models on interactive paths.",
+          "reveal": 3
+        },
+        {
+          "say": "Four, correctness. The same input can give different outputs, sometimes confidently wrong. Unit tests can't prove it, so you need evaluation sets and guardrails outside the model.",
+          "reveal": 4
+        },
+        {
+          "say": "Five, state. K-V caches make placement matter again, so you route requests to the replica that already holds their prefix.",
+          "reveal": 5
+        },
+        {
+          "say": "Six, security. Text can act as instructions, which is prompt injection. So authorization lives in the runtime, never in the prompt.",
+          "reveal": 6
+        },
+        {
+          "say": "Seven, data is the product's raw material. Quality is bounded by data quality, so datasets get versions, lineage and drift monitoring.",
+          "reveal": 7
+        }
+      ],
+      "id": "s023"
+    },
+    {
+      "layout": "bullets",
+      "title": "The AI addendum to the five questions",
+      "bullets": [
+        "Token budget per request, and who pays?",
+        "Latency shape: watching tokens, or waiting?",
+        "How will we know it's right?"
+      ],
+      "steps": [
+        {
+          "say": "So after the usual five questions, add three. One: what's the token budget per request, and who pays for it?",
+          "reveal": 1
+        },
+        {
+          "say": "Two: is a human watching tokens arrive, or waiting for a whole answer? That decides streaming.",
+          "reveal": 2
+        },
+        {
+          "say": "Three: how will we know it's right? Name the evaluation set, the live quality metric and the human fallback. Evaluation becomes part of the architecture. Recap: tokens, GPUs, and evaluation are the new constants.",
+          "reveal": 3
+        }
+      ],
+      "id": "s024"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 5 of 7",
+      "title": "AI-Powered Code Assistant",
+      "steps": [
+        {
+          "say": "Concept five. Build a coding assistant like GitHub Copilot or Cursor. Grey ghost text appears as you type, accepted with Tab, plus a chat panel about the codebase. Running example: a developer typing a retry loop in a payments service.",
+          "reveal": 0
+        }
+      ],
+      "id": "s025",
+      "caption": "Book: Module 24 · Case 1 — AI-Powered Code Assistant"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "The numbers: a prefill-heavy workload",
+      "table": {
+        "head": [
+          "Quantity",
+          "Value"
+        ],
+        "rows": [
+          [
+            "Peak completions",
+            "500K devs -> ~28K requests/s"
+          ],
+          [
+            "Tokens per request",
+            "2,000 in, 24 out: 80 to 1"
+          ],
+          [
+            "Prefill GPUs, no cache",
+            "56M tokens/s / 28K = ~2,000"
+          ],
+          [
+            "With 70% prefix cache",
+            "~600 prefill GPUs"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Five hundred thousand developers, each triggering about twelve hundred requests a day after debouncing. That's about seven thousand a second on average, twenty-eight thousand at the working-day peak.",
+          "reveal": 1
+        },
+        {
+          "say": "Each prompt is about two thousand tokens of code; each answer about twenty-four. Input outnumbers output eighty to one, so this is prefill-heavy. Prefill is the phase where the model reads the prompt.",
+          "reveal": 2
+        },
+        {
+          "say": "Fifty-six million input tokens a second, at about twenty-eight thousand prefill tokens per G-P-U, needs about two thousand G-P-Us.",
+          "reveal": 3
+        },
+        {
+          "say": "But consecutive prompts share almost all their prefix while you type. With a seventy percent prefix-cache hit rate, prefill drops to about six hundred. The cache saves about fourteen hundred G-P-Us.",
+          "reveal": 4
+        }
+      ],
+      "id": "s026"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "The 250 ms loop, step by step",
+      "table": {
+        "head": [
+          "Step",
+          "Budget",
+          "Trick"
+        ],
+        "rows": [
+          [
+            "Debounce",
+            "75 ms",
+            "One request per keystroke burst"
+          ],
+          [
+            "Gather context",
+            "15 ms",
+            "Warm local indexes"
+          ],
+          [
+            "Network",
+            "40 ms",
+            "Regional pools, open HTTP/2"
+          ],
+          [
+            "Gateway, policy",
+            "15 ms",
+            "Policy cached at edge"
+          ],
+          [
+            "Prefill 600 new tokens",
+            "25 ms",
+            "Prefix cache"
+          ],
+          [
+            "Decode 24 tokens",
+            "70 ms",
+            "Speculative decoding"
+          ],
+          [
+            "Post-filters",
+            "10 ms",
+            "Parse, secret, public code"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Our developer types r-e-t-r-y and pauses. Step one, debounce: wait seventy-five milliseconds so a burst of keystrokes becomes one request.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, the editor extension gathers context from open tabs and imports in fifteen milliseconds.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, forty milliseconds round trip to a regional pool over a connection that's already open.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, the gateway checks seat, policy and token limits from a cache. Fifteen milliseconds.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, prefill. Only about six hundred tokens are new, thanks to the prefix cache. Twenty-five milliseconds.",
+          "reveal": 5
+        },
+        {
+          "say": "Step six, decode twenty-four tokens. Speculative decoding has a tiny draft model guess several tokens, and the main model verifies them in one pass. Same output, two to three times faster.",
+          "reveal": 6
+        },
+        {
+          "say": "Step seven, post-filters: does it parse, is there a secret, does it copy public code. Total about two hundred fifty. And if the developer keeps typing, the request is cancelled end to end, or about forty percent of G-P-U work is wasted.",
+          "reveal": 7
+        }
+      ],
+      "id": "s027"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Context assembly: filling 2,000 tokens",
+      "table": {
+        "head": [
+          "Slot",
+          "Share",
+          "Source"
+        ],
+        "rows": [
+          [
+            "Prefix",
+            "~50%",
+            "Code above the cursor"
+          ],
+          [
+            "Suffix",
+            "~15%",
+            "Code below the cursor"
+          ],
+          [
+            "Similar snippets",
+            "~20%",
+            "Open tabs, recent edits"
+          ],
+          [
+            "Definitions",
+            "~15%",
+            "Symbol table signatures"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The model only knows its prompt, so assembly is ranking under a budget. The prompt is fill-in-the-middle: given the code before and after the cursor, write the middle. Half the budget is the prefix, nearest lines first.",
+          "reveal": 1
+        },
+        {
+          "say": "Fifteen percent is the suffix, the code below the cursor.",
+          "reveal": 2
+        },
+        {
+          "say": "Twenty percent is similar snippets from open tabs, ranked by token overlap. GitHub saw about five percent more acceptance from neighbouring tabs.",
+          "reveal": 3
+        },
+        {
+          "say": "Fifteen percent is definitions. If our developer calls retry with backoff, its real signature comes from the symbol table, so the model doesn't invent arguments. Put stable content first and volatile lines last, so the prefix cache keeps hitting.",
+          "reveal": 4
+        }
+      ],
+      "id": "s028"
+    },
+    {
+      "layout": "bullets",
+      "title": "Index freshness and private code",
+      "bullets": [
+        "Merkle tree: compare roots, walk changed branches",
+        "Chunk by function; embed by content hash",
+        "Reuse a teammate's index, with proof of files",
+        "Exclusion globs, org filter, tenant-keyed caches",
+        "Quality: acceptance, retention at 30 s and 2 min"
+      ],
+      "steps": [
+        {
+          "say": "Keeping the repository index fresh. A Merkle tree hashes each folder from its children. Compare roots with the server, walk only mismatched branches, and you find the three changed files among fifty thousand in a few round trips.",
+          "reveal": 1
+        },
+        {
+          "say": "Chunk code at function boundaries and cache embeddings by hash of chunk text and model version. Edit one function, re-embed one chunk.",
+          "reveal": 2
+        },
+        {
+          "say": "Clones inside a company are about ninety-two percent similar, so a new laptop starts from a teammate's index, proving which files it really has. Cursor cut time to first query from about eight seconds to half a second.",
+          "reveal": 3
+        },
+        {
+          "say": "Private code. Excluded files, like a secrets folder, never leave the laptop, and the gateway rechecks. Every index search filters by org I-D. The prefix cache is keyed by tenant too, or a cache hit could reveal another company's code.",
+          "reveal": 4
+        },
+        {
+          "say": "Measuring quality. Acceptance rate is accepted over shown. But a suggestion accepted then deleted isn't a win, so also track retention: is the text still there after thirty seconds and two minutes. Plus latency, cancellation rate, offline benchmarks, and A-B tests. In the interview, say: debounce, cache, cancel, stable context first, small model with speculative decoding.",
+          "reveal": 5
+        }
+      ],
+      "id": "s029"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "A support bot's containment rate hits 90%. Good news?",
+      "bullets": [
+        "A. Yes, ship it",
+        "B. Not yet: check repeat contacts in 7 days",
+        "C. Only if CSAT is also above 90%"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. A support bot says ninety percent of conversations never reached a human. Is that good news? A, yes. B, not yet, check repeat contacts within seven days. C, only if satisfaction is also high.",
+          "reveal": 0
+        }
+      ],
+      "id": "s030"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 6 of 7",
+      "title": "LLM Customer Support Bot",
+      "steps": [
+        {
+          "say": "The answer is B. Containment is easy to inflate by hiding the human button. That's concept six: an L-L-M support bot for an airline that answers policy, changes bookings, issues small refunds, and hands off to humans. Running example: a traveller asking about a bereavement fare refund.",
+          "reveal": 0
+        }
+      ],
+      "id": "s031",
+      "caption": "Book: Module 24 · Case 2 — LLM Customer Support Bot"
+    },
+    {
+      "layout": "number",
+      "title": "Scale is modest; correctness is not",
+      "big": "1.15/s x 360 s = ~410 open chats",
+      "caption": "About $0.20 per conversation in model cost",
+      "steps": [
+        {
+          "say": "Twenty million contacts a year, sixty percent by chat, is thirty-three thousand chats a day, about one point one five a second at peak. Each lasts six minutes, so by Little's law about four hundred ten are open at once.",
+          "reveal": 0
+        },
+        {
+          "say": "Model cost is about twenty cents a conversation. Versus four dollars for a human chat, the case is strong, but only if resolved really means resolved. This is a correctness problem, not a throughput problem.",
+          "reveal": 0
+        }
+      ],
+      "id": "s032"
+    },
+    {
+      "layout": "diagram",
+      "title": "The conversation as a state machine",
+      "mermaid": "flowchart LR\n  B[\"BotActive\"] --> V[\"Verifying\"]\n  V --> B\n  B --> T[\"ToolPending\"]\n  T --> B\n  B --> H[\"HandoffQueued\"]\n  H --> A[\"AgentActive\"]\n  A --> R[\"Resolved\"]\n  A --> B",
+      "caption": "Exactly one owner at a time",
+      "steps": [
+        {
+          "say": "Make states explicit, and stop two classic bugs: the bot answering while an agent types, and chats stuck in limbo. Our traveller starts in Bot Active.",
+          "reveal": 0
+        },
+        {
+          "say": "She asks about her booking, so we go to Verifying until her identity is confirmed, then back. She asks for a refund, so Tool Pending until the refund tool answers.",
+          "reveal": 0
+        },
+        {
+          "say": "She mentions a bereavement. That moves to Handoff Queued, then Agent Active when an agent accepts. The agent either resolves it or passes control back to the bot for routine steps. The owner field changes by compare-and-set, so a late bot reply can't overwrite the agent.",
+          "reveal": 0
+        }
+      ],
+      "id": "s033"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Intent routing: rules on top of a classifier",
+      "table": {
+        "head": [
+          "Route",
+          "Examples"
+        ],
+        "rows": [
+          [
+            "Bot, no verification",
+            "Baggage rules, opening hours"
+          ],
+          [
+            "Bot + verification + tools",
+            "Booking status, refund under limit"
+          ],
+          [
+            "Human, always",
+            "Legal, fraud, bereavement, safety"
+          ],
+          [
+            "Human, by signal",
+            "Low confidence twice, asks 3 times"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "A small classifier labels each turn in twenty to fifty milliseconds, and hard rules sit on top. Route one: bot alone, for public policy questions like baggage rules.",
+          "reveal": 1
+        },
+        {
+          "say": "Route two: bot with verification and tools, for her booking status or a refund under the limit. Tools act with her delegated token, never as an all-powerful bot account.",
+          "reveal": 2
+        },
+        {
+          "say": "Route three: human, always. Legal threats, fraud, bereavement, safety. Rules decide these first; they never depend on generation.",
+          "reveal": 3
+        },
+        {
+          "say": "Route four: human by signal. Low confidence twice, a negative sentiment trend, the same question three times, or simply asking. Talk to a human is always available.",
+          "reveal": 4
+        }
+      ],
+      "id": "s034"
+    },
+    {
+      "layout": "bullets",
+      "title": "Handoff, guardrails, grounding",
+      "bullets": [
+        "Warm handoff: 3 to 5 line summary; CRM via outbox",
+        "PII: redact and tokenise before any model sees it",
+        "Grounding: each policy claim backed by a cited chunk",
+        "Promises only from tool results in this turn",
+        "Versioned policies close the Air Canada gap"
+      ],
+      "steps": [
+        {
+          "say": "Warm handoff: the agent gets the redacted transcript and a short summary of the issue, what was tried, and verification status, so she never repeats herself. The C-R-M case, the support system of record, is updated through an outbox, so a slow C-R-M never blocks chat.",
+          "reveal": 1
+        },
+        {
+          "say": "Guardrails. If she pastes a card number, a detector using patterns, a Luhn checksum and name recognition swaps it for a token like card one. The real value sits in an encrypted vault. Tools get it server-side; the model never does.",
+          "reveal": 2
+        },
+        {
+          "say": "Grounding: a small judge checks each policy claim against the retrieved text. Unsupported? Regenerate once, else hand off.",
+          "reveal": 3
+        },
+        {
+          "say": "Promises: you will get a full refund is allowed only if a tool in this turn returned that refund.",
+          "reveal": 4
+        },
+        {
+          "say": "Why so strict? In Moffatt versus Air Canada, twenty twenty-four, the chatbot wrongly said a bereavement fare could be claimed afterwards, and the airline had to pay. So every chunk carries a document version, and every turn records which versions it cited.",
+          "reveal": 5
+        }
+      ],
+      "id": "s035"
+    },
+    {
+      "layout": "bullets",
+      "title": "The evaluation loop",
+      "bullets": [
+        "Sample 1 to 2%, plus every escalation and complaint",
+        "Score with an LLM judge; humans audit weekly",
+        "Promote failures into a regression set",
+        "Gate changes in CI, then canary",
+        "Headline: resolved, no repeat contact in 7 days"
+      ],
+      "steps": [
+        {
+          "say": "Step one, sample. One to two percent of chats, plus every escalation, complaint, low rating and agent-corrected draft, all redacted.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, score with an L-L-M judge against a rubric: correct, grounded, followed policy, right escalation. Strong judges agree with humans over eighty percent of the time, but have biases, so humans audit a weekly slice.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, promote failures, like the wrong bereavement answer, into a regression set of a few thousand cases.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, gate every prompt, model or policy change on that set in C-I, then canary against the live baseline.",
+          "reveal": 4
+        },
+        {
+          "say": "And the headline metric: automated resolution, meaning closed with no human and no repeat contact on the same issue within seven days. In the interview, say: one-owner state machine, rules-backed routing, P-I-I tokenised, promises only from tools, and a judged regression loop.",
+          "reveal": 5
+        }
+      ],
+      "id": "s036"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 7 of 7",
+      "title": "Data Infrastructure for AI/ML",
+      "steps": [
+        {
+          "say": "Concept seven, the data platform behind training: fraud and recommendation models retrained daily, vision models, L-L-M fine-tunes. Running example: a fraud model, version thirty-one, that must be traceable to the exact bytes it learned from months later.",
+          "reveal": 0
+        }
+      ],
+      "id": "s037",
+      "caption": "Book: Module 24 · Case 3 — Data Infrastructure for AI/ML"
+    },
+    {
+      "layout": "table",
+      "title": "Lakehouse: how an Iceberg commit works",
+      "caption": "Commit = atomic swap of the catalog pointer",
+      "steps": [
+        {
+          "say": "A data lake has no transactions; readers can see half-written output. A lakehouse adds a metadata layer with transactions and versions over open Parquet files. Here's an Iceberg commit, step by step. Step one, new data goes into new files; existing files are never modified.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, the writer creates new manifests listing files with column stats, and a new metadata file describing the new snapshot.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, commit: swap the catalog pointer from metadata v twelve to v thirteen, only if it still points to twelve. If another writer won, re-read and retry.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, readers resolve the pointer once and see one consistent snapshot. Time travel reads an older one. Chores: compact small files, and expire old snapshots.",
+          "reveal": 4
+        }
+      ],
+      "id": "s038",
+      "table": {
+        "head": [
+          "Step",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "1. Write",
+            "New Parquet files; old files never change"
+          ],
+          [
+            "2. Metadata",
+            "New manifests and a metadata file for the snapshot"
+          ],
+          [
+            "3. Commit",
+            "Swap pointer v12 to v13, only if still v12"
+          ],
+          [
+            "4. Read",
+            "Resolve pointer once; see one snapshot"
+          ]
+        ]
+      }
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Labeling at scale",
+      "bullets": [
+        "2M items/month, 10% triple-labeled: ~60 labelers",
+        "Agreement scores and hidden gold questions",
+        "Active learning: label what the model doubts",
+        "Weak supervision and LLM labels, audited"
+      ],
+      "steps": [
+        {
+          "say": "Humans are the bottleneck. Two million fraud cases a month, ten percent labeled by three people for quality, at two hundred fifty an hour, is ninety-six hundred hours, about sixty full-time labelers.",
+          "reveal": 1
+        },
+        {
+          "say": "Quality: measure agreement on the overlap, score labelers with hidden gold questions, and let an expert settle disagreements. Low agreement usually means unclear instructions.",
+          "reveal": 2
+        },
+        {
+          "say": "Active learning sends humans only the items the model is least sure about. If thirty percent of items suffice, sixty labelers become about eighteen.",
+          "reveal": 3
+        },
+        {
+          "say": "Weak supervision lets experts write heuristic rules whose noisy votes a model combines. L-L-M labeling is cheap too, but audit a sample. Every relabel is a new label-set version.",
+          "reveal": 4
+        }
+      ],
+      "id": "s039"
+    },
+    {
+      "layout": "bullets",
+      "title": "Dataset versions, lineage, deletion",
+      "bullets": [
+        "Version = manifest: snapshots, labels, split, code",
+        "Lineage: tables -> dataset v7 -> model v31",
+        "Erasure 1: delete rows from tables and feature store",
+        "Erasure 2: expire old snapshots in time",
+        "Erasure 3 and 4: rebuild datasets, flag models"
+      ],
+      "steps": [
+        {
+          "say": "A dataset version is a manifest, not a copy. Fraud dataset v seven pins each table's snapshot I-D, the filter, the label-set version, the code commit, and the split rule: hash of user I-D mod a hundred below eighty is train, so no user lands in both train and test. Its content hash is its identity.",
+          "reveal": 1
+        },
+        {
+          "say": "Lineage records every job's inputs and outputs. So when order total turns out buggy, you ask which datasets and models used it, and get dataset v seven and model v thirty-one.",
+          "reveal": 2
+        },
+        {
+          "say": "Now a customer asks to be erased, but datasets are immutable. Step one, delete their rows from current tables and the online feature store.",
+          "reveal": 3
+        },
+        {
+          "say": "Step two, snapshot expiry removes old versions inside the legal window.",
+          "reveal": 4
+        },
+        {
+          "say": "Step three, lineage finds affected datasets, which are rebuilt as new versions and old shards deleted. Step four, models trained on old versions are flagged, and retraining is a recorded policy decision.",
+          "reveal": 5
+        }
+      ],
+      "id": "s040"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Feeding the GPUs",
+      "table": {
+        "head": [
+          "Problem",
+          "Fix"
+        ],
+        "rows": [
+          [
+            "768K small GETs/s",
+            "256 MB shards: ~450 GETs/s"
+          ],
+          [
+            "Need random order",
+            "Shuffle shards, then a buffer"
+          ],
+          [
+            "80 CPU cores per node",
+            "Separate preprocessing fleet"
+          ],
+          [
+            "Node dies at hour 30",
+            "Save loader state in checkpoint"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The largest job: five hundred twelve G-P-Us needing one hundred fifteen gigabytes a second of images. One file per sample means seven hundred sixty-eight thousand object-store requests a second. Pack samples into two hundred fifty-six megabyte shards, and it's about four hundred fifty.",
+          "reveal": 1
+        },
+        {
+          "say": "Training wants random order, but shards are sequential. So shuffle twice: the shard order each epoch, then samples mixed in a memory buffer.",
+          "reveal": 2
+        },
+        {
+          "say": "Decoding and augmenting needs about eighty cores per node, most of the server, so a separate C-P-U fleet does it and streams ready tensors.",
+          "reveal": 3
+        },
+        {
+          "say": "A node dies at hour thirty. The loader's position is saved with each checkpoint, so training resumes mid-epoch, no repeats, no skips. Watch G-P-U data-wait time; above a few percent, the loader is the bottleneck.",
+          "reveal": 4
+        }
+      ],
+      "id": "s041"
+    },
+    {
+      "layout": "number",
+      "title": "Drift: a PSI example",
+      "big": "PSI = 0.102 + 0 + 0.139 = 0.24",
+      "caption": "Under 0.1 stable, over 0.25 major shift",
+      "steps": [
+        {
+          "say": "Three failures get called drift. Data drift: inputs change. Concept drift: the input to label relationship changes, like fraudsters changing tactics. Training-serving skew: the same feature computed differently online and offline.",
+          "reveal": 0
+        },
+        {
+          "say": "To score data drift, use the Population Stability Index. Bin a feature. Training shares are half, point three, point two. Live shares are point three, point three, point four. Sum live minus training, times the log of live over training. That gives point one oh two, plus zero, plus point one three nine: point two four.",
+          "reveal": 0
+        },
+        {
+          "say": "Near point two five, a major shift. Drift alone opens a ticket. Drift plus a live metric drop triggers retraining, and the new model must beat the old on a fresh holdout before a canary. And check schemas and null rates on every commit, quarantining bad batches. In the interview, say: lakehouse snapshots, dataset manifests with lineage, sharded loaders, gated retraining.",
+          "reveal": 0
+        }
+      ],
+      "id": "s042"
+    },
+    {
+      "layout": "recap",
+      "title": "Recap",
+      "bullets": [
+        "CDN: anycast + DNS, owner hashing, sequenced purge log",
+        "Rate limiter: GCRA in an atomic script, leases, shadow",
+        "Pub-sub: one log, floor + ranges, windowed push",
+        "AI constants; code assistant: 250 ms loop, FIM, Merkle",
+        "Support bot: state machine, guardrails, eval loop",
+        "ML data: lakehouse, manifests, shards, drift checks"
+      ],
+      "steps": [
+        {
+          "say": "Let's recap. C-D-N: anycast plus load-aware D-N-S, one owner per key in a PoP, a coalescing parent tier, and purges as a sequenced log.",
+          "reveal": 1
+        },
+        {
+          "say": "Rate limiter: G-C-R-A stores one timestamp, checked in one atomic script; hot keys lease tokens; rules ship in shadow mode.",
+          "reveal": 2
+        },
+        {
+          "say": "Pub-sub: write once, track acks as a floor plus ranges, isolate push with windows, dead-letter after N tries.",
+          "reveal": 3
+        },
+        {
+          "say": "A-I changed the constants: tokens, G-P-U time, and evaluation as architecture.",
+          "reveal": 4
+        },
+        {
+          "say": "Code assistant: a two hundred fifty millisecond loop with debounce, prefix cache, speculative decoding, and a Merkle-synced index.",
+          "reveal": 4
+        },
+        {
+          "say": "Support bot: one owner, rule-backed routing, P-I-I tokens, promises only from tools, and resolution without repeat contact.",
+          "reveal": 5
+        },
+        {
+          "say": "M-L data: lakehouse snapshots, dataset manifests with lineage, sharded loaders, and drift checks.",
+          "reveal": 6
+        },
+        {
+          "say": "Next time, episode thirty: Commerce Platforms and Postmortems. See you there.",
+          "reveal": 6
+        }
+      ],
+      "id": "s043"
+    }
+  ]
+}

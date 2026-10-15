@@ -1,0 +1,1771 @@
+{
+  "series": "System Design Workshop",
+  "episode": 7,
+  "title": "Moving Data: Communication Patterns",
+  "subtitle": "Seven ways to draw an arrow, and when each one is right",
+  "scenes": [
+    {
+      "id": "s001",
+      "layout": "title",
+      "title": "Moving Data: Communication Patterns",
+      "subtitle": "Seven ways to draw an arrow, and when each one is right",
+      "steps": [
+        {
+          "say": "Welcome to episode seven of the System Design Workshop: moving data. A design diagram is boxes and arrows. Today is all about the arrows.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll be able to look at any arrow and pick the right one of seven patterns: request-response, message queues, publish-subscribe, event-driven architecture, webhooks, server-sent events and bidirectional streaming. Then we'll combine all seven in a notification system.",
+          "reveal": 0
+        },
+        {
+          "say": "Keep the Module two notes open. One online store drives the story.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s002",
+      "layout": "bullets",
+      "title": "Every arrow hides three questions",
+      "kicker": "Module introduction",
+      "bullets": [
+        "Waiting: must someone wait for the answer?",
+        "Downtime: what if B is offline?",
+        "Duplicates: what if it arrives twice?"
+      ],
+      "steps": [
+        {
+          "say": "How A reaches B decides three behaviors. First, waiting: must anyone wait for the answer? A shopper clicking buy waits for approved or declined.",
+          "reveal": 1
+        },
+        {
+          "say": "Second, downtime: what happens if B is offline? If the email service is down for ten minutes, do receipts vanish, or just arrive late?",
+          "reveal": 2
+        },
+        {
+          "say": "Third, duplicates: a second 'ship this order' means two parcels.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s003",
+      "layout": "table",
+      "title": "Seven patterns, one store",
+      "kicker": "The seven patterns",
+      "table": {
+        "head": [
+          "Situation",
+          "Pattern",
+          "Store example"
+        ],
+        "rows": [
+          [
+            "Caller needs the answer",
+            "Request-response",
+            "Authorize the card"
+          ],
+          [
+            "Work can wait, no one waiting",
+            "Message queue",
+            "Fulfill the order"
+          ],
+          [
+            "Many services care about a fact",
+            "Publish-subscribe",
+            "order.placed"
+          ],
+          [
+            "Carry the details in the event",
+            "Event-driven",
+            "Items, total, address"
+          ],
+          [
+            "Another company tells you",
+            "Webhooks",
+            "payment.succeeded"
+          ],
+          [
+            "Steady one-way updates",
+            "Server-Sent Events",
+            "Live order status"
+          ],
+          [
+            "Both sides keep talking",
+            "Bidirectional stream",
+            "Support chat"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's the map, applied to our store. One: request-response. The caller can't go on without the answer. Checkout asking the payment service to authorize a card.",
+          "reveal": 1
+        },
+        {
+          "say": "Two: message queue. Work that can happen later, with nobody waiting. Fulfilling an order after the buyer already saw 'confirmed'.",
+          "reveal": 2
+        },
+        {
+          "say": "Three: publish-subscribe. Something happened and several services care. 'Order placed' matters to email, fraud and analytics.",
+          "reveal": 3
+        },
+        {
+          "say": "Four: event-driven architecture. Pack the details into the event, so nobody has to call back to ask what was ordered.",
+          "reveal": 4
+        },
+        {
+          "say": "Five: webhooks. Another company tells you something. The payment provider saying 'payment succeeded'.",
+          "reveal": 5
+        },
+        {
+          "say": "Six: server-sent events. A steady one-way flow of updates, like a live order-status page.",
+          "reveal": 6
+        },
+        {
+          "say": "Seven: bidirectional streaming. Both sides keep talking, like a support chat.",
+          "reveal": 7
+        }
+      ],
+      "caption": "Book: Module 2 Moving Data · The seven patterns"
+    },
+    {
+      "id": "s004",
+      "layout": "bullets",
+      "title": "Two rules and four terms",
+      "kicker": "Module introduction",
+      "bullets": [
+        "Rule 1: request-response is the default",
+        "Rule 2: anything that retries can deliver twice",
+        "Job (do once) versus fact (it happened)",
+        "At-least-once: never lost, maybe repeated",
+        "Push versus pull",
+        "Synchronous versus asynchronous"
+      ],
+      "steps": [
+        {
+          "say": "Rule one: request-response is the default. If someone waits for the answer, make a direct call. The other six patterns each have costs, so switching is a trade, not an upgrade.",
+          "reveal": 1
+        },
+        {
+          "say": "Rule two: anything that retries can deliver twice. Queues, events and webhooks resend whenever they're unsure. So every receiver must be idempotent, meaning running it twice has the same effect as running it once.",
+          "reveal": 2
+        },
+        {
+          "say": "Now four terms. A job is work to do once, like 'resize this image'. A fact records that something happened, like 'an order was placed'. Jobs go on queues. Facts get published. Mixing these up is the most common mistake.",
+          "reveal": 3
+        },
+        {
+          "say": "At-least-once delivery: a message is never lost, but may arrive more than once. That's rule two in one phrase.",
+          "reveal": 4
+        },
+        {
+          "say": "Push versus pull. With pull, the client keeps asking 'anything new?'. With push, the server sends updates as they happen. Pull costs requests. Push costs open connections.",
+          "reveal": 5
+        },
+        {
+          "say": "Synchronous means the caller waits. Asynchronous means the caller hands off the message and carries on.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s005",
+      "layout": "diagram",
+      "title": "Request-response: ask and wait",
+      "kicker": "Concept 1 of 7",
+      "mermaid": "flowchart LR\n  C[\"Checkout (needs answer)\"] -- \"1. request\" --> P[\"Payment service\"]\n  P -- \"2. response or error\" --> C",
+      "caption": "Book: Module 2 Moving Data · Request-Response",
+      "steps": [
+        {
+          "say": "Pattern one, request-response. The caller sends a request and waits, doing nothing else, until a result or an error comes back. It's like asking a shop assistant at the counter: you stay put until you get an answer.",
+          "reveal": 0
+        },
+        {
+          "say": "Our running example is checkout. Checkout calls the payment service, waits about eighty milliseconds, and gets 'approved'. The very next line of code uses that answer.",
+          "reveal": 0
+        },
+        {
+          "say": "That's what it gives you. The answer immediately. Errors right where you can handle them, so checkout can retry or show a message. And easy debugging: one request, one path, one trace.",
+          "reveal": 0
+        },
+        {
+          "say": "One tip: new connections cost handshakes, up to a hundred milliseconds between regions, so reuse them with a connection pool.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s006",
+      "layout": "table",
+      "title": "Example: what a chain of calls costs",
+      "kicker": "Example",
+      "table": {
+        "head": [
+          "Cost",
+          "Checkout calling 5 services"
+        ],
+        "rows": [
+          [
+            "Availability multiplies",
+            "0.999^5 = 99.5%, about 44 h/year down"
+          ],
+          [
+            "Latency adds",
+            "5 x 80 ms = 400 ms; parallel = 80 ms"
+          ],
+          [
+            "Threads held",
+            "300/s x 2 s = 600 in flight"
+          ],
+          [
+            "Safeguards",
+            "Timeout, retries, circuit breaker"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Each cost is small alone, but a chain compounds them. Imagine checkout calls five services, one after another, each up ninety-nine point nine percent of the time. Checkout works only when all five do. Multiply: about ninety-nine point five percent. That's roughly forty-four hours of failed checkouts a year. This is temporal coupling: both sides must be up at once.",
+          "reveal": 1
+        },
+        {
+          "say": "Latency adds up too. Five sequential calls of eighty milliseconds is four hundred milliseconds. But if they're independent, run them in parallel and you pay only the slowest, about eighty. That's often the quickest speed-up you'll ever find.",
+          "reveal": 2
+        },
+        {
+          "say": "And waiting ties up resources. Three hundred requests a second, each waiting two seconds, means six hundred in flight, each holding a thread. That's Little's law.",
+          "reveal": 3
+        },
+        {
+          "say": "So at scale, every synchronous call gets three safeguards: a timeout, bounded retries, and a circuit breaker that stops calling a service that's clearly down.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s007",
+      "layout": "bullets",
+      "title": "One question per arrow",
+      "kicker": "Concept 1 of 7",
+      "bullets": [
+        "Next step needs it AND someone waits: direct call",
+        "Long-running work: reply 'started', deliver later",
+        "Many services care: publish once",
+        "Bursty, nobody waiting: queue it",
+        "Mistake: async where the user still waits"
+      ],
+      "steps": [
+        {
+          "say": "Before you draw any arrow, ask one question with two parts. Does the caller's next step need the answer, and is someone waiting for it? Both yes: a direct call. Checkout and payment: yes and yes.",
+          "reveal": 1
+        },
+        {
+          "say": "If not, look elsewhere. Long-running work, say a ten-minute video export: reply 'started' right away and deliver the result later.",
+          "reveal": 2
+        },
+        {
+          "say": "Telling many services about one event: don't make five calls, publish it once.",
+          "reveal": 3
+        },
+        {
+          "say": "Bursty work with loose deadlines: if nobody waits, put it on a queue.",
+          "reveal": 4
+        },
+        {
+          "say": "And watch the opposite mistake: async by habit. Putting search behind Kafka still leaves the user waiting, now through a broker, with extra latency and duplicates. In the interview say: 'Checkout needs the payment result and the user is waiting, so it stays synchronous, protected by a timeout, retries and a breaker.'",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s008",
+      "layout": "quiz",
+      "title": "Pause and think: make payment authorization async?",
+      "kicker": "Pause and think",
+      "bullets": [
+        "A. Yes, async is always more resilient",
+        "B. No, the user waits; protect the sync call",
+        "C. Yes, but only during flash sales"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. A teammate wants to make payment authorization asynchronous 'for resilience', by publishing a payment requested event. Good idea, or not? Hold your answer.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s009",
+      "layout": "number",
+      "title": "The flash sale that broke the store",
+      "kicker": "Concept 2 of 7",
+      "big": "5,000/s in, 400/s done = 92% errors",
+      "caption": "Book: Module 2 Moving Data · Message Queue",
+      "steps": [
+        {
+          "say": "The answer was B. Checkout needs the result and the user is waiting. Going async adds a pending state and a risk of charging twice. Protect the sync call instead, and make the receipt email async.",
+          "reveal": 0
+        },
+        {
+          "say": "Now pattern two, the message queue, and it starts with an outage. Our store sells ten thousand signed books at ten a.m. Normal traffic is two hundred orders a second. At ten o'clock and one second it jumps to five thousand a second, for two minutes.",
+          "reveal": 0
+        },
+        {
+          "say": "The pipeline is synchronous: take the order, reserve stock, write the database, schedule fulfillment, then say success. Capacity: four hundred orders a second. Five thousand in, four hundred done, so four thousand six hundred a second fail. Ninety-two percent of buyers see an error.",
+          "reveal": 0
+        },
+        {
+          "say": "The real cause? Buyers needed a confirmation right away, not fulfillment in two minutes. Gluing the two together caused the outage.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s010",
+      "layout": "bullets",
+      "title": "Why the obvious fixes fail",
+      "kicker": "Concept 2 of 7",
+      "bullets": [
+        "Scale for the peak: 12x servers, bottleneck moves",
+        "Buffer in memory: a crash loses paid orders",
+        "Reject the excess: turn away 9 in 10 buyers",
+        "Real problem: arrival rate tied to processing rate"
+      ],
+      "steps": [
+        {
+          "say": "Fix one: scale up for the peak. That's twelve times the servers all year for a two-minute event, and the database still has its own ceiling. The bottleneck just moves.",
+          "reveal": 1
+        },
+        {
+          "say": "Fix two: buffer orders in memory. A crash loses paid orders.",
+          "reveal": 2
+        },
+        {
+          "say": "Fix three: reject the excess. That turns away nine customers in ten, during the biggest sale of the quarter, for work that could safely run an hour later.",
+          "reveal": 3
+        },
+        {
+          "say": "All three treat it as capacity. It's coupling: arrivals and processing were forced to run at the same rate every second.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s011",
+      "layout": "bullets",
+      "title": "How a queue works: four mechanics",
+      "kicker": "Concept 2 of 7",
+      "bullets": [
+        "Kitchen ticket rail: producer, broker, workers",
+        "1. Save to disk before confirming",
+        "2. Ack on finish; no ack means redelivery",
+        "Finished but died before ack: runs twice",
+        "3. Competing consumers: one worker per message",
+        "4. Depth: short rise OK, week-long rise is not"
+      ],
+      "steps": [
+        {
+          "say": "A message queue is a durable to-do list between a producer, which creates work, and consumers, also called workers, which do it. Like a kitchen ticket rail: waiters clip tickets fast, cooks take them at their own pace, and a rush just lengthens the rail. Four mechanics make it safe.",
+          "reveal": 1
+        },
+        {
+          "say": "Mechanic one: save before confirming. The broker, the software running the queue, writes each order to disk, and only then tells the API 'got it'. A worker crash or a deploy can't lose the order.",
+          "reveal": 2
+        },
+        {
+          "say": "Mechanic two: workers acknowledge on finish, not on start. Worker one takes order forty-two, does the work, then sends an ack. If it crashes mid-job, no ack arrives. After a visibility timeout, say thirty seconds, the broker hands order forty-two to another worker. That's redelivery.",
+          "reveal": 3
+        },
+        {
+          "say": "Here's the catch. If worker one finished but crashed just before acking, the broker can't tell the difference, so the job runs twice. That's at-least-once delivery, and why every consumer must be idempotent.",
+          "reveal": 4
+        },
+        {
+          "say": "Mechanic three: competing consumers. Many workers pull from one queue, and each message goes to exactly one of them. Need more throughput? Add workers. No coordination code.",
+          "reveal": 5
+        },
+        {
+          "say": "Mechanic four: queue depth is your health signal. Depth rising during a two-minute spike means buffering is working. Rising for a week means you're short on capacity.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s012",
+      "layout": "diagram",
+      "title": "Where the duplicate comes from",
+      "kicker": "Concept 2 of 7",
+      "mermaid": "flowchart TB\n  A[\"1. Broker delivers msg 42 to Worker 1\"] --> B[\"2. Worker 1 does the work, crashes before ack\"]\n  B --> C[\"3. Visibility timeout expires\"]\n  C --> D[\"4. Broker redelivers msg 42 to Worker 2\"]\n  D --> E[\"5. Worker 2: idempotency check, then ack\"]",
+      "caption": "At-least-once delivery means idempotent workers",
+      "steps": [
+        {
+          "say": "Watch it happen. The broker delivers message forty-two to worker one. Worker one does the work, then crashes before sending its ack.",
+          "reveal": 0
+        },
+        {
+          "say": "The visibility timeout expires, so the broker redelivers message forty-two to worker two. Worker two checks: have I already applied order forty-two? If yes, it skips. If not, it applies it once. Then it acks.",
+          "reveal": 0
+        },
+        {
+          "say": "No order lost, no order shipped twice. Redelivery gives you retries for free, and idempotency makes them safe.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s013",
+      "layout": "table",
+      "title": "Example: the flash sale with a queue",
+      "kicker": "Example",
+      "table": {
+        "head": [
+          "Time",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "10:00-10:02",
+            "5,000/s arrive; 'confirmed' in ~50 ms"
+          ],
+          [
+            "Backlog",
+            "4,600/s x 120 s = ~552,000 messages"
+          ],
+          [
+            "10:02-10:25",
+            "552,000 / 400/s = ~23 min to drain"
+          ],
+          [
+            "10:07 drill",
+            "Worker dies; redelivered; no double order"
+          ],
+          [
+            "Takeaway",
+            "No extra power, just decoupled rates"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Replay the flash sale with a queue between the API and the pipeline. From ten o'clock to two minutes past, five thousand orders a second arrive. The API validates, enqueues, and replies 'Order confirmed' in about fifty milliseconds. Nobody sees an error.",
+          "reveal": 1
+        },
+        {
+          "say": "The queue grows by four thousand six hundred a second. Over a hundred and twenty seconds, that's a backlog of about five hundred fifty-two thousand messages. Cheap on disk.",
+          "reveal": 2
+        },
+        {
+          "say": "Workers keep going at four hundred a second. Five hundred fifty-two thousand divided by four hundred is about twenty-three minutes to drain. The business agreed in advance that 'ships today' allows that.",
+          "reveal": 3
+        },
+        {
+          "say": "At seven past ten, a failure drill: a worker dies mid-message, it's redelivered, the idempotency check prevents a double order. And the bill? A queue costing pennies per million messages replaces a twelve-times fleet.",
+          "reveal": 4
+        },
+        {
+          "say": "Key point: the queue added no processing power. It removed the need to keep pace second by second, which the business never needed.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s014",
+      "layout": "twocol",
+      "title": "Queue trade-offs",
+      "kicker": "Concept 2 of 7",
+      "left": {
+        "heading": "You gain",
+        "bullets": [
+          "Spikes become backlog",
+          "Worker outage = longer list",
+          "Scale independently; depth drives autoscaling"
+        ]
+      },
+      "right": {
+        "heading": "You pay",
+        "bullets": [
+          "Latency by design",
+          "Duplicates; dead letter queue",
+          "Ordering: partition by customer ID"
+        ]
+      },
+      "steps": [
+        {
+          "say": "What you gain. Spikes become backlog, not errors.",
+          "reveal": 1
+        },
+        {
+          "say": "A worker outage becomes a longer list, not an outage, so deploys stop being scary.",
+          "reveal": 2
+        },
+        {
+          "say": "Producers and workers scale separately, and depth tells your autoscaler when to add workers.",
+          "reveal": 3
+        },
+        {
+          "say": "What you pay. Latency, deliberately: nothing a user waits on belongs here.",
+          "reveal": 4
+        },
+        {
+          "say": "Duplicates, so idempotent workers are mandatory. And a dead letter queue for messages that keep failing.",
+          "reveal": 5
+        },
+        {
+          "say": "Lost ordering. With twenty workers, a refund can finish before its charge. Partition by customer ID: each customer stays in order, customers run in parallel.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s015",
+      "layout": "table",
+      "title": "Message queue versus publish-subscribe",
+      "kicker": "Comparison",
+      "table": {
+        "head": [
+          "",
+          "Message queue",
+          "Publish-subscribe"
+        ],
+        "rows": [
+          [
+            "Message is",
+            "A job",
+            "A fact"
+          ],
+          [
+            "Delivered to",
+            "Exactly one worker",
+            "Every subscriber"
+          ],
+          [
+            "New consumer adds",
+            "More workers, same job",
+            "A new use of the fact"
+          ],
+          [
+            "Question",
+            "Who does this task?",
+            "Who cares this happened?"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Both use a broker, both are async, but they answer different questions. In a queue, a message is a job, work that should happen once. In pub-sub, it's a fact, something that happened.",
+          "reveal": 1
+        },
+        {
+          "say": "A queue delivers each message to exactly one worker. Pub-sub delivers to every subscriber, each on its own.",
+          "reveal": 2
+        },
+        {
+          "say": "Adding a consumer to a queue adds more hands for the same job. Adding a subscriber adds another use for the same fact.",
+          "reveal": 3
+        },
+        {
+          "say": "'Resize this image' asks who does this task: a queue. 'An order was placed' asks who cares: pub-sub. They combine well: publish once, feed each team its own queue.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Module 2 · Message Queue vs Publish-Subscribe"
+    },
+    {
+      "id": "s016",
+      "layout": "bullets",
+      "title": "The problem: checkout feeding five teams",
+      "kicker": "Concept 3 of 7",
+      "bullets": [
+        "Checkout writes to 5 team queues in sequence",
+        "1. Every new team needs a checkout deploy",
+        "2. Crash after 3 of 5 writes: mismatched data",
+        "3. Loyalty's slow queue slows checkout"
+      ],
+      "steps": [
+        {
+          "say": "Pattern three, publish-subscribe. After the queue fix, email wanted order data. Then analytics, fraud and loyalty. Each request added another 'write to this team's queue' line inside checkout. Eighteen months later checkout writes to five queues in sequence. Three problems follow.",
+          "reveal": 1
+        },
+        {
+          "say": "One: every new consumer needs a checkout deploy. Your most important revenue service changes for every team's data request.",
+          "reveal": 2
+        },
+        {
+          "say": "Two: a crash leaves teams with mismatched data. Checkout crashed after writing three of five queues. Fulfillment shipped the order, but fraud never saw it.",
+          "reveal": 3
+        },
+        {
+          "say": "Three: when loyalty's queue was slow for an hour, checkout slowed too.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s017",
+      "layout": "diagram",
+      "title": "Publish once, fan out to every subscription",
+      "kicker": "Concept 3 of 7",
+      "mermaid": "flowchart LR\n  C[\"Checkout\"] -- \"publish once\" --> T[\"Topic: order.placed\"]\n  T --> F[\"Fulfillment sub\"]\n  T --> E[\"Email sub\"]\n  T --> R[\"Fraud sub\"]\n  T --> A[\"Analytics sub\"]\n  T --> L[\"Loyalty sub\"]",
+      "caption": "Book: Module 2 Moving Data · Publish-Subscribe",
+      "steps": [
+        {
+          "say": "The fix: publish the fact once. Checkout publishes order placed to a topic, a named stream of facts, and moves on. The broker makes one durable write, however many listeners there are, so a crash can't deliver to some and not others.",
+          "reveal": 0
+        },
+        {
+          "say": "Each team has a subscription, its own private copy. Think of it as each team's own queue, with its own backlog, its own position in the stream called the offset, its own retries and dead letter queue. If fraud is down an hour, only fraud's backlog grows.",
+          "reveal": 0
+        },
+        {
+          "say": "Fan-out means one message reaching many receivers. A sixth team just adds a subscription on the right. Nothing on the left changes. Like a newspaper: it prints once, and a new reader subscribes without touching the newsroom.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s018",
+      "layout": "bullets",
+      "title": "How pub-sub works: four mechanics",
+      "kicker": "Concept 3 of 7",
+      "bullets": [
+        "1. Topic: publish the fact once",
+        "2. Subscription: own offset, backlog, dead letters",
+        "3. Joining is config; replay history",
+        "4. Event format is a public contract"
+      ],
+      "steps": [
+        {
+          "say": "Walk through the four mechanics with our store. One: the topic. Order placed is a stream of facts. Checkout publishes once, in about five milliseconds, and moves on.",
+          "reveal": 1
+        },
+        {
+          "say": "Two: the subscription. Each team's independent feed, with its own offset, acks and dead letter queue. Fraud's outage stays fraud's problem.",
+          "reveal": 2
+        },
+        {
+          "say": "Three: joining is configuration, not code. Data science subscribes without touching checkout. With a broker that keeps history, like Kafka, they can replay old events first, then switch to live.",
+          "reveal": 3
+        },
+        {
+          "say": "Four: the event format becomes a public contract. Publish facts, not commands: 'order placed', not 'send a receipt'. Keep changes additive. A new optional field is safe. A renamed field breaks teams you've never met. A schema registry checks formats before publishing.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s019",
+      "layout": "table",
+      "title": "Example: pub-sub at 200 orders a second",
+      "kicker": "Example",
+      "table": {
+        "head": [
+          "Measure",
+          "Before (5 queues)",
+          "After (1 topic)"
+        ],
+        "rows": [
+          [
+            "Publish cost",
+            "~25 ms, grows per team",
+            "~5 ms, flat"
+          ],
+          [
+            "New team joins",
+            "PR + release, no history",
+            "Afternoon, replay 30 days"
+          ],
+          [
+            "Fraud down 40 min",
+            "Slows checkout",
+            "480,000 events wait"
+          ],
+          [
+            "Costs",
+            "",
+            "Duplicates, no done signal, retention"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Now the numbers, at two hundred orders a second. Publish cost: before, five sequential queue writes took about twenty-five milliseconds, and grew with every team. After, one write of about five milliseconds, flat no matter how many subscribers.",
+          "reveal": 1
+        },
+        {
+          "say": "Data science subscribed in an afternoon. Thirty days of retained history let them replay about five hundred million events before going live. Before, they'd have needed a pull request, a release, and they'd get no history at all.",
+          "reveal": 2
+        },
+        {
+          "say": "Failure drill: fraud is down forty minutes. Its subscription piles up two hundred times two thousand four hundred seconds, four hundred eighty thousand events, processed when it returns. Email and checkout don't notice.",
+          "reveal": 3
+        },
+        {
+          "say": "The costs: duplicates per subscription, no 'all done' signal, and a slow consumer loses events once it falls behind retention. Rule of thumb: broadcast across services, compete within a service.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s020",
+      "layout": "quiz",
+      "title": "Pause and think: who lost the orders?",
+      "kicker": "Pause and think",
+      "bullets": [
+        "A. The broker is dropping messages",
+        "B. They share one subscription and compete",
+        "C. Retention is too short"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Fraud scores only about twenty percent of orders, and email sends only about thirty percent of receipts. Yet nothing was lost, and publish counts match orders. What's wrong?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s021",
+      "layout": "table",
+      "title": "Choreography versus orchestration",
+      "kicker": "Concept 3 of 7",
+      "table": {
+        "head": [
+          "",
+          "Choreography",
+          "Orchestration"
+        ],
+        "rows": [
+          [
+            "Control",
+            "Emerges, no one in the middle",
+            "A coordinator, openly"
+          ],
+          [
+            "Add a step",
+            "New subscription",
+            "Change the workflow"
+          ],
+          [
+            "Order X done?",
+            "No one place knows",
+            "Coordinator knows"
+          ],
+          [
+            "Failure",
+            "Each consumer alone",
+            "Retry, undo, escalate"
+          ],
+          [
+            "Best for",
+            "Email, analytics",
+            "Stock, charge, ship"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The answer was B. Fraud and email share one subscription, so they became competing consumers, and each event reaches only one of them. Give each service its own subscription.",
+          "reveal": 0
+        },
+        {
+          "say": "Now a key distinction. Pub-sub enables choreography: each service reacts on its own, and the overall process emerges. Nobody is in charge. Orchestration uses one coordinator that runs the workflow step by step.",
+          "reveal": 1
+        },
+        {
+          "say": "Adding a step under choreography is just a new subscription. Under orchestration, you change the coordinator's workflow.",
+          "reveal": 2
+        },
+        {
+          "say": "Ask 'is order X fully processed?' With choreography, no single place knows. The coordinator knows by design.",
+          "reveal": 3
+        },
+        {
+          "say": "On failure, each choreographed consumer handles its own. A coordinator can retry, undo, or escalate.",
+          "reveal": 4
+        },
+        {
+          "say": "So: email and analytics are independent reactions. Choreograph them. Reserve stock, charge the card, ship, and undo on failure depend on each other. Orchestrate that, with a saga.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Module 2 · Choreography vs Orchestration"
+    },
+    {
+      "id": "s022",
+      "layout": "number",
+      "title": "The callback storm",
+      "kicker": "Concept 4 of 7",
+      "big": "5,000 events/s x 5 consumers = 25,000 GET/s",
+      "caption": "Book: Module 2 Moving Data · Event-Driven Architecture",
+      "steps": [
+        {
+          "say": "Pattern four, event-driven architecture. Its core question: how much should each event carry? Here's the incident. Checkout's order placed event contained only an order ID. A notification that an order exists.",
+          "reveal": 0
+        },
+        {
+          "say": "So fraud called the orders API to get the amount and items. So did email, analytics, loyalty and fulfillment. Every event bounced back as five API calls.",
+          "reveal": 0
+        },
+        {
+          "say": "At the next flash sale, five thousand orders a second became twenty-five thousand GET requests a second on checkout, during the exact spike the queue was meant to absorb. Checkout's read service fell over, and fraud fell minutes behind. Async delivery wrapped around a synchronous dependency.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s023",
+      "layout": "table",
+      "title": "Three levels of event content",
+      "kicker": "Concept 4 of 7",
+      "table": {
+        "head": [
+          "Level",
+          "Event says",
+          "Consumer does"
+        ],
+        "rows": [
+          [
+            "1. Notification",
+            "Order ord_7f3a placed",
+            "Calls back for details"
+          ],
+          [
+            "2. Event-carried state",
+            "3 items, $142, Austin",
+            "Reads its local view"
+          ],
+          [
+            "3. Event sourcing",
+            "Events are the data",
+            "Rebuilds state by replay"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Think of a kitchen ticket. 'Order seven F three A' sends the cook to the front desk to ask. 'Three items, a hundred forty-two dollars, ships to Austin' lets them start cooking.",
+          "reveal": 0
+        },
+        {
+          "say": "Level one, event notification. 'Order seven F three A was placed.' Small, no copied data, and exactly what caused the callback storm.",
+          "reveal": 1
+        },
+        {
+          "say": "Level two, event-carried state transfer. The event includes the facts consumers need. Each consumer keeps a local view, a small table of just the fields it uses. Fraud now reads locally in under a millisecond, even with checkout down. This is the sensible default.",
+          "reveal": 2
+        },
+        {
+          "say": "Level three, event sourcing. The events are the data, and tables are rebuilt by replaying them. That's a storage decision for a later episode.",
+          "reveal": 3
+        }
+      ],
+      "caption": "Book: Module 2 · Three levels of event content"
+    },
+    {
+      "id": "s024",
+      "layout": "bullets",
+      "title": "Three rules for full-state events",
+      "kicker": "Concept 4 of 7",
+      "bullets": [
+        "1. Facts, never commands",
+        "2. Views are copies; one owner per fact",
+        "3. Views lag: eventual consistency, show 'as of'"
+      ],
+      "steps": [
+        {
+          "say": "Three rules make level two work. Rule one: events are facts, never commands. 'Order placed', not 'send a receipt'. A command ties the publisher to one consumer's job.",
+          "reveal": 1
+        },
+        {
+          "say": "Rule two: local views are copies, never the truth. Checkout owns the order. If fraud spots a wrong value, it must not patch its copy. It asks checkout to fix it, and checkout publishes a new fact so every view corrects the same way.",
+          "reveal": 2
+        },
+        {
+          "say": "Rule three: freshness is about when, not if. Views lag the source, milliseconds normally, minutes during a backlog. That's eventual consistency. Show it: store the event timestamp, and display 'as of twelve oh four' on a support dashboard.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s025",
+      "layout": "diagram",
+      "title": "Callback storm versus local views",
+      "kicker": "Concept 4 of 7",
+      "mermaid": "flowchart LR\n  T1[\"Level 1: order.placed id\"] --> C1[\"5 consumers\"]\n  C1 -- \"25,000 GET/s\" --> API[\"Checkout API\"]\n  T2[\"Level 2: order + facts, 2 KB\"] --> C2[\"5 consumers\"]\n  C2 -- \"1 ms local read\" --> LV[\"Local views\"]",
+      "caption": "A little bandwidth buys independence",
+      "steps": [
+        {
+          "say": "Side by side. On the left, level one: a thin event with just an ID goes to five consumers, who send twenty-five thousand GETs a second at checkout.",
+          "reveal": 0
+        },
+        {
+          "say": "On the right, level two: the event carries the facts, about two kilobytes. Each consumer reads its own local view in about a millisecond.",
+          "reveal": 0
+        },
+        {
+          "say": "The price: events grow from about a hundred bytes to two kilobytes, so at five thousand a second the broker moves ten megabytes a second. Small. In exchange, twenty-five thousand calls a second vanish, and checkout's read traffic stays flat during the sale.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s026",
+      "layout": "table",
+      "title": "Notification versus full-state events",
+      "kicker": "Comparison",
+      "table": {
+        "head": [
+          "",
+          "Notification",
+          "Full-state"
+        ],
+        "rows": [
+          [
+            "Contains",
+            "Only an ID",
+            "The facts"
+          ],
+          [
+            "Needs data",
+            "Calls the producer",
+            "Reads local view"
+          ],
+          [
+            "Producer load",
+            "Rises with consumers",
+            "Zero"
+          ],
+          [
+            "Copies, privacy",
+            "Minimal",
+            "Every subscriber + history"
+          ],
+          [
+            "Freshness",
+            "Always current",
+            "Slightly behind"
+          ],
+          [
+            "Best when",
+            "Few consumers, sensitive data",
+            "Many consumers, independence"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "So which do you choose? A notification event contains only an ID. A full-state event contains the facts.",
+          "reveal": 1
+        },
+        {
+          "say": "When a consumer needs data, with notifications it calls the producer. With full state, it reads its own view.",
+          "reveal": 2
+        },
+        {
+          "say": "Producer read load: notifications rise with how much consumers ask. Full state: zero.",
+          "reveal": 3
+        },
+        {
+          "say": "But copies and privacy cut the other way. A customer email in a full-state event gets copied to every subscriber and the retained topic. A deletion request then touches all of them.",
+          "reveal": 4
+        },
+        {
+          "say": "And freshness: a lookup is always current, while views run slightly behind. Selling the very last item needs the current value, so read that from the owner.",
+          "reveal": 5
+        },
+        {
+          "say": "The middle path: decide field by field. Order items and totals go in the event. A sensitive field like a customer's lifetime value stays with its owner, behind an ID. In the interview say: 'What's in the event is the main decision.'",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Module 2 · Notification events vs Full-state events"
+    },
+    {
+      "id": "s027",
+      "layout": "bullets",
+      "title": "The handler that did everything",
+      "kicker": "Concept 5 of 7",
+      "bullets": [
+        "Provider POSTs payment.succeeded to your URL",
+        "Handler did all the work: ~7.5 s; timeout 5 s",
+        "40% 'failed', retried: two shipments",
+        "Endpoint disabled; 3 silent hours"
+      ],
+      "steps": [
+        {
+          "say": "Pattern five, webhooks. A webhook is an event that arrives as an HTTP POST from another company's system. Our payment provider calls a URL on our server to say 'payment succeeded'. It's pub-sub across a company boundary.",
+          "reveal": 1
+        },
+        {
+          "say": "Our handler did everything: marked the order paid, reserved stock, told the warehouse, sent a receipt, and only then replied two hundred, meaning OK. Under load, that took seven and a half seconds. The provider waits only five.",
+          "reveal": 2
+        },
+        {
+          "say": "So forty percent of deliveries looked failed, and the provider retried. But our handler usually finished anyway. Each retry repeated everything: two shipments for one payment.",
+          "reveal": 3
+        },
+        {
+          "say": "Then the failure rate crossed the provider's threshold, and it disabled our endpoint. For three hours customers paid while orders sat at 'pending', and support tickets found it before monitoring did. Silence looked like a quiet day.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s028",
+      "layout": "diagram",
+      "title": "The webhook receiver pipeline",
+      "kicker": "Concept 5 of 7",
+      "mermaid": "flowchart LR\n  P[\"Payment provider\"] -- \"POST event\" --> E[\"Edge: verify signature\"]\n  E --> S[\"Store raw + enqueue\"]\n  S -- \"200 in 15 ms\" --> P\n  S --> Q[\"Queue\"]\n  Q --> W[\"Workers: dedupe, process\"]\n  R[\"Hourly reconciliation\"] --> Q",
+      "caption": "Book: Module 2 Moving Data · Webhooks",
+      "steps": [
+        {
+          "say": "Here's the fix, like signing for a courier's parcel in seconds and unpacking later. The provider POSTs to your edge. You check the signature, store the raw event, enqueue it, and return two hundred, all in about fifteen milliseconds.",
+          "reveal": 0
+        },
+        {
+          "say": "Behind the queue, workers dedupe and do the real business work under your own retry rules.",
+          "reveal": 0
+        },
+        {
+          "say": "And separately, an hourly reconciliation poller asks the provider for anything you missed. Now let's walk the five receiver rules in the order a request hits them.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s029",
+      "layout": "bullets",
+      "title": "Five receiver rules",
+      "kicker": "Concept 5 of 7",
+      "bullets": [
+        "1. Verify HMAC signature + timestamp",
+        "2. Save raw, fast ack: 200 in ~15 ms",
+        "3. Async processing; dedupe on event ID",
+        "4. Ordering: fetch current state for decisions",
+        "5. Reconcile from a watermark"
+      ],
+      "steps": [
+        {
+          "say": "Rule one: verify before you believe. The URL is public, so anyone can POST 'payment succeeded'. The provider signs each message with an H-MAC, a hash keyed with a secret only you two share. Recompute it over the raw body, compare in constant time, and check the timestamp so nobody replays an old message. Reject before parsing.",
+          "reveal": 1
+        },
+        {
+          "say": "Rule two: save and acknowledge fast. Store the raw event, enqueue it, return two hundred in about fifteen milliseconds. That's the fast ack. Two hundred means safely received, not processed.",
+          "reveal": 2
+        },
+        {
+          "say": "Rule three: process asynchronously behind your queue, and dedupe on event ID. Every provider delivers at least once. If event e v t one two three is already handled, stop. One shipment.",
+          "reveal": 3
+        },
+        {
+          "say": "Rule four: don't trust order or freshness. 'Refund updated' can arrive before 'charge succeeded', and a retried payload can be hours old. For decisions that depend on state, treat the webhook as a heads-up and fetch current state from the provider's API.",
+          "reveal": 4
+        },
+        {
+          "say": "Rule five: reconcile, because silence isn't success. Every hour, ask the provider for everything since your saved bookmark, called a watermark. Webhooks give speed. Reconciliation gives completeness.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s030",
+      "layout": "table",
+      "title": "Example: the fixed receiver",
+      "kicker": "Example",
+      "table": {
+        "head": [
+          "Situation",
+          "Result"
+        ],
+        "rows": [
+          [
+            "Handler time",
+            "~15 ms: 1 ms signature, 10 ms store"
+          ],
+          [
+            "Duplicate after 90 s",
+            "Event ID seen: one shipment"
+          ],
+          [
+            "Provider incident",
+            "Reconciliation finds 217 missing"
+          ],
+          [
+            "Quiet 15 min",
+            "Silence alarm pages on-call"
+          ],
+          [
+            "You as sender",
+            "Sign, IDs, retries, redeliver button"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Now the numbers. Handler time about fifteen milliseconds: one for the signature, ten to store and enqueue. The provider sees a hundred percent success, through spikes and deploys.",
+          "reveal": 1
+        },
+        {
+          "say": "A duplicate arrives ninety seconds later, because our first two hundred got lost in transit. The worker sees the event ID is done and stops. One shipment.",
+          "reveal": 2
+        },
+        {
+          "say": "Hourly reconciliation normally finds nothing. During one provider incident, it found two hundred seventeen missing confirmations and quietly queued them.",
+          "reveal": 3
+        },
+        {
+          "say": "And a silence alarm: if a normally busy endpoint is quiet for fifteen minutes, page someone. That catches the disabled endpoint in minutes, not three hours.",
+          "reveal": 4
+        },
+        {
+          "say": "As the sender, the duties flip: sign, give events IDs, retry on a schedule, offer redelivery.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s031",
+      "layout": "table",
+      "title": "Webhooks versus polling",
+      "kicker": "Comparison",
+      "table": {
+        "head": [
+          "",
+          "Webhooks (push)",
+          "Polling (pull)"
+        ],
+        "rows": [
+          [
+            "Freshness",
+            "Seconds",
+            "Your interval"
+          ],
+          [
+            "Idle cost",
+            "Near zero",
+            "Steady requests"
+          ],
+          [
+            "Completeness",
+            "Best effort",
+            "Guaranteed eventually"
+          ],
+          [
+            "Controls delivery",
+            "The sender",
+            "You"
+          ],
+          [
+            "Worst failure",
+            "Looks like a quiet day",
+            "Stale but visible"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Webhooks push, polling pulls. Freshness: webhooks deliver in seconds. Polling is only as fresh as your interval.",
+          "reveal": 1
+        },
+        {
+          "say": "Cost when idle: webhooks cost almost nothing. Polling is a steady stream of 'anything new?'",
+          "reveal": 2
+        },
+        {
+          "say": "Completeness: webhooks are best effort, gaps can happen. Polling eventually sees everything.",
+          "reveal": 3
+        },
+        {
+          "say": "Control: the sender controls webhook delivery. You control polling.",
+          "reveal": 4
+        },
+        {
+          "say": "The worst failure: a failed webhook looks like a quiet day, while polling shows stale but visible data. So: speed from push, truth from poll.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Module 2 · Webhooks vs Polling"
+    },
+    {
+      "id": "s032",
+      "layout": "number",
+      "title": "Polling that mostly says nothing",
+      "kicker": "Concept 6 of 7",
+      "big": "200,000 users / 3 s = 66,000 req/s",
+      "caption": "Book: Module 2 Moving Data · Server-Sent Events",
+      "steps": [
+        {
+          "say": "Pattern six, server-sent events. New running example: a food-delivery page showing driver location and order status. It polls the status endpoint every three seconds.",
+          "reveal": 0
+        },
+        {
+          "say": "On a rainy Friday, two hundred thousand customers have it open. One request every three seconds each is about sixty-six thousand requests a second. Each is a full round trip, with TLS, authentication and a database read. And ninety-nine in a hundred say 'no change'.",
+          "reveal": 0
+        },
+        {
+          "say": "And it's still slow: news waits a second and a half on average, for an order that changes maybe twelve times in forty minutes. With polling, cost grows with the audience. It should grow with the news.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s033",
+      "layout": "diagram",
+      "title": "How Server-Sent Events work",
+      "kicker": "Concept 6 of 7",
+      "mermaid": "flowchart TB\n  A[\"1. EventSource opens GET /orders/7f3a/stream\"] --> B[\"2. Server: 200, text/event-stream, held open\"]\n  B --> C[\"3. Server pushes id 41, id 42\"]\n  C --> D[\"4. Drop: browser reconnects, Last-Event-ID 42\"]\n  D --> E[\"5. Server replays from buffer: id 43\"]",
+      "caption": "One long-lived response; built-in reconnect and resume",
+      "steps": [
+        {
+          "say": "Server-sent events, or S-S-E, is one HTTP response that never finishes. Like staying on the line with the pizza place instead of phoning every three minutes.",
+          "reveal": 0
+        },
+        {
+          "say": "Step one: the browser's EventSource opens a GET to the order's stream URL. Step two: the server replies two hundred with content type text event-stream, and keeps the connection open.",
+          "reveal": 0
+        },
+        {
+          "say": "Step three: whenever there's news, the server pushes a small numbered event: ID forty-one, ID forty-two.",
+          "reveal": 0
+        },
+        {
+          "say": "Step four: the connection drops, maybe a tunnel. The browser reconnects automatically, sending a Last-Event-ID header of forty-two. Step five: the server replays everything after it from a short replay buffer, so event forty-three arrives. Nothing missed.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s034",
+      "layout": "bullets",
+      "title": "Four properties that make SSE work",
+      "kicker": "Concept 6 of 7",
+      "bullets": [
+        "1. Plain HTTP: existing infra just works",
+        "2. Auto-reconnect with Last-Event-ID",
+        "3. One direction: actions go via POST",
+        "4. Async I/O: tens of thousands per server",
+        "Gotcha: proxy buffering; heartbeat every 15 s"
+      ],
+      "steps": [
+        {
+          "say": "Property one: it's just HTTP. No protocol upgrade, so your load balancers, TLS, authentication middleware and proxies all handle it unchanged. Most of its simplicity comes from this.",
+          "reveal": 1
+        },
+        {
+          "say": "Property two: the browser reconnects for you, with Last-Event-ID. A reconnect can deliver a message twice, so event IDs double as dedupe keys.",
+          "reveal": 2
+        },
+        {
+          "say": "Property three: one direction, by design. The server talks, the client listens. If the customer cancels their order, that's an ordinary POST.",
+          "reveal": 3
+        },
+        {
+          "say": "Property four: held-open connections change the server math. Two hundred thousand connections can't each hold a thread. Async I-O lets one event-loop thread watch thousands of idle connections, so one server holds tens of thousands.",
+          "reveal": 4
+        },
+        {
+          "say": "One gotcha: some proxies buffer responses, so events arrive in thirty-second batches. Disable buffering on stream routes, and send a heartbeat every fifteen seconds so idle connections aren't closed.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s035",
+      "layout": "table",
+      "title": "Example: the rainy Friday on SSE",
+      "kicker": "Example",
+      "table": {
+        "head": [
+          "Measure",
+          "SSE result"
+        ],
+        "rows": [
+          [
+            "Idle traffic",
+            "66,000 req/s becomes heartbeats only"
+          ],
+          [
+            "Freshness",
+            "Under 1 s, versus up to 3 s"
+          ],
+          [
+            "Capacity",
+            "~50,000 per server: 4 machines"
+          ],
+          [
+            "Deploy",
+            "Jittered reconnect + replay buffer"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Back to the rainy Friday on S-S-E. When nothing happens, nothing is sent except heartbeats. The sixty-six thousand requests a second of 'nothing yet' disappear.",
+          "reveal": 1
+        },
+        {
+          "say": "News arrives in under a second, instead of up to three seconds of staleness.",
+          "reveal": 2
+        },
+        {
+          "say": "Capacity: about fifty thousand connections per async server, so four machines for two hundred thousand users. Cost shifts from CPU to memory.",
+          "reveal": 3
+        },
+        {
+          "say": "Deploy drill: a restart drops fifty thousand connections. Reconnecting at the same instant is a stampede, so add random jitter to the retry delay. Keep a replay buffer longer than a deploy. Anyone returning later refetches current state. The stream is for delivery, never storage.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s036",
+      "layout": "table",
+      "title": "Four levels of push",
+      "kicker": "Concept 6 of 7",
+      "table": {
+        "head": [
+          "Level",
+          "Idle cost",
+          "Direction",
+          "Best for"
+        ],
+        "rows": [
+          [
+            "Polling",
+            "Constant requests",
+            "Pull",
+            "Rare changes"
+          ],
+          [
+            "Long polling",
+            "Held request",
+            "Fake push",
+            "Old infrastructure"
+          ],
+          [
+            "SSE",
+            "Held connection",
+            "Server to client",
+            "Feeds, LLM tokens"
+          ],
+          [
+            "WebSocket",
+            "Connection + protocol",
+            "Both ways",
+            "Conversations"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Pick the lightest method that fits. Level one, polling. Staleness is about half the interval, and idle cost is a constant flow of requests. Fine for rare changes, like a daily price.",
+          "reveal": 1
+        },
+        {
+          "say": "Level two, long polling. The server holds each request until there's news, then the client asks again. Near-zero staleness, but it's pull pretending to be push, with proxy timeout trouble and reconnect code you write yourself. It survives mainly on old infrastructure.",
+          "reveal": 2
+        },
+        {
+          "say": "Level three, S-S-E. One held connection, server to client, plain HTTP, reconnect built into the browser. Feeds, tickers, progress bars, and every A-I chat app streaming tokens.",
+          "reveal": 3
+        },
+        {
+          "say": "Level four, WebSocket. Both ways, but it needs special infrastructure handling and your own reconnect logic. For conversations. The deciding question: who has data to send? The server occasionally: poll. The server constantly: S-S-E. Both sides: WebSocket.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Module 2 · Four levels of push"
+    },
+    {
+      "id": "s037",
+      "layout": "quiz",
+      "title": "Pause and think: pick the transport",
+      "kicker": "Pause and think",
+      "bullets": [
+        "A. Polling every second",
+        "B. Server-Sent Events",
+        "C. WebSocket"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. A live sports score page. Fans only watch. Scores change every few seconds during a match. Polling, S-S-E, or WebSocket?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s038",
+      "layout": "bullets",
+      "title": "Messages that silently vanish",
+      "kicker": "Concept 7 of 7",
+      "bullets": [
+        "Answer: SSE (server speaks, fans only read)",
+        "Chat works in staging: one server",
+        "Production: 3 gateways; Alice on A, Bob on B",
+        "Alice's 'hey' never reaches Bob; no errors",
+        "Sticky sessions pin clients, not rooms"
+      ],
+      "steps": [
+        {
+          "say": "The answer was B. The server speaks constantly, and fans never send. S-S-E. A WebSocket would pay for a direction nobody uses.",
+          "reveal": 1
+        },
+        {
+          "say": "Pattern seven, bidirectional streaming. One connection where both sides send whenever they like. In browsers, usually a WebSocket. Running example: a support chat. A team launches it, and it works in the demo and in staging, which has one server.",
+          "reveal": 2
+        },
+        {
+          "say": "Production has three gateway servers, machines that hold client connections, behind a load balancer. Alice connects to server A. Bob joins the same room via server B.",
+          "reveal": 3
+        },
+        {
+          "say": "Alice sends 'hey'. Server A checks its own list for the room, sees only Alice, and Bob gets nothing. No errors anywhere. Room membership lived only in each server's memory.",
+          "reveal": 4
+        },
+        {
+          "say": "Sticky sessions don't fix it: they pin clients, not rooms. The socket was never the hard part. Routing is.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s039",
+      "layout": "diagram",
+      "title": "Two tiers: gateways and a backplane",
+      "kicker": "Concept 7 of 7",
+      "mermaid": "flowchart LR\n  A[\"Alice\"] --> GA[\"Gateway A (sockets only)\"]\n  GA -- \"publish\" --> BP[\"Backplane: topic per room\"]\n  BP --> GA\n  BP --> GB[\"Gateway B\"]\n  GB --> BOB[\"Bob and Carol\"]\n  GA --> H[\"History DB (truth)\"]\n  GA --> PS[\"Presence store\"]",
+      "caption": "Book: Module 2 Moving Data · Bidirectional Streaming",
+      "steps": [
+        {
+          "say": "The fix has two tiers. Tier one: gateways that hold sockets only, nothing authoritative. Tier two: a routing backplane, which is just pub-sub, with one topic per room.",
+          "reveal": 0
+        },
+        {
+          "say": "Follow Alice's 'hey'. It goes from her socket to gateway A, which publishes to the room's topic. Every gateway holding a member of that room is subscribed, so A and B both get it, and each writes to its local sockets. Bob sees 'hey'. No gateway needs to know any other exists.",
+          "reveal": 0
+        },
+        {
+          "say": "Presence, meaning who's online, lives in a shared store. Messages are written to a history database before publishing. The stream carries data. The history database holds the truth.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s040",
+      "layout": "bullets",
+      "title": "You now own a protocol",
+      "kicker": "Concept 7 of 7",
+      "bullets": [
+        "1. Durable messages versus ephemeral signals",
+        "2. Sequence numbers per room",
+        "3. Heartbeats: ping and pong",
+        "4. Auth on open, rechecks, app-level acks",
+        "5. Resume: fetch after seq 120, drop overlap",
+        "6. Backpressure: 1 MB cap, then resync"
+      ],
+      "steps": [
+        {
+          "say": "A raw socket is transport only. What EventSource gave S-S-E for free, you now build. One: separate durable messages, with ID, room and sequence number, from ephemeral signals like 'Bob is typing', never stored.",
+          "reveal": 1
+        },
+        {
+          "say": "Two: sequence numbers per room, to spot duplicates and gaps.",
+          "reveal": 2
+        },
+        {
+          "say": "Three: heartbeats, a regular ping and pong, so both ends detect a dead connection.",
+          "reveal": 3
+        },
+        {
+          "say": "Four: authenticate when the socket opens, recheck in long sessions, and add application-level acks where delivery matters.",
+          "reveal": 4
+        },
+        {
+          "say": "Five: reconnect and resume. Bob's phone goes through a tunnel. His last sequence is one twenty. He reconnects, fetches one twenty-one to one thirty-five from history, rejoins live, and drops one thirty-four and one thirty-five when they arrive again. No gap, no duplicates.",
+          "reveal": 5
+        },
+        {
+          "say": "Six: backpressure. A subway rider receives slower than the room sends. Cap the buffer at one megabyte, keep only the latest typing update, and at the cap disconnect with a resync hint.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s041",
+      "layout": "table",
+      "title": "Example: chat for a million users",
+      "kicker": "Example",
+      "table": {
+        "head": [
+          "Item",
+          "Number"
+        ],
+        "rows": [
+          [
+            "1M users / 50,000 per gateway",
+            "20 gateways"
+          ],
+          [
+            "50-member room",
+            "1 publish, 2 hops"
+          ],
+          [
+            "Typing",
+            "Throttle to 2/s, latest wins"
+          ],
+          [
+            "Deploy",
+            "Going-away notice, jittered resume"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Scale it. One million connected users, about fifty thousand sockets per gateway, so twenty gateways. Adding gateways adds capacity without moving rooms.",
+          "reveal": 1
+        },
+        {
+          "say": "A fifty-member room costs one publish, not fifty sends from Alice's server. Two internal hops, a few tens of milliseconds.",
+          "reveal": 2
+        },
+        {
+          "say": "Typing indicators can generate fifty times the traffic of real messages. Throttle to two updates a second per typer, latest wins, never stored.",
+          "reveal": 3
+        },
+        {
+          "say": "Deploy drill: send a 'going away' notice, and clients reconnect elsewhere with jitter, resuming by sequence number. And if the client rarely sends, like a Like button, use S-S-E down and POSTs up.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s042",
+      "layout": "table",
+      "title": "WebSocket versus gRPC bidirectional stream",
+      "kicker": "Comparison",
+      "table": {
+        "head": [
+          "",
+          "WebSocket",
+          "gRPC bidi stream"
+        ],
+        "rows": [
+          [
+            "Home",
+            "Browsers, mobile apps",
+            "Backend to backend"
+          ],
+          [
+            "Format",
+            "Your own frames",
+            "Typed protobuf"
+          ],
+          [
+            "Proxies, firewalls",
+            "Excellent",
+            "Unreliable on internet"
+          ],
+          [
+            "Tooling",
+            "Special handling",
+            "Service mesh support"
+          ],
+          [
+            "Best for",
+            "Chat, multiplayer",
+            "Internal control links"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Same communication shape, different homes. WebSocket lives in browsers, mobile apps and the public internet. A g-R-P-C bidirectional stream connects one backend service to another.",
+          "reveal": 1
+        },
+        {
+          "say": "Message format: with WebSocket, you define raw frames yourself. gRPC gives typed protobuf messages with generated code.",
+          "reveal": 2
+        },
+        {
+          "say": "Through proxies and firewalls: WebSocket does well, it looks like normal HTTPS. gRPC is unreliable on the public internet.",
+          "reveal": 3
+        },
+        {
+          "say": "Tooling: WebSocket needs special handling everywhere. gRPC is fully supported in service meshes.",
+          "reveal": 4
+        },
+        {
+          "say": "The rule: WebSocket faces users, for chat and multiplayer. gRPC streams face services, like Envoy pushing config to proxies.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Module 2 · WebSocket vs gRPC bidirectional stream"
+    },
+    {
+      "id": "s043",
+      "layout": "bullets",
+      "title": "Capstone: the notification platform brief",
+      "kicker": "Capstone",
+      "bullets": [
+        "5M users; orders, shipping, security, marketing",
+        "Feed + badge, push, email, SMS, enterprise",
+        "600,000 events in 2 min; 300,000 online",
+        "Email limit 10,000/s; quiet hours"
+      ],
+      "steps": [
+        {
+          "say": "Capstone time. We pick one pattern per arrow, and a notification system uses every direction in this module. The store now has five million users. Triggers: order updates, shipping, security alerts, marketing campaigns.",
+          "reveal": 1
+        },
+        {
+          "say": "Channels: an in-app feed with an unread badge, mobile push, email, S-M-S, and for enterprise customers, delivery into their own systems.",
+          "reveal": 2
+        },
+        {
+          "say": "Scale: a flash sale creates six hundred thousand order events in two minutes. A campaign sends one message to five million users. About three hundred thousand users are online at any moment.",
+          "reveal": 3
+        },
+        {
+          "say": "Constraints: the email provider allows ten thousand sends a second, and users have preferences and quiet hours. At each decision ask: who has the information, is anyone waiting, is it a job or a fact, and who controls the destination?",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s044",
+      "layout": "table",
+      "title": "Seven decisions, one per arrow",
+      "kicker": "Capstone",
+      "table": {
+        "head": [
+          "Arrow",
+          "Pattern"
+        ],
+        "rows": [
+          [
+            "1. Product events in",
+            "Pub/sub + full-state; API returns 202"
+          ],
+          [
+            "2. Render notifications",
+            "Message queue + dedupe, 5 min backlog"
+          ],
+          [
+            "3. Out to SES/Twilio/APNs",
+            "Queue per channel; protected calls"
+          ],
+          [
+            "4. Provider status in",
+            "Webhooks, receiver rules"
+          ],
+          [
+            "5. In-app feed + badge",
+            "SSE over feed database"
+          ],
+          [
+            "6. Enterprise delivery",
+            "Webhooks, sender duties"
+          ],
+          [
+            "7. 'Make it chat'",
+            "Decline WebSocket: POST + SSE"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Decision one, getting events in. Tempting: a send API checkout calls per order, coupling every producer to us. Instead, the platform subscribes to order placed and shipment updated, full-state events, so no callbacks. Marketing campaigns get an API that returns two oh two, accepted, in milliseconds.",
+          "reveal": 1
+        },
+        {
+          "say": "Decision two, the pipeline: a message queue. Load preferences, choose channels, render, dedupe on event ID and user. Six hundred thousand jobs at two thousand a second is a five-minute backlog, not an outage. Quiet hours become a scheduled send time.",
+          "reveal": 2
+        },
+        {
+          "say": "Decision three, delivering out: one queue per channel, email to S-E-S, S-M-S to Twilio, push to Apple. A Twilio outage only backs up S-M-S. That's a bulkhead. Each provider call gets a timeout, retries with a unique key, and a circuit breaker.",
+          "reveal": 3
+        },
+        {
+          "say": "Decision four, provider status coming back: delivery receipts and bounces arrive as webhooks. Apply all five receiver rules. A hard bounce updates the preference store, protecting your sender reputation.",
+          "reveal": 4
+        },
+        {
+          "say": "Decision five, the in-app feed: S-S-E. Polling three hundred thousand users every five seconds is sixty thousand requests a second. The client only reads, so no WebSocket. The database is the truth: S-S-E carries live updates, and the badge count always comes from the database.",
+          "reveal": 5
+        },
+        {
+          "say": "Decision six, enterprise delivery: webhooks again, but now we're the sender. Sign with rotatable secrets, give events IDs, retry from a durable queue per endpoint, so one dead customer can't block others, and offer redelivery.",
+          "reveal": 6
+        },
+        {
+          "say": "Decision seven: product wants replies to support notifications, and suggests swapping S-S-E for WebSockets. Decline. Replies are occasional, so each is an ordinary POST. If it becomes live chat, only that feature gets a gateway and backplane.",
+          "reveal": 7
+        }
+      ],
+      "caption": "Book: Module 2 · Capstone - Designing a Notification System"
+    },
+    {
+      "id": "s045",
+      "layout": "diagram",
+      "title": "The final notification architecture",
+      "kicker": "Capstone",
+      "mermaid": "flowchart LR\n  T[\"Topics + POST 202\"] --> W[\"Preference, routing, dedupe workers\"]\n  W --> CQ[\"Per-channel queues\"]\n  CQ --> PR[\"SES, Twilio, APNs\"]\n  W --> DB[\"Feed DB (truth)\"]\n  DB --> SSE[\"SSE to 300k streams\"]\n  W --> EQ[\"Partner queues: webhooks out\"]\n  PR -- \"status webhooks\" --> W",
+      "caption": "No WebSocket, one API, seven async relationships",
+      "steps": [
+        {
+          "say": "Here's the whole picture. Topics and the two oh two API feed the central workers: preferences, routing and dedupe.",
+          "reveal": 0
+        },
+        {
+          "say": "They fan out to per-channel queues, each calling its provider. A feed writer stores entries in the feed database, the truth, and S-S-E pushes to three hundred thousand open streams. Partner queues deliver enterprise webhooks.",
+          "reveal": 0
+        },
+        {
+          "say": "Provider status webhooks come back through a receiver into the workers. In the interview say: 'I route each arrow on its own. There's no WebSocket anywhere, because nothing here streams both ways.'",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s046",
+      "layout": "recap",
+      "title": "Episode 7 recap",
+      "kicker": "Episode 7 complete",
+      "bullets": [
+        "Request-response default; idempotent everywhere",
+        "Queue: spikes become backlog; ack on finish",
+        "Pub/sub: publish once, own subscriptions",
+        "Full-state events: no callback storm",
+        "Webhooks: verify, ack fast, dedupe, reconcile",
+        "SSE one-way; WebSocket only when both talk"
+      ],
+      "steps": [
+        {
+          "say": "Let's recap. Request-response is the default: if someone waits, call directly, with timeouts, retries and breakers. And anything that retries can deliver twice, so be idempotent.",
+          "reveal": 1
+        },
+        {
+          "say": "Message queues turn spikes into backlog. Ack on finish, redeliver on crash, one worker per message.",
+          "reveal": 2
+        },
+        {
+          "say": "Pub-sub publishes a fact once, and every subscription gets its own copy. Broadcast across services, compete within one.",
+          "reveal": 3
+        },
+        {
+          "say": "Event-driven design puts the facts in the event, so consumers keep local views instead of starting a callback storm.",
+          "reveal": 4
+        },
+        {
+          "say": "Webhooks: verify, save, ack fast, dedupe, and reconcile, because silence isn't success.",
+          "reveal": 5
+        },
+        {
+          "say": "S-S-E for one-way live updates, and bidirectional streaming only when both sides talk, built on gateways plus a backplane. Next time, in episode eight, Storing Data: replication and logs. How copies of your data stay in sync. See you there.",
+          "reveal": 6
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,2128 @@
+{
+  "series": "LLD Workshop",
+  "episode": 3,
+  "title": "Class Relationships and UML",
+  "subtitle": "Six relationships, five UML diagrams, and how much to draw",
+  "scenes": [
+    {
+      "id": "s001",
+      "layout": "title",
+      "title": "Class Relationships and UML",
+      "subtitle": "Six relationships, five UML diagrams, and how much to draw",
+      "steps": [
+        {
+          "say": "Welcome to episode three of the L-L-D Workshop, the low-level design series. Today: how classes connect, and how to draw a design so anyone can read it.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll pick the right line between any two classes in about ten seconds, turn each line into Java, and draw use case, class, sequence, activity and state diagrams at interview depth.",
+          "reveal": 0
+        },
+        {
+          "say": "Keep the chapter three notes open. Every concept matches a section there, in order. Pause whenever I ask you to predict something.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s002",
+      "layout": "section",
+      "kicker": "Concept 1 of 16",
+      "title": "Part A: what a relationship claims",
+      "steps": [
+        {
+          "say": "Part A is about lines. Every line between two boxes on a class diagram is a claim, and interviewers read those claims very carefully.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 3 · 3.1 The big picture: what a relationship claims"
+    },
+    {
+      "id": "s003",
+      "layout": "bullets",
+      "kicker": "Concept 1 of 16",
+      "title": "A line makes two claims",
+      "bullets": [
+        "Lifetime: if A is destroyed, does B die too?",
+        "Substitution: can a B go anywhere an A is expected?",
+        "Body and heart share a lifetime",
+        "Car and driver don't: the driver walks away",
+        "A sports car is a car, and goes anywhere a car can"
+      ],
+      "steps": [
+        {
+          "say": "A relationship line makes two claims. First, lifetime: if object A is destroyed, is B destroyed too?",
+          "reveal": 1
+        },
+        {
+          "say": "The second is substitution. Can you hand a B to code that asked for an A, and everything still works?",
+          "reveal": 2
+        },
+        {
+          "say": "Picture a body and its heart. They share one lifetime. That is composition.",
+          "reveal": 3
+        },
+        {
+          "say": "A car and its driver don't. The driver gets out and walks away. That's a plain association.",
+          "reveal": 4
+        },
+        {
+          "say": "And a sports car is a car. That's inheritance, which U-M-L calls generalization.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s004",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Six relationships, weakest to strongest",
+      "table": {
+        "head": [
+          "Family",
+          "Relationship",
+          "Meaning"
+        ],
+        "rows": [
+          [
+            "uses-a",
+            "Dependency",
+            "A uses B inside one method"
+          ],
+          [
+            "has-a",
+            "Association",
+            "A keeps a reference to B"
+          ],
+          [
+            "has-a",
+            "Aggregation",
+            "Whole with parts that live on"
+          ],
+          [
+            "has-a",
+            "Composition",
+            "Whole owns parts, they die with it"
+          ],
+          [
+            "is-a",
+            "Realization",
+            "A implements interface B"
+          ],
+          [
+            "is-a",
+            "Generalization",
+            "A extends class B"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here are all six, ordered by coupling. Coupling means how much one class must change when the other changes. Dependency is weakest: A just uses B for one call.",
+          "reveal": 1
+        },
+        {
+          "say": "Association: A holds a field pointing at B, but nobody owns anybody. An order knows its customer.",
+          "reveal": 2
+        },
+        {
+          "say": "Aggregation: A is a whole made of parts, but the parts outlive it. An airline and its planes.",
+          "reveal": 3
+        },
+        {
+          "say": "Composition: the whole owns its parts, and they die with it. A parking floor and its spots.",
+          "reveal": 4
+        },
+        {
+          "say": "Realization: A implements an interface. An email notifier implements notifier.",
+          "reveal": 5
+        },
+        {
+          "say": "Generalization: A extends a class. Card payment extends payment. It's last because a subclass is coupled to every detail of its parent. The order is a rule of thumb, not part of the standard.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s005",
+      "layout": "bullets",
+      "kicker": "Concept 1 of 16",
+      "title": "Why it matters",
+      "bullets": [
+        "Order has a Customer: points at something living elsewhere",
+        "Floor has Spots: creates, owns and deletes them",
+        "Mix them up: delete data you don't own, or leak objects",
+        "Read the line ends: triangle, diamond, arrowhead, dashed"
+      ],
+      "steps": [
+        {
+          "say": "Order has a customer and floor has spots sound alike, but the order just points at a customer living elsewhere.",
+          "reveal": 1
+        },
+        {
+          "say": "The floor creates its spots, owns them, and deletes them.",
+          "reveal": 2
+        },
+        {
+          "say": "Confuse the two and you get real bugs: deleting a customer you never owned, or leaking spots nobody is responsible for.",
+          "reveal": 3
+        },
+        {
+          "say": "The whole vocabulary lives at the ends of each line: a triangle, a diamond, an arrowhead, and solid versus dashed. In the interview, say this: a relationship line is a claim about who owns whom, and who can stand in for whom.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s006",
+      "layout": "bullets",
+      "kicker": "Concept 2 of 16 · Book 3.2",
+      "title": "Association: A knows B",
+      "bullets": [
+        "A keeps a field pointing at B, longer than one call",
+        "Neither owns the other: destroy one, the other is fine",
+        "Uni-directional: only one side has the field",
+        "Bi-directional: both sides point at each other",
+        "Multiplicity: how many at each end, like 1, 0..1, *, 1..*"
+      ],
+      "steps": [
+        {
+          "say": "A parking ticket refers to a spot. Throw the ticket away, and the spot is still there. That's association. One class keeps a reference, a field, to another and can call it over a long period, longer than one method call.",
+          "reveal": 1
+        },
+        {
+          "say": "Neither side owns the other. Destroy one and the other is untouched.",
+          "reveal": 2
+        },
+        {
+          "say": "Direction is called navigability, meaning can be reached from. Uni-directional means only one side has the field. An order has a customer field. The customer has no list of orders.",
+          "reveal": 3
+        },
+        {
+          "say": "Bi-directional means both sides do. A student knows their courses, and a course knows its students.",
+          "reveal": 4
+        },
+        {
+          "say": "Multiplicity says how many objects take part at each end. One means exactly one. Zero dot dot one means optional. Star means any number. One dot dot star means at least one. Exact counts like two work too.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 3 · 3.2 Association"
+    },
+    {
+      "id": "s007",
+      "layout": "diagram",
+      "kicker": "Concept 2 of 16",
+      "title": "Four associations, four multiplicities",
+      "mermaid": "flowchart LR\n  O[\"Order\"] -->|\"* to 1: placed by\"| C[\"Customer\"]\n  S[\"Student\"] ---|\"* to *: enrolled in\"| CO[\"Course\"]\n  F[\"FlightInstance\"] -->|\"* to 2: flown by\"| P[\"Pilot\"]\n  PS[\"ParkingSpot\"] -->|\"1 to 0..1: holds\"| V[\"Vehicle\"]",
+      "caption": "Arrow = one-way, tail knows head. Numbers sit next to the class they count",
+      "steps": [
+        {
+          "say": "Read the arrows. A solid line with an open arrowhead is one-way: the tail knows the head. Many orders each have exactly one customer, and the field lives in order.",
+          "reveal": 0
+        },
+        {
+          "say": "Student and course has no arrowhead, so both know each other. Many students, many courses.",
+          "reveal": 0
+        },
+        {
+          "say": "A flight instance has exactly two pilots. A parking spot holds zero or one vehicle. The numbers sit next to the class they count. Now the key point: each of these numbers changes the code.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s008",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Multiplicity becomes code",
+      "table": {
+        "head": [
+          "Multiplicity",
+          "Java shape",
+          "Running example"
+        ],
+        "rows": [
+          [
+            "1",
+            "required field, requireNonNull",
+            "Order needs one Customer"
+          ],
+          [
+            "0..1",
+            "nullable field shown as Optional",
+            "Spot 7 holds 0 or 1 vehicle"
+          ],
+          [
+            "*",
+            "a collection",
+            "Customer places many orders"
+          ],
+          [
+            "1..*",
+            "never-empty collection",
+            "Floor has at least one spot"
+          ],
+          [
+            "exactly 2",
+            "size check in constructor",
+            "Flight AI-202 needs 2 pilots"
+          ],
+          [
+            "0..capacity",
+            "size check before add",
+            "JAVA101 holds max 2 students"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Step one, exactly one. Order's constructor calls objects dot require non null on the customer. No customer, it throws.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, zero or one. Parking spot seven keeps a nullable field, but exposes it as an optional, a box that's either full or empty, so callers must check.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, star, any number: just a collection.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, one or more: a collection that the constructor refuses to leave empty.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, an exact number. Flight A-I two zero two gets two pilots and is accepted. Flight A-I three zero three gets one pilot and is rejected: a flight needs exactly two pilots, got one.",
+          "reveal": 5
+        },
+        {
+          "say": "Step six, a capacity. Course JAVA one-oh-one has room for two. Ravi and Meera enroll, then Kiran is refused: the course is full.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s009",
+      "layout": "bullets",
+      "kicker": "Concept 2 of 16",
+      "title": "Keeping a two-way link honest",
+      "bullets": [
+        "One side owns the update: Course.enroll and drop",
+        "enroll adds the student AND calls student.linkCourse",
+        "Student.linkCourse is package-private: only Course calls it",
+        "Drop Ravi: JAVA101 is [Meera], Ravi has [UML201]",
+        "Prefer one-way: the reverse question is a repository query"
+      ],
+      "steps": [
+        {
+          "say": "Bi-directional links have one classic bug: updating only one side. The fix is a single owning side. Course owns the link through enroll and drop.",
+          "reveal": 1
+        },
+        {
+          "say": "Enroll adds the student to the course's set, and in the same method tells the student to add the course. Both ends change in one place.",
+          "reveal": 2
+        },
+        {
+          "say": "The student's link method is package-private, meaning no access keyword, so only classes in the same package, like course, can call it.",
+          "reveal": 3
+        },
+        {
+          "say": "Run it. Ravi is in JAVA one-oh-one and U-M-L two-oh-one. Drop him from Java, and both views agree: the course has just Meera, Ravi has just U-M-L.",
+          "reveal": 4
+        },
+        {
+          "say": "Most associations should be one-way. Two fields mean two places to sync. Which orders does this customer have? Ask a repository, a class that stores and looks up objects. In the interview, say this: one-way by default, multiplicity on every line, and multiplicity changes the code.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s010",
+      "layout": "bullets",
+      "kicker": "Concept 3 of 16 · Book 3.3",
+      "title": "Aggregation: whole and parts that live on",
+      "bullets": [
+        "A whole made of parts, but parts have their own life",
+        "Parts exist before the whole and can move to another",
+        "UML: hollow diamond at the whole's end",
+        "Test: whole gone, is the part still meaningful? Yes",
+        "In code it usually looks just like association"
+      ],
+      "steps": [
+        {
+          "say": "An airline shuts down. What happens to its planes? They're sold, not scrapped. That's aggregation: a whole made of parts, where the parts have their own life.",
+          "reveal": 1
+        },
+        {
+          "say": "The parts exist before the whole, can move to another whole, and survive when it's gone.",
+          "reveal": 2
+        },
+        {
+          "say": "In U-M-L you draw a hollow diamond at the whole's end.",
+          "reveal": 3
+        },
+        {
+          "say": "Here's the one test. Imagine the whole is gone. Is the part still meaningful on its own? If yes, it's aggregation.",
+          "reveal": 4
+        },
+        {
+          "say": "Honestly, in code it's usually identical to association: a field holding references. The difference is intent, so say the lifetime test out loud.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 3 · 3.3 Aggregation"
+    },
+    {
+      "id": "s011",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Skyways shuts down",
+      "table": {
+        "head": [
+          "Step",
+          "What happens",
+          "Fleets after"
+        ],
+        "rows": [
+          [
+            "1. Create parts first",
+            "VT-AAA, VT-BBB, VT-CCC built",
+            "No airline yet"
+          ],
+          [
+            "2. Pass them in",
+            "addAircraft on each airline",
+            "Skyways AAA, BBB. BlueJet CCC"
+          ],
+          [
+            "3. Transfer a part",
+            "remove BBB, add to BlueJet",
+            "BlueJet CCC, BBB"
+          ],
+          [
+            "4. Shut the whole down",
+            "shutDown releases its list",
+            "Released: AAA, still alive"
+          ],
+          [
+            "5. Parts join a new whole",
+            "skyways = null, add to BlueJet",
+            "BlueJet CCC, BBB, AAA"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's walk the airline code. Step one: the parts are created outside the whole. Three aircraft, V-T triple A, V-T triple B and V-T triple C, exist before any airline does.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: the parts are passed in. Skyways gets triple A and triple B, BlueJet gets triple C.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: remove aircraft hands the part back alive, and BlueJet adds it.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: Skyways shuts down. Shut down doesn't destroy anything. It releases its list and returns it. Triple A still exists.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five: we set Skyways to null. The airline becomes garbage, but its plane joins BlueJet, which now flies three aircraft. In the interview, say this: aggregation is has-a where parts live on, hollow diamond at the whole.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s012",
+      "layout": "bullets",
+      "kicker": "Concept 4 of 16 · Book 3.4",
+      "title": "Composition: the whole owns its parts",
+      "bullets": [
+        "Part belongs to exactly one whole at a time",
+        "The whole creates the part from data, not a ready object",
+        "Part's constructor is not public",
+        "Only read-only views or copies leave the whole",
+        "Remove the whole: its parts go with it",
+        "UML: filled black diamond at the whole's end"
+      ],
+      "steps": [
+        {
+          "say": "Think of a house and its rooms. A room of a house that doesn't exist means nothing. Composition is the strongest has-a. First rule: a part belongs to exactly one whole at a time.",
+          "reveal": 1
+        },
+        {
+          "say": "Second: the whole creates the parts. Add floor takes a description, a layout, never a ready-made floor.",
+          "reveal": 2
+        },
+        {
+          "say": "Third: the part's constructor isn't public. Parking spot's constructor is package-private, so only the floor can make spots.",
+          "reveal": 3
+        },
+        {
+          "say": "Fourth: the whole never hands out its internal list, only read-only views or copies.",
+          "reveal": 4
+        },
+        {
+          "say": "Fifth: removing the whole drops the only reference, so the parts become unreachable. Java has no destructors, so dying is logical: nothing references the part any more.",
+          "reveal": 5
+        },
+        {
+          "say": "And in U-M-L: a filled black diamond at the whole's end.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Ch 3 · 3.4 Composition"
+    },
+    {
+      "id": "s013",
+      "layout": "diagram",
+      "kicker": "Concept 4 of 16",
+      "title": "A parking lot owns floors, a floor owns spots",
+      "mermaid": "flowchart LR\n  L[\"ParkingLot\"] -->|\"filled diamond, 1 to 1..*\"| F0[\"Floor 0: L0-1 to L0-4\"]\n  L -->|\"filled diamond\"| F1[\"Floor 1: 4 motorbike spots\"]\n  F0 --> T[\"SpotType enum: COMPACT, LARGE, HANDICAPPED, MOTORBIKE\"]",
+      "caption": "Lot owns floors, floors own spots: filled diamond at the owner",
+      "steps": [
+        {
+          "say": "Here's the structure. Parking lot composes one or more floors, and each floor composes one or more spots.",
+          "reveal": 0
+        },
+        {
+          "say": "Floor zero gets three compact spots and one large. Floor one gets four motorbike spots. The spot type is an enum field, not a subclass. We'll see why in the generalization section.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s014",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Composition, step by step",
+      "table": {
+        "head": [
+          "Step",
+          "Call",
+          "Output"
+        ],
+        "rows": [
+          [
+            "1. Floor builds spots",
+            "addFloor(0, 3 compact, 1 large)",
+            "L0-1 to L0-3 COMPACT, L0-4 LARGE"
+          ],
+          [
+            "2. Second floor",
+            "addFloor(1, 4 motorbike)",
+            "Total spots in lot: 8"
+          ],
+          [
+            "3. Use a part in place",
+            "ground.park(COMPACT)",
+            "Parked at L0-1, 3 free"
+          ],
+          [
+            "4. Outsider tries to edit",
+            "ground.spots().clear()",
+            "Refused: spots() is read-only"
+          ],
+          [
+            "5. Remove the whole",
+            "removeFloor(1)",
+            "Total spots: 4, floors left [0]"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Step one. The lot calls add floor with level zero and a layout. The floor's constructor loops over the layout and builds spots L-zero-one through L-zero-four itself.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two. Floor one gets four motorbike spots. The lot now counts eight.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three. Park a compact car. The floor finds the first free compact spot, L-zero-one, and marks it taken. Three free spots remain.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four. Some outsider calls spots dot clear. It throws unsupported operation, because spots returns an unmodifiable view. Nobody changes the parts behind the owner's back.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five. Remove floor one. Total drops from eight to four. Its four spots are gone with it, because nobody else held them.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s015",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Aggregation or composition?",
+      "bullets": [
+        "A. Library and its Members",
+        "B. Flight and its WeeklySchedule",
+        "C. Spotify playlist and its Songs",
+        "D. Google Doc and its Comments"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Use the one test: whole gone, is the part still meaningful alone? Library and members. Flight and its weekly schedule. A playlist and its songs. A Google Doc and its comments. Decide each one.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s016",
+      "layout": "twocol",
+      "kicker": "Answer",
+      "title": "Answers, and the trade-off",
+      "left": {
+        "heading": "Aggregation: parts live on",
+        "bullets": [
+          "Library members keep their accounts",
+          "Delete a playlist, songs stay"
+        ]
+      },
+      "right": {
+        "heading": "Composition: parts die",
+        "bullets": [
+          "A schedule of no flight means nothing",
+          "Delete a doc, comments go too",
+          "Strong control, but parts can't be reused"
+        ]
+      },
+      "steps": [
+        {
+          "say": "A library closing doesn't erase its members, so that's aggregation.",
+          "reveal": 1
+        },
+        {
+          "say": "Deleting a playlist keeps the songs. Aggregation again.",
+          "reveal": 2
+        },
+        {
+          "say": "A weekly schedule of a flight that doesn't exist is meaningless, so that's composition.",
+          "reveal": 3
+        },
+        {
+          "say": "A deleted Google Doc takes its comments and history with it. Composition.",
+          "reveal": 4
+        },
+        {
+          "say": "The trade-off: composition gives strong encapsulation, since one place controls every change, but the parts can't be shared or reused. In the interview, say this: the whole creates the parts, hides their constructor, exposes read-only views, and they die with it.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s017",
+      "layout": "bullets",
+      "kicker": "Concept 5 of 16 · Book 3.5",
+      "title": "Dependency: uses B for one call",
+      "bullets": [
+        "B appears as a parameter, local variable or return type",
+        "Or A calls a static method on B",
+        "No field: when the method returns, the link is over",
+        "UML: dashed line, open arrowhead from user to used",
+        "Lowest coupling, and the caller can swap B every call"
+      ],
+      "steps": [
+        {
+          "say": "A chef uses today's delivery van. Tomorrow's van may be different. That's a dependency: A uses B briefly, inside one method.",
+          "reveal": 1
+        },
+        {
+          "say": "B shows up as a method parameter, a local variable, a return type, or A calls a static method on it.",
+          "reveal": 2
+        },
+        {
+          "say": "The key test: A has no field of type B. When the method returns, the relationship is over.",
+          "reveal": 3
+        },
+        {
+          "say": "In U-M-L, draw a dashed line with an open arrowhead, from the user to the used class.",
+          "reveal": 4
+        },
+        {
+          "say": "It's the weakest coupling, and it lets the class stay stateless, holding no data between calls.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 3 · 3.5 Dependency"
+    },
+    {
+      "id": "s018",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Checkout service: four dependencies",
+      "table": {
+        "head": [
+          "Line in checkout",
+          "Kind",
+          "Value"
+        ],
+        "rows": [
+          [
+            "cart.subtotal()",
+            "parameter",
+            "250 + 99.50 = Rs 349.50"
+          ],
+          [
+            "new TaxCalculator()",
+            "local variable",
+            "GST 18% = Rs 62.91"
+          ],
+          [
+            "gateway.charge(total)",
+            "parameter, interface",
+            "charges Rs 412.41, TXN-1"
+          ],
+          [
+            "return new Receipt(...)",
+            "return type",
+            "Receipt with TXN-1"
+          ],
+          [
+            "second call, lambda gateway",
+            "swapped per call",
+            "same total, LMB-42"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's checkout service. It has no fields at all. First, the cart comes in as a parameter. Two items, two fifty and ninety-nine fifty rupees, give a subtotal of three forty-nine fifty.",
+          "reveal": 1
+        },
+        {
+          "say": "Second, it creates a tax calculator as a local variable. G-S-T at eighteen percent adds about sixty-two ninety-one.",
+          "reveal": 2
+        },
+        {
+          "say": "Third, the payment gateway is also a parameter, typed as an interface. It charges four hundred twelve rupees forty-one paise and returns transaction T-X-N one.",
+          "reveal": 3
+        },
+        {
+          "say": "Fourth, it returns a receipt, so receipt is a return-type dependency.",
+          "reveal": 4
+        },
+        {
+          "say": "Fifth, the payoff. Main calls checkout again with a different gateway, a lambda, which is a short inline function. Same total, transaction L-M-B forty-two. The caller picked the collaborator per call, which a stored field makes harder.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s019",
+      "layout": "twocol",
+      "kicker": "Concept 5 of 16",
+      "title": "Dependency or association?",
+      "left": {
+        "heading": "Dependency: parameter",
+        "bullets": [
+          "Lowest coupling, stateless object",
+          "Swap the collaborator every call",
+          "Caller passes B every time"
+        ]
+      },
+      "right": {
+        "heading": "Association: field",
+        "bullets": [
+          "Holds state, higher coupling",
+          "Store it when used in many methods",
+          "Caller passes B once, in constructor"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Dependency gives the lowest coupling and a stateless object.",
+          "reveal": 1
+        },
+        {
+          "say": "You can swap the collaborator on every call.",
+          "reveal": 2
+        },
+        {
+          "say": "The cost is call-site noise. The caller hands it over every time.",
+          "reveal": 3
+        },
+        {
+          "say": "Association holds state, so coupling is higher.",
+          "reveal": 4
+        },
+        {
+          "say": "But if a service uses the same repository in ten methods, store it. That's constructor injection: pass it in once.",
+          "reveal": 5
+        },
+        {
+          "say": "Flight reservation dot pay takes a payment: dependency, unless it stores the payment in a field. In the interview, say this: dependency is uses briefly, dashed arrow, and if I only need it in one method I pass it in rather than store it.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s020",
+      "layout": "bullets",
+      "kicker": "Concept 6 of 16 · Book 3.6",
+      "title": "Generalization: A is a kind of B",
+      "bullets": [
+        "UML's word for inheritance: class B extends class A",
+        "Substitution test first: B works anywhere A is expected",
+        "If B must refuse any parent method, don't extend",
+        "Shared workflow in the parent, varying steps overridden",
+        "UML: solid line, hollow triangle pointing at the parent"
+      ],
+      "steps": [
+        {
+          "say": "A credit card payment is a payment. Any code that handles a payment handles it. Generalization is U-M-L's word for inheritance.",
+          "reveal": 1
+        },
+        {
+          "say": "Before you draw it, run the substitution test. Can the child be used anywhere the parent is expected, with no surprises? That's the Liskov substitution principle, coming in chapter four.",
+          "reveal": 2
+        },
+        {
+          "say": "If the child would have to refuse or break any parent method, the answer is no.",
+          "reveal": 3
+        },
+        {
+          "say": "If yes, put the shared state and workflow in the parent, often abstract, meaning it can't be instantiated, and let subclasses override only the varying step.",
+          "reveal": 4
+        },
+        {
+          "say": "In U-M-L, a solid line with a hollow triangle pointing at the parent.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 3 · 3.6 Generalization (inheritance)"
+    },
+    {
+      "id": "s021",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Good hierarchy: Payment",
+      "table": {
+        "head": [
+          "Payment",
+          "authorize() result",
+          "pay() prints"
+        ],
+        "rows": [
+          [
+            "Cash 500, tendered 600",
+            "OK, change 100",
+            "CashPayment of 500.00 OK"
+          ],
+          [
+            "Card 1200, last4 4242",
+            "card ****4242 approved",
+            "CardPayment of 1200.00 OK"
+          ],
+          [
+            "Cash 300, tendered 200",
+            "DECLINED, short by 100",
+            "CashPayment of 300.00 DECLINED"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Payment is abstract. Its pay method is final, the shared workflow, and it calls authorize, the one step that varies. First, cash of five hundred with six hundred tendered: authorized, change one hundred.",
+          "reveal": 1
+        },
+        {
+          "say": "Second, a card payment of twelve hundred on a card ending four two four two: approved.",
+          "reveal": 2
+        },
+        {
+          "say": "Third, cash of three hundred with only two hundred tendered: declined, short by one hundred. Main loops over payments without asking which kind. That's honest inheritance.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s022",
+      "layout": "bullets",
+      "title": "Three wrong inheritances, three fixes",
+      "bullets": [
+        "Guest extends Customer, but guests can't order",
+        "Fix: Customer only browses, RegisteredCustomer orders",
+        "CompactSpot, LargeSpot only pass a constant up",
+        "Fix: one ParkingSpot with a SpotType enum field",
+        "FlyingBird breaks when a penguin arrives",
+        "Fix: Bird holds a MovementStyle, swap it at run time"
+      ],
+      "steps": [
+        {
+          "say": "First wrong one: the subclass that must refuse something. If guest extends customer and customer can place orders, a guest could order.",
+          "reveal": 1
+        },
+        {
+          "say": "Fix: customer holds only what every customer can do, browse. Ordering moves down to registered customer. Now guest dot place order doesn't even compile.",
+          "reveal": 2
+        },
+        {
+          "say": "Second: the subclass that only carries a constant. Compact spot, large spot, handicapped spot, whose constructors just pass a different value up.",
+          "reveal": 3
+        },
+        {
+          "say": "Fix: that's data, so it's a field. One parking spot with a spot type enum. A fourth type is one new constant, not a new class.",
+          "reveal": 4
+        },
+        {
+          "say": "Third: behaviours that mix. Flying bird and swimming bird subclasses break when a penguin arrives.",
+          "reveal": 5
+        },
+        {
+          "say": "Fix: hold instead of extend. Bird holds a movement style interface. The eagle flies, the penguin swims, then we set its movement to walk and it walks, changed at run time. In the interview, say this: inheritance only after the substitution test, constants become enum fields, varying behaviour becomes a held interface.",
+          "reveal": 6
+        }
+      ],
+      "kicker": "Concept 6 of 16"
+    },
+    {
+      "id": "s023",
+      "layout": "bullets",
+      "kicker": "Concept 7 of 16 · Book 3.7",
+      "title": "Realization: a class implements an interface",
+      "bullets": [
+        "Interface: a named contract of operations, no state",
+        "Callers hold the interface type, not the class",
+        "New channels need no caller changes",
+        "One class can realize many interfaces",
+        "UML: dashed line, hollow triangle at the interface"
+      ],
+      "steps": [
+        {
+          "say": "Think of a wall socket standard. Any plug that follows it works in any socket. Realization means a class implements an interface, a named list of operations with no instance state.",
+          "reveal": 1
+        },
+        {
+          "say": "Callers depend on the contract, not the class. Alert service holds a list of notifier, and never names email or S-M-S.",
+          "reveal": 2
+        },
+        {
+          "say": "So a new channel, say push notifications, needs no change in alert service.",
+          "reveal": 3
+        },
+        {
+          "say": "One class can play several roles. Java allows one parent class but any number of interfaces.",
+          "reveal": 4
+        },
+        {
+          "say": "In U-M-L, a dashed line with a hollow triangle at the interface. It deliberately looks like generalization: the same is-a idea, but only the contract is inherited.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 3 · 3.7 Realization (interface implementation)"
+    },
+    {
+      "id": "s024",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "One alert, three notifiers",
+      "table": {
+        "head": [
+          "Notifier",
+          "How it realizes it",
+          "What it prints"
+        ],
+        "rows": [
+          [
+            "EmailNotifier",
+            "implements Notifier, Auditable",
+            "EMAIL to ops: Disk usage above 90..."
+          ],
+          [
+            "SmsNotifier",
+            "overrides default channel()",
+            "SMS: first 20 chars, then ..."
+          ],
+          [
+            "console lambda",
+            "one abstract method, so a lambda",
+            "CONSOLE ops: Disk usage..."
+          ],
+          [
+            "email as Auditable",
+            "same object, other interface",
+            "audit trail: 1 email line"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Main sends one alert, disk usage above ninety percent on D-B one, to the ops team. First, the email notifier sends the full message.",
+          "reveal": 1
+        },
+        {
+          "say": "Second, the S-M-S notifier trims it to the first twenty characters, and overrides the interface's default channel method to say S-M-S.",
+          "reveal": 2
+        },
+        {
+          "say": "Third, a lambda. Notifier has exactly one abstract method, which makes it a functional interface, so a one-line lambda realizes it too.",
+          "reveal": 3
+        },
+        {
+          "say": "Fourth, the same email object, seen through its other interface, auditable, returns its history. One object, two roles. In the interview, say this: I put an interface wherever behaviour can vary or I need a test double, and the rest of the design depends on the interface only.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s025",
+      "layout": "twocol",
+      "kicker": "Concept 7 of 16",
+      "title": "Interface or abstract class?",
+      "left": {
+        "heading": "Interface + realization",
+        "bullets": [
+          "Many per class",
+          "No instance fields, default methods only",
+          "Roles, plug-ins, test seams"
+        ]
+      },
+      "right": {
+        "heading": "Abstract class + generalization",
+        "bullets": [
+          "Only one parent",
+          "Fields, constructors, any shared code",
+          "A family sharing state and a workflow"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Interfaces: a class can have many.",
+          "reveal": 1
+        },
+        {
+          "say": "No instance fields, and shared code only through default methods.",
+          "reveal": 2
+        },
+        {
+          "say": "Best for roles and capabilities, plug-ins, and test seams like a payment gateway.",
+          "reveal": 3
+        },
+        {
+          "say": "Abstract classes: only one per class.",
+          "reveal": 4
+        },
+        {
+          "say": "But they carry fields, constructors, and any shared code.",
+          "reveal": 5
+        },
+        {
+          "say": "Best for a family sharing state and a fixed workflow, like payment. They combine well: list, then abstract list, then array list. One warning: one implementation that will never vary is ceremony. Add the interface when a second one, or a test, appears.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s026",
+      "layout": "table",
+      "kicker": "Concept 8 of 16",
+      "title": "Choose the line: ask in order",
+      "caption": "Book: Ch 3 · 3.8 Decision guide",
+      "steps": [
+        {
+          "say": "Now the ten second guide. Ask in order, and stop at the first yes. Is B an interface A promises to fulfil? Realization.",
+          "reveal": 1
+        },
+        {
+          "say": "Can A be used anywhere B is expected, refusing nothing? Generalization. Most pairs fail it.",
+          "reveal": 2
+        },
+        {
+          "say": "Does A keep B in a field? If not, only a parameter, local or return type, it's a dependency.",
+          "reveal": 3
+        },
+        {
+          "say": "If it is a field: is B a part that dies with A? Composition. A part that can outlive A? Aggregation. Neither? Plain association. Most pairs end as plain association, and that's healthy.",
+          "reveal": 6
+        }
+      ],
+      "table": {
+        "head": [
+          "Ask in order",
+          "If yes"
+        ],
+        "rows": [
+          [
+            "1. Is B an interface that A fulfils?",
+            "Realization"
+          ],
+          [
+            "2. Can A go anywhere B goes, refusing nothing?",
+            "Generalization"
+          ],
+          [
+            "3. Is B only a parameter, local or return type?",
+            "Dependency"
+          ],
+          [
+            "4. B is a field: is it a part that dies with A?",
+            "Composition"
+          ],
+          [
+            "5. Is it a part that can outlive A?",
+            "Aggregation"
+          ],
+          [
+            "6. None of the above",
+            "Association"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "s027",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Run the guide on four pairs",
+      "table": {
+        "head": [
+          "Pair",
+          "Question that decides",
+          "Answer"
+        ],
+        "rows": [
+          [
+            "Library and Member",
+            "Members exist if library closes",
+            "Aggregation or association"
+          ],
+          [
+            "Flight and WeeklySchedule",
+            "Schedule dies with flight",
+            "Composition"
+          ],
+          [
+            "ParkingTicket and ParkingSpot",
+            "Field, but not a whole of spots",
+            "Association"
+          ],
+          [
+            "Report.render(Formatter f)",
+            "Only a parameter",
+            "Dependency"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's run it. Library and member: not an interface, not a substitute, held in a field, and members survive the library closing. Aggregation, or plain association.",
+          "reveal": 1
+        },
+        {
+          "say": "Flight and weekly schedule: held, and a schedule of no flight is meaningless. Composition.",
+          "reveal": 2
+        },
+        {
+          "say": "Parking ticket and parking spot: the ticket holds the spot, but a ticket isn't a whole made of spots. Association.",
+          "reveal": 3
+        },
+        {
+          "say": "Report dot render taking a formatter: only a parameter. Dependency. In the interview, say the test out loud for each line: when a floor is removed its spots go too, so this is composition.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s028",
+      "layout": "section",
+      "kicker": "Concept 9 of 16",
+      "title": "Part B: UML, the shared picture language",
+      "steps": [
+        {
+          "say": "Part B: drawing. You know what each line means. Now the standard way to draw designs, and which pictures actually earn their place in an interview.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 3 · 3.9 What UML is"
+    },
+    {
+      "id": "s029",
+      "layout": "bullets",
+      "kicker": "Concept 9 of 16",
+      "title": "What UML is",
+      "bullets": [
+        "Unified Modeling Language: standard symbols for designs",
+        "Not a programming language: it never runs",
+        "Makes a design visible: twelve boxes read in seconds",
+        "Makes decisions explicit: filled or hollow diamond?",
+        "Makes disagreement cheap: point at one line"
+      ],
+      "steps": [
+        {
+          "say": "U-M-L, the Unified Modeling Language, is a standard set of symbols for software designs, so your diagram reads without a legend.",
+          "reveal": 1
+        },
+        {
+          "say": "It's not a programming language. It never runs, and a whiteboard is all the tooling you need. It's an agreement about what, say, a filled diamond means. It's large, so every team uses a subset.",
+          "reveal": 2
+        },
+        {
+          "say": "It solves three problems. First, it makes a design visible. Twelve boxes with lines read in seconds. Twelve classes in sentences don't.",
+          "reveal": 3
+        },
+        {
+          "say": "Second, it forces decisions. A sentence can be vague about ownership. A diagram makes you pick a filled or hollow diamond.",
+          "reveal": 4
+        },
+        {
+          "say": "Third, it makes disagreement cheap. The interviewer points at one line and asks, why composition here? That's exactly what a good interview looks like.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s030",
+      "layout": "twocol",
+      "kicker": "Concept 9 of 16",
+      "title": "Fourteen diagrams, two families",
+      "left": {
+        "heading": "Structural: what it is",
+        "bullets": [
+          "Class: always drawn",
+          "Object, package, composite, profile",
+          "Component, deployment: system design"
+        ]
+      },
+      "right": {
+        "heading": "Behavioural: what it does",
+        "bullets": [
+          "Use case: scope, early, often spoken",
+          "Activity, state machine",
+          "Interaction: sequence, timing and more"
+        ]
+      },
+      "steps": [
+        {
+          "say": "U-M-L defines fourteen diagram types, seven structural and seven behavioural. Structural diagrams show what the system is made of, the parts that exist at any moment. The class diagram is the one you'll always draw.",
+          "reveal": 1
+        },
+        {
+          "say": "Object, package, composite structure and profile diagrams are rare in interviews.",
+          "reveal": 2
+        },
+        {
+          "say": "Component and deployment diagrams show up in system design rounds instead.",
+          "reveal": 3
+        },
+        {
+          "say": "Behavioural diagrams show what the system does over time. The use case diagram fixes scope, early.",
+          "reveal": 4
+        },
+        {
+          "say": "Activity shows one flow's steps and branches. State machine shows one object's lifecycle.",
+          "reveal": 5
+        },
+        {
+          "say": "Interaction diagrams are a behavioural subgroup about messages between objects: sequence, plus communication, interaction overview and timing. So an interview uses five: use case, class, activity, sequence, and state machine. Only the class diagram maps directly to code.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s031",
+      "layout": "bullets",
+      "kicker": "Concept 10 of 16 · Book 3.10",
+      "title": "Use-case diagrams: who, and what",
+      "bullets": [
+        "Actor: a role outside the system, human or not",
+        "Use case: one goal, a verb phrase in an oval",
+        "System boundary: a box around everything you build",
+        "include: always happens, arrow base to included",
+        "extend: sometimes happens, arrow extension to base"
+      ],
+      "steps": [
+        {
+          "say": "A use case diagram shows who uses the system and what each can achieve. No classes, no methods, no ordering. An actor is a role, drawn as a stick figure outside the system. Roles, not people, and not always human: a payment gateway or a timer can be an actor.",
+          "reveal": 1
+        },
+        {
+          "say": "A use case is one goal that produces a result the actor cares about, written as a verb phrase like borrow a book. Click the search button is a step inside a use case, not a use case.",
+          "reveal": 2
+        },
+        {
+          "say": "The system boundary is a rectangle around all the use cases. Inside is what you build. It fixes scope.",
+          "reveal": 3
+        },
+        {
+          "say": "Include means always. Borrow a book always includes check member's limit. The dashed arrow runs from the base to the included one.",
+          "reveal": 4
+        },
+        {
+          "say": "Extend means sometimes, under a condition. Charge late fine extends return a book, only if it's late. The arrow runs from the extending case back to the base. Test: can the base finish without it? Yes means extend.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 3 · 3.10 Use-case diagrams"
+    },
+    {
+      "id": "s032",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Finding the library's actors",
+      "table": {
+        "head": [
+          "Question",
+          "Library answer",
+          "Use cases it brings"
+        ],
+        "rows": [
+          [
+            "1. Who starts something?",
+            "Member",
+            "Search, borrow, return"
+          ],
+          [
+            "2. Who administers it?",
+            "Librarian",
+            "Add book copy"
+          ],
+          [
+            "3. Who gets told?",
+            "Email service",
+            "Delivers reminders"
+          ],
+          [
+            "4. What acts with nobody there?",
+            "System timer",
+            "Send overdue reminder"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's build the library system with four questions. One: who starts something? The member, who searches the catalog, borrows and returns books.",
+          "reveal": 1
+        },
+        {
+          "say": "Two: who administers it? The librarian, who adds book copies. This is the most forgotten actor, and it brings a whole column of use cases. A librarian can do everything a member can, so draw a generalization between the actors.",
+          "reveal": 2
+        },
+        {
+          "say": "Three: who gets told? The email service, a secondary actor the system calls, drawn on the right.",
+          "reveal": 3
+        },
+        {
+          "say": "Four: what acts with nobody present? A system timer that sends overdue reminders every night. Then draw the boundary and agree what's out, like refunds.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s033",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "From use cases to code",
+      "table": {
+        "head": [
+          "Use-case element",
+          "Becomes in Java"
+        ],
+        "rows": [
+          [
+            "Actor Member",
+            "class Member"
+          ],
+          [
+            "Librarian generalizes Member",
+            "Librarian extends Member"
+          ],
+          [
+            "Borrow a book",
+            "Member.checkout(item, today)"
+          ],
+          [
+            "include Check member limit",
+            "private checkLimit(), every time"
+          ],
+          [
+            "Return a book",
+            "Member.returnBook(item, today)"
+          ],
+          [
+            "extend Charge late fine",
+            "chargeFine(), only if late"
+          ],
+          [
+            "Add book copy",
+            "Librarian.addCopy(...)"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's the payoff. Actors usually become classes. Member becomes a class.",
+          "reveal": 1
+        },
+        {
+          "say": "The actor generalization becomes librarian extends member.",
+          "reveal": 2
+        },
+        {
+          "say": "Use cases become methods. Borrow a book becomes member dot checkout.",
+          "reveal": 3
+        },
+        {
+          "say": "The include becomes a private check limit method called on every single checkout. Include means one method always calls another.",
+          "reveal": 4
+        },
+        {
+          "say": "Return a book becomes return book.",
+          "reveal": 5
+        },
+        {
+          "say": "The extend becomes charge fine, called only if the book is late. Extend means an if statement.",
+          "reveal": 6
+        },
+        {
+          "say": "And add book copy lands on librarian. In the interview, spend three to five minutes here, early, usually spoken: actors, what each does, and what's out of scope.",
+          "reveal": 7
+        }
+      ]
+    },
+    {
+      "id": "s034",
+      "layout": "bullets",
+      "kicker": "Concept 11 of 16 · Book 3.11",
+      "title": "Class diagrams: the design at rest",
+      "bullets": [
+        "Box: name, attributes, operations",
+        "Visibility: + public, - private, # protected, ~ package",
+        "Italic or abstract tag, interface tag, underline = static",
+        "Every line typed, with multiplicity at both ends",
+        "The only UML diagram that maps directly to code"
+      ],
+      "steps": [
+        {
+          "say": "A class diagram shows static structure: which classes exist, what each holds, what each can do, and how they connect. Each box has three compartments: the name, the attributes, written name colon type, and the operations, written name, parameters, colon return type.",
+          "reveal": 1
+        },
+        {
+          "say": "Visibility uses four symbols. Plus is public. Minus is private. Hash is protected, which in Java also means same package. Tilde is package-private, Java's default with no keyword.",
+          "reveal": 2
+        },
+        {
+          "say": "Abstract classes are in italics or tagged abstract. Interfaces get an interface tag above the name. An underlined member is static.",
+          "reveal": 3
+        },
+        {
+          "say": "And every line gets a type and a multiplicity at both ends. That's the part you never skip.",
+          "reveal": 4
+        },
+        {
+          "say": "It's the answer to an O-O-D question, the only diagram that maps straight to code.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 3 · 3.11 Class diagrams"
+    },
+    {
+      "id": "s035",
+      "layout": "diagram",
+      "kicker": "Concept 11 of 16",
+      "title": "The library class diagram",
+      "mermaid": "flowchart LR\n  LIB[\"Library\"] -->|\"composes 1\"| CAT[\"Catalog\"]\n  LIB -->|\"composes *\"| BI[\"BookItem\"]\n  CAT -->|\"aggregates *, indexes\"| BI\n  BI -->|\"* to 1: copy of\"| BK[\"Book record\"]\n  MEM[\"Member\"] -->|\"1 to 0..*: on loan\"| BI\n  LN[\"Librarian\"] -->|\"extends\"| MEM\n  MEM -->|\"uses rule\"| POL[\"LendingPolicy interface\"]\n  MEM -.->|\"local variable\"| FC[\"FineCalculator\"]",
+      "caption": "Composition, aggregation, association, generalization, realization, dependency",
+      "steps": [
+        {
+          "say": "Here's the library design, and every line type appears. The library composes its catalog and its book items, the physical copies.",
+          "reveal": 0
+        },
+        {
+          "say": "The catalog aggregates book items. It indexes copies it doesn't own. Each book item is a copy of exactly one book, a record holding I-S-B-N, title and author.",
+          "reveal": 0
+        },
+        {
+          "say": "A member has zero or more items on loan. Librarian extends member. Member holds a lending policy interface, realized by standard policy: ten books for a librarian, two for a member.",
+          "reveal": 0
+        },
+        {
+          "say": "And the dashed arrow: member uses a fine calculator only as a local variable inside return book. That's a dependency.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s036",
+      "layout": "bullets",
+      "kicker": "Concept 11 of 16",
+      "title": "How much detail to draw",
+      "bullets": [
+        "Every class a named box: ten to fifteen is a full answer",
+        "Attributes only where they carry the design",
+        "Operations only those used in your flows",
+        "Every line typed, with multiplicity",
+        "Short on time? Drop attributes before relationships"
+      ],
+      "steps": [
+        {
+          "say": "How much should you put in the boxes? Every class gets a named box. Ten to fifteen is plenty.",
+          "reveal": 1
+        },
+        {
+          "say": "Attributes only where they matter, the two or three that carry the design, like book item's status and due date.",
+          "reveal": 2
+        },
+        {
+          "say": "Operations only the ones your flows use.",
+          "reveal": 3
+        },
+        {
+          "say": "And every line typed, with a multiplicity.",
+          "reveal": 4
+        },
+        {
+          "say": "When you're short of time, drop attributes before relationships. Name-only boxes with precise lines describe a design. Rich boxes with vague lines don't. In the interview, say this: named boxes from nouns and actors, every line typed with multiplicity, and the lifetime or substitution test said aloud.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s037",
+      "layout": "bullets",
+      "kicker": "Concept 12 of 16 · Book 3.12",
+      "title": "Sequence diagrams: who calls whom, in order",
+      "bullets": [
+        "Objects across the top, time runs down the page",
+        "Solid line, filled head: sync call, caller waits",
+        "Solid line, open head: async, fire and forget",
+        "Dashed line: a return, drawn only when it matters",
+        "Fragments: alt = if else, opt = if, loop = for"
+      ],
+      "steps": [
+        {
+          "say": "A class diagram says objects can talk. A sequence diagram shows what they actually say, in order, for one scenario. Objects sit across the top, each with a dashed lifeline, and time runs down the page.",
+          "reveal": 1
+        },
+        {
+          "say": "A solid line with a filled arrowhead is a synchronous call: the caller waits until it finishes, like a normal method call.",
+          "reveal": 2
+        },
+        {
+          "say": "A solid line with an open arrowhead is asynchronous, fire and forget. The caller carries on.",
+          "reveal": 3
+        },
+        {
+          "say": "A dashed line is a return. Draw it only when the value matters, or the diagram doubles in height and says nothing more.",
+          "reveal": 4
+        },
+        {
+          "say": "Boxes called combined fragments add logic. Alt is if, else. Opt is an if with no else. Loop is a for loop. On a whiteboard, keep it to three or four objects and six to eight messages.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 3 · 3.12 Sequence diagrams"
+    },
+    {
+      "id": "s038",
+      "layout": "diagram",
+      "kicker": "Concept 12 of 16",
+      "title": "Maya borrows Dune",
+      "mermaid": "flowchart LR\n  M[\"maya : Member\"] -->|\"1. search dune\"| C[\"catalog : Catalog\"]\n  C -->|\"2. self-call lookUpTitleIndex\"| C\n  C -.->|\"3. return: B-1, B-2\"| M\n  M -->|\"4. self-call checkLimit\"| M\n  M -->|\"5. checkout maya, today\"| B[\"copy : BookItem\"]\n  B -.->|\"6. return: due date\"| M",
+      "caption": "Messages numbered top to bottom: time runs down",
+      "steps": [
+        {
+          "say": "Here's the library checkout with numbered messages. One: the flow starts from outside. Maya, a member, calls search with dune.",
+          "reveal": 0
+        },
+        {
+          "say": "Two: the catalog calls itself. Looking up the title index needs no other object, so it's a self-message. Three: it returns two copies, B-one and B-two. That return is worth drawing.",
+          "reveal": 0
+        },
+        {
+          "say": "Four: Maya checks her own limit. That's the include from the use case diagram. Five: she calls checkout on the copy directly, not back through the catalog. That's a design choice an interviewer can question.",
+          "reveal": 0
+        },
+        {
+          "say": "Six: the copy returns the due date. Only two returns drawn, the ones that matter.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s039",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "The diagram, run as code",
+      "table": {
+        "head": [
+          "Call",
+          "Output"
+        ],
+        "rows": [
+          [
+            "catalog.search(dune)",
+            "B-1, B-2, both AVAILABLE"
+          ],
+          [
+            "maya.checkout(B-1, March 1)",
+            "Maya borrowed B-1, due March 15"
+          ],
+          [
+            "maya.checkout(Hobbit B-3)",
+            "On loan: B-1, B-3"
+          ],
+          [
+            "maya.checkout(B-2)",
+            "Blocked: Maya already has 2 books"
+          ],
+          [
+            "omar.checkout(B-1)",
+            "Blocked: B-1 is LOANED"
+          ],
+          [
+            "return B-1 on day 10",
+            "On time, fine 0.00"
+          ],
+          [
+            "return B-3 on day 17",
+            "3 days late, fine 15.00"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Now run it. Search for dune returns copies B-one and B-two, both available.",
+          "reveal": 1
+        },
+        {
+          "say": "Maya borrows B-one on March first. Loan length is fourteen days, so it's due March fifteenth.",
+          "reveal": 2
+        },
+        {
+          "say": "She also borrows The Hobbit, copy B-three. She now holds two books.",
+          "reveal": 3
+        },
+        {
+          "say": "She tries a third. The include fires: check limit says a member may hold two. Blocked.",
+          "reveal": 4
+        },
+        {
+          "say": "Omar tries to borrow B-one, but it's already loaned.",
+          "reveal": 5
+        },
+        {
+          "say": "Maya returns B-one on day ten. On time, fine zero.",
+          "reveal": 6
+        },
+        {
+          "say": "She returns B-three on day seventeen, three days late. At five rupees a day, the extend fires and charges fifteen. Here's the check: every arrow in the diagram is a real method. A message with no method means your class diagram is missing one.",
+          "reveal": 7
+        }
+      ]
+    },
+    {
+      "id": "s040",
+      "layout": "bullets",
+      "kicker": "Concept 12 of 16",
+      "title": "Fragments and async: checkout with payment",
+      "bullets": [
+        "loop for each cart line: Inventory.reserve(sku, qty)",
+        "opt coupon present: applyDiscount, a self-call",
+        "Gateway.charge(total), synchronous",
+        "alt approved: publish OrderPlaced async, confirm",
+        "else declined: releaseAll(cart), error, retry"
+      ],
+      "steps": [
+        {
+          "say": "A bigger example uses every common fragment. A customer places an order. First, a loop: for each cart line, the checkout service asks inventory to reserve that S-K-U, a stock keeping unit, and quantity.",
+          "reveal": 1
+        },
+        {
+          "say": "Then an opt box: only if a coupon code is present, the service applies a discount on itself.",
+          "reveal": 2
+        },
+        {
+          "say": "Then a synchronous charge to the payment gateway. The service waits.",
+          "reveal": 3
+        },
+        {
+          "say": "Then an alt box with two sections. If approved, the service publishes order placed to an event bus asynchronously, without waiting for subscribers, and confirms to the customer.",
+          "reveal": 4
+        },
+        {
+          "say": "Else, declined: release all the reserved stock and tell the customer to retry. The order is the whole point. Reserve stock before charging, release it if the charge fails.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s041",
+      "layout": "bullets",
+      "kicker": "Concept 13 of 16 · Book 3.13",
+      "title": "Activity diagrams: one flow, every branch",
+      "bullets": [
+        "Start: filled circle. End: bullseye",
+        "Action: rounded box in business language",
+        "Decision diamond: every exit has a [guard]",
+        "Fork and join bars: parallel steps, then wait for all",
+        "Swimlanes: who does each action"
+      ],
+      "steps": [
+        {
+          "say": "An activity diagram traces one flow end to end and marks every point where it branches. It's the U-M-L diagram closest to a flowchart. It starts at a filled circle and ends at a bullseye.",
+          "reveal": 1
+        },
+        {
+          "say": "Each action is a rounded box in the problem's language: the system calculates the fee. Not call calculate fee.",
+          "reveal": 2
+        },
+        {
+          "say": "A decision is a diamond, and every exit carries a guard in square brackets. Guards must cover every case. Use else to be safe.",
+          "reveal": 3
+        },
+        {
+          "say": "A thick fork bar splits the flow into parallel steps. A join bar waits until all of them finish.",
+          "reveal": 4
+        },
+        {
+          "say": "Swimlanes are labelled lanes showing who does each action. Best interview use: it tests your class diagram. Walk the flow and ask, which class does this? An action with no home is a missing class.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 3 · 3.13 Activity diagrams"
+    },
+    {
+      "id": "s042",
+      "layout": "table",
+      "kicker": "Concept 13 of 16",
+      "title": "Pay at the parking exit",
+      "caption": "Guarded decisions, a retry loop, and a hand-off",
+      "steps": [
+        {
+          "say": "Let's walk the parking exit, from the parking lot case study in chapter fourteen. Step one: the customer inserts the ticket. Decision one: already paid? If yes, the gate opens.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: if not, the system calculates the fee from the entry time, and the customer pays. Decision two: did payment succeed? If yes, mark the ticket paid, free the spot, and the gate opens. The book adds one more choice here: does the customer want a receipt?",
+          "reveal": 3
+        },
+        {
+          "say": "Step three: if payment failed, ask: is this the third failure? If no, loop back and pay again. If yes, hand off to an attendant, who sits in a different swimlane.",
+          "reveal": 5
+        }
+      ],
+      "table": {
+        "head": [
+          "Step or decision",
+          "Guard",
+          "Then"
+        ],
+        "rows": [
+          [
+            "Customer inserts ticket: already paid?",
+            "[yes]",
+            "Gate opens"
+          ],
+          [
+            "System calculates fee, customer pays",
+            "[no]",
+            "Check the payment"
+          ],
+          [
+            "Payment succeeded?",
+            "[yes]",
+            "Mark paid, free spot, gate opens"
+          ],
+          [
+            "Payment failed: third failure?",
+            "[no]",
+            "Loop back, pay again"
+          ],
+          [
+            "Third failure?",
+            "[yes]",
+            "Attendant handles it (own swimlane)"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "s043",
+      "layout": "twocol",
+      "kicker": "Concept 13 of 16",
+      "title": "Fork and join, then activity versus sequence",
+      "left": {
+        "heading": "Fork and join example",
+        "bullets": [
+          "Payment confirmed, then fork",
+          "Pack, email invoice, loyalty points",
+          "Join waits for all, courier ships"
+        ]
+      },
+      "right": {
+        "heading": "Which diagram?",
+        "bullets": [
+          "Activity: what happens? branches",
+          "Sequence: who calls whom? order",
+          "Three branches: activity"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Fork and join: order fulfilment. Payment is confirmed, then a fork bar.",
+          "reveal": 1
+        },
+        {
+          "say": "Three things run in parallel: the warehouse packs the items, the system emails the invoice, and the system awards loyalty points.",
+          "reveal": 2
+        },
+        {
+          "say": "The join bar waits for all three. Only then does the courier ship.",
+          "reveal": 3
+        },
+        {
+          "say": "Now, activity versus sequence. An activity diagram answers, what happens? Steps in business language, and branches come naturally.",
+          "reveal": 4
+        },
+        {
+          "say": "A sequence diagram answers, who calls whom? Objects and method calls, where order is the interesting part.",
+          "reveal": 5
+        },
+        {
+          "say": "Rule of thumb: three branches, use activity. Four objects with an easily confused call order, use sequence.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s044",
+      "layout": "bullets",
+      "kicker": "Concept 14 of 16 · Book 3.14",
+      "title": "State machines: one object's lifecycle",
+      "bullets": [
+        "State: a condition the object waits in, like PAID",
+        "Transition label: event [guard] / action",
+        "Initial dot, final bullseye",
+        "Anything not drawn is illegal",
+        "Code: enum plus one transition method"
+      ],
+      "steps": [
+        {
+          "say": "Think of a traffic light: one state at a time, moved on by a timer. A state machine diagram shows the states one object can be in, and the transitions between them. A state is a condition where the object waits, drawn as a rounded box: created, paid, shipped.",
+          "reveal": 1
+        },
+        {
+          "say": "Each arrow is labelled event, guard, action. The event is what happens, like pay. The guard in square brackets must be true to fire, like amount equals total. The action after a slash is what the object does on the way, like refund.",
+          "reveal": 2
+        },
+        {
+          "say": "A filled dot points to the first state. A bullseye means the object's life is over.",
+          "reveal": 3
+        },
+        {
+          "say": "The power is this: every legal transition is listed, so everything else is rejected. No shipping a cancelled order.",
+          "reveal": 4
+        },
+        {
+          "say": "In Java that's an enum of states plus one transition method, or the State pattern, chapter eleven, when each state has lots of behaviour.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 3 · 3.14 State machine diagrams"
+    },
+    {
+      "id": "s045",
+      "layout": "diagram",
+      "kicker": "Concept 14 of 16",
+      "title": "Order lifecycle",
+      "mermaid": "flowchart LR\n  S((\"start\")) --> C[\"CREATED\"]\n  C -->|\"pay [amount == total]\"| P[\"PAID\"]\n  C -->|\"cancel\"| X[\"CANCELLED\"]\n  P -->|\"ship / print label\"| SH[\"SHIPPED\"]\n  P -->|\"cancel / refund\"| X\n  SH -->|\"deliver\"| D[\"DELIVERED\"]",
+      "caption": "Label every arrow: event [guard] / action",
+      "steps": [
+        {
+          "say": "Here's an order. It starts in created. Pay moves it to paid, but only if the amount equals the total. Pay the wrong amount and the guard fails, so it stays in created.",
+          "reveal": 0
+        },
+        {
+          "say": "From created, cancel goes straight to cancelled. From paid, cancel also goes to cancelled, but runs the refund action.",
+          "reveal": 0
+        },
+        {
+          "say": "From paid, ship moves to shipped and prints a label. Deliver moves to delivered. Delivered and cancelled are final. There's no arrow from cancelled to shipped, so that's illegal.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s046",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Two orders through the machine",
+      "table": {
+        "head": [
+          "Order and event",
+          "Result"
+        ],
+        "rows": [
+          [
+            "ORD-1 total 499, Pay 499",
+            "CREATED to PAID"
+          ],
+          [
+            "ORD-1 Ship TRK-77",
+            "print label, PAID to SHIPPED"
+          ],
+          [
+            "ORD-1 Deliver",
+            "SHIPPED to DELIVERED, final"
+          ],
+          [
+            "ORD-2 total 120, Pay 100",
+            "Rejected: guard failed"
+          ],
+          [
+            "ORD-2 Pay 120, then Cancel",
+            "PAID to CANCELLED, refund 120"
+          ],
+          [
+            "ORD-2 Ship TRK-99",
+            "Rejected: no transition"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The Java handle method is one switch over a sealed event interface, meaning only the listed event types may implement it. Each case is one arrow, with a when clause as the guard. Order one, total four ninety-nine, pays four ninety-nine. The guard holds. Created to paid.",
+          "reveal": 1
+        },
+        {
+          "say": "Ship with tracking T-R-K seventy-seven. The action prints a label. Paid to shipped.",
+          "reveal": 2
+        },
+        {
+          "say": "Deliver. Shipped to delivered, and is final returns true.",
+          "reveal": 3
+        },
+        {
+          "say": "Order two, total one twenty, tries to pay one hundred. The guard fails and it's rejected.",
+          "reveal": 4
+        },
+        {
+          "say": "It pays one twenty, then cancels. Paid to cancelled, with refund one twenty.",
+          "reveal": 5
+        },
+        {
+          "say": "Finally, ship. There's no arrow from cancelled, so the default branch rejects it. Everything not on the diagram is illegal. In the interview, say this: states with transitions labelled event, guard, action. Anything not drawn, the code rejects.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s047",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Which diagram would you draw?",
+      "bullets": [
+        "A. Payment fails and retries up to three times",
+        "B. A vending machine: idle, has coin, dispensing",
+        "C. Five services, and call order is easy to confuse"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Three situations. A flow where payment fails and retries up to three times. A vending machine moving between idle, has coin, and dispensing. And five services where the call order is easy to get wrong. Which diagram fits each?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s048",
+      "layout": "table",
+      "kicker": "Concept 15 of 16",
+      "title": "How much UML in a 45-minute round",
+      "table": {
+        "head": [
+          "Minutes",
+          "Diagram",
+          "Depth"
+        ],
+        "rows": [
+          [
+            "0 to 5",
+            "Use case",
+            "Spoken list: actors, goals, out of scope"
+          ],
+          [
+            "5 to 20",
+            "Class diagram",
+            "Always: 10 to 15 boxes, typed lines"
+          ],
+          [
+            "20 to 25",
+            "One behaviour diagram",
+            "Activity, sequence or state"
+          ],
+          [
+            "25 to 45",
+            "Code and discussion",
+            "Walk the flow against the diagrams"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Answers first. Retries are branches, so activity. The vending machine is one object's lifecycle, so state machine. Five services with tricky order is sequence. Now the budget for a forty-five minute round. Minutes zero to five: use cases, usually spoken.",
+          "reveal": 1
+        },
+        {
+          "say": "Minutes five to twenty: the class diagram, always drawn. Ten to fifteen boxes, every line typed with multiplicity, key attributes and methods only.",
+          "reveal": 2
+        },
+        {
+          "say": "Minutes twenty to twenty-five: one behaviour diagram for the flow that carries the design. Activity if it branches, sequence if call order matters, state if one object has a lifecycle.",
+          "reveal": 3
+        },
+        {
+          "say": "Minutes twenty-five to forty-five: code the core classes and walk the flow against your diagrams.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Ch 3 · 3.15 How much UML to draw"
+    },
+    {
+      "id": "s049",
+      "layout": "bullets",
+      "kicker": "Concept 15 of 16",
+      "title": "Rules of thumb for the whiteboard",
+      "bullets": [
+        "Only one picture? The class diagram",
+        "Drop attributes before relationships, never unlabelled lines",
+        "Use behaviour diagrams to test the class diagram",
+        "Small sequences: 3 to 4 objects, 6 to 8 messages",
+        "Machine coding round: two-minute sketch, then code",
+        "Forgot a symbol? Say what you mean and move on"
+      ],
+      "steps": [
+        {
+          "say": "Rule one: if you only draw one picture, draw the class diagram. It's the answer.",
+          "reveal": 1
+        },
+        {
+          "say": "Rule two: drop attributes before relationships, never leave a line unlabelled, and say the test aloud for every diamond and triangle.",
+          "reveal": 2
+        },
+        {
+          "say": "Rule three: use the other diagrams as tests. Every activity action and every sequence arrow must be a method on a class you drew.",
+          "reveal": 3
+        },
+        {
+          "say": "Rule four: keep sequence diagrams small. Three or four objects, six to eight messages, no branches.",
+          "reveal": 4
+        },
+        {
+          "say": "Rule five: in a machine coding round spend two minutes on a class sketch, then code.",
+          "reveal": 5
+        },
+        {
+          "say": "Rule six: notation isn't what's graded. Diagram and words agreeing is. Forgot the realization arrow? Say, this implements that, and move on.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s050",
+      "layout": "quiz",
+      "kicker": "Concept 16 of 16",
+      "title": "Chapter self-check",
+      "bullets": [
+        "A. Six relationships, weakest to strongest coupling?",
+        "B. Java type for 0..1 and for 1..*?",
+        "C. include versus extend, and arrow directions?",
+        "D. Sequence arrowheads: sync, async, return?"
+      ],
+      "steps": [
+        {
+          "say": "Final self-check. Pause and answer all four before I do. The six relationships from weakest to strongest coupling. The Java types for zero to one, and one or more. Include versus extend. And the three sequence diagram arrowheads.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 3 · 3.16 Chapter self-check, 3.17 TL;DR"
+    },
+    {
+      "id": "s051",
+      "layout": "bullets",
+      "kicker": "Answer",
+      "title": "Self-check answers",
+      "bullets": [
+        "Dependency, association, aggregation, composition, ...",
+        "... realization, generalization",
+        "0..1: Optional. 1..*: non-empty collection, checked",
+        "include: always, base to included",
+        "extend: sometimes, extension to base",
+        "Filled = sync, open = async, dashed = return"
+      ],
+      "steps": [
+        {
+          "say": "Weakest to strongest: dependency, association, aggregation, composition.",
+          "reveal": 1
+        },
+        {
+          "say": "Then realization, and generalization last, because a subclass sees every parent detail.",
+          "reveal": 2
+        },
+        {
+          "say": "Zero to one is a nullable field exposed as an optional. One or more is a collection the constructor refuses to leave empty.",
+          "reveal": 3
+        },
+        {
+          "say": "Include is always, and the arrow runs from the base to the included case.",
+          "reveal": 4
+        },
+        {
+          "say": "Extend is sometimes, and the arrow runs from the extension back to the base.",
+          "reveal": 5
+        },
+        {
+          "say": "Solid line with a filled head is a sync call, solid with an open head is async, and a dashed line is a return.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s052",
+      "layout": "recap",
+      "kicker": "Episode 3 complete",
+      "title": "Episode 3 recap",
+      "bullets": [
+        "A line claims lifetime and substitution",
+        "Uses, knows, has, owns, implements, extends",
+        "Ask in order; most pairs are plain association",
+        "Multiplicity changes code: 1, 0..1, 1..*, exact counts",
+        "UML: use case, class, activity, sequence, state",
+        "Draw little, label everything, say the test aloud"
+      ],
+      "steps": [
+        {
+          "say": "Let's recap. Every relationship is a claim about lifetime and substitution.",
+          "reveal": 1
+        },
+        {
+          "say": "Dependency uses, with a dashed arrow. Association knows, with a line or arrow. Aggregation has parts that live on, hollow diamond at the whole. Composition owns parts that die with it, filled diamond. Realization implements, dashed triangle. Generalization extends, solid triangle.",
+          "reveal": 2
+        },
+        {
+          "say": "Choose in order: interface, substitution test, field or not, dies with the whole, outlives it, else association.",
+          "reveal": 3
+        },
+        {
+          "say": "Multiplicity changes code. One is a required field, zero to one is an optional, one or more is a non-empty collection, and exact counts are checked in constructors.",
+          "reveal": 4
+        },
+        {
+          "say": "U-M-L has fourteen diagrams, structural and behavioural. Interviews use five: use cases for scope, the class diagram as the answer, activity for branches, sequence for call order, and state machines for lifecycles.",
+          "reveal": 5
+        },
+        {
+          "say": "Draw little, label everything, say the test out loud, and use behaviour diagrams to test the class diagram. Next episode, episode four: SOLID Principles. See you there.",
+          "reveal": 6
+        }
+      ]
+    }
+  ]
+}

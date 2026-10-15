@@ -1,0 +1,1426 @@
+{
+ "series": "System Design Workshop",
+ "episode": 21,
+ "title": "Case Studies: Messaging and Media",
+ "subtitle": "Chat, email, video, file sync and live streaming, built end to end",
+ "scenes": [
+  {
+   "layout": "title",
+   "title": "Case Studies: Messaging and Media",
+   "subtitle": "Chat, email, video, file sync and live streaming, built end to end",
+   "steps": [
+    {
+     "say": "Welcome to episode twenty-one of the System Design Workshop: Case Studies, Messaging and Media. Today we build five complete systems: a chat app, an email service, a video platform, a file sync drive, and live streaming.",
+     "reveal": 0
+    },
+    {
+     "say": "By the end you'll be able to explain, with numbers, how each one keeps order, avoids losing data, and moves huge files to millions of screens. No new patterns today; every mechanism comes from earlier episodes.",
+     "reveal": 0
+    },
+    {
+     "say": "Keep the Module fourteen notes open beside the video. When I say pause, sketch the design on paper first, then compare.",
+     "reveal": 0
+    }
+   ],
+   "id": "s001"
+  },
+  {
+   "layout": "table",
+   "kicker": "Concept 1 of 18: the map",
+   "title": "Five designs, five centers of gravity",
+   "table": {
+    "head": [
+     "Case",
+     "Main problem",
+     "What decides it"
+    ],
+    "rows": [
+     [
+      "Chat",
+      "Ordered, no-repeat delivery",
+      "Connection count"
+     ],
+     [
+      "Email",
+      "Never lose an accepted letter",
+      "Durability, deliverability"
+     ],
+     [
+      "Video",
+      "Encode once, serve billions",
+      "Egress and encode cost"
+     ],
+     [
+      "File sync",
+      "Many devices, one folder tree",
+      "Chunk dedupe, change journal"
+     ],
+     [
+      "Live",
+      "Seconds of delay, millions watching",
+      "Latency budget, hot object"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Think of five chess games from the same opening: a client that must stay in step with a server. Case one, chat: tiny messages that must arrive in order, with no repeats, to users whose connections live on thousands of machines.",
+     "reveal": 1
+    },
+    {
+     "say": "Case two, email: a letter, once accepted, must never be lost, while you talk to a slow and untrusted internet.",
+     "reveal": 2
+    },
+    {
+     "say": "Case three, video: pay once to convert each upload into many sizes, then serve a few hugely popular videos from servers near viewers.",
+     "reveal": 3
+    },
+    {
+     "say": "Case four, file sync: the same folder on five devices, edited offline, with no silent data loss.",
+     "reveal": 4
+    },
+    {
+     "say": "Case five, live streaming: one broadcast reaching twenty-five million people within seconds.",
+     "reveal": 5
+    }
+   ],
+   "id": "s002",
+   "caption": "Book: Module 14 · Module Introduction"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 1 of 18",
+   "title": "Four terms used all episode",
+   "bullets": [
+    "Fan-out: one input, many deliveries",
+    "Cursor: a saved position in an ordered log",
+    "Blob versus metadata: big bytes versus small facts",
+    "Egress: bytes leaving your servers"
+   ],
+   "steps": [
+    {
+     "say": "Four terms first. Fan-out means one input producing many deliveries. One chat message to a five-hundred-member group is five hundred deliveries.",
+     "reveal": 1
+    },
+    {
+     "say": "A cursor is a saved position in an ordered log. Your phone says, I've seen everything up to number four thousand eight hundred and twelve, give me the rest.",
+     "reveal": 2
+    },
+    {
+     "say": "Blob versus metadata. A blob is big, unchanging bytes, like a video or a file chunk. Metadata is small, changing facts about it, like its title or owner. Every case stores them in different systems.",
+     "reveal": 3
+    },
+    {
+     "say": "Egress means bytes leaving your servers toward users. For media it's the biggest bill, and it's why a C-D-N, a content delivery network of caches near users, exists.",
+     "reveal": 4
+    }
+   ],
+   "id": "s003"
+  },
+  {
+   "layout": "section",
+   "kicker": "Case 1 of 5",
+   "title": "Case 1: The Chat System",
+   "steps": [
+    {
+     "say": "Case one. A messaging app like WhatsApp: one-to-one and group chats up to a thousand members, live delivery, history on every device, read receipts and online dots. Messages are tiny. The hard part is everything around them.",
+     "reveal": 0
+    }
+   ],
+   "id": "s004",
+   "caption": "Book: Module 14 · Case 1 — Chat System"
+  },
+  {
+   "layout": "table",
+   "kicker": "Concept 2 of 18: numbers and skeleton",
+   "title": "Example: chat numbers",
+   "table": {
+    "head": [
+     "Quantity",
+     "Math",
+     "Result"
+    ],
+    "rows": [
+     [
+      "Messages",
+      "500M users x 40 a day",
+      "20B a day, 700K/s peak"
+     ],
+     [
+      "Deliveries",
+      "700K x 3 recipients",
+      "About 2M a second"
+     ],
+     [
+      "Storage",
+      "20B x 300 bytes",
+      "6 TB a day, kept forever"
+     ],
+     [
+      "Open sockets",
+      "30% of 500M online",
+      "150M connections"
+     ],
+     [
+      "Gateways",
+      "150M / 50K each",
+      "3,000 machines"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Numbers first. Five hundred million daily users, forty messages each, is twenty billion a day. That's about two hundred and thirty thousand a second on average, seven hundred thousand at peak.",
+     "reveal": 1
+    },
+    {
+     "say": "Each message goes to about three recipients, so two million deliveries a second at peak.",
+     "reveal": 2
+    },
+    {
+     "say": "At three hundred bytes each, that's six terabytes a day, kept forever, and old messages are almost never read.",
+     "reveal": 3
+    },
+    {
+     "say": "If thirty percent are online at peak, that's a hundred and fifty million open WebSockets. A WebSocket is a long-lived, two-way connection.",
+     "reveal": 4
+    },
+    {
+     "say": "At fifty thousand sockets per gateway, we need three thousand gateways. And heartbeats, every thirty seconds, are five million pings a second, so they must be answered at the gateway, never in a database. The lesson: connection count decides this design.",
+     "reveal": 5
+    }
+   ],
+   "id": "s005"
+  },
+  {
+   "layout": "diagram",
+   "kicker": "Concept 2 of 18",
+   "title": "One message from Alice to Bob",
+   "mermaid": "flowchart LR\n  A[\"Alice phone\"] --> GA[\"Gateway A: sockets only\"]\n  GA --> CS[\"Chat service: owner of conv c9\"]\n  CS --> MS[\"Message store by conv\"]\n  CS --> IB[\"User inbox logs\"]\n  CS --> SR[\"Session registry\"]\n  CS --> GB[\"Gateway B\"]\n  GB --> B[\"Bob laptop and phone\"]",
+   "caption": "Gateways hold sockets and own nothing; one owner per conversation",
+   "steps": [
+    {
+     "say": "Follow one message. Alice's phone sends it, with an I-D her phone made up, called u one, to Gateway A. Gateways only hold connections and answer heartbeats. Nothing important lives there.",
+     "reveal": 0
+    },
+    {
+     "say": "Gateway A forwards it to the one chat service instance that owns conversation c nine, chosen by consistent hashing on the conversation I-D.",
+     "reveal": 0
+    },
+    {
+     "say": "That owner gives the message sequence number eight hundred and twelve, writes it to the message store, adds a pointer to each member's inbox log, and only then acks Alice. The ack is the durability promise.",
+     "reveal": 0
+    },
+    {
+     "say": "Then it looks up Bob's devices in the session registry and publishes to Gateway B, which writes to both his laptop and his phone. If Bob is offline, he gets a push notification and syncs on open.",
+     "reveal": 0
+    }
+   ],
+   "id": "s006"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 3 of 18",
+   "title": "Ordering and exactly-once display",
+   "bullets": [
+    "Problem: two senders, two gateways, skewed clocks",
+    "Fix: one sequencer per conversation",
+    "Retries: same client_msg_id, same original ack",
+    "Delivery: at-least-once, dedupe by seq",
+    "Gaps: hold 810, get 812, fetch 811"
+   ],
+   "steps": [
+    {
+     "say": "Here's the hook. In a group chat, Ana and Raj send at the same instant through different gateways. If each gateway stamps its own clock, and those clocks differ by a few milliseconds, members could see different orders.",
+     "reveal": 1
+    },
+    {
+     "say": "The fix: one sequencer per conversation. The owner hands out gap-free numbers, eight hundred and eleven, eight hundred and twelve, and order is defined by those numbers, not clocks. It's cheap, because one conversation is slow.",
+     "reveal": 2
+    },
+    {
+     "say": "Now duplicates. Alice's phone enters a tunnel and retries without an ack. It reuses the same client message I-D, u one. The owner remembers recent I-Ds, so the retry gets back the original ack, sequence eight hundred and twelve, not a second copy.",
+     "reveal": 3
+    },
+    {
+     "say": "Delivery is at-least-once: a gateway may resend after a reconnect. Bob's phone just drops any sequence number it already has. Idempotent send plus dedupe by sequence means each message appears exactly once, even though no single hop is exactly-once.",
+     "reveal": 4
+    },
+    {
+     "say": "Bonus: gap detection is free. If Bob's phone holds eight hundred and ten and receives eight hundred and twelve, it knows eight eleven is missing and fetches it. In the interview, say: order comes from a per-conversation sequencer, not clocks.",
+     "reveal": 5
+    }
+   ],
+   "id": "s007",
+   "caption": "Book: Module 14 Chat · Deep dive 1, ordering"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 4 of 18",
+   "title": "Offline catch-up and multi-device sync",
+   "bullets": [
+    "Each device keeps one cursor into its user inbox",
+    "Reconnect: GET /sync after the cursor",
+    "Offline a week: summaries first, history lazily",
+    "Receipts are cumulative: read up to 812",
+    "Your own sends go to your inbox too"
+   ],
+   "steps": [
+    {
+     "say": "Bob's phone was offline. How does it catch up? Every device keeps one cursor: its last position in Bob's per-user inbox log, a list of pointers saying, conversation c nine has new message eight twelve.",
+     "reveal": 1
+    },
+    {
+     "say": "On reconnect, the phone calls sync with its cursor. One range scan returns every pointer since then, across all conversations. It fetches the missing bodies, rejoins the live stream, and drops overlaps by sequence number.",
+     "reveal": 2
+    },
+    {
+     "say": "Imagine Bob was away a week in two hundred busy groups: twenty thousand new messages. Don't download them all. Return a summary per conversation first, last message and unread count, and fetch history when he opens a chat. Reconnect stays under a second.",
+     "reveal": 3
+    },
+    {
+     "say": "Read receipts are cumulative. Bob reads fifty messages and sends one frame: read up to eight twelve. In a thousand-member group, receipts are aggregated, read by thirty-seven, or traffic multiplies a thousand times.",
+     "reveal": 4
+    },
+    {
+     "say": "And Alice's own message must appear on her laptop too, so her inbox log also gets the pointer. That's reading your own writes, across devices.",
+     "reveal": 5
+    }
+   ],
+   "id": "s008",
+   "caption": "Book: Module 14 Chat · Deep dive 2, offline catch-up"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 5 of 18",
+   "title": "Presence without a heartbeat storm",
+   "bullets": [
+    "Naive: broadcast every online change to all contacts",
+    "Store presence in memory with a 60 s TTL",
+    "Pull on open; push only while a chat is visible",
+    "Debounce: offline only after TTL expires",
+    "Ephemeral: losing it means a few wrong dots"
+   ],
+   "steps": [
+    {
+     "say": "Presence is the online dot. The naive way broadcasts every online or offline change to all your contacts. With a hundred and fifty million phones flapping on mobile networks, that's millions of events a second, mostly to people not looking.",
+     "reveal": 1
+    },
+    {
+     "say": "Better: keep presence in the in-memory session registry with a time to live, say sixty seconds, refreshed by heartbeats.",
+     "reveal": 2
+    },
+    {
+     "say": "Clients pull presence when they open a chat or contact list, and get pushes only while that chat is on screen.",
+     "reveal": 3
+    },
+    {
+     "say": "Debounce flapping. Publish offline only when the time to live expires. So Bob driving through a five-second tunnel creates zero events.",
+     "reveal": 4
+    },
+    {
+     "say": "Presence is never stored durably. If you lose it, users see a few seconds of wrong dots. That's graceful degradation: on New Year's Eve you shed typing indicators and presence first, messages last.",
+     "reveal": 5
+    }
+   ],
+   "id": "s009",
+   "caption": "Book: Module 14 Chat · Deep dive 3, presence"
+  },
+  {
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "A gateway with 50,000 users crashes. What is lost?",
+   "bullets": [
+    "A: Messages not yet delivered",
+    "B: Nothing durable; clients reconnect and sync",
+    "C: The conversation order"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. A gateway holding fifty thousand sockets dies. What did we lose? Take a moment.",
+     "reveal": 0
+    }
+   ],
+   "id": "s010"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Chat recap",
+   "title": "Answer: nothing durable lived there",
+   "bullets": [
+    "Clients reconnect with jittered backoff",
+    "Re-register sessions, then sync from cursor",
+    "Sequencer dies? Neighbour reads last_seq, fenced writes"
+   ],
+   "steps": [
+    {
+     "say": "Answer B. Gateways own nothing. The fifty thousand clients reconnect elsewhere with jittered backoff, so they don't all retry in the same millisecond.",
+     "reveal": 1
+    },
+    {
+     "say": "They re-register their sessions and call sync from their cursors. Any gap is filled. Deploys work the same way: drain, send a going-away frame, reconnect.",
+     "reveal": 2
+    },
+    {
+     "say": "If a sequencer dies instead, the hash ring hands its conversations to a neighbour, which reads the last sequence number before accepting writes. Writes are fenced, so a paused old owner can't write too. Senders see a one- or two-second pause, and retries are deduped. Recap for chat: gateways hold sockets, one sequencer per conversation, ack after durable, and one cursor per device.",
+     "reveal": 3
+    }
+   ],
+   "id": "s011"
+  },
+  {
+   "layout": "section",
+   "kicker": "Case 2 of 5",
+   "title": "Case 2: The Email Service",
+   "steps": [
+    {
+     "say": "Case two, a webmail provider like Gmail. The twist: you don't control the other side. Mail arrives from millions of foreign servers, many hostile, and your outgoing mail goes to servers that may be down for days.",
+     "reveal": 0
+    }
+   ],
+   "id": "s012",
+   "caption": "Book: Module 14 · Case 2 — Email Service"
+  },
+  {
+   "layout": "table",
+   "kicker": "Concept 6 of 18: the 250 OK boundary",
+   "title": "Example: email numbers",
+   "table": {
+    "head": [
+     "Quantity",
+     "Result",
+     "So what"
+    ],
+    "rows": [
+     [
+      "Inbound mail",
+      "40B a day, 1.4M/s peak",
+      "Accept fast"
+     ],
+     [
+      "Outbound mail",
+      "10B a day",
+      "Retry for days"
+     ],
+     [
+      "Stored bytes",
+      "1.2 PB a day",
+      "Blob store"
+     ],
+     [
+      "Metadata",
+      "40 TB a day, 1 KB each",
+      "Every query hits it"
+     ],
+     [
+      "Query scope",
+      "Always one mailbox",
+      "Shard by mailbox"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "A billion users each receive forty real messages a day. That's forty billion accepted a day, about one point four million a second at peak, and as much spam again, mostly rejected at connection time.",
+     "reveal": 1
+    },
+    {
+     "say": "They send ten billion a day, which go out to the internet and may need retries for days.",
+     "reveal": 2
+    },
+    {
+     "say": "At thirty kilobytes per message, that's one point two petabytes a day of raw mail.",
+     "reveal": 3
+    },
+    {
+     "say": "Metadata, at a kilobyte each, is forty terabytes a day: three percent of the bytes, but nearly all of the queries.",
+     "reveal": 4
+    },
+    {
+     "say": "And the key insight: every query is about one mailbox. So the mailbox I-D is the shard key for almost everything.",
+     "reveal": 5
+    }
+   ],
+   "id": "s013",
+   "caption": "Book: Module 14 Email · 1. Requirements and numbers"
+  },
+  {
+   "layout": "diagram",
+   "kicker": "Concept 6 of 18",
+   "title": "Inbound mail: durable before 250 OK",
+   "mermaid": "flowchart LR\n  EXT[\"Internet mail servers\"] --> EDGE[\"SMTP edge: reputation, rate limits\"]\n  EDGE --> SPOOL[\"Replicated spool\"]\n  SPOOL --> PIPE[\"Async pipeline: spam, malware\"]\n  PIPE --> BLOB[\"Blob store: raw mail\"]\n  PIPE --> META[\"Mailbox metadata by mailbox_id\"]\n  META --> IDX[\"Search indexer\"]",
+   "caption": "Reply 250 OK only after the spool write is on two machines",
+   "steps": [
+    {
+     "say": "Mail arrives over S-M-T-P, the Simple Mail Transfer Protocol. The edge checks the sender's I-P reputation and rate limits, and rejects obvious junk during the conversation. That's the cheapest place to say no, because nothing is stored.",
+     "reveal": 0
+    },
+    {
+     "say": "Then it writes the message to a replicated spool, a disk-backed holding area copied to several machines. Only then does it reply two-fifty O-K.",
+     "reveal": 0
+    },
+    {
+     "say": "Spam scoring and malware scanning happen afterwards, asynchronously. The delivery writer stores the blob first, then the metadata row, so a crash never leaves a pointer to missing bytes.",
+     "reveal": 0
+    }
+   ],
+   "id": "s014"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 6 of 18",
+   "title": "Walk-through: one letter across the boundary",
+   "bullets": [
+    "250 OK means: I now own this message",
+    "So write to two machines, ideally two zones, first",
+    "Crash before the 250 arrives: sender retries",
+    "Dedupe on Message-ID plus body hash",
+    "Why not scan first? Senders time out"
+   ],
+   "steps": [
+    {
+     "say": "Imagine a bank's server sends Priya a statement. When we reply two-fifty O-K, S-M-T-P says we've taken responsibility. The bank deletes its copy. From now on, losing it is our fault.",
+     "reveal": 1
+    },
+    {
+     "say": "So the spool acts as our write-ahead log. The message must be on at least two machines, ideally in two separate data-centre buildings, before we answer.",
+     "reveal": 2
+    },
+    {
+     "say": "Now say we write it, then crash before the bank receives our two-fifty. The bank times out and sends it again. S-M-T-P is at-least-once by design.",
+     "reveal": 3
+    },
+    {
+     "say": "So the delivery writer dedupes on a fingerprint: the Message-I-D header plus a hash of the body, within a few days. Priya sees one statement.",
+     "reveal": 4
+    },
+    {
+     "say": "Why not scan it before replying? Spam and malware checks can take seconds, and senders time out. Accept fast into a log, then process asynchronously. In the interview, say: durable on two machines before two-fifty, dedupe after.",
+     "reveal": 5
+    }
+   ],
+   "id": "s015"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 7 of 18",
+   "title": "Sending to an internet you don't control",
+   "bullets": [
+    "Authenticate: SPF, DKIM, DMARC",
+    "Retry: 4xx means try later, for 4 to 5 days",
+    "Queue partitioned by destination domain",
+    "Separate IP pools protect reputation"
+   ],
+   "steps": [
+    {
+     "say": "Now outgoing mail. Step one, authenticate. S-P-F lists which I-P addresses may send for your domain. D-K-I-M signs each message with a private key, checkable with a public key in D-N-S. D-MARC says what receivers should do when checks fail. Big receivers now effectively require all three.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two, retries. Priya emails a small company whose server replies with a four-hundred code, try later. Often that's greylisting: refusing an unknown sender once, since real servers retry and many spam tools don't. We retry after a few minutes, then every thirty to sixty minutes, for at least four to five days, then send her a bounce.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three, backpressure per destination. Partition the outbound queue by destination domain with a concurrency limit each. If one domain is down for two days, only its partition grows; mail to everyone else flows. That's a bulkhead.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four, reputation. Receivers judge your sending I-Ps. Put new and bulk accounts on separate I-P pools, and rate-limit new accounts, so one spammer can't get everyone's mail blocked.",
+     "reveal": 4
+    }
+   ],
+   "id": "s016",
+   "caption": "Book: Module 14 Email · Deep dive 2, sending"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 8 of 18",
+   "title": "Mailbox search: one small index per user",
+   "bullets": [
+    "Global index: every query filters, everyone writes",
+    "Per-mailbox index on the mailbox's shard",
+    "Every query carries the user, so one shard",
+    "Index async; merge a recent-mail scan"
+   ],
+   "steps": [
+    {
+     "say": "Priya searches: from Ana, invoice, after January. One global index over all mail would make every query filter by user and get written by everyone at once.",
+     "reveal": 1
+    },
+    {
+     "say": "Instead, keep one small inverted index per mailbox, on the same shard as that mailbox. An inverted index maps each word to the messages containing it.",
+     "reveal": 2
+    },
+    {
+     "say": "Normally a per-partition index means asking every shard. Here every query carries the user, so it hits exactly one shard.",
+     "reveal": 3
+    },
+    {
+     "say": "Indexing runs asynchronously from the change stream, seconds behind. To cover the gap, each query also scans the last few recent messages, so Priya never hears: I just got it, but search can't find it. Attachments are text-extracted and indexed too, allowed to lag more. Recap for email: spool before two-fifty, shard by mailbox, per-domain outbound queue.",
+     "reveal": 4
+    }
+   ],
+   "id": "s017",
+   "caption": "Book: Module 14 Email · Deep dive 3, search"
+  },
+  {
+   "layout": "section",
+   "kicker": "Case 3 of 5",
+   "title": "Case 3: The Video Platform",
+   "steps": [
+    {
+     "say": "Case three, a YouTube-like platform. Two very different pipelines share one catalogue: heavy background encoding for every upload, and playback measured in terabits per second.",
+     "reveal": 0
+    }
+   ],
+   "id": "s018",
+   "caption": "Book: Module 14 · Case 3 — Video Platform"
+  },
+  {
+   "layout": "table",
+   "kicker": "Concept 9 of 18: the transcoding DAG",
+   "title": "Example: video numbers",
+   "table": {
+    "head": [
+     "Quantity",
+     "Math",
+     "Result"
+    ],
+    "rows": [
+     [
+      "Watch time",
+      "500M x 5 videos x 6 min",
+      "15B minutes a day"
+     ],
+     [
+      "Peak streams",
+      "15B / 1,440, times 2",
+      "About 20M at once"
+     ],
+     [
+      "Peak egress",
+      "20M x 3 Mbps",
+      "About 60 Tbps"
+     ],
+     [
+      "Uploads",
+      "500 hours a minute",
+      "720K hours a day"
+     ],
+     [
+      "Encode compute",
+      "720K x 10 core-hours",
+      "About 300K cores"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Five hundred million daily viewers watch five videos of six minutes. That's fifteen billion minutes a day.",
+     "reveal": 1
+    },
+    {
+     "say": "Divide by fourteen hundred and forty minutes in a day: about ten million streams at once on average, twenty million at peak.",
+     "reveal": 2
+    },
+    {
+     "say": "At three megabits a second each, that's sixty terabits a second of egress. No data centre can do that. It's a C-D-N problem first.",
+     "reveal": 3
+    },
+    {
+     "say": "Uploads: YouTube has said more than five hundred hours arrive every minute. That's seven hundred and twenty thousand hours a day.",
+     "reveal": 4
+    },
+    {
+     "say": "At about ten C-P-U core-hours per video hour, encoding needs about three hundred thousand cores running all day. Egress is the biggest bill, encode compute the second.",
+     "reveal": 5
+    }
+   ],
+   "id": "s019",
+   "caption": "Book: Module 14 Video · 1. Requirements and numbers"
+  },
+  {
+   "layout": "diagram",
+   "kicker": "Concept 9 of 18",
+   "title": "The transcoding DAG",
+   "mermaid": "flowchart LR\n  V[\"Validate\"] --> S[\"Split at keyframes\"]\n  S --> E[\"Encode chunk x rendition\"]\n  E --> P[\"Package HLS and DASH\"]\n  P --> T[\"Thumbnails\"]\n  V --> C[\"Content checks\"]\n  T --> PUB[\"Publish\"]\n  C --> PUB",
+   "caption": "1-hour video: 360 chunks x 5 renditions = 1,800 small tasks",
+   "steps": [
+    {
+     "say": "Transcoding means converting the upload into other formats and sizes. Each version is a rendition, like seven-twenty p at about three megabits. A D-A-G is a set of steps with must-run-before arrows and no loops.",
+     "reveal": 0
+    },
+    {
+     "say": "Serial is too slow: one machine needs hours for a one-hour upload. So we split by time, cutting the original into ten-second chunks at keyframes. A keyframe decodes on its own, so each chunk encodes independently.",
+     "reveal": 0
+    },
+    {
+     "say": "Copyright and safety checks run in parallel with encoding, and publish waits for both.",
+     "reveal": 0
+    }
+   ],
+   "id": "s020"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 9 of 18",
+   "title": "Walk-through: one 1-hour upload",
+   "bullets": [
+    "1. Validate the file",
+    "2. Split: 360 ten-second chunks",
+    "3. Encode: 1,800 tasks of 20 core-seconds",
+    "4. Package into segments plus manifests",
+    "5. Thumbnails and content checks",
+    "6. Publish low renditions first"
+   ],
+   "steps": [
+    {
+     "say": "Let's walk a creator's one-hour cooking video through it. Step one, validate: is it really a video, and can we decode it?",
+     "reveal": 1
+    },
+    {
+     "say": "Step two, split: three hundred and sixty chunks of ten seconds each.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three, encode: three hundred and sixty chunks times five renditions is eighteen hundred independent tasks, each about twenty core-seconds. With enough workers, that's a couple of minutes, not hours. Each task is idempotent, keyed by video, chunk and rendition, writing to a fixed path, so a retry just overwrites. A dead worker's lease expires and another takes over. A corrupt chunk goes to a dead letter queue, and the video is marked failed with a reason.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four, package: stitch the chunks into short segments and manifests, the playlists the player reads.",
+     "reveal": 4
+    },
+    {
+     "say": "Step five, extract thumbnails and finish content checks.",
+     "reveal": 5
+    },
+    {
+     "say": "Step six, publish early: watchable once low and medium renditions exist, with ten-eighty p minutes later. Only popular videos get expensive codecs like A-V-one, because five times the C-P-U pays off only across millions of views.",
+     "reveal": 6
+    }
+   ],
+   "id": "s021"
+  },
+  {
+   "layout": "table",
+   "kicker": "Concept 10 of 18",
+   "title": "Example: an adaptive bitrate ladder",
+   "table": {
+    "head": [
+     "Rendition",
+     "Bitrate",
+     "Typical use"
+    ],
+    "rows": [
+     [
+      "240p",
+      "0.4 Mbps",
+      "Weak mobile signal"
+     ],
+     [
+      "360p",
+      "0.8 Mbps",
+      "Mobile on cellular"
+     ],
+     [
+      "720p",
+      "2.8 Mbps",
+      "Laptops"
+     ],
+     [
+      "1080p",
+      "5 Mbps",
+      "TVs, good broadband"
+     ],
+     [
+      "2160p (4K)",
+      "16 Mbps",
+      "Popular content only"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Adaptive bitrate streaming, A-B-R, means the player switches quality as bandwidth changes. Each rendition is cut into segments of two to six seconds, aligned on the same timestamps, so the player can switch at any boundary. Imagine Raj on a train. He starts at two-forty p, so the first frame appears in one to two seconds.",
+     "reveal": 1
+    },
+    {
+     "say": "His buffer, the seconds downloaded but not yet played, grows, and downloads are fast, so the player steps up to three-sixty p.",
+     "reveal": 2
+    },
+    {
+     "say": "On station Wi-Fi it climbs to seven-twenty p.",
+     "reveal": 3
+    },
+    {
+     "say": "At home on his TV, ten-eighty p.",
+     "reveal": 4
+    },
+    {
+     "say": "In a tunnel the buffer drains, so the player steps down before it runs dry. That's client-side backpressure: the consumer picks the rate it can sustain. Seeking just fetches another segment number, with no per-viewer server state, which is why plain H-T-T-P caches can serve video.",
+     "reveal": 5
+    }
+   ],
+   "id": "s022",
+   "caption": "Book: Module 14 Video · Deep dive 2, ABR"
+  },
+  {
+   "layout": "diagram",
+   "kicker": "Concept 11 of 18",
+   "title": "The CDN and the long tail",
+   "mermaid": "flowchart LR\n  ORIGIN[\"Origin storage\"] --> SHIELD[\"Regional origin shield\"]\n  SHIELD --> E1[\"CDN edge\"]\n  SHIELD --> E2[\"CDN edge\"]\n  E1 --> V1[\"Viewers\"]\n  E2 --> V2[\"Viewers\"]",
+   "caption": "200 edge misses for one segment become 1 origin read",
+   "steps": [
+    {
+     "say": "Segments never change, so edges can cache them for a year. An edge hit costs a few milliseconds and no origin bandwidth.",
+     "reveal": 0
+    },
+    {
+     "say": "Popularity is skewed. The top few percent of videos take most watch time and live in edge caches. The long tail, millions of videos watched a few times a month, misses.",
+     "reveal": 0
+    },
+    {
+     "say": "So we tier the caches: edge, then a regional origin shield, then origin, each asked only when the one below misses. If two hundred edges miss on the same segment, the shield collapses them into one origin read. That's cache stampede prevention at C-D-N scale.",
+     "reveal": 0
+    }
+   ],
+   "id": "s023"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 11 of 18",
+   "title": "Long-tail levers and a viral surprise",
+   "bullets": [
+    "Request collapsing at the shield",
+    "Push popular titles into ISPs off-peak",
+    "1% more hit rate = 3.4 PB a day saved",
+    "Viral unknown video: pre-warm more PoPs"
+   ],
+   "steps": [
+    {
+     "say": "Lever one, request collapsing at the shield, as we just saw.",
+     "reveal": 1
+    },
+    {
+     "say": "Lever two, push. Netflix's Open Connect, for example, puts its own caches inside internet providers and fill them with predicted-popular titles overnight, so peak traffic never crosses the backbone.",
+     "reveal": 2
+    },
+    {
+     "say": "Lever three, the bill. At three hundred and forty petabytes a day delivered, each one percent of edge hit rate saves about three point four petabytes of origin traffic a day.",
+     "reveal": 3
+    },
+    {
+     "say": "Imagine an unknown creator's video goes viral. It's cold at every edge at once. Shield collapsing protects the origin, the popularity signal pre-warms more points of presence, and the efficient-codec re-encode is queued. Recap for video: resumable upload, parallel DAG, A-B-R segments, tiered C-D-N.",
+     "reveal": 4
+    }
+   ],
+   "id": "s024"
+  },
+  {
+   "layout": "section",
+   "kicker": "Case 4 of 5",
+   "title": "Case 4: File Sync and Storage",
+   "steps": [
+    {
+     "say": "Case four, a Dropbox-like drive. It looks like upload files, but it's really a replicated database of folder trees, where every device is a replica that can be offline for days and come back with its own changes.",
+     "reveal": 0
+    }
+   ],
+   "id": "s025",
+   "caption": "Book: Module 14 · Case 4 — File Sync and Storage"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 12 of 18: chunking and dedupe",
+   "title": "File sync numbers",
+   "bullets": [
+    "100M daily users, about 3 devices each",
+    "1 trillion file entries, 500 TB of metadata",
+    "2B saves a day, 70K commits/s peak",
+    "About 100 KB of new data per save"
+   ],
+   "steps": [
+    {
+     "say": "A hundred million daily users with about three devices each: three hundred million devices, most holding an idle connection waiting for news.",
+     "reveal": 1
+    },
+    {
+     "say": "Two thousand files per user is a trillion file entries, about five hundred terabytes of metadata. Small next to the blobs, but that's where all the logic lives.",
+     "reveal": 2
+    },
+    {
+     "say": "Each user saves twenty files a day: two billion commits, about seventy thousand a second at peak.",
+     "reveal": 3
+    },
+    {
+     "say": "With chunk dedupe, a save uploads only about a hundred kilobytes. So blob storage is solved by object storage. The real design is the metadata and the sync protocol.",
+     "reveal": 4
+    }
+   ],
+   "id": "s026",
+   "caption": "Book: Module 14 File Sync · 1. Requirements and numbers"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: insert 5 bytes into a 1 MB file",
+   "table": {
+    "head": [
+     "Chunking",
+     "Chunks",
+     "New chunks",
+     "Bytes to upload"
+    ],
+    "rows": [
+     [
+      "Fixed 4 KiB",
+      "245",
+      "123",
+      "500,293"
+     ],
+     [
+      "Content-defined ~4 KiB",
+      "189",
+      "1",
+      "10,626"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Files are split into blocks named by the S-H-A two fifty-six hash of their contents. That's content addressing: identical blocks get the same name and are stored once. The client asks, which of these hashes are you missing, and uploads only those. Now our notes' simulation: a one-megabyte file, five bytes inserted in the middle. With fixed four-kilobyte blocks, every boundary after the edit shifts, so a hundred and twenty-three blocks look new. Half the file goes up again.",
+     "reveal": 1
+    },
+    {
+     "say": "Content-defined chunking places a boundary wherever a rolling hash of the last few dozen bytes matches a pattern. Boundaries depend on content, so they re-align right after the insert. Only one chunk is new: about ten kilobytes. That's delta sync.",
+     "reveal": 2
+    }
+   ],
+   "id": "s027"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 12 of 18",
+   "title": "Dedupe has a security catch",
+   "bullets": [
+    "Cross-user dedupe leaks: does anyone have this file?",
+    "Safer: dedupe per user or organisation",
+    "Garbage collection: mark and sweep",
+    "Grace period protects pending commits"
+   ],
+   "steps": [
+    {
+     "say": "A catch. If the server dedupes across all users and says, I already have this block, an attacker can test whether anyone holds a known confidential document, just by trying to upload it.",
+     "reveal": 1
+    },
+    {
+     "say": "So dedupe within a user or company, or always upload and dedupe silently on the server.",
+     "reveal": 2
+    },
+    {
+     "say": "Blocks are shared, so deleting a file can't delete its blocks. Use mark and sweep: mark every block referenced by a live revision, delete the rest.",
+     "reveal": 3
+    },
+    {
+     "say": "But only unmarked blocks older than a grace period, so blocks uploaded for a commit that hasn't landed yet survive.",
+     "reveal": 4
+    }
+   ],
+   "id": "s028"
+  },
+  {
+   "layout": "diagram",
+   "kicker": "Concept 13 of 18: journal, cursors, conflicts",
+   "title": "One save, end to end",
+   "mermaid": "flowchart LR\n  L[\"Laptop: chunk and hash\"] --> B[\"Block service: missing h17\"]\n  B --> O[\"Object storage\"]\n  L --> M[\"Metadata: commit rev 8\"]\n  M --> J[\"Namespace journal seq 5120\"]\n  J --> N[\"Notifier: ns 42 changed\"]\n  N --> P[\"Phone: GET changes, fetch h17\"]",
+   "caption": "Blocks first, metadata last; other devices get a hint, then pull",
+   "steps": [
+    {
+     "say": "Follow one save. Priya edits a report on her laptop. It chunks and hashes the file into forty blocks and asks the block service which are missing. Only h seventeen. It uploads just that block.",
+     "reveal": 0
+    },
+    {
+     "say": "Then it commits: namespace forty-two, based on revision seven, here's the block list. The metadata service appends journal entry five one two zero and answers, revision eight. Blocks first, metadata last, so no device ever sees a file pointing at missing bytes.",
+     "reveal": 0
+    },
+    {
+     "say": "The notifier tells her phone, namespace forty-two changed. The phone asks for changes after its cursor, five one one nine, sees revision eight, and downloads only block h seventeen.",
+     "reveal": 0
+    }
+   ],
+   "id": "s029"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 13 of 18",
+   "title": "Change journal, cursors and conflicts",
+   "bullets": [
+    "Namespace = unit of sharing and ordering",
+    "Gap-free journal; cursor = {ns: last seq}",
+    "Commit is conditional on parent_rev",
+    "Loser gets 409, kept as a conflicted copy",
+    "Moves use stable file IDs; restore deleted parents"
+   ],
+   "steps": [
+    {
+     "say": "A namespace is the unit of sharing and ordering. Each user has a root namespace, and each shared folder is its own namespace, so every commit touches one shard.",
+     "reveal": 1
+    },
+    {
+     "say": "Each namespace has a gap-free, append-only journal. A device's cursor is a small map: for namespace forty-two, I've seen up to five one one nine. All devices apply the same entries in the same order, so they converge.",
+     "reveal": 2
+    },
+    {
+     "say": "Commits are conditional: make revision eight based on revision seven. That's compare-and-set, which prevents lost updates.",
+     "reveal": 3
+    },
+    {
+     "say": "Imagine Priya edits revision seven on her laptop offline, and on her phone offline too. The laptop commits first and gets revision eight. The phone's commit gets a four-oh-nine conflict. The loser is never discarded: it's saved as report, Phone's conflicted copy. Never silently overwrite someone's work.",
+     "reveal": 4
+    },
+    {
+     "say": "Folder operations are the subtle part. If one device deletes folder X while another moves a file into it, use stable file I-Ds, not paths, and restore the deleted parent so the file survives. And flag a huge delete batch, like fifty thousand files from a buggy client, for confirmation.",
+     "reveal": 5
+    }
+   ],
+   "id": "s030",
+   "caption": "Book: Module 14 File Sync · Deep dive 2, journal"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 14 of 18",
+   "title": "Notifications to 300M devices",
+   "bullets": [
+    "Send a hint, not the data",
+    "Hints may be lost or duplicated: harmless",
+    "Hot folder: coalesce to 1 hint a second",
+    "Add jitter before pulling",
+    "Notifier down: poll every few minutes"
+   ],
+   "steps": [
+    {
+     "say": "The notification service sends only a hint: namespace forty-two is now at five one two zero. The device then pulls the journal with its cursor.",
+     "reveal": 1
+    },
+    {
+     "say": "Hints can be lost, duplicated or merged harmlessly, because the journal is the truth. The transport isn't the truth.",
+     "reveal": 2
+    },
+    {
+     "say": "Now a hot namespace: a twenty-thousand-member company folder with constant edits. Coalesce hints to at most one per namespace per second per device.",
+     "reveal": 3
+    },
+    {
+     "say": "And each client waits a small random jitter before pulling, so twenty thousand devices don't hit one shard in the same millisecond.",
+     "reveal": 4
+    },
+    {
+     "say": "If the notifier is down, devices poll every few minutes. Slower, not wrong. Recap for file sync: content-addressed blocks, conditional commits to a namespace journal, hint then pull, conflicted copies.",
+     "reveal": 5
+    }
+   ],
+   "id": "s031",
+   "caption": "Book: Module 14 File Sync · Deep dive 3, notifications"
+  },
+  {
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "A laptop was offline for three months. What now?",
+   "bullets": [
+    "A: Replay the journal from its cursor",
+    "B: Full resync by comparing hashes",
+    "C: Re-upload every file"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. Priya's old laptop wakes up after three months. Its cursor points at journal entries that were compacted away. What happens?",
+     "reveal": 0
+    }
+   ],
+   "id": "s032"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "File sync recap",
+   "title": "Answer: cursor too old, full resync",
+   "bullets": [
+    "Server replies: cursor too old",
+    "List current tree, compare by hash",
+    "Move only differences; conflicted copies if both changed"
+   ],
+   "steps": [
+    {
+     "say": "Answer B. The server says, cursor too old.",
+     "reveal": 1
+    },
+    {
+     "say": "The client lists the current tree and compares hashes with its local state.",
+     "reveal": 2
+    },
+    {
+     "say": "It uploads or downloads only the differences, and anything edited on both sides becomes a conflicted copy. Nothing is lost, nothing is re-uploaded needlessly.",
+     "reveal": 3
+    }
+   ],
+   "id": "s033"
+  },
+  {
+   "layout": "section",
+   "kicker": "Case 5 of 5",
+   "title": "Case 5: Live Streaming",
+   "steps": [
+    {
+     "say": "Case five, live streaming, in two shapes. A creator platform like Twitch, with a hundred thousand channels live at once, mostly tiny. And a cricket final: one stream, twenty-five million people, the same moment. Video had hours to prepare. Live has seconds.",
+     "reveal": 0
+    }
+   ],
+   "id": "s034",
+   "caption": "Book: Module 14 · Case 5 — Live Streaming"
+  },
+  {
+   "layout": "table",
+   "kicker": "Concept 15 of 18: the latency budget",
+   "title": "Example: where the 4 seconds go",
+   "table": {
+    "head": [
+     "Stage",
+     "Time",
+     "Lever"
+    ],
+    "rows": [
+     [
+      "Camera + broadcaster encoder",
+      "0.3 to 1 s",
+      "No long look-ahead"
+     ],
+     [
+      "First mile to ingest",
+      "0.1 to 0.5 s",
+      "Nearby ingest PoP, SRT"
+     ],
+     [
+      "Transcode",
+      "0.5 to 1 s",
+      "Hardware encoding, short GOPs"
+     ],
+     [
+      "Packaging",
+      "0.5 s",
+      "Publish 0.5 s partial segments"
+     ],
+     [
+      "Origin to shield to edge",
+      "0.1 to 0.3 s",
+      "Persistent connections"
+     ],
+     [
+      "Player buffer",
+      "1 to 2 s",
+      "Safety margin against jitter"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Glass-to-glass latency is the delay from camera to viewer's screen. Let's walk a four-second budget for a creator called Meera. Stage one, her camera and encoder: up to a second. Keep encoder look-ahead short.",
+     "reveal": 1
+    },
+    {
+     "say": "Stage two, the first mile to our ingest point: up to half a second. Use an ingest site near her, and S-R-T, a protocol that recovers lost packets.",
+     "reveal": 2
+    },
+    {
+     "say": "Stage three, transcoding into the quality ladder: half a second to a second. Hardware encoders and a keyframe every two seconds help.",
+     "reveal": 3
+    },
+    {
+     "say": "Stage four, packaging: half a second, because we publish half-second partial segments instead of waiting for whole ones.",
+     "reveal": 4
+    },
+    {
+     "say": "Stage five, origin to shield to edge: a few hundred milliseconds over persistent connections.",
+     "reveal": 5
+    },
+    {
+     "say": "Stage six, the player buffer: one to two seconds of margin against network jitter. Classic H-L-S with six-second segments adds up to twenty or thirty seconds. Low-latency H-L-S gets two to five.",
+     "reveal": 6
+    }
+   ],
+   "id": "s035",
+   "caption": "Book: Module 14 Live · Deep dive 1, latency budget"
+  },
+  {
+   "layout": "twocol",
+   "kicker": "Concept 15 of 18",
+   "title": "The core trade: latency versus rebuffering",
+   "left": {
+    "heading": "Lower latency",
+    "bullets": [
+     "Smaller buffer, fresher picture",
+     "Creator streams: 2 to 4 s",
+     "WebRTC: under 1 s, not cacheable"
+    ]
+   },
+   "right": {
+    "heading": "Smoother playback",
+    "bullets": [
+     "Bigger buffer, fewer stalls",
+     "Mass sports: 8 to 15 s",
+     "HTTP segments scale via CDNs"
+    ]
+   },
+   "steps": [
+    {
+     "say": "A smaller buffer means lower latency, so Meera can answer chat almost live.",
+     "reveal": 1
+    },
+    {
+     "say": "That's why interactive creator streams aim for two to four seconds.",
+     "reveal": 2
+    },
+    {
+     "say": "Web-R-T-C goes under a second, but it's a stateful session per viewer that ordinary C-D-Ns can't cache. Use it for auctions and calls, not twenty-five million fans.",
+     "reveal": 3
+    },
+    {
+     "say": "But a smaller buffer also means more freezing on shaky networks.",
+     "reveal": 4
+    },
+    {
+     "say": "So mass sports often pick eight to fifteen seconds for smoothness.",
+     "reveal": 5
+    },
+    {
+     "say": "And plain H-T-T-P segments scale through every C-D-N. In the interview, say: latency is a per-channel setting traded against rebuffering, not one global number.",
+     "reveal": 6
+    }
+   ],
+   "id": "s036"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 16 of 18",
+   "title": "Fan-out of one hot object",
+   "bullets": [
+    "25M players want the same new segment in 2 s",
+    "About 12M requests a second, a handful of URLs",
+    "Request collapsing at every tier",
+    "Capacity booked: multi-CDN, calendar pre-scaling",
+    "Play-button storm: waiting room, cached tokens",
+    "Degrade quality, not availability"
+   ],
+   "steps": [
+    {
+     "say": "Now the cricket final. Every two seconds a brand-new segment appears, and up to twenty-five million players want it immediately.",
+     "reveal": 1
+    },
+    {
+     "say": "That's about twelve million requests a second for a handful of U-R-Ls. Every edge misses at once, because the file is milliseconds old.",
+     "reveal": 2
+    },
+    {
+     "say": "Request collapsing at every tier: the first request for a missing object goes upstream, and everyone else waits on that one fetch. So the origin serves each segment roughly once per shield, not once per viewer.",
+     "reveal": 3
+    },
+    {
+     "say": "At three megabits each, that's seventy-five terabits a second, more than one C-D-N's spare capacity. So big events book capacity across several C-D-Ns, and pre-scale origin, shields and the A-P-I tier from the event calendar. A ten-minute auto-scale is useless at kick-off.",
+     "reveal": 4
+    },
+    {
+     "say": "At kick-off, millions press play within a minute, hammering login and payment checks. Use a waiting room, you're in line, starting in twenty seconds, instead of errors, and cache entitlement tokens.",
+     "reveal": 5
+    },
+    {
+     "say": "If egress runs short, drop ten-eighty p from some regions' manifests. Players step down smoothly, and nobody's stream stops.",
+     "reveal": 6
+    }
+   ],
+   "id": "s037",
+   "caption": "Book: Module 14 Live · Deep dive 2, hot object"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 17 of 18",
+   "title": "Keeping the stream alive",
+   "bullets": [
+    "Broadcaster drops 5 s: reconnecting, not ended",
+    "Grace window 30 to 60 s, same stream key",
+    "Transcoder dies: lease expires, restart elsewhere",
+    "Health check on segment output rate",
+    "Premium events: 1+1 pipelines, timestamp names"
+   ],
+   "steps": [
+    {
+     "say": "Meera's Wi-Fi drops for five seconds. The session moves to reconnecting, not ended.",
+     "reveal": 1
+    },
+    {
+     "say": "The origin keeps the manifest alive for thirty to sixty seconds. Players drain their buffer, show reconnecting, and resume when her encoder reconnects with the same key. Without that window, every blip kicks millions back to the home page.",
+     "reveal": 2
+    },
+    {
+     "say": "If a transcoder node dies, its lease expires within seconds and the control plane restarts the pipeline elsewhere. Viewers lose seconds, not the stream.",
+     "reveal": 3
+    },
+    {
+     "say": "Health checks watch the segment output rate, not just whether the process runs. A pipeline that's running but producing nothing is dead.",
+     "reveal": 4
+    },
+    {
+     "say": "For the final, run one plus one: two encoders, two ingest sites, two pipelines. Segments are named by media timestamp, so both produce identical names for the same moment, and the origin switches to the healthy twin within a segment. Recap for live: a latency budget, request collapsing, pre-booked capacity, and redundancy because there's no second chance.",
+     "reveal": 5
+    }
+   ],
+   "id": "s038",
+   "caption": "Book: Module 14 Live · Deep dive 3, keeping alive"
+  },
+  {
+   "layout": "table",
+   "kicker": "Concept 18 of 18",
+   "title": "Pattern review: the same tools, five times",
+   "table": {
+    "head": [
+     "Pattern",
+     "Chat",
+     "Email",
+     "Video",
+     "File sync",
+     "Live"
+    ],
+    "rows": [
+     [
+      "Ordered log + cursor",
+      "Inbox log",
+      "modseq changes",
+      "Workflow state",
+      "Namespace journal",
+      "-"
+     ],
+     [
+      "Idempotency",
+      "client_msg_id",
+      "SMTP dedupe",
+      "Task outputs",
+      "Commit IDs",
+      "-"
+     ],
+     [
+      "Stampede prevention",
+      "-",
+      "-",
+      "Shield collapsing",
+      "Jittered pulls",
+      "Collapse new segments"
+     ],
+     [
+      "Graceful degradation",
+      "Shed presence",
+      "Spam outage mode",
+      "Lower renditions",
+      "Polling fallback",
+      "Drop top rendition"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's review across all five. Ordered logs with cursors: chat's inbox log, email's change log, video's durable workflow state, and file sync's namespace journal.",
+     "reveal": 1
+    },
+    {
+     "say": "Idempotency absorbs retries everywhere: client message I-Ds, S-M-T-P dedupe, transcode tasks that overwrite the same path, and commit I-Ds.",
+     "reveal": 2
+    },
+    {
+     "say": "Stampede prevention shows up wherever many clients want the same thing: shield collapsing, jittered pulls, and collapsing on every new live segment.",
+     "reveal": 3
+    },
+    {
+     "say": "And graceful degradation: shed the extras. Presence, unscanned-mail labels, lower renditions, polling instead of hints, and dropping the top rendition from live manifests.",
+     "reveal": 4
+    }
+   ],
+   "id": "s039",
+   "caption": "Book: Module 14 · Pattern Review"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 18 of 18",
+   "title": "Seven ideas that repeat",
+   "bullets": [
+    "Separate the bytes from the facts",
+    "Per-scope ordered log plus a cursor",
+    "Hints are not data",
+    "At-least-once, made safe by idempotency",
+    "Shard by the key every query carries",
+    "Skew returns; degrade extras, protect the core"
+   ],
+   "steps": [
+    {
+     "say": "Idea one, separate blobs from metadata. Attachments, segments and file blocks go in object storage behind a C-D-N; small facts in a sharded database. Write blobs first, reference them last.",
+     "reveal": 1
+    },
+    {
+     "say": "Idea two, a per-scope ordered log plus a cursor keeps clients in sync. Order only within the scope that needs it: one conversation, one mailbox, one namespace.",
+     "reveal": 2
+    },
+    {
+     "say": "Idea three, hints are not data. Push notifications, changed pings and presence dots can be lost. Correctness comes from pulling the log.",
+     "reveal": 3
+    },
+    {
+     "say": "Idea four, at-least-once everywhere, made safe by client-generated I-Ds and content hashes.",
+     "reveal": 4
+    },
+    {
+     "say": "Idea five, the shard key is whatever every query carries: conversation, mailbox, video, namespace, channel.",
+     "reveal": 5
+    },
+    {
+     "say": "Ideas six and seven: skew always returns, big groups, hot mailboxes, viral videos, one huge stream, each with its escape. And degrade the extras, typing dots, presence, four K, to protect the core: the message, the email, the live picture.",
+     "reveal": 6
+    }
+   ],
+   "id": "s040"
+  },
+  {
+   "layout": "recap",
+   "title": "Recap: Messaging and Media",
+   "bullets": [
+    "Chat: sequencer per conversation, ack after durable, device cursors",
+    "Email: spool before 250 OK, shard by mailbox, per-domain retries",
+    "Video: parallel DAG, ABR segments, tiered CDN for the long tail",
+    "File sync: content-defined blocks, conditional commits, hint then pull",
+    "Live: latency budget, request collapsing, pre-scaled and redundant",
+    "Next: Episode 22, Case Studies: Location and Real-Time"
+   ],
+   "steps": [
+    {
+     "say": "Let's recap. Chat: gateways hold sockets, one sequencer per conversation gives order, ack only after durable, and each device syncs with one cursor.",
+     "reveal": 1
+    },
+    {
+     "say": "Email: write to a replicated spool before saying two-fifty O-K, process asynchronously, shard by mailbox, and retry outbound per destination for days.",
+     "reveal": 2
+    },
+    {
+     "say": "Video: split uploads into a parallel D-A-G of small idempotent tasks, serve adaptive segments, and lean on a tiered C-D-N.",
+     "reveal": 3
+    },
+    {
+     "say": "File sync: content-defined blocks so only changes move, blocks first and conditional commits last, hints then pull, and conflicted copies instead of overwrites.",
+     "reveal": 4
+    },
+    {
+     "say": "Live: spend a latency budget per channel, collapse requests for the hot segment, and pre-scale big events with full redundancy.",
+     "reveal": 5
+    },
+    {
+     "say": "Next time, episode twenty-two, Case Studies: Location and Real-Time. See you there.",
+     "reveal": 6
+    }
+   ],
+   "id": "s041"
+  }
+ ]
+}

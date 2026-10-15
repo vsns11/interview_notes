@@ -1,0 +1,1508 @@
+{
+  "series": "System Design Workshop",
+  "episode": 5,
+  "title": "Fundamentals V: Architecture, Ops, Security",
+  "subtitle": "Arrange it, keep it running, ship it safely, lock it down",
+  "scenes": [
+    {
+      "layout": "title",
+      "title": "Fundamentals V: Architecture, Ops, Security",
+      "subtitle": "Arrange it, keep it running, ship it safely, lock it down",
+      "steps": [
+        {
+          "say": "Welcome to episode five of the System Design Workshop: architecture, operations and security. By the end you'll be able to pick an architecture, contain failures, ship safely, see inside production, and keep the wrong people out.",
+          "reveal": 0
+        },
+        {
+          "say": "Our running example is one online shop: users, a catalogue, a cart, checkout and payments. Keep the Part five notes open: the twenty-four concepts follow them in order.",
+          "reveal": 0
+        }
+      ],
+      "id": "s001"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 1 of 24",
+      "title": "Five ways to split one shop",
+      "table": {
+        "head": [
+          "Style",
+          "Our shop looks like"
+        ],
+        "rows": [
+          [
+            "Monolith",
+            "One app, one database, copies behind a balancer"
+          ],
+          [
+            "Modular monolith",
+            "One app; checkout calls catalogue via interface"
+          ],
+          [
+            "SOA",
+            "Coarse services + central enterprise service bus"
+          ],
+          [
+            "Microservices",
+            "Payments, search, users: own DB, own deploys"
+          ],
+          [
+            "Serverless",
+            "Thumbnail function runs only on upload"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "How should our shop's code be split into running programs? That's an architectural style. First, the monolith: accounts, catalogue, checkout and emails all in one codebase, one deployable program, one database. Scale by running copies behind a load balancer.",
+          "reveal": 1
+        },
+        {
+          "say": "Second, the modular monolith. Still one program, but split into modules with strict walls. Checkout may ask the catalogue for a price only through a defined interface. Never its tables. Tidiness without the network.",
+          "reveal": 2
+        },
+        {
+          "say": "Third, service-oriented architecture, S-O-A. A two-thousands enterprise style: coarse services, like a whole billing system, talking through a central enterprise service bus.",
+          "reveal": 3
+        },
+        {
+          "say": "Fourth, microservices. Many small services, each owning one business capability and its own database, deployed independently. Smart endpoints, dumb pipes: logic lives in the services, not in a central bus.",
+          "reveal": 4
+        },
+        {
+          "say": "Fifth, serverless, or function as a service. You upload a function, say make a thumbnail when a photo is uploaded. The provider runs it only on events, scales from zero, and bills per call.",
+          "reveal": 5
+        }
+      ],
+      "id": "s002",
+      "caption": "Book: Fundamentals Part 5 · Architectural styles"
+    },
+    {
+      "layout": "diagram",
+      "title": "A checkout call: in-process versus network",
+      "mermaid": "flowchart LR\n  A[\"Monolith: checkout()\"] -- \"in-process, microseconds\" --> B[\"reserveStock(), chargeCard()\"]\n  C[\"Checkout service\"] -- \"network, 0.5 to 2 ms\" --> I[\"Inventory service\"]\n  C -- \"network, 0.5 to 2 ms\" --> P[\"Payment service\"]",
+      "caption": "No single transaction spans services: use sagas",
+      "steps": [
+        {
+          "say": "In the monolith, checkout calls reserve stock, then charge card. Those are function calls, microseconds each, inside one database transaction. If the card fails, roll back. Done.",
+          "reveal": 0
+        },
+        {
+          "say": "In microservices, each arrow is a network call, about half a millisecond to two milliseconds inside one data centre, and it can fail. There's no single transaction covering inventory and payments, so you need a saga to undo the stock reservation when the charge fails.",
+          "reveal": 0
+        },
+        {
+          "say": "Trade-offs. Monoliths are simple to build and debug, until dozens of developers slow every build. Microservices let teams deploy independently, but you pay the distributed systems tax: latency, consistency, tracing, on-call. Serverless costs nothing idle, but has cold starts of up to seconds and gets pricey at steady high load.",
+          "reveal": 0
+        },
+        {
+          "say": "In the interview, say: start with a modular monolith, and extract a service when there's a clear reason, like independent scaling or a team's own deploy schedule.",
+          "reveal": 0
+        }
+      ],
+      "id": "s003"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 2 of 24",
+      "title": "Placing an order: sync then async",
+      "mermaid": "flowchart LR\n  U[\"User\"] --> O[\"Order service\"]\n  O -- \"sync: charge card\" --> P[\"Payment service\"]\n  O -- \"publish OrderPlaced\" --> Q[\"Queue\"]\n  Q -. \"later\" .-> E[\"Email service\"]\n  Q -. \"later\" .-> W[\"Warehouse service\"]",
+      "caption": "Book: Fundamentals Part 5 · Synchronous vs asynchronous communication",
+      "steps": [
+        {
+          "say": "When one service needs another, it can wait for the answer, like a phone call. That's synchronous. Or it can leave a message and carry on, like a text. That's asynchronous.",
+          "reveal": 0
+        },
+        {
+          "say": "Walk through placing an order. Step one: the order service charges the card synchronously, because the user is waiting for approved or declined.",
+          "reveal": 0
+        },
+        {
+          "say": "Step two: once the order is saved, it publishes an order placed event to a queue and replies to the user in about two hundred milliseconds.",
+          "reveal": 0
+        },
+        {
+          "say": "Step three: email and the warehouse read the event at their own pace. If the warehouse is down for ten minutes, events wait in the queue. The order still succeeded.",
+          "reveal": 0
+        }
+      ],
+      "id": "s004"
+    },
+    {
+      "layout": "number",
+      "title": "Why long sync chains hurt",
+      "big": "0.999^5 = 99.5%",
+      "caption": "About 44 hours down a year instead of 9",
+      "steps": [
+        {
+          "say": "Five services in a row, each ninety-nine point nine percent available. The chain is at best point nine nine nine to the fifth, about ninety-nine point five percent. That's roughly forty-four hours of downtime a year instead of nine.",
+          "reveal": 0
+        },
+        {
+          "say": "The rule: does the caller need the result to answer the user right now? Yes, call synchronously with a timeout. No, publish an event. Async consumers must be idempotent, because queues usually deliver at least once.",
+          "reveal": 0
+        }
+      ],
+      "id": "s005"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 3 of 24",
+      "title": "Finding the payment service",
+      "bullets": [
+        "1. New instance starts on 10.0.3.17, registers",
+        "2. Registry health-checks it every few seconds",
+        "3. Checkout asks: where is payments?",
+        "4. Call goes to a healthy instance",
+        "Client-side: caller picks instance itself",
+        "Server-side: caller hits a fixed router"
+      ],
+      "steps": [
+        {
+          "say": "Payments runs ten copies that come and go. How does checkout find them? Service discovery: a live phone book called a registry. Step one: a new payment instance starts on ten dot zero dot three dot seventeen, port eighty-eighty, and registers.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: the registry health-checks it every few seconds.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: checkout asks the registry, or a router that asks for it, where's payments?",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: the call goes to a healthy instance. A dead one drops out within seconds.",
+          "reveal": 4
+        },
+        {
+          "say": "Two types. Client-side discovery: checkout queries the registry and load-balances itself, like Netflix Eureka with Ribbon. One fewer hop, but every client needs a library.",
+          "reveal": 5
+        },
+        {
+          "say": "Server-side discovery: checkout sends to a fixed address, a load balancer or a Kubernetes Service, which looks up the registry and forwards. Clients stay thin. That's the usual default.",
+          "reveal": 6
+        }
+      ],
+      "id": "s006",
+      "caption": "Book: Fundamentals Part 5 · Service discovery, sidecars, mesh"
+    },
+    {
+      "layout": "diagram",
+      "title": "Sidecars and the service mesh",
+      "mermaid": "flowchart LR\n  subgraph PA[\"Checkout pod\"]\n    A[\"Checkout app\"] --> SA[\"Sidecar proxy\"]\n  end\n  subgraph PB[\"Payment pod\"]\n    SB[\"Sidecar proxy\"] --> B[\"Payment app\"]\n  end\n  SA -- \"mTLS, retries, metrics\" --> SB\n  CP[\"Mesh control plane\"] -.-> SA\n  CP -.-> SB",
+      "caption": "Data plane: the sidecars. Control plane: configures them",
+      "steps": [
+        {
+          "say": "Every service needs the same plumbing: timeouts, retries, encryption, metrics. A sidecar is a helper process that rides beside each instance and does that plumbing for it.",
+          "reveal": 0
+        },
+        {
+          "say": "A service mesh is a fleet of these sidecar proxies intercepting all service-to-service traffic: the data plane. A control plane configures them all. Think Istio or Linkerd, with Envoy as the proxy.",
+          "reveal": 0
+        },
+        {
+          "say": "Example: checkout calls payments. Checkout's sidecar opens a mutual T-L-S connection to payment's sidecar, retries once on a reset, and records latency, all without app code. The cost: extra hops, extra memory, and a complex control plane. For ten services, it's often overkill.",
+          "reveal": 0
+        }
+      ],
+      "id": "s007"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 4 of 24",
+      "title": "Retrying safely: five rules",
+      "bullets": [
+        "1. Only transient errors: timeouts, 503, 429",
+        "2. Only idempotent ops, or idempotency key",
+        "3. Limit attempts: 2 to 3 retries",
+        "4. Exponential backoff with jitter",
+        "5. Retry at one layer only"
+      ],
+      "steps": [
+        {
+          "say": "Our product page calls the pricing service. A timeout is how long we'll wait before giving up. Without one, a dead pricing service holds our threads forever, we run out, and we die too. That's a cascading failure. If pricing's p ninety-nine is three hundred milliseconds, use around five hundred milliseconds to a second. A retry repeats a failed call. Rule one: retry only temporary errors, like timeouts, five-oh-three, or four-twenty-nine. Never four hundred or four-oh-three. They'll fail again.",
+          "reveal": 1
+        },
+        {
+          "say": "Rule two: retry only idempotent operations. Retrying charge fifty dollars without an idempotency key can charge twice.",
+          "reveal": 2
+        },
+        {
+          "say": "Rule three: limit attempts to two or three.",
+          "reveal": 3
+        },
+        {
+          "say": "Rule four: wait between attempts with exponential backoff plus jitter. More on that next.",
+          "reveal": 4
+        },
+        {
+          "say": "Rule five: retry at one layer. If browser, gateway, service A and service B each try three times, one click becomes three times three times three times three, eighty-one database calls. That's a retry storm.",
+          "reveal": 5
+        }
+      ],
+      "id": "s008",
+      "caption": "Book: Fundamentals Part 5 · Timeouts, retries, backoff and jitter"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Backoff with full jitter",
+      "table": {
+        "head": [
+          "Attempt",
+          "Backoff cap",
+          "Actual wait"
+        ],
+        "rows": [
+          [
+            "1",
+            "200 ms",
+            "random 0 to 200 ms"
+          ],
+          [
+            "2",
+            "400 ms",
+            "random 0 to 400 ms"
+          ],
+          [
+            "3",
+            "800 ms",
+            "random 0 to 800 ms"
+          ],
+          [
+            "No jitter",
+            "10,000 clients",
+            "all retry at the same instant"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Exponential backoff doubles the wait after each failure, up to a cap. With a base of a hundred milliseconds, attempt one waits up to two hundred milliseconds.",
+          "reveal": 1
+        },
+        {
+          "say": "Attempt two, up to four hundred.",
+          "reveal": 2
+        },
+        {
+          "say": "Attempt three, up to eight hundred. Jitter means we pick a random wait between zero and that cap. That's called full jitter.",
+          "reveal": 3
+        },
+        {
+          "say": "Why the randomness? Imagine ten thousand clients failing in the same second. Without jitter, they all retry at the same instants, in waves that knock the service over again. With jitter, the server sees a smooth trickle. In the interview, say: timeouts always, a few idempotent retries, backoff plus jitter, at one layer.",
+          "reveal": 4
+        }
+      ],
+      "id": "s009"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 5 of 24",
+      "title": "Circuit breaker states",
+      "mermaid": "flowchart TD\n  C[\"Closed: calls pass\"] -- \"50% of 20+ calls fail\" --> O[\"Open: fail fast\"]\n  O -- \"30 s cool-down\" --> H[\"Half-open: few trial calls\"]\n  H -- \"trials succeed\" --> C\n  H -- \"trial fails\" --> O",
+      "caption": "Book: Fundamentals Part 5 · Circuit breakers, bulkheads, fallbacks",
+      "steps": [
+        {
+          "say": "Imagine our recommendation service hangs. Every product page waits two seconds, threads pile up, and product pages fail too. Three tools fix this. First, a circuit breaker, like the one in your house, with three states.",
+          "reveal": 0
+        },
+        {
+          "say": "Closed is normal. Calls pass, and failures are counted over a rolling window, say the last ten seconds.",
+          "reveal": 0
+        },
+        {
+          "say": "When failures pass a threshold, say fifty percent of at least twenty calls, it goes open. Every call now fails instantly or goes to a fallback. The recommendation service gets breathing room, and our threads are freed.",
+          "reveal": 0
+        },
+        {
+          "say": "After a cool-down, say thirty seconds, it goes half-open: a few trial calls pass. If they succeed, back to closed. If one fails, open again for another cool-down. That's how it discovers recovery without flooding the dependency.",
+          "reveal": 0
+        }
+      ],
+      "id": "s010"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Bulkheads and fallbacks on the product page",
+      "bullets": [
+        "Bulkhead: 20 of 200 threads for recommendations",
+        "Others: separate pools, per-tier queues, cells",
+        "Fallback: show cached popular items",
+        "Fallbacks: last value, default, empty section"
+      ],
+      "steps": [
+        {
+          "say": "Second, a bulkhead, like a ship's watertight compartments. Give recommendation calls their own pool of twenty threads out of two hundred. If recommendations hang, at most twenty threads are stuck. The other hundred and eighty keep serving pages.",
+          "reveal": 1
+        },
+        {
+          "say": "Other bulkheads: separate queues per customer tier, or cells, independent copies of the whole stack, so a bad deploy hurts only one cell.",
+          "reveal": 2
+        },
+        {
+          "say": "Third, a fallback: what you do instead of failing. Our page shows cached popular items instead of personal recommendations.",
+          "reveal": 3
+        },
+        {
+          "say": "Or a default, or an empty section. Stale is fine for recommendations, not a bank balance. In the interview, say: tight timeout, circuit breaker, small bulkhead pool, and a fallback.",
+          "reveal": 4
+        }
+      ],
+      "id": "s011"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Breaker is open, cool-down ends. What happens?",
+      "bullets": [
+        "It closes and sends all traffic",
+        "It lets a few trial calls through",
+        "It stays open until a human resets it"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. The breaker on the recommendation service has been open for thirty seconds and the cool-down ends. What happens next? Answer on the next slide.",
+          "reveal": 0
+        }
+      ],
+      "id": "s012"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 6 of 24",
+      "title": "Rate limiting the shop's API",
+      "bullets": [
+        "Answer: half-open, a few trial calls",
+        "Limit: 100 requests a minute per API key",
+        "Over limit: 429 + Retry-After",
+        "Key: user, API key, IP, or user + endpoint",
+        "Throttling: delay or queue, not reject"
+      ],
+      "steps": [
+        {
+          "say": "Answer: it goes half-open and lets a few trial calls through. Now, rate limiting. Our shop's public API caps each client at, say, a hundred requests a minute.",
+          "reveal": 1
+        },
+        {
+          "say": "Rate limiting caps requests per client per time window. It stops one buggy script hurting everyone, controls cost, slows password guessing, and enables tiers: free at a thousand a day, paid at a hundred thousand.",
+          "reveal": 2
+        },
+        {
+          "say": "Over the limit, return four-twenty-nine Too Many Requests with a Retry-After header, plus remaining-quota headers.",
+          "reveal": 3
+        },
+        {
+          "say": "Limits apply per key: user, API key, or IP. IP alone punishes a whole office behind one NAT.",
+          "reveal": 4
+        },
+        {
+          "say": "Throttling is often a synonym. Strictly, throttling slows the excess down by delaying or queueing it, while rate limiting rejects it.",
+          "reveal": 5
+        }
+      ],
+      "id": "s013",
+      "caption": "Book: Fundamentals Part 5 · Rate limiting and throttling"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Five algorithms, limit 100 a minute",
+      "table": {
+        "head": [
+          "Algorithm",
+          "How it plays out"
+        ],
+        "rows": [
+          [
+            "Token bucket",
+            "B = 10, R = 1/s: 10 at once, then 1 per second"
+          ],
+          [
+            "Leaky bucket",
+            "Queue drains at fixed rate; full bucket drops"
+          ],
+          [
+            "Fixed window",
+            "100 at 12:00:59 + 100 at 12:01:00 = 200"
+          ],
+          [
+            "Sliding log",
+            "Store every timestamp, count last 60 s"
+          ],
+          [
+            "Sliding counter",
+            "30 + 80 x 0.75 = 90, allowed"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Five algorithms, walked through. Token bucket: a bucket holds up to B tokens and refills at R per second. Each request takes a token. With B ten and R one per second, a client can burst ten at once, then one per second. Cheap, and the most widely used.",
+          "reveal": 1
+        },
+        {
+          "say": "Leaky bucket: requests join a queue that drains at a fixed rate, like water dripping from a hole. A full bucket drops new ones. It smooths bursts for a fragile downstream, but adds delay.",
+          "reveal": 2
+        },
+        {
+          "say": "Fixed window counter: one counter per calendar minute, reset at the boundary. Simple, but a client can send a hundred in the last second of one minute and a hundred more in the first second of the next. Two hundred requests in two seconds, double the limit.",
+          "reveal": 3
+        },
+        {
+          "say": "Sliding window log: store every request's timestamp, drop those older than a minute, count the rest. Exact, but one entry per request eats memory.",
+          "reveal": 4
+        },
+        {
+          "say": "Sliding window counter: fifteen seconds into the minute, we've seen thirty requests, and last minute had eighty. Three quarters of last minute is still inside our window, so thirty plus eighty times point seven five is ninety. Allowed. Near-log accuracy with two counters.",
+          "reveal": 5
+        }
+      ],
+      "id": "s014"
+    },
+    {
+      "layout": "diagram",
+      "title": "Distributed rate limiting at the gateway",
+      "mermaid": "flowchart LR\n  C[\"Client\"] --> GW[\"API gateway x 20\"]\n  GW -- \"atomic check and decrement\" --> R[(\"Redis counters\")]\n  GW -- \"allowed\" --> S[\"Backend service\"]\n  GW -- \"over limit\" --> X[\"429 Too Many Requests\"]",
+      "caption": "If Redis is down: most fail open for user traffic",
+      "steps": [
+        {
+          "say": "Where? Usually at the A-P-I gateway. With twenty gateway servers, all must see the same count, so they share a Redis store with an atomic check-and-decrement, often a small Lua script.",
+          "reveal": 0
+        },
+        {
+          "say": "In the interview, say: token bucket per API key in Redis at the gateway. If Redis is down, fail open for user traffic rather than cause an outage.",
+          "reveal": 0
+        }
+      ],
+      "id": "s015"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 7 of 24",
+      "title": "Black Friday: 3x traffic, scaling takes 5 min",
+      "bullets": [
+        "1. Signal: in-flight over limit, queue wait > 100 ms",
+        "2. Reject low priority fast with 503",
+        "3. Shed bots first; keep checkout and login",
+        "4. Drop requests already past client timeout",
+        "5. Kill switch: hide reviews, recommendations"
+      ],
+      "steps": [
+        {
+          "say": "Black Friday. Traffic hits three times our capacity and autoscaling needs five minutes. Unprotected, queues grow, requests time out, clients retry, and throughput collapses. Load shedding means deliberately rejecting some requests so the rest succeed, like rolling blackouts that save the grid. Step one: watch an overload signal, like queue wait over a hundred milliseconds.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: reject new low-priority requests immediately and cheaply with five-oh-three and Retry-After, rather than queueing them.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: shed bots and background jobs first, then logged-out browsing. Keep checkout and login last.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: drop requests that already waited longer than the client's timeout. Nobody's listening for the answer.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five: graceful degradation. Flip kill switches that turn off non-essential features, like reviews and recommendations, so search and checkout keep working. The goal is high goodput: useful work completed.",
+          "reveal": 5
+        }
+      ],
+      "id": "s016",
+      "caption": "Book: Fundamentals Part 5 · Load shedding and graceful degradation"
+    },
+    {
+      "layout": "number",
+      "kicker": "Concept 8 of 24",
+      "title": "Autoscaling the checkout service",
+      "big": "10 x 90/60 = 15",
+      "caption": "Book: Fundamentals Part 5 · Autoscaling",
+      "steps": [
+        {
+          "say": "Our shop sees five times more orders at seven p.m. than at three p.m. Autoscaling adds instances when load rises, scaling out, and removes them when it falls, scaling in. Walk through it. Step one, pick a metric: CPU, requests per instance, queue length. Step two, pick a target, say sixty percent CPU, leaving forty percent headroom for boot time.",
+          "reveal": 0
+        },
+        {
+          "say": "Step three: a controller checks regularly, every fifteen seconds for Kubernetes, and computes desired equals current times metric over target. We have ten instances at ninety percent CPU. Ten times ninety over sixty is fifteen. Step four: launch five more.",
+          "reveal": 0
+        },
+        {
+          "say": "Step five: scale in slowly, after a cool-down, draining connections first. Step six: set a minimum and maximum, so an attack can't scale you to a huge bill.",
+          "reveal": 0
+        }
+      ],
+      "id": "s017"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Three kinds of autoscaling",
+      "bullets": [
+        "Reactive: CPU climbs at 7 pm, add capacity",
+        "Scheduled: weekdays 18:30, minimum = 40",
+        "Predictive: model learns peaks, adds early",
+        "Watch the DB: 200 web nodes, too many connections"
+      ],
+      "steps": [
+        {
+          "say": "Reactive scaling responds to current metrics, like we just did. Simple, but always a bit late.",
+          "reveal": 1
+        },
+        {
+          "say": "Scheduled scaling works by the clock. Our dinner rush is predictable, so on weekdays at six thirty p.m., set the minimum to forty instances.",
+          "reveal": 2
+        },
+        {
+          "say": "Predictive scaling uses a model that learns daily and weekly patterns and adds capacity before the forecast rise.",
+          "reveal": 3
+        },
+        {
+          "say": "The trap: scaling the web tier to two hundred instances that exhaust the database's connection limit. You moved the bottleneck. In the interview: scheduled before the known peak, reactive for surprises. For queue workers, scale on queue depth, not CPU.",
+          "reveal": 4
+        }
+      ],
+      "id": "s018"
+    },
+    {
+      "layout": "twocol",
+      "kicker": "Concept 9 of 24",
+      "title": "VM versus container",
+      "left": {
+        "heading": "Virtual machine",
+        "bullets": [
+          "Own guest OS and kernel",
+          "Gigabytes, boots in minutes",
+          "Strong isolation"
+        ]
+      },
+      "right": {
+        "heading": "Container",
+        "bullets": [
+          "Shares host kernel",
+          "Megabytes, starts in seconds",
+          "Namespaces + cgroups"
+        ]
+      },
+      "steps": [
+        {
+          "say": "A virtual machine, V-M, is a software-emulated computer. A hypervisor splits one physical server into several, each with its own operating system and kernel. Flats, each with its own kitchen.",
+          "reveal": 1
+        },
+        {
+          "say": "So V-Ms are gigabytes in size and take tens of seconds to minutes to boot.",
+          "reveal": 2
+        },
+        {
+          "say": "But isolation is strong, which is why clouds rent you V-Ms.",
+          "reveal": 3
+        },
+        {
+          "say": "A container is an isolated process sharing the host's kernel. Private rooms with a shared kitchen.",
+          "reveal": 4
+        },
+        {
+          "say": "So it's megabytes, starts in under a second to a few seconds, and dozens pack onto one host.",
+          "reveal": 5
+        },
+        {
+          "say": "Linux builds containers from namespaces, which control what a process can see, and cgroups, which control how much C-P-U and memory it can use. Isolation is weaker, since the kernel is shared.",
+          "reveal": 6
+        }
+      ],
+      "id": "s019",
+      "caption": "Book: Fundamentals Part 5 · VMs, containers and Docker"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Docker: building and shipping shop-api",
+      "bullets": [
+        "Dockerfile: base image, install deps, copy code",
+        "1. docker build: cached layers",
+        "2. Push to registry as shop-api:1.4.2",
+        "3. Any server pulls and runs it"
+      ],
+      "steps": [
+        {
+          "say": "Docker made containers popular in twenty thirteen. A container image is a read-only snapshot of the app plus everything it needs. A Dockerfile describes it: Python base image, install requirements, copy code, run the server.",
+          "reveal": 1
+        },
+        {
+          "say": "Step one: docker build stacks cached layers, so a rebuild after a code change takes seconds.",
+          "reveal": 2
+        },
+        {
+          "say": "Step two: push the image to a registry, like Docker Hub or Amazon E-C-R, tagged shop-api one point four point two.",
+          "reveal": 3
+        },
+        {
+          "say": "Step three: any server, a laptop, staging or production, pulls and runs exactly that image. It works on my machine disappears. Don't keep data or secrets inside the image.",
+          "reveal": 4
+        }
+      ],
+      "id": "s020"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 10 of 24",
+      "title": "Kubernetes: declare it, it makes it so",
+      "mermaid": "flowchart TD\n  U[\"You: kubectl apply\"] --> API[\"API server\"]\n  API --> E[(\"etcd: desired state\")]\n  API --> S[\"Scheduler\"]\n  S --> N1[\"Node 1: kubelet, pods\"]\n  S --> N2[\"Node 2: kubelet, pods\"]\n  SVC[\"Service: shop-api\"] --> N1\n  SVC --> N2",
+      "caption": "Book: Fundamentals Part 5 · Kubernetes basics",
+      "steps": [
+        {
+          "say": "Kubernetes, or K-eights, is a container orchestrator. You declare what you want: five copies of shop-api one point four point two, each with one C-P-U and five hundred twelve megabytes, reachable at shop-api. It keeps reality matching.",
+          "reveal": 0
+        },
+        {
+          "say": "The control plane is the brain. The A-P-I server takes your instructions. etcd stores desired and current state. The scheduler picks a node for each pod, where an agent called the kubelet runs it.",
+          "reveal": 0
+        },
+        {
+          "say": "A pod is the smallest unit: one or more containers sharing an address, like our app plus its sidecar. A deployment says keep five replicas of this pod, and does rolling updates when the image changes. A service gives a stable name and virtual IP that load-balances across whichever pods are alive. That's built-in server-side discovery.",
+          "reveal": 0
+        },
+        {
+          "say": "Watch the reconciliation loop. A node dies, taking two of our five pods. The deployment controller sees three, want five, and creates two on healthy nodes. The service stops routing to the dead ones. Nobody got paged. For a small team, a managed platform is often a better first choice.",
+          "reveal": 0
+        }
+      ],
+      "id": "s021"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 11 of 24",
+      "title": "Infrastructure as code: adding an image bucket",
+      "bullets": [
+        "1. Write: resource aws_s3_bucket images",
+        "2. Plan: will create 1 bucket",
+        "3. Review the plan in a pull request",
+        "4. Apply: tool calls cloud APIs, saves state"
+      ],
+      "steps": [
+        {
+          "say": "Infrastructure as code means infrastructure described in version-controlled files that a tool applies, instead of console clicks. Our shop needs a bucket for product images. Step one: write a declarative description in Terraform: a resource of type S three bucket, named shop product images.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: run plan. The tool compares the files with what exists and shows the diff: will create one bucket.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: a teammate reviews that plan in a pull request.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: apply. The tool calls the cloud A-P-Is and records what it built in a state file. The classic mistake: hand edits in the console create drift that the next apply silently undoes.",
+          "reveal": 4
+        }
+      ],
+      "id": "s022",
+      "caption": "Book: Fundamentals Part 5 · Infrastructure as code"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 12 of 24",
+      "title": "The shop's pipeline",
+      "mermaid": "flowchart LR\n  A[\"Push commit\"] --> B[\"Build + unit tests\"]\n  B --> C[\"Package image once\"]\n  C --> D[\"Deploy to staging\"]\n  D --> E[\"Integration tests\"]\n  E --> F[\"Deploy to prod, watch, auto-rollback\"]",
+      "caption": "Book: Fundamentals Part 5 · CI/CD",
+      "steps": [
+        {
+          "say": "Continuous integration, C-I, means merging small changes into main at least daily, each triggering an automatic build and test run. Continuous delivery keeps every passing change releasable with one button. Continuous deployment ships it automatically.",
+          "reveal": 0
+        },
+        {
+          "say": "Follow one change to our cart. Step one: push the commit. Step two: C-I runs linters, unit tests and scans in under ten minutes. Step three: build one container image. That same artifact is promoted through every environment, never rebuilt, so what you tested is what you ship.",
+          "reveal": 0
+        },
+        {
+          "say": "Step four: deploy to staging and run integration tests. Step five: deploy to production with a safe strategy, watch health metrics, and roll back automatically if they worsen. Small frequent releases are safer: one change, and you know exactly what broke.",
+          "reveal": 0
+        }
+      ],
+      "id": "s023"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 13 of 24",
+      "title": "Shipping version 2 of checkout",
+      "table": {
+        "head": [
+          "Strategy",
+          "On our 20 checkout servers"
+        ],
+        "rows": [
+          [
+            "Rolling",
+            "Replace 2 at a time, health-check each batch"
+          ],
+          [
+            "Blue-green",
+            "Green gets v2, flip balancer; flip back to undo"
+          ],
+          [
+            "Canary",
+            "1% to v2, then 5, 25, 50, 100 while healthy"
+          ],
+          [
+            "Feature flag",
+            "v2 code off; enable staff, then 5%, then all"
+          ],
+          [
+            "Rollback",
+            "Redeploy last good image; schema? roll forward"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "A deployment strategy decides whether a bug hits one percent of users or everyone: the blast radius. We'll ship version two of checkout onto twenty servers. Rolling deployment: replace two at a time, each batch passing health checks before the next. No downtime, but both versions serve side by side for a while.",
+          "reveal": 1
+        },
+        {
+          "say": "Blue-green: blue runs version one live. Green gets version two and is tested privately. Then the load balancer flips all traffic to green at once. Rollback is instant: flip back. But you need double capacity briefly, and everyone's exposed at the switch.",
+          "reveal": 2
+        },
+        {
+          "say": "Canary: send one percent of real traffic to version two and automatically compare its errors and latency with version one. Healthy? Step up to five, twenty-five, fifty, a hundred percent. Unhealthy? Pull back automatically. Smallest blast radius.",
+          "reveal": 3
+        },
+        {
+          "say": "Feature flags: ship the code switched off, then turn it on at runtime, for staff, then five percent of customers, then everyone. The flag doubles as a kill switch.",
+          "reveal": 4
+        },
+        {
+          "say": "Rollback means returning to the last known-good version. In an incident, go back first, investigate later. If the release changed data in a way the old code can't read, roll forward with a quick fix instead.",
+          "reveal": 5
+        }
+      ],
+      "id": "s024",
+      "caption": "Book: Fundamentals Part 5 · Deployment strategies and rollback"
+    },
+    {
+      "layout": "number",
+      "title": "Why staged rollouts matter",
+      "big": "1 change, all at once = 8.5M machines",
+      "caption": "CrowdStrike, July 2024",
+      "steps": [
+        {
+          "say": "Two real lessons. In twenty twelve, Knight Capital deployed to only seven of eight servers. The eighth ran dormant old code and lost about four hundred forty million dollars in forty-five minutes.",
+          "reveal": 0
+        },
+        {
+          "say": "In July twenty twenty-four, a faulty CrowdStrike update pushed to all customers at once crashed about eight and a half million Windows machines. The lesson: staged, canary-style rollout. In the interview, say: canary with automated metric checks, plus feature flags.",
+          "reveal": 0
+        }
+      ],
+      "id": "s025"
+    },
+    {
+      "layout": "twocol",
+      "kicker": "Concept 14 of 24",
+      "title": "Three pillars on one slow checkout",
+      "left": {
+        "heading": "Signal",
+        "bullets": [
+          "Metrics",
+          "Traces",
+          "Logs"
+        ]
+      },
+      "right": {
+        "heading": "What it told us",
+        "bullets": [
+          "p99 checkout up from 400 ms to 2.1 s",
+          "1.8 s of 2.1 s waiting on tax service",
+          "trace abc: tax DB pool exhausted"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Observability is understanding why the system behaves as it does, even for problems you didn't predict, from the data it emits. Three pillars. Metrics: cheap numbers over time, like counters, gauges and latency histograms.",
+          "reveal": 1
+        },
+        {
+          "say": "Traces: one request's path through many services, a tree of spans, each with a start time and duration, sharing a trace ID passed in headers.",
+          "reveal": 2
+        },
+        {
+          "say": "Logs: timestamped event records, best as structured J-SON so you can search by field.",
+          "reveal": 3
+        },
+        {
+          "say": "Let's use them on a real complaint: checkout is slow. Metrics say what moved: p ninety-nine went from four hundred milliseconds to two point one seconds.",
+          "reveal": 4
+        },
+        {
+          "say": "A trace says where: one point eight of those two point one seconds was spent waiting on the tax service.",
+          "reveal": 5
+        },
+        {
+          "say": "The logs for that trace ID say why: the tax service's database connection pool was exhausted. Without metrics you don't know something's wrong. Without traces, where. Without logs, why. Instrument with OpenTelemetry, and keep user IDs out of metric labels.",
+          "reveal": 6
+        }
+      ],
+      "id": "s026",
+      "caption": "Book: Fundamentals Part 5 · Observability: logs, metrics, traces"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "What to measure",
+      "table": {
+        "head": [
+          "Method",
+          "Measures",
+          "Checkout example"
+        ],
+        "rows": [
+          [
+            "Golden signals",
+            "Latency, traffic, errors, saturation",
+            "p99 2.1 s, 800 rps, 0.5%, pool 100%"
+          ],
+          [
+            "RED (services)",
+            "Rate, Errors, Duration",
+            "800 rps, 4 errors/s, p99 2.1 s"
+          ],
+          [
+            "USE (resources)",
+            "Utilisation, Saturation, Errors",
+            "Tax DB CPU 95%, 40 queued, 0 disk errors"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "What to measure? Google's four golden signals. Latency: how long requests take, with errors tracked separately. Traffic: demand, here eight hundred requests a second. Errors: the failure rate, half a percent. Saturation: how full the tightest resource is. Our tax pool is at a hundred percent.",
+          "reveal": 1
+        },
+        {
+          "say": "The RED method is for request-driven services, the user's view: Rate, eight hundred a second. Errors, four a second. Duration, p ninety-nine two point one seconds.",
+          "reveal": 2
+        },
+        {
+          "say": "The USE method is for resources, the machines underneath: Utilisation, the tax database's C-P-U at ninety-five percent busy. Saturation, forty queries queued. Errors, zero disk errors. RED tells you users are hurting. USE tells you why.",
+          "reveal": 3
+        }
+      ],
+      "id": "s027"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 15 of 24",
+      "title": "Alerting that doesn't burn people out",
+      "bullets": [
+        "Dashboard: is it healthy? panel at the top",
+        "Page on symptoms: checkout errors, not 1 CPU",
+        "Every page: urgent, actionable, runbook link",
+        "On-call: incident commander, mitigate first",
+        "Blameless postmortem afterwards"
+      ],
+      "steps": [
+        {
+          "say": "A dashboard is a page of graphs at a glance. Put an is-it-healthy panel at the top.",
+          "reveal": 1
+        },
+        {
+          "say": "An alert is an automatic notification when a rule breaks. A page wakes someone. A ticket waits for working hours. Page on symptoms users feel, like checkout errors, not causes like one server at ninety percent C-P-U, which may be fine.",
+          "reveal": 2
+        },
+        {
+          "say": "Every page must be urgent and actionable, with a runbook link. Otherwise you get alert fatigue: paged thirty times a night, on-call starts ignoring pages.",
+          "reveal": 3
+        },
+        {
+          "say": "On-call is the rota of engineers who answer. In an incident, an incident commander coordinates, and the first goal is mitigation: roll back, fail over, shed load. Root cause comes later.",
+          "reveal": 4
+        },
+        {
+          "say": "Afterwards, a blameless postmortem: how the system allowed the mistake, not who made it.",
+          "reveal": 5
+        }
+      ],
+      "id": "s028",
+      "caption": "Book: Fundamentals Part 5 · Dashboards, alerting, on-call, SLO alerts"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "SLO burn-rate alerts: 99.9% over 30 days",
+      "table": {
+        "head": [
+          "Window",
+          "Burn rate",
+          "Budget used",
+          "Action"
+        ],
+        "rows": [
+          [
+            "1 hour",
+            "14.4",
+            "2%",
+            "Page now"
+          ],
+          [
+            "6 hours",
+            "6",
+            "5%",
+            "Page"
+          ],
+          [
+            "3 days",
+            "1",
+            "10%",
+            "Ticket"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Better still, alert on your S-L-O. Our checkout's S-L-O is ninety-nine point nine percent successful requests over thirty days. The error budget is the point one percent we may fail, about forty-three minutes of full downtime a month. Burn rate is how fast we're spending it. A burn rate of one spends exactly the whole budget in thirty days. Now, a burn rate of fourteen point four sustained for one hour spends two percent of the month's budget in that hour, and would empty it in about two days. Page now.",
+          "reveal": 1
+        },
+        {
+          "say": "Burn rate six over six hours uses five percent. Still a page.",
+          "reveal": 2
+        },
+        {
+          "say": "Burn rate one over three days uses ten percent. That's a ticket for working hours. Pair each long window with a short one, so alerts stop quickly once fixed. In the interview, say: page on S-L-O burn rate for the main user journeys, plus a few saturation signals like disk nearly full.",
+          "reveal": 3
+        }
+      ],
+      "id": "s029"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Is a database replica a backup?",
+      "bullets": [
+        "Yes: it's a full copy of the data",
+        "No: a mistaken DELETE replicates too",
+        "Only if it's in another region"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Our orders database streams to a replica in real time. Is that replica a backup? Answer on the next slide.",
+          "reveal": 0
+        }
+      ],
+      "id": "s030"
+    },
+    {
+      "layout": "number",
+      "kicker": "Concept 16 of 24",
+      "title": "RPO and RTO for the orders database",
+      "big": "Backup every 6 h + 2 h restore",
+      "caption": "Book: Fundamentals Part 5 · Disaster recovery",
+      "steps": [
+        {
+          "say": "Answer: no. A mistaken delete replicates to every copy. Only backups cover that. Disaster recovery, D-R, is the plan for getting back after a big failure: a region down, ransomware, a dropped database. Two numbers. R-P-O, recovery point objective: how much data, in time, you can afford to lose. R-T-O, recovery time objective: how long you can be down.",
+          "reveal": 0
+        },
+        {
+          "say": "Worked example. We back up our orders database every six hours, and a restore takes two hours. Disaster strikes just before the next backup. We lose up to six hours of orders: that's our R-P-O. And we're down for at least two hours: that's our R-T-O.",
+          "reveal": 0
+        },
+        {
+          "say": "To improve, ship the database log continuously to another region: R-P-O drops to seconds. Keep a warm standby: R-T-O drops to minutes. Lower numbers cost more: a payments ledger needs near zero, a wiki can accept a day. A backup is unproven until you've restored it. GitLab lost six hours of data in twenty seventeen learning that.",
+          "reveal": 0
+        }
+      ],
+      "id": "s031"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Four DR strategies for the shop",
+      "table": {
+        "head": [
+          "Strategy",
+          "In region B",
+          "RTO",
+          "RPO"
+        ],
+        "rows": [
+          [
+            "Backup and restore",
+            "Only backups",
+            "Hours to a day",
+            "Hours"
+          ],
+          [
+            "Pilot light",
+            "DB replicated, servers off",
+            "Tens of minutes",
+            "Minutes"
+          ],
+          [
+            "Warm standby",
+            "Small full copy running",
+            "Minutes",
+            "Seconds to minutes"
+          ],
+          [
+            "Active-active",
+            "Full copy serving traffic",
+            "Near zero",
+            "Near zero"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Our shop runs in region A. Four ways to use region B, cheapest first. Backup and restore: region B holds only backups. Hours to a day down, hours of data lost.",
+          "reveal": 1
+        },
+        {
+          "say": "Pilot light: the database is replicated into B, but the app servers are off, like a gas pilot flame. On disaster, start servers and scale up. Tens of minutes down.",
+          "reveal": 2
+        },
+        {
+          "say": "Warm standby: a scaled-down but complete copy of the shop runs in B. On disaster, scale it up and switch traffic. Minutes down, seconds to minutes of data lost.",
+          "reveal": 3
+        },
+        {
+          "say": "Multi-site active-active: both regions serve live traffic all the time. Lose one and the other absorbs its share. Near-zero downtime, but each region needs headroom, and writing in two places creates hard consistency problems. Baseline for most: multi-A-Z in one region. Prove it with chaos engineering, like Netflix's Chaos Monkey killing servers on purpose.",
+          "reveal": 4
+        }
+      ],
+      "id": "s032"
+    },
+    {
+      "layout": "twocol",
+      "kicker": "Concept 17 of 24",
+      "title": "Authentication versus authorization",
+      "left": {
+        "heading": "Authentication: who are you?",
+        "bullets": [
+          "Alice logs in: password + phone code",
+          "Fails: 401 Unauthorized"
+        ]
+      },
+      "right": {
+        "heading": "Authorization: what may you do?",
+        "bullets": [
+          "Alice is editor: may edit products",
+          "Fails: 403 Forbidden"
+        ]
+      },
+      "steps": [
+        {
+          "say": "At an airport, your passport proves who you are. That's authentication, Auth-N. Alice logs into our shop's admin with her password plus a code from her phone.",
+          "reveal": 1
+        },
+        {
+          "say": "If that fails, the server returns four-oh-one Unauthorized, which confusingly means unauthenticated.",
+          "reveal": 2
+        },
+        {
+          "say": "Your boarding pass decides which plane you may board. That's authorization, Auth-Z: what an identity may do. Alice has the editor role, so she may edit products. That's role-based access control.",
+          "reveal": 3
+        },
+        {
+          "say": "If Alice tries to issue refunds, which needs the admin role, she gets four-oh-three Forbidden. And check authorization on the server for every request, never just by hiding a button in the U-I.",
+          "reveal": 4
+        }
+      ],
+      "id": "s033",
+      "caption": "Book: Fundamentals Part 5 · Authentication and authorization"
+    },
+    {
+      "layout": "twocol",
+      "kicker": "Concept 18 of 24",
+      "title": "Remembering Alice after login",
+      "left": {
+        "heading": "Session + cookie",
+        "bullets": [
+          "Server stores session in Redis",
+          "Cookie: random session ID",
+          "Logout: delete session, instant"
+        ]
+      },
+      "right": {
+        "heading": "JWT access token",
+        "bullets": [
+          "header.payload.signature",
+          "Any service verifies, no DB call",
+          "Hard to revoke: keep it 5 to 15 min"
+        ]
+      },
+      "steps": [
+        {
+          "say": "After Alice logs in, how do we recognise her next request? Option one, a session. The server stores a session record, user ID and expiry, in Redis.",
+          "reveal": 1
+        },
+        {
+          "say": "It gives the browser a random session ID in a cookie, small data the browser sends back automatically on every request. Like a cloakroom ticket the server looks up.",
+          "reveal": 2
+        },
+        {
+          "say": "Logging out is instant: delete the session.",
+          "reveal": 3
+        },
+        {
+          "say": "Option two, a token, sent as Authorization Bearer, meaning whoever holds it gets in. The common self-contained format is the J-W-T, pronounced jot: header, payload and signature. Alice's payload says subject user eight eight one two, role editor, and an expiry time.",
+          "reveal": 4
+        },
+        {
+          "say": "Any service with the public key checks signature and expiry, with no database call. But it's signed, not encrypted: anyone can read the payload, so no secrets in it.",
+          "reveal": 5
+        },
+        {
+          "say": "And a stolen J-W-T works until it expires. So keep access tokens short, five to fifteen minutes, with a long-lived refresh token checked against a database. Revoke that, and Alice is logged out within minutes.",
+          "reveal": 6
+        }
+      ],
+      "id": "s034",
+      "caption": "Book: Fundamentals Part 5 · Sessions, cookies, tokens and JWT"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 19 of 24",
+      "title": "OAuth: PhotoPrinter reads your Google Photos",
+      "bullets": [
+        "1. Redirect to Google with scope photos.read + PKCE",
+        "2. User logs in at Google, approves",
+        "3. Google redirects back with one-time code",
+        "4. App swaps code + PKCE secret for tokens",
+        "5. Receives access token (+ ID token with OIDC)",
+        "6. Calls Photos API with Bearer token"
+      ],
+      "steps": [
+        {
+          "say": "OAuth two point oh is delegated authorization: letting one app use your data in another without your password. Our example: an app called PhotoPrinter wants to read your Google Photos. Step one: you click connect. PhotoPrinter redirects your browser to Google's authorization server, asking for the scope photos dot read, a named permission. With P-K-C-E, it also sends a hash of a one-time secret.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: you log in at Google, so PhotoPrinter never sees your password, and approve the scope.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: Google redirects back with a short-lived, single-use authorization code.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: PhotoPrinter's server exchanges the code plus the P-K-C-E secret at Google's token endpoint, server to server. The secret proves it's the same app that started the flow.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five: it receives an access token, often a refresh token too.",
+          "reveal": 5
+        },
+        {
+          "say": "Step six: it calls the Photos A-P-I, the resource server, with that bearer token, which checks the scope. Four roles: you, the owner; PhotoPrinter, the client; Google's login, the authorization server; Photos, the resource server.",
+          "reveal": 6
+        }
+      ],
+      "id": "s035",
+      "caption": "Book: Fundamentals Part 5 · OAuth 2.0, OpenID Connect, SSO, API keys"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "OIDC, SSO and API keys",
+      "bullets": [
+        "OIDC: adds an ID token: who logged in",
+        "SSO: log in to Okta once, open mail, chat",
+        "API key: a partner's server, X-API-Key header"
+      ],
+      "steps": [
+        {
+          "say": "OpenID Connect, O-I-D-C, is a thin identity layer on OAuth. OAuth says what a client may access. O-I-D-C adds an ID token, a J-W-T saying who logged in. Sign in with Google is O-I-D-C. Don't use a plain OAuth access token as proof of identity.",
+          "reveal": 1
+        },
+        {
+          "say": "Single sign-on, S-S-O: log in once to an identity provider like Okta, then open email, chat and dashboards without logging in again.",
+          "reveal": 2
+        },
+        {
+          "say": "An API key is a long random secret identifying a program, not a person. A partner's warehouse server sends it in an X-API-Key header, and we use it for metering and rate limits. No built-in expiry or scopes. Acting for users? Use OAuth.",
+          "reveal": 3
+        }
+      ],
+      "id": "s036"
+    },
+    {
+      "layout": "twocol",
+      "kicker": "Concept 20 of 24",
+      "title": "Encryption in transit and at rest",
+      "left": {
+        "heading": "In transit",
+        "bullets": [
+          "Browser to shop: TLS (HTTPS)",
+          "Service to service: mutual TLS"
+        ]
+      },
+      "right": {
+        "heading": "At rest",
+        "bullets": [
+          "Orders DB, backups: AES-256",
+          "Keys from a KMS, envelope encryption"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Encryption scrambles data with a key; the key reverses it. Encryption in transit protects data moving over a network. Alice's card number travels from browser to shop over T-L-S, the S in H-T-T-P-S.",
+          "reveal": 1
+        },
+        {
+          "say": "Between our services, mutual T-L-S, with certificates on both sides.",
+          "reveal": 2
+        },
+        {
+          "say": "Encryption at rest protects stored data, so a stolen disk or backup is unreadable. Our orders database and its backups use A-E-S two fifty-six.",
+          "reveal": 3
+        },
+        {
+          "say": "The keys come from a key management service, K-M-S. With envelope encryption, each piece of data gets its own data key, which is itself encrypted by a master key that never leaves the K-M-S. You need both.",
+          "reveal": 4
+        }
+      ],
+      "id": "s037",
+      "caption": "Book: Fundamentals Part 5 · Encryption, hashing, passwords, secrets"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Storing Alice's password",
+      "bullets": [
+        "1. Random 16-byte salt per user",
+        "2. Slow hash: Argon2id or bcrypt",
+        "3. Store algorithm, params, salt, hash",
+        "4. Login: re-hash with stored salt, compare",
+        "Secrets: vault, per-service, rotated"
+      ],
+      "steps": [
+        {
+          "say": "Hashing is different: a one-way fingerprint, like grinding coffee beans. Same input, same hash. Never store passwords in plain text or encrypted. Store a slow, salted hash. Step one: generate a random salt for Alice, sixteen bytes. Same password as Bob, different hash, so rainbow tables are useless.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: hash password plus salt with a deliberately slow algorithm, Argon two I-D or bcrypt, tuned so one hash takes tens to hundreds of milliseconds. A G-P-U tries billions of S-H-A guesses a second, only thousands of bcrypt ones.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: store the algorithm, its parameters, the salt and the hash together.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: at login, re-hash what Alice typed with her stored salt and compare.",
+          "reveal": 4
+        },
+        {
+          "say": "Secrets management: database passwords, API keys and private keys stay out of code, images and logs. Keep them in a secrets manager like Vault, per service, rotated automatically.",
+          "reveal": 5
+        }
+      ],
+      "id": "s038"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 21 of 24",
+      "title": "From the internet to our database",
+      "mermaid": "flowchart LR\n  I[\"Internet incl. attack\"] --> E[\"CDN + DDoS scrubbing\"]\n  E --> W[\"WAF rules\"]\n  W --> LB[\"Load balancer: public subnet\"]\n  LB --> APP[\"App: private subnet\"]\n  APP --> DB[(\"Database: private subnet\")]",
+      "caption": "Book: Fundamentals Part 5 · Network security: firewalls, WAF, DDoS",
+      "steps": [
+        {
+          "say": "Follow a request in. A firewall filters by IP, port and protocol. Our rule: allow port four forty-three from anywhere, database port fifty-four thirty-two only from the app subnet, deny everything else.",
+          "reveal": 0
+        },
+        {
+          "say": "A web application firewall, W-A-F, reads the H-T-T-P request itself and blocks attack-like ones: SQL injection patterns, script payloads, bad bots. The database sits in a private subnet with no route from the internet at all.",
+          "reveal": 0
+        },
+        {
+          "say": "A D-DoS attack, distributed denial of service, floods us from many machines, often a botnet of hacked cameras and routers. Defence: absorb it on a huge edge network like Cloudflare or A-W-S Shield, filter at the edge, rate limit and challenge suspicious clients, cache aggressively, and hide our origin's IP.",
+          "reveal": 0
+        }
+      ],
+      "id": "s039"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 22 of 24",
+      "title": "Four web attacks on our shop",
+      "table": {
+        "head": [
+          "Attack",
+          "What happens",
+          "Fix"
+        ],
+        "rows": [
+          [
+            "CORS",
+            "api.shop.com must allow shop.com reads",
+            "Allow-Origin: https://shop.com, not *"
+          ],
+          [
+            "CSRF",
+            "Evil page posts transfer $1,000 with your cookie",
+            "SameSite cookies, CSRF token"
+          ],
+          [
+            "XSS",
+            "Review contains <script>, runs for others",
+            "Escape output, CSP, HttpOnly"
+          ],
+          [
+            "SQL injection",
+            "Email input ' OR '1'='1 dumps users",
+            "Parameterised queries"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Four classics. First, CORS. Browsers stop a page from one origin, meaning scheme, domain and port, reading responses from another. Our site on shop dot com calls api dot shop dot com. That's a different origin, so the A-P-I opts in with an Access-Control-Allow-Origin header naming shop dot com. Never use star on an A-P-I with cookies.",
+          "reveal": 1
+        },
+        {
+          "say": "Second, C-S-R-F, cross-site request forgery. You're logged into your bank. An evil page has a hidden form that posts transfer a thousand dollars to the bank, and your browser attaches your cookie. Fix: SameSite cookies and an anti-C-S-R-F token the server checks.",
+          "reveal": 2
+        },
+        {
+          "say": "Third, X-S-S, cross-site scripting. Someone posts a product review containing a script tag. Every shopper who views it runs the attacker's JavaScript inside our site. Fix: escape all user content when rendering, add a Content Security Policy, and use HttpOnly cookies so scripts can't steal sessions.",
+          "reveal": 3
+        },
+        {
+          "say": "Fourth, SQL injection. Our login glues the typed email into a SQL string. Someone types quote, OR one equals one, and the query now matches every user. Fix: parameterised queries, where input is always data, never SQL.",
+          "reveal": 4
+        }
+      ],
+      "id": "s040",
+      "caption": "Book: Fundamentals Part 5 · Common web vulnerabilities"
+    },
+    {
+      "layout": "twocol",
+      "kicker": "Concept 23 of 24",
+      "title": "Least privilege and zero trust",
+      "left": {
+        "heading": "Least privilege",
+        "bullets": [
+          "Image resizer: read 1 bucket only",
+          "Engineer access expires after 1 hour"
+        ]
+      },
+      "right": {
+        "heading": "Zero trust",
+        "bullets": [
+          "Inside the VPN? Still verify",
+          "Every call: identity, authz, mTLS, log"
+        ]
+      },
+      "steps": [
+        {
+          "say": "The principle of least privilege: every user and service gets only the permissions its job needs. A cleaner gets office keys, not the safe. Our image-resizing service can read one bucket. If it's hacked, the attacker can't delete the customer database.",
+          "reveal": 1
+        },
+        {
+          "say": "Same for people: engineer access that expires after an hour.",
+          "reveal": 2
+        },
+        {
+          "say": "Zero trust: never trust a request just because it comes from inside. The old model was a castle and moat: once on the office network or V-P-N, you were trusted. Then one phished laptop lets an attacker move sideways through everything.",
+          "reveal": 3
+        },
+        {
+          "say": "Zero trust verifies every request wherever it comes from: authenticate user and device, check authorization, encrypt with mutual T-L-S, and log it. Add defence in depth, several independent layers, so one failure isn't fatal.",
+          "reveal": 4
+        }
+      ],
+      "id": "s041",
+      "caption": "Book: Fundamentals Part 5 · Least privilege and zero trust"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 24 of 24",
+      "title": "What does our shop cost?",
+      "table": {
+        "head": [
+          "Lever",
+          "Shop example"
+        ],
+        "rows": [
+          [
+            "Egress",
+            "Product videos: about $0.05 to 0.09 per GB out; use a CDN"
+          ],
+          [
+            "Pricing models",
+            "Reserved for steady web tier; spot for nightly batch"
+          ],
+          [
+            "Right-size and autoscale",
+            "Shut staging off at night"
+          ],
+          [
+            "Tier and sample",
+            "Old logs to cold storage; sample traces"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Interviewers increasingly ask: and what would this cost? The big drivers are compute, storage, managed databases and data transfer. Data in is usually free, but data out to the internet, egress, costs roughly five to nine cents a gigabyte on A-W-S. If our shop streams product videos, that's mostly a bandwidth bill.",
+          "reveal": 1
+        },
+        {
+          "say": "Pricing: on-demand is flexible. Reserved instances or savings plans give big discounts for one to three year commitments, good for our steady web tier. Spot instances are spare capacity at up to ninety percent off, but reclaimable, fine for nightly batch jobs.",
+          "reveal": 2
+        },
+        {
+          "say": "Levers: autoscale, right-size oversized machines, and switch off staging at night.",
+          "reveal": 3
+        },
+        {
+          "say": "Move old logs to cheaper cold storage, and sample logs and traces. In the interview, name your design's expensive part and one way to cut it.",
+          "reveal": 4
+        }
+      ],
+      "id": "s042",
+      "caption": "Book: Fundamentals Part 5 · Cost awareness"
+    },
+    {
+      "layout": "recap",
+      "kicker": "Episode 5 complete",
+      "title": "Episode 5 recap",
+      "bullets": [
+        "Monolith first; sync only on the critical path",
+        "Timeouts, jittered retries, breakers, bulkheads",
+        "Token bucket, shed load, autoscale with bounds",
+        "Containers on Kubernetes, IaC, CI/CD, canaries",
+        "Metrics, traces, logs; page on SLO burn",
+        "RPO/RTO; AuthN/AuthZ, OAuth, hashing, least privilege"
+      ],
+      "steps": [
+        {
+          "say": "Let's recap. Start with a modular monolith and split when there's a reason. Call synchronously only on the user's critical path, and publish events for the rest.",
+          "reveal": 1
+        },
+        {
+          "say": "Protect every call: timeouts, a few jittered retries on idempotent work, circuit breakers, bulkheads and fallbacks.",
+          "reveal": 2
+        },
+        {
+          "say": "Control load: token bucket rate limits, shed low-priority work early, and autoscale with headroom and bounds.",
+          "reveal": 3
+        },
+        {
+          "say": "Ship safely: containers on Kubernetes, infrastructure as code, one artifact through C-I-C-D, and canaries with fast rollback.",
+          "reveal": 4
+        },
+        {
+          "say": "See everything: metrics, traces and logs linked by trace ID, RED and USE, and page on S-L-O burn rate.",
+          "reveal": 5
+        },
+        {
+          "say": "Plan for disaster with R-P-O and R-T-O, and lock it down: Auth-N versus Auth-Z, short-lived tokens, OAuth with O-I-D-C, salted slow hashes, and least privilege. Next episode, episode six: Putting It Together, plus Thinking in Patterns. See you there.",
+          "reveal": 6
+        }
+      ],
+      "id": "s043"
+    }
+  ]
+}

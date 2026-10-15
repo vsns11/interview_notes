@@ -1,0 +1,2483 @@
+{
+  "series": "LLD Workshop",
+  "episode": 29,
+  "title": "Quick-Fire Review: Cheat Sheets and Q&A",
+  "subtitle": "One pass over the whole handbook: cheat sheets, glossary, Design-X prompts and concept answers",
+  "scenes": [
+    {
+      "id": "s001",
+      "layout": "title",
+      "title": "Quick-Fire Review: Cheat Sheets and Q&A",
+      "subtitle": "One pass over the whole handbook: cheat sheets, glossary, Design-X prompts and concept answers",
+      "steps": [
+        {
+          "say": "Welcome to the L-L-D Workshop, episode twenty-nine: Quick-Fire Review, Cheat Sheets and Q and A. L-L-D means low-level design, the classes and code inside one program.",
+          "reveal": 0
+        },
+        {
+          "say": "This episode is the whole course. We'll sweep the answer framework, O-O-P and U-M-L, SOLID, clean code, code smells, all twenty-three patterns, concurrency, every case study, and the interview question bank.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll be able to revise in fifteen minutes, pick a pattern from a symptom in seconds, and answer the most common concept questions out loud in two to four sentences.",
+          "reveal": 0
+        },
+        {
+          "say": "Use it with chapters twenty-two and twenty-three of the PDF. Each slide names its section. When a quick answer doesn't click, pause, open that section, and read the full explanation.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s002",
+      "layout": "bullets",
+      "title": "One running example for today",
+      "bullets": [
+        "A parking lot: floors, spots, vehicles, tickets",
+        "Two gates, one last free spot",
+        "Pricing that changes per vehicle type",
+        "Boards that show free spots",
+        "Plus a movie-seat booking for concurrency"
+      ],
+      "steps": [
+        {
+          "say": "To keep this concrete, we'll reuse one story: a parking lot. It has floors, spots, vehicles and tickets.",
+          "reveal": 1
+        },
+        {
+          "say": "It has a race: two gates both want the last free spot.",
+          "reveal": 2
+        },
+        {
+          "say": "It has a rule that changes: trucks may be charged differently from cars.",
+          "reveal": 3
+        },
+        {
+          "say": "It has listeners: display boards that show how many spots are free.",
+          "reveal": 4
+        },
+        {
+          "say": "And when we get to multi-item locking, we'll borrow a movie-seat booking.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s003",
+      "layout": "section",
+      "kicker": "Concept 1 of 14",
+      "title": "How to revise",
+      "caption": "Book: Ch 22 · 22.1 How to revise",
+      "steps": [
+        {
+          "say": "Concept one: how to revise. The trick is recall first, then check. Reading a chapter again feels productive, but the interview tests recall.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s004",
+      "layout": "table",
+      "title": "The 15-minute plan (morning of the interview)",
+      "table": {
+        "head": [
+          "Minutes",
+          "Read",
+          "Why"
+        ],
+        "rows": [
+          [
+            "0 to 3",
+            "The answer framework",
+            "You use it in minute one"
+          ],
+          [
+            "3 to 6",
+            "SOLID + relationship table",
+            "Asked by name most often"
+          ],
+          [
+            "6 to 10",
+            "'Which pattern?' table",
+            "Patterns come from signals"
+          ],
+          [
+            "10 to 13",
+            "Concurrency + deadlock list",
+            "Every booking has a race"
+          ],
+          [
+            "13 to 15",
+            "Case-study rows you expect",
+            "Entities, pattern, atomic step"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Imagine your interview is at ten a.m. and you have fifteen minutes on the train. Minutes zero to three: the answer framework, because you'll use it in the very first minute.",
+          "reveal": 1
+        },
+        {
+          "say": "Minutes three to six: the SOLID one-pager and the relationship table. Those are the two things interviewers name most often.",
+          "reveal": 2
+        },
+        {
+          "say": "Minutes six to ten: the which-pattern table. You want patterns to come from a symptom, not from memory.",
+          "reveal": 3
+        },
+        {
+          "say": "Minutes ten to thirteen: the concurrency sheet and deadlock checklist, because every booking or inventory problem hides a race.",
+          "reveal": 4
+        },
+        {
+          "say": "Last two minutes: the case-study rows you expect. If you think they'll ask a parking lot, read that one row: entities, pattern, and the one atomic step.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s005",
+      "layout": "bullets",
+      "title": "The night before: about two hours",
+      "bullets": [
+        "45 min: read cheat sheets, say one example per row",
+        "45 min: three case studies from memory",
+        "20 min: mark glossary terms you can't explain",
+        "Then stop. Sleep beats one more pattern",
+        "Mistakes: re-reading, all 23 equal, skipping 'when not'"
+      ],
+      "steps": [
+        {
+          "say": "The night before, give it about two hours. First, forty-five minutes on the cheat sheets. For each row, say one example out loud. If you can't, open the referenced section.",
+          "reveal": 1
+        },
+        {
+          "say": "Second, forty-five minutes on three case studies you haven't practised. For example, hotel, auction and Splitwise. Write the requirements, list the classes, draw the diagram, and name the one hard method, all without looking. Then compare with the chapter's summary.",
+          "reveal": 2
+        },
+        {
+          "say": "Third, twenty minutes on the glossary. Mark every term you can't explain in one sentence, and read only those sections.",
+          "reveal": 3
+        },
+        {
+          "say": "Fourth, stop. Sleep matters more than one more pattern.",
+          "reveal": 4
+        },
+        {
+          "say": "Three classic mistakes: re-reading instead of recalling, memorising all twenty-three patterns equally when six come up in almost every round, and skipping the when-not-to-use column. Interviewers love asking, would you always do that?",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s006",
+      "layout": "section",
+      "kicker": "Concept 2 of 14",
+      "title": "The LLD answer framework on one page",
+      "caption": "Book: Ch 22 · 22.2 The LLD interview answer framework",
+      "steps": [
+        {
+          "say": "Concept two: the answer framework. Eleven steps. Say each one out loud as you enter it, so the interviewer can follow your thinking.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s007",
+      "layout": "table",
+      "title": "Steps 1 to 6, applied to the parking lot",
+      "table": {
+        "head": [
+          "#",
+          "Step",
+          "Parking-lot output"
+        ],
+        "rows": [
+          [
+            "1",
+            "Clarify",
+            "One building, many floors, two gates"
+          ],
+          [
+            "2",
+            "Requirements",
+            "8 to 12 lines + out of scope: no app"
+          ],
+          [
+            "3",
+            "Use cases",
+            "Driver parks, pays; admin adds floor"
+          ],
+          [
+            "4",
+            "Entities",
+            "Lot, Floor, Spot, Vehicle, Ticket"
+          ],
+          [
+            "5",
+            "Relationships",
+            "Floor owns 1 or more Spots"
+          ],
+          [
+            "6",
+            "Class diagram",
+            "Fields, key methods, enums"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Step one, clarify. Who uses it, one site or many? For our lot: one building, several floors, two entry gates.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, requirements. Write eight to twelve numbered lines, and an out-of-scope list. For example: we will not build a mobile app or online payments.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, use cases. What can each actor do? The driver parks and pays. The admin adds a floor.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, entities. Which nouns hold state or behaviour? ParkingLot, ParkingFloor, ParkingSpot, Vehicle, Ticket.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, relationships. Uses, knows, has, owns or is-a, and how many. A floor owns one or more spots.",
+          "reveal": 5
+        },
+        {
+          "say": "Step six, the class diagram: fields, key methods, interfaces and enums like SpotType.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s008",
+      "layout": "table",
+      "title": "Steps 7 to 11, applied to the parking lot",
+      "table": {
+        "head": [
+          "#",
+          "Step",
+          "Parking-lot output"
+        ],
+        "rows": [
+          [
+            "7",
+            "Key flows",
+            "Park: find spot, claim, issue ticket"
+          ],
+          [
+            "8",
+            "Patterns and SOLID",
+            "Strategy for pricing; reject Singleton"
+          ],
+          [
+            "9",
+            "Code",
+            "Models, services, driver"
+          ],
+          [
+            "10",
+            "Edge cases + concurrency",
+            "Lot full? Two gates, one spot?"
+          ],
+          [
+            "11",
+            "Extensions",
+            "'Add EV spots' = one new class"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Step seven, key flows. Walk the main use case: find a free spot, claim it, issue a ticket. Maybe sketch the ticket's lifecycle.",
+          "reveal": 1
+        },
+        {
+          "say": "Step eight, patterns and SOLID. Is there a rule that varies? Pricing per vehicle type, so Strategy. Name one you rejected, too: no Singleton for the lot, we inject one instance.",
+          "reveal": 2
+        },
+        {
+          "say": "Step nine, code: interfaces, enums, models, services, and a driver that runs the main flows.",
+          "reveal": 3
+        },
+        {
+          "say": "Step ten, edge cases and concurrency. Lot full? Exit without entry? Two gates racing for one spot?",
+          "reveal": 4
+        },
+        {
+          "say": "Step eleven, extensions. What if E-V charging spots are added? Answer: one new class, nothing old edited.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s009",
+      "layout": "twocol",
+      "title": "Time budgets",
+      "left": {
+        "heading": "45-minute design round",
+        "bullets": [
+          "Clarify requirements: 5 to 8 min",
+          "Actors and use cases: 3 to 5 min",
+          "Find classes: 8 to 10 min",
+          "Connect classes: 8 to 10 min",
+          "Write code: 12 to 15 min"
+        ]
+      },
+      "right": {
+        "heading": "90-minute machine coding",
+        "bullets": [
+          "Read + requirements: 5 to 10 min",
+          "Model: 10 to 15 min",
+          "Core flow end to end: 30 to 40 min",
+          "Rest + edge cases: 15 to 20 min",
+          "Polish, demo, 5 min buffer"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Now the clock. In a forty-five minute design round, spend five to eight minutes clarifying.",
+          "reveal": 1
+        },
+        {
+          "say": "Then three to five minutes on actors and use cases.",
+          "reveal": 2
+        },
+        {
+          "say": "Eight to ten minutes finding classes.",
+          "reveal": 3
+        },
+        {
+          "say": "Eight to ten connecting them.",
+          "reveal": 4
+        },
+        {
+          "say": "And twelve to fifteen writing code. Notice: roughly a quarter of the hour goes by before you name a class.",
+          "reveal": 5
+        },
+        {
+          "say": "In a ninety-minute machine-coding round, five to ten minutes to read and write requirements.",
+          "reveal": 6
+        },
+        {
+          "say": "Ten to fifteen to model entities, enums and service interfaces.",
+          "reveal": 7
+        },
+        {
+          "say": "Thirty to forty for the core flow, end to end. The rule: something runs by the halfway mark.",
+          "reveal": 8
+        },
+        {
+          "say": "Fifteen to twenty for remaining features, validation and edge cases.",
+          "reveal": 9
+        },
+        {
+          "say": "Then polish and demo, and always keep a five-minute buffer. Never zero.",
+          "reveal": 10
+        }
+      ]
+    },
+    {
+      "id": "s010",
+      "layout": "table",
+      "title": "Example: finding classes in one sentence",
+      "table": {
+        "head": [
+          "Candidate noun",
+          "Test",
+          "Verdict"
+        ],
+        "rows": [
+          [
+            "Spot size",
+            "A value, differs only in data",
+            "Enum SpotType, not a subclass"
+          ],
+          [
+            "Ticket",
+            "Changing state, others call it",
+            "Class: the record-keeping one"
+          ],
+          [
+            "Pricing rule",
+            "Differs in behaviour",
+            "Class behind an interface"
+          ],
+          [
+            "ParkingLotManager",
+            "Its sentence needs 'and'",
+            "Split it"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Finding classes: nouns become candidate classes, verbs become methods. Then cut. Spot size is just data, so different data means a field or an enum. We don't write CompactSpot and LargeSpot subclasses.",
+          "reveal": 1
+        },
+        {
+          "say": "Ticket has changing state and things call it. Keep it. Beginners most often forget this record-keeping class: the ticket, the loan, the booking.",
+          "reveal": 2
+        },
+        {
+          "say": "The pricing rule differs in behaviour, and different behaviour means a class. That's the other class beginners forget: the rule class.",
+          "reveal": 3
+        },
+        {
+          "say": "And a ParkingLotManager whose one-sentence description needs the word and is a God class. Split it, and put each method where its data lives.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s011",
+      "layout": "twocol",
+      "title": "What the interviewer judges, and code habits",
+      "left": {
+        "heading": "Judged",
+        "bullets": [
+          "Did you bound the problem?",
+          "One job per class?",
+          "Relationships right?",
+          "Code matches diagram? A trade-off?"
+        ]
+      },
+      "right": {
+        "heading": "Habits",
+        "bullets": [
+          "Pass time in; inject a Clock",
+          "Money: BigDecimal or long cents",
+          "Exceptions, Optional, private final"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Five things are judged. One: did you bound the problem with an out-of-scope list?",
+          "reveal": 1
+        },
+        {
+          "say": "Two: can you say each class's one job in a sentence?",
+          "reveal": 2
+        },
+        {
+          "say": "Three: are the relationships right, with multiplicity?",
+          "reveal": 3
+        },
+        {
+          "say": "Four and five: does the code match the diagram, and can you explain a trade-off, the choice plus the option you rejected? Machine coding adds: does it run, is it readable, does it handle bad input, and is shared state thread-safe.",
+          "reveal": 4
+        },
+        {
+          "say": "Code habits they notice. Pass the time in, for example as an injected Clock, instead of reading the clock inside logic. That makes the fee calculation testable.",
+          "reveal": 5
+        },
+        {
+          "say": "Money in BigDecimal or whole cents in a long. Never double, because zero point one plus zero point two in double is not exactly zero point three.",
+          "reveal": 6
+        },
+        {
+          "say": "Throw clear exceptions, return Optional when not found is normal, keep fields private final, and use domain names like ParkingTicket, never Helper or Data2. The skeleton: models, repositories, strategies, services, driver.",
+          "reveal": 7
+        }
+      ]
+    },
+    {
+      "id": "s012",
+      "layout": "section",
+      "kicker": "Concept 3 of 14",
+      "title": "OOP and relationships cheat sheet",
+      "caption": "Book: Ch 22 · 22.3 OOP & relationships cheat sheet",
+      "steps": [
+        {
+          "say": "Concept three: O-O-P and relationships. O-O-P means object-oriented programming. Four pillars, one choice between abstract class and interface, and six relationship lines.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s013",
+      "layout": "table",
+      "title": "The four pillars with one bank account",
+      "table": {
+        "head": [
+          "Pillar",
+          "One line",
+          "Example"
+        ],
+        "rows": [
+          [
+            "Encapsulation",
+            "Private data, rules in methods",
+            "withdraw refuses overdraft"
+          ],
+          [
+            "Abstraction",
+            "Show what, hide how",
+            "PaymentGateway.pay()"
+          ],
+          [
+            "Inheritance",
+            "Only if child truly is a parent",
+            "SavingsAccount extends Account"
+          ],
+          [
+            "Polymorphism",
+            "One call, behaviour per object",
+            "account.monthlyFee()"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Take one bank account. Encapsulation: the balance is private, and only withdraw changes it, and withdraw refuses to go below zero. That rule is an invariant, a fact that must always be true.",
+          "reveal": 1
+        },
+        {
+          "say": "Abstraction: callers see a PaymentGateway with a pay method, and never how the bank call works. Encapsulation hides data; abstraction hides complexity.",
+          "reveal": 2
+        },
+        {
+          "say": "Inheritance: SavingsAccount extends Account, but only because a savings account truly is an account. A subclass that throws on a parent method is a warning sign.",
+          "reveal": 3
+        },
+        {
+          "say": "Polymorphism: one call, account dot monthlyFee, runs different code per account type, so the type switch disappears.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s014",
+      "layout": "twocol",
+      "title": "Abstract class vs interface",
+      "left": {
+        "heading": "Abstract class",
+        "bullets": [
+          "Has state and constructors",
+          "Extend only one",
+          "'Is a': shared family code"
+        ]
+      },
+      "right": {
+        "heading": "Interface",
+        "bullets": [
+          "No instance state",
+          "Implement many",
+          "'Can do': roles, strategies"
+        ]
+      },
+      "steps": [
+        {
+          "say": "An abstract class can hold state and constructors.",
+          "reveal": 1
+        },
+        {
+          "say": "A class extends only one.",
+          "reveal": 2
+        },
+        {
+          "say": "It says is-a, and suits a close family sharing code, like Template Method.",
+          "reveal": 3
+        },
+        {
+          "say": "An interface has no instance state, only constants and default, static or private methods.",
+          "reveal": 4
+        },
+        {
+          "say": "A class can implement many.",
+          "reveal": 5
+        },
+        {
+          "say": "It says can-do. Rule of thumb: start with an interface, and add an abstract class underneath only when real shared state appears. The J-D-K does exactly that: List, then AbstractList, then ArrayList.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s015",
+      "layout": "table",
+      "title": "The six relationships, weakest to strongest",
+      "table": {
+        "head": [
+          "Relation",
+          "Phrase",
+          "Example"
+        ],
+        "rows": [
+          [
+            "Dependency",
+            "A uses B",
+            "CheckoutService uses PaymentGateway"
+          ],
+          [
+            "Association",
+            "A knows B",
+            "Order knows Customer"
+          ],
+          [
+            "Aggregation",
+            "A has B; parts live on",
+            "Airline has Aircraft"
+          ],
+          [
+            "Composition",
+            "A owns B; parts die",
+            "ParkingFloor owns ParkingSpot"
+          ],
+          [
+            "Realization",
+            "A implements B",
+            "EmailNotifier implements Notifier"
+          ],
+          [
+            "Generalization",
+            "A is a B",
+            "CardPayment extends Payment"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Six relationships, weakest coupling first. Dependency: A uses B for a moment, as a parameter or local. Checkout uses the payment gateway in one method.",
+          "reveal": 1
+        },
+        {
+          "say": "Association: A knows B through a field. An order keeps a reference to its customer.",
+          "reveal": 2
+        },
+        {
+          "say": "Aggregation: A has B, but the parts live on. Retire an airline and its aircraft still exist.",
+          "reveal": 3
+        },
+        {
+          "say": "Composition: A owns B, and the parts die with it. Demolish a floor and its spots are gone.",
+          "reveal": 4
+        },
+        {
+          "say": "Realization: A implements an interface. EmailNotifier implements Notifier.",
+          "reveal": 5
+        },
+        {
+          "say": "Generalization: A is a B, through extends. CardPayment is a Payment. To choose, ask in order: implements an interface? Substitutable? Kept in a field? Dies with the whole? Outlives it?",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s016",
+      "layout": "table",
+      "title": "UML arrow legend",
+      "caption": "Diamond at the whole; triangle at the parent or interface",
+      "steps": [
+        {
+          "say": "Here are the lines. Dependency is dashed with an open arrow. Association is a solid line, with an arrow if it's one-way.",
+          "reveal": 1
+        },
+        {
+          "say": "Aggregation and composition are solid lines with a diamond. Hollow for aggregation, filled for composition. And the diamond always sits at the whole, the floor, not the spot.",
+          "reveal": 2
+        },
+        {
+          "say": "Realization is dashed with a hollow triangle, generalization is solid with a hollow triangle. The triangle sits at the parent or the interface. Wrong-end diamonds and triangles are the most common U-M-L mistake.",
+          "reveal": 3
+        },
+        {
+          "say": "Multiplicity turns into code. One means a required field. Zero or one means Optional. One or more means a non-empty collection checked in the constructor.",
+          "reveal": 4
+        }
+      ],
+      "table": {
+        "head": [
+          "Relation",
+          "Line",
+          "End marker"
+        ],
+        "rows": [
+          [
+            "Dependency, association",
+            "Dashed / solid",
+            "Open arrow (one-way)"
+          ],
+          [
+            "Aggregation, composition",
+            "Solid",
+            "Hollow / filled diamond at whole"
+          ],
+          [
+            "Realization, generalization",
+            "Dashed / solid",
+            "Hollow triangle at parent"
+          ],
+          [
+            "Multiplicity",
+            "1 / 0..1 / 1..*",
+            "Field / Optional / non-empty list"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "s017",
+      "layout": "table",
+      "title": "UML diagrams in the interview",
+      "table": {
+        "head": [
+          "Diagram",
+          "Use it for",
+          "Budget"
+        ],
+        "rows": [
+          [
+            "Use case",
+            "Actors and scope",
+            "Usually spoken"
+          ],
+          [
+            "Class",
+            "The answer: 10 to 15 boxes",
+            "Always, 10 to 15 min"
+          ],
+          [
+            "Sequence",
+            "Call order: 3 to 4 objects",
+            "Pick one behaviour diagram"
+          ],
+          [
+            "Activity",
+            "A flow that branches",
+            "Same slot"
+          ],
+          [
+            "State machine",
+            "One object's lifecycle",
+            "Same slot"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "U-M-L has fourteen diagram types, but you need five. The use-case diagram sets scope: actors and what they do. Usually you just say it.",
+          "reveal": 1
+        },
+        {
+          "say": "The class diagram is the answer. Ten to fifteen boxes, every line typed, with multiplicity.",
+          "reveal": 2
+        },
+        {
+          "say": "Then draw only one behaviour diagram. A sequence diagram shows call order, for example gate, lot, floor, spot, ticket.",
+          "reveal": 3
+        },
+        {
+          "say": "An activity diagram shows a flow with branches.",
+          "reveal": 4
+        },
+        {
+          "say": "And a state machine shows one object's lifecycle, with labels like event, guard, action. For the ticket: active, paid, closed.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s018",
+      "layout": "section",
+      "kicker": "Concept 4 of 14",
+      "title": "SOLID one-pager",
+      "caption": "Book: Ch 22 · 22.4 SOLID one-pager",
+      "steps": [
+        {
+          "say": "Concept four: SOLID. Five names for the ways code becomes painful to change. Use them to diagnose, not as a checklist, and always say what the fix costs.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s019",
+      "layout": "table",
+      "title": "SOLID: rule, smell, fix",
+      "table": {
+        "head": [
+          "Letter",
+          "Smell that signals it",
+          "Fix"
+        ],
+        "rows": [
+          [
+            "S: one reason to change",
+            "Description needs 'and'",
+            "Split by actor"
+          ],
+          [
+            "O: add, don't edit",
+            "switch on vehicle type",
+            "Interface + new class"
+          ],
+          [
+            "L: subtype works anywhere",
+            "Subclass throws or no-ops",
+            "Better parent / composition"
+          ],
+          [
+            "I: no unused methods",
+            "Empty bodies, Unsupported",
+            "Role interfaces"
+          ],
+          [
+            "D: depend on abstractions",
+            "Service does new of a DB",
+            "Inject an interface"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "S, single responsibility: one reason to change. An Invoice that calculates totals, prints P-D-Fs and saves to the database changes for finance, design and D-B-A reasons. Split it into Invoice, InvoicePrinter and InvoiceRepository.",
+          "reveal": 1
+        },
+        {
+          "say": "O, open-closed: add behaviour by adding code. A fee calculator with switch on vehicle type must be edited for every new type. Put a PricingStrategy interface there and add EvPricing as a new class.",
+          "reveal": 2
+        },
+        {
+          "say": "L, Liskov substitution: a subtype must work anywhere its parent does. Square extends Rectangle is worse than Penguin dot fly throwing, because setWidth on a square silently changes the height. Wrong area, no error.",
+          "reveal": 3
+        },
+        {
+          "say": "I, interface segregation: a basic printer forced to implement fax throws UnsupportedOperation. Split into Printer, Scanner and Fax role interfaces.",
+          "reveal": 4
+        },
+        {
+          "say": "D, dependency inversion: if BookingService does new MySqlDatabase, you can't test it. Inject an interface that BookingService owns, and let main wire the real one.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s020",
+      "layout": "bullets",
+      "title": "The five-minute pass over your diagram",
+      "bullets": [
+        "Run S, O, L, I, D over what you drew",
+        "Two findings: good pass",
+        "Five findings: rework. Zero: you didn't look",
+        "Say: observation, cost, fix, price of fix",
+        "Over-engineering: one impl + factory + registry"
+      ],
+      "steps": [
+        {
+          "say": "After the class diagram, do a five-minute pass. Run S, O, L, I, D over it.",
+          "reveal": 1
+        },
+        {
+          "say": "On our parking lot, a good pass finds two things. S: the ParkingLot both assigns spots and computes fees, so split out a FeeCalculator. O: the fee switches on vehicle type, so make it a strategy.",
+          "reveal": 2
+        },
+        {
+          "say": "Five findings means rework. Zero means you didn't look. S and O earn the most credit, because O is what interviewers probe with a late requirement: what if trucks are charged differently? You say: add a class.",
+          "reveal": 3
+        },
+        {
+          "say": "Say it in this shape: observation, cost, fix, price of the fix. For example: Reporting implements nine methods but calls two. That's an interface segregation problem.",
+          "reveal": 4
+        },
+        {
+          "say": "And watch the opposite mistake. An interface plus factory plus registry for one implementation is speculative. Write the if, and refactor at the second or third case. That's the rule of three, and YAGNI tells you when to cut a seam.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s021",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "switch on vehicleType: principle, smell, pattern?",
+      "bullets": [
+        "SRP, Large Class, Builder",
+        "OCP, Repeated Switches, Strategy",
+        "LSP, Refused Bequest, State",
+        "DIP, Feature Envy, Factory"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. A fee method does switch on vehicle type, and the same switch shows up in two other places. Which principle, which smell, and which pattern? Pause the video now.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s022",
+      "layout": "section",
+      "kicker": "Concept 5 of 14",
+      "title": "Other principles and Clean Code rules",
+      "caption": "Book: Ch 22 · 22.5 Other design principles and Clean Code",
+      "steps": [
+        {
+          "say": "The answer was B. Open-closed, the Repeated Switches smell, and Strategy. Now concept five: the other design principles, and the Clean Code checklist.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s023",
+      "layout": "table",
+      "title": "Principles you'll name most",
+      "table": {
+        "head": [
+          "Principle",
+          "One line",
+          "Parking-lot example"
+        ],
+        "rows": [
+          [
+            "DRY",
+            "One home per rule",
+            "Hourly rate in one place"
+          ],
+          [
+            "KISS / YAGNI",
+            "Simplest thing; not before needed",
+            "No plugin system for 3 types"
+          ],
+          [
+            "Law of Demeter",
+            "Talk to friends only",
+            "No lot.getFloor().getSpot()"
+          ],
+          [
+            "Tell, Don't Ask",
+            "Tell the owner to act",
+            "ticket.pay(amount)"
+          ],
+          [
+            "Fail fast",
+            "Detect early, loudly",
+            "requireNonNull in constructor"
+          ],
+          [
+            "GRASP Expert",
+            "Class with data does work",
+            "Floor finds its free spot"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "DRY, don't repeat yourself: every rule has one home. The hourly rate lives in one place, not copied into the gate and the receipt.",
+          "reveal": 1
+        },
+        {
+          "say": "KISS, keep it simple, and YAGNI, you aren't gonna need it. Three vehicle types don't need a plugin system.",
+          "reveal": 2
+        },
+        {
+          "say": "Law of Demeter: only talk to immediate friends. lot dot getFloor dot getSpot dot assign is a train wreck. Add an intent-revealing method instead.",
+          "reveal": 3
+        },
+        {
+          "say": "Tell, don't ask: don't pull the ticket's data out and decide for it. Call ticket dot pay.",
+          "reveal": 4
+        },
+        {
+          "say": "Fail fast: reject a null plate in the constructor, not three calls later with a confusing null pointer exception.",
+          "reveal": 5
+        },
+        {
+          "say": "GRASP, nine guidelines for which class does what. Information Expert says the floor, which holds the spots, finds the free spot. Creator, Controller, Pure Fabrication like a repository, and Protected Variations complete the main ones.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s024",
+      "layout": "table",
+      "title": "Clean Code checklist",
+      "table": {
+        "head": [
+          "Area",
+          "Rule of thumb"
+        ],
+        "rows": [
+          [
+            "Names",
+            "Reveal intent: activeBookings, not list2"
+          ],
+          [
+            "Functions",
+            "Small, one thing, no flag arguments"
+          ],
+          [
+            "Comments",
+            "Only the why; delete commented-out code"
+          ],
+          [
+            "Errors",
+            "Exceptions with context; no null"
+          ],
+          [
+            "Tests",
+            "F.I.R.S.T.; Given-When-Then"
+          ],
+          [
+            "Simple design",
+            "Passes tests, reveals intent, no dupes"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Names reveal intent. activeBookings, not list2. Code should read like the requirement.",
+          "reveal": 1
+        },
+        {
+          "say": "Functions are small, do one thing, and take no flag arguments. park with a boolean isVip does two things, so split it into two methods.",
+          "reveal": 2
+        },
+        {
+          "say": "Comments say why, not what. Delete commented-out code.",
+          "reveal": 3
+        },
+        {
+          "say": "Errors use exceptions with context, never error codes or null. Return an empty list or Optional instead.",
+          "reveal": 4
+        },
+        {
+          "say": "Tests follow F-I-R-S-T: fast, independent, repeatable, self-validating, timely. One concept per test, written as given, when, then.",
+          "reveal": 5
+        },
+        {
+          "say": "And Kent Beck's simple design: passes the tests, reveals intention, no duplication, fewest elements. Plus the Boy Scout Rule: leave the code a little cleaner than you found it.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s025",
+      "layout": "section",
+      "kicker": "Concept 6 of 14",
+      "title": "Code smells to refactorings",
+      "caption": "Book: Ch 22 · 22.6 Code smells to refactorings (all 24)",
+      "steps": [
+        {
+          "say": "Concept six: code smells. A smell is a surface symptom that usually signals a deeper design problem. It's not a bug by itself. The book lists twenty-four, each with a usual first move.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s026",
+      "layout": "table",
+      "title": "Smells you'll meet most, and the first move",
+      "table": {
+        "head": [
+          "Smell",
+          "Signal",
+          "First move"
+        ],
+        "rows": [
+          [
+            "Long Function",
+            "You want a comment for a block",
+            "Extract Function"
+          ],
+          [
+            "Primitive Obsession",
+            "Money as double",
+            "Replace Primitive with Object"
+          ],
+          [
+            "Feature Envy",
+            "Uses another class's data",
+            "Move Function"
+          ],
+          [
+            "Message Chains",
+            "a.getB().getC()",
+            "Hide Delegate"
+          ],
+          [
+            "Refused Bequest",
+            "Subclass throws on parent",
+            "Replace Subclass w/ Delegate"
+          ],
+          [
+            "Speculative Generality",
+            "Abstract class, one child",
+            "Collapse Hierarchy"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Long Function: you feel the need to comment a block. Extract that block into a well-named function.",
+          "reveal": 1
+        },
+        {
+          "say": "Primitive Obsession: money as a double, status as a string. Replace it with a Money value object or an enum.",
+          "reveal": 2
+        },
+        {
+          "say": "Feature Envy: a method in ParkingLot that mostly reads the ticket's fields. Move it onto Ticket.",
+          "reveal": 3
+        },
+        {
+          "say": "Message Chains: order dot getCustomer dot getAddress dot getCity. Hide the delegate behind one method.",
+          "reveal": 4
+        },
+        {
+          "say": "Refused Bequest: a subclass throws on an inherited method. That's a Liskov violation, so replace the subclass with a delegate.",
+          "reveal": 5
+        },
+        {
+          "say": "Speculative Generality: an abstract class with one subclass, built for someday. Collapse the hierarchy.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s027",
+      "layout": "twocol",
+      "title": "Smell family to principle, and toward patterns",
+      "left": {
+        "heading": "Family to principle",
+        "bullets": [
+          "Divergent Change, Large Class: SRP",
+          "Repeated Switches, Shotgun: OCP",
+          "Message Chains: Demeter"
+        ]
+      },
+      "right": {
+        "heading": "Smell to pattern",
+        "bullets": [
+          "Switch choosing algorithm: Strategy",
+          "Methods checking status: State",
+          "null checks everywhere: Null Object"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Smell families map onto principles. Divergent Change and Large Class break single responsibility.",
+          "reveal": 1
+        },
+        {
+          "say": "Repeated Switches and Shotgun Surgery, where one change forces edits in many classes, break open-closed. Refused Bequest breaks Liskov.",
+          "reveal": 2
+        },
+        {
+          "say": "Message Chains and Insider Trading break the Law of Demeter. Feature Envy and Data Class break Tell, Don't Ask. Duplicated code breaks DRY, speculative generality breaks YAGNI.",
+          "reveal": 3
+        },
+        {
+          "say": "Some smells point straight to a pattern. A switch choosing an algorithm becomes Strategy.",
+          "reveal": 4
+        },
+        {
+          "say": "Methods that check and change a status field become State.",
+          "reveal": 5
+        },
+        {
+          "say": "If x equals null at many call sites becomes a Null Object. Logging mixed into a core class becomes a Decorator. And refactoring itself means changing structure without changing behaviour, in small steps, with tests as the safety net. Wear one hat at a time: adding features, or refactoring.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s028",
+      "layout": "section",
+      "kicker": "Concept 7 of 14",
+      "title": "All 23 GoF patterns plus extras",
+      "caption": "Book: Ch 22 · 22.7 Design patterns: all 23 GoF + extras",
+      "steps": [
+        {
+          "say": "Concept seven: design patterns. G-o-F means Gang of Four, the four authors of the nineteen ninety-four book. Twenty-three patterns: five creational, seven structural, eleven behavioral.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s029",
+      "layout": "number",
+      "title": "The count",
+      "big": "5 + 7 + 11 = 23",
+      "caption": "Creational + structural + behavioral",
+      "steps": [
+        {
+          "say": "Five creational patterns are about making objects: Singleton, Factory Method, Abstract Factory, Builder, Prototype.",
+          "reveal": 0
+        },
+        {
+          "say": "Seven structural patterns are about composing objects: Adapter, Bridge, Composite, Decorator, Facade, Flyweight, Proxy. The memory hooks: adapter makes it fit, decorator adds to it, proxy guards it, facade simplifies it, bridge splits it, composite nests it, flyweight shares it.",
+          "reveal": 0
+        },
+        {
+          "say": "Eleven behavioral patterns are about how objects share work: Chain of Responsibility, Command, Iterator, Mediator, Memento, Interpreter, Observer, State, Strategy, Template Method, Visitor. Plus extras like Null Object, Repository and Specification.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s030",
+      "layout": "table",
+      "title": "Which pattern? Pick by symptom",
+      "table": {
+        "head": [
+          "If you see",
+          "Use",
+          "Parking-lot case"
+        ],
+        "rows": [
+          [
+            "Several swappable rules",
+            "Strategy",
+            "Hourly vs flat pricing"
+          ],
+          [
+            "Class depends on a type value",
+            "Factory",
+            "Create spot from SpotType"
+          ],
+          [
+            "Many listeners",
+            "Observer",
+            "Display boards"
+          ],
+          [
+            "3+ methods switch on status",
+            "State",
+            "Vending machine states"
+          ],
+          [
+            "6+ args, many optional",
+            "Builder",
+            "Lot config"
+          ],
+          [
+            "Wrong interface",
+            "Adapter",
+            "Vendor card reader API"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Pick by symptom. Several interchangeable rules chosen at run time: Strategy. Our hourly versus flat pricing.",
+          "reveal": 1
+        },
+        {
+          "say": "The class to create depends on a type value: a Factory. Make an ElectricSpot when the type says electric.",
+          "reveal": 2
+        },
+        {
+          "say": "One change must reach an open-ended set of listeners: Observer. Every display board updates when a spot is taken.",
+          "reveal": 3
+        },
+        {
+          "say": "Three or more methods repeating one switch over a status: State. The vending machine is the classic case.",
+          "reveal": 4
+        },
+        {
+          "say": "A constructor with six or more arguments, many optional: Builder, with one validating build call.",
+          "reveal": 5
+        },
+        {
+          "say": "An existing class with the wrong interface: Adapter. Wrap the vendor's card-reader A-P-I behind your own PaymentGateway. A tree of parts is Composite. Undo or a queue is Command.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s031",
+      "layout": "bullets",
+      "title": "Three questions for the look-alikes",
+      "bullets": [
+        "Alternatives reference each other? State, else Strategy",
+        "Can one stop the flow? Chain of Responsibility",
+        "Everyone always runs? Decorator",
+        "Everyone told, nobody stops? Observer",
+        "Central object decides next? Mediator"
+      ],
+      "steps": [
+        {
+          "say": "Some patterns share a diagram, so ask three questions. First: do the alternatives reference each other? In a vending machine, HasCoin moves itself to Dispensing, so it's State. Pricing rules never know each other, so it's Strategy.",
+          "reveal": 1
+        },
+        {
+          "say": "Second: can one participant stop the flow? An A-T-M check where a bad PIN rejects the request: Chain of Responsibility.",
+          "reveal": 2
+        },
+        {
+          "say": "If every layer always runs, like logging wrapped around caching, it's Decorator.",
+          "reveal": 3
+        },
+        {
+          "say": "If everyone is told and nobody stops anyone, like the display boards, it's Observer.",
+          "reveal": 4
+        },
+        {
+          "say": "Third: does a central object decide what happens next? A chat server coordinating users is a Mediator. If each listener decides for itself, it's Observer.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s032",
+      "layout": "table",
+      "title": "The six that come up in every round",
+      "table": {
+        "head": [
+          "Pattern",
+          "Signal",
+          "Do not use when"
+        ],
+        "rows": [
+          [
+            "Strategy",
+            "Swappable rules",
+            "Only one rule, no hint of two"
+          ],
+          [
+            "Factory",
+            "Creation by type value",
+            "One concrete class"
+          ],
+          [
+            "Observer",
+            "Listeners source shouldn't know",
+            "One known listener"
+          ],
+          [
+            "State",
+            "Status drives behaviour",
+            "3 to 4 states, one method"
+          ],
+          [
+            "Singleton",
+            "Truly exactly one",
+            "You just want a global"
+          ],
+          [
+            "Builder",
+            "Many optional fields",
+            "A few required fields"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Six patterns come up in almost every round. Strategy, but not when there's only one rule and no hint of a second.",
+          "reveal": 1
+        },
+        {
+          "say": "Factory, but not when only one concrete class exists.",
+          "reveal": 2
+        },
+        {
+          "say": "Observer, but not for one listener the source already knows.",
+          "reveal": 3
+        },
+        {
+          "say": "State, but three or four states handled by one guarded method on an enum is fine.",
+          "reveal": 4
+        },
+        {
+          "say": "Singleton, only when there genuinely must be one. If you just want a global handle, inject one instance instead. Singletons hide dependencies and make tests hard.",
+          "reveal": 5
+        },
+        {
+          "say": "Builder, but not for a handful of required fields. In a forty-five minute design, use one or two patterns where the signal appears, and name one you rejected and why.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s033",
+      "layout": "section",
+      "kicker": "Concept 8 of 14",
+      "title": "Concurrency cheat sheet",
+      "caption": "Book: Ch 22 · 22.8 Concurrency cheat sheet",
+      "steps": [
+        {
+          "say": "Concept eight: concurrency. Races come from shared mutable state. Make the critical section atomic, or remove the sharing or the mutability.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s034",
+      "layout": "table",
+      "title": "Primitives and their gotchas",
+      "table": {
+        "head": [
+          "Tool",
+          "Use for",
+          "Gotcha"
+        ],
+        "rows": [
+          [
+            "synchronized",
+            "Atomic multi-step update",
+            "No slow I/O inside"
+          ],
+          [
+            "ReentrantLock",
+            "tryLock, timeouts, Conditions",
+            "unlock() in finally"
+          ],
+          [
+            "volatile",
+            "Visibility of a flag",
+            "count++ still a race"
+          ],
+          [
+            "AtomicInteger / CAS",
+            "Lock-free counters, claims",
+            "get then set is a race"
+          ],
+          [
+            "ConcurrentHashMap",
+            "Shared map",
+            "containsKey then put races"
+          ],
+          [
+            "BlockingQueue",
+            "Producer-consumer",
+            "Unbounded = no back-pressure"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "synchronized makes a multi-step update atomic and visible. Gotcha: never do slow I-O while holding it, and readers must use the same lock.",
+          "reveal": 1
+        },
+        {
+          "say": "ReentrantLock adds tryLock with a timeout and Conditions. Call lock just before try, and unlock in finally.",
+          "reveal": 2
+        },
+        {
+          "say": "volatile gives visibility, not atomicity. Two threads doing count plus plus on a volatile can both read five and both write six.",
+          "reveal": 3
+        },
+        {
+          "say": "AtomicInteger uses C-A-S, compare and swap: set the new value only if it still equals what I expected. A separate get then set is still a race. Use compareAndSet or updateAndGet.",
+          "reveal": 4
+        },
+        {
+          "say": "ConcurrentHashMap: contains-key then put is a race. Use putIfAbsent, computeIfAbsent or merge. For our lot, putIfAbsent on the plate number stops one car entering twice.",
+          "reveal": 5
+        },
+        {
+          "say": "A bounded BlockingQueue hands work between threads. Unbounded means no back-pressure and memory blows up. Also: a Semaphore of N limits access to N threads, and a CountDownLatch waits for N events once. Read the use-for column as your which-class lookup. Two more: to stop a loop from another thread, use a volatile flag or interrupt. For many readers and few writers, publish an immutable snapshot through a volatile field.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s035",
+      "layout": "table",
+      "title": "Deadlock: break any one Coffman condition",
+      "table": {
+        "head": [
+          "Condition",
+          "How to break it"
+        ],
+        "rows": [
+          [
+            "Mutual exclusion",
+            "Lock-free or immutable data"
+          ],
+          [
+            "Hold and wait",
+            "Take all at once, or tryLock + release"
+          ],
+          [
+            "No preemption",
+            "Timeouts, expiring leases"
+          ],
+          [
+            "Circular wait",
+            "Global lock order: lower id first"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "A deadlock needs all four Coffman conditions. Break any one and it can't happen. Mutual exclusion: use lock-free or immutable data.",
+          "reveal": 1
+        },
+        {
+          "say": "Hold and wait: grab everything at once, or tryLock and release everything on failure.",
+          "reveal": 2
+        },
+        {
+          "say": "No preemption: add timeouts and leases that expire.",
+          "reveal": 3
+        },
+        {
+          "say": "Circular wait: the usual fix, one global lock order. Imagine thread one transfers from wallet one to wallet two, and thread two the other way. Each grabs its first lock and waits forever. Always lock the lower id first and the cycle can't form. Also: never call a listener while holding your lock, and add jitter to retries so threads don't livelock.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s036",
+      "layout": "table",
+      "title": "The LLD concurrency recipe, on movie seats",
+      "table": {
+        "head": [
+          "#",
+          "Step",
+          "Movie booking"
+        ],
+        "rows": [
+          [
+            "1",
+            "Name shared mutable state",
+            "Seat to owner, per show"
+          ],
+          [
+            "2",
+            "State the invariant",
+            "A seat has at most one booking"
+          ],
+          [
+            "3",
+            "Find the critical op",
+            "Check free, then hold"
+          ],
+          [
+            "4",
+            "Smallest atomic tool",
+            "putIfAbsent; seats in sorted order"
+          ],
+          [
+            "5",
+            "Granularity",
+            "Lock per show, not global"
+          ],
+          [
+            "6",
+            "Handle time",
+            "Holds expire in 10 minutes"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Now the recipe, on a movie booking. Step one, name the shared mutable state: for each show, which seat belongs to whom.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, state the invariant: a seat has at most one booking.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, find the critical operation. It's a check-then-act: see that A1 is free, then hold it. Two users can both see it free.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, pick the smallest tool that makes it atomic. One seat: putIfAbsent of seat to user. Several seats all or nothing: per-seat locks taken in sorted order, so A1 then A2 for everyone. Across servers: a database constraint or optimistic version check.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, granularity: lock per show, not one global lock. One global synchronized park on the whole lot is correct, but it serialises every gate.",
+          "reveal": 5
+        },
+        {
+          "say": "Step six, handle time: holds that expire, say after ten minutes, timeouts, and idempotent retries.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s037",
+      "layout": "table",
+      "title": "Classic problems in one line each",
+      "table": {
+        "head": [
+          "Problem",
+          "Key tool",
+          "Invariant"
+        ],
+        "rows": [
+          [
+            "FooBar, Zero Even Odd",
+            "Semaphores",
+            "One permit circulates"
+          ],
+          [
+            "Dining philosophers",
+            "Ordered locks",
+            "No circular wait"
+          ],
+          [
+            "Blocking queue",
+            "Lock + 2 conditions",
+            "0 <= count <= capacity"
+          ],
+          [
+            "TTL cache",
+            "CHM + compute",
+            "Never return expired data"
+          ],
+          [
+            "Token bucket",
+            "Lock or CAS",
+            "Refill + take atomic"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The classic puzzles. FooBar and Zero Even Odd: threads take turns with semaphores, and exactly one permit circulates.",
+          "reveal": 1
+        },
+        {
+          "say": "Dining philosophers: take the lower-numbered fork first, so there's no circular wait.",
+          "reveal": 2
+        },
+        {
+          "say": "A blocking queue: one lock and two conditions, not-full and not-empty, and always wait in a while loop because of spurious wakeups.",
+          "reveal": 3
+        },
+        {
+          "say": "A T-T-L cache, time to live: a concurrent hash map with compute, and never return expired data.",
+          "reveal": 4
+        },
+        {
+          "say": "A token-bucket rate limiter: refill and take must be one atomic step.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s038",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "A1+A2 versus A2+A1: what prevents deadlock?",
+      "bullets": [
+        "Lock seats in the order clicked",
+        "Make the lock field volatile",
+        "Lock seats in sorted seat-id order",
+        "Use a bigger thread pool"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. User one picks A1 then A2. User two picks A2 then A1. Each locks seats as clicked. What stops the deadlock? Pause now.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s039",
+      "layout": "section",
+      "kicker": "Concept 9 of 14",
+      "title": "Case-study map across chapters 14 to 21",
+      "caption": "Book: Ch 22 · 22.9 Case-study map",
+      "steps": [
+        {
+          "say": "The answer was C: sort the seat ids and lock in that order, so both users lock A1 first. Now concept nine: the case-study map. One line per problem: entities, pattern, and the one atomic step.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s040",
+      "layout": "table",
+      "title": "One row per family",
+      "table": {
+        "head": [
+          "Problem",
+          "Key pattern",
+          "Atomic step"
+        ],
+        "rows": [
+          [
+            "Parking lot",
+            "Strategy, Factory, Observer",
+            "pollFirst + CAS on spot"
+          ],
+          [
+            "Vending machine",
+            "State (the whole design)",
+            "synchronized machine"
+          ],
+          [
+            "Movie tickets",
+            "Strategy (refunds)",
+            "All-or-nothing TTL hold"
+          ],
+          [
+            "Hotel / car rental",
+            "Template Method, Strategy",
+            "tryReserve per night / range"
+          ],
+          [
+            "Splitwise",
+            "Strategy (splits)",
+            "One signed number per pair"
+          ],
+          [
+            "Ride sharing",
+            "Strategy x3, Decorator",
+            "AtomicBoolean driver claim"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Chapter fourteen, everyday objects. Parking lot: Strategy for pricing and spot-finding, Factory for electric spots, Observer for boards. Two gates take one spot, so claim it with an atomic pollFirst and a C-A-S.",
+          "reveal": 1
+        },
+        {
+          "say": "Vending machine: State is the whole design, and change-making uses a coin-change table, not greedy.",
+          "reveal": 2
+        },
+        {
+          "say": "Chapter fifteen and sixteen, booking. Movie tickets: hold all seats with a time limit, pay, then commit atomically, and refund if the hold was lost. Library, concert, airline, restaurant and meeting scheduler follow the same idea.",
+          "reveal": 3
+        },
+        {
+          "say": "Hotel and car rental: availability is about dates, so a room-night or a vehicle date range is reserved inside one synchronized tryReserve.",
+          "reveal": 4
+        },
+        {
+          "say": "Chapter twenty, components. Splitwise: a split strategy and one signed number per pair of people, in BigDecimal, with no lost cents. Plus L-R-U cache, logger, pub-sub and rate limiter.",
+          "reveal": 5
+        },
+        {
+          "say": "Ride sharing: three strategies, surge as a Decorator, and one driver can't be double-booked because the claim is an atomic boolean.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s041",
+      "layout": "bullets",
+      "title": "What every case study teaches",
+      "bullets": [
+        "Name the real unit of inventory",
+        "Every 'if free then take' is one atomic step",
+        "Rules live on the object owning the data",
+        "Strategy, Observer, State for change, events, life",
+        "Inject time and randomness; listeners outside locks"
+      ],
+      "steps": [
+        {
+          "say": "Five lessons repeat. Name the real unit of inventory: a library copy, a show seat, a room-night, a vehicle-day. Not the book title, not the movie.",
+          "reveal": 1
+        },
+        {
+          "say": "Every if free then take is one atomic step: a monitor, a C-A-S, or a conditional database update.",
+          "reveal": 2
+        },
+        {
+          "say": "Put rules on the object that owns the data. The service just orders the steps.",
+          "reveal": 3
+        },
+        {
+          "say": "Strategy for the rule most likely to change, Observer for tell someone when it happens, State for lifecycles.",
+          "reveal": 4
+        },
+        {
+          "say": "Inject time and randomness, so tests repeat. Money in BigDecimal or cents. And call listeners outside locks.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s042",
+      "layout": "section",
+      "kicker": "Concept 10 of 14",
+      "title": "Machine-coding and edge-case checklists",
+      "caption": "Book: Ch 22 · 22.10 Machine-coding and edge-case checklists",
+      "steps": [
+        {
+          "say": "Concept ten: the machine-coding checklist, the interviewer's rubric, and the edge-case list.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s043",
+      "layout": "table",
+      "title": "Machine-coding checklist by phase",
+      "table": {
+        "head": [
+          "Phase",
+          "Do this"
+        ],
+        "rows": [
+          [
+            "0 to 20 min",
+            "Mandatory vs bonus; sample input in driver"
+          ],
+          [
+            "0 to 20 min",
+            "Six packages: model ... driver"
+          ],
+          [
+            "20 to 75 min",
+            "Mandatory in order; run every 15 min"
+          ],
+          [
+            "20 to 75 min",
+            "No System.out in services"
+          ],
+          [
+            "75 to 90 min",
+            "Edge cases, locks, bonus last, walkthrough"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Before coding, read the statement twice and mark mandatory versus bonus. Paste the sample input into the driver as a list of commands.",
+          "reveal": 1
+        },
+        {
+          "say": "Create six packages: model, repository, service, strategy, exception, driver.",
+          "reveal": 2
+        },
+        {
+          "say": "While coding, implement mandatory requirements in the statement's order, and run the driver after each one, at least every fifteen minutes.",
+          "reveal": 3
+        },
+        {
+          "say": "Services return data and throw domain exceptions. They never print. The driver is a map of command name to handler. It catches each domain exception, prints it, and continues.",
+          "reveal": 4
+        },
+        {
+          "say": "Before you stop: edge cases, thread safety where money or stock is shared, bonus only after every mandatory feature runs, and a two-minute walkthrough.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s044",
+      "layout": "table",
+      "title": "Rubric and edge cases",
+      "table": {
+        "head": [
+          "Rubric item",
+          "Edge case to test"
+        ],
+        "rows": [
+          [
+            "Working, demo-able code",
+            "Input: null, negative, unknown id"
+          ],
+          [
+            "Mandatory first, in order",
+            "Capacity: lot full"
+          ],
+          [
+            "Clean models, separation",
+            "State: exit without entry"
+          ],
+          [
+            "Extensible: new rule = new class",
+            "Time: exit before entry"
+          ],
+          [
+            "Edge cases, readability",
+            "Money: no lost cents"
+          ],
+          [
+            "Concurrency if asked; tests bonus",
+            "Concurrency: two gates, one spot"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The rubric starts with working, demo-able code. Never finish with code that doesn't compile. Edge case: bad input. A null plate, a negative amount, an unknown ticket id.",
+          "reveal": 1
+        },
+        {
+          "say": "Functional completeness, mandatory first. Edge case: capacity. What happens when the lot is full?",
+          "reveal": 2
+        },
+        {
+          "say": "Clean models: enums for fixed sets, records for values. Separation: driver, service, repository. Edge case: state. Exiting without entering, or paying twice.",
+          "reveal": 3
+        },
+        {
+          "say": "Extensibility: a new rule is a new class. Edge case: time. An exit stamped before the entry, or a part hour. Do you round up?",
+          "reveal": 4
+        },
+        {
+          "say": "Edge-case handling and readable names. Edge case: money. Split one hundred rupees three ways, and the extra paisa must go to someone.",
+          "reveal": 5
+        },
+        {
+          "say": "Concurrency when asked, and tests as a bonus. A tiny assert-style self-check in main is enough. Edge case: two gates, one spot, and seeded randomness so the demo repeats.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s045",
+      "layout": "section",
+      "kicker": "Concept 11 of 14",
+      "title": "Most important glossary terms",
+      "caption": "Book: Ch 22 · 22.11 Glossary",
+      "steps": [
+        {
+          "say": "Concept eleven: the glossary. About two hundred terms. Here are the ones that trip people most, each in one sentence.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s046",
+      "layout": "table",
+      "title": "Terms to say in one sentence",
+      "table": {
+        "head": [
+          "Term",
+          "Plain meaning"
+        ],
+        "rows": [
+          [
+            "Check-then-act",
+            "Read, then act as two steps: a race"
+          ],
+          [
+            "Idempotency",
+            "Twice has the same effect as once"
+          ],
+          [
+            "Half-open interval",
+            "[start, end): back-to-back don't clash"
+          ],
+          [
+            "Happens-before",
+            "Guarantees one thread sees another's write"
+          ],
+          [
+            "Composition root",
+            "The one place objects are wired: main"
+          ],
+          [
+            "Invariant",
+            "Must always be true: balance >= 0"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Check-then-act: reading a condition, then acting on it, as two steps. A race unless you make it atomic.",
+          "reveal": 1
+        },
+        {
+          "say": "Idempotency: running it twice has the same effect as once. A payment retry with the same idempotency key never charges twice.",
+          "reveal": 2
+        },
+        {
+          "say": "Half-open interval: from start, up to but not including end. A meeting from ten to eleven and another from eleven to twelve don't clash.",
+          "reveal": 3
+        },
+        {
+          "say": "Happens-before: the Java Memory Model rule that guarantees one thread sees another's write. Unlocking happens-before the next lock of the same lock.",
+          "reveal": 4
+        },
+        {
+          "say": "Composition root: the one place, usually main, where objects are created and wired together.",
+          "reveal": 5
+        },
+        {
+          "say": "Invariant: a fact that must always be true, like balance is never negative. Others worth one line: C-A-S, the A-B-A problem, value object versus entity, aggregate, T-T-L hold, optimistic versus pessimistic locking.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s047",
+      "layout": "section",
+      "kicker": "Concept 12 of 14",
+      "title": "Most important Design-X questions",
+      "caption": "Book: Ch 23 · Part A, Design X questions",
+      "steps": [
+        {
+          "say": "Concept twelve: the Design-X prompts from chapter twenty-three. The starred ones are asked very often. Here's the one-breath answer for each category.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s048",
+      "layout": "table",
+      "title": "Design-X by category",
+      "table": {
+        "head": [
+          "Category",
+          "Starred prompts",
+          "What they probe"
+        ],
+        "rows": [
+          [
+            "Everyday objects",
+            "Parking lot, elevator, vending, ATM",
+            "Atomic spot claim; LOOK"
+          ],
+          [
+            "Booking",
+            "BookMyShow, library, hotel, rental",
+            "Hold with expiry; copy vs title"
+          ],
+          [
+            "Games",
+            "Snake and ladder, chess, 2048, tic-tac-toe",
+            "O(1) win check; move objects"
+          ],
+          [
+            "Platforms",
+            "Uber, Swiggy, Cricinfo, Amazon",
+            "One driver, two riders"
+          ],
+          [
+            "Components",
+            "Rate limiter, LRU, logger, pub-sub",
+            "Thread-safe O(1) structures"
+          ],
+          [
+            "Machine coding",
+            "Splitwise, wallet, inventory",
+            "Rounding; lock in id order"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Everyday objects. Parking lot, elevator, vending machine and A-T-M. They probe the atomic spot claim, why first-come first-served makes an elevator zig-zag so you use LOOK, and A-T-M reversal when cash is debited but not dispensed.",
+          "reveal": 1
+        },
+        {
+          "say": "Booking. BookMyShow: two users pick the same seat, so hold with expiry and then confirm. Library: the split between a book title and a physical copy. Hotel and car rental: overlapping date ranges.",
+          "reveal": 2
+        },
+        {
+          "say": "Games. Tic-tac-toe: keep counters per row, column and diagonal, so the win check is O of one, constant time. Chess: moves as objects, for undo. 2048: write one slide-left routine and rotate the grid for the others.",
+          "reveal": 3
+        },
+        {
+          "say": "Platforms. Uber: two riders matched to one driver. Swiggy: restaurant capacity. Cricinfo: derive stats from balls, don't store totals. Amazon: reserve stock at checkout or at payment?",
+          "reveal": 4
+        },
+        {
+          "say": "Components. L-R-U cache: a hash map plus a doubly linked list gives O of one get and put. Rate limiter: lazy refill and a lock or C-A-S per key. Logger and pub-sub: async without losing messages.",
+          "reveal": 5
+        },
+        {
+          "say": "Machine-coding favourites. Splitwise: give the leftover paisa to one person. Wallet: transfers lock both wallets in id order. Inventory: lock per S-K-U, stock-keeping unit, so you never oversell.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s049",
+      "layout": "table",
+      "title": "Example: an outline built from scratch, the coupon system",
+      "table": {
+        "head": [
+          "Part",
+          "Answer"
+        ],
+        "rows": [
+          [
+            "Classes",
+            "Coupon, DiscountStrategy, EligibilityRule"
+          ],
+          [
+            "Patterns",
+            "Strategy, Specification, Factory"
+          ],
+          [
+            "Race",
+            "'First 1,000 users' used 1,001 times"
+          ],
+          [
+            "Fix",
+            "CAS increment only while below limit"
+          ],
+          [
+            "Lifecycle",
+            "RESERVED, then REDEEMED or RELEASED"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "When the book has no case study, the bank gives a full outline. Take the coupon system. Classes: Coupon, a DiscountStrategy for flat, percent with a cap, or buy-one-get-one, and EligibilityRules.",
+          "reveal": 1
+        },
+        {
+          "say": "Patterns: Strategy for discounts, Specification to combine rules with and, or, not, and a Factory to build coupons.",
+          "reveal": 2
+        },
+        {
+          "say": "The race: a first one thousand users coupon must not be used one thousand and one times.",
+          "reveal": 3
+        },
+        {
+          "say": "The fix: at checkout, reserve a use with a C-A-S loop on an AtomicInteger that increments only while below the limit.",
+          "reveal": 4
+        },
+        {
+          "say": "Then REDEEMED when payment succeeds, RELEASED on failure or timeout, and redeeming is idempotent per order id.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s050",
+      "layout": "section",
+      "kicker": "Concept 13 of 14",
+      "title": "Most important concept Q&As",
+      "caption": "Book: Ch 23 · Part B, Concept questions",
+      "steps": [
+        {
+          "say": "Concept thirteen: the concept questions. Answer in two to four sentences, then give a tiny example from your design. Let's go fast, one per area.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s051",
+      "layout": "table",
+      "title": "OOP, UML, SOLID, principles",
+      "table": {
+        "head": [
+          "Question",
+          "Short answer"
+        ],
+        "rows": [
+          [
+            "Overloading vs overriding?",
+            "Compile time by params; run time by object"
+          ],
+          [
+            "equals / hashCode?",
+            "Equal objects, equal hashes; override both"
+          ],
+          [
+            "Composition vs aggregation?",
+            "Part dies with whole vs lives on"
+          ],
+          [
+            "DIP vs DI vs IoC?",
+            "Principle; technique; framework calls you"
+          ],
+          [
+            "SOLID overdone?",
+            "Yes: one impl + factory. Apply at seams"
+          ],
+          [
+            "Entity vs value object?",
+            "Identity lasts vs defined by values"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Overloading versus overriding. Overloading picks a method at compile time by parameter types. Overriding picks at run time by the actual object. Static and private methods can't be overridden.",
+          "reveal": 1
+        },
+        {
+          "say": "equals and hashCode. Equal objects must have equal hash codes. Override only equals, and a HashSet holds duplicates. Use records for value objects.",
+          "reveal": 2
+        },
+        {
+          "say": "Association, aggregation, composition. An order owns its order lines, they die with it: composition. A team has players who live on: aggregation.",
+          "reveal": 3
+        },
+        {
+          "say": "D-I-P versus D-I versus I-o-C. D-I-P is the principle, depend on abstractions. Dependency injection is the technique, pass dependencies in. Inversion of control is the bigger idea: the framework calls you.",
+          "reveal": 4
+        },
+        {
+          "say": "Can SOLID be overdone? Yes. Single-implementation interfaces and factories for trivial objects. Apply it where the interviewer will extend: pricing, channels.",
+          "reveal": 5
+        },
+        {
+          "say": "D-D-D basics. An entity, like a Customer, has an identity that lasts. A value object, like Money, is defined only by its values and is immutable.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s052",
+      "layout": "table",
+      "title": "Patterns",
+      "table": {
+        "head": [
+          "Question",
+          "Short answer"
+        ],
+        "rows": [
+          [
+            "Thread-safe Singleton?",
+            "enum, or holder class; DCL needs volatile"
+          ],
+          [
+            "Builder when?",
+            "Many optional params; validate in build()"
+          ],
+          [
+            "Adapter vs Facade vs Bridge?",
+            "Fix mismatch; simplify; planned split"
+          ],
+          [
+            "Decorator vs Proxy?",
+            "Adds behaviour vs controls access"
+          ],
+          [
+            "Strategy vs State?",
+            "Caller chooses vs object's own lifecycle"
+          ],
+          [
+            "Command undo/redo?",
+            "Undo stack, redo stack; new cmd clears redo"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Creational. A thread-safe Singleton: use an enum, or the holder-class idiom. Double-checked locking needs a volatile field. And say it's often an anti-pattern because it's hidden global state.",
+          "reveal": 1
+        },
+        {
+          "say": "Builder: many optional parameters. For example, a pizza builder with size, cheese and toppings, and build checks everything once.",
+          "reveal": 2
+        },
+        {
+          "say": "Structural. Adapter fixes a mismatch after the fact, like a legacy payment A-P-I. Facade gives a simple front to a subsystem. Bridge is planned up front so two dimensions vary, like Shape times Renderer.",
+          "reveal": 3
+        },
+        {
+          "say": "Decorator versus Proxy: same shape, different intent. Decorator adds behaviour and stacks, like logging around compressing. Proxy controls access, like lazy loading or a security check.",
+          "reveal": 4
+        },
+        {
+          "say": "Behavioral. Strategy versus State: ask who chooses. The caller means Strategy. The object's own lifecycle means State.",
+          "reveal": 5
+        },
+        {
+          "say": "Command gives undo and redo. Push each command on an undo stack. Undo pops it, calls undo, and pushes it on the redo stack. Any new command clears the redo stack.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s053",
+      "layout": "table",
+      "title": "Concurrency and Java specifics",
+      "table": {
+        "head": [
+          "Question",
+          "Short answer"
+        ],
+        "rows": [
+          [
+            "Race condition?",
+            "count++: both read 5, both write 6"
+          ],
+          [
+            "synchronized vs ReentrantLock?",
+            "Simple vs tryLock, fairness, Conditions"
+          ],
+          [
+            "wait() vs sleep()?",
+            "Releases monitor vs keeps locks"
+          ],
+          [
+            "Prevent double booking?",
+            "Atomic claim; optimistic/pessimistic DB"
+          ],
+          [
+            "Pass by value or reference?",
+            "Always value; the reference is copied"
+          ],
+          [
+            "How HashMap works?",
+            "Buckets, equals in bucket, tree past 8"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concurrency. A race condition: count plus plus is read, modify, write. Two threads read five and both write six.",
+          "reveal": 1
+        },
+        {
+          "say": "synchronized versus ReentrantLock. Both are reentrant. synchronized is simpler. ReentrantLock adds tryLock with timeout, fairness and several Conditions, but you must unlock in finally.",
+          "reveal": 2
+        },
+        {
+          "say": "wait versus sleep. wait releases the monitor and must sit inside synchronized, in a while loop. sleep just pauses and keeps any locks.",
+          "reveal": 3
+        },
+        {
+          "say": "Preventing double booking: make check and claim one step with putIfAbsent, or lock per seat in sorted order. With a database, a version column for optimistic locking, or select for update for pessimistic.",
+          "reveal": 4
+        },
+        {
+          "say": "Java specifics. Java is always pass-by-value. For objects the reference is copied, so a method can change the object but can't make the caller's variable point somewhere else.",
+          "reveal": 5
+        },
+        {
+          "say": "HashMap: an array of buckets, pick the bucket from the hash, compare with equals inside. When a bucket already holding eight entries gets one more, it becomes a red-black tree, but only if the table has at least sixty-four slots, and the table doubles past seventy-five percent full.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s054",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "States move the machine on themselves. Which pattern?",
+      "bullets": [
+        "Strategy",
+        "State",
+        "Template Method",
+        "Observer"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Same class shape, but each state object moves the machine to the next state itself. Which pattern? Pause now.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s055",
+      "layout": "section",
+      "kicker": "Concept 14 of 14",
+      "title": "How to run a 60 to 90 minute machine-coding round",
+      "caption": "Book: Ch 23 · Part C, How to run a 60-90 minute round",
+      "steps": [
+        {
+          "say": "The answer was B, State, because the states know each other and advance themselves. Final concept: the minute-by-minute plan for a machine-coding round. We'll walk it with Splitwise. For a sixty-minute round, roughly halve each step.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s056",
+      "layout": "table",
+      "title": "The 90-minute plan, on Splitwise",
+      "table": {
+        "head": [
+          "Minutes",
+          "Step",
+          "Splitwise"
+        ],
+        "rows": [
+          [
+            "0 to 10",
+            "Clarify, cut scope",
+            "EXPENSE, SHOW; no auth, no UI"
+          ],
+          [
+            "10 to 20",
+            "Model",
+            "User, Expense, SplitStrategy"
+          ],
+          [
+            "20 to 60",
+            "Vertical slice",
+            "Add equal split, show balances"
+          ],
+          [
+            "60 to 75",
+            "Features + edge cases",
+            "Exact, percent; sum must match"
+          ],
+          [
+            "75 to 85",
+            "Demo and test",
+            "Sample input + 3 edge cases"
+          ],
+          [
+            "85 to 90",
+            "Walk through, extend",
+            "'New split type = one class'"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Minutes zero to ten: clarify and cut scope. Read twice. Write the three to five must-have commands, like EXPENSE and SHOW. Leave out persistence, auth and U-I. Ask the tricky rules: who gets the leftover paisa?",
+          "reveal": 1
+        },
+        {
+          "say": "Ten to twenty: model. Entities from nouns, services from verbs. Put the change behind an interface: a SplitStrategy. Sketch the packages, no full U-M-L.",
+          "reveal": 2
+        },
+        {
+          "say": "Twenty to sixty: build a vertical slice. Make one flow work end to end: add an equal-split expense, then show balances. Records and enums for models, constructor injection, custom exceptions. It compiles at every step.",
+          "reveal": 3
+        },
+        {
+          "say": "Sixty to seventy-five: add exact and percent splits one at a time. Validate that the parts add up to the total. Make shared balances thread-safe if concurrency was asked.",
+          "reveal": 4
+        },
+        {
+          "say": "Seventy-five to eighty-five: run main on the sample input plus two or three edge cases, like one hundred split three ways.",
+          "reveal": 5
+        },
+        {
+          "say": "Eighty-five to ninety: explain the structure in one minute, then show the extension: a new split type is one new class. Be honest about what you skipped. And talk while you code. Silence, one giant class and no working demo are the classic ways to lose marks.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s057",
+      "layout": "recap",
+      "kicker": "Episode 29 recap",
+      "title": "Episode 29 recap",
+      "bullets": [
+        "Recall first; 15 min / 2 h plans",
+        "11 steps; quarter-hour before classes",
+        "4 pillars, 6 relationships, SOLID with costs",
+        "Smells to patterns; the six; name a rejected one",
+        "State, invariant, atomic claim, sorted locks",
+        "Mandatory first, run often, driver keeps going"
+      ],
+      "steps": [
+        {
+          "say": "Let's recap. Revise by recall: fifteen minutes in the morning, two hours the night before, then sleep.",
+          "reveal": 1
+        },
+        {
+          "say": "The framework: eleven steps from clarify to extensions, a quarter of the hour before the first class, and something running by halfway.",
+          "reveal": 2
+        },
+        {
+          "say": "O-O-P and SOLID: four pillars, six relationships with the diamond at the whole, and SOLID as a diagnosis with a price for every fix.",
+          "reveal": 3
+        },
+        {
+          "say": "Smells point to principles and patterns. Pick patterns from signals. Six cover most rounds, and you name one you rejected.",
+          "reveal": 4
+        },
+        {
+          "say": "Concurrency: name the state, state the invariant, make check-then-act atomic, lock in sorted order, notify outside the lock.",
+          "reveal": 5
+        },
+        {
+          "say": "Machine coding: mandatory first, run every fifteen minutes, services return data, and the driver prints and keeps going.",
+          "reveal": 6
+        },
+        {
+          "say": "Next time, episode thirty: How to Run the Mock Interview Drills. See you there.",
+          "reveal": 6
+        }
+      ]
+    }
+  ]
+}

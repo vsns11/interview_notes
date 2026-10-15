@@ -1,0 +1,1780 @@
+{
+  "series": "System Design Workshop",
+  "episode": 28,
+  "title": "Case Studies: Developer and AI Platforms",
+  "subtitle": "An online judge, a global deployment system, a chat AI service and a distributed cache",
+  "scenes": [
+    {
+      "layout": "title",
+      "title": "Case Studies: Developer and AI Platforms",
+      "subtitle": "An online judge, a global deployment system, a chat AI service and a distributed cache",
+      "steps": [
+        {
+          "say": "Welcome to episode twenty-eight of the System Design Workshop: Case Studies on developer and A-I platforms.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll be able to design a LeetCode-style online judge that runs hostile code safely, a deployment system that ships to two hundred thousand servers without breaking them, a ChatGPT-style service that streams tokens from GPUs, and a Redis-style cache cluster.",
+          "reveal": 0
+        },
+        {
+          "say": "Keep Module twenty-one of the notes open. When I say pause, answer on paper first.",
+          "reveal": 0
+        }
+      ],
+      "id": "s001"
+    },
+    {
+      "layout": "table",
+      "title": "Four prompts, four hard parts",
+      "table": {
+        "head": [
+          "Case",
+          "Hard part",
+          "Key number"
+        ],
+        "rows": [
+          [
+            "Online judge",
+            "Run strangers' code safely and fairly",
+            "~500 submissions/s at contest peak"
+          ],
+          [
+            "Global deployment",
+            "One build to many servers, safely",
+            "200K servers, 20 regions"
+          ],
+          [
+            "Conversational AI",
+            "GPU memory and token streaming",
+            "~350K open streams"
+          ],
+          [
+            "Distributed cache",
+            "Spread keys and load, survive failures",
+            "10M ops/s, 2.2 TB"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Case one, the online judge. Every submission is assumed hostile, and contests spike to about five hundred submissions a second.",
+          "reveal": 1
+        },
+        {
+          "say": "Case two, global deployment. About seventy percent of outages come from changes, so shipping is both the biggest risk and the main defence.",
+          "reveal": 2
+        },
+        {
+          "say": "Case three, conversational A-I. The web tier is ordinary. The GPUs are the system and the bill.",
+          "reveal": 3
+        },
+        {
+          "say": "Case four, the distributed cache. Ten million operations a second, under a millisecond each. The enemy is skew.",
+          "reveal": 4
+        }
+      ],
+      "id": "s002"
+    },
+    {
+      "layout": "section",
+      "kicker": "Case 1",
+      "title": "Case 1: Online judge",
+      "steps": [
+        {
+          "say": "Case one. A LeetCode-style site. You write code in one of about twenty languages, press submit, and within seconds see Accepted, Wrong Answer, or Time Limit Exceeded.",
+          "reveal": 0
+        },
+        {
+          "say": "Our running numbers: a contest with fifty thousand people, four problems, about two and a half attempts each. That's five hundred thousand submissions in ninety minutes, peaking around five hundred a second. Each costs about four C-P-U seconds, so the peak needs about two thousand six hundred cores, roughly eighty thirty-two-core workers. Between contests we need ten times less.",
+          "reveal": 0
+        }
+      ],
+      "id": "s003"
+    },
+    {
+      "layout": "diagram",
+      "title": "Judge architecture",
+      "mermaid": "flowchart LR\n  U[\"Browser\"] --> API[\"Submit API\"]\n  API --> Q[\"Queue: contest + practice lanes\"]\n  Q --> W[\"Judge worker\"]\n  W --> SB[\"Sandbox microVM\"]\n  W --> DB[(\"Submission DB\")]\n  W --> EV[\"Verdict events\"]\n  EV --> LB[\"Leaderboard + SSE push\"]",
+      "caption": "Async: store, enqueue, return an ID; workers lease jobs",
+      "steps": [
+        {
+          "say": "The skeleton is asynchronous. The submit API stores the code, enqueues a job, and returns a submission I-D in about fifty milliseconds. The browser waits through server-sent events.",
+          "reveal": 0
+        },
+        {
+          "say": "A judge worker leases the job, meaning it's hidden from others for, say, a hundred and twenty seconds. If the worker dies, the job reappears. The verdict is written with a conditional update, only if not already final, so two workers can't both win. Verdict events feed the browser and the leaderboard.",
+          "reveal": 0
+        }
+      ],
+      "id": "s004"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 1 of 19",
+      "title": "The sandbox: how thick is the wall?",
+      "bullets": [
+        "Container: namespaces, cgroups, seccomp",
+        "Weakness: shares the real host kernel",
+        "gVisor: user-space kernel intercepts syscalls",
+        "Firecracker: microVM, own kernel, <125 ms boot",
+        "Choice: microVM outside, cgroups inside",
+        "No network; destroy after one submission"
+      ],
+      "steps": [
+        {
+          "say": "Concept one, the sandbox. A plain container uses namespaces, a private view of processes, files and network, cgroups, which cap C-P-U, memory and process count, and seccomp, a filter on which system calls are allowed.",
+          "reveal": 1
+        },
+        {
+          "say": "The weakness: the code still talks to the real host kernel. One reachable kernel bug, and it escapes onto a worker holding other people's code.",
+          "reveal": 2
+        },
+        {
+          "say": "gVisor, from Google, puts a user-space kernel in between. It intercepts system calls and implements them itself. System-call-heavy programs run slower.",
+          "reveal": 3
+        },
+        {
+          "say": "Firecracker, built by A-W-S for Lambda, is a tiny virtual machine with its own guest kernel. It boots in under a hundred and twenty-five milliseconds with under five megabytes of overhead.",
+          "reveal": 4
+        },
+        {
+          "say": "The choice: a microVM or gVisor as the outer wall, and cgroups plus seccomp inside for precise limits. Two independent layers must both fail.",
+          "reveal": 5
+        },
+        {
+          "say": "No network interface at all, a read-only image, a small memory-backed scratch disk, and every VM destroyed after one submission. Never reuse a sandbox between users.",
+          "reveal": 6
+        }
+      ],
+      "id": "s005",
+      "caption": "Book: Module 21 · Case 1 · Deep dive 1 — the sandbox"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Example: one malicious submission",
+      "bullets": [
+        "Tries to open a socket: no interface exists",
+        "Tries to read /etc on the host: guest kernel only",
+        "Exploits a kernel bug: lands in the microVM",
+        "VM destroyed after the run; nothing persists"
+      ],
+      "steps": [
+        {
+          "say": "Imagine Mallory's code tries to open a socket. There's no network interface, so it fails.",
+          "reveal": 1
+        },
+        {
+          "say": "She tries to read files on the host. She only sees the guest's read-only image.",
+          "reveal": 2
+        },
+        {
+          "say": "She has a real kernel exploit. It works, but against the microVM's own kernel, and the cgroup layer still caps her. She's inside the outer wall, not on the host.",
+          "reveal": 3
+        },
+        {
+          "say": "Then the VM is thrown away. Why not just Docker? It shares the host kernel. Recap: two walls, no network, never reuse.",
+          "reveal": 4
+        }
+      ],
+      "id": "s006"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 2 of 19",
+      "title": "Resource limits and fair timing",
+      "bullets": [
+        "CPU time decides TLE; wall clock = 3x backstop",
+        "Memory cap: cgroup OOM kill = MLE",
+        "pids.max = 64 stops fork bombs",
+        "Output cap 64 MB",
+        "One dedicated core, no boost, re-run borderline",
+        "Per-language multiplier: Python 3x C++"
+      ],
+      "steps": [
+        {
+          "say": "Concept two, limits and fairness. Time Limit Exceeded is decided by C-P-U time, time actually running on a core. A wall-clock limit, say three times the C-P-U limit, kills programs that just sleep.",
+          "reveal": 1
+        },
+        {
+          "say": "Memory is a cgroup cap. If the out-of-memory killer fires inside it, the verdict is Memory Limit Exceeded.",
+          "reveal": 2
+        },
+        {
+          "say": "A process cap of sixty-four stops a fork bomb, a program that copies itself endlessly.",
+          "reveal": 3
+        },
+        {
+          "say": "Output is capped too, say sixty-four megabytes, so endless printing gets Output Limit Exceeded.",
+          "reveal": 4
+        },
+        {
+          "say": "Fairness means the same code gets the same time anywhere. Pin each sandbox to one dedicated physical core, disable frequency boost, never run more sandboxes than cores, and re-run any result within about five percent of the limit on another worker.",
+          "reveal": 5
+        },
+        {
+          "say": "And each language gets a published multiplier, for example Python gets three times the C plus plus limit.",
+          "reveal": 6
+        }
+      ],
+      "id": "s007",
+      "caption": "Book: Module 21 · Case 1 · Deep dive 2 — limits and fair timing"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: a borderline time limit",
+      "table": {
+        "head": [
+          "Run",
+          "Worker",
+          "CPU time",
+          "Limit 1,000 ms"
+        ],
+        "rows": [
+          [
+            "First",
+            "Worker 12",
+            "1,030 ms",
+            "TLE, but within 5%"
+          ],
+          [
+            "Re-run",
+            "Worker 47",
+            "985 ms",
+            "Passes"
+          ],
+          [
+            "Kept",
+            "Better time",
+            "985 ms",
+            "Accepted"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Example. Ravi's solution has a one-second limit. On worker twelve it uses one thousand and thirty milliseconds. That's over, but within five percent of the limit.",
+          "reveal": 1
+        },
+        {
+          "say": "So the judge automatically re-runs it on worker forty-seven, where it takes nine hundred and eighty-five.",
+          "reveal": 2
+        },
+        {
+          "say": "The judge keeps the better time: Accepted. Recap: C-P-U time on a dedicated core, and re-run anything borderline.",
+          "reveal": 3
+        }
+      ],
+      "id": "s008"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 3 of 19",
+      "title": "The queue at contest time",
+      "bullets": [
+        "Lanes: contest 9 jobs per 1 practice job",
+        "Pre-scale 30 min before start from sign-ups",
+        "Lease and retry; conditional final write",
+        "Poison jobs: 3 worker crashes, dead letter",
+        "Rejudge lane below live submissions",
+        "Show queue position; pause practice and Run"
+      ],
+      "steps": [
+        {
+          "say": "Concept three, the queue. Separate lanes, or priority classes: workers take, say, nine contest jobs per practice job. Contest users aren't stuck behind practice, but practice isn't starved.",
+          "reveal": 1
+        },
+        {
+          "say": "Pre-scale. Thirty minutes before start, compute registrations times expected submissions times four C-P-U seconds, and boot that many workers. The spike arrives in seconds, faster than reactive autoscaling.",
+          "reveal": 2
+        },
+        {
+          "say": "Lease and retry: a dead worker's job comes back when the lease expires, and the conditional write keeps exactly one verdict.",
+          "reveal": 3
+        },
+        {
+          "say": "A poison submission that crashes the worker itself three times goes to a dead letter queue with System Error, under review.",
+          "reveal": 4
+        },
+        {
+          "say": "If a test was wrong mid-contest, admins publish a new test-set version and rejudge on a lane below live submissions.",
+          "reveal": 5
+        },
+        {
+          "say": "If the queue backs up anyway, show the position, your submission is number twelve hundred, and pause the practice lane and the Run button. Never drop a queued contest submission.",
+          "reveal": 6
+        }
+      ],
+      "id": "s009",
+      "caption": "Book: Module 21 · Case 1 · Deep dive 3 — the queue at contest time"
+    },
+    {
+      "layout": "number",
+      "kicker": "Example",
+      "title": "Example: pre-scaling a contest",
+      "big": "50K x 10 / 5,400 s = ~93/s; x5 = ~500/s x 4 CPU-s = 2,000 cores",
+      "caption": "Plus 30% headroom: ~2,600 cores, about 80 workers",
+      "steps": [
+        {
+          "say": "Example. Fifty thousand people times ten submissions is five hundred thousand jobs. Over five thousand four hundred seconds, about ninety-three a second. Times five for the opening and closing rush: about five hundred a second. At four C-P-U seconds each, two thousand busy cores.",
+          "reveal": 0
+        },
+        {
+          "say": "Add thirty percent headroom, about two thousand six hundred cores, and you boot about eighty thirty-two-core workers half an hour before the start. In the interview, say: the fleet is scheduled, not reactive.",
+          "reveal": 0
+        }
+      ],
+      "id": "s010"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 4 of 19",
+      "title": "Leaderboard and anti-cheat",
+      "bullets": [
+        "Rank: solved desc, then penalty minutes asc",
+        "Penalty: minutes to AC + 20 per wrong try",
+        "Sorted set: score = solved x 10^7 - penalty x 10",
+        "Only verdict events change scores; idempotent",
+        "Anti-cheat: winnowing fingerprints, behaviour",
+        "Flags go to human review, never auto-ban"
+      ],
+      "steps": [
+        {
+          "say": "Concept four. The I-C-P-C ranking rule: more problems solved wins, and ties go to less penalty time.",
+          "reveal": 1
+        },
+        {
+          "say": "Penalty per solved problem is the minutes from start to first accept, plus twenty minutes for each earlier wrong attempt.",
+          "reveal": 2
+        },
+        {
+          "say": "Encode both in one sorted-set score, for example solved times ten to the seventh, minus penalty times ten. One Z-ADD per accepted verdict keeps order, and rank of X is a log N lookup.",
+          "reveal": 3
+        },
+        {
+          "say": "Only verdict events change scores, and a second Accepted on the same problem does nothing. If the sorted set is lost, rebuild it from the durable scores table in seconds.",
+          "reveal": 4
+        },
+        {
+          "say": "After the contest, anti-cheat. Code similarity uses winnowing: strip comments and names, cut tokens into overlapping k-grams, hash them, keep a sample of fingerprints, and flag pairs sharing many. Add behaviour signals, like a hard problem solved forty seconds after a friend.",
+          "reveal": 5
+        },
+        {
+          "say": "Flags go to human review, because short standard algorithms look alike.",
+          "reveal": 6
+        }
+      ],
+      "id": "s011",
+      "caption": "Book: Module 21 · Case 1 · Deep dive 4 — leaderboard and anti-cheat"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: two contestants",
+      "table": {
+        "head": [
+          "Who",
+          "Solved",
+          "Accept times + wrong tries",
+          "Penalty"
+        ],
+        "rows": [
+          [
+            "Ana",
+            "3",
+            "10, 25, 50 min; 1 wrong",
+            "85 + 20 = 105"
+          ],
+          [
+            "Ben",
+            "3",
+            "8, 30, 40 min; 2 wrong",
+            "78 + 40 = 118"
+          ],
+          [
+            "Score",
+            "Ana ahead",
+            "30,000,000 - 1,050",
+            "vs - 1,180"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Example. Ana solved three, accepted at ten, twenty-five and fifty minutes, with one wrong try. Penalty: eighty-five plus twenty, a hundred and five.",
+          "reveal": 1
+        },
+        {
+          "say": "Ben also solved three, at eight, thirty and forty minutes, but with two wrong tries. Seventy-eight plus forty, a hundred and eighteen.",
+          "reveal": 2
+        },
+        {
+          "say": "Both scores start at thirty million. Ana subtracts one thousand and fifty, Ben one thousand one hundred and eighty. Ana ranks higher. Recap: one number encodes the whole rule.",
+          "reveal": 3
+        }
+      ],
+      "id": "s012"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "A new C++ image breaks every submission. Prevention?",
+      "bullets": [
+        "A. Pull the latest image tag on every worker",
+        "B. Pin images by digest; canary new images",
+        "C. Run each submission on two images"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. A new C plus plus image is broken, and every submission gets Compile Error mid-contest. What would have prevented it? A, pull the latest tag. B, pin by digest and canary. C, run on two images.",
+          "reveal": 0
+        }
+      ],
+      "id": "s013"
+    },
+    {
+      "layout": "section",
+      "kicker": "Case 2",
+      "title": "Case 2: Global deployment",
+      "steps": [
+        {
+          "say": "The answer was B. Pin each image by its digest, a content hash, for the whole contest, and canary new images on a few workers outside contest hours. Which is exactly our next case: shipping changes safely.",
+          "reveal": 0
+        },
+        {
+          "say": "Case two. An engineer merges, and within hours the build runs on two hundred thousand servers in twenty regions. About two thousand rollouts a day, plus five thousand config changes. Google's S-R-E book says roughly seventy percent of outages come from changes.",
+          "reveal": 0
+        }
+      ],
+      "id": "s014"
+    },
+    {
+      "layout": "diagram",
+      "title": "Deployment architecture",
+      "mermaid": "flowchart LR\n  CI[\"CI: one signed artifact\"] --> REG[(\"Registry\")]\n  CI --> ORCH[\"Orchestrator: waves\"]\n  ORCH --> DS[(\"Desired state\")]\n  REG --> P2P[\"Seeders + P2P swarm\"]\n  DS --> AG[\"Host agent: pull, swap\"]\n  P2P --> AG\n  AG --> GATE[\"Health gate\"]\n  GATE --> ORCH",
+      "caption": "Build once, promote everywhere; agents pull desired state",
+      "steps": [
+        {
+          "say": "The skeleton. C-I builds one signed, immutable artifact per commit. Build once, promote everywhere: the exact bytes that passed tests go to every stage.",
+          "reveal": 0
+        },
+        {
+          "say": "The orchestrator never pushes to hosts. It changes the desired state, for example cell seven runs build forty-eight twelve, and each host agent pulls, verifies, swaps and reports. If the orchestrator dies, hosts just keep running. Health gates decide whether to promote or roll back.",
+          "reveal": 0
+        }
+      ],
+      "id": "s015"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 5 of 19",
+      "title": "Moving the bytes: registry, P2P, pre-staging",
+      "bullets": [
+        "Naive: 1 GB x 200K hosts = 200 TB, ~2.2 hours",
+        "Content addressing: send only changed chunks",
+        "P2P swarm: every host uploads pieces it has",
+        "Rack-aware tracker; one copy per region crosses",
+        "Pre-stage: download first, switch later",
+        "Keep last N versions on disk for rollback"
+      ],
+      "steps": [
+        {
+          "say": "Concept five, moving the bytes. Naive fan-out of a one-gigabyte binary to two hundred thousand hosts is two hundred terabytes. A central store pushing twenty-five gigabytes a second takes over two hours, blocking every other deploy.",
+          "reveal": 1
+        },
+        {
+          "say": "First, content addressing: chunks named by their hash. A build that changes three percent of one gigabyte moves about thirty megabytes, and the hash rejects corrupt chunks.",
+          "reveal": 2
+        },
+        {
+          "say": "Second, peer to peer, BitTorrent-style. The file is cut into pieces, and each host downloads from several peers and uploads the pieces it already has. Capacity grows with the swarm, so two hundred thousand hosts take about as long as two thousand.",
+          "reveal": 3
+        },
+        {
+          "say": "The tracker hands out peers in the same rack, then cluster, then region, so only one copy crosses an ocean.",
+          "reveal": 4
+        },
+        {
+          "say": "Pre-staging separates the slow network part from the risky restart. Download and verify first. Then the switch is a seconds-long restart.",
+          "reveal": 5
+        },
+        {
+          "say": "Keep the previous few versions on disk, so rollback needs no network at all.",
+          "reveal": 6
+        }
+      ],
+      "id": "s016",
+      "caption": "Book: Module 21 · Case 2 · Deep dive 1 — registry, P2P and pre-staging"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: central store versus swarm",
+      "table": {
+        "head": [
+          "Approach",
+          "Capacity",
+          "Time for 1 GB to 200K"
+        ],
+        "rows": [
+          [
+            "Central, 20 x 10 Gbps",
+            "Fixed 25 GB/s",
+            "~2.2 hours, store saturated"
+          ],
+          [
+            "P2P swarm",
+            "Grows with hosts",
+            "Well under a minute"
+          ],
+          [
+            "Changed chunks only",
+            "30 MB per host",
+            "Seconds"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Example. Twenty central servers at ten gigabits each is a fixed twenty-five gigabytes a second. Two hundred terabytes takes about two point two hours.",
+          "reveal": 1
+        },
+        {
+          "say": "In a swarm, each host is also a server. Time is about one host's download, two seconds per gigabyte, plus a few relay hops. Well under a minute.",
+          "reveal": 2
+        },
+        {
+          "say": "And with content addressing, most deploys move only changed chunks. Recap: peer to peer solves the bytes. The rest of the design is about exposure.",
+          "reveal": 3
+        }
+      ],
+      "id": "s017"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 6 of 19",
+      "title": "Staged waves and blast radius",
+      "bullets": [
+        "Blast radius: share of users hurt if step is bad",
+        "Pre-prod: tests, then a gamma stage",
+        "One-box in one AZ, bake 1 hour or more",
+        "Wave 1: rest of that region, AZ by AZ; bake 12 h",
+        "Wave 2: one big region; waves 3-5 widen",
+        "Never two AZs at once; deploy in work hours"
+      ],
+      "steps": [
+        {
+          "say": "Concept six. Blast radius is the share of users hurt if this step is bad. Every wave caps it.",
+          "reveal": 1
+        },
+        {
+          "say": "Here's the plan shape Amazon publishes, walked for our checkout service. Pre-production first: integration tests, then a gamma stage that mirrors production config.",
+          "reveal": 2
+        },
+        {
+          "say": "Then one-box: one host in one availability zone, A-Z, of a low-traffic region. An A-Z is one or more data centres with independent power. Bake at least an hour, meaning run under real traffic before promoting.",
+          "reveal": 3
+        },
+        {
+          "say": "Wave one: the rest of that zone, then the region's other zones one at a time. Bake about twelve hours, to catch daily-cycle bugs like overnight batch jobs and memory leaks.",
+          "reveal": 4
+        },
+        {
+          "say": "Wave two: one high-traffic region. Then waves three to five: three regions, then about twelve, then all the rest, with two-to-four-hour bakes.",
+          "reveal": 5
+        },
+        {
+          "say": "Never two zones of a region at once, so a failure stays in one cell. And production waves start only in the team's working hours, with blockers that halt deploys during incidents.",
+          "reveal": 6
+        }
+      ],
+      "id": "s018",
+      "caption": "Book: Module 21 · Case 2 · Deep dive 2 — staged rollout waves"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: a memory leak caught early",
+      "table": {
+        "head": [
+          "Stage",
+          "What happens",
+          "Users exposed"
+        ],
+        "rows": [
+          [
+            "One-box",
+            "Leak shows after 6 h, alarm trips",
+            "~0.01%"
+          ],
+          [
+            "Gate",
+            "Fails; rollback to cached digest",
+            "1 host restarts"
+          ],
+          [
+            "Without waves",
+            "Every server leaks at once",
+            "100%"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Example. Our checkout build has a memory leak that only shows after six hours. On the one-box, memory climbs and the alarm trips. Only about one hundredth of a percent of traffic was exposed.",
+          "reveal": 1
+        },
+        {
+          "say": "The gate fails and rollback restarts one host into the last good version, already on disk.",
+          "reveal": 2
+        },
+        {
+          "say": "Without waves, every server leaks together six hours later. Recap: bake times exist because some bugs need time.",
+          "reveal": 3
+        }
+      ],
+      "id": "s019"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 7 of 19",
+      "title": "Health gates and automatic rollback",
+      "bullets": [
+        "Signals: 5xx, latency p99, crashes, business KPIs",
+        "Compare canary vs baseline, same cell and time",
+        "Mann-Whitney test, ~98% confidence (Kayenta)",
+        "Pass: promote; fail: roll back; unsure: bake more",
+        "Tripwires: traffic to zero, crash spike, instant",
+        "Rollback needs expand, migrate, contract"
+      ],
+      "steps": [
+        {
+          "say": "Concept seven. Gates watch error rates, latency p fifty and p ninety-nine, crashes, and business metrics like checkouts per minute, plus synthetic canaries, scripted fake users calling the A-P-I every minute.",
+          "reveal": 1
+        },
+        {
+          "say": "Don't use fixed thresholds. They miss subtle regressions and misfire at peaks. Compare canary hosts with baseline hosts on the old version, in the same cell, same window, same count.",
+          "reveal": 2
+        },
+        {
+          "say": "Netflix and Google's Kayenta runs a Mann-Whitney test per metric, which asks whether two sets of numbers come from different distributions without assuming a bell curve.",
+          "reveal": 3
+        },
+        {
+          "say": "Three outcomes. Pass, promote after the bake. Fail, roll back. Inconclusive, because too little traffic, extend the bake. Never promote silently.",
+          "reveal": 4
+        },
+        {
+          "say": "Fast tripwires skip the statistics: requests drop to zero, or health checks fail on many new hosts, and rollback is immediate. Rollback means desired state back to the last digest that passed, already cached, so it's a restart.",
+          "reveal": 5
+        },
+        {
+          "say": "But rollback only works if the old version can read new data. So schema changes go expand, migrate, contract: add the column, write both, backfill, drop the old one much later.",
+          "reveal": 6
+        }
+      ],
+      "id": "s020",
+      "caption": "Book: Module 21 · Case 2 · Deep dive 3 — health gates and rollback"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: canary versus baseline",
+      "table": {
+        "head": [
+          "Metric",
+          "Baseline (old)",
+          "Canary (new)",
+          "Verdict"
+        ],
+        "rows": [
+          [
+            "Error rate",
+            "0.20%",
+            "0.21%",
+            "Same distribution"
+          ],
+          [
+            "p99 latency",
+            "180 ms",
+            "260 ms",
+            "Different, 98%+"
+          ],
+          [
+            "Score",
+            "1 of 2 failed",
+            "",
+            "Fail: roll back"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Example. Ten canary hosts against ten baseline hosts for an hour. Error rate: point two zero versus point two one percent. The test says that's noise.",
+          "reveal": 1
+        },
+        {
+          "say": "But p ninety-nine latency: a hundred and eighty versus two hundred and sixty milliseconds, consistently. Different with high confidence.",
+          "reveal": 2
+        },
+        {
+          "say": "The score fails and the system rolls back by itself, before anyone wakes up at three a.m. Recap: compare like with like.",
+          "reveal": 3
+        }
+      ],
+      "id": "s021"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 8 of 19",
+      "title": "Config deploys versus code deploys",
+      "bullets": [
+        "Code: new binary, hours to days of waves",
+        "Config: a value, reaches fleet in seconds",
+        "Danger: a bad value hits everyone at once",
+        "Validate schema; canary 20 servers, then cluster",
+        "One-click revert; apps keep last good config",
+        "Separate feature flags from operational config"
+      ],
+      "steps": [
+        {
+          "say": "Concept eight. Code needs a new binary everywhere, which takes hours to days of waves.",
+          "reveal": 1
+        },
+        {
+          "say": "But many changes are just values: a timeout, a rate limit, which five percent see a feature. As config, they reach the fleet and undo in seconds.",
+          "reveal": 2
+        },
+        {
+          "say": "That speed is the danger. A bad value hits every server at once, and many famous global outages were config pushes.",
+          "reveal": 3
+        },
+        {
+          "say": "Facebook's model: configs in Git, often generated by code with validators, every change reviewed. An automated canary applies it to about twenty servers, then a cluster, comparing health, about ten minutes in all. Then a fan-out tree reaches the fleet in seconds.",
+          "reveal": 4
+        },
+        {
+          "say": "Keep full history with one-click revert. And apps reject unparseable config and keep the last good one, cached on disk, even if the config system is down.",
+          "reveal": 5
+        },
+        {
+          "say": "Finally, separate feature flags, which control per-user exposure, from operational config like pool sizes, so each gets the right review rules.",
+          "reveal": 6
+        }
+      ],
+      "id": "s022",
+      "caption": "Book: Module 21 · Case 2 · Deep dive 4 — config vs code deploys"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Example: a timeout set to zero",
+      "bullets": [
+        "Engineer sets payment timeout_ms = 0",
+        "Schema check: range 50 to 30,000, rejected",
+        "If typed 5: canary 20 servers, errors spike",
+        "Canary fails; never leaves those 20"
+      ],
+      "steps": [
+        {
+          "say": "Example. An engineer changes the payment timeout and types zero by mistake.",
+          "reveal": 1
+        },
+        {
+          "say": "Schema validation says the range is fifty to thirty thousand milliseconds. Rejected before review even starts.",
+          "reveal": 2
+        },
+        {
+          "say": "Suppose instead they type five. That's valid, but way too short. The canary applies it to twenty servers, and their error rate spikes.",
+          "reveal": 3
+        },
+        {
+          "say": "The canary fails, and the value never leaves those twenty servers. In the interview, say: config gets its own fast lane, but it's still canaried and staged. Recap: fast to apply, fast to undo, never instant everywhere.",
+          "reveal": 4
+        }
+      ],
+      "id": "s023"
+    },
+    {
+      "layout": "section",
+      "kicker": "Case 3",
+      "title": "Case 3: Conversational AI",
+      "steps": [
+        {
+          "say": "Case three. A ChatGPT-style assistant. You type, and the answer appears word by word. The hard part is that a large language model, an L-L-M, generates one token at a time on GPUs. A token is a word piece, about three quarters of an English word.",
+          "reveal": 0
+        },
+        {
+          "say": "Running numbers: a hundred million daily users, ten messages each. Peak about thirty-five thousand messages a second. Each answer is about five hundred tokens at fifty tokens a second, so ten seconds. By Little's law, that's about three hundred and fifty thousand streams open at once.",
+          "reveal": 0
+        }
+      ],
+      "id": "s024"
+    },
+    {
+      "layout": "diagram",
+      "title": "Chat service architecture",
+      "mermaid": "flowchart LR\n  C[\"Client\"] -- \"HTTPS + SSE\" --> GW[\"Gateway: auth, limits\"]\n  GW --> OR[\"Orchestrator: prompt, quota\"]\n  OR --> SF[\"Safety\"]\n  OR --> RT[\"KV-aware router\"]\n  RT --> P[\"GPU pools: batching\"]\n  P --> GB[(\"Generation buffer\")]\n  GB --> OR",
+      "caption": "The web tier is ordinary; the GPUs are the system",
+      "steps": [
+        {
+          "say": "The flow. The gateway checks the session, the tier and rate limits. The orchestrator saves the message, builds the prompt from history, checks quota and safety.",
+          "reveal": 0
+        },
+        {
+          "say": "The router picks a GPU replica. The GPU writes numbered token chunks into a generation buffer, and the orchestrator streams them to the client. That buffer is the key to the next concept.",
+          "reveal": 0
+        }
+      ],
+      "id": "s025"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 9 of 19",
+      "title": "Token streaming: SSE, resume, cancel",
+      "bullets": [
+        "SSE: small data events in one open response",
+        "Batch ~4 tokens per event: 17.5M to 4.4M/s",
+        "No buffering proxies; ping every 15 s",
+        "Resume: Last-Event-ID, replay from buffer",
+        "GPU never waits on a slow client",
+        "Stop frees KV at once; unread 60 s = cancel"
+      ],
+      "steps": [
+        {
+          "say": "Concept nine. Server-sent events, S-S-E: the server writes small data events into one open H-T-T-P response. One-way, proxy-friendly, with built-in resume. That's why it beats WebSockets here.",
+          "reveal": 1
+        },
+        {
+          "say": "One event per token would be seventeen and a half million events a second. About four tokens per event cuts it to four point four million.",
+          "reveal": 2
+        },
+        {
+          "say": "No hop may buffer: turn buffering off at load balancers and proxies, and send a ping comment every fifteen seconds while queued, so idle timeouts don't fire.",
+          "reveal": 3
+        },
+        {
+          "say": "Every event carries an I-D equal to its sequence number. When the client reconnects, it sends Last-Event-I-D, and the server replays from the buffer, then follows the live tail.",
+          "reveal": 4
+        },
+        {
+          "say": "The GPU writes to the buffer at full speed and never waits on a slow phone.",
+          "reveal": 5
+        },
+        {
+          "say": "The stop button sets a flag checked between decode steps, freeing GPU memory at once. A silent disconnect doesn't cancel, since the user may come back. But a generation nobody reads for sixty seconds is cancelled.",
+          "reveal": 6
+        }
+      ],
+      "id": "s026",
+      "caption": "Book: Module 21 · Case 3 · Deep dive 1 — token streaming"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: switching Wi-Fi to 5G",
+      "table": {
+        "head": [
+          "Moment",
+          "Client",
+          "Server"
+        ],
+        "rows": [
+          [
+            "t = 6 s",
+            "Has chunk 812; Wi-Fi drops",
+            "GPU keeps writing 813, 814..."
+          ],
+          [
+            "t = 8 s",
+            "Reconnects on 5G, Last-Event-ID: 812",
+            "Any gateway reads buffer"
+          ],
+          [
+            "t = 8.1 s",
+            "Gets 813 onward, then live",
+            "No duplicates, no lost tokens"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Example. Six seconds into an answer, Lena walks out the door. She has chunk eight twelve, and her Wi-Fi drops. The GPU doesn't notice. It keeps writing to the buffer.",
+          "reveal": 1
+        },
+        {
+          "say": "Two seconds later her phone reconnects on five G and sends Last-Event-I-D eight twelve, to any gateway.",
+          "reveal": 2
+        },
+        {
+          "say": "It replays from eight thirteen, then follows the live tail. Recap: decouple the GPU from the socket.",
+          "reveal": 3
+        }
+      ],
+      "id": "s027"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 10 of 19",
+      "title": "Prefill, decode, continuous batching",
+      "bullets": [
+        "Prefill: whole prompt in parallel, compute-bound",
+        "Decode: one token per step, bandwidth-bound",
+        "Each step reads all weights: ~5.2 ms",
+        "Static batch waits for the longest answer",
+        "Continuous: re-form the batch every step",
+        "Chunked prefill avoids decode hiccups"
+      ],
+      "steps": [
+        {
+          "say": "Concept ten. Generation has two phases. Prefill processes all the prompt tokens in parallel and produces the first token. It's compute-bound, and it sets time to first token.",
+          "reveal": 1
+        },
+        {
+          "say": "Decode produces one token per step per sequence. It's memory-bandwidth-bound, because every step reads all the model weights.",
+          "reveal": 2
+        },
+        {
+          "say": "For our seventy-billion-parameter model on eight H one hundreds, that's seventeen and a half gigabytes per GPU per step, about five point two milliseconds, whether the batch has one sequence or two hundred and fifty-six. So batching is everything.",
+          "reveal": 3
+        },
+        {
+          "say": "Static batching runs a fixed batch until its longest answer ends. Short answers and new arrivals wait.",
+          "reveal": 4
+        },
+        {
+          "say": "Continuous batching re-forms the batch every decode step. Finished sequences leave, waiting ones join, and the GPU stays busy.",
+          "reveal": 5
+        },
+        {
+          "say": "One catch: a thirty-thousand-token prefill can stall every decoding user for hundreds of milliseconds. Chunked prefill splits it into pieces that share steps with decodes.",
+          "reveal": 6
+        }
+      ],
+      "id": "s028",
+      "caption": "Book: Module 21 · Case 3 · Deep dive 2 — prefill, decode, batching"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: why batch size matters",
+      "table": {
+        "head": [
+          "Batch",
+          "Step time",
+          "Tokens/s per user",
+          "Tokens/s per replica"
+        ],
+        "rows": [
+          [
+            "1 sequence",
+            "~5.2 ms",
+            "~190",
+            "~190"
+          ],
+          [
+            "256 sequences",
+            "~16 ms",
+            "~60",
+            "~15,000 ceiling"
+          ],
+          [
+            "Planning figure",
+            "",
+            "35 to 50",
+            "~6,000 measured"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Example. With one sequence, a step takes five point two milliseconds: a hundred and ninety tokens a second for the whole replica. Expensive.",
+          "reveal": 1
+        },
+        {
+          "say": "With two hundred and fifty-six sequences, each step also reads their KV cache, so it's about sixteen milliseconds. Each user still gets sixty tokens a second, faster than reading, but the replica makes about fifteen thousand.",
+          "reveal": 2
+        },
+        {
+          "say": "Real systems reach about half, so we plan six thousand per replica. That means about thirty thousand GPUs for our load. Recap: bigger batches buy throughput with a little per-user speed.",
+          "reveal": 3
+        }
+      ],
+      "id": "s029"
+    },
+    {
+      "layout": "number",
+      "kicker": "Concept 11 of 19",
+      "title": "KV-cache memory",
+      "big": "2 x 80 layers x 8 heads x 128 x 2 B = 320 KB/token",
+      "caption": "Book: Module 21 · Case 3 · Deep dive 2 — KV cache and PagedAttention",
+      "steps": [
+        {
+          "say": "Concept eleven, KV-cache memory. In a transformer, every token produces a key and a value vector at every layer. Keeping them avoids recomputing the whole prompt for each new token.",
+          "reveal": 0
+        },
+        {
+          "say": "For a Llama-seventy-B-shaped model: two, for key and value, times eighty layers, times eight heads, times a hundred and twenty-eight, times two bytes. Three hundred and twenty kilobytes per token. A three-thousand-five-hundred-token chat holds about one point one gigabytes.",
+          "reveal": 0
+        },
+        {
+          "say": "A replica of eight eighty-gigabyte GPUs has six hundred and forty gigabytes. Weights take a hundred and forty, and after activations about four hundred are left for KV. That's about three hundred and fifty chats at once. Memory caps users per GPU.",
+          "reveal": 0
+        }
+      ],
+      "id": "s030"
+    },
+    {
+      "layout": "bullets",
+      "title": "Managing KV memory",
+      "bullets": [
+        "Contiguous max-length reservation wastes most",
+        "PagedAttention: 16-token blocks on demand",
+        "Waste only in the last partial block; 2-4x",
+        "Admit only if blocks cover prompt + reserve",
+        "Out of memory: preempt lowest priority"
+      ],
+      "steps": [
+        {
+          "say": "How do we manage it? Reserving one contiguous region for each sequence's maximum length wastes most of it, because most answers are short.",
+          "reveal": 1
+        },
+        {
+          "say": "PagedAttention, from vLLM, stores KV in fixed blocks, say sixteen tokens each, allocated on demand through a block table, like pages in an operating system.",
+          "reveal": 2
+        },
+        {
+          "say": "Waste drops to the last partial block, and the paper reports two to four times the throughput at the same latency.",
+          "reveal": 3
+        },
+        {
+          "say": "Admission control: let a sequence in only if free blocks cover its prompt plus an output reserve.",
+          "reveal": 4
+        },
+        {
+          "say": "If memory runs out mid-generation, preempt the lowest-priority sequence, dropping its KV to recompute later, rather than crash. Recap: KV memory is the real capacity limit.",
+          "reveal": 5
+        }
+      ],
+      "id": "s031"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 12 of 19",
+      "title": "KV-cache-aware routing and prefix caching",
+      "bullets": [
+        "Turn 12 repeats turns 1-11 plus system prompt",
+        "60% cached: 3,000 prefill tokens become 1,200",
+        "Cache is per replica: round robin misses",
+        "1. Hash the request's blocks",
+        "2. Find replicas with longest matching prefix",
+        "3. Score: cached - queue depth - memory used"
+      ],
+      "steps": [
+        {
+          "say": "Concept twelve. Turn twelve of a chat repeats turns one to eleven, and every request shares the system prompt. If that prefix's KV is still on a replica, prefill only runs on new tokens.",
+          "reveal": 1
+        },
+        {
+          "say": "With a sixty percent hit rate, three thousand prefill tokens become twelve hundred. Two and a half times less prefill, and a much faster first token.",
+          "reveal": 2
+        },
+        {
+          "say": "The catch: the cache lives on one replica. Round robin over three thousand replicas almost never sends turn twelve where turn eleven ran. So the router must be cache-aware.",
+          "reveal": 3
+        },
+        {
+          "say": "Step one, hash the request block by block. Each block's hash covers all tokens before it, so one hash identifies a whole prefix.",
+          "reveal": 4
+        },
+        {
+          "say": "Step two, find replicas holding the longest match, either approximately, by remembering where recent prefixes went, or precisely, from servers publishing block stored and evicted events.",
+          "reveal": 5
+        },
+        {
+          "say": "Step three, score each candidate: cached fraction, minus queue depth, minus memory used. The load terms stop a hot prefix piling onto one replica.",
+          "reveal": 6
+        }
+      ],
+      "id": "s032",
+      "caption": "Book: Module 21 · Case 3 · Deep dive 3 — KV-cache-aware routing"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: routing turn 12",
+      "table": {
+        "head": [
+          "Replica",
+          "Cached prefix",
+          "Queue",
+          "Choice"
+        ],
+        "rows": [
+          [
+            "R-17",
+            "2,800 of 3,000 tokens",
+            "Deep, 40 waiting",
+            "Too busy"
+          ],
+          [
+            "R-204",
+            "1,800 of 3,000",
+            "Light, 2 waiting",
+            "Best score"
+          ],
+          [
+            "R-951",
+            "System prompt only",
+            "Empty",
+            "Too much prefill"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Example. Turn twelve of Omar's chat arrives. Replica seventeen holds almost all of his prefix, but forty requests are queued there.",
+          "reveal": 1
+        },
+        {
+          "say": "Replica two-oh-four holds eighteen hundred tokens of it and is nearly idle. It gets the best combined score.",
+          "reveal": 2
+        },
+        {
+          "say": "Replica nine fifty-one is empty but would redo almost all the prefill. The cheap version is session affinity: consistent hashing on the conversation I-D picks a home replica, spilling to the least loaded. Recap: route to the cache, but respect load.",
+          "reveal": 3
+        }
+      ],
+      "id": "s033"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 13 of 19",
+      "title": "Quotas, priority and cost",
+      "bullets": [
+        "Requests/min, tokens/min, product quotas",
+        "Reserve input + max output; refund the rest",
+        "Counters in memory, atomic; paid fail open",
+        "Paid queues and reserved replicas: bulkhead",
+        "Cost = prefill tokens + output tokens",
+        "Levers: smaller model, batch, cache hits"
+      ],
+      "steps": [
+        {
+          "say": "Concept thirteen. Three kinds of limit. Requests per minute protect A-P-I servers. Tokens per minute protect GPUs, since one hundred-thousand-token request costs as much as hundreds of short ones. Product quotas, like N messages on the top model every few hours, protect the budget.",
+          "reveal": 1
+        },
+        {
+          "say": "Output length is unknown, so reserve input plus max output tokens from the bucket, then refund the unused part at the end. Otherwise fifty parallel streams each pass the check and overspend together.",
+          "reveal": 2
+        },
+        {
+          "say": "Counters live in memory, sharded by user, with an atomic check-and-decrement. If the limiter fails, it fails open for paid tiers and closed for anonymous traffic.",
+          "reveal": 3
+        },
+        {
+          "say": "Paid traffic gets its own queues, and big customers get reserved replicas. That's a bulkhead, so a free-tier surge can't starve payers.",
+          "reveal": 4
+        },
+        {
+          "say": "Cost per message is uncached prefill tokens plus output tokens, each at its price. Our fleet costs about a fifth of a cent per message.",
+          "reveal": 5
+        },
+        {
+          "say": "Levers, biggest first: route easy requests to a smaller model, raise batch size and cache hit rate, and cap max output per tier.",
+          "reveal": 6
+        }
+      ],
+      "id": "s034",
+      "caption": "Book: Module 21 · Case 3 · Deep dive 4 — quotas, priority and cost"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: reserve, then settle",
+      "table": {
+        "head": [
+          "Step",
+          "Bucket (tokens)",
+          "Note"
+        ],
+        "rows": [
+          [
+            "Start",
+            "20,000",
+            "Free user, per-minute budget"
+          ],
+          [
+            "Reserve 3,000 in + 4,000 max out",
+            "13,000",
+            "Others see true headroom"
+          ],
+          [
+            "Answer used 500 out; refund 3,500",
+            "16,500",
+            "Charged 3,500 total"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Example. A free user has twenty thousand tokens this minute.",
+          "reveal": 1
+        },
+        {
+          "say": "A request with three thousand input tokens and a four-thousand-token output cap reserves seven thousand. Thirteen thousand left, so parallel requests see the true headroom.",
+          "reveal": 2
+        },
+        {
+          "say": "The answer used five hundred output tokens. Refund three thousand five hundred, leaving sixteen and a half thousand. Recap: reserve the worst case, settle the truth.",
+          "reveal": 3
+        }
+      ],
+      "id": "s035"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 14 of 19",
+      "title": "Safety filters without killing latency",
+      "bullets": [
+        "Input classifier runs in parallel with prompt",
+        "Blocked prompts never reach the big model",
+        "Output: hold back a 20-50 token window",
+        "Flagged: end with content_filtered error",
+        "Safety down: fail closed for free and anonymous"
+      ],
+      "steps": [
+        {
+          "say": "Concept fourteen, safety. An input classifier, for example Llama Guard, a small model that labels prompts against a risk list, runs in parallel with prompt building and the quota check, so it adds little to time to first token.",
+          "reveal": 1
+        },
+        {
+          "say": "Blocked prompts get a refusal and never cost GPU time on the large model.",
+          "reveal": 2
+        },
+        {
+          "say": "Output is checked while streaming. Hold back a short window, say twenty to fifty tokens, and classify the text so far each time it fills.",
+          "reveal": 3
+        },
+        {
+          "say": "If it's flagged, end the stream with a content filtered error, and the client replaces the shown text. A slightly later first token buys never showing a full harmful answer.",
+          "reveal": 4
+        },
+        {
+          "say": "If the safety service is down, fail closed for free and anonymous traffic and alert. It gets its own capacity and a circuit breaker. Recap: check in parallel on input, incrementally on output.",
+          "reveal": 5
+        }
+      ],
+      "id": "s036",
+      "caption": "Book: Module 21 · Case 3 · Deep dive 5 — safety filters"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "A GPU replica crashes 70% into an answer. What happens?",
+      "bullets": [
+        "A. The user sees an error and retries",
+        "B. Resubmit prompt + tokens so far elsewhere",
+        "C. Restart generation from scratch elsewhere"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. A replica crashes seventy percent into an answer, and its KV cache is gone. A, show an error. B, resubmit the prompt plus tokens so far to another replica. C, restart from scratch.",
+          "reveal": 0
+        }
+      ],
+      "id": "s037"
+    },
+    {
+      "layout": "section",
+      "kicker": "Case 4",
+      "title": "Case 4: Distributed cache cluster",
+      "steps": [
+        {
+          "say": "The answer is B. The orchestrator sends the prompt plus the tokens already generated to another replica, which prefills and continues. Sequence numbers continue, so the user sees a one-to-two second pause and no duplicates.",
+          "reveal": 0
+        },
+        {
+          "say": "Case four. The shared in-memory cache a big company runs, like Redis Cluster or Memcached. Running numbers: ten million operations a second, two billion keys, two point two terabytes. One single-threaded shard handles about a hundred thousand operations a second, so throughput needs a hundred primaries of twenty-two gigabytes each, not memory. Add a replica each: two hundred processes on fifty machines.",
+          "reveal": 0
+        }
+      ],
+      "id": "s038"
+    },
+    {
+      "layout": "diagram",
+      "title": "Cache cluster architecture",
+      "mermaid": "flowchart LR\n  A[\"App: smart client + slot map\"] -- \"CRC16 mod 16384\" --> S1[\"Shard 1: slots 0-163\"]\n  A --> SN[\"Shard 100: slots 16220-16383\"]\n  S1 -- \"async\" --> R1[\"Replica, other rack\"]\n  SN -- \"async\" --> RN[\"Replica\"]\n  S1 -. \"gossip\" .- SN\n  A -- \"on miss\" --> DB[(\"Database\")]",
+      "caption": "One hop: the routing table lives in the client",
+      "steps": [
+        {
+          "say": "The picture. The app's smart client caches the map of slots to shards, so every request is one hop. Each primary streams writes asynchronously to a replica on another rack.",
+          "reveal": 0
+        },
+        {
+          "say": "Nodes gossip about health on a separate cluster bus, with no coordinator on the request path. On a miss, the app reads the database and fills the cache. That's cache-aside.",
+          "reveal": 0
+        }
+      ],
+      "id": "s039"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 15 of 19",
+      "title": "Hash slots vs consistent hashing",
+      "bullets": [
+        "Modulo N: 100 to 101 moves almost every key",
+        "Ring: vnodes, adding a node moves ~1/(N+1)",
+        "Slots: CRC16(key) mod 16,384, explicit table",
+        "Slots move whole; versioned for failover",
+        "Hash tags: only {...} is hashed",
+        "Reshard: MIGRATING/IMPORTING, ASK then MOVED"
+      ],
+      "steps": [
+        {
+          "say": "Concept fifteen. Plain modulo, hash of key mod N, moves almost every key when N goes from a hundred to a hundred and one. A near-total cache wipe.",
+          "reveal": 1
+        },
+        {
+          "say": "Consistent hashing, the Memcached tradition, puts servers at many virtual points on a ring. A key belongs to the first server clockwise. Adding a server moves about one over N plus one of the keys, and clients need only the server list.",
+          "reveal": 2
+        },
+        {
+          "say": "Redis Cluster adds indirection: keys hash with CRC sixteen, a cheap checksum, into one of a fixed sixteen thousand three hundred eighty-four slots, and an explicit table maps slots to nodes. That's about a hundred and sixty-four slots per primary.",
+          "reveal": 3
+        },
+        {
+          "say": "Adding a node moves whole slots, and you can move slots off a hot node. The table carries a config epoch, a version number, so failover has a clear record. The cost: every client must keep the table current.",
+          "reveal": 4
+        },
+        {
+          "say": "Multi-key commands need all keys on one shard. With a hash tag in braces, only the part inside is hashed.",
+          "reveal": 5
+        },
+        {
+          "say": "Resharding: mark the source migrating and the target importing, then move keys in atomic batches. The source answers ASK for moved keys, meaning try there just once. When done, it answers MOVED, meaning update your map.",
+          "reveal": 6
+        }
+      ],
+      "id": "s040",
+      "caption": "Book: Module 21 · Case 4 · Deep dive 1 — slots vs consistent hashing"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: where does user:42 live?",
+      "table": {
+        "head": [
+          "Key",
+          "Hashed part",
+          "Slot",
+          "Shard"
+        ],
+        "rows": [
+          [
+            "user:42",
+            "user:42",
+            "15,880",
+            "97"
+          ],
+          [
+            "{user:42}:profile",
+            "user:42",
+            "15,880",
+            "97"
+          ],
+          [
+            "{user:42}:cart",
+            "user:42",
+            "15,880",
+            "97, so MGET works"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Example. CRC sixteen of user colon forty-two is fifteen thousand eight hundred eighty. Divide by about a hundred sixty-four slots per shard: shard ninety-seven.",
+          "reveal": 1
+        },
+        {
+          "say": "Now the profile key, with user forty-two in braces. Only the braces are hashed, so it's also slot fifteen eight eighty.",
+          "reveal": 2
+        },
+        {
+          "say": "The cart key too. So an M-GET of profile and cart hits one shard. The trap: tagging a whole big tenant recreates a hot shard. Recap: slots give explicit, movable ownership.",
+          "reveal": 3
+        }
+      ],
+      "id": "s041"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 16 of 19",
+      "title": "Replication and failover",
+      "bullets": [
+        "Async: primary acks first; acked writes can be lost",
+        "WAIT 1 100 narrows the window, not consensus",
+        "No pong in 5 s: PFAIL; majority agrees: FAIL",
+        "Freshest replica asks for votes; majority wins",
+        "New config epoch; clients get MOVED",
+        "Replica never on the primary's rack"
+      ],
+      "steps": [
+        {
+          "say": "Concept sixteen. Replication is asynchronous. The primary replies before the replica has the write, so an acknowledged write can be lost if the primary dies first. The Redis spec says so.",
+          "reveal": 1
+        },
+        {
+          "say": "The WAIT command blocks until one replica has the write, shrinking the window for important keys. But it's not consensus.",
+          "reveal": 2
+        },
+        {
+          "say": "Detection. Nodes ping each other. No answer within the node timeout, say five seconds, and a node marks it PFAIL, a local suspicion. When a majority of primaries agree, it becomes FAIL, broadcast cluster-wide.",
+          "reveal": 3
+        },
+        {
+          "say": "Election. The failed primary's replicas wait a delay ranked by how up to date they are, freshest first, then ask for votes. Each primary votes once per failure, so two can't both win.",
+          "reveal": 4
+        },
+        {
+          "say": "The winner promotes itself with a new, higher config epoch and announces its slots. Clients get MOVED and refresh. Outage for those slots is about the timeout plus one or two seconds.",
+          "reveal": 5
+        },
+        {
+          "say": "And never place a primary and its replica on one machine or rack.",
+          "reveal": 6
+        }
+      ],
+      "id": "s042",
+      "caption": "Book: Module 21 · Case 4 · Deep dive 2 — replication and failover"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: shard 97 dies",
+      "table": {
+        "head": [
+          "Time",
+          "Event",
+          "Effect"
+        ],
+        "rows": [
+          [
+            "t = 0",
+            "Primary 97 crashes; last 2 writes unreplicated",
+            "Those 2 writes lost"
+          ],
+          [
+            "t = 5 s",
+            "Majority marks FAIL",
+            "164 slots unavailable"
+          ],
+          [
+            "t = 6.5 s",
+            "Replica wins vote, epoch +1",
+            "Clients follow MOVED"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Example. Shard ninety-seven's primary crashes. Its last two acknowledged writes hadn't reached the replica yet. Those are lost.",
+          "reveal": 1
+        },
+        {
+          "say": "At five seconds, a majority of primaries mark it failed. Its hundred and sixty-four slots are briefly unavailable, and apps fall back to the database behind a circuit breaker.",
+          "reveal": 2
+        },
+        {
+          "say": "At about six and a half seconds, the replica wins the vote and takes over. A minority-side primary in a partition stops taking writes after the timeout. Recap: a small loss window is the price of sub-millisecond writes.",
+          "reveal": 3
+        }
+      ],
+      "id": "s043"
+    },
+    {
+      "layout": "twocol",
+      "kicker": "Concept 17 of 19",
+      "title": "Routing: smart client vs proxy",
+      "left": {
+        "heading": "Smart client",
+        "bullets": [
+          "One hop, lowest latency",
+          "Every language needs MOVED/ASK",
+          "5,000 x 100 x 4 = 2M connections"
+        ]
+      },
+      "right": {
+        "heading": "Proxy (mcrouter, twemproxy)",
+        "bullets": [
+          "Thin clients, pooling, pipelining",
+          "Extra hop ~0.1-0.3 ms",
+          "Sidecar on localhost: the middle"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept seventeen. A smart client holds the slot map and connects to every shard. One hop, lowest latency, no extra servers.",
+          "reveal": 1
+        },
+        {
+          "say": "But every language needs a correct client that handles MOVED, ASK, map refresh and pooling.",
+          "reveal": 2
+        },
+        {
+          "say": "And connections explode: five thousand app servers times a hundred shards times four connections is two million T-C-P connections, each costing shard memory.",
+          "reveal": 3
+        },
+        {
+          "say": "A proxy, like Facebook's mcrouter or Twitter's twemproxy, knows the topology instead. Clients stay thin, and the proxy pools and pipelines connections.",
+          "reveal": 4
+        },
+        {
+          "say": "The cost is an extra hop, about a tenth to three tenths of a millisecond, and more machines.",
+          "reveal": 5
+        },
+        {
+          "say": "The common middle is a sidecar proxy on each app host, on localhost. The hop is a local socket, and connections drop to proxies times shards.",
+          "reveal": 6
+        }
+      ],
+      "id": "s044",
+      "caption": "Book: Module 21 · Case 4 · Deep dive 3 — smart client vs proxy"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 18 of 19",
+      "title": "Hot keys, big keys, thundering herds",
+      "bullets": [
+        "Viral key: 500K reads/s vs 100K per shard",
+        "Fix 1: near cache in each app, 1-5 s",
+        "Fix 2: split into 8 copies, read one at random",
+        "Fix 3: read hot slots from replicas",
+        "Herd: leases, one refiller per key; TTL jitter",
+        "Big keys: cap size, bucket, delete with UNLINK"
+      ],
+      "steps": [
+        {
+          "say": "Concept eighteen. Even keys don't mean even traffic. A viral post at five hundred thousand reads a second meets a shard budget of a hundred thousand, and about four gigabits a second on one link. Find hot keys with top-K counters at the client or proxy.",
+          "reveal": 1
+        },
+        {
+          "say": "Fix one, a near cache. Each app keeps the hottest few thousand keys in process for one to five seconds.",
+          "reveal": 2
+        },
+        {
+          "say": "Fix two, key splitting. Store eight copies, post nine number zero to number seven, in different slots. Readers pick one at random, writers update all eight.",
+          "reveal": 3
+        },
+        {
+          "say": "Fix three, send hot-slot reads to replicas, accepting slight staleness.",
+          "reveal": 4
+        },
+        {
+          "say": "When a hot key expires, thousands miss at once: a thundering herd. Facebook's fix is leases. On a miss, the server gives a lease token to one client, at most once every ten seconds per key. Others wait briefly and retry. Also jitter TTLs, say an hour plus or minus ten percent, so keys don't expire together.",
+          "reveal": 5
+        },
+        {
+          "say": "Big keys, like a fifty-megabyte list, block a single-threaded shard. Cap value size, split into buckets, and delete with UNLINK, which frees memory in the background.",
+          "reveal": 6
+        }
+      ],
+      "id": "s045",
+      "caption": "Book: Module 21 · Case 4 · Deep dive 4 — hot keys, big keys, herds"
+    },
+    {
+      "layout": "number",
+      "kicker": "Example",
+      "title": "Example: a near cache absorbs a viral post",
+      "big": "500K reads/s / 2,000 app servers = 250/s each",
+      "caption": "Each server hits Redis once per 2 s TTL: ~1,000 reads/s total",
+      "steps": [
+        {
+          "say": "Example. A celebrity post gets five hundred thousand reads a second. Spread over two thousand app servers, that's just two hundred and fifty per server, all served from local memory.",
+          "reveal": 0
+        },
+        {
+          "say": "With a two-second near-cache TTL, each server asks Redis once every two seconds. The shard sees about a thousand reads a second instead of half a million. Recap: skew beats any single machine, so spread or absorb it.",
+          "reveal": 0
+        }
+      ],
+      "id": "s046"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 19 of 19",
+      "title": "Eviction, memory and persistence",
+      "bullets": [
+        "allkeys-lru for caches; noeviction for stores",
+        "Sampled LRU (5 keys); LFU decaying counter",
+        "Keep 20-30% headroom: fork copy-on-write",
+        "None: restart empty, refill from database",
+        "RDB snapshots: fast restart, minutes lost",
+        "AOF everysec: lose about 1 s"
+      ],
+      "steps": [
+        {
+          "say": "Concept nineteen. When memory hits maxmemory, the policy decides. All-keys L-R-U, least recently used, is usual for a pure cache. All-keys L-F-U, least frequently used, is better when a stable set is popular. No-eviction rejects writes, which is right for a primary store.",
+          "reveal": 1
+        },
+        {
+          "say": "Redis approximates L-R-U by sampling about five keys and evicting the oldest, far cheaper than a true list. L-F-U uses a small decaying counter per key.",
+          "reveal": 2
+        },
+        {
+          "say": "Keep twenty to thirty percent headroom. When Redis forks to save to disk, copy-on-write copies pages the parent changes, which can nearly double memory under heavy writes.",
+          "reveal": 3
+        },
+        {
+          "say": "Persistence choices. None: a restart is an empty shard refilled from the database.",
+          "reveal": 4
+        },
+        {
+          "say": "R-D-B snapshots: a forked child writes a compact file every few minutes. Fast restarts, good backups, but minutes of writes lost on a crash.",
+          "reveal": 5
+        },
+        {
+          "say": "A-O-F, the append-only file: every write appended, fsynced every second by default, so you lose about one second. Our choice: no persistence on cache primaries, R-D-B on replicas, and a separate cluster with A-O-F and no-eviction for sessions and counters.",
+          "reveal": 6
+        }
+      ],
+      "id": "s047",
+      "caption": "Book: Module 21 · Case 4 · Deep dive 5 — eviction, memory, persistence"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: two clusters, two guarantees",
+      "table": {
+        "head": [
+          "Cluster",
+          "Data",
+          "Eviction",
+          "Persistence"
+        ],
+        "rows": [
+          [
+            "Cache tier",
+            "Product pages, profiles",
+            "allkeys-lru",
+            "None; RDB on replicas"
+          ],
+          [
+            "Store tier",
+            "Sessions, rate counters",
+            "noeviction",
+            "AOF everysec"
+          ],
+          [
+            "Mixed (mistake)",
+            "Both",
+            "LRU evicts a session",
+            "Users logged out"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Example. The cache tier holds product pages and profiles. If they're evicted, the database refills them. So L-R-U and no persistence.",
+          "reveal": 1
+        },
+        {
+          "say": "The store tier holds sessions and rate-limit counters. Losing them hurts, so no-eviction and A-O-F every second.",
+          "reveal": 2
+        },
+        {
+          "say": "Mix both on one cluster, and under memory pressure L-R-U evicts Aisha's session, logging her out. In the interview, say: different data, different guarantees. Recap: never mix may-evict with must-keep.",
+          "reveal": 3
+        }
+      ],
+      "id": "s048"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "The whole cache is flushed: 9M reads/s miss. Now?",
+      "bullets": [
+        "A. Let the database absorb the miss storm",
+        "B. Leases, DB concurrency caps, gradual refill",
+        "C. Restart all app servers"
+      ],
+      "steps": [
+        {
+          "say": "Final pause and think. A bad deploy flushed every key. Nine million reads a second are about to miss. A, let the database absorb it. B, leases, database concurrency caps and gradual refill. C, restart the apps.",
+          "reveal": 0
+        }
+      ],
+      "id": "s049"
+    },
+    {
+      "layout": "bullets",
+      "title": "Answer: protect the database",
+      "bullets": [
+        "B: one refiller per key via leases",
+        "Cap DB concurrency per app; shed load",
+        "Serve stale or default for non-critical",
+        "Warm gradually; never assume DB survives"
+      ],
+      "steps": [
+        {
+          "say": "The answer is B. Leases or single-flight mean one refill per key, not thousands.",
+          "reveal": 1
+        },
+        {
+          "say": "Cap database concurrency per app, and shed the rest.",
+          "reveal": 2
+        },
+        {
+          "say": "Serve stale or default data for non-critical features.",
+          "reveal": 3
+        },
+        {
+          "say": "And warm up gradually. Never assume the database can absorb a full miss storm.",
+          "reveal": 4
+        }
+      ],
+      "id": "s050"
+    },
+    {
+      "layout": "recap",
+      "title": "Recap",
+      "bullets": [
+        "Judge: microVM + cgroups, CPU time, lanes, sorted set",
+        "Deploy: P2P, waves, canary gates; config canaried too",
+        "AI chat: SSE buffer, continuous batching, KV memory",
+        "AI chat: cache-aware routing, reserve-settle, safety",
+        "Cache: slots, async failover, near caches, leases",
+        "Next: Episode 29, Case Studies: Edge Blocks and AI Systems"
+      ],
+      "steps": [
+        {
+          "say": "Let's recap. The online judge: a throwaway microVM or gVisor outside, cgroups and seccomp inside, no network. C-P-U time on dedicated cores with borderline re-runs. Contest lanes, pre-scaling, and a sorted-set leaderboard fed by verdict events.",
+          "reveal": 1
+        },
+        {
+          "say": "Deployment: one signed artifact, spread by a rack-aware peer to peer swarm and pre-staged. Waves from one-box to every region, gates comparing canary with baseline, and automatic rollback to the cached last good version. Config gets its own fast lane, but it's still validated, canaried and staged.",
+          "reveal": 2
+        },
+        {
+          "say": "Conversational A-I: stream over S-S-E from a resumable generation buffer. Continuous batching with paged KV memory, about three hundred twenty kilobytes per token.",
+          "reveal": 3
+        },
+        {
+          "say": "Route each turn to the replica holding its prefix, meter tokens by reserving then settling, and check safety incrementally on the stream.",
+          "reveal": 4
+        },
+        {
+          "say": "The cache cluster: sixteen thousand three hundred eighty-four hash slots, async replicas promoted by majority vote, and skew fought with near caches, key splitting, leases and TTL jitter.",
+          "reveal": 5
+        },
+        {
+          "say": "Next time, episode twenty-nine, Case Studies: Edge Blocks and A-I Systems. See you there.",
+          "reveal": 6
+        }
+      ],
+      "id": "s051"
+    }
+  ]
+}

@@ -1,0 +1,1845 @@
+{
+  "series": "LLD Workshop",
+  "episode": 23,
+  "title": "Commerce: Amazon and Stock Brokerage",
+  "subtitle": "An online shop and a stock brokerage: exact money, legal moves, no double-selling",
+  "scenes": [
+    {
+      "id": "s001",
+      "layout": "title",
+      "title": "Commerce: Amazon and Stock Brokerage",
+      "subtitle": "An online shop and a stock brokerage: exact money, legal moves, no double-selling",
+      "steps": [
+        {
+          "say": "Welcome to the L-L-D Workshop, episode twenty-three: Commerce, Amazon and Stock Brokerage. L-L-D means low-level design, the class-by-class design of one system.",
+          "reveal": 0
+        },
+        {
+          "say": "Last time we built social networks, where people talk. Today people buy, sell and trade. Money moves, stock runs out, prices change every second, and two people often want the same last thing at the same moment.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll be able to design an online shop from cart to delivery, and a stock brokerage with four order types, lots for tax, and a real matching engine. Keep the chapter nineteen PDF open. Most numbers I use come straight from the program output printed there.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s002",
+      "layout": "section",
+      "kicker": "Concept 1",
+      "title": "Four rules for every commerce design",
+      "steps": [
+        {
+          "say": "Before we draw a single class, here are four rules. They apply to every design in this chapter, and to almost every commerce question you'll get in an interview.",
+          "reveal": 0
+        },
+        {
+          "say": "Here's the question to keep in mind. What's the most expensive bug in a shop? It's not a crash. It's charging the wrong amount, or selling the same last item twice.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 19 · Four rules that apply to every design"
+    },
+    {
+      "id": "s003",
+      "layout": "bullets",
+      "kicker": "Concept 1",
+      "title": "The four rules, plus one",
+      "bullets": [
+        "Money is BigDecimal, never double",
+        "Status changes follow a state machine",
+        "Check-then-take on stock is one atomic step",
+        "Copy prices into the order",
+        "Plus: idempotency, a repeated request has one effect"
+      ],
+      "steps": [
+        {
+          "say": "Rule one. Money is a BigDecimal, never a double. A double stores numbers in binary, so most decimal fractions are only approximated. BigDecimal is Java's exact decimal type.",
+          "reveal": 1
+        },
+        {
+          "say": "Rule two. Status changes follow a state machine: a fixed list of states plus the allowed moves between them. An illegal move, like cancelling a delivered order, throws at once.",
+          "reveal": 2
+        },
+        {
+          "say": "Rule three. Check-then-take on shared stock must be atomic. Is there one left, then take it, is two steps. If two threads do step one together, both see yes, and both take it. That's a race condition. The fix: one lock, or one compare-and-set.",
+          "reveal": 3
+        },
+        {
+          "say": "Rule four. Copy prices into the order. An order remembers the price that was actually paid, and it never changes. If the catalog price goes up tomorrow, yesterday's order must still say what you paid.",
+          "reveal": 4
+        },
+        {
+          "say": "Plus one more, from the interview follow-ups: idempotency. Idempotent means safe to repeat: doing it twice has the same effect as doing it once. If a shopper double-clicks Place order, they must get one order, not two.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s004",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "BigDecimal and idempotency, happening",
+      "table": {
+        "head": [
+          "Scenario",
+          "Wrong way",
+          "Right way"
+        ],
+        "rows": [
+          [
+            "0.1 + 0.2 as double",
+            "0.30000000000000004",
+            "BigDecimal(\"0.1\") + (\"0.2\") = 0.3"
+          ],
+          [
+            "Compare 2.0 and 2.00",
+            "equals -> false (scale differs)",
+            "compareTo -> 0, equal"
+          ],
+          [
+            "Build from a number",
+            "new BigDecimal(0.1) = 0.1000000000000000055...",
+            "new BigDecimal(\"0.10\")"
+          ],
+          [
+            "Double-click checkout",
+            "Two orders, charged twice",
+            "Same idempotency key -> same order"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Add zero point one and zero point two as doubles, and Java prints zero point three, followed by fifteen zeros and a four. With BigDecimal you get exactly zero point three.",
+          "reveal": 1
+        },
+        {
+          "say": "Trap number one: comparing. new BigDecimal of two point zero, equals, new BigDecimal of two point zero zero, is false, because equals also compares the number of decimal places. Use compareTo instead.",
+          "reveal": 2
+        },
+        {
+          "say": "Trap number two: building it. If you pass a double into the constructor, the binary error comes along with it. Build money from a string.",
+          "reveal": 3
+        },
+        {
+          "say": "And idempotency. The browser makes a unique id, an idempotency key, and sends it with Place order. The first request creates order one thousand and one under that key. The double-click arrives with the same key, so we return order one thousand and one again. One order, one charge.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s005",
+      "layout": "section",
+      "kicker": "Part 1 of 3",
+      "title": "Design Amazon: online shopping",
+      "steps": [
+        {
+          "say": "Part one: Amazon. We design the online retail part. People list products, others find them, put them in a cart, pay, and track the parcel.",
+          "reveal": 0
+        },
+        {
+          "say": "The one idea that makes it work: an order is an immutable copy of the cart, moved through a state machine. Let's build up to that.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 19 · Design Amazon, Online Shopping System"
+    },
+    {
+      "id": "s006",
+      "layout": "table",
+      "title": "Clarify first",
+      "table": {
+        "head": [
+          "Question",
+          "Assumed answer"
+        ],
+        "rows": [
+          [
+            "Buy without an account?",
+            "No. Browse and cart: anyone. Order: members"
+          ],
+          [
+            "Who sells?",
+            "Members can list products (a marketplace)"
+          ],
+          [
+            "How do people pay?",
+            "Card clears now; bank transfer clears later"
+          ],
+          [
+            "Cancel an order?",
+            "Yes, until it has shipped"
+          ],
+          [
+            "Notify people?",
+            "On every order or shipment status change"
+          ],
+          [
+            "Returns, warehouses, payouts?",
+            "Out of scope, and say so out loud"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Always clarify first. Can someone buy without an account? No. Anyone can browse and fill a cart, but placing an order needs a registered member.",
+          "reveal": 1
+        },
+        {
+          "say": "Who sells? Members can list products, so it's a marketplace, not only goods sold by the platform itself.",
+          "reveal": 2
+        },
+        {
+          "say": "How do people pay? Credit card or electronic bank transfer. That difference matters later. A card clears at once. A transfer clears days later.",
+          "reveal": 3
+        },
+        {
+          "say": "Can an order be cancelled? Yes, until it has shipped. We'll make breaking that rule impossible.",
+          "reveal": 4
+        },
+        {
+          "say": "Do we notify people? Yes, every time the order or its shipment changes status.",
+          "reveal": 5
+        },
+        {
+          "say": "And returns, wish lists, multiple warehouses, seller payouts? Out of scope. Say that out loud.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s007",
+      "layout": "twocol",
+      "kicker": "Concept 2",
+      "title": "Member versus Guest",
+      "left": {
+        "heading": "Customer = what anyone may do",
+        "bullets": [
+          "Guest: search, view, fill a cart",
+          "Guest: can register"
+        ]
+      },
+      "right": {
+        "heading": "Member = Customer + ordering",
+        "bullets": [
+          "Member: place orders, list products",
+          "Member: review, cancel, track"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Now the first design decision, and the one sentence to say out loud in the interview. We have a base class, Customer, with two subclasses, Guest and Member. A guest can search, view products and fill a cart.",
+          "reveal": 1
+        },
+        {
+          "say": "A guest can also register, which turns them into a member. We'll see how in a moment.",
+          "reveal": 2
+        },
+        {
+          "say": "A member can do everything a guest can, plus place orders and list products to sell.",
+          "reveal": 3
+        },
+        {
+          "say": "So where does place order live? Not on Customer. If Customer had it, every guest would inherit a method it must refuse. That breaks the Liskov Substitution Principle: a subclass must work wherever its parent works, with no surprises. So ordering lives on Member only. Say: ordering is on Member, not Customer, otherwise every guest inherits a method it isn't allowed to use.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s008",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "The cart survives registration",
+      "table": {
+        "head": [
+          "Moment",
+          "Guest cart",
+          "Member cart"
+        ],
+        "rows": [
+          [
+            "Guest adds 1 x Clean Code",
+            "$32.50",
+            "-"
+          ],
+          [
+            "Guest adds 2 x USB-C Cable",
+            "$32.50 + $19.98",
+            "-"
+          ],
+          [
+            "register() creates Member alice",
+            "merged, then cleared",
+            "1 Clean Code, 2 cables"
+          ],
+          [
+            "Alice checks out",
+            "-",
+            "total $52.48"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's the demo from the PDF. A guest browses and adds one copy of Clean Code at thirty-two fifty.",
+          "reveal": 1
+        },
+        {
+          "say": "Then two USB-C cables at nine ninety-nine each, so nineteen ninety-eight.",
+          "reveal": 2
+        },
+        {
+          "say": "Now the guest registers. Java objects can't change their class, so a Guest can't become a Member in place. Instead, register returns a brand-new Member and merges the guest's cart into it, then clears the old one.",
+          "reveal": 3
+        },
+        {
+          "say": "Alice checks out and the total is fifty-two forty-eight. Nothing was lost. Registration is a real-world moment where the cart must survive, so the design carries it across.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s009",
+      "layout": "diagram",
+      "title": "The shop's main classes",
+      "mermaid": "flowchart LR\n    G[\"Guest\"] -->|\"register\"| M[\"Member\"]\n    M --> C[\"Cart owns Items\"]\n    S[\"OrderService\"] --> CAT[\"Catalog\"]\n    S --> O[\"Order\"]\n    O --> P[\"Payment\"]\n    O --> SH[\"Shipment\"]\n    S --> N[\"Notifications\"]",
+      "caption": "OrderService coordinates; the order owns its log and shipment",
+      "steps": [
+        {
+          "say": "Here's the picture. A guest registers and becomes a member. Every customer owns a shopping cart, and the cart owns its items.",
+          "reveal": 0
+        },
+        {
+          "say": "The catalog keeps two indexes, from name words to products, and from category to products. So a search reads a map instead of scanning every product.",
+          "reveal": 0
+        },
+        {
+          "say": "The order service is the coordinator. It creates the order, which owns its log entries and its shipment, and only points to the payment it was handed.",
+          "reveal": 0
+        },
+        {
+          "say": "And whenever an order changes status, the service tells a notification service. That's the Observer pattern.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s010",
+      "layout": "bullets",
+      "kicker": "Concept 3",
+      "title": "Checkout, step by step",
+      "bullets": [
+        "1. Member active? Cart not empty?",
+        "2. Reserve stock for every line, all or nothing",
+        "3. Create the Order from a copy of the cart lines",
+        "4. Build the payment for the order total, process it",
+        "5. Move the order: UNSHIPPED, PENDING or CANCELED",
+        "6. Publish the new status to listeners"
+      ],
+      "steps": [
+        {
+          "say": "Let's follow Alice's fifty-two forty-eight checkout. Step one: guard checks. Is Alice's account active? Is her cart non-empty? A blocked member stops right here.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: reserve stock for every line. Reserve means actually take it out of the pool now, not just check that it's there. Clean Code has five copies. We reserve one, leaving four. Then we reserve two cables. If any line fails, we give back everything we already reserved.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: create the order from a copy of the cart lines. Order number O-R-D one thousand and one.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: now we know the total, fifty-two forty-eight, so we build a payment for exactly that amount and call process.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five: the result decides the move. A card comes back completed, so the order goes to unshipped. A bank transfer comes back pending, so the order stays pending. A declined payment releases the stock and cancels the order, but keeps the cart so Alice can retry.",
+          "reveal": 5
+        },
+        {
+          "say": "Step six: publish the new status. Alice gets an email and a text saying O-R-D one thousand and one is now unshipped. Stock of Clean Code is now four.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s011",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Reserve all or nothing",
+      "table": {
+        "head": [
+          "Cart line",
+          "Stock before",
+          "reserve()",
+          "Stock after"
+        ],
+        "rows": [
+          [
+            "2 x Refactoring",
+            "3",
+            "true",
+            "1"
+          ],
+          [
+            "1 x Clean Code",
+            "5",
+            "true",
+            "4"
+          ],
+          [
+            "1 x Design Patterns",
+            "0",
+            "false -> fail",
+            "0"
+          ],
+          [
+            "Rollback",
+            "-",
+            "release 2 + release 1",
+            "3 and 5 again"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Why all or nothing? Imagine a three-line cart. Line one, two copies of Refactoring. Stock three, reserve succeeds, one left.",
+          "reveal": 1
+        },
+        {
+          "say": "Line two, one Clean Code. Five becomes four.",
+          "reveal": 2
+        },
+        {
+          "say": "Line three, Design Patterns. Someone just bought the last copy, so reserve returns false.",
+          "reveal": 3
+        },
+        {
+          "say": "If we simply threw an error now, two Refactoring copies and one Clean Code would be stuck, reserved for an order that doesn't exist. That's a stock leak. So place order remembers every line it reserved and releases them all. Back to three and five. Then it fails with out of stock: Design Patterns.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s012",
+      "layout": "number",
+      "title": "Ten members race for the last copy",
+      "big": "10 threads -> 1 winner, 9 losers, stock 0",
+      "caption": "Product.reserve is synchronized: check and decrement are one step",
+      "steps": [
+        {
+          "say": "Does the lock really work? The PDF's demo starts ten threads at exactly the same instant, each trying to buy the last copy of a book.",
+          "reveal": 0
+        },
+        {
+          "say": "Inside Product, reserve is synchronized. Only one thread at a time can run the check and the decrement. So exactly one wins, nine are told out of stock, and stock ends at zero. Never minus nine.",
+          "reveal": 0
+        },
+        {
+          "say": "Why reserve at order time and not at payment time? Check, then pay, then decrement leaves a window where two buyers both pass the check. The cost of reserving early is that an abandoned order holds stock, so real systems release it on a timer, say after thirty minutes.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s013",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Why does the Order copy the cart lines?",
+      "bullets": [
+        "A. Copying is faster",
+        "B. So later cart edits or price changes can't rewrite a finished order",
+        "C. Java requires it for records"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Why does the order copy the cart lines instead of just pointing at the same item objects? Take a moment.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s014",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Answer: the order is a frozen copy",
+      "table": {
+        "head": [
+          "Event",
+          "Cart",
+          "Order ORD-1001"
+        ],
+        "rows": [
+          [
+            "Checkout",
+            "1 Clean Code @ $32.50",
+            "1 Clean Code @ $32.50"
+          ],
+          [
+            "Catalog price rises to $35",
+            "next add uses $35",
+            "still $32.50"
+          ],
+          [
+            "Alice adds 3 more cables to cart",
+            "3 cables",
+            "unchanged: 2 cables"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The answer is B. An order documents a finished purchase. It must stay fixed. Each line is an Item record holding product id, name, quantity and the unit price at the moment it was added. At checkout we take List copy-of, so the order has its own list.",
+          "reveal": 1
+        },
+        {
+          "say": "Now the seller raises Clean Code to thirty-five dollars. Alice's order still says thirty-two fifty. That's rule four, copy prices.",
+          "reveal": 2
+        },
+        {
+          "say": "And if Alice starts a new cart and adds three cables, her finished order still says two. Sharing items would silently rewrite history.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s015",
+      "layout": "diagram",
+      "kicker": "Concept 4",
+      "title": "The OrderStatus state machine",
+      "mermaid": "stateDiagram-v2\n    [*] --> PENDING : order placed\n    PENDING --> UNSHIPPED : payment cleared\n    PENDING --> CANCELED : declined or cancelled\n    UNSHIPPED --> SHIPPED : handed to carrier\n    UNSHIPPED --> CANCELED : member cancels\n    SHIPPED --> COMPLETED : delivered\n    CANCELED --> REFUND_APPLIED : money returned\n    COMPLETED --> [*]\n    REFUND_APPLIED --> [*]",
+      "caption": "There is no SHIPPED to CANCELED edge, so cancel-after-ship is impossible",
+      "steps": [
+        {
+          "say": "Next, rule two in action: the order's state machine. We put the allowed moves inside the OrderStatus enum itself.",
+          "reveal": 0
+        },
+        {
+          "say": "Pending means waiting for payment. From pending, it can go to unshipped when payment clears, or to canceled if payment is declined or the member cancels.",
+          "reveal": 0
+        },
+        {
+          "say": "Unshipped means paid but not handed to the carrier. It can go to shipped, or to canceled.",
+          "reveal": 0
+        },
+        {
+          "say": "Shipped can only go to completed. Look closely: there's no arrow from shipped to canceled. So the requirement, cancel only if not shipped, becomes one line. can cancel returns whether the current status can move to canceled. It's impossible by construction.",
+          "reveal": 0
+        },
+        {
+          "say": "Canceled can go to refund applied. Completed and refund applied are final. Any other move throws an exception right away, instead of silently corrupting data.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s016",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Walk the machine: ORD-1002",
+      "table": {
+        "head": [
+          "Event",
+          "Move",
+          "Allowed?"
+        ],
+        "rows": [
+          [
+            "Bank transfer placed",
+            "-> PENDING",
+            "yes, payment PENDING"
+          ],
+          [
+            "Transfer clears",
+            "PENDING -> UNSHIPPED",
+            "yes"
+          ],
+          [
+            "Member cancels",
+            "UNSHIPPED -> CANCELED",
+            "yes, stock back to 2"
+          ],
+          [
+            "Refund issued",
+            "CANCELED -> REFUND_APPLIED",
+            "yes, payment REFUNDED"
+          ],
+          [
+            "Bug tries to ship it",
+            "REFUND_APPLIED -> SHIPPED",
+            "no: throws"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's walk order one thousand and two from the PDF. Alice pays for Refactoring by bank transfer. The transfer comes back pending, so the order is pending.",
+          "reveal": 1
+        },
+        {
+          "say": "The transfer clears. Pending to unshipped is a legal edge.",
+          "reveal": 2
+        },
+        {
+          "say": "Alice cancels before shipping. Unshipped to canceled is legal. Stock is released, and Refactoring goes back to two.",
+          "reveal": 3
+        },
+        {
+          "say": "The payment is refunded, so canceled moves to refund applied. The order log now reads: pending, unshipped, canceled, refund applied.",
+          "reveal": 4
+        },
+        {
+          "say": "Finally the demo tries something illegal: ship this refunded order. The enum says no, and throws: O-R-D one thousand and two, refund applied to shipped, is not allowed.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s017",
+      "layout": "bullets",
+      "kicker": "Concept 5",
+      "title": "Payment: a sealed Strategy",
+      "bullets": [
+        "abstract sealed Payment permits Card, BankTransfer",
+        "process(): card -> COMPLETED, transfer -> PENDING",
+        "Not an enum + switch: behaviour differs",
+        "New method = new subclass; checkout untouched"
+      ],
+      "steps": [
+        {
+          "say": "Now payment. Payment is an abstract class. Abstract means you can't create a plain Payment, only a real card payment or bank transfer payment. It's also sealed: sealed lists exactly which subclasses are allowed, so the compiler knows every possible kind.",
+          "reveal": 1
+        },
+        {
+          "say": "Each subclass answers process differently. A credit card returns completed right away. A bank transfer returns pending, and clears later. That's the Strategy pattern: each interchangeable way of doing a job sits behind one interface.",
+          "reveal": 2
+        },
+        {
+          "say": "Why not an enum called PaymentType with a switch inside checkout? Because the two methods behave differently. A switch means editing checkout for every new method.",
+          "reveal": 3
+        },
+        {
+          "say": "With the strategy, imagine they ask you to add gift cards, or U-P-I, India's instant mobile bank payment. You write GiftCardPayment extends Payment, add it to the permits list, and the order service doesn't change, because it only ever calls process. That's the Open-Closed Principle: open to extension, closed to modification.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s018",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Why the payment arrives as a function",
+      "table": {
+        "head": [
+          "Moment",
+          "What is known",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "Member clicks Pay by card",
+            "card details",
+            "caller passes amount -> new CardPayment(amount)"
+          ],
+          [
+            "Stock reserved, Order built",
+            "total = $52.48",
+            "service calls paymentMethod.apply(52.48)"
+          ],
+          [
+            "Payment created",
+            "exact amount",
+            "process() -> COMPLETED"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's a subtle detail. The member chooses how to pay before the total is known for certain. The order service only learns the total after it has reserved stock and built the order. So the caller doesn't pass a payment. It passes a function: give it an amount, and it hands back a Payment.",
+          "reveal": 1
+        },
+        {
+          "say": "Inside place order, once the order exists and its total is fifty-two forty-eight, the service calls that function with fifty-two forty-eight.",
+          "reveal": 2
+        },
+        {
+          "say": "Out comes a card payment for exactly the right amount, and process returns completed.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s019",
+      "layout": "diagram",
+      "kicker": "Concept 6",
+      "title": "Observer: who hears about status changes",
+      "mermaid": "flowchart LR\n    S[\"OrderService\"] -->|\"publish status\"| L[\"OrderEventListener\"]\n    L --> N[\"NotificationService\"]\n    N --> E[\"EmailChannel\"]\n    N --> T[\"SmsChannel\"]\n    N -.-> P[\"PushChannel (new, no change to OrderService)\"]",
+      "caption": "OrderService publishes; listeners decide who to tell and how",
+      "steps": [
+        {
+          "say": "Requirement: notify members every time an order or shipment changes. The naive way is to call the email code and the SMS code directly inside the order service. Then every new channel means editing checkout.",
+          "reveal": 0
+        },
+        {
+          "say": "Instead we use Observer. Objects subscribe to events from another object and get called back automatically, so the publisher never knows who's listening. The order service publishes to an OrderEventListener. The notification service is one listener.",
+          "reveal": 0
+        },
+        {
+          "say": "The notification service sends each message through every registered channel. That's why the PDF shows two lines for each change: an email to alice at mail dot test, and a text to her phone. O-R-D one thousand and one is now shipped.",
+          "reveal": 0
+        },
+        {
+          "say": "Adding push notifications is one new class, PushChannel. The order service never changes.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s020",
+      "layout": "twocol",
+      "kicker": "Concept 7",
+      "title": "Shipment log and reviews",
+      "left": {
+        "heading": "Shipment keeps a log",
+        "bullets": [
+          "SHIPPED @ sort centre",
+          "SHIPPED @ Portland hub",
+          "DELIVERED @ front door"
+        ]
+      },
+      "right": {
+        "heading": "Reviews store reviewerId",
+        "bullets": [
+          "Rating 1 to 5 + text, owned by Product",
+          "Clean Code: 5 and 4 -> average 4.5"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Two smaller decisions. First, the shipment keeps a log, not a single status field. Here's Alice's parcel. Entry one: shipped, at the sort centre.",
+          "reveal": 1
+        },
+        {
+          "say": "Entry two: shipped, at the Portland hub.",
+          "reveal": 2
+        },
+        {
+          "say": "Entry three: delivered, at the front door. Tracking means reading the last entry. And the whole history stays for support and disputes. A single status field would lose it.",
+          "reveal": 3
+        },
+        {
+          "say": "Second, reviews. A product owns its reviews, each a rating from one to five plus text. The review stores the reviewer's id, not the Member object. That avoids a two-way dependency between Product and Member, so each class can be understood on its own.",
+          "reveal": 4
+        },
+        {
+          "say": "In the demo, Clean Code gets a five and a four, so its average rating is four point five.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s021",
+      "layout": "bullets",
+      "kicker": "Concept 8",
+      "title": "OrderService: the Facade",
+      "bullets": [
+        "placeOrder: guard, reserve, copy, pay, publish",
+        "cancel: lock order, canCancel?, release, refund",
+        "ship: lock order, move to SHIPPED",
+        "Callers never juggle five objects"
+      ],
+      "steps": [
+        {
+          "say": "Last Amazon concept. The order service is a Facade: one simple class that hides many classes behind a few easy methods. Place order is the one you've seen: guard, reserve, copy, pay, publish.",
+          "reveal": 1
+        },
+        {
+          "say": "Cancel locks the order object, asks can cancel, releases the stock, moves to canceled, and then asks the payment for a refund. If the refund comes back refunded, it moves on to refund applied.",
+          "reveal": 2
+        },
+        {
+          "say": "Ship locks the same order object. Why? Imagine cancel and ship arrive at the same moment. Without the lock, both checks pass, and the order is shipped and its stock released. With both locking the order, check-then-move is one atomic step. One wins.",
+          "reveal": 3
+        },
+        {
+          "say": "Without the facade, every caller orchestrates five objects by hand.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s022",
+      "layout": "table",
+      "title": "Amazon edge cases",
+      "table": {
+        "head": [
+          "Risk",
+          "Prevention"
+        ],
+        "rows": [
+          [
+            "Line 3 out of stock",
+            "Release lines 1 and 2 (all or nothing)"
+          ],
+          [
+            "Payment declined",
+            "Release stock, CANCELED, keep the cart"
+          ],
+          [
+            "Transfer never clears",
+            "Timeout job cancels old PENDING orders"
+          ],
+          [
+            "Blocked member",
+            "canBuy() checks ACTIVE first"
+          ],
+          [
+            "Distributed stock",
+            "UPDATE ... WHERE stock >= 1, or a version"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Quick edge cases. One line out of stock: release what you reserved.",
+          "reveal": 1
+        },
+        {
+          "say": "Declined payment: give the stock back, cancel, keep the cart.",
+          "reveal": 2
+        },
+        {
+          "say": "A transfer that never clears: a timeout job cancels old pending orders.",
+          "reveal": 3
+        },
+        {
+          "say": "A blocked member: can buy checks the account is active first.",
+          "reveal": 4
+        },
+        {
+          "say": "Many servers? A Java lock isn't enough. Use a conditional database update, set stock to stock minus one where stock is at least one, or optimistic locking with a version number.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s023",
+      "layout": "bullets",
+      "title": "Amazon: in the interview, say this",
+      "bullets": [
+        "Catalog with name and category indexes",
+        "Ordering only on Member (LSP)",
+        "Reserve all lines -> copy -> pay -> publish",
+        "State machine: no SHIPPED -> CANCELED edge",
+        "Idempotency key stops double orders"
+      ],
+      "steps": [
+        {
+          "say": "Here's your thirty-second answer. A catalog with name and category indexes, and a cart per customer.",
+          "reveal": 1
+        },
+        {
+          "say": "Ordering lives only on Member, because of Liskov.",
+          "reveal": 2
+        },
+        {
+          "say": "Checkout reserves stock for every line atomically, copies the lines into an immutable order, and takes payment through a Payment strategy, then publishes to notification observers.",
+          "reveal": 3
+        },
+        {
+          "say": "The order moves through a state machine that forbids cancelling after shipping.",
+          "reveal": 4
+        },
+        {
+          "say": "And if they ask about double-clicks: a client-generated idempotency key. If an order with that key exists, return it. Recap: reserve, copy, pay, publish.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s024",
+      "layout": "section",
+      "kicker": "Part 2 of 3",
+      "title": "Design an online stock brokerage",
+      "steps": [
+        {
+          "say": "Part two: a stock brokerage. People buy and sell shares online without a human middleman, track their holdings, and get statements for tax.",
+          "reveal": 0
+        },
+        {
+          "say": "The one idea: four order types that differ in only two questions. Plus money that's reserved, so it's never promised twice.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 19 · Design an Online Stock Brokerage System"
+    },
+    {
+      "id": "s025",
+      "layout": "twocol",
+      "title": "Broker versus exchange",
+      "left": {
+        "heading": "Broker (Part A)",
+        "bullets": [
+          "Holds your cash and shares",
+          "Checks you can afford the order",
+          "Forwards orders, books the fills"
+        ]
+      },
+      "right": {
+        "heading": "Exchange (Part B)",
+        "bullets": [
+          "Where all brokers' orders meet",
+          "Order book per stock",
+          "Matches by price, then time"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Keep two things apart in your head. A broker is the company you trade through. It holds your cash and shares.",
+          "reveal": 1
+        },
+        {
+          "say": "Before your order goes anywhere, the broker checks you can actually afford it.",
+          "reveal": 2
+        },
+        {
+          "say": "It forwards the order, and when a fill comes back, it moves your money and shares.",
+          "reveal": 3
+        },
+        {
+          "say": "An exchange is the market where buy and sell orders from all brokers meet.",
+          "reveal": 4
+        },
+        {
+          "say": "It keeps an order book for each stock: the list of all waiting buy and sell orders.",
+          "reveal": 5
+        },
+        {
+          "say": "And it matches them by price first, then by time. We'll design both, kept apart in code.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s026",
+      "layout": "table",
+      "title": "Clarify the brokerage",
+      "table": {
+        "head": [
+          "Question",
+          "Assumed answer"
+        ],
+        "rows": [
+          [
+            "Order types?",
+            "Market, limit, stop-loss, stop-limit"
+          ],
+          [
+            "Fill in parts?",
+            "Yes, an order can fill at several prices"
+          ],
+          [
+            "Separate purchases?",
+            "Yes, each is a lot (tax needs it)"
+          ],
+          [
+            "Money in and out?",
+            "Check, wire, electronic transfer; limit each"
+          ],
+          [
+            "Reports? Alerts?",
+            "Quarterly + yearly tax; notify on fill"
+          ],
+          [
+            "Margin, shorting, options?",
+            "Out of scope"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Clarifying questions. Which order types? Four: market, limit, stop-loss and stop-limit. We'll define each in a minute.",
+          "reveal": 1
+        },
+        {
+          "say": "Can one order fill at several prices? Yes. A hundred-share order might fill as seventy at one price and thirty at another.",
+          "reveal": 2
+        },
+        {
+          "say": "Do we track separate purchases of the same stock? Yes. Each purchase is a lot, because the tax you owe depends on which shares you sell.",
+          "reveal": 3
+        },
+        {
+          "say": "Money comes in and out by check, by wire, which is a direct bank-to-bank transfer, or by electronic bank transfer, each with a per-transfer limit.",
+          "reveal": 4
+        },
+        {
+          "say": "We produce quarterly statements and a yearly tax statement, and notify the member whenever an order executes.",
+          "reveal": 5
+        },
+        {
+          "say": "Margin, which is trading with borrowed money, short selling, options and dividends are out of scope. Say so.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s027",
+      "layout": "bullets",
+      "kicker": "Concept 9",
+      "title": "One abstract Order, two questions",
+      "bullets": [
+        "Shared: member, symbol, side, quantity, status, fills",
+        "Q1 canTradeAt(price): may I trade at this price now?",
+        "Q2 limitPrice(): my worst acceptable price, or none",
+        "acceptsPrice(p): BUY p <= limit, SELL p >= limit"
+      ],
+      "steps": [
+        {
+          "say": "Here's the sentence that earns the most credit: the four order types differ in exactly two things. Everything else is shared, so it lives in one abstract Order class: the member, the stock symbol, buy or sell, quantity, status and the list of fills.",
+          "reveal": 1
+        },
+        {
+          "say": "Question one: may I trade at this market price right now? That's can trade at.",
+          "reveal": 2
+        },
+        {
+          "say": "Question two: what's my worst acceptable price? That's limit price, and it can be empty, meaning any price.",
+          "reveal": 3
+        },
+        {
+          "say": "The base class turns question two into a final helper, accepts price. For a buy, a price is acceptable if it's at or below the limit. For a sell, at or above. No limit means always yes. Each subclass is just a few lines. It's plain polymorphism, not the State pattern.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s028",
+      "layout": "table",
+      "kicker": "Concept 9",
+      "title": "The four order types",
+      "table": {
+        "head": [
+          "Type",
+          "Q1: may trade?",
+          "Q2: worst price",
+          "Plain words"
+        ],
+        "rows": [
+          [
+            "Market",
+            "Always",
+            "None",
+            "Now, at whatever the market gives"
+          ],
+          [
+            "Limit",
+            "Always",
+            "The limit",
+            "Buy at 9.50 or less"
+          ],
+          [
+            "Stop-loss",
+            "Once price reaches stop",
+            "None",
+            "If it falls to 10.00, get me out"
+          ],
+          [
+            "Stop-limit",
+            "Once price reaches stop",
+            "The limit",
+            "If it hits 305, buy, max 306"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's walk all four with Alice's trades. A market order: may it trade? Always. Worst price? None. Buy a hundred Apple shares now, at whatever the market gives.",
+          "reveal": 1
+        },
+        {
+          "say": "A limit order: always may trade, but has a limit. Alice says, buy fifty Apple at nine fifty or less. The price is ten, so it waits. The next day the price ticks down to nine forty, and it fills at nine forty.",
+          "reveal": 2
+        },
+        {
+          "say": "A stop-loss: may trade only once the price reaches the stop, and then it acts like a market order. Alice holds thirty shares and says, if it falls to ten dollars, get me out. A sell stop triggers when price is at or below the stop. A buy stop triggers at or above.",
+          "reveal": 3
+        },
+        {
+          "say": "A stop-limit: a stop that becomes a limit order instead of a market order. Alice says, if Microsoft rises to three oh five, buy five shares, but pay no more than three oh six. In code, StopLimitOrder extends StopLossOrder. It inherits the trigger and overrides only limit price.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s029",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Stop orders, tick by tick",
+      "table": {
+        "head": [
+          "Order",
+          "Price tick",
+          "Triggered?",
+          "Result"
+        ],
+        "rows": [
+          [
+            "SELL stop @ 10.00",
+            "10.50",
+            "no",
+            "stays OPEN"
+          ],
+          [
+            "SELL stop @ 10.00",
+            "9.95",
+            "yes (latched)",
+            "30 sold @ 9.95"
+          ],
+          [
+            "BUY stop 305 / limit 306",
+            "310",
+            "yes",
+            "above limit: stays OPEN"
+          ],
+          [
+            "BUY stop 305 / limit 306",
+            "305.50",
+            "still yes",
+            "5 bought @ 305.50"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's watch them tick. Alice's sell stop at ten. The price moves to ten fifty. Is ten fifty at or below ten? No. Nothing happens.",
+          "reveal": 1
+        },
+        {
+          "say": "The price drops to nine ninety-five. Triggered. It sells thirty shares at nine ninety-five. And here's the subtle part: the trigger latches. Once true, it stays true.",
+          "reveal": 2
+        },
+        {
+          "say": "Now the stop-limit on Microsoft. The price jumps to three ten. That's at or above three oh five, so it triggers. But three ten is above the three oh six limit, so accepts price says no. It stays open.",
+          "reveal": 3
+        },
+        {
+          "say": "The price falls back to three oh five fifty. Still triggered, thanks to the latch, and now within the limit. Five shares fill at three oh five fifty.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s030",
+      "layout": "diagram",
+      "title": "The order hierarchy",
+      "mermaid": "classDiagram\n    class Order {\n        <<abstract>>\n        +canTradeAt(price) boolean\n        +limitPrice() Optional\n        +acceptsPrice(price) boolean\n        +addPart(OrderPart)\n    }\n    Order <|-- MarketOrder\n    Order <|-- LimitOrder\n    Order <|-- StopLossOrder\n    StopLossOrder <|-- StopLimitOrder\n    Order *-- OrderPart",
+      "caption": "Four tiny subclasses; StopLimit reuses StopLoss's trigger",
+      "steps": [
+        {
+          "say": "Here's the hierarchy. One abstract Order with the two abstract questions and the shared helpers. Market and limit extend it directly. Stop-loss extends it too, and stop-limit extends stop-loss.",
+          "reveal": 0
+        },
+        {
+          "say": "The alternatives are worse. Four unrelated classes would copy the shared fields and invite bugs. One class with a type field would scatter switch statements everywhere. Here, a new trailing stop is one subclass.",
+          "reveal": 0
+        },
+        {
+          "say": "And notice the filled diamond to OrderPart. That's our next concept.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s031",
+      "layout": "bullets",
+      "kicker": "Concept 10",
+      "title": "OrderPart: one record per fill",
+      "bullets": [
+        "OrderPart = quantity, price, day",
+        "Market buy 100 AAPL -> 70 @ 10.00 + 30 @ 10.05",
+        "Status: OPEN -> PARTIALLY_FILLED -> FILLED",
+        "Each part becomes its own lot",
+        "Reserved $1,000.00, cost $1,001.50"
+      ],
+      "steps": [
+        {
+          "say": "An order can fill in pieces, at different prices. So every fill becomes an OrderPart: quantity, price and day.",
+          "reveal": 1
+        },
+        {
+          "say": "Here's the PDF's step three. Alice places a market buy for a hundred Apple shares. The simulated exchange has seventy shares at ten dollars, then more at ten oh five. So the order fills as seventy at ten, plus thirty at ten oh five.",
+          "reveal": 2
+        },
+        {
+          "say": "Add part refuses an overfill, and updates the status. After seventy, partially filled. After a hundred, filled.",
+          "reveal": 3
+        },
+        {
+          "say": "Why not just store an average price? Because each part becomes its own lot, and tax needs the real purchase price of each lot. An average throws that away.",
+          "reveal": 4
+        },
+        {
+          "say": "And notice a known gap. The order reserved one thousand dollars, a hundred times the last price of ten. But it cost one thousand and one fifty. A market order can spend more than was reserved. The fix: reserve a buffer, say five percent extra.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s032",
+      "layout": "diagram",
+      "kicker": "Concept 11",
+      "title": "Fill callback: the Observer",
+      "mermaid": "flowchart LR\n    M[\"Member\"] -->|\"1. reserve, then submit\"| X[\"StockExchange\"]\n    X -->|\"2. canTradeAt, addPart\"| O[\"Order\"]\n    X -->|\"3. onFill\"| L[\"Member as OrderListener\"]\n    L -->|\"4. add lot or sell FIFO\"| P[\"StockPosition\"]",
+      "caption": "Money and shares move only in onFill, called by the exchange",
+      "steps": [
+        {
+          "say": "How does the broker learn about fills? Observer again. Member implements an interface called OrderListener, with on fill and on cancelled. The exchange calls that interface. It never imports Member, so exchange code and account code change independently.",
+          "reveal": 0
+        },
+        {
+          "say": "Follow the arrows. The member reserves first, under its own lock. Then, outside that lock, it submits to the exchange.",
+          "reveal": 0
+        },
+        {
+          "say": "The exchange asks the order, can you trade at this price? If yes, it adds a part, and calls on fill.",
+          "reveal": 0
+        },
+        {
+          "say": "On fill is where money and shares actually move. For a buy, cash goes down and a new lot is added. For a sell, cash goes up and the position sells lots oldest first.",
+          "reveal": 0
+        },
+        {
+          "say": "One more thing: lock order. The member never calls the exchange while holding its own lock. The exchange may call the member, never the reverse. That fixed order prevents deadlock, two threads waiting on each other forever.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s033",
+      "layout": "table",
+      "kicker": "Concept 12",
+      "title": "Reserved funds and shares",
+      "table": {
+        "head": [
+          "Action",
+          "Cash",
+          "Available",
+          "Result"
+        ],
+        "rows": [
+          [
+            "Start",
+            "$3,617.00",
+            "$3,617.00",
+            "-"
+          ],
+          [
+            "O6: buy 20 AMZN @ 100",
+            "$3,617.00",
+            "$1,617.00",
+            "SUCCESS, $2,000 reserved"
+          ],
+          [
+            "O7: buy 20 AMZN @ 100",
+            "$3,617.00",
+            "$1,617.00",
+            "INSUFFICIENT_FUNDS"
+          ],
+          [
+            "Cancel O6",
+            "$3,617.00",
+            "$3,617.00",
+            "reservation released"
+          ],
+          [
+            "Sell 10 AMZN, none owned",
+            "-",
+            "-",
+            "NO_STOCK_POSITION"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Without reservations, a member with a thousand dollars could place ten thousand-dollar orders, and every one would pass the balance check. So money is reserved when an order is placed. Here's the PDF's step eight. Alice has three thousand six hundred and seventeen dollars, all available.",
+          "reveal": 1
+        },
+        {
+          "say": "Order six: buy twenty Amazon at a limit of a hundred. That needs two thousand. It succeeds, and two thousand is reserved. Available drops to one thousand six hundred and seventeen.",
+          "reveal": 2
+        },
+        {
+          "say": "Order seven: the same again. Two thousand is more than one six one seven available, so it's rejected: insufficient funds. Without the reservation it would have passed.",
+          "reveal": 3
+        },
+        {
+          "say": "Alice cancels order six. The reservation is released, and available is back to three six one seven.",
+          "reveal": 4
+        },
+        {
+          "say": "Shares work the same way. Free shares are the shares you own, minus those promised to your open sell orders. Selling ten Amazon shares she doesn't own fails: no stock position. So the same shares can never be sold twice.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s034",
+      "layout": "table",
+      "kicker": "Concept 13",
+      "title": "FIFO lots: sell 120 AAPL",
+      "table": {
+        "head": [
+          "Lot",
+          "Bought",
+          "Sold",
+          "Gain"
+        ],
+        "rows": [
+          [
+            "L1",
+            "70 @ 10.00",
+            "70 @ 11.00",
+            "$70.00"
+          ],
+          [
+            "L2",
+            "30 @ 10.05",
+            "30 @ 10.95",
+            "$27.00"
+          ],
+          [
+            "L3 (part)",
+            "20 of 50 @ 9.40",
+            "20 @ 10.95",
+            "$31.00"
+          ],
+          [
+            "L3 (rest)",
+            "30 @ 9.40",
+            "30 @ 9.95 (stop)",
+            "$16.50"
+          ],
+          [
+            "Total realised",
+            "",
+            "",
+            "$144.50"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Now lots. A lot is one purchase at one price. After days one and two, Alice holds three Apple lots: L1, seventy at ten. L2, thirty at ten oh five. L3, fifty at nine forty. On day three she sells a hundred and twenty with a limit of ten ninety. The position sells first in, first out, FIFO, unless she names a lot. L1 goes first: seventy sold at eleven, a gain of seventy dollars.",
+          "reveal": 1
+        },
+        {
+          "say": "Then L2: thirty bought at ten oh five, sold at ten ninety-five. Ninety cents times thirty is twenty-seven dollars.",
+          "reveal": 2
+        },
+        {
+          "say": "That's a hundred. Twenty more come from L3: bought at nine forty, sold at ten ninety-five. One fifty-five times twenty is thirty-one dollars. Thirty shares of L3 remain.",
+          "reveal": 3
+        },
+        {
+          "say": "Those thirty are the ones her stop-loss sold at nine ninety-five. Fifty-five cents times thirty is sixteen fifty.",
+          "reveal": 4
+        },
+        {
+          "say": "Realised gain, meaning profit actually locked in by selling: one hundred forty-four fifty. Each lot sale records which lot, the buy price and the sell price. An average cost would lose that.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s035",
+      "layout": "twocol",
+      "kicker": "Concept 14",
+      "title": "Template Method: statements",
+      "left": {
+        "heading": "Statement.render (final)",
+        "bullets": [
+          "Filter trades to the day range",
+          "Write the title line",
+          "Call body(...) for the lines"
+        ]
+      },
+      "right": {
+        "heading": "Subclasses fill in body",
+        "bullets": [
+          "Quarterly: days 1-90, every trade",
+          "Tax: days 1-365, gain per lot"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Two kinds of report, quarterly and tax, share most of their work. That's Template Method: a base-class method fixes the outline of an algorithm and lets subclasses fill in one step. Step one of the outline: filter trades to the statement's day range.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: write the title, like quarterly statement for Alice, days one to ninety.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: call body. Render is final, so no subclass can change the outline. Only body varies.",
+          "reveal": 3
+        },
+        {
+          "say": "The quarterly statement's body lists every trade: day one, buy seventy Apple at ten, and so on.",
+          "reveal": 4
+        },
+        {
+          "say": "The tax statement covers days one to three sixty-five, and its body prints the four lot sales we just computed, ending with realised gain one forty-four fifty.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s036",
+      "layout": "table",
+      "kicker": "Concept 15",
+      "title": "MoneyTransfer: one limit rule",
+      "table": {
+        "head": [
+          "Transfer",
+          "Days to clear",
+          "Amount",
+          "isValid?"
+        ],
+        "rows": [
+          [
+            "Wire",
+            "1",
+            "5,000",
+            "yes -> SUCCESS"
+          ],
+          [
+            "Check",
+            "5",
+            "200,000",
+            "no: over 100,000"
+          ],
+          [
+            "Electronic bank",
+            "3",
+            "0",
+            "no: must be positive"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Money in and out. There are three transfer types: check, wire and electronic bank transfer. They differ only in name and in how many days they take to clear: five, one and three in our code. The limit, a hundred thousand per transfer, is one rule, so it lives only in the base class. Alice wires in five thousand. Valid, success, cash is five thousand.",
+          "reveal": 1
+        },
+        {
+          "say": "She tries a check for two hundred thousand. Is valid says the amount must be positive and at most a hundred thousand. It fails.",
+          "reveal": 2
+        },
+        {
+          "say": "And a transfer of zero fails the positive check.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s037",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "SELL stop at 10.00; price 10.50, 9.95, 10.20. When?",
+      "bullets": [
+        "A. At 10.50",
+        "B. At 9.95, and it stays triggered",
+        "C. Never, because the price went back up"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think before the matching engine. A sell stop-loss at ten dollars. The price goes ten fifty, then nine ninety-five, then ten twenty. When does it trade?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s038",
+      "layout": "section",
+      "kicker": "Part 3 of 3",
+      "title": "The exchange's matching engine",
+      "steps": [
+        {
+          "say": "The answer was B. Ten fifty is above the stop, so nothing. Nine ninety-five triggers it, and the latch means the bounce to ten twenty doesn't undo it.",
+          "reveal": 0
+        },
+        {
+          "say": "Part three: the exchange side. This is a machine-coding problem, where you write a working program in about ninety minutes. The PDF calls it the Navi statement.",
+          "reveal": 0
+        },
+        {
+          "say": "Orders arrive as lines like: hash one, nine forty-five, B-A-C, sell, two forty point one two, a hundred. Our job: match buys and sells by price-time priority and print each trade.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 19 · Part B, Matching engine"
+    },
+    {
+      "id": "s039",
+      "layout": "bullets",
+      "kicker": "Concept 16",
+      "title": "The matching loop, step by step",
+      "bullets": [
+        "1. Look at the best price on the opposite side",
+        "2. Doesn't cross? Stop",
+        "3. Fill the oldest order at that level: min(qty)",
+        "4. Remove filled orders and empty levels; repeat",
+        "5. Leftover? Rest at the back of its own level"
+      ],
+      "steps": [
+        {
+          "say": "Each stock has an order book with two sides. Bids, the buy orders, sorted highest price first. Asks, the sell orders, sorted lowest first. Better prices go first, and at the same price, earlier orders go first. When a new order arrives, step one: look at the best price on the opposite side. For an incoming buy, that's the lowest ask.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: does it cross? A buy crosses when its price is at or above the best ask. A sell crosses when its price is at or below the best bid. If not, stop.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: fill against the oldest order at that price level, for the smaller of the two remaining quantities.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: remove any resting order that's fully filled, drop the level if it's empty, and go back to step one.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five: if the incoming order still has quantity left, it rests at the back of its own price level's queue. Behind everyone already there.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s040",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Walk the sample input (BAC)",
+      "table": {
+        "head": [
+          "Order",
+          "Book before",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "#1 sell 240.12 x 100",
+            "empty",
+            "rests on asks"
+          ],
+          [
+            "#2 sell 237.45 x 90",
+            "ask 240.12",
+            "rests; best ask now 237.45"
+          ],
+          [
+            "#3 buy 238.10 x 110",
+            "asks 237.45, 240.12",
+            "trade 90 @ 237.45; 20 rest"
+          ],
+          [
+            "#4 buy 237.80 x 10",
+            "best ask 240.12",
+            "no cross; rests"
+          ],
+          [
+            "#5 buy 237.80 x 40",
+            "same",
+            "rests behind #4"
+          ],
+          [
+            "#6 sell 236.00 x 50",
+            "bids 238.10, 237.80",
+            "#3 20, #4 10, #5 20"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's run the sample. Order one: sell a hundred at two forty twelve. The book is empty, so it rests on the ask side.",
+          "reveal": 1
+        },
+        {
+          "say": "Order two: sell ninety at two thirty-seven forty-five. No buyers, so it rests. The best ask is now two thirty-seven forty-five, because lower sells go first.",
+          "reveal": 2
+        },
+        {
+          "say": "Order three: buy a hundred and ten at two thirty-eight ten. Best ask is two thirty-seven forty-five. Does it cross? Yes. Fill ninety against order two. Twenty left. Next best ask is two forty twelve, above two thirty-eight ten, so stop. Twenty rest as a bid.",
+          "reveal": 3
+        },
+        {
+          "say": "Order four: buy ten at two thirty-seven eighty. Best ask two forty twelve. No cross, so it rests.",
+          "reveal": 4
+        },
+        {
+          "say": "Order five: buy forty at the same price. It rests behind order four. Same price, later time.",
+          "reveal": 5
+        },
+        {
+          "say": "Order six: sell fifty at two thirty-six. Best bid is order three's twenty at two thirty-eight ten. Fill twenty. Next level, two thirty-seven eighty: order four first, it's older, for ten. Then order five for the last twenty. All three at two thirty-six, the sell price.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s041",
+      "layout": "diagram",
+      "title": "Matching flow",
+      "mermaid": "flowchart LR\n    A[\"new order\"] --> B[\"crosses best price?\"]\n    B -->|\"no\"| R[\"rest remainder\"]\n    B -->|\"yes\"| D[\"fill oldest at level\"]\n    D --> E[\"fully filled?\"]\n    E -->|\"yes\"| F[\"done\"]\n    E -->|\"no\"| B",
+      "caption": "Best price first; oldest first within a price",
+      "steps": [
+        {
+          "say": "Same loop, as a flowchart. A new order arrives. Does it cross the best price on the other side? If that side is empty, or the price doesn't cross, the remainder rests.",
+          "reveal": 0
+        },
+        {
+          "say": "If it crosses, fill the oldest order at that level.",
+          "reveal": 0
+        },
+        {
+          "say": "Is the incoming order filled? Then we're done, and return the trades. If not, loop back and look at the best price again.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s042",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Who sets the trade price?",
+      "table": {
+        "head": [
+          "Trade",
+          "Navi rule: sell price",
+          "Real exchange: resting price"
+        ],
+        "rows": [
+          [
+            "#3 buys from #2",
+            "237.45",
+            "237.45"
+          ],
+          [
+            "#6 sells to #3",
+            "236.00",
+            "238.10"
+          ],
+          [
+            "#6 sells to #4",
+            "236.00",
+            "237.80"
+          ],
+          [
+            "#6 sells to #5",
+            "236.00",
+            "237.80"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "One more decision: at what price does a trade happen? The Navi statement says, the sell order's price. Real exchanges with continuous trading use the resting order's price, the one already in the book. For the first trade, both rules agree. Order two was resting, and it was the seller.",
+          "reveal": 1
+        },
+        {
+          "say": "But for order six, the incoming sell, the rules differ. Navi says two thirty-six. The resting rule says two thirty-eight ten, the price order three was waiting at.",
+          "reveal": 2
+        },
+        {
+          "say": "And order four gets two thirty-seven eighty instead of two thirty-six.",
+          "reveal": 3
+        },
+        {
+          "say": "Same for order five. The seller got a better price than it asked for. That's called price improvement. In code, this is a one-line Strategy called ExecutionPricePolicy, with two constants, sell price and resting price. Don't hard-code either.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s043",
+      "layout": "bullets",
+      "kicker": "Concept 17",
+      "title": "Engine design choices",
+      "bullets": [
+        "Each side: TreeMap<price, ArrayDeque> (FIFO)",
+        "Best level O(log L); append and match O(1)",
+        "One lock per symbol; sequence taken inside it",
+        "Cancel takes the same lock: matched or cancelled",
+        "Publish trades after releasing the lock"
+      ],
+      "steps": [
+        {
+          "say": "Now the data structure. Each side is a TreeMap, a map that keeps its keys sorted, from price to an ArrayDeque, a fast first-in first-out queue. The bids map uses reverse order, so the first entry is always the best price.",
+          "reveal": 1
+        },
+        {
+          "say": "Finding the best level is O of log L, for L price levels: it grows very slowly. Appending to a queue and matching one fill are constant time.",
+          "reveal": 2
+        },
+        {
+          "say": "Locking: one lock per stock symbol. Apple and Microsoft match in parallel, but orders for the same symbol are handled strictly one at a time, so time priority is well defined. The sequence number is taken inside the lock, so arrival order equals matching order.",
+          "reveal": 3
+        },
+        {
+          "say": "Cancel takes the same per-symbol lock. So an order is either matched or cancelled, never both.",
+          "reveal": 4
+        },
+        {
+          "say": "And trades are collected under the lock but published after releasing it, so slow listeners never slow down matching. Nine tests, including a concurrency test, prove it.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s044",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Bids b1 then b2, 5 each at 50; sell 7 at 49. Trades?",
+      "bullets": [
+        "A. b2 gets 7",
+        "B. b1 gets 5, b2 gets 2",
+        "C. b1 and b2 get 3.5 each"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Two bids at fifty dollars, five shares each. b1 arrived first, then b2. Now a sell for seven at forty-nine arrives. Who trades?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s045",
+      "layout": "twocol",
+      "kicker": "Concept 18",
+      "title": "The Singleton question",
+      "left": {
+        "heading": "Course: Singleton",
+        "bullets": [
+          "StockExchange.getInstance()",
+          "Exactly one gateway",
+          "Tests can't swap in a fake"
+        ]
+      },
+      "right": {
+        "heading": "Ours: dependency injection",
+        "bullets": [
+          "One exchange passed into Member",
+          "Same 'only one' in practice",
+          "Tests inject a fake exchange"
+        ]
+      },
+      "steps": [
+        {
+          "say": "The answer was B. Inside the fifty level the oldest goes first, so b1 gets five, b2 gets two and keeps three resting. Time priority. Now, last concept, a classic follow-up. Should StockExchange be a Singleton? A Singleton is a class that allows exactly one instance, usually reached through a static get instance method. The course makes the exchange one.",
+          "reveal": 1
+        },
+        {
+          "say": "The argument for it: there's exactly one gateway to the real exchange.",
+          "reveal": 2
+        },
+        {
+          "say": "The problem: every class that calls get instance is welded to the real thing. A test can't replace it with a fake.",
+          "reveal": 3
+        },
+        {
+          "say": "Our version uses dependency injection. An object is handed the things it needs from outside, instead of creating or looking them up itself. We create one exchange and pass it into each Member.",
+          "reveal": 4
+        },
+        {
+          "say": "In practice there's still only one exchange.",
+          "reveal": 5
+        },
+        {
+          "say": "But a test can hand in a fake exchange that fills orders on cue. In the interview, say: I'd keep one instance, but inject it rather than use a global, so it stays testable.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s046",
+      "layout": "bullets",
+      "title": "Brokerage: in the interview, say this",
+      "bullets": [
+        "Four types differ in two answers",
+        "Fills are OrderParts; purchases are lots (FIFO)",
+        "Reserve money and shares at placement",
+        "Exchange calls back via OrderListener",
+        "Engine: TreeMap of FIFO queues, lock per symbol"
+      ],
+      "steps": [
+        {
+          "say": "Your interview plan. Clarify order types, lots and transfers. Then say the key sentence: the four order types differ in exactly two things, whether they may trade yet, and the worst price they accept. Draw Order and four tiny subclasses.",
+          "reveal": 1
+        },
+        {
+          "say": "Explain lots: tax depends on which shares you sold. Fills are order parts, and each becomes a lot, sold first in, first out.",
+          "reveal": 2
+        },
+        {
+          "say": "Explain reserved funds: ten thousand-dollar orders can't all pass a thousand-dollar balance.",
+          "reveal": 3
+        },
+        {
+          "say": "Then the Observer callback, where money actually moves, and statements as a Template Method.",
+          "reveal": 4
+        },
+        {
+          "say": "For the ninety-minute machine-coding version: parse lines, two TreeMaps of queues, the matching loop, print trades. Get the sample passing first, then add tests for price priority, time priority, partial fills and cancel.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s047",
+      "layout": "recap",
+      "kicker": "Episode 23 recap",
+      "title": "Recap",
+      "bullets": [
+        "BigDecimal, state machine, atomic stock, copy prices",
+        "Ordering on Member (LSP); cart survives register",
+        "Reserve all -> copy -> pay(total) -> publish",
+        "OrderStatus state machine; sealed Payment; ship log",
+        "Order: 2 questions; OrderPart, FIFO lots, reserves",
+        "Engine: price-time, lock per symbol, price policy"
+      ],
+      "steps": [
+        {
+          "say": "Let's recap. Four rules: money in BigDecimal, status through a state machine, reserve stock in one atomic step, and copy prices into orders. Plus an idempotency key against double-clicks.",
+          "reveal": 1
+        },
+        {
+          "say": "Amazon: ordering lives on Member, not Customer, because of Liskov. A guest's cart carries over when they register.",
+          "reveal": 2
+        },
+        {
+          "say": "Checkout reserves every line all or nothing, copies the cart into an immutable order, builds the payment from the total, and publishes to observers through the order service facade.",
+          "reveal": 3
+        },
+        {
+          "say": "Order status is a state machine with no shipped-to-canceled edge. Payment is a sealed strategy. Shipments keep a log.",
+          "reveal": 4
+        },
+        {
+          "say": "Brokerage: one abstract order, four subclasses answering may I trade and worst price. Fills are order parts, purchases are lots sold FIFO, money and shares are reserved, the exchange calls back, statements are a template method, and the transfer limit lives in the base class.",
+          "reveal": 5
+        },
+        {
+          "say": "Matching engine: best price first, oldest first, one lock per symbol, and a pluggable trade-price policy. Inject the exchange instead of making it a global singleton.",
+          "reveal": 6
+        },
+        {
+          "say": "Next time, episode twenty-four: Commerce, Auction to Grocery P-O-S. We'll design an online auction, music streaming, food delivery, and a grocery checkout with a pricing engine. See you there.",
+          "reveal": 6
+        }
+      ]
+    }
+  ]
+}

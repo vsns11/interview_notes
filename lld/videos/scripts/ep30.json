@@ -1,0 +1,2089 @@
+{
+  "series": "LLD Workshop",
+  "episode": 30,
+  "title": "How to Run the Mock Interview Drills",
+  "subtitle": "Timebox, rubric and all 23 drills: what to ask, what to build, what they'll ask next",
+  "scenes": [
+    {
+      "id": "s001",
+      "layout": "title",
+      "title": "How to Run the Mock Interview Drills",
+      "subtitle": "Timebox, rubric and all 23 drills: what to ask, what to build, what they'll ask next",
+      "steps": [
+        {
+          "say": "Welcome to the L-L-D Workshop, episode thirty, the final episode: How to Run the Mock Interview Drills. L-L-D means low-level design, the round where you turn a one-line idea into classes and a little code.",
+          "reveal": 0
+        },
+        {
+          "say": "Over the last episodes we learned the designs. Today we train the performance. You'll learn how to run a forty-five minute drill on yourself, how to split the clock, how to talk so the interviewer hears decisions, and how to score yourself honestly out of twenty-eight.",
+          "reveal": 0
+        },
+        {
+          "say": "Then we'll walk one full drill, the parking lot, minute by minute. After that, a quick tour of the other twenty-two drills: the one thing each interviewer looks for first, and the follow-up they'll most likely throw at you.",
+          "reveal": 0
+        },
+        {
+          "say": "Keep the chapter twenty-four PDF open. Each drill has a table of questions and a checklist. Pause and read any drill that goes by fast.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s002",
+      "layout": "section",
+      "kicker": "Concept 1 of 5",
+      "title": "How to use these drills",
+      "caption": "Book: Ch 24 · 24.0 How to use these drills",
+      "steps": [
+        {
+          "say": "Here's a question. You know how to design a parking lot. Can you present it in forty-five minutes, out loud, without running out of time? Those are different skills.",
+          "reveal": 0
+        },
+        {
+          "say": "An object-oriented design round, or O-O-D round, also called an L-L-D round, lasts forty-five to sixty minutes. It grades two things: the model you build, and how you explain it. These drills train the explanation. Each drill is just the interview script: the prompt, the questions to ask back, a plan, a checklist, the usual follow-ups, and a link to the full design.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s003",
+      "layout": "bullets",
+      "title": "Running a drill: five steps",
+      "bullets": [
+        "1. Read only the prompt and the questions",
+        "2. 45-minute timer, talk out loud, code",
+        "3. Score yourself before looking",
+        "4. Uncover, study, re-score, pick one fix",
+        "5. Under 24? Repeat it tomorrow"
+      ],
+      "steps": [
+        {
+          "say": "Step one. Read only the prompt and the clarifying questions. Cover everything else. Say you pick the vending machine drill: you read 'insert money, pick a product, get change', and the six questions. Nothing more.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two. Start a forty-five minute timer and talk out loud, as if someone's listening. Sketch the classes on paper and type the core code. For the vending machine, that's the state interface and two states.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three. When the timer rings, score yourself with the rubric, before you look at anything.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four. Now uncover the checklist and follow-ups, and open the linked case study. Re-score. Then write down the single dimension you'll fix next time. For example: 'I never said money is integer cents.'",
+          "reveal": 4
+        },
+        {
+          "say": "Step five. If you scored under twenty-four, repeat the same drill tomorrow.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s004",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "The timebox: six phases",
+      "table": {
+        "head": [
+          "45 min",
+          "60 min",
+          "Phase",
+          "What exists at the end"
+        ],
+        "rows": [
+          [
+            "0-5",
+            "0-6",
+            "Clarify",
+            "6-10 numbered requirements, actors"
+          ],
+          [
+            "5-8",
+            "6-10",
+            "Use cases",
+            "4-8 actions, one line each"
+          ],
+          [
+            "8-18",
+            "10-22",
+            "Entities",
+            "Classes plus a class diagram"
+          ],
+          [
+            "18-23",
+            "22-28",
+            "Walk one flow",
+            "Main use case traced"
+          ],
+          [
+            "23-35",
+            "28-45",
+            "Code",
+            "2-3 core classes written"
+          ],
+          [
+            "35-45",
+            "45-60",
+            "Follow-ups",
+            "Concurrency, extension, trade-offs"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Every drill uses the same clock. Let's walk it with the vending machine. Minutes zero to five: clarify. You end with six to ten numbered requirements, an out-of-scope line, and two to four actors. Actors are the people or systems that use the design. Here: customer and operator.",
+          "reveal": 1
+        },
+        {
+          "say": "Minutes five to eight: use cases, four to eight actions, one line each. Insert money, select, cancel, dispense, restock.",
+          "reveal": 2
+        },
+        {
+          "say": "Minutes eight to eighteen: entities and relationships. Each class gets one sentence of responsibility, and the diagram shows kinds and multiplicities, meaning how many on each side. VendingMachine has one current state, and many slots.",
+          "reveal": 3
+        },
+        {
+          "say": "Minutes eighteen to twenty-three: walk one flow. You trace the main use case through the classes. Insert a coin, move to has-money, select slot A-one, dispense, return change.",
+          "reveal": 4
+        },
+        {
+          "say": "Minutes twenty-three to thirty-five: code. Only the two or three classes that carry the main flow, written properly. The rest you just name.",
+          "reveal": 5
+        },
+        {
+          "say": "Minutes thirty-five to forty-five: follow-ups. Concurrency, one extension, trade-offs. In a sixty-minute round the extra time goes to code and follow-ups, never to longer clarifying.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s005",
+      "layout": "twocol",
+      "title": "Two rules for every problem",
+      "left": {
+        "heading": "Rule 1: minute one",
+        "bullets": [
+          "Say the plan out loud",
+          "Interviewer can steer early"
+        ]
+      },
+      "right": {
+        "heading": "Rule 2: minute 18",
+        "bullets": [
+          "Class diagram must exist",
+          "If not, cut scope aloud"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Two rules hold for every problem. Rule one: say your plan in the first minute. 'I'll clarify for five minutes, list use cases, draw classes, walk the main flow, code the core, then talk concurrency.'",
+          "reveal": 1
+        },
+        {
+          "say": "That gives the interviewer a chance to steer you early, before you spend ten minutes on the wrong thing.",
+          "reveal": 2
+        },
+        {
+          "say": "Rule two: have a class diagram by minute eighteen. It's the checkpoint that tells you whether you're on time.",
+          "reveal": 3
+        },
+        {
+          "say": "If you don't have one, cut scope out loud. For example: 'I'll leave refunds for later', and move on.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s006",
+      "layout": "twocol",
+      "title": "How to explain clearly",
+      "left": {
+        "heading": "Action, scores low",
+        "bullets": [
+          "I'm drawing Ticket",
+          "I'll use Strategy"
+        ]
+      },
+      "right": {
+        "heading": "Decision, scores high",
+        "bullets": [
+          "Ticket outlives the session",
+          "Strategy: pricing changes most"
+        ]
+      },
+      "steps": [
+        {
+          "say": "The core habit: narrate decisions, not actions. 'I'm drawing Ticket' is an action. It tells the interviewer nothing.",
+          "reveal": 1
+        },
+        {
+          "say": "'I'll use Strategy' on its own is also just a label.",
+          "reveal": 2
+        },
+        {
+          "say": "Compare: 'Ticket is its own class because it outlives the parking session, and payment needs something to point at.' That's a decision with a reason, and decisions are what get graded.",
+          "reveal": 3
+        },
+        {
+          "say": "Same with patterns. Name the change the pattern absorbs. 'Strategy for pricing, because pricing changes most often, and a new rule should be a new class.'",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s007",
+      "layout": "bullets",
+      "title": "Say four things, every time",
+      "bullets": [
+        "Each class: name, one-line job, why separate",
+        "Each relationship: kind and multiplicity",
+        "Each pattern: the change it absorbs",
+        "Each phase boundary: check in"
+      ],
+      "steps": [
+        {
+          "say": "For each class, say its name, one sentence of responsibility, and why it's separate. 'Loan holds the borrow and due dates, separate from Member because a member has many loans over time.'",
+          "reveal": 1
+        },
+        {
+          "say": "For each relationship, say its kind: composition, aggregation or association, and the multiplicity. 'Parking lot owns many levels' means composition, one to many. That's the drills' shorthand, and 'walk' means trace one use case through the classes. Terms like compare-and-set and idempotent are in the glossary, section twenty-two point eleven.",
+          "reveal": 2
+        },
+        {
+          "say": "For each design pattern, the change it absorbs, like we just saw.",
+          "reveal": 3
+        },
+        {
+          "say": "And at each phase boundary, check in. 'That's my class list. Shall I walk the booking flow, or would you rather I start on concurrency?'",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s008",
+      "layout": "table",
+      "title": "Scoring rubric: 7 dimensions, 1 to 4 each",
+      "table": {
+        "head": [
+          "Dimension",
+          "3: Solid",
+          "4: Strong adds"
+        ],
+        "rows": [
+          [
+            "Requirements",
+            "Numbered list + out of scope",
+            "Non-functional, confirmed"
+          ],
+          [
+            "Entities",
+            "One-line job per class",
+            "Non-obvious split"
+          ],
+          [
+            "Relationships",
+            "Right kinds, multiplicities",
+            "Inheritance only if substitutable"
+          ],
+          [
+            "Patterns",
+            "Tied to the change",
+            "One rejected, with reason"
+          ],
+          [
+            "Concurrency",
+            "Names shared resource",
+            "Failure mode: expiry, retry"
+          ],
+          [
+            "Extensibility",
+            "One extension = one class",
+            "Says what won't extend"
+          ],
+          [
+            "Communication",
+            "Decisions, check-ins",
+            "Keeps time, invites steering"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Now the rubric. Seven dimensions, each scored one to four, so the total is out of twenty-eight. Requirements: one means you drew classes at once. Three is a numbered list plus out-of-scope. Four also covers non-functional needs like concurrency and failure, confirmed with the interviewer.",
+          "reveal": 1
+        },
+        {
+          "say": "Entities: one means a single Manager class does everything. Three is one sentence of responsibility per class. Four spots the non-obvious split, like book versus copy.",
+          "reveal": 2
+        },
+        {
+          "say": "Relationships: one is unlabelled lines. Three is correct kinds and multiplicities. Four also uses inheritance only where substitution holds, and says why.",
+          "reveal": 3
+        },
+        {
+          "say": "Patterns: one is none, or named for show. Three ties one or two patterns to the change they absorb. Four also mentions one pattern you considered and rejected.",
+          "reveal": 4
+        },
+        {
+          "say": "Concurrency: one is not mentioned. Two is 'add synchronized' with no target. Three names the shared resource and locks at the right grain. Four also names the failure mode: hold expiry, lock order, idempotent retry.",
+          "reveal": 5
+        },
+        {
+          "say": "Extensibility: three shows one extension as one new class. Four also says what would not extend cheaply, and why that's acceptable.",
+          "reveal": 6
+        },
+        {
+          "say": "Communication: one is silent or rambling, two narrates actions, three narrates decisions and checks in, four also keeps time and invites steering.",
+          "reveal": 7
+        }
+      ]
+    },
+    {
+      "id": "s009",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: scoring one attempt",
+      "table": {
+        "head": [
+          "Dimension",
+          "Score",
+          "Why"
+        ],
+        "rows": [
+          [
+            "Requirements",
+            "3",
+            "List + out of scope, no failures"
+          ],
+          [
+            "Entities",
+            "4",
+            "Seat vs ShowSeat split"
+          ],
+          [
+            "Relationships",
+            "3",
+            "Kinds right"
+          ],
+          [
+            "Patterns",
+            "3",
+            "Pricing Strategy, change named"
+          ],
+          [
+            "Concurrency",
+            "2",
+            "Said 'synchronized', no target"
+          ],
+          [
+            "Extensibility",
+            "3",
+            "New seat type = one class"
+          ],
+          [
+            "Communication",
+            "3",
+            "Checked in, ran 5 min over"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's score an imaginary attempt at the movie ticket drill. Requirements: you wrote a numbered list and out-of-scope, but never mentioned failure. Three.",
+          "reveal": 1
+        },
+        {
+          "say": "Entities: you split the physical seat from the seat's state for one show. That's the non-obvious split. Four.",
+          "reveal": 2
+        },
+        {
+          "say": "Relationships: kinds and multiplicities right. Three.",
+          "reveal": 3
+        },
+        {
+          "say": "Patterns: pricing as a Strategy, and you said why. Three.",
+          "reveal": 4
+        },
+        {
+          "say": "Concurrency: you said 'make it synchronized' but never said on what. Two.",
+          "reveal": 5
+        },
+        {
+          "say": "Extensibility: a new seat type is one new class. Three. Communication: you checked in, but ran five minutes over. Three.",
+          "reveal": 6
+        },
+        {
+          "say": "Total: twenty-one. Borderline. Your one fix for tomorrow is obvious: name the shared resource, the show's seats, and lock them in a fixed order.",
+          "reveal": 7
+        }
+      ]
+    },
+    {
+      "id": "s010",
+      "layout": "number",
+      "title": "Reading the total",
+      "big": "24-28 ready · 18-23 borderline · <18 restudy",
+      "caption": "Borderline is usually Requirements or Communication",
+      "steps": [
+        {
+          "say": "Reading the total. Twenty-four to twenty-eight: interview-ready.",
+          "reveal": 0
+        },
+        {
+          "say": "Eighteen to twenty-three: borderline. It's usually dragged down by requirements or communication, not by the design itself.",
+          "reveal": 0
+        },
+        {
+          "say": "Below eighteen: study the case chapter and repeat the drill tomorrow.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s011",
+      "layout": "bullets",
+      "title": "Suggested order: small to large",
+      "bullets": [
+        "Small state machines: Parking, Vending, ATM ...",
+        "Booking: Library, Movies, Hotel, Car, Airline ...",
+        "Games: Blackjack, Chess, Jigsaw",
+        "Platforms: Amazon, Stack Overflow, Facebook ...",
+        "Last, no notes: Ride Sharing, Food Delivery"
+      ],
+      "steps": [
+        {
+          "say": "Which order? Small state machines first: parking lot, vending machine, A-T-M, elevator, Amazon locker.",
+          "reveal": 1
+        },
+        {
+          "say": "Then the booking family: library, movie tickets, hotel, car rental, airline, restaurant, meeting scheduler.",
+          "reveal": 2
+        },
+        {
+          "say": "Then games: Blackjack, chess, jigsaw.",
+          "reveal": 3
+        },
+        {
+          "say": "Then platforms: Amazon shopping, Stack Overflow, Facebook, LinkedIn, ESPNcricinfo, stock brokerage.",
+          "reveal": 4
+        },
+        {
+          "say": "Finally ride sharing and food delivery, with no notes at all. They're the practice sessions, the closest to a real surprise.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s012",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Minute 18 and no class diagram. What do you do?",
+      "bullets": [
+        "A. Keep clarifying until it's clear",
+        "B. Cut scope out loud and draw now",
+        "C. Skip straight to code"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. You're at minute eighteen with no class diagram. What do you do? Answer on the next slide.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s013",
+      "layout": "section",
+      "kicker": "Concept 2 of 5",
+      "title": "Drill anatomy: six parts",
+      "caption": "Book: Ch 24 · 24.1 Drill — Parking Lot",
+      "steps": [
+        {
+          "say": "The answer was B. Cut scope out loud, for example 'refunds later', and draw the diagram now. More clarifying burns time, and code without a diagram has no map.",
+          "reveal": 0
+        },
+        {
+          "say": "Now, every drill in the chapter has the same six parts. Learn the anatomy once, and you can read any drill in two minutes.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s014",
+      "layout": "table",
+      "title": "The six parts of a drill",
+      "table": {
+        "head": [
+          "Part",
+          "What it gives you"
+        ],
+        "rows": [
+          [
+            "Prompt as said",
+            "The one line the interviewer speaks"
+          ],
+          [
+            "Clarifying questions",
+            "What to ask, and a default to assume"
+          ],
+          [
+            "Minute-by-minute plan",
+            "Problem-specific content per phase"
+          ],
+          [
+            "Strong answer must include",
+            "Checklist the interviewer is grading"
+          ],
+          [
+            "Likely follow-ups",
+            "Next questions with short answers"
+          ],
+          [
+            "Where to study it",
+            "Link to the full case chapter"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Part one, the prompt as the interviewer says it. For parking: 'Cars come in, get a ticket, park, and pay when they leave. Take it wherever you like.' That open ending tests whether you bound the problem.",
+          "reveal": 1
+        },
+        {
+          "say": "Part two, clarifying questions, as a table: the question, and what to assume if the interviewer shrugs. You never stall waiting for an answer.",
+          "reveal": 2
+        },
+        {
+          "say": "Part three, the minute-by-minute plan. Only the problem-specific content; the phases are always the timebox we just saw.",
+          "reveal": 3
+        },
+        {
+          "say": "Part four, what a strong answer must include. A checklist. These are the boxes the interviewer is ticking in their head.",
+          "reveal": 4
+        },
+        {
+          "say": "Part five, likely follow-ups and how to answer, each in one or two sentences.",
+          "reveal": 5
+        },
+        {
+          "say": "Part six, where to study it: the case-study section that teaches the full design. Now let's run the parking lot through all six.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s015",
+      "layout": "section",
+      "kicker": "Concept 3 of 5",
+      "title": "Walk-through: the Parking Lot drill",
+      "caption": "Book: Ch 24 · 24.1 Drill — Parking Lot",
+      "steps": [
+        {
+          "say": "This is the model drill. Copy its rhythm everywhere.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s016",
+      "layout": "table",
+      "title": "Parking Lot: clarify (minutes 0-5)",
+      "table": {
+        "head": [
+          "Ask",
+          "Assume"
+        ],
+        "rows": [
+          [
+            "Levels?",
+            "Several, fixed spots each"
+          ],
+          [
+            "Vehicle and spot types?",
+            "Bike/car/truck; small/medium/large"
+          ],
+          [
+            "Gates?",
+            "Several entries and exits at once"
+          ],
+          [
+            "Fee?",
+            "Hourly, per vehicle type, changeable"
+          ],
+          [
+            "Display?",
+            "Free spots per level and size"
+          ],
+          [
+            "Out of scope?",
+            "Reservations, valet, plate cameras"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Minutes zero to five. Ask: how many levels? Assume several, each with a fixed set of spots.",
+          "reveal": 1
+        },
+        {
+          "say": "Vehicle and spot types? Motorbike, car, truck; spots small, medium, large. And a fit rule: a smaller vehicle may take a bigger spot.",
+          "reveal": 2
+        },
+        {
+          "say": "Gates? Several entries and exits running at once.",
+          "reveal": 3
+        },
+        {
+          "say": "Fee? Hourly, a rate per vehicle type, easy to change. That's a hint for a Strategy.",
+          "reveal": 4
+        },
+        {
+          "say": "Display? Free spots per level and size.",
+          "reveal": 5
+        },
+        {
+          "say": "Out of scope: advance reservations, valet, plate cameras.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s017",
+      "layout": "bullets",
+      "title": "Parking Lot: use cases and classes (5-18)",
+      "bullets": [
+        "Actors: driver, attendant, admin",
+        "Use cases: ticket, park, pay, exit, view free",
+        "ParkingLot owns many Level owns many Spot",
+        "Vehicle, Ticket, EntryGate, ExitGate, Payment",
+        "SpotAllocationStrategy, FeeStrategy"
+      ],
+      "steps": [
+        {
+          "say": "Actors: driver, attendant, admin.",
+          "reveal": 1
+        },
+        {
+          "say": "Use cases: take ticket, park, pay, exit, view free spots. Five lines, done by minute eight.",
+          "reveal": 2
+        },
+        {
+          "say": "Now classes. Parking lot owns many levels, and each level owns many parking spots. Composition, one to many, twice.",
+          "reveal": 3
+        },
+        {
+          "say": "Vehicle, Ticket, entry and exit gates, and Payment. Say why Ticket is separate: it holds spot, vehicle and entry time, it outlives the parking session, and payment needs something to point at.",
+          "reveal": 4
+        },
+        {
+          "say": "And two interfaces. SpotAllocationStrategy picks a spot. FeeStrategy computes the fee. Say the change each absorbs: allocation rules and pricing rules change independently.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s018",
+      "layout": "diagram",
+      "title": "Walk one flow: a car enters",
+      "mermaid": "flowchart LR\n    A[\"Car at EntryGate\"] --> B[\"ParkingLot\"]\n    B --> C[\"SpotAllocationStrategy\"]\n    C --> D[\"Spot.tryOccupy\"]\n    D -- \"won\" --> E[\"Ticket issued\"]\n    D -- \"lost race\" --> C\n    E --> F[\"Free count updated\"]",
+      "caption": "Minutes 18-23: trace the main use case",
+      "steps": [
+        {
+          "say": "Minutes eighteen to twenty-three, walk one flow. A car arrives at entry gate one. The gate asks the parking lot for a spot.",
+          "reveal": 0
+        },
+        {
+          "say": "The lot asks the allocation strategy, say nearest-first, which picks medium spot fourteen on level two.",
+          "reveal": 0
+        },
+        {
+          "say": "The spot is claimed with tryOccupy. If another gate won the race, the strategy picks again. On success, a ticket is issued with spot, vehicle and entry time, and the free count for medium spots on level two drops by one, maintained in one place, never by scanning.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s019",
+      "layout": "twocol",
+      "title": "Parking Lot: code (23-35)",
+      "left": {
+        "heading": "Write properly",
+        "bullets": [
+          "ParkingSpot.tryOccupy",
+          "One allocation strategy",
+          "FeeStrategy.fee(ticket, exit)"
+        ]
+      },
+      "right": {
+        "heading": "Just name",
+        "bullets": [
+          "Gates, display board",
+          "Payment methods",
+          "Admin operations"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Minutes twenty-three to thirty-five, code. First, ParkingSpot dot tryOccupy: an atomic claim, a compare-and-set from free to taken, so two gates can't both win.",
+          "reveal": 1
+        },
+        {
+          "say": "Second, one allocation strategy, like nearest free spot of a fitting size.",
+          "reveal": 2
+        },
+        {
+          "say": "Third, FeeStrategy dot fee, given the ticket and the exit time.",
+          "reveal": 3
+        },
+        {
+          "say": "Everything else you only name: the gates, the display board, payment methods, admin.",
+          "reveal": 4
+        },
+        {
+          "say": "That's the rule: two or three classes carry the main flow, and those get real code.",
+          "reveal": 5
+        },
+        {
+          "say": "Clean core code beats many half-written classes.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s020",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: the fee on one ticket",
+      "table": {
+        "head": [
+          "Item",
+          "Value"
+        ],
+        "rows": [
+          [
+            "Vehicle",
+            "Car, hourly rate $3"
+          ],
+          [
+            "Entry",
+            "09:10"
+          ],
+          [
+            "Exit",
+            "12:40, 3.5 h, rounds to 4"
+          ],
+          [
+            "HourlyFee",
+            "4 x $3 = $12"
+          ],
+          [
+            "FirstHourFree decorator",
+            "3 x $3 = $9"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's make the fee concrete. A car, rate three dollars an hour.",
+          "reveal": 1
+        },
+        {
+          "say": "It entered at nine ten.",
+          "reveal": 2
+        },
+        {
+          "say": "It leaves at twelve forty. That's three and a half hours, rounded up to four.",
+          "reveal": 3
+        },
+        {
+          "say": "The hourly fee strategy gives four times three, twelve dollars.",
+          "reveal": 4
+        },
+        {
+          "say": "Now the follow-up, 'first hour free'. Wrap the hourly strategy in a decorator that subtracts one hour. Three times three, nine dollars. No gate code, no ticket code changes. That's the extension shown as one new class.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s021",
+      "layout": "bullets",
+      "title": "Parking Lot: checklist and follow-ups",
+      "bullets": [
+        "Size enums plus one fit rule",
+        "Ticket is its own class",
+        "Allocation and fee behind interfaces",
+        "Atomic spot claim across gates",
+        "Two gates, last spot: CAS, loser retries",
+        "EV spots, lost ticket: new kind, flat max"
+      ],
+      "steps": [
+        {
+          "say": "The checklist. Size enums for vehicle and spot, with one fit rule.",
+          "reveal": 1
+        },
+        {
+          "say": "Ticket as its own class.",
+          "reveal": 2
+        },
+        {
+          "say": "Allocation and fee each behind an interface, with fee separate from payment method.",
+          "reveal": 3
+        },
+        {
+          "say": "An atomic spot claim across gates, and free counts kept in one place, not by scanning.",
+          "reveal": 4
+        },
+        {
+          "say": "Follow-up one: two gates, last spot. Compare-and-set on the spot, or a per-size free queue. The loser retries, then shows 'full'. Mention the trade-off: a lot-wide lock is correct, but serialises every gate.",
+          "reveal": 5
+        },
+        {
+          "say": "Follow-up: E-V charging spots? A new spot kind plus a charging fee class, no gate changes. Weekend rates? A new fee strategy or a decorator. Lost ticket? A flat daily maximum, or look up by plate if stored. Study it in chapter fourteen, section fourteen point one.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s022",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Two gates, one free spot. Best answer?",
+      "bullets": [
+        "A. Lock the whole lot for every entry",
+        "B. Compare-and-set on the spot; loser retries",
+        "C. Let both park and fix it later"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Which answer scores four on concurrency? The answer comes next.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s023",
+      "layout": "section",
+      "kicker": "Concept 4 of 5",
+      "title": "Highlights of the other 22 drills",
+      "caption": "Book: Ch 24 · 24.2 to 24.23",
+      "steps": [
+        {
+          "say": "B. Compare-and-set on the spot, and the loser retries. A is correct but slow, because every gate waits on one lock. Saying that trade-off out loud is what lifts you to four.",
+          "reveal": 0
+        },
+        {
+          "say": "Now the tour. For each drill: the prompt, the key must-haves, and the follow-up to expect. Listen for the same four moves: an atomic claim of something scarce, a state machine, a Strategy for the rule that changes, and Observer for notifications.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s024",
+      "layout": "bullets",
+      "kicker": "Drill 2 of 23",
+      "title": "Elevator System",
+      "bullets": [
+        "3-4 cars, ~20 floors; hall calls vs car calls",
+        "Sorted up-stops and down-stops, not FIFO",
+        "Dispatcher as Strategy; LOOK rule in step()",
+        "Doors never open while moving",
+        "Follow-up: why not nearest idle car?"
+      ],
+      "caption": "Book: Ch 24 · 24.2 Drill — Elevator System",
+      "steps": [
+        {
+          "say": "Drill two, the elevator. 'People press buttons on floors and inside cars. How do you decide which elevator goes where?' Assume three or four cars and about twenty floors. A hall call is the up or down button on a floor; a car call is a floor button inside the car.",
+          "reveal": 1
+        },
+        {
+          "say": "Must-have: each car keeps its stops in two sorted sets, up and down, not a first-in-first-out queue. A FIFO queue zig-zags: floor two, then fifteen, then three.",
+          "reveal": 2
+        },
+        {
+          "say": "The dispatcher is a Strategy: nearest, least busy, or zoned. The car's step method uses the LOOK rule: keep going while stops lie ahead, then reverse.",
+          "reveal": 3
+        },
+        {
+          "say": "Car states have legal transitions, and doors never open while moving.",
+          "reveal": 4
+        },
+        {
+          "say": "Follow-up: why not the nearest idle car? A car already heading toward the caller in the same direction is often better. Cost equals distance, plus a direction-change penalty, plus a load penalty.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s025",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: the dispatcher's cost",
+      "table": {
+        "head": [
+          "Car",
+          "At",
+          "Moving",
+          "Cost for floor 7 up"
+        ],
+        "rows": [
+          [
+            "A",
+            "floor 2",
+            "up",
+            "5 + 0 = 5"
+          ],
+          [
+            "B",
+            "floor 8",
+            "stopped, full",
+            "1 + 6 load = 7"
+          ],
+          [
+            "C",
+            "floor 10",
+            "down",
+            "3 + 10 penalty = 13"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Floor seven presses up. Car A is at floor two heading up. Distance five, no direction change. Cost five.",
+          "reveal": 1
+        },
+        {
+          "say": "Car B is stopped at eight, distance one, but it's full of passengers, so a load penalty of six. Cost seven.",
+          "reveal": 2
+        },
+        {
+          "say": "Car C is at ten going down. It must finish going down and reverse, so a direction penalty of ten. Cost thirteen. The dispatcher picks car A, not the nearest car. And many presses at once? One controller thread drains a request queue, so dispatch logic stays single-threaded.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s026",
+      "layout": "bullets",
+      "kicker": "Drill 3 of 23",
+      "title": "Library Management System",
+      "bullets": [
+        "Book (title) owns many BookItem (copy)",
+        "Loan is its own class with dates",
+        "Borrow limit per membership, in one place",
+        "FinePolicy interface; Notifier decoupled",
+        "Follow-up: two members, last copy"
+      ],
+      "caption": "Book: Ch 24 · 24.3 Drill — Library Management System",
+      "steps": [
+        {
+          "say": "Drill three, the library. 'Members borrow and return books, and late returns are fined.' Assume fourteen-day loans, five books max, one renewal.",
+          "reveal": 1
+        },
+        {
+          "say": "The first thing the interviewer looks for: the book versus copy split. Book is the title data. BookItem is one physical copy with a barcode and a rack.",
+          "reveal": 2
+        },
+        {
+          "say": "Loan is a class with its own dates, not fields on Member. The borrow limit lives in one place, per membership type.",
+          "reveal": 3
+        },
+        {
+          "say": "The fine rule sits behind an interface, notifications are decoupled, and search is separate from lending.",
+          "reveal": 4
+        },
+        {
+          "say": "Follow-up: two members want the last copy. The copy's change from available to loaned is atomic; the loser is offered a reservation. And adding magazines? A non-lendable magazine must not inherit borrow.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s027",
+      "layout": "bullets",
+      "kicker": "Drill 4 of 23",
+      "title": "Amazon Locker Service",
+      "bullets": [
+        "Ordered sizes; smallest-that-fits Strategy",
+        "Locker: free, reserved, occupied, out of service",
+        "Single-use code on the assignment, 3-day deadline",
+        "Scheduled expiry, return to sender",
+        "Follow-up: wrong codes, count per keypad"
+      ],
+      "caption": "Book: Ch 24 · 24.4 Drill — Amazon Locker Service",
+      "steps": [
+        {
+          "say": "Drill four, Amazon Locker. 'Parcels go to a self-service locker. Design delivery, pickup, and what happens when nobody collects.'",
+          "reveal": 1
+        },
+        {
+          "say": "Sizes are ordered enums, and 'smallest that fits' sits behind an interface. Locker states: free, reserved, occupied, back to free, plus out of service.",
+          "reveal": 2
+        },
+        {
+          "say": "The one-time code lives on the locker assignment, not the locker. It's single-use with a three-day deadline. So if a locker is jammed, you reassign and the code survives.",
+          "reveal": 3
+        },
+        {
+          "say": "A scheduled expiry job frees lockers and starts return-to-sender. Customer returns reuse the same assignment mechanism.",
+          "reveal": 4
+        },
+        {
+          "say": "Follow-up: repeated wrong codes. Count failures per keypad, because a wrong code matches no assignment. Lock the keypad for a few minutes after five in a row.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s028",
+      "layout": "bullets",
+      "kicker": "Drill 5 of 23",
+      "title": "Vending Machine",
+      "bullets": [
+        "State pattern: Idle, HasMoney, Dispensing ...",
+        "Illegal events fail clearly",
+        "Money in integer cents, never double",
+        "Check change stock before dispensing",
+        "Restock as a state; follow-up: enum vs classes"
+      ],
+      "caption": "Book: Ch 24 · 24.5 Drill — Vending Machine",
+      "steps": [
+        {
+          "say": "Drill five, the vending machine. This is a State-pattern question, so reach the states fast: idle, has money, dispensing, sold out, and service.",
+          "reveal": 1
+        },
+        {
+          "say": "Each state lists the events it accepts, and illegal events fail clearly. Justify the pattern: each mode's rules sit in one class, no growing switch.",
+          "reveal": 2
+        },
+        {
+          "say": "Money is integer minor units, like cents, never a double.",
+          "reveal": 3
+        },
+        {
+          "say": "Change is checked against real coin stock before dispensing. If you can't make change, refuse and refund.",
+          "reveal": 4
+        },
+        {
+          "say": "Restock is a state too, so sales stop during it. Follow-up: enum versus State classes? An enum with a switch is fine for four stateless modes. Classes pay off once states carry data or multiply.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s029",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: greedy change can fail",
+      "table": {
+        "head": [
+          "Coins in stock",
+          "Change for 30",
+          "Result"
+        ],
+        "rows": [
+          [
+            "25, 10, 10, 10",
+            "Greedy: 25, then 5? none",
+            "Fails"
+          ],
+          [
+            "25, 10, 10, 10",
+            "Search: 10 + 10 + 10",
+            "Works"
+          ],
+          [
+            "25, 5, 5",
+            "Greedy: 25 + 5",
+            "Works"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Greedy change takes the biggest coin first. Say you owe thirty cents and the machine holds one quarter and three dimes. Greedy takes the quarter, then needs five cents, and has none. It fails.",
+          "reveal": 1
+        },
+        {
+          "say": "A small search finds ten, ten, ten. Same interface, smarter implementation.",
+          "reveal": 2
+        },
+        {
+          "say": "With normal coin stock, greedy works: twenty-five plus five. So say: greedy by default, search as the fallback behind the same ChangeMaker interface.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s030",
+      "layout": "bullets",
+      "kicker": "Drill 6 of 23",
+      "title": "Online Blackjack Game",
+      "bullets": [
+        "Game-agnostic Card, Deck, Shoe",
+        "Ace rule only inside Hand",
+        "Round (phases) separate from Table",
+        "DealerPolicy: hits below 17",
+        "Bets debited once, settled once; seeded shuffle"
+      ],
+      "caption": "Book: Ch 24 · 24.6 Drill — Online Blackjack Game",
+      "steps": [
+        {
+          "say": "Drill six, Blackjack. Several players against a dealer, with betting. Payouts: one to one on a win, three to two on blackjack, and a push returns the bet.",
+          "reveal": 1
+        },
+        {
+          "say": "Card, Deck and Shoe stay game-agnostic, so Poker can reuse them. The ace rule lives only inside Hand.",
+          "reveal": 2
+        },
+        {
+          "say": "Round, with its phases, is separate from the long-lived Table. Bets, deal, players act, dealer plays, settle.",
+          "reveal": 3
+        },
+        {
+          "say": "The dealer rule is a policy, so 'hit soft seventeen' is one new class.",
+          "reveal": 4
+        },
+        {
+          "say": "Bets are debited once at the start and settled once, and the shuffle is injectable and seeded for tests. Follow-up for multiplayer: each table processes commands from a queue on one thread, so no locks on game state.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s031",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: Hand.bestValue with aces",
+      "table": {
+        "head": [
+          "Hand",
+          "Aces as 1",
+          "Add 10?",
+          "Value"
+        ],
+        "rows": [
+          [
+            "A, 6",
+            "7",
+            "17 <= 21, yes",
+            "17, soft"
+          ],
+          [
+            "A, 6, 9",
+            "16",
+            "26 > 21, no",
+            "16, hard"
+          ],
+          [
+            "A, A, 9",
+            "11",
+            "21 <= 21, yes",
+            "21"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The ace rule, worked. Count every ace as one. Then, if the total plus ten is at most twenty-one, add ten once. Ace and six: seven, plus ten is seventeen. Allowed, so seventeen, and that's a soft hand.",
+          "reveal": 1
+        },
+        {
+          "say": "Ace, six, nine: sixteen. Plus ten would be twenty-six, too many. So sixteen, hard.",
+          "reveal": 2
+        },
+        {
+          "say": "Two aces and a nine: eleven, plus ten is twenty-one. You never add ten twice, so one rule covers every case and gives you the soft flag for free.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s032",
+      "layout": "bullets",
+      "kicker": "Drill 7 of 23",
+      "title": "Ride Sharing (practice)",
+      "bullets": [
+        "Trip states: requested to completed, cancel early",
+        "Matching and fare as Strategies",
+        "Driver claimed atomically",
+        "Location index (grid or geohash), not a scan",
+        "Follow-up: two requests, one driver"
+      ],
+      "caption": "Book: Ch 24 · 24.7 Drill — Ride Sharing (practice session)",
+      "steps": [
+        {
+          "say": "Drill seven, ride sharing, a practice session to do without notes. 'Riders request rides, drivers accept, the rider pays at the end.' Fare is base plus distance plus time, with a surge multiplier.",
+          "reveal": 1
+        },
+        {
+          "say": "Trip is a state machine: requested, driver assigned, in progress, completed, with cancelled allowed from the early states.",
+          "reveal": 2
+        },
+        {
+          "say": "Matching and fare are each a Strategy: nearest or best-rated; normal or surge.",
+          "reveal": 3
+        },
+        {
+          "say": "The driver is claimed atomically. Location lookup lives in its own class, a grid or geohash index, not a scan of every driver. Live status to the rider goes through Observer.",
+          "reveal": 4
+        },
+        {
+          "say": "Follow-up: two requests match one driver. Compare-and-set the driver from available to assigned; the loser is re-matched. Surge? A fare decorator using demand over supply per area.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s033",
+      "layout": "bullets",
+      "kicker": "Drill 8 of 23",
+      "title": "Meeting Scheduler",
+      "bullets": [
+        "Interval value type, half-open overlap",
+        "Per-room sorted map; clash check O(log n)",
+        "Check and insert under one per-room lock",
+        "Room selection Strategy; RSVP + Observer",
+        "Follow-up: first slot all attendees free"
+      ],
+      "caption": "Book: Ch 24 · 24.8 Drill — Meeting Scheduler",
+      "steps": [
+        {
+          "say": "Drill eight, the meeting scheduler. People book rooms and invite colleagues.",
+          "reveal": 1
+        },
+        {
+          "say": "Must-have: an Interval value type with a half-open overlap test. Half-open means the start is included and the end is not, so ten to eleven and eleven to twelve don't clash.",
+          "reveal": 2
+        },
+        {
+          "say": "Each room keeps bookings in a sorted map, so the clash check is order log n: look at the booking that starts just before your end time.",
+          "reveal": 3
+        },
+        {
+          "say": "Check and insert happen under one per-room lock. When trying rooms in turn, release one lock before taking the next, so no deadlock. Room selection is a Strategy, invitations carry R-S-V-P status, and notifications go through Observer.",
+          "reveal": 4
+        },
+        {
+          "say": "Follow-up: find the first slot when all attendees are free. Gather busy intervals, sort, merge overlaps, and scan the gaps for the required length.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s034",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: half-open overlap",
+      "table": {
+        "head": [
+          "Existing",
+          "New",
+          "a.start < b.end and b.start < a.end",
+          "Clash?"
+        ],
+        "rows": [
+          [
+            "10:00-11:00",
+            "11:00-12:00",
+            "10<12 yes, 11<11 no",
+            "No"
+          ],
+          [
+            "10:00-11:00",
+            "10:30-11:30",
+            "10<11:30 yes, 10:30<11 yes",
+            "Yes"
+          ],
+          [
+            "10:00-11:00",
+            "09:00-10:00",
+            "10<10 no",
+            "No"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Two intervals overlap when each starts before the other ends. Ten to eleven against eleven to twelve: eleven is not before eleven, so no clash. Back-to-back meetings are fine.",
+          "reveal": 1
+        },
+        {
+          "say": "Ten to eleven against ten thirty to eleven thirty: both tests pass. Clash.",
+          "reveal": 2
+        },
+        {
+          "say": "Ten to eleven against nine to ten: ten is not before ten. No clash.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s035",
+      "layout": "bullets",
+      "kicker": "Drill 9 of 23",
+      "title": "Movie Ticket Booking",
+      "bullets": [
+        "Seat (physical) vs ShowSeat (per show)",
+        "Available, held, booked; hold expires in 10 min",
+        "Multi-seat hold is all-or-nothing",
+        "Payment failure releases the hold",
+        "Follow-up: same seat, lock in seat-id order"
+      ],
+      "caption": "Book: Ch 24 · 24.9 Drill — Movie Ticket Booking System",
+      "steps": [
+        {
+          "say": "Drill nine, movie tickets, like BookMyShow. Users find a movie, pick a show and seats, and pay.",
+          "reveal": 1
+        },
+        {
+          "say": "The key split: Seat is the physical chair; ShowSeat is that chair's state for one show. Seat states go available, held, booked, and a hold expires back to available after ten minutes.",
+          "reveal": 2
+        },
+        {
+          "say": "Holding several seats is all-or-nothing. If you want seats twelve and thirteen and thirteen is taken, you get neither.",
+          "reveal": 3
+        },
+        {
+          "say": "Pricing is a Strategy, confirmation goes through Observer, and a payment failure releases the hold.",
+          "reveal": 4
+        },
+        {
+          "say": "Follow-up: two users click the same seat. Lock the show's seats in a fixed order, by seat id, and check-and-hold together. Fixed order prevents deadlock. Payment succeeds after the hold expired? Check ownership at confirm, and refund if lost.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s036",
+      "layout": "bullets",
+      "kicker": "Drill 10 of 23",
+      "title": "Car Rental System",
+      "bullets": [
+        "Reserve a type; car assigned at pickup",
+        "Availability = interval overlap, not a flag",
+        "Reserved, picked up, returned, cancelled, no-show",
+        "Pricing Strategy; add-ons as list or Decorator",
+        "Follow-up: last SUV, two customers"
+      ],
+      "caption": "Book: Ch 24 · 24.10 Drill — Car Rental System",
+      "steps": [
+        {
+          "say": "Drill ten, car rental. Customers reserve a car at a branch for some dates. Assume they reserve a vehicle type, and the actual car is assigned at pickup.",
+          "reveal": 1
+        },
+        {
+          "say": "Availability is a date-range overlap, not a single 'is free' flag. A car free today might be booked next week.",
+          "reveal": 2
+        },
+        {
+          "say": "Reservation lifecycle: reserved, picked up, returned, plus cancelled and no-show.",
+          "reveal": 3
+        },
+        {
+          "say": "Pricing is a Strategy, and add-ons like insurance or G-P-S compose as a list or a Decorator. A one-way rental moves the vehicle to the drop branch.",
+          "reveal": 4
+        },
+        {
+          "say": "Follow-up: the last S-U-V, two customers. A per-branch, per-type lock around check and reserve. Car breaks mid-rental? Swap the vehicle on the same agreement. The agreement, not the car, carries the money.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s037",
+      "layout": "bullets",
+      "kicker": "Drill 11 of 23",
+      "title": "ATM",
+      "bullets": [
+        "States: Idle, CardInserted, Authenticated ...",
+        "Bank behind an interface; ATM holds no balances",
+        "Dispenser as Chain of Responsibility",
+        "Check cash, debit, dispense, reverse on fail",
+        "Follow-up: debited but no cash"
+      ],
+      "caption": "Book: Ch 24 · 24.11 Drill — ATM",
+      "steps": [
+        {
+          "say": "Drill eleven, the A-T-M. Insert card, enter PIN, withdraw or check balance. Three wrong PINs keep the card.",
+          "reveal": 1
+        },
+        {
+          "say": "The A-T-M has states, each with allowed events. The bank sits behind an interface; the A-T-M never holds balances.",
+          "reveal": 2
+        },
+        {
+          "say": "Note dispensing is a Chain of Responsibility, largest denomination first. For a hundred and seventy: the fifty handler gives three, the twenty gives one, the ten handler none needed.",
+          "reveal": 3
+        },
+        {
+          "say": "The order matters: check cash, then debit, then dispense, and if dispensing fails, reverse the debit.",
+          "reveal": 4
+        },
+        {
+          "say": "Follow-up: debited but no cash came out. Send a reversal with the same transaction id; the bank treats it idempotently, meaning repeating it has no extra effect. Network drop? Retry with the same id, so no double debit.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s038",
+      "layout": "bullets",
+      "kicker": "Drill 12 of 23",
+      "title": "Chess Game",
+      "bullets": [
+        "Piece subclasses; sliding pieces share a helper",
+        "Move as Command, stores enough to undo",
+        "Legal = pseudo-legal + own king safe",
+        "Status after every move; turns in Game",
+        "Follow-up: detect checkmate"
+      ],
+      "caption": "Book: Ch 24 · 24.12 Drill — Chess Game",
+      "steps": [
+        {
+          "say": "Drill twelve, chess. Two players, full rules.",
+          "reveal": 1
+        },
+        {
+          "say": "Piece movement goes through polymorphism, one subclass per piece. Rook, bishop and queen slide, so they share a helper. Why not a giant switch on piece type? A new fairy piece would edit it; a subclass leaves existing code closed.",
+          "reveal": 2
+        },
+        {
+          "say": "Move is a Command object that stores from, to, the captured piece and any special kind, enough to undo.",
+          "reveal": 3
+        },
+        {
+          "say": "Legality is two steps. Generate pseudo-legal moves, apply each to a copy, and reject it if your own king is now in check. Game status is computed after every move, and turn enforcement lives in Game, not pieces.",
+          "reveal": 4
+        },
+        {
+          "say": "Follow-up: detect checkmate. You're in check and no legal move exists, so generate all moves and test each. An A-I player? A Player strategy that picks a move; the game loop doesn't change.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s039",
+      "layout": "bullets",
+      "kicker": "Drill 13 of 23",
+      "title": "Hotel Management System",
+      "bullets": [
+        "Book a type; room assigned at check-in",
+        "Availability per night: rooms minus overlaps",
+        "Reservation status separate from room status",
+        "Pricing Strategy; charges as line items",
+        "Follow-up: last room, two bookings"
+      ],
+      "caption": "Book: Ch 24 · 24.13 Drill — Hotel Management System",
+      "steps": [
+        {
+          "say": "Drill thirteen, the hotel: booking, check-in, check-out and billing. Nights are half-open date ranges.",
+          "reveal": 1
+        },
+        {
+          "say": "Availability, per night, equals the count of rooms of that type minus overlapping reservations. Say ten deluxe rooms and nine booked on Friday: one left for Friday.",
+          "reveal": 2
+        },
+        {
+          "say": "Reservation status, booked, checked in, checked out, cancelled or no-show, is separate from room status: occupied, dirty, clean, out of order. At check-out, the room goes dirty and a housekeeping task is created.",
+          "reveal": 3
+        },
+        {
+          "say": "Pricing is a Strategy for season and weekend. Charges are line items, so room service or laundry needs no invoice change.",
+          "reveal": 4
+        },
+        {
+          "say": "Follow-up: last room, two bookings. Lock per room type for the check-and-insert, or decrement a per-night counter atomically. Group bookings: a parent reservation, all-or-nothing.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s040",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Seat/ShowSeat, Book/BookItem: the shared idea?",
+      "bullets": [
+        "A. They're all Strategies",
+        "B. Type vs instance: a thing vs its use",
+        "C. They're Observers"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Seat and ShowSeat. Book and BookItem. What's the common idea? We'll answer it next.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s041",
+      "layout": "bullets",
+      "kicker": "Drill 14 of 23",
+      "title": "Food Delivery (practice)",
+      "bullets": [
+        "Order state machine: who triggers each step",
+        "Kitchen capacity: take on accept, free on ready",
+        "Restaurant and agent selection: two Strategies",
+        "Atomic claim of a free agent; Observer status",
+        "Follow-up: restaurant never accepts"
+      ],
+      "caption": "Book: Ch 24 · 24.14 Drill — Food Delivery (practice session)",
+      "steps": [
+        {
+          "say": "The answer was B: type versus instance, the non-obvious split that scores four on entities. Now drill fourteen, food delivery, the second practice session. Customers order from restaurants; agents bring the food.",
+          "reveal": 1
+        },
+        {
+          "say": "The order is a state machine, and you state who may trigger each transition: the restaurant accepts, the agent picks up.",
+          "reveal": 2
+        },
+        {
+          "say": "Kitchen capacity: a kitchen cooks at most N items at once. Take capacity on accept, release it when the food is ready or the order is cancelled. A full kitchen refusing a prepaid order refunds it.",
+          "reveal": 3
+        },
+        {
+          "say": "Restaurant selection and agent assignment are two separate Strategies. Claim a free agent atomically, and push status through Observer.",
+          "reveal": 4
+        },
+        {
+          "say": "Follow-up: the restaurant never accepts. A timeout auto-cancels and refunds. Batch two orders to one agent? An assignment strategy allowing a second pickup within a detour limit.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s042",
+      "layout": "bullets",
+      "kicker": "Drill 15 of 23",
+      "title": "Amazon Online Shopping",
+      "bullets": [
+        "OrderItem copies price; cart reads live price",
+        "Stock reserved atomically for all lines",
+        "Placed, paid, shipped, delivered, cancelled, returned",
+        "Payment and shipping as Strategy; Observer",
+        "Follow-up: last unit, two buyers"
+      ],
+      "caption": "Book: Ch 24 · 24.15 Drill — Amazon Online Shopping System",
+      "steps": [
+        {
+          "say": "Drill fifteen, Amazon shopping: browse, cart, checkout, track.",
+          "reveal": 1
+        },
+        {
+          "say": "OrderItem copies the price at purchase time. The cart reads live prices. So if a phone was five hundred dollars when you bought it, your order says five hundred forever, even if it drops to four fifty tomorrow.",
+          "reveal": 2
+        },
+        {
+          "say": "At checkout, stock is reserved atomically for all lines, and released if payment fails.",
+          "reveal": 3
+        },
+        {
+          "say": "Order states: placed, paid, shipped, delivered, plus cancelled and returned. Payment and shipping methods are Strategies; notifications go through Observer.",
+          "reveal": 4
+        },
+        {
+          "say": "Follow-up: last unit, two buyers. A conditional decrement on stock; the loser gets 'out of stock'. Payment timeout? The reservation has an expiry, and a sweeper releases the stock.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s043",
+      "layout": "bullets",
+      "kicker": "Drill 16 of 23",
+      "title": "Stack Overflow",
+      "bullets": [
+        "Post base; Question and Answer extend it",
+        "Vote keyed by (user, post): replace, not add",
+        "Reputation via events (Observer)",
+        "Privileges as thresholds in one place",
+        "Follow-up: changing a vote"
+      ],
+      "caption": "Book: Ch 24 · 24.16 Drill — Stack Overflow",
+      "steps": [
+        {
+          "say": "Drill sixteen, Stack Overflow: ask, answer, vote, earn reputation.",
+          "reveal": 1
+        },
+        {
+          "say": "A shared Post base handles voting and commenting. Question adds a title, tags and an accepted answer.",
+          "reveal": 2
+        },
+        {
+          "say": "Vote is keyed by user and post, so a second vote replaces the first, never adds to it.",
+          "reveal": 3
+        },
+        {
+          "say": "Reputation changes through events, Observer, not inline in the vote code. Privileges are reputation thresholds kept in one place. Search is separate from posting.",
+          "reveal": 4
+        },
+        {
+          "say": "Follow-up: a user changes a vote from up to down. Reverse the old reputation change, then apply the new one.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s044",
+      "layout": "bullets",
+      "kicker": "Drill 17 of 23",
+      "title": "Restaurant Management",
+      "bullets": [
+        "Table allocation Strategy + waitlist",
+        "Orders to kitchen as Command objects",
+        "OrderItem: ordered, cooking, ready, served",
+        "Table ready, dish ready via Observer",
+        "Follow-up: split the bill"
+      ],
+      "caption": "Book: Ch 24 · 24.17 Drill — Restaurant Management System",
+      "steps": [
+        {
+          "say": "Drill seventeen, the restaurant: reservations, orders, kitchen and bill. Tables come in sizes two, four and six.",
+          "reveal": 1
+        },
+        {
+          "say": "Table allocation is a Strategy, smallest table that fits, with a waitlist fallback. A party of three gets a four-top, not a six.",
+          "reveal": 2
+        },
+        {
+          "say": "Orders go to kitchen stations as Command objects, so they can be queued and cancelled. Each OrderItem moves ordered, cooking, ready, served.",
+          "reveal": 3
+        },
+        {
+          "say": "'Table ready' and 'dish ready' use Observer. The bill is built from order items plus a tax and tip policy.",
+          "reveal": 4
+        },
+        {
+          "say": "Follow-up: split the bill, by items or evenly. A split strategy that produces several bills. Several waiters ordering for one table? Lock the order per table, or make items append-only.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s045",
+      "layout": "bullets",
+      "kicker": "Drill 18 of 23",
+      "title": "Facebook",
+      "bullets": [
+        "Friendship (two-sided) vs follow (one-sided)",
+        "One VisibilityPolicy for feed, profile, search",
+        "Feed ranking Strategy",
+        "State pull vs push, with the trade-off",
+        "Follow-up: privacy changed after posting"
+      ],
+      "caption": "Book: Ch 24 · 24.18 Drill — Facebook",
+      "steps": [
+        {
+          "say": "Drill eighteen, Facebook: profiles, friends, posts, feed, privacy.",
+          "reveal": 1
+        },
+        {
+          "say": "Friendship is two-sided, created through a request: pending, then accepted or rejected. Follow is one-sided.",
+          "reveal": 2
+        },
+        {
+          "say": "One visibility policy, canSee viewer and post, is reused by the feed, profile and search.",
+          "reveal": 3
+        },
+        {
+          "say": "Feed ranking is a Strategy. And state your choice of pull, merging at read time, versus push, fanning out at write time. Pull is simpler for an in-memory design. Push makes reads fast but a user with five thousand friends costs five thousand writes per post. Hybrid: push for normal users, pull for celebrities.",
+          "reveal": 4
+        },
+        {
+          "say": "Follow-up: privacy changed after posting. Check visibility at read time; never cache it into the feed. Friend suggestions? Friends of friends, ranked by mutual friends.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s046",
+      "layout": "bullets",
+      "kicker": "Drill 19 of 23",
+      "title": "Online Stock Brokerage",
+      "bullets": [
+        "Block funds at placement, not at fill",
+        "New, open, partially filled, filled, cancelled",
+        "Exchange behind an Adapter",
+        "Money as BigDecimal or integer units",
+        "Follow-up: duplicate fill messages"
+      ],
+      "caption": "Book: Ch 24 · 24.19 Drill — Online Stock Brokerage System",
+      "steps": [
+        {
+          "say": "Drill nineteen, stock brokerage. Fund an account, place buy and sell orders, see the portfolio. An external exchange does the matching; you route and track.",
+          "reveal": 1
+        },
+        {
+          "say": "Funds, or shares for a sell, are blocked when the order is placed, not when it fills.",
+          "reveal": 2
+        },
+        {
+          "say": "Order states: new, open, partially filled, filled, cancelled, rejected. The exchange sits behind an Adapter interface.",
+          "reveal": 3
+        },
+        {
+          "say": "Money is BigDecimal or integer units, and price alerts use Observer.",
+          "reveal": 4
+        },
+        {
+          "say": "Follow-up: duplicate fill messages. Keep the processed fill ids and ignore repeats. That's idempotency. Two orders spending the same cash? Lock per account around check-and-block.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s047",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: buy with partial fills",
+      "table": {
+        "head": [
+          "Event",
+          "Cash",
+          "Blocked",
+          "Shares"
+        ],
+        "rows": [
+          [
+            "Start",
+            "$10,000",
+            "$0",
+            "0"
+          ],
+          [
+            "Place: 100 @ limit $50",
+            "$5,000",
+            "$5,000",
+            "0"
+          ],
+          [
+            "Fill 60 @ $50",
+            "$5,000",
+            "$2,000",
+            "60"
+          ],
+          [
+            "Cancel remainder",
+            "$7,000",
+            "$0",
+            "60"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Worked example. You start with ten thousand dollars cash.",
+          "reveal": 1
+        },
+        {
+          "say": "Place a limit buy: a hundred shares at fifty. Block five thousand. Available cash drops to five thousand.",
+          "reveal": 2
+        },
+        {
+          "say": "Sixty shares fill at fifty. Three thousand of the block is spent. Blocked drops to two thousand, and you hold sixty shares.",
+          "reveal": 3
+        },
+        {
+          "say": "You cancel the rest. The remaining two thousand is released, so cash is seven thousand. And if a fill arrives after your cancel? The exchange is the truth: apply the fill, and cancel only the remainder.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s048",
+      "layout": "bullets",
+      "kicker": "Drill 20 of 23",
+      "title": "Jigsaw Puzzle",
+      "bullets": [
+        "Side type: flat, tab, blank + shape id",
+        "Rotation stored in Placement, not Piece",
+        "Corner, border, interior by flat-side count",
+        "Solver: index by shape id, not a scan",
+        "Follow-up: complexity, O(n) vs O(n squared)"
+      ],
+      "caption": "Book: Ch 24 · 24.20 Drill — Jigsaw Puzzle",
+      "steps": [
+        {
+          "say": "Drill twenty, the jigsaw puzzle: pieces, board, fit test, and a solver.",
+          "reveal": 1
+        },
+        {
+          "say": "Side is its own type: flat for the border, tab sticking out, blank going in, plus a shape id. A tab fits a blank with the same shape id.",
+          "reveal": 2
+        },
+        {
+          "say": "Rotation is stored in the placement, not the piece, so pieces stay immutable. Category comes from flat-side count: two flats is a corner, one is a border, none is interior.",
+          "reveal": 3
+        },
+        {
+          "say": "The solver goes corners, borders, then inside, matching neighbours, and finds candidates with a hash map by shape id.",
+          "reveal": 4
+        },
+        {
+          "say": "Follow-up: complexity. With unique shapes and that index, each cell is constant time on average, so order n overall. Scanning every piece is order n squared. Look-alike pieces force backtracking, so budget the search.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s049",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: which side faces up after a turn?",
+      "table": {
+        "head": [
+          "Direction d",
+          "Turns r",
+          "(d - r) mod 4",
+          "Side shown"
+        ],
+        "rows": [
+          [
+            "TOP = 0",
+            "1",
+            "(0 - 1) mod 4 = 3",
+            "LEFT"
+          ],
+          [
+            "RIGHT = 1",
+            "1",
+            "(1 - 1) mod 4 = 0",
+            "TOP"
+          ],
+          [
+            "TOP = 0",
+            "2",
+            "(0 - 2) mod 4 = 2",
+            "BOTTOM"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Number the directions: top zero, right one, bottom two, left three. After r clockwise quarter-turns, the side facing direction d is side number d minus r, mod four.",
+          "reveal": 1
+        },
+        {
+          "say": "Turn once. What faces top? Zero minus one, mod four, is three: the old left side. What faces right? One minus one, zero: the old top.",
+          "reveal": 2
+        },
+        {
+          "say": "Turn twice: the old bottom now faces top. One formula, no if-statements, and the piece object never changes.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s050",
+      "layout": "bullets",
+      "kicker": "Drill 21 of 23",
+      "title": "Airline Management System",
+      "bullets": [
+        "Flight (route) vs FlightInstance (date)",
+        "Seat state per instance",
+        "Multi-leg booking: all-or-nothing",
+        "Held, confirmed, checked in / cancelled",
+        "Follow-up: same seat, lock in fixed order"
+      ],
+      "caption": "Book: Ch 24 · 24.21 Drill — Airline Management System",
+      "steps": [
+        {
+          "say": "Drill twenty-one, the airline: search flights, book seats, check in.",
+          "reveal": 1
+        },
+        {
+          "say": "The split: Flight is the recurring route and number, like flight one-oh-one. FlightInstance is one dated departure. Seat state lives per instance, in FlightSeat.",
+          "reveal": 2
+        },
+        {
+          "say": "A two-leg itinerary is booked all-or-nothing: hold seats on both legs, pay, confirm both, or release both.",
+          "reveal": 3
+        },
+        {
+          "say": "Booking states: held, confirmed, then checked in or cancelled. Fares are a Strategy, and flight status changes notify passengers through Observer.",
+          "reveal": 4
+        },
+        {
+          "say": "Follow-up: two people, same seat. Lock seats in a fixed order across instances, so no deadlock. Partner airlines? An adapter per partner behind one booking interface.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s051",
+      "layout": "bullets",
+      "kicker": "Drill 22 of 23",
+      "title": "ESPNcricinfo",
+      "bullets": [
+        "Ball is the source event; totals derived",
+        "Wide and no-ball are not legal deliveries",
+        "Strike rotates on odd runs and over end",
+        "Format rules: interface or Template Method",
+        "Follow-up: scorer corrects a ball"
+      ],
+      "caption": "Book: Ch 24 · 24.22 Drill — ESPNcricinfo",
+      "steps": [
+        {
+          "say": "Drill twenty-two, ESPNcricinfo: live scores, scorecards, commentary, player stats. An admin enters each ball.",
+          "reveal": 1
+        },
+        {
+          "say": "Ball is the source event. Totals and stats are derived from balls.",
+          "reveal": 2
+        },
+        {
+          "say": "Extras: a wide or a no-ball doesn't count as a legal delivery, so the over needs another ball.",
+          "reveal": 3
+        },
+        {
+          "say": "Strike rotates on odd runs and at the end of an over. One run off the sixth ball? Rotate twice, so the same batter faces the next over. Format rules for Test, O-D-I and T-twenty sit behind an interface or a Template Method. Live updates use Observer.",
+          "reveal": 4
+        },
+        {
+          "say": "Follow-up: the scorer corrects a ball. Replace that event and recompute derived totals.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s052",
+      "layout": "bullets",
+      "kicker": "Drill 23 of 23",
+      "title": "LinkedIn",
+      "bullets": [
+        "Invitation: pending, accepted, ignored, withdrawn",
+        "Connection symmetric, both sides in one step",
+        "Degree by BFS, limited to depth 3",
+        "Job applications have their own states",
+        "Follow-up: degree on a huge graph"
+      ],
+      "caption": "Book: Ch 24 · 24.23 Drill — LinkedIn",
+      "steps": [
+        {
+          "say": "Drill twenty-three, LinkedIn: profiles, connections, feed, jobs and messages.",
+          "reveal": 1
+        },
+        {
+          "say": "Invitation states: pending, then accepted, ignored or withdrawn.",
+          "reveal": 2
+        },
+        {
+          "say": "A connection is symmetric and created for both members in one step.",
+          "reveal": 3
+        },
+        {
+          "say": "Degree, first, second or third, comes from breadth-first search, B-F-S, limited to depth three. Applications have their own states: applied, reviewed, rejected or offered. Feed ranking is a Strategy; notifications are Observer.",
+          "reveal": 4
+        },
+        {
+          "say": "Follow-up: degree on a huge graph. Bidirectional B-F-S from both ends, stopping at depth three. People you may know? Second-degree members ranked by mutual connections.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s053",
+      "layout": "section",
+      "kicker": "Concept 5 of 5",
+      "title": "Chapter summary: four repeating moves",
+      "caption": "Book: Ch 24 · Chapter summary",
+      "steps": [
+        {
+          "say": "You've now heard twenty-three drills. Did you notice the same four moves coming back?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s054",
+      "layout": "table",
+      "title": "The patterns repeat",
+      "table": {
+        "head": [
+          "Move",
+          "Seen in"
+        ],
+        "rows": [
+          [
+            "Atomic claim of a scarce thing",
+            "Spot, seat, room, driver, locker"
+          ],
+          [
+            "State machine for the main entity",
+            "Trip, Order, Reservation, ATM"
+          ],
+          [
+            "Strategy for the rule that changes",
+            "Fee, dispatch, matching, ranking"
+          ],
+          [
+            "Observer for notifications",
+            "Status, alerts, reputation, feed"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Move one: an atomic claim of a scarce resource. The parking spot, the movie seat, the hotel room, the driver, the locker. Compare-and-set or a lock at the right grain, and the loser retries or gets a clear 'taken'.",
+          "reveal": 1
+        },
+        {
+          "say": "Move two: a state machine for the main entity. Trip, order, reservation, the A-T-M itself. List the states, the legal transitions, and who triggers each.",
+          "reveal": 2
+        },
+        {
+          "say": "Move three: a Strategy for the rule most likely to change. Fees, dispatch, matching, ranking, pricing.",
+          "reveal": 3
+        },
+        {
+          "say": "Move four: Observer for notifications. Order status, price alerts, reputation, live scores. In the interview, recognise which move the interviewer is probing, and name it: 'This is the scarce-resource question. Here's my atomic claim.'",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s055",
+      "layout": "recap",
+      "kicker": "Episode 30 recap",
+      "title": "Episode 30 recap",
+      "bullets": [
+        "Drill: prompt only, 45 min, score, study, repeat",
+        "Timebox: diagram by 18, plan in minute 1",
+        "Decisions, not actions; check in",
+        "Rubric: 7 x 4 = 28; 24+ is ready",
+        "Six parts; Parking Lot as the model",
+        "Claim, state machine, Strategy, Observer"
+      ],
+      "steps": [
+        {
+          "say": "Let's recap. Run a drill in five steps: read only the prompt, talk for forty-five minutes, score before looking, study and re-score, repeat tomorrow if under twenty-four.",
+          "reveal": 1
+        },
+        {
+          "say": "Keep the timebox: clarify, use cases, entities by minute eighteen, walk one flow, code two or three classes, then follow-ups. Say the plan in minute one.",
+          "reveal": 2
+        },
+        {
+          "say": "Narrate decisions, not actions. Name each pattern's change, and check in at each phase.",
+          "reveal": 3
+        },
+        {
+          "say": "Score seven dimensions out of twenty-eight. Twenty-four and up is ready.",
+          "reveal": 4
+        },
+        {
+          "say": "Every drill has six parts, and the parking lot is your model: Ticket as a class, fee and allocation as strategies, an atomic spot claim.",
+          "reveal": 5
+        },
+        {
+          "say": "Across all twenty-three: atomic claim, state machine, Strategy, Observer.",
+          "reveal": 6
+        },
+        {
+          "say": "That's the end of the L-L-D Workshop. Thanks for sticking with all thirty episodes. Next, we move on to the next subject in your notes, starting with its own episode one. Run one drill tonight, and see you there.",
+          "reveal": 6
+        }
+      ]
+    }
+  ]
+}

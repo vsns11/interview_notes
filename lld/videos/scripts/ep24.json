@@ -1,0 +1,1626 @@
+{
+ "series": "LLD Workshop",
+ "episode": 24,
+ "title": "Commerce: Auction to Grocery POS",
+ "subtitle": "Auction, Spotify, Swiggy and FoodKart, and a grocery till: locks, strategies and exact money",
+ "scenes": [
+  {
+   "id": "s001",
+   "layout": "title",
+   "title": "Commerce: Auction to Grocery POS",
+   "subtitle": "Auction, Spotify, Swiggy and FoodKart, and a grocery till: locks, strategies and exact money",
+   "steps": [
+    {
+     "say": "Welcome to the L-L-D Workshop, episode twenty-four: Commerce, from Auction to Grocery P-O-S. L-L-D means low-level design, the class-by-class design of one system. P-O-S means point of sale, the software behind a supermarket till.",
+     "reveal": 0
+    },
+    {
+     "say": "Last time we built Amazon and a stock brokerage. Today we finish the commerce chapter with four more systems: an online auction, a music streaming service like Spotify, a food delivery app like Swiggy with its machine-coding cousin FoodKart, and a grocery checkout.",
+     "reveal": 0
+    },
+    {
+     "say": "By the end you'll be able to design all four. You'll keep a bid atomic under one lock, build shuffle that never loses the original order, claim a delivery rider with compare-and-set, and price a basket so tax and refunds add up to the paisa. Keep the chapter nineteen PDF open. Every name and number I use comes from its program output.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s002",
+   "layout": "bullets",
+   "title": "Four rules from this chapter",
+   "bullets": [
+    "Money is BigDecimal, never double",
+    "Status changes follow a state machine",
+    "Check-then-act on shared things is atomic",
+    "Orders copy prices at the moment of sale"
+   ],
+   "steps": [
+    {
+     "say": "Before we start, four rules that run through every design today. Rule one: money is BigDecimal, Java's exact decimal type. A double can't store zero point one exactly, so zero point one plus zero point two prints thirty followed by a long tail of digits.",
+     "reveal": 1
+    },
+    {
+     "say": "Rule two: status changes follow a state machine, a fixed list of states plus the legal moves between them. An illegal move, like cancelling a delivered order, fails loudly.",
+     "reveal": 2
+    },
+    {
+     "say": "Rule three: check-then-act must be atomic. Is there one left? Then take it. That's two steps. If two threads both check before either takes, both win. Use one lock, or one compare-and-set.",
+     "reveal": 3
+    },
+    {
+     "say": "Rule four: copy prices into orders. If the menu price changes tomorrow, yesterday's order must not change. Watch for all four in each design.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s003",
+   "layout": "section",
+   "kicker": "Part 1 of 5",
+   "title": "Design an Online Auction",
+   "steps": [
+    {
+     "say": "First, an online auction, think eBay auctions. A seller lists an item with a starting price and an end time. Bidders offer more and more. When time runs out, the highest bidder wins.",
+     "reveal": 0
+    },
+    {
+     "say": "Here's the hook. Fifty people bid on the same guitar in the same second. How do you guarantee exactly one true highest bid, and a history that only ever goes up?",
+     "reveal": 0
+    }
+   ],
+   "caption": "Book: Ch 19 · Design an Online Auction System"
+  },
+  {
+   "id": "s004",
+   "layout": "table",
+   "title": "Clarify the bid rules",
+   "table": {
+    "head": [
+     "Question",
+     "Our answer"
+    ],
+    "rows": [
+     [
+      "What's in a listing?",
+      "Name, category, start price, increment, reserve, duration"
+     ],
+     [
+      "Valid first bid?",
+      "At least the starting price"
+     ],
+     [
+      "Valid later bid?",
+      "Beat the current highest by the increment"
+     ],
+     [
+      "Seller bids? Leader re-bids?",
+      "No and no"
+     ],
+     [
+      "When does it end?",
+      "At the end time; a late bid is refused"
+     ],
+     [
+      "Who is told what?",
+      "Outbid bidder now; winner and seller at close"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Start with questions. What's in a listing? An item name, a category, a starting price, a minimum bid increment, an optional reserve price, and a duration.",
+     "reveal": 1
+    },
+    {
+     "say": "What's a valid first bid? At least the starting price.",
+     "reveal": 2
+    },
+    {
+     "say": "Every later bid must beat the current highest by at least the increment. That's the minimum increment rule.",
+     "reveal": 3
+    },
+    {
+     "say": "Can the seller bid on their own item? No. Can the current leader outbid themselves? Also no.",
+     "reveal": 4
+    },
+    {
+     "say": "When does it end? At its end time. A bid that arrives late is refused, even if the closing job hasn't run yet.",
+     "reveal": 5
+    },
+    {
+     "say": "And notifications: the outbid bidder hears right away. At close, the winner and seller hear. If nothing sold, the seller hears that too.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s005",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Bid rules on the Vintage Guitar",
+   "table": {
+    "head": [
+     "Bid",
+     "Outcome",
+     "Next minimum"
+    ],
+    "rows": [
+     [
+      "Ana bids 90 (start is 100)",
+      "TOO_LOW",
+      "100"
+     ],
+     [
+      "Ana bids 100",
+      "ACCEPTED",
+      "110"
+     ],
+     [
+      "Ana bids 120 (she leads)",
+      "ALREADY_HIGHEST",
+      "110"
+     ],
+     [
+      "Bob bids 105 (increment 10)",
+      "TOO_LOW",
+      "110"
+     ],
+     [
+      "Bob bids 110",
+      "ACCEPTED, Ana told",
+      "120"
+     ],
+     [
+      "Sam, the seller, bids",
+      "SELLER_CANNOT_BID",
+      "120"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's walk it with the book's demo. Sam lists a Vintage Guitar. Starting price one hundred, increment ten. Ana bids ninety. Below the start, so the answer is too low, and the next minimum is one hundred.",
+     "reveal": 1
+    },
+    {
+     "say": "Ana bids one hundred. Accepted. Now the next minimum is the highest plus the increment: one hundred ten.",
+     "reveal": 2
+    },
+    {
+     "say": "Ana bids one hundred twenty while she's already leading. Refused: already highest. You can't bid against yourself.",
+     "reveal": 3
+    },
+    {
+     "say": "Bob bids one hundred five. That beats Ana, but not by the increment of ten, so it's too low. The increment stops one-cent bidding wars.",
+     "reveal": 4
+    },
+    {
+     "say": "Bob bids one hundred ten. Accepted, and Ana gets a notice: you were outbid.",
+     "reveal": 5
+    },
+    {
+     "say": "Finally Sam, the seller, tries to bid up his own item. Refused: seller cannot bid. Every rule fired once.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s006",
+   "layout": "twocol",
+   "title": "Refusals are values, not exceptions",
+   "left": {
+    "heading": "BidOutcome enum",
+    "bullets": [
+     "ACCEPTED",
+     "TOO_LOW, ALREADY_HIGHEST",
+     "AUCTION_NOT_ACTIVE, AUCTION_ENDED",
+     "SELLER_CANNOT_BID"
+    ]
+   },
+   "right": {
+    "heading": "BidResult record",
+    "bullets": [
+     "outcome",
+     "next minimum bid",
+     "accepted bid snapshot",
+     "who was outbid"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Notice what came back each time: an outcome and a next minimum. That's a design choice. An exception is Java's way of aborting a method when something goes wrong. But a too-low bid isn't wrong. It's normal business.",
+     "reveal": 1
+    },
+    {
+     "say": "So the listing returns a BidOutcome enum. Accepted, too low, already highest.",
+     "reveal": 2
+    },
+    {
+     "say": "Auction not active, or auction ended.",
+     "reveal": 3
+    },
+    {
+     "say": "And seller cannot bid. Each refusal has a name the screen can show.",
+     "reveal": 4
+    },
+    {
+     "say": "It comes wrapped in a BidResult record. First the outcome.",
+     "reveal": 5
+    },
+    {
+     "say": "Then the next minimum bid, so the screen can say, bid at least one hundred ten.",
+     "reveal": 6
+    },
+    {
+     "say": "Then a snapshot of the accepted bid, a copy frozen at one moment. You'll see why that matters in a minute.",
+     "reveal": 7
+    },
+    {
+     "say": "And who was outbid, so the service knows whom to notify.",
+     "reveal": 8
+    }
+   ]
+  },
+  {
+   "id": "s007",
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "Where should the lock for placing a bid live?",
+   "bullets": [
+    "A: One global lock in AuctionService",
+    "B: One lock per AuctionListing",
+    "C: No lock, check then set the highest bid",
+    "D: Lock each Bid object"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. Placing a bid means: read the highest bid, compare, replace. Where should the lock live? A, one global lock in the service. B, one lock per listing. C, no lock at all. D, a lock on each bid. Pause and pick.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s008",
+   "layout": "diagram",
+   "title": "Placing a bid: the critical section",
+   "mermaid": "sequenceDiagram\n    participant B as Bidder\n    participant S as AuctionService\n    participant L as AuctionListing\n    participant N as Listener\n    B->>S: placeBid(id, bidder, amount)\n    S->>L: placeBid(bidder, amount, now, seq)\n    Note over L: synchronized - one bidder at a time\n    L->>L: active? before end? not seller? not leader?\n    L->>L: amount at least minimumNextBid?\n    L-->>S: BidResult(ACCEPTED, next min, bid, outbid)\n    Note over S,N: lock released before notifying\n    S->>N: onNewHighBid, onOutbid",
+   "caption": "Rules run inside the listing's lock; listeners run after it",
+   "steps": [
+    {
+     "say": "The answer is B. A global lock would make bids on a guitar wait behind bids on a watch. No lock is a race: two bidders read one hundred, both write, and one bid vanishes. So each listing owns its rules and guards them with its own lock. Different auctions never wait for each other.",
+     "reveal": 0
+    },
+    {
+     "say": "Follow the arrows. The bidder calls the service. The service calls the listing's placeBid, passing the current time and a sequence number. Inside the synchronized method, only one bidder at a time, the listing checks: is it active, are we before the end, is this not the seller, is this not the leader, is the amount at least the next minimum?",
+     "reveal": 0
+    },
+    {
+     "say": "If all pass, it replaces the highest bid, remembers the previous leader, and returns the result. Then the lock is released.",
+     "reveal": 0
+    },
+    {
+     "say": "Only now does the service call the listeners. That's the Observer pattern: listeners subscribe and get called back on a new high bid or an outbid. We call them outside the lock because an email or a push can take a second, and every other bidder would wait behind it. Worse, a listener that calls back into the listing could deadlock. The snapshot in BidResult means listeners never read a newer, unrelated value.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s009",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Fifty threads, one guitar",
+   "table": {
+    "head": [
+     "Check",
+     "Result"
+    ],
+    "rows": [
+     [
+      "Bids sent at once",
+      "50, from 50 threads"
+     ],
+     [
+      "Accepted",
+      "28 this run (varies)"
+     ],
+     [
+      "Final highest",
+      "650.00 by bidder49, every run"
+     ],
+     [
+      "History",
+      "Strictly rising by at least 10"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Here's the proof from the demo. Fifty threads bid on the guitar at the same moment.",
+     "reveal": 1
+    },
+    {
+     "say": "Twenty-eight were accepted in this run. That number changes run to run, because a bid that arrives after a higher one is now too low.",
+     "reveal": 2
+    },
+    {
+     "say": "But the final highest is always the maximum, six hundred fifty, by bidder forty-nine.",
+     "reveal": 3
+    },
+    {
+     "say": "And the history is always strictly rising by at least the increment. That rule, which must always be true, is called an invariant. The lock protects it.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s010",
+   "layout": "number",
+   "title": "Reserve price: checked only at close",
+   "big": "60 < reserve 500  =  unsold",
+   "caption": "The Pocket Watch closes with no sale; the reserve was never revealed",
+   "steps": [
+    {
+     "say": "Next, the reserve price. It's the seller's hidden minimum. Bids below it are still accepted, so bidders never learn the reserve. It's checked only at close.",
+     "reveal": 0
+    },
+    {
+     "say": "Example: Bob bid sixty on a Pocket Watch, and the reserve was five hundred. One hour later the watch closes. Sixty is below five hundred, so the reserve isn't met. The seller hears: Pocket Watch unsold.",
+     "reveal": 0
+    },
+    {
+     "say": "Why not reject bids below the reserve? Because that would reveal it. Anyone could probe with bids until one got through.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s011",
+   "layout": "diagram",
+   "title": "Auction lifecycle",
+   "mermaid": "stateDiagram-v2\n    [*] --> SCHEDULED : listing created\n    SCHEDULED --> ACTIVE : start time reached\n    SCHEDULED --> CANCELLED : seller withdraws\n    ACTIVE --> CANCELLED : withdraw with no bids\n    ACTIVE --> CLOSED : end time reached\n    CLOSED --> [*]\n    CANCELLED --> [*]",
+   "caption": "Activation is lazy; closing is idempotent",
+   "steps": [
+    {
+     "say": "The lifecycle is a small state machine. Scheduled, then active, then closed. Or cancelled, but only while nobody has bid. That protects bidders.",
+     "reveal": 0
+    },
+    {
+     "say": "Scheduled to active happens lazily. Every method first calls refresh with the current time. If the start time has passed, flip to active. No background thread just to flip a flag.",
+     "reveal": 0
+    },
+    {
+     "say": "Closing is done by a scheduler every few seconds. Each listing's close-if-due moves active to closed atomically and returns the winner only if the reserve is met. Run it twice and the second call returns nothing. That's idempotent, so a retry is harmless.",
+     "reveal": 0
+    },
+    {
+     "say": "And the end time is exclusive. A bid at exactly twelve o'clock on an auction ending at twelve o'clock is refused: auction ended. Even if the closing job runs late, it can't change the winner.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s012",
+   "layout": "bullets",
+   "title": "Three more choices",
+   "bullets": [
+    "Injected clock: InstantSource, ManualClock in tests",
+    "Specification search: each criterion is a Predicate",
+    "No Singleton: pass one service instance around"
+   ],
+   "steps": [
+    {
+     "say": "Three more choices. First, the injected clock. The listing never calls Instant dot now. It asks an InstantSource, Java's what-time-is-it interface. The demo passes a ManualClock and moves it forward one hour instead of sleeping. Time-dependent code becomes testable.",
+     "reveal": 1
+    },
+    {
+     "say": "Second, search uses the Specification pattern. Each criterion is a Predicate, a small yes-or-no function. Name contains watch, and price between zero and one hundred, combined with and. The demo returns just the Pocket Watch. A new filter is one new method, not one more parameter on a growing search method.",
+     "reveal": 2
+    },
+    {
+     "say": "Third, no Singleton. Some reference designs make the auction system a global Singleton. We create one instance and pass it in. Same sharing, but each test gets a fresh one. In the interview, say this: one lock per listing, refusals as values, notify after unlocking, time injected.",
+     "reveal": 3
+    }
+   ]
+  },
+  {
+   "id": "s013",
+   "layout": "section",
+   "kicker": "Part 2 of 5",
+   "title": "Design a Music Streaming Service",
+   "steps": [
+    {
+     "say": "Second, a music streaming service like Spotify. Users search a catalog, build playlists, and play songs with play, pause, skip, previous, seek, shuffle and repeat. Free and premium plans behave differently.",
+     "reveal": 0
+    },
+    {
+     "say": "The hook: you're on song two of a playlist. You turn shuffle on, then off. How does the player get the original order back, without losing the song you're hearing?",
+     "reveal": 0
+    }
+   ],
+   "caption": "Book: Ch 19 · Design a Music Streaming Service (Spotify)"
+  },
+  {
+   "id": "s014",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "The player: queue, order, cursor",
+   "table": {
+    "head": [
+     "Field",
+     "Road trip example"
+    ],
+    "rows": [
+     [
+      "queue",
+      "0 Bohemian, 1 Blue in Green, 2 So What, 3 Hello, 4 Love of My Life"
+     ],
+     [
+      "order",
+      "indexes into the queue: 0 1 2 3 4"
+     ],
+     [
+      "cursor",
+      "position in order: 1 (Blue in Green)"
+     ],
+     [
+      "state, repeat",
+      "PLAYING; repeat OFF / ALL / ONE"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Here's the trick. The player holds three things. First, the queue: the songs, in playlist order. Our Road trip playlist has five songs, numbered zero to four. The queue never changes.",
+     "reveal": 1
+    },
+    {
+     "say": "Second, the order: a list of indexes into the queue. Played in sequence, it's zero, one, two, three, four.",
+     "reveal": 2
+    },
+    {
+     "say": "Third, the cursor: where we are in the order. Cursor one means index one, Blue in Green.",
+     "reveal": 3
+    },
+    {
+     "say": "Plus a state and a repeat mode. Next just moves the cursor. Previous walks it back, so in shuffle, previous is the song you actually heard before.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s015",
+   "layout": "twocol",
+   "title": "Play order is a Strategy",
+   "left": {
+    "heading": "SequentialOrder",
+    "bullets": [
+     "Start at the current song",
+     "Rest in playlist order",
+     "From 1: 1 2 3 4 0"
+    ]
+   },
+   "right": {
+    "heading": "ShuffleOrder(seed)",
+    "bullets": [
+     "Current song stays first",
+     "Shuffle the rest",
+     "From 1: 1 4 2 0 3"
+    ]
+   },
+   "steps": [
+    {
+     "say": "How is the order built? By a strategy. Strategy puts each interchangeable algorithm behind one interface. Here the interface is PlaybackOrder, with one method: give me an order of this many songs, starting with this one. Sequential order starts at the current song.",
+     "reveal": 1
+    },
+    {
+     "say": "And keeps the rest in playlist order.",
+     "reveal": 2
+    },
+    {
+     "say": "So starting from Blue in Green, index one, you get one, two, three, four, zero.",
+     "reveal": 3
+    },
+    {
+     "say": "Shuffle order also keeps the current song first. Blue in Green keeps playing.",
+     "reveal": 4
+    },
+    {
+     "say": "Then it shuffles the rest.",
+     "reveal": 5
+    },
+    {
+     "say": "In the demo, up next becomes Love of My Life, So What, Bohemian Rhapsody, Hello. That's indexes four, two, zero, three. Turn shuffle off and sequential rebuilds from the current song. The queue never moved, so nothing is lost. And because shuffle is a permutation, every song once, no song repeats before all have played.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s016",
+   "layout": "bullets",
+   "title": "Why the strategy pays off",
+   "bullets": [
+    "Seeded Random: same shuffle every test run",
+    "Smart shuffle: new class, player unchanged",
+    "No if-shuffle-else spread through the player"
+   ],
+   "steps": [
+    {
+     "say": "Two more details. Shuffle uses a Random built with a seed, forty-two in the demo. A seed makes the random sequence repeatable, so the demo prints the same order every run and tests can assert it. Production uses a fresh seed per session.",
+     "reveal": 1
+    },
+    {
+     "say": "Here's the real-world payoff. Spotify's engineers wrote that a truly random shuffle felt non-random when the same artist came up twice in a row. So they spread artists apart. In our design that's one new class, an artist-spread shuffle. The player doesn't change.",
+     "reveal": 2
+    },
+    {
+     "say": "The alternative is an if shuffle else branch inside skip, previous and wrap-around. Three places to forget.",
+     "reveal": 3
+    }
+   ]
+  },
+  {
+   "id": "s017",
+   "layout": "table",
+   "title": "Song ends or user presses Next",
+   "caption": "Repeat ONE only applies when a song ends naturally",
+   "steps": [
+    {
+     "say": "When a song ends or you press next, the player checks a few cases in order. First: did the song end naturally with repeat one on? Then replay it. In the demo, Bohemian Rhapsody plays twice.",
+     "reveal": 1
+    },
+    {
+     "say": "Pressing next on repeat one moves on anyway. Repeat one only affects songs that end naturally. Real players work that way.",
+     "reveal": 2
+    },
+    {
+     "say": "Otherwise, if there are more songs in the order, move the cursor forward by one and play.",
+     "reveal": 3
+    },
+    {
+     "say": "If we are at the end and repeat is all, or one, build a new order, reshuffled if shuffling, and start again from the top.",
+     "reveal": 4
+    },
+    {
+     "say": "If repeat is off, stop. End of queue.",
+     "reveal": 5
+    },
+    {
+     "say": "The player's state is just an enum: stopped, playing, paused. Why not the State pattern, one class per state? Because these three states have almost no distinct behaviour. The pattern would add classes for nothing.",
+     "reveal": 5
+    }
+   ],
+   "table": {
+    "head": [
+     "Situation",
+     "What the player does"
+    ],
+    "rows": [
+     [
+      "Song ends naturally, repeat ONE",
+      "Replay the same song"
+     ],
+     [
+      "User presses Next, repeat ONE",
+      "Move on anyway"
+     ],
+     [
+      "More songs left in the order",
+      "Cursor plus 1, play next"
+     ],
+     [
+      "End of order, repeat ALL or ONE",
+      "New order, reshuffle if shuffling"
+     ],
+     [
+      "End of order, repeat OFF",
+      "STOPPED: end of queue"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "s018",
+   "layout": "table",
+   "title": "Plan rules live in the plan enum",
+   "table": {
+    "head": [
+     "Plan",
+     "Price",
+     "Skips per hour",
+     "Ads",
+     "Offline"
+    ],
+    "rows": [
+     [
+      "FREE",
+      "0.00",
+      "6",
+      "yes",
+      "no"
+     ],
+     [
+      "PREMIUM",
+      "10.99",
+      "unlimited",
+      "no",
+      "yes"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Next, subscriptions. The SubscriptionPlan enum carries its own rules. Free: zero dollars, six skips per hour, ads, no downloads.",
+     "reveal": 1
+    },
+    {
+     "say": "Premium: ten ninety-nine a month, unlimited skips, no ads, offline downloads. The player asks user dot plan dot skips per hour. There's no if plan equals free scattered around. A new plan is one new enum constant.",
+     "reveal": 2
+    }
+   ]
+  },
+  {
+   "id": "s019",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Six skips in a rolling hour",
+   "table": {
+    "head": [
+     "Event",
+     "Skip times kept",
+     "Result"
+    ],
+    "rows": [
+     [
+      "Skips 1 to 6 within the hour",
+      "6",
+      "allowed"
+     ],
+     [
+      "Skip 7, same hour",
+      "6, limit reached",
+      "refused"
+     ],
+     [
+      "Ads on FREE",
+      "every 3 songs",
+      "30-second ad"
+     ],
+     [
+      "Upgrade to PREMIUM",
+      "limit unlimited",
+      "skips work, no ads"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's see the skip limit. The player keeps a deque, a queue you can use at both ends, of skip times. On each skip it drops times older than one hour. That's a rolling hour, always the last sixty minutes. The first six skips are allowed.",
+     "reveal": 1
+    },
+    {
+     "say": "On the seventh, the deque still holds six recent times. Six reaches the limit, so the player prints: skip limit reached on free plan.",
+     "reveal": 2
+    },
+    {
+     "say": "Ads work the same way. The player asks the plan whether ads apply, and on free plays a thirty-second ad every three songs.",
+     "reveal": 3
+    },
+    {
+     "say": "Then the user upgrades and is charged ten ninety-nine. The next skip reads the new plan and works. The plan field is volatile, so every thread sees the change.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s020",
+   "layout": "bullets",
+   "title": "Plays, recommendations, two devices",
+   "bullets": [
+    "Observer: PlaybackListener on song started",
+    "History, royalties, recommendations subscribe",
+    "Recommender Strategy: GenreRecommender today",
+    "One synchronized MusicPlayer per user session"
+   ],
+   "steps": [
+    {
+     "say": "Three last pieces. When a song starts, the player notifies PlaybackListeners. That's Observer for plays.",
+     "reveal": 1
+    },
+    {
+     "say": "History, royalty counting and recommendations each subscribe. The player doesn't know any of them.",
+     "reveal": 2
+    },
+    {
+     "say": "Recommendations are a Recommender strategy. Today it's genre-based: count the user's plays per genre and suggest songs they haven't heard from their top genres. After thirteen plays, the demo suggests You're My Best Friend, All Blues and When We Were Young. Tomorrow, swap in collaborative filtering: people who liked what you like also liked this.",
+     "reveal": 3
+    },
+    {
+     "say": "Finally, one MusicPlayer per user session, with every public method synchronized. Your phone and laptop can both press next at the same instant. The two skips simply apply one after the other. In the interview, say: queue plus order plus cursor, order from a strategy, plan rules in the enum.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s021",
+   "layout": "section",
+   "kicker": "Part 3 of 5",
+   "title": "Design Food Delivery: Swiggy and FoodKart",
+   "steps": [
+    {
+     "say": "Third, food delivery, like Swiggy or Zomato. Customers browse restaurants, fill a cart, pay, and track the order. Restaurants cook. Riders deliver.",
+     "reveal": 0
+    },
+    {
+     "say": "The hook: two orders are ready at the same second and only one rider is free. How do you make sure that rider gets exactly one order, and the other order isn't lost?",
+     "reveal": 0
+    }
+   ],
+   "caption": "Book: Ch 19 · Design an Online Food Delivery Service"
+  },
+  {
+   "id": "s022",
+   "layout": "table",
+   "title": "Clarify, then the cart",
+   "table": {
+    "head": [
+     "Question",
+     "Our answer"
+    ],
+    "rows": [
+     [
+      "Mix restaurants in a cart?",
+      "No: one restaurant per cart"
+     ],
+     [
+      "Who confirms?",
+      "The restaurant; may refuse if kitchen full"
+     ],
+     [
+      "How is a rider chosen?",
+      "A strategy: nearest, or fair share"
+     ],
+     [
+      "No rider free?",
+      "Order waits in a queue"
+     ],
+     [
+      "Cancel when?",
+      "Only PENDING or CONFIRMED"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Questions first. Can one cart mix restaurants? No. One restaurant per cart, as in the real apps. One kitchen, one pickup, one fee. In the demo, Asha has dosa in her cart and adds pizza. The cart refuses: cart has items from Dosa Corner, clear it first.",
+     "reveal": 1
+    },
+    {
+     "say": "Who confirms an order? The restaurant. It may refuse if its kitchen is full.",
+     "reveal": 2
+    },
+    {
+     "say": "How is a rider chosen? By a strategy: nearest to the restaurant, or fair share, fewest deliveries today.",
+     "reveal": 3
+    },
+    {
+     "say": "No rider free? Normal at peak. The order waits in a queue.",
+     "reveal": 4
+    },
+    {
+     "say": "And the customer can cancel only before cooking starts.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s023",
+   "layout": "number",
+   "title": "Copy the price into the order",
+   "big": "280.00 + (20 + 8 x 1.4 km) = 311.20",
+   "caption": "Raising the dosa price afterwards leaves the order at 311.20",
+   "steps": [
+    {
+     "say": "When Asha places her order, each OrderItem copies the item's name and its price at that moment. The delivery fee is twenty plus eight per kilometre. Dosa Corner is one point four kilometres away, so the fee is thirty-one twenty. Subtotal two hundred eighty, total three hundred eleven twenty.",
+     "reveal": 0
+    },
+    {
+     "say": "Then the restaurant raises the dosa price. Her order still says three hundred eleven twenty. That's the price copy, rule four.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s024",
+   "layout": "diagram",
+   "title": "OrderStatus state machine",
+   "mermaid": "stateDiagram-v2\n    [*] --> PENDING : placed\n    PENDING --> CONFIRMED : accepted, kitchen reserved\n    PENDING --> CANCELLED : kitchen full or customer\n    CONFIRMED --> PREPARING : cooking starts\n    CONFIRMED --> CANCELLED : customer, slots released\n    PREPARING --> READY_FOR_PICKUP : slots released\n    READY_FOR_PICKUP --> OUT_FOR_DELIVERY : rider picks up\n    OUT_FOR_DELIVERY --> DELIVERED",
+   "caption": "Each status knows its legal next states",
+   "steps": [
+    {
+     "say": "The order moves through the OrderStatus state machine. Pending when placed. Confirmed when the restaurant accepts. Preparing when cooking starts. Ready for pickup. Out for delivery. Delivered.",
+     "reveal": 0
+    },
+    {
+     "say": "Cancelled is reachable only from pending or confirmed. Once cooking starts, the food cost is spent. In the demo, cancelling an order that's out for delivery returns false. Cancelling a confirmed card order returns true and refunds six hundred fifty-one sixty.",
+     "reveal": 0
+    },
+    {
+     "say": "The legal moves live inside the enum, in a can-move-to method. Every transition goes through it, so an illegal move throws instead of quietly corrupting data.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s025",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Kitchen capacity at Dosa Corner",
+   "table": {
+    "head": [
+     "Step",
+     "Items cooking",
+     "Result"
+    ],
+    "rows": [
+     [
+      "Capacity",
+      "0 of 4",
+      "empty kitchen"
+     ],
+     [
+      "Vikram's order, 3 items, accepted",
+      "3 of 4",
+      "CONFIRMED"
+     ],
+     [
+      "Asha's card order, 2 items",
+      "needs 2, free 1",
+      "CANCELLED, refund 111.20"
+     ],
+     [
+      "Vikram's food ready",
+      "0 of 4",
+      "slots released"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Now kitchen capacity. A restaurant can only cook so many items at once. Dosa Corner holds four.",
+     "reveal": 1
+    },
+    {
+     "say": "Vikram's order of three items arrives. The restaurant's try-reserve-kitchen method checks, three fits in four, and adds three, all in one synchronized step. Confirmed.",
+     "reveal": 2
+    },
+    {
+     "say": "Asha's card order needs two slots, but only one is free. Refused. The order is auto-cancelled and her one hundred eleven twenty is refunded, through the same refund path as a customer cancel.",
+     "reveal": 3
+    },
+    {
+     "say": "When is capacity freed? When the food is ready, not when it's delivered. The kitchen is free once the food leaves it. Delivery time is the rider's problem. Accept and cancel both lock the order, so slots can't leak or be released twice.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s026",
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "Two dispatchers see Ravi free. What stops double booking?",
+   "bullets": [
+    "A: Check isAvailable() then set it false",
+    "B: AtomicBoolean.compareAndSet(true, false)",
+    "C: Assign whichever order is cheaper",
+    "D: Nothing; riders can carry two orders"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. Two dispatchers both see Ravi as free and both try to give him an order. What stops a double booking? A, check is-available, then set it false. B, compare-and-set on an atomic boolean. C, pick the cheaper order. D, nothing. Pause and pick.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s027",
+   "layout": "diagram",
+   "title": "Food ready: rank, claim, or wait",
+   "mermaid": "sequenceDiagram\n    participant R as Restaurant\n    participant S as Service\n    participant Q as Waiting queue\n    participant St as Strategy\n    participant A as Rider\n    R->>S: foodReady(order)\n    S->>Q: add(order)\n    S->>St: rank(order, free riders)\n    St-->>S: riders in preference order\n    S->>A: tryClaim() CAS true to false\n    A-->>S: won, or try the next rider\n    S->>Q: poll, OUT_FOR_DELIVERY",
+   "caption": "If nobody can be claimed, the order stays queued",
+   "steps": [
+    {
+     "say": "The answer is B. Option A is two steps, so both dispatchers can check true before either sets false. Compare-and-set, C-A-S for short, does it in one atomic step: set to false only if it's still true. Exactly one caller wins.",
+     "reveal": 0
+    },
+    {
+     "say": "Follow the flow. Food is ready. The service releases the kitchen slots and adds the order to a first-in, first-out waiting queue.",
+     "reveal": 0
+    },
+    {
+     "say": "It asks the assignment strategy to rank the free riders. Notice it returns a ranked list, not one rider. Between ranking and claiming, the top rider might be grabbed by someone else. With a list, the service just tries the next one.",
+     "reveal": 0
+    },
+    {
+     "say": "It calls try-claim on each rider in order until one compare-and-set succeeds. Then it polls the order off the queue, assigns the rider, and moves to out for delivery. If no rider can be claimed, the order keeps waiting. The rider guards itself, so even a future rider-accepts button stays safe.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s028",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Waiting queue and fair share",
+   "table": {
+    "head": [
+     "Moment",
+     "What happens"
+    ],
+    "rows": [
+     [
+      "OD102 ready, Meena free",
+      "Meena claimed, out for delivery"
+     ],
+     [
+      "OD104 ready, Ravi still out",
+      "OD104 waits in the queue"
+     ],
+     [
+      "OD101 delivered",
+      "Ravi freed; dispatch reruns; Ravi takes OD104"
+     ],
+     [
+      "Switch to fair share",
+      "Ravi has 2 today, Meena 1"
+     ],
+     [
+      "OD106 ready",
+      "Meena chosen: fewer deliveries"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's walk the demo. Order one-oh-two is ready. Meena is free, so she's claimed.",
+     "reveal": 1
+    },
+    {
+     "say": "Order one-oh-four is ready at Pizza Hub, but Ravi is still out with order one-oh-one. Nobody to claim. It prints: waiting for a free rider.",
+     "reveal": 2
+    },
+    {
+     "say": "Ravi delivers one-oh-one. Delivering frees the rider and reruns dispatch. The oldest waiting order, one-oh-four, gets Ravi. No order lost.",
+     "reveal": 3
+    },
+    {
+     "say": "Then we swap the strategy at run time to fair share. Both riders are now at the same spot. Ravi has two deliveries today, Meena one.",
+     "reveal": 4
+    },
+    {
+     "say": "Order one-oh-six is ready. Nearest would be a tie, but fair share picks Meena, fewer deliveries. Same service, different strategy.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s029",
+   "layout": "bullets",
+   "title": "Payments and notifications",
+   "bullets": [
+    "Sealed PaymentMethod: UPI, Card, CashOnDelivery",
+    "COD overrides paidUpfront() to false: no refund",
+    "OrderListener: customer, restaurant, rider apps"
+   ],
+   "steps": [
+    {
+     "say": "Payments are a sealed interface. Sealed means it lists exactly which types may implement it: U-P-I, India's instant bank payment, card, and cash on delivery. The compiler knows every kind.",
+     "reveal": 1
+    },
+    {
+     "say": "Each has a paid-upfront method that defaults to true. Cash on delivery overrides it to false, so a cancelled C-O-D order skips the refund. Nothing was paid.",
+     "reveal": 2
+    },
+    {
+     "say": "Every status change goes through one transition method that notifies each OrderListener. Observer again. The customer app, the restaurant tablet and the rider app all react to the same events.",
+     "reveal": 3
+    }
+   ]
+  },
+  {
+   "id": "s030",
+   "layout": "table",
+   "title": "FoodKart: the machine-coding version",
+   "table": {
+    "head": [
+     "Command",
+     "Key rule"
+    ],
+    "rows": [
+     [
+      "register_restaurant",
+      "One dish, many pincodes; owner = logged-in user"
+     ],
+     [
+      "show_restaurant(price)",
+      "Serviceable only; sorted descending"
+     ],
+     [
+      "place_order(name, qty)",
+      "take(qty): check and subtract, synchronized"
+     ],
+     [
+      "place_order(qty, strategy)",
+      "Filter capacity, strategy picks, retry"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "FoodKart is Flipkart's ninety-minute machine-coding version. It's command-driven. A restaurant serves one dish to many pincodes, Indian postal codes, and it's owned by whoever was logged in when it was registered. Only that owner can update quantity or location.",
+     "reveal": 1
+    },
+    {
+     "say": "Show restaurant lists only serviceable ones, those that deliver to my pincode and have quantity left, sorted descending, as the statement says. So Burger at one twenty comes before Thali at one hundred. A SortBy enum holds each comparator.",
+     "reveal": 2
+    },
+    {
+     "say": "Place order calls the restaurant's take method: check quantity, then subtract, in one synchronized step. Order Food Court-2 for seven when it has fewer, and you get: cannot place order.",
+     "reveal": 3
+    },
+    {
+     "say": "The variant lets the system pick. Filter restaurants that deliver here and have enough plates, ask the selection strategy, highest rating or lowest price, then take. For four plates, highest rating picks Food Court-2, lowest price picks Food Court-4. If a racer took the plates in between, drop that restaurant and ask again, at most three tries.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s031",
+   "layout": "section",
+   "kicker": "Part 4 of 5",
+   "title": "Design a Grocery Store POS",
+   "steps": [
+    {
+     "say": "Fourth, a grocery till. The cashier scans items, produce is weighed, offers apply, the customer pays, a receipt prints, and stock goes down. Prices are tax-inclusive Indian rupees.",
+     "reveal": 0
+    },
+    {
+     "say": "The hook: chips qualify for two offers, the basket has a coupon, and three items have different tax rates. Later the customer returns one bag of chips. How much do you refund, exactly?",
+     "reveal": 0
+    }
+   ],
+   "caption": "Book: Ch 19 · Design a Grocery Store (POS & Checkout)"
+  },
+  {
+   "id": "s032",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "The basket on lane one",
+   "table": {
+    "head": [
+     "Item",
+     "How priced",
+     "Gross"
+    ],
+    "rows": [
+     [
+      "Bananas",
+      "1.245 kg at 60 per kg",
+      "74.70"
+     ],
+     [
+      "Tomatoes",
+      "0.500 kg at 40 per kg",
+      "20.00"
+     ],
+     [
+      "Milk, Paneer",
+      "68 + 90 (a second milk is VOID)",
+      "158.00"
+     ],
+     [
+      "Chips",
+      "3 at 20",
+      "60.00"
+     ],
+     [
+      "Biscuits",
+      "4 at 30",
+      "120.00"
+     ],
+     [
+      "Detergent",
+      "1 at 245",
+      "245.00"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Here's our running basket from the demo, rupee amounts. Bananas are loose produce: a four-digit P-L-U, price look-up, code plus the scale's weight. One point two four five kilos at sixty per kilo is seventy-four seventy.",
+     "reveal": 1
+    },
+    {
+     "say": "Tomatoes: half a kilo at forty, twenty rupees.",
+     "reveal": 2
+    },
+    {
+     "say": "Milk sixty-eight and paneer ninety. A second milk was scanned by mistake and voided. It stays on the receipt marked void, for the audit trail.",
+     "reveal": 3
+    },
+    {
+     "say": "Three bags of chips at twenty: sixty.",
+     "reveal": 4
+    },
+    {
+     "say": "Four packs of biscuits at thirty: one hundred twenty.",
+     "reveal": 5
+    },
+    {
+     "say": "And detergent, two forty-five. Gross: six hundred seventy-seven seventy. Every line copied its price at scan time.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s033",
+   "layout": "diagram",
+   "title": "How one basket is priced",
+   "mermaid": "flowchart TD\n    A[\"Active lines, voids skipped\"] --> B[\"Group by SKU\"]\n    B --> C[\"Best item offer per SKU\"]\n    C --> D[\"Net = gross - item discount\"]\n    D --> E[\"Best basket coupon on sum of nets\"]\n    E --> F[\"Spread coupon over SKUs\"]\n    F --> G[\"Tax per category\"]\n    G --> H[\"Total\"]",
+   "caption": "PricingEngine.price: a pure function of lines and coupons",
+   "steps": [
+    {
+     "say": "This is the hard method, the pricing engine. Step one: skip voided lines and group by S-K-U, the store's id for one product.",
+     "reveal": 0
+    },
+    {
+     "say": "Step two: for each S-K-U, ask every item offer for a discount and keep only the best. Each offer is a Strategy class: buy X get Y free, multi-buy, percent off a department. A new offer is one new class.",
+     "reveal": 0
+    },
+    {
+     "say": "Step three: net equals gross minus that discount. Step four: apply the best basket coupon to the sum of nets. Step five: spread the coupon across the products. Step six: tax per category. Step seven: total.",
+     "reveal": 0
+    },
+    {
+     "say": "The engine is a pure function. Its result depends only on its inputs, and it changes nothing outside itself. Same basket, same price, every time. One engine is shared by every register, and returns can reproduce the price later.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s034",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Best offer per SKU, then the coupon",
+   "table": {
+    "head": [
+     "Product",
+     "Offers that match",
+     "Applied"
+    ],
+    "rows": [
+     [
+      "Chips, 3 x 20",
+      "Buy 2 get 1: -20; 3 for 50: -10",
+      "-20.00"
+     ],
+     [
+      "Biscuits, 4 x 30",
+      "3 for 80",
+      "-10.00"
+     ],
+     [
+      "Bananas, Tomatoes",
+      "10% off PRODUCE",
+      "-7.47, -2.00"
+     ],
+     [
+      "Basket after offers",
+      "SAVE50: 50 off over 500",
+      "-50.00"
+     ],
+     [
+      "Total due",
+      "",
+      "588.23"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's apply it. Chips match two offers. Buy two get one free saves twenty. Three for fifty saves ten. Only the best is applied: minus twenty. Applying both would give away thirty, and stacked offers can even push a price below zero.",
+     "reveal": 1
+    },
+    {
+     "say": "Biscuits: three for eighty instead of ninety saves ten.",
+     "reveal": 2
+    },
+    {
+     "say": "Ten percent off produce: seven forty-seven off bananas and two off tomatoes.",
+     "reveal": 3
+    },
+    {
+     "say": "After item offers the basket is still over five hundred, so coupon SAVE fifty takes fifty off.",
+     "reveal": 4
+    },
+    {
+     "say": "Total due: five hundred eighty-eight twenty-three. Inside it, eight seventy-eight of five percent tax and forty oh seven of eighteen percent tax.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s035",
+   "layout": "number",
+   "title": "Spread the coupon, remainder to the largest",
+   "big": "share = coupon x net(SKU) / sum of nets",
+   "caption": "Rounded shares always add back to exactly 50.00",
+   "steps": [
+    {
+     "say": "Why spread the coupon? Tax differs by category, and a return must refund what that item really cost. So every rupee of discount must belong to some product.",
+     "reveal": 0
+    },
+    {
+     "say": "Each product's share is the coupon times its net, divided by the total net. Detergent, the biggest net, takes the biggest share. Chips, with a net of forty, take about three rupees thirteen.",
+     "reveal": 0
+    },
+    {
+     "say": "Each share is rounded to two decimals, so the parts might add up to forty-nine ninety-nine. The engine gives the leftover paisa to the largest product. The parts always sum to exactly fifty.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s036",
+   "layout": "twocol",
+   "title": "Tax is a Strategy too",
+   "left": {
+    "heading": "TaxInclusive (India, EU)",
+    "bullets": [
+     "Price already contains tax",
+     "tax = amount x r / (100 + r)",
+     "Total 588.23"
+    ]
+   },
+   "right": {
+    "heading": "TaxExclusive (US)",
+    "bullets": [
+     "Tax added at the till",
+     "tax = amount x r / 100",
+     "Total 644.73"
+    ]
+   },
+   "steps": [
+    {
+     "say": "How tax relates to the price is a TaxPolicy strategy. Inclusive, as in India: the shelf price already contains the tax.",
+     "reveal": 1
+    },
+    {
+     "say": "Tax is the amount times the rate, over one hundred plus the rate.",
+     "reveal": 2
+    },
+    {
+     "say": "Our total stays five eighty-eight twenty-three, and the receipt just shows the tax inside it.",
+     "reveal": 3
+    },
+    {
+     "say": "Exclusive, US style: tax goes on top.",
+     "reveal": 4
+    },
+    {
+     "say": "Tax is the amount times the rate, over one hundred.",
+     "reveal": 5
+    },
+    {
+     "say": "Same basket: six hundred forty-four seventy-three. One engine, two policies.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s037",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Freeze, then split tender",
+   "table": {
+    "head": [
+     "Payment",
+     "Result",
+     "Still due"
+    ],
+    "rows": [
+     [
+      "total()",
+      "Prices frozen; OPEN to TENDERING",
+      "588.23"
+     ],
+     [
+      "Card 300",
+      "Declined: nothing recorded",
+      "588.23"
+     ],
+     [
+      "Card or UPI over 588.23",
+      "Refused: over the amount due",
+      "588.23"
+     ],
+     [
+      "UPI 400",
+      "Authorised",
+      "188.23"
+     ],
+     [
+      "Cash 500",
+      "COMPLETED; change 311.77",
+      "0.00"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Now paying. Pressing total freezes the price breakdown and moves the sale from open to tendering. A reprice or an expiring offer can't change the amount due mid-payment. Trying to scan now fails.",
+     "reveal": 1
+    },
+    {
+     "say": "The customer tries a card for three hundred. The gateway declines it. That throws before anything is recorded, so nothing changes.",
+     "reveal": 2
+    },
+    {
+     "say": "Card and U-P-I may never exceed the amount due. An oversized U-P-I amount is refused.",
+     "reveal": 3
+    },
+    {
+     "say": "U-P-I for four hundred is authorised. One eighty-eight twenty-three still due.",
+     "reveal": 4
+    },
+    {
+     "say": "Cash five hundred. Only cash may exceed the due, and the extra becomes change: three eleven seventy-seven. The sale completes, the receipt is written, stock goes down. Tenders are a sealed interface, cash, card, U-P-I, so the receipt printer's switch is checked by the compiler.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s038",
+   "layout": "bullets",
+   "title": "Facade, frozen receipt, sale states",
+   "bullets": [
+    "Register: the only API the till UI calls",
+    "Sale: OPEN, TENDERING, COMPLETED or CANCELLED",
+    "Back to scanning only if nothing paid",
+    "Cancel reverses every card and UPI payment",
+    "Receipt is an immutable record, stored"
+   ],
+   "steps": [
+    {
+     "say": "The till's screen calls just one class: Register. That's the Facade pattern, one simple class hiding the catalog, pricing engine, inventory, receipt store and payment gateway. Scan, weigh, void, coupon, total, pay, cancel, refund.",
+     "reveal": 1
+    },
+    {
+     "say": "Behind it, one Sale moves through an enum state machine: open, tendering, completed, or cancelled.",
+     "reveal": 2
+    },
+    {
+     "say": "From tendering you can go back to scanning, but only if no payment was taken. Otherwise: payments already taken, cancel them first.",
+     "reveal": 3
+    },
+    {
+     "say": "Cancelling reverses every non-cash payment through the gateway. The demo prints: reversed one hundred rupees.",
+     "reveal": 4
+    },
+    {
+     "say": "And the receipt is an immutable record. Lines, discounts, tax breakdown, tenders and change are frozen forever. That's what returns are priced from.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s039",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Returns refund what was really paid",
+   "table": {
+    "head": [
+     "Return",
+     "Refund"
+    ],
+    "rows": [
+     [
+      "Chips net paid, after offer and coupon",
+      "36.87 for 3 bags"
+     ],
+     [
+      "Return 1 bag",
+      "share(1) - share(0) = 12.29"
+     ],
+     [
+      "Return 2 more",
+      "share(3) - share(1) = 24.58"
+     ],
+     [
+      "Total refunded",
+      "36.87, exactly what was paid"
+     ],
+     [
+      "Try a fourth bag",
+      "Refused: 0 left to return"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Finally, returns. Think of a return as a negative line priced from the receipt, never from the shelf. The chips cost sixty on the shelf, but after the offer and their share of the coupon, the customer paid thirty-six eighty-seven for three bags.",
+     "reveal": 1
+    },
+    {
+     "say": "Return one bag. The refund is the share for the first one unit minus the share for zero: twelve twenty-nine. Not twenty.",
+     "reveal": 2
+    },
+    {
+     "say": "Return two more. Share of three minus share of one: twenty-four fifty-eight.",
+     "reveal": 3
+    },
+    {
+     "say": "Together, thirty-six eighty-seven. Taking differences of running shares means rounding never makes refunds add up to more or less than was paid.",
+     "reveal": 4
+    },
+    {
+     "say": "Try a fourth: refused, zero left to return. The receipt store checks and records returns with one atomic compute call, so two service desks can't refund the same bag. Stock goes back up by the returned quantity.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s040",
+   "layout": "bullets",
+   "title": "Stock: never block a real sale",
+   "bullets": [
+    "Inventory.adjust: atomic merge per SKU",
+    "Stock may go negative: the count is wrong",
+    "Edge-triggered alerts: once per crossing"
+   ],
+   "steps": [
+    {
+     "say": "Last, stock. Four registers sell paneer at once. Inventory adjust uses a concurrent map's merge, atomic per product, so no update is lost.",
+     "reveal": 1
+    },
+    {
+     "say": "Stock was ninety-nine. Four registers sell thirty each, so it ends at minus twenty-one. The till never refuses an item the customer is holding. If the count says zero, the count is wrong.",
+     "reveal": 2
+    },
+    {
+     "say": "Alerts are edge-triggered. The inventory compares the value before and after this one change, and alerts only when that change crosses the line. Low, reorder fired once at twenty. Negative, recount the shelf fired once at minus one. No alert spam.",
+     "reveal": 3
+    }
+   ]
+  },
+  {
+   "id": "s041",
+   "layout": "table",
+   "kicker": "Part 5 of 5",
+   "title": "Chapter summary",
+   "table": {
+    "head": [
+     "Problem",
+     "The move that solves it"
+    ],
+    "rows": [
+     [
+      "Amazon",
+      "Atomic stock reservation; order state machine"
+     ],
+     [
+      "Brokerage, exchange",
+      "Price then time; one lock per symbol"
+     ],
+     [
+      "Auction",
+      "Bid rules in one per-listing lock; notify after"
+     ],
+     [
+      "Music streaming",
+      "Order = permutation of indexes; plan enum"
+     ],
+     [
+      "Food, FoodKart",
+      "Reserve kitchen; CAS-claim riders; strategies"
+     ],
+     [
+      "Grocery POS",
+      "Pure pricing; frozen price; atomic returns"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Here's the chapter in one table.",
+     "reveal": 0
+    },
+    {
+     "say": "Let's zoom out over the whole chapter. Amazon, last episode: all-or-nothing stock reservation and an order state machine.",
+     "reveal": 1
+    },
+    {
+     "say": "The brokerage and stock exchange: match by price, then time, with one lock per stock symbol.",
+     "reveal": 2
+    },
+    {
+     "say": "Today's auction: all bid rules in one per-listing critical section, and notify after unlocking.",
+     "reveal": 3
+    },
+    {
+     "say": "Music streaming: the play order is a strategy-made permutation of indexes, and plan rules live in the enum.",
+     "reveal": 4
+    },
+    {
+     "say": "Food delivery and FoodKart: reserve kitchen slots atomically, claim riders with compare-and-set, choose with strategies.",
+     "reveal": 5
+    },
+    {
+     "say": "Grocery: a pure pricing engine with best offer per product and a spread coupon, a price frozen at total, and atomic return claims.",
+     "reveal": 6
+    }
+   ],
+   "caption": "Book: Ch 19 · Chapter summary"
+  },
+  {
+   "id": "s042",
+   "layout": "number",
+   "title": "One rule kept coming back",
+   "big": "check-then-act = one atomic step",
+   "caption": "A lock, or a compare-and-set",
+   "steps": [
+    {
+     "say": "The patterns that kept coming back: Strategy for payments, play order, rider assignment, restaurant selection, offers and tax. Observer for notifications and plays. State machines in enums. And a Facade in front of every service.",
+     "reveal": 0
+    },
+    {
+     "say": "And one concurrency rule above all: make check-then-act atomic. The auction does it with a lock per listing. The rider does it with compare-and-set. The kitchen, FoodKart's take, and the receipt store do it with a synchronized method or an atomic map call.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s043",
+   "layout": "recap",
+   "kicker": "Episode 24 recap",
+   "title": "Recap",
+   "bullets": [
+    "Auction: per-listing lock, BidOutcome, notify after",
+    "Increment, hidden reserve, injected clock, Specification",
+    "Music: queue + order Strategy + cursor; plan enum",
+    "Food: one-restaurant cart, kitchen slots, CAS riders",
+    "Grocery: pure pricing, coupon spread, frozen price",
+    "Returns = net paid; stock may go negative"
+   ],
+   "steps": [
+    {
+     "say": "Let's recap. Auction: bid rules run under the listing's own lock, refusals return a BidOutcome with the next minimum, and listeners are called after unlocking.",
+     "reveal": 1
+    },
+    {
+     "say": "Minimum increment stops penny wars, the reserve is checked only at close, time comes from an injected clock, search uses Specification predicates, and there's no Singleton.",
+     "reveal": 2
+    },
+    {
+     "say": "Music: queue plus order plus cursor. Play order is a strategy with a seeded random, plan rules live in the enum, plays go to observers, recommendations are a strategy.",
+     "reveal": 3
+    },
+    {
+     "say": "Food delivery: one restaurant per cart, copied prices, an OrderStatus state machine, kitchen capacity reserved on accept, riders ranked by a strategy and claimed with compare-and-set, and a waiting queue.",
+     "reveal": 4
+    },
+    {
+     "say": "Grocery: a pure pricing engine, best offer per product, the coupon spread exactly, tax as a strategy, frozen prices, sealed tenders, a Register facade.",
+     "reveal": 5
+    },
+    {
+     "say": "Returns refund the net paid as differences of shares, claimed atomically. Stock may go negative with edge-triggered alerts.",
+     "reveal": 6
+    },
+    {
+     "say": "Next time, episode twenty-five: Components, Splitwise, Notifications and Cache. We'll split bills fairly, send messages over many channels, and build a cache with eviction policies. See you there.",
+     "reveal": 6
+    }
+   ]
+  }
+ ]
+}

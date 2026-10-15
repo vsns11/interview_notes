@@ -1,0 +1,1630 @@
+{
+  "series": "System Design Workshop",
+  "episode": 22,
+  "title": "Case Studies: Location and Real-Time",
+  "subtitle": "Proximity, nearby friends, maps and navigation, gaming leaderboard",
+  "scenes": [
+    {
+      "layout": "title",
+      "title": "Case Studies: Location and Real-Time",
+      "subtitle": "Proximity, nearby friends, maps and navigation, gaming leaderboard",
+      "steps": [
+        {
+          "say": "Welcome to episode twenty-two of the System Design Workshop: Case Studies, Location and Real-Time.",
+          "reveal": 0
+        },
+        {
+          "say": "Today we design four systems that all ask one of two questions. What is near me? And what is changing right now? A restaurant finder, a nearby friends feature, a maps app with navigation, and a live gaming leaderboard.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll be able to pick a spatial index and defend it, size a pub-sub layer, explain how a route comes back in milliseconds, and answer what's my rank out of twenty-five million in under ten milliseconds.",
+          "reveal": 0
+        },
+        {
+          "say": "Keep the module fifteen notes PDF open beside the video. When I say pause and think, pause, and answer before I do.",
+          "reveal": 0
+        }
+      ],
+      "id": "s001"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 1 of 14",
+      "title": "Four designs, a few tactics",
+      "steps": [
+        {
+          "say": "Here's a picture. Last time we played full chess games. Today is a themed puzzle book. Every puzzle drills the same few tactics.",
+          "reveal": 0
+        },
+        {
+          "say": "The tactics are spatial cells, in-memory state, pub-sub fan-out, and precomputation. Pub-sub, short for publish-subscribe, means one published message is delivered to every subscriber. No new patterns. We just compose the ones you know.",
+          "reveal": 0
+        }
+      ],
+      "id": "s002",
+      "caption": "Book: Module 15 · Module Introduction"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "The four designs and their numbers",
+      "table": {
+        "head": [
+          "Design",
+          "Main problem",
+          "Key numbers"
+        ],
+        "rows": [
+          [
+            "Proximity service",
+            "Spatial index",
+            "100M places, 20K searches/s"
+          ],
+          [
+            "Nearby friends",
+            "Fan-out of moving points",
+            "10M online, 333K updates/s"
+          ],
+          [
+            "Maps and navigation",
+            "Precompute at planet scale",
+            "1.2M GPS points/s"
+          ],
+          [
+            "Gaming leaderboard",
+            "Rank queries",
+            "25M players, rank < 10 ms"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Design one, the proximity service: restaurants near me. A hundred million places, about twenty thousand searches a second at peak. The hard part is the index.",
+          "reveal": 1
+        },
+        {
+          "say": "Design two, nearby friends. Ten million people online, each sending a location, so about three hundred thirty thousand updates a second. The hard part is fan-out.",
+          "reveal": 2
+        },
+        {
+          "say": "Design three, maps and navigation. Tiles, routing and live traffic, fed by over a million G-P-S points a second. The hard part is precomputing the planet.",
+          "reveal": 3
+        },
+        {
+          "say": "Design four, the leaderboard. Twenty-five million players, and every one wants to know their exact rank, fast. Every design follows the same format: numbers, the five questions, A-P-I and data model, architecture, deep dives, failure walk and trade-offs.",
+          "reveal": 4
+        }
+      ],
+      "id": "s003"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 2 of 14",
+      "title": "Proximity service: numbers first",
+      "steps": [
+        {
+          "say": "Imagine you open a places app and tap cafes near me. You want places within five hundred meters, closest or best first. Owners can add and edit listings.",
+          "reveal": 0
+        },
+        {
+          "say": "Why is that hard? A normal index sorts along one line. Near me is two-dimensional. So the whole design is about squeezing two-D closeness into a one-D key a database can look up.",
+          "reveal": 0
+        }
+      ],
+      "id": "s004",
+      "caption": "Book: Module 15 · Design 1 — Proximity Service"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Proximity: back-of-envelope",
+      "bullets": [
+        "100M daily users x 5 searches = 500M/day",
+        "About 5,800/s average, 20,000/s peak",
+        "Writes: 1% of places change daily = 12/s",
+        "Details: 100M x 1 KB = 100 GB",
+        "Geo-index: 100M x 16 bytes = 1.6 GB, 3-5 GB real",
+        "Index fits in RAM: replicate, don't shard"
+      ],
+      "steps": [
+        {
+          "say": "Let's run the numbers. A hundred million daily users, five searches each, is five hundred million searches a day.",
+          "reveal": 1
+        },
+        {
+          "say": "Divide by eighty-six thousand four hundred seconds and that's about fifty-eight hundred a second on average. Mealtimes peak three to four times higher, so call it twenty thousand a second.",
+          "reveal": 2
+        },
+        {
+          "say": "Writes are tiny. Maybe one percent of places change per day. That's a million edits, about twelve a second. Reads beat writes over a thousand to one.",
+          "reveal": 3
+        },
+        {
+          "say": "Place details at about a kilobyte each come to a hundred gigabytes. A normal relational database handles that.",
+          "reveal": 4
+        },
+        {
+          "say": "Now the geo-index. Each entry is a cell ID and a place ID, eight bytes each, so sixteen bytes. A hundred million of those is one point six gigabytes, three to five with overhead.",
+          "reveal": 5
+        },
+        {
+          "say": "And here's the punchline. The whole index fits in memory on one ordinary server. So we replicate it for throughput, and we don't shard it. Sharding five gigabytes just adds scatter-gather for nothing. Numbers before boxes.",
+          "reveal": 6
+        }
+      ],
+      "id": "s005"
+    },
+    {
+      "layout": "diagram",
+      "title": "Proximity architecture",
+      "mermaid": "flowchart LR\n  U[\"Client\"] --> S[\"Search service, stateless\"]\n  S --> IDX[\"Geo-index replicas, in memory\"]\n  S --> RC[\"Result cache per cell\"]\n  O[\"Owner app\"] --> W[\"Place write service\"]\n  W --> DB[(\"Places DB\")]\n  DB -- \"CDC\" --> IX[\"Indexer\"]\n  IX --> IDX",
+      "caption": "Places DB is the truth. The geo-index is derived and rebuildable.",
+      "steps": [
+        {
+          "say": "Here's the shape. A stateless search service turns latitude, longitude and radius into cell IDs, pulls candidates from an in-memory geo-index, filters by exact distance, ranks, and pages.",
+          "reveal": 0
+        },
+        {
+          "say": "Each index replica holds the whole index. At about five thousand searches a second per replica, twenty thousand at peak needs four, plus headroom, so about six per region.",
+          "reveal": 0
+        },
+        {
+          "say": "Owner edits go to the places database, the source of truth. Change Data Capture, C-D-C, streams each change to an indexer that patches the in-memory index. A nightly full rebuild is the safety net.",
+          "reveal": 0
+        },
+        {
+          "say": "In the interview, say this: the index is a few gigabytes, so I replicate it in memory, and I feed it from the database with C-D-C.",
+          "reveal": 0
+        }
+      ],
+      "id": "s006"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 3 of 14",
+      "title": "Choosing the spatial index",
+      "steps": [
+        {
+          "say": "Every spatial index does one trick. It cuts the map into cells with IDs. Then near becomes same cell or neighbouring cell. Four families do it differently.",
+          "reveal": 0
+        }
+      ],
+      "id": "s007",
+      "caption": "Book: Module 15 Proximity · Deep dive 1, spatial index"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 3 of 14",
+      "title": "Four ways to cut the map into cells",
+      "bullets": [
+        "Geohash: halve the world, bits become base-32 text",
+        "Quadtree: split any square holding over 100 places",
+        "Google S2: cube faces, Hilbert curve, 64-bit IDs",
+        "Uber H3: hexagons, 6 equal-distance neighbours",
+        "Start with geohash, mention the others"
+      ],
+      "steps": [
+        {
+          "say": "One, geohash. Keep halving the world, alternating longitude and latitude, writing a one for the upper half and a zero for the lower. Group bits five at a time into base thirty-two characters. The key property: a longer geohash always starts with its parent's geohash. So all places in a cell is a prefix scan, like geohash starts with d r five r u six, on any normal B-tree.",
+          "reveal": 1
+        },
+        {
+          "say": "Two, the quadtree. One square covers the map. Any square holding more than, say, a hundred places splits into four. Dense Manhattan gets tiny squares, the Sahara one huge square. A hundred million places makes about a million leaves, a few gigabytes in memory, rebuilt at start-up.",
+          "reveal": 2
+        },
+        {
+          "say": "Three, Google S-two. It projects the globe onto a cube's six faces and numbers cells along a Hilbert curve, a path that visits every cell while keeping neighbours numerically close. Its library can cover any circle with a few mixed-size cells.",
+          "reveal": 3
+        },
+        {
+          "say": "Four, Uber H-three. Hexagons. All six neighbours are the same distance away, unlike squares, whose corner neighbours are farther. That suits movement, heat maps and pricing grids.",
+          "reveal": 4
+        },
+        {
+          "say": "In the interview, say this: I'll start with geohash because it's easy to explain and store in a normal column. A quadtree handles very uneven density. S-two and H-three are the production libraries.",
+          "reveal": 5
+        }
+      ],
+      "id": "s008"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Running example: one point in Manhattan",
+      "table": {
+        "head": [
+          "Precision",
+          "Cell size at latitude 40",
+          "Geohash"
+        ],
+        "rows": [
+          [
+            "4 characters",
+            "about 30 km x 20 km",
+            "dr5r"
+          ],
+          [
+            "5 characters",
+            "about 3.7 km x 4.9 km",
+            "dr5ru"
+          ],
+          [
+            "6 characters",
+            "about 940 m x 610 m",
+            "dr5ru6"
+          ],
+          [
+            "7 characters",
+            "about 120 m x 150 m",
+            "dr5ru6j"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's encode one real point, near the Empire State Building, latitude forty point seven four, longitude minus seventy-three point nine eight. Four characters, d r five r, gives a cell about thirty kilometers wide. That's a whole city.",
+          "reveal": 1
+        },
+        {
+          "say": "Add a fifth character, d r five r u, and the cell shrinks to a few kilometers. Each extra character makes cells about thirty-two times smaller in area.",
+          "reveal": 2
+        },
+        {
+          "say": "Six characters, d r five r u six, is about nine hundred by six hundred meters. That's our pick for a five-hundred-meter search, because the cell should be at least as big as the radius.",
+          "reveal": 3
+        },
+        {
+          "say": "Seven characters is a city block. Notice each longer code starts with the shorter one. That's what makes prefix scans work.",
+          "reveal": 4
+        }
+      ],
+      "id": "s009"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 4 of 14",
+      "title": "The boundary problem and the 9-cell search",
+      "steps": [
+        {
+          "say": "Here's the trap. Two cafes can be seventeen meters apart and still sit in different cells. In the demo, d r five r u six and d r five r u d are seventeen meters apart. If you only search the user's own cell, you miss the cafe across the street.",
+          "reveal": 0
+        }
+      ],
+      "id": "s010",
+      "caption": "Book: Module 15 Proximity · Deep dive 2, 9-cell search"
+    },
+    {
+      "layout": "table",
+      "title": "Search your cell plus its 8 neighbours",
+      "caption": "Scan 9 cells, then filter every candidate by exact distance",
+      "steps": [
+        {
+          "say": "The fix is simple. Search the user's cell and its eight neighbours, a three by three block.",
+          "reveal": 3
+        },
+        {
+          "say": "Then compute the exact distance to every candidate and keep only those inside the radius. Cells give you a cheap shortlist. Distance math gives you the right answer.",
+          "reveal": 3
+        },
+        {
+          "say": "Two edge cases. Longitude must wrap at plus or minus a hundred eighty degrees, and cells beyond the poles are skipped. S-two has no such seams because it works on the sphere.",
+          "reveal": 3
+        }
+      ],
+      "id": "s011",
+      "table": {
+        "head": [
+          "Row",
+          "West",
+          "Centre",
+          "East"
+        ],
+        "rows": [
+          [
+            "North",
+            "NW",
+            "N",
+            "NE"
+          ],
+          [
+            "Middle",
+            "W",
+            "USER CELL",
+            "E"
+          ],
+          [
+            "South",
+            "SW",
+            "S",
+            "SE"
+          ]
+        ]
+      }
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Worked example: 500 m radius over 5,000 places",
+      "bullets": [
+        "Step 1: encode user -> dr5ru6 (precision 6)",
+        "Step 2: list 9 cells: dr5ru6 plus 8 neighbours",
+        "Step 3: read 262 candidates, 5.2% of all places",
+        "Step 4: exact distance -> 39 within 500 m",
+        "Own cell only: 12 found, 27 missed",
+        "Too few? drop a character: cells 32x larger"
+      ],
+      "steps": [
+        {
+          "say": "Let's walk the demo. Step one: encode the user's position at precision six. We get d r five r u six.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: list that cell and its eight neighbours. Nine cells.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: read every place in those nine cells. That's two hundred sixty-two candidates, only five point two percent of the data.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: compute exact distances. Thirty-nine are within five hundred meters, and a brute-force scan of all five thousand agrees exactly.",
+          "reveal": 4
+        },
+        {
+          "say": "Now the warning. Searching only the user's own cell finds twelve. It misses twenty-seven of thirty-nine. That's the boundary problem in one number.",
+          "reveal": 5
+        },
+        {
+          "say": "And in the countryside, if results are short, drop one character. Cells get thirty-two times bigger, and you repeat.",
+          "reveal": 6
+        }
+      ],
+      "id": "s012"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Why not just WHERE lat BETWEEN and lon BETWEEN?",
+      "bullets": [
+        "A. Databases can't compare decimals",
+        "B. Each condition selects a thin stripe around the planet",
+        "C. It's too slow to write",
+        "D. It breaks at the equator"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Why not just query latitude between two values and longitude between two values, with an index on each?",
+          "reveal": 0
+        }
+      ],
+      "id": "s013"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Answer",
+      "title": "Answer: stripes, not squares",
+      "bullets": [
+        "lat BETWEEN: a stripe circling the whole Earth",
+        "lon BETWEEN: a stripe from pole to pole",
+        "DB uses one index, filters the other row by row",
+        "A cell ID makes both dimensions one sortable key"
+      ],
+      "steps": [
+        {
+          "say": "The answer is B. A latitude range is a thin band right around the planet.",
+          "reveal": 1
+        },
+        {
+          "say": "A longitude range is a band from pole to pole. Each band holds millions of places.",
+          "reveal": 2
+        },
+        {
+          "say": "The database uses one index well and filters the other band row by row. Even a composite index on latitude then longitude only narrows latitude efficiently.",
+          "reveal": 3
+        },
+        {
+          "say": "A cell ID folds both dimensions into one key that sorts. That's the whole point of a spatial index.",
+          "reveal": 4
+        }
+      ],
+      "id": "s014"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 5 of 14",
+      "title": "Ranking, caching and freshness",
+      "steps": [
+        {
+          "say": "We have the right places. Now three questions. In what order? How do we avoid doing the work twice? And how fresh is it?",
+          "reveal": 0
+        }
+      ],
+      "id": "s015",
+      "caption": "Book: Module 15 Proximity · Deep dive 3, ranking and caching"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Ranking, caching, freshness: step by step",
+      "bullets": [
+        "Rank: rating x w1 - distance x w2 + open now x w3",
+        "Cache key: (cell, category), not exact coordinates",
+        "Owner edit -> DB -> CDC -> indexer, seconds to minutes",
+        "Invalidate that cell's cache entry on each patch",
+        "Nightly full rebuild catches any drift",
+        "New replica: load snapshot, replay change feed"
+      ],
+      "steps": [
+        {
+          "say": "Ranking first. Distance alone ranks badly, because the closest cafe may be terrible. So blend: rating times a weight, minus distance times a weight, plus a bonus if it's open now. The search node computes this from fields stored inside the index entry, so there's no database round trip.",
+          "reveal": 1
+        },
+        {
+          "say": "Caching. Key the cache by cell and category, not by exact coordinates. Imagine three thousand office workers in one block at lunch, all searching cafes. They round to the same cell, so they share one cache entry. That's why the hit rate is high.",
+          "reveal": 2
+        },
+        {
+          "say": "Freshness. Picture Maria, who opens a cafe and adds it at nine A M. Her edit hits the places database. C-D-C streams it to the indexer, which patches the in-memory index within seconds to minutes. That's inside our agreed staleness budget.",
+          "reveal": 3
+        },
+        {
+          "say": "When the indexer patches Maria's cell, it also invalidates that cell's cache entry, so the next search sees her cafe.",
+          "reveal": 4
+        },
+        {
+          "say": "The nightly full rebuild is a backstop, so small drift between index and database can never pile up.",
+          "reveal": 5
+        },
+        {
+          "say": "And a brand-new replica loads the latest index snapshot from object storage, then replays the change feed from the snapshot's position. That's the same snapshot plus log recovery as a write-ahead log.",
+          "reveal": 6
+        }
+      ],
+      "id": "s016"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Proximity failure walk",
+      "table": {
+        "head": [
+          "What fails",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "An index replica",
+            "Health check removes it, others absorb load"
+          ],
+          [
+            "Indexer or CDC stalls",
+            "Serve last good index, alert on lag"
+          ],
+          [
+            "Places DB primary",
+            "Search unaffected, owner edits retry"
+          ],
+          [
+            "A cache node",
+            "Miss burst, single-flight per cell key"
+          ],
+          [
+            "A whole region",
+            "Route to next region, same small index"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Walk the failures. An index replica dies: health checks pull it, and the others absorb its share because we keep about fifty percent headroom.",
+          "reveal": 1
+        },
+        {
+          "say": "The indexer stalls: search keeps serving the last good index. Nothing errors, so alert on change-feed lag, not on errors.",
+          "reveal": 2
+        },
+        {
+          "say": "The database primary dies: search never touches it, so search is fine. Owner edits get try again later.",
+          "reveal": 3
+        },
+        {
+          "say": "A cache node is lost: a burst of misses hits the replicas. Single-flight per cell key means only one request rebuilds each entry.",
+          "reveal": 4
+        },
+        {
+          "say": "A whole region is lost: route to the next one. The index is small and identical everywhere. One-liner for the interview: turn two-D closeness into a one-D cell key, search nine cells, filter by exact distance, and replicate the small index in memory.",
+          "reveal": 5
+        }
+      ],
+      "id": "s017"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 6 of 14",
+      "title": "Nearby friends: both ends move",
+      "steps": [
+        {
+          "say": "Design two. Opted-in users see which friends are within five kilometers, live, while the app is open. Friends disappear after ten minutes of silence.",
+          "reveal": 0
+        },
+        {
+          "say": "What's new? Both ends move. Every update must reach the few friends who care within about five seconds, then be thrown away. It's fan-out crossed with ephemeral location.",
+          "reveal": 0
+        }
+      ],
+      "id": "s018",
+      "caption": "Book: Module 15 · Design 2 — Nearby Friends"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Nearby friends: the numbers",
+      "bullets": [
+        "10M online at peak, location every 30 s",
+        "10M / 30 s = about 333,000 updates/s in",
+        "About 40 online friends each -> 13M deliveries/s",
+        "Latest locations: 10M x 50 bytes = 0.5 GB",
+        "10M sockets / 100K per gateway = 100 gateways"
+      ],
+      "steps": [
+        {
+          "say": "A hundred million daily users, ten percent online at peak. That's ten million people sending a location every thirty seconds.",
+          "reveal": 1
+        },
+        {
+          "say": "Ten million divided by thirty is about three hundred thirty-three thousand updates a second coming in.",
+          "reveal": 2
+        },
+        {
+          "say": "Each user has about four hundred friends, and about ten percent are online and sharing, so forty. Three hundred thirty-three thousand times forty is about thirteen million deliveries a second inside the system. After the five-kilometer filter, maybe one to two million pushes a second actually reach phones.",
+          "reveal": 3
+        },
+        {
+          "say": "The state is tiny. Ten million latest locations at fifty bytes is half a gigabyte.",
+          "reveal": 4
+        },
+        {
+          "say": "And ten million open connections at a hundred thousand per gateway node means about a hundred gateways. So the expensive numbers are thirteen million deliveries a second and ten million sockets, not storage.",
+          "reveal": 5
+        }
+      ],
+      "id": "s019"
+    },
+    {
+      "layout": "table",
+      "title": "One channel per user",
+      "caption": "The distance filter runs on the receiving side",
+      "steps": [
+        {
+          "say": "Let's follow Alice and Bob. Step one: Bob opens the app. His gateway loads his opted-in friends, subscribes to each friend's channel, including channel Alice, and sends him their latest locations.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: Alice moves. Her phone sends a location over a WebSocket, a persistent two-way connection. Her gateway writes it to the location cache, resetting a ten-minute T-T-L, time to live, and publishes it on channel Alice.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: the pub-sub cluster delivers it to every gateway with a subscriber on channel Alice. Here, Bob's.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: Bob's gateway already holds Bob's own latest point, because Bob's socket lives there. Alice is eight hundred twenty meters away, inside five kilometers, so it pushes. If she'd just left the radius, it sends friend gone. That's why the filter sits on the receiver: only it knows where the receiver is.",
+          "reveal": 4
+        }
+      ],
+      "id": "s020",
+      "table": {
+        "head": [
+          "Step",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "1. Bob connects",
+            "Gateway 2 subscribes to ch:Alice and other friends"
+          ],
+          [
+            "2. Alice moves",
+            "Gateway 1 writes cache (TTL 10 min), publishes ch:Alice"
+          ],
+          [
+            "3. Pub/sub delivers",
+            "To every gateway subscribed to ch:Alice"
+          ],
+          [
+            "4. Bob's gateway filters",
+            "820 m, within 5 km, so push to Bob"
+          ]
+        ]
+      }
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 6 of 14",
+      "title": "Sizing and sharding the pub/sub layer",
+      "bullets": [
+        "100M+ channels, mostly idle, nearly free",
+        "Real limit: delivery CPU, 13M/s",
+        "13M / 100K per node = about 130 nodes",
+        "Consistent hashing: channel name -> node",
+        "Resize = resubscribe, a few updates lost"
+      ],
+      "steps": [
+        {
+          "say": "One channel per user means over a hundred million channels. But an idle channel costs almost nothing. A subscription is a small hash table entry, and classic Redis pub-sub stores no messages at all.",
+          "reveal": 1
+        },
+        {
+          "say": "So memory isn't the limit. Delivery C-P-U is: thirteen million deliveries a second.",
+          "reveal": 2
+        },
+        {
+          "say": "At a conservative hundred thousand deliveries per node per second, that's about a hundred thirty nodes, plus headroom.",
+          "reveal": 3
+        },
+        {
+          "say": "Spread channels with consistent hashing on the channel name. The ring lives in a service-discovery store, like etcd or ZooKeeper, that every gateway watches. Redis seven's sharded pub-sub does this routing inside a cluster.",
+          "reveal": 4
+        },
+        {
+          "say": "The catch: resizing the ring moves channels, so gateways must resubscribe, and a few updates get lost. That's fine, because the next one arrives in thirty seconds. But resize off-peak and add capacity early.",
+          "reveal": 5
+        }
+      ],
+      "id": "s021"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 7 of 14",
+      "title": "Connection tier and trimming fan-out",
+      "steps": [
+        {
+          "say": "Ten million long-lived WebSockets make gateways stateful. They know who's connected and what they've subscribed to. How do we deploy them, and how do we send less?",
+          "reveal": 0
+        }
+      ],
+      "id": "s022",
+      "caption": "Book: Module 15 Nearby Friends · Deep dives 2 and 3"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 7 of 14",
+      "title": "Connection tier: sockets local, routing global",
+      "bullets": [
+        "Deploy: drain a node gradually, don't cut it",
+        "Clients reconnect with jittered backoff",
+        "On reconnect: resend location, rebuild subscriptions",
+        "No gateway state has to survive a crash"
+      ],
+      "steps": [
+        {
+          "say": "Step one, deploys. Imagine gateway seven holds a hundred thousand phones. You don't kill it. You drain it: stop accepting new sockets and ask clients to reconnect gradually.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, jitter. Each client waits a random delay before reconnecting. Without jitter, a hundred thousand phones reconnect in the same second. That's a retry storm in disguise.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, rebuild. On reconnect, the phone resends its location, and the new gateway rebuilds subscriptions from the friends list.",
+          "reveal": 3
+        },
+        {
+          "say": "So nothing on a gateway needs to survive a crash. Sockets are local, routing is global, exactly as in the ride-sharing design.",
+          "reveal": 4
+        }
+      ],
+      "id": "s023"
+    },
+    {
+      "layout": "twocol",
+      "kicker": "Example",
+      "title": "Trimming fan-out, and nearby strangers",
+      "left": {
+        "heading": "Trim friend traffic",
+        "bullets": [
+          "Send only after moving 100 m",
+          "Or every 5 min when still",
+          "Skip far-then-far-again updates"
+        ]
+      },
+      "right": {
+        "heading": "Strangers near me",
+        "bullets": [
+          "One channel per geohash cell",
+          "Publish to my cell, subscribe to 9",
+          "Resubscribe on crossing a cell"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Two cheap wins. First, the phone sends only when it's moved more than about a hundred meters.",
+          "reveal": 1
+        },
+        {
+          "say": "Otherwise it sends every five minutes when sitting still. Most phones sit still, so this often halves inbound traffic or better.",
+          "reveal": 2
+        },
+        {
+          "say": "Second, a gateway drops a friend's update without pushing if the friend is far away now and was far last time too. Nothing changed for the user.",
+          "reveal": 3
+        },
+        {
+          "say": "Now a twist. People near me who are not friends. Per-user channels don't work, because you don't know whom to subscribe to. So use one channel per geo-cell.",
+          "reveal": 4
+        },
+        {
+          "say": "Publish to your current cell's channel, and subscribe to it plus its eight neighbours. That's the nine-cell idea from design one, reused.",
+          "reveal": 5
+        },
+        {
+          "say": "When you cross into a new cell, resubscribe.",
+          "reveal": 6
+        }
+      ],
+      "id": "s024"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Failures: lossy on delivery, strict on privacy",
+      "table": {
+        "head": [
+          "What fails",
+          "Response"
+        ],
+        "rows": [
+          [
+            "Gateway dies",
+            "100K reconnect with jitter, 30 s freeze"
+          ],
+          [
+            "Pub/sub node dies",
+            "Ring drops it, gateways resubscribe"
+          ],
+          [
+            "Location cache lost",
+            "Back with the next 30 s update"
+          ],
+          [
+            "Friends DB slow",
+            "Session cache, else fail closed"
+          ],
+          [
+            "Update out of order",
+            "Keep newest device timestamp per friend"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "A gateway dies: its clients reconnect elsewhere. Friends freeze for up to thirty seconds.",
+          "reveal": 1
+        },
+        {
+          "say": "A pub-sub node dies: seconds of staleness. Nothing is corrupted, because nothing was stored.",
+          "reveal": 2
+        },
+        {
+          "say": "A location cache node is lost: points come back with the next update. Show updating meanwhile.",
+          "reveal": 3
+        },
+        {
+          "say": "The friends database is slow: use the session cache. If there isn't one, fail closed and show nothing. Never skip the privacy check.",
+          "reveal": 4
+        },
+        {
+          "say": "Mobile networks reorder messages, so each carries the device timestamp and gateways keep the newest. One-liner: latest location in memory with a T-T-L, one channel per user, filter on the receiving side, lossy by design and strict on privacy.",
+          "reveal": 5
+        }
+      ],
+      "id": "s025"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Why not query a geo database for friends near me?",
+      "bullets": [
+        "A. Geo databases can't store points",
+        "B. A spatial query every 30 s on a table rewritten 333K times/s",
+        "C. WebSockets can't reach databases",
+        "D. Friends lists are too long"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Why not just keep everyone's location in a spatial database and have each user query for friends nearby every thirty seconds?",
+          "reveal": 0
+        }
+      ],
+      "id": "s026"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 8 of 14",
+      "title": "Maps and navigation: precompute the planet",
+      "steps": [
+        {
+          "say": "The answer was B. That's a spatial query per user every thirty seconds, over a table rewritten three hundred thirty-three thousand times a second. Friendship already narrows candidates to about forty, so fan-out to them is far cheaper.",
+          "reveal": 0
+        },
+        {
+          "say": "Now design three, a maps app. It's three systems in one: rendering the map, routing from A to B, and live traffic with E-T-As, estimated times of arrival. The trick for all three is to precompute offline, so the online path becomes a lookup.",
+          "reveal": 0
+        }
+      ],
+      "id": "s027",
+      "caption": "Book: Module 15 · Design 3 — Maps & Navigation"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Maps: the numbers",
+      "bullets": [
+        "20M navigate 30 min/day -> 1.2M at peak",
+        "GPS each second, batched every 15 s",
+        "-> 80K uploads/s carrying 1.2M points/s",
+        "Routes: 100M/day, about 5,000/s peak",
+        "Tiles: 200 per user per day -> 230K/s"
+      ],
+      "steps": [
+        {
+          "say": "Twenty million people navigate about thirty minutes a day. Twenty million times thirty, over fourteen forty minutes in a day, is about four hundred twenty thousand at once on average, and about one point two million at rush hour.",
+          "reveal": 1
+        },
+        {
+          "say": "Phones sample G-P-S once a second but upload in batches every fifteen seconds.",
+          "reveal": 2
+        },
+        {
+          "say": "So that's eighty thousand uploads a second carrying one point two million points.",
+          "reveal": 3
+        },
+        {
+          "say": "Routes: about three per navigator per day, initial plus reroutes, plus planners, so a hundred million a day. About five thousand a second at peak.",
+          "reveal": 4
+        },
+        {
+          "say": "And tiles: two hundred tile requests per user per day, times a hundred million users, is twenty billion a day, about two hundred thirty thousand a second. Mostly served by a C-D-N.",
+          "reveal": 5
+        }
+      ],
+      "id": "s028"
+    },
+    {
+      "layout": "number",
+      "title": "Why you never render per request",
+      "big": "zooms 0-18 = 92 billion tiles",
+      "caption": "Zoom z has 4^z tiles. Zoom 18 alone is 69 billion.",
+      "steps": [
+        {
+          "say": "Map tiles are squares addressed by zoom, column and row. Zoom zero is one tile for the whole world. Each zoom level has four times as many.",
+          "reveal": 0
+        },
+        {
+          "say": "Zoom eighteen alone is four to the eighteenth, about sixty-nine billion. All zooms up to eighteen come to about ninety-two billion.",
+          "reveal": 0
+        },
+        {
+          "say": "Rendering one tile takes tens of milliseconds of C-P-U. At two hundred thirty thousand requests a second, that's a huge render farm. So build once, store, and serve from the C-D-N.",
+          "reveal": 0
+        }
+      ],
+      "id": "s029"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Tiles: build once, serve forever",
+      "bullets": [
+        "Batch build per map version, parallel by tile",
+        "URL holds version: /tiles/v42/14/x/y",
+        "Immutable: CDN never invalidates, 95%+ hits",
+        "Vector tiles: geometry, phone draws, restyles",
+        "Over-zoom: build to 14-16, client scales up",
+        "Road change: rebuild only touched tiles"
+      ],
+      "steps": [
+        {
+          "say": "Step one: a batch job, like MapReduce, builds every tile for a map version, in parallel by tile.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: the map version sits in the U-R-L. Say version forty-two, zoom fourteen, then column and row.",
+          "reveal": 2
+        },
+        {
+          "say": "So every tile is immutable. Caches never need invalidating. A new release just uses new U-R-Ls. Usage is skewed toward cities, so the C-D-N hits over ninety-five percent.",
+          "reveal": 3
+        },
+        {
+          "say": "Step three: send vector tiles, geometry and labels instead of pixels. They're several times smaller, and the phone can rotate, tilt and switch to night mode without downloading again.",
+          "reveal": 4
+        },
+        {
+          "say": "Step four: over-zoom. Build only to about zoom fourteen to sixteen and let the phone scale further. That cuts tens of billions of tiles to a few hundred million.",
+          "reveal": 5
+        },
+        {
+          "say": "And when one road changes, only the tiles it touches get marked dirty for the next build. Identical ocean tiles are stored once.",
+          "reveal": 6
+        }
+      ],
+      "id": "s030"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 9 of 14",
+      "title": "Routing in milliseconds",
+      "steps": [
+        {
+          "say": "Roads are a weighted, directed graph. Junctions are nodes, road segments are edges, and each weight is travel time. Routing is a shortest-path search. The problem is doing it five thousand times a second across a continent.",
+          "reveal": 0
+        }
+      ],
+      "id": "s031",
+      "caption": "Book: Module 15 Maps · Deep dive 2, routing in milliseconds"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 9 of 14",
+      "title": "Three steps from seconds to a millisecond",
+      "bullets": [
+        "Dijkstra: expand outward by distance, seconds",
+        "A*: lean toward goal, straight line / top speed",
+        "Contraction Hierarchies: shortcuts, about 1 ms",
+        "Multi-level partitions: fold in traffic in seconds"
+      ],
+      "steps": [
+        {
+          "say": "Start with Dijkstra's algorithm. It grows outward from the start in order of distance, like a ripple. It's correct, but for London to Edinburgh it ripples across much of Britain before reaching the goal. Seconds per query.",
+          "reveal": 1
+        },
+        {
+          "say": "Next, A star. Add a guess of the remaining time: straight-line distance divided by top speed. The search now leans toward Edinburgh. The guess must never overestimate, or you can miss the best route. Better, but still too slow for five thousand long routes a second.",
+          "reveal": 2
+        },
+        {
+          "say": "Then Contraction Hierarchies. Offline, rank junctions by importance, motorway junctions high, cul-de-sacs low, and add shortcut edges that skip the unimportant ones. Online, one tiny search climbs up from London, another climbs up from Edinburgh, and they meet in the middle on the motorway network. About a millisecond. The cost: minutes to hours of preprocessing, and a traffic change invalidates shortcuts.",
+          "reveal": 3
+        },
+        {
+          "say": "So production often uses multi-level partitions, called Customizable Route Planning. Split the graph into cells, cities inside regions inside countries, and precompute distances between each cell's boundary nodes. The partition rarely changes. Recomputing boundary distances with new traffic takes seconds. And the partition doubles as a sharding scheme.",
+          "reveal": 4
+        }
+      ],
+      "id": "s032"
+    },
+    {
+      "layout": "diagram",
+      "title": "Contraction Hierarchies: meet in the middle",
+      "mermaid": "flowchart LR\n  A[\"London street\"] --> J1[\"Local junction\"]\n  J1 --> M1[\"M1 motorway junction\"]\n  M1 -->|\"shortcut edge\"| M2[\"A1 motorway junction\"]\n  B[\"Edinburgh street\"] --> J2[\"Local junction\"]\n  J2 --> M2",
+      "caption": "Forward search from A, backward from B, both only climb to more important nodes",
+      "steps": [
+        {
+          "say": "Here's the picture. The forward search from London only climbs to more important junctions, quickly reaching the motorway.",
+          "reveal": 0
+        },
+        {
+          "say": "The backward search from Edinburgh does the same. A precomputed shortcut edge jumps hundreds of kilometers in one hop. The two searches meet, and the route is unpacked back into real roads.",
+          "reveal": 0
+        },
+        {
+          "say": "In the interview, say this: Dijkstra is correct but slow. A star helps. Contraction Hierarchies are fastest per query, but multi-level partitions let me fold in live traffic in seconds, so I'd pick those.",
+          "reveal": 0
+        }
+      ],
+      "id": "s033"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 10 of 14",
+      "title": "Live traffic and ETA",
+      "steps": [
+        {
+          "say": "Routing needs edge weights. Live traffic supplies them, from one point two million G-P-S points a second. Let's follow one car through the pipeline.",
+          "reveal": 0
+        }
+      ],
+      "id": "s034",
+      "caption": "Book: Module 15 Maps · Deep dive 3, live traffic and ETA"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "From raw GPS to an ETA, step by step",
+      "bullets": [
+        "1. Batch of 15 points lands in a partitioned log",
+        "2. Map-match: snap noisy points to real roads",
+        "3. Speed per segment in 1-minute windows",
+        "4. Few probes? blend with historical speed",
+        "5. ETA = sum of segment times + turns, ML fix",
+        "6. Slowdown on route -> push a reroute"
+      ],
+      "steps": [
+        {
+          "say": "Step one. A driver on a ring road uploads fifteen points. They land in a partitioned log, Kafka-style.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, map matching. G-P-S is off by ten to twenty meters, worse between tall buildings. Is the car on the ring road or the service road beside it? A hidden Markov model picks roads that are close to each point and also form a sensible path on the network.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three. Compute the car's speed per segment, then aggregate per segment in one-minute tumbling windows, fixed and non-overlapping. Partition by segment ID so one worker owns each segment. Say forty cars show twenty-two kilometers an hour on a segment that's usually sixty.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four. A quiet country lane might have one probe. Then fall back to the historical speed for that fifteen-minute slot of the week. There are six hundred seventy-two such slots per segment. Blend live and historical by sample count.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, the E-T-A. Sum predicted segment times plus turn delays, then an M-L model corrects systematic errors. Subtlety: on a one-hour trip, the segment you reach in fifty minutes should use the speed predicted for then, not now.",
+          "reveal": 5
+        },
+        {
+          "say": "Step six. The navigation service sees your route's segments slow down, recomputes, and pushes a better route to your phone.",
+          "reveal": 6
+        }
+      ],
+      "id": "s035"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Maps failure walk and trade-offs",
+      "table": {
+        "head": [
+          "Situation",
+          "Response"
+        ],
+        "rows": [
+          [
+            "Traffic pipeline stalls",
+            "Historical speeds, say 'traffic delayed'"
+          ],
+          [
+            "Routing server dies",
+            "LB retries replica, keep warm spares"
+          ],
+          [
+            "Bad map release",
+            "Canary by region, roll back to N-1"
+          ],
+          [
+            "Phone loses signal",
+            "Route held on phone, guide on GPS"
+          ],
+          [
+            "Everyone rerouted to one road",
+            "Spread across near-equal routes"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "If the traffic pipeline stalls, live speeds expire and routing falls back to history. Be honest: show traffic data delayed instead of a confident number.",
+          "reveal": 1
+        },
+        {
+          "say": "A routing server holds only a read-only graph, so the load balancer retries on a replica. Loading a graph takes minutes, so keep warm spares.",
+          "reveal": 2
+        },
+        {
+          "say": "A bad map release, like a bridge marked closed by mistake, is caught by canarying per region and watching route quality. Rollback means pointing back to version N minus one, since tiles and graphs are immutable.",
+          "reveal": 3
+        },
+        {
+          "say": "If the phone loses signal, it already holds the whole route and turn list, so it keeps guiding.",
+          "reveal": 4
+        },
+        {
+          "say": "And don't send thousands of drivers down the same detour. You'll create the next jam. One-liner: precompute what changes slowly, tiles and shortcuts, and stream what changes fast, traffic.",
+          "reveal": 5
+        }
+      ],
+      "id": "s036"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 11 of 14",
+      "title": "Real-time gaming leaderboard",
+      "steps": [
+        {
+          "say": "Design four is the odd one out. It's not spatial. A mobile game gives points per match won. Show the monthly top ten, my own rank, and the two players above and below me, in real time.",
+          "reveal": 0
+        },
+        {
+          "say": "Top ten is easy. What's my rank out of twenty-five million is not. In a sorted table, your rank is the count of rows above you. That's a scan of up to N rows per request.",
+          "reveal": 0
+        }
+      ],
+      "id": "s037",
+      "caption": "Book: Module 15 · Design 4 — Real-Time Gaming Leaderboard"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Leaderboard: the numbers",
+      "bullets": [
+        "5M daily players x 10 wins = 50M updates/day",
+        "About 580/s average, 3,000/s peak",
+        "25M players x 100 bytes = 2.5 GB",
+        "One Redis node does 100K+ ops/s",
+        "Answer: one primary plus a replica"
+      ],
+      "steps": [
+        {
+          "say": "Five million daily players, ten wins each, is fifty million updates a day.",
+          "reveal": 1
+        },
+        {
+          "say": "That's about five hundred eighty a second, three thousand at peak. Reads are similar, about five thousand a second at peak.",
+          "reveal": 2
+        },
+        {
+          "say": "Memory: a member ID, a score, and structure overhead come to about a hundred bytes per player. Twenty-five million players is two and a half gigabytes.",
+          "reveal": 3
+        },
+        {
+          "say": "One Redis node handles well over a hundred thousand simple operations a second.",
+          "reveal": 4
+        },
+        {
+          "say": "So one primary plus a replica is the whole answer at this scale. The interesting parts are correctness, and what changes at twenty times the players.",
+          "reveal": 5
+        }
+      ],
+      "id": "s038"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 11 of 14",
+      "title": "How a sorted set answers 'my rank'",
+      "bullets": [
+        "Hash map: member -> score, O(1) lookup",
+        "Skip list: sorted list with express lanes",
+        "Each pointer records how many it skips",
+        "ZINCRBY / ZADD: update score, O(log N)",
+        "ZREVRANK: my rank, O(log N)",
+        "ZREVRANGE: top 10 or around me, O(log N + K)"
+      ],
+      "steps": [
+        {
+          "say": "A Redis sorted set is two structures. First, a hash map from member to score, so what's my score is instant.",
+          "reveal": 1
+        },
+        {
+          "say": "Second, a skip list. Picture a sorted linked list with express lanes above it, like an express train that skips stations.",
+          "reveal": 2
+        },
+        {
+          "say": "The trick: every pointer records how many elements it skips. Walk down to your member, add up the skips, and you have your rank.",
+          "reveal": 3
+        },
+        {
+          "say": "So adding points is O of log N. Doubling the players adds just one step.",
+          "reveal": 4
+        },
+        {
+          "say": "My rank is O of log N too. For twenty-five million players that's about twenty-five steps, not twenty-five million.",
+          "reveal": 5
+        },
+        {
+          "say": "And top ten, or the window around me, is log N plus the K items returned. One month, one key: L B colon twenty twenty-six dash zero nine.",
+          "reveal": 6
+        }
+      ],
+      "id": "s039"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Worked example: u01234 asks 'where am I?'",
+      "table": {
+        "head": [
+          "Command",
+          "Result"
+        ],
+        "rows": [
+          [
+            "ZREVRANGE lb 0 4",
+            "#1 u17882 52 pts, #2 u08730 44 pts ..."
+          ],
+          [
+            "ZSCORE lb u01234",
+            "16 pts"
+          ],
+          [
+            "ZREVRANK lb u01234",
+            "10996, so rank #10997"
+          ],
+          [
+            "ZREVRANGE lb 10994 10998",
+            "5 players, all on 16 pts"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The demo has twenty thousand players and two hundred thousand score events. Reverse range zero to four gives the top five. Number one has fifty-two points.",
+          "reveal": 1
+        },
+        {
+          "say": "Player u zero one two three four asks for their score: sixteen points.",
+          "reveal": 2
+        },
+        {
+          "say": "Reverse rank returns ten thousand nine hundred ninety-six, counting from zero, so they're rank ten thousand nine hundred ninety-seven.",
+          "reveal": 3
+        },
+        {
+          "say": "Now the around-me window, two above and two below. All five players have sixteen points. Mid-table, thousands tie. Hold that thought, because it's our next problem.",
+          "reveal": 4
+        }
+      ],
+      "id": "s040"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 12 of 14",
+      "title": "Correctness: idempotency, ordering, ties",
+      "steps": [
+        {
+          "say": "The match results table in the database is the truth. The sorted set is a derived read model we can rebuild by replay. That gives us three correctness problems.",
+          "reveal": 0
+        }
+      ],
+      "id": "s041",
+      "caption": "Book: Module 15 Leaderboard · Deep dive 1, correctness"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Idempotency: count each match exactly once",
+      "bullets": [
+        "Game server POSTs match_id m_77, +3 points",
+        "INSERT with unique match_id",
+        "Retry? unique key conflict -> return stored result",
+        "Crash between DB and Redis? outbox drives Redis",
+        "Use absolute ZADD total, not ZINCRBY +3"
+      ],
+      "steps": [
+        {
+          "say": "Step one. A game server, never the client, posts match m seventy-seven, user u zero one two three four, plus three points. Clients can't call this A-P-I at all, so they can't forge scores.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two. The score service inserts the result with match ID as a unique key.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three. The network blips and the game server retries. The insert conflicts on the unique key, so the service returns the stored result, score sixteen, and does not touch Redis. No double count.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four. But the database insert and the Redis update are two writes. A crash between them leaves Redis behind. Fix it with an outbox, a pending-events table written in the same transaction, which drives the Redis update at least once. A reconcile job also compares totals now and then.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five. At least once means replays. Increment by three would add three again on replay. So the consumer reads the user's total from the database, sixteen, and sets it absolutely. Setting sixteen twice is still sixteen. That's naturally idempotent.",
+          "reveal": 5
+        }
+      ],
+      "id": "s042"
+    },
+    {
+      "layout": "number",
+      "title": "Tie-break inside the score",
+      "big": "score = points x 2^32 + (MAX_TS - t)",
+      "caption": "Higher points win. Same points: earlier time wins.",
+      "steps": [
+        {
+          "say": "Now ties. Redis orders equal scores by member name, which is arbitrary. The fair rule is usually: whoever reached the score first ranks higher.",
+          "reveal": 0
+        },
+        {
+          "say": "So encode the rule in the score. Multiply points by two to the thirty-second, then add max timestamp minus the time you reached it. An earlier time leaves a bigger remainder.",
+          "reveal": 0
+        },
+        {
+          "say": "Example: Bob reaches fifty points at time nine hundred, Alice at time one thousand. Same points, but Bob's remainder is a hundred larger, so Bob ranks above Alice. Redis scores are sixty-four-bit floats with fifty-three bits of exact integers, so this is exact up to about two million points.",
+          "reveal": 0
+        },
+        {
+          "say": "And ordering of messages? Because we write absolute totals from the database, a late, older message can't push a score backwards in a way the next sync won't fix. And on the phone side, nearby friends used the same trick: keep the newest timestamp, drop older ones.",
+          "reveal": 0
+        }
+      ],
+      "id": "s043"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 13 of 14",
+      "title": "Scaling past one node, and real-time push",
+      "steps": [
+        {
+          "say": "Now grow twenty times, to five hundred million players. The set is about fifty gigabytes and writes may reach sixty thousand a second. Time to shard. There are two ways, with opposite costs.",
+          "reveal": 0
+        }
+      ],
+      "id": "s044",
+      "caption": "Book: Module 15 Leaderboard · Deep dives 2 and 3"
+    },
+    {
+      "layout": "twocol",
+      "kicker": "Example",
+      "title": "Two ways to shard a leaderboard",
+      "left": {
+        "heading": "Hash of user",
+        "bullets": [
+          "Writes spread evenly",
+          "Top 10: merge 8 x 10 = 80 rows",
+          "My rank: ask every shard, sum"
+        ]
+      },
+      "right": {
+        "heading": "Score range",
+        "bullets": [
+          "My rank: higher shards + local rank",
+          "Players move as scores cross bounds",
+          "Everyone starts at 0: hot range"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Option one, shard by a hash of the user ID. Writes spread evenly.",
+          "reveal": 1
+        },
+        {
+          "say": "Top ten stays easy. With eight shards, each returns its own top ten, and you merge eighty rows. The demo checks this matches the exact global top ten.",
+          "reveal": 2
+        },
+        {
+          "say": "But my global rank needs a count of players above my score from every shard, summed. Eight calls per request. Fine at eight shards, costly at a hundred.",
+          "reveal": 3
+        },
+        {
+          "say": "Option two, shard by score range. Shard one holds zero to a hundred points, shard two a hundred one to five hundred, and so on. My rank is the cached sizes of all higher shards plus my rank in my shard. One call.",
+          "reveal": 4
+        },
+        {
+          "say": "But players move between shards as their scores cross boundaries.",
+          "reveal": 5
+        },
+        {
+          "say": "And on day one of the month everyone's at zero, so one range is red hot. Boundaries need constant tuning.",
+          "reveal": 6
+        }
+      ],
+      "id": "s045"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 13 of 14",
+      "title": "Relax the requirement, then push live",
+      "bullets": [
+        "Exact rank for the top 10,000",
+        "Everyone else: percentile from a histogram",
+        "Top 10 changes -> SSE push, at most 1/s",
+        "Conflate: keep only the latest snapshot",
+        "Tournament spike: queue, watch backlog age"
+      ],
+      "steps": [
+        {
+          "say": "Or question the requirement. Give exact ranks only to the top ten thousand.",
+          "reveal": 1
+        },
+        {
+          "say": "Everyone else gets a percentile, like top thirty-seven percent, from a score histogram: how many players sit in each score bucket, updated as a stream. Nobody can tell rank eleven million two hundred four thousand from eleven million two hundred four thousand three hundred thirty-one. Interviewers love a requirement questioned with numbers.",
+          "reveal": 2
+        },
+        {
+          "say": "Now real time. The score service emits top ten changed events, and a server-sent events tier, S-S-E, pushes to spectators, at most once a second.",
+          "reveal": 3
+        },
+        {
+          "say": "If fifty changes arrive in that second, merge them and send only the latest snapshot. That's a conflating backpressure policy.",
+          "reveal": 4
+        },
+        {
+          "say": "And for tournament spikes, put a queue in front of the Redis updater, so bursts become a little lag instead of errors. Watch backlog age, the age of the oldest waiting item. One-liner: results D-B as truth, a sorted set per month for log N rank, idempotent by match ID, ties in the score, and shard only past one node.",
+          "reveal": 5
+        }
+      ],
+      "id": "s046"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Monthly reset for 25M players: what's cheapest?",
+      "bullets": [
+        "A. Delete every member at midnight",
+        "B. Set every score to zero",
+        "C. Write to a new key per month, expire the old",
+        "D. Restart Redis"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. At midnight on the first, how do you reset twenty-five million scores?",
+          "reveal": 0
+        }
+      ],
+      "id": "s047"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Answer",
+      "title": "Answer: a new key per month",
+      "bullets": [
+        "Writes switch to lb:2026-10 by timestamp",
+        "Late results go to old key in a grace window",
+        "Snapshot top N to the DB, then EXPIRE old key",
+        "Redis lost? Rebuild: GROUP BY + pipelined ZADD"
+      ],
+      "steps": [
+        {
+          "say": "The answer is C. There's no mass reset. Writes just switch to the new month's key, based on match timestamp.",
+          "reveal": 1
+        },
+        {
+          "say": "A match ending at eleven fifty-nine and fifty-eight seconds still lands in the old key, until a grace window closes.",
+          "reveal": 2
+        },
+        {
+          "say": "Then snapshot the top N into the database for history and expire the old key. Zero cost.",
+          "reveal": 3
+        },
+        {
+          "say": "And if Redis is lost entirely, rebuild from the truth: one group-by over the month's results, then pipelined writes, in minutes. Meanwhile serve the cached top ten and hide personal ranks. Degrade, don't error.",
+          "reveal": 4
+        }
+      ],
+      "id": "s048"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 14 of 14",
+      "title": "Pattern review",
+      "steps": [
+        {
+          "say": "Let's step back and see what the four designs share. Five lessons keep coming back.",
+          "reveal": 0
+        }
+      ],
+      "id": "s049",
+      "caption": "Book: Module 15 · Pattern Review"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 14 of 14",
+      "title": "Five recurring lessons",
+      "bullets": [
+        "1. Make the key match the query",
+        "2. Small data: replicate. Big or write-heavy: shard",
+        "3. Precompute slow change, stream fast change",
+        "4. Ephemeral state is cheap state",
+        "5. Keep a rebuildable truth behind fast structures"
+      ],
+      "steps": [
+        {
+          "say": "Lesson one: make the key match the query. Near needs a cell ID, so proximity used geohash. Rank needs a structure that counts, so the leaderboard used a skip list. Choosing the index is most of the design.",
+          "reveal": 1
+        },
+        {
+          "say": "Lesson two: small data, replicate. Big or write-heavy, shard. The five-gigabyte place index and the two-and-a-half-gigabyte leaderboard aren't sharded. The thirteen-million-deliveries-a-second pub-sub layer is.",
+          "reveal": 2
+        },
+        {
+          "say": "Lesson three: precompute what changes slowly, like tiles, graph shortcuts and the place index. Stream what changes fast, like traffic and friend locations.",
+          "reveal": 3
+        },
+        {
+          "say": "Lesson four: ephemeral state is cheap. Friend locations and live speeds get replaced by the next update, so they live in memory with T-T-Ls and no synchronous durability.",
+          "reveal": 4
+        },
+        {
+          "say": "Lesson five: keep a rebuildable truth behind every fast structure. The places database, the match results, the map source data. Then recovery is a replay, not data loss.",
+          "reveal": 5
+        }
+      ],
+      "id": "s050"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Which pattern served which design",
+      "table": {
+        "head": [
+          "Pattern",
+          "Where it was central"
+        ],
+        "rows": [
+          [
+            "Spatial cells",
+            "Proximity index, map tiles, graph partitions"
+          ],
+          [
+            "CQRS read model + CDC",
+            "Geo-index, tiles, sorted set"
+          ],
+          [
+            "Publish-subscribe + consistent hashing",
+            "Nearby friends"
+          ],
+          [
+            "Stream processing + backpressure",
+            "Traffic, friend updates, top-10 push"
+          ],
+          [
+            "Graceful degradation",
+            "All four: stale index, history, cached top 10"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Spatial cells: the proximity index, map tiles and routing partitions, and stranger mode in nearby friends.",
+          "reveal": 1
+        },
+        {
+          "say": "Derived read models fed by change data capture: the geo-index, the tiles and graph, and the sorted set.",
+          "reveal": 2
+        },
+        {
+          "say": "Pub-sub with consistent hashing: nearby friends.",
+          "reveal": 3
+        },
+        {
+          "say": "Stream processing and backpressure: traffic windows, drop-oldest friend locations, and the conflated top-ten push.",
+          "reveal": 4
+        },
+        {
+          "say": "And graceful degradation in all four. A stale index, stale positions, historical speeds, a cached top ten. Every design prefers slightly old over broken.",
+          "reveal": 5
+        }
+      ],
+      "id": "s051"
+    },
+    {
+      "layout": "recap",
+      "kicker": "Episode 22 complete",
+      "title": "Episode 22 recap",
+      "bullets": [
+        "Proximity: cell key, 9-cell search, exact distance",
+        "Few-GB index: replicate in memory, feed by CDC",
+        "Friends: WebSocket, per-user channel, receiver filter",
+        "Maps: versioned vector tiles, CRP routing, streamed traffic",
+        "Leaderboard: sorted set, match_id, tie-break in score",
+        "Make the key match the query"
+      ],
+      "steps": [
+        {
+          "say": "Let's recap. Proximity turns two-D closeness into a one-D cell key, searches the cell plus eight neighbours, and filters by exact distance.",
+          "reveal": 1
+        },
+        {
+          "say": "The index is a few gigabytes, so we replicate it in memory, fed by C-D-C, with a nightly rebuild.",
+          "reveal": 2
+        },
+        {
+          "say": "Nearby friends keeps latest locations in memory with a T-T-L, publishes on one channel per user, and filters on the receiving gateway. Lossy on purpose, strict on privacy.",
+          "reveal": 3
+        },
+        {
+          "say": "Maps precomputes versioned vector tiles for the C-D-N and a partitioned road graph with shortcuts, and streams G-P-S through map matching into per-segment speeds.",
+          "reveal": 4
+        },
+        {
+          "say": "The leaderboard is a sorted set per month for log N rank, idempotent by match ID, with ties broken inside the score.",
+          "reveal": 5
+        },
+        {
+          "say": "And the big lesson: make the key match the query. Next time, in episode twenty-three: Case Studies, Infrastructure. See you there.",
+          "reveal": 6
+        }
+      ],
+      "id": "s052"
+    }
+  ]
+}

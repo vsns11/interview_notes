@@ -1,0 +1,2140 @@
+{
+ "series": "System Design Workshop",
+ "episode": 3,
+ "title": "Fundamentals III: Data Storage",
+ "subtitle": "Where data lives, how it stays safe, how it spreads out",
+ "scenes": [
+  {
+   "id": "s001",
+   "layout": "title",
+   "title": "Fundamentals III: Data Storage",
+   "subtitle": "Where data lives, how it stays safe, how it spreads out",
+   "steps": [
+    {
+     "say": "Welcome to episode three of the System Design Workshop: data storage. By the end you'll be able to pick a database and defend it, explain transactions and isolation, design indexes, and replicate and shard data.",
+     "reveal": 0
+    },
+    {
+     "say": "Our running example is an online shop: users, products, orders and payments. Keep the Part three notes open. Each concept matches a section there, in order.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s002",
+   "layout": "bullets",
+   "kicker": "Concept 1 of 24",
+   "title": "What a database is",
+   "bullets": [
+    "Fast lookup: 1 in 50 million, under 1 ms",
+    "Safe concurrent access",
+    "Crash safety: all or nothing",
+    "A query language"
+   ],
+   "steps": [
+    {
+     "say": "Why not just save everything to a file? A database is a program that stores data, keeps it safe, and finds it again fast. It gives four things files don't.",
+     "reveal": 0
+    },
+    {
+     "say": "One, fast lookup. Reading a whole file to find one customer among fifty million takes seconds. An index takes under a millisecond.",
+     "reveal": 1
+    },
+    {
+     "say": "Two, safe concurrent access. Two servers writing one file at once can corrupt it. A database coordinates them.",
+     "reveal": 2
+    },
+    {
+     "say": "Three, crash safety. If the power dies mid-write, the write either fully happened or didn't happen at all.",
+     "reveal": 3
+    },
+    {
+     "say": "Four, a query language. You ask for all orders over a hundred dollars from last week, and the database works out how.",
+     "reveal": 4
+    }
+   ],
+   "caption": "Book: Fundamentals Part 3 · What a database is"
+  },
+  {
+   "id": "s003",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "One request through the shop's database",
+   "table": {
+    "head": [
+     "Step",
+     "Shop: find user by email"
+    ],
+    "rows": [
+     [
+      "1. Parse",
+      "Check the SQL is valid"
+     ],
+     [
+      "2. Plan",
+      "Planner: use the email index"
+     ],
+     [
+      "3. Execute",
+      "Read pages: cache, else disk"
+     ],
+     [
+      "4. Log (writes)",
+      "Durable log first, then apply"
+     ],
+     [
+      "5. Return",
+      "Send the row back"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's follow one request from our shop: find the user with this email. Step one, parse. The database reads the S-Q-L statement and checks it's valid.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two, plan. The query planner picks the cheapest route: use the email index, not read every row.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three, execute. Read data pages from the memory cache, or from disk.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four, for writes only: log the change to a durable file first, then apply it.",
+     "reveal": 4
+    },
+    {
+     "say": "Step five, return the result. App servers are stateless, so all the state that matters lives here. That's why the database is the hardest part to scale.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s004",
+   "layout": "bullets",
+   "kicker": "Concept 2 of 24",
+   "title": "Relational databases and SQL",
+   "bullets": [
+    "Row: one thing (a user)",
+    "Column: one property (email)",
+    "Schema: tables, columns, types",
+    "Primary key, foreign key, unique",
+    "SQL: say what, not how"
+   ],
+   "steps": [
+    {
+     "say": "A relational database stores data in tables, like spreadsheets. Each row is one thing, like one user.",
+     "reveal": 1
+    },
+    {
+     "say": "Each column is one property of it, like email.",
+     "reveal": 2
+    },
+    {
+     "say": "The schema describes the tables: their names, columns, and each column's data type. Data that doesn't fit is refused at the door.",
+     "reveal": 3
+    },
+    {
+     "say": "Keys tie tables together. A primary key is unique and never empty: the row's identity, like users dot id. A foreign key holds another table's primary key, like orders dot user id. The database can refuse an order for a user who doesn't exist. That's referential integrity.",
+     "reveal": 4
+    },
+    {
+     "say": "You ask questions in SQL, Structured Query Language. You say what you want, not how to fetch it. PostgreSQL and MySQL are the classic examples.",
+     "reveal": 5
+    }
+   ],
+   "caption": "Book: Fundamentals Part 3 · Relational databases and SQL"
+  },
+  {
+   "id": "s005",
+   "layout": "diagram",
+   "title": "The shop's tables and keys",
+   "mermaid": "flowchart LR\n  U[\"users: id PK, name, email\"]\n  O[\"orders: id PK, user_id FK, total\"]\n  I[\"order_items: order_id FK, product_id FK, qty\"]\n  P[\"products: id PK, title, price\"]\n  O -- \"user_id -> users.id\" --> U\n  I -- \"order_id\" --> O\n  I -- \"product_id\" --> P",
+   "caption": "Foreign keys point at primary keys; joins follow them",
+   "steps": [
+    {
+     "say": "Here's our shop. Users has an id as primary key, plus name and email. Orders has its own id, and a user id that points back to users. Order items points to both an order and a product. Products has a title and a price.",
+     "reveal": 0
+    },
+    {
+     "say": "A join combines rows that match on a key. To list the ten biggest orders this year with the buyer's name, you join orders to users on user id, filter by date, sort by total, and take ten. An inner join keeps only matching rows. A left join keeps every left row, even with no match.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s006",
+   "layout": "twocol",
+   "title": "Why relational is the default",
+   "left": {
+    "heading": "Gives you",
+    "bullets": [
+     "Flexible queries",
+     "Transactions protect money",
+     "Mature tooling"
+    ]
+   },
+   "right": {
+    "heading": "Costs",
+    "bullets": [
+     "Schema changes need care",
+     "Writes hard past one box",
+     "Few hundred GB? One server"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Why has relational been the default for fifty years? A flexible query language: ask questions you never planned for.",
+     "reveal": 1
+    },
+    {
+     "say": "Transactions, which protect anything that must add up, like money and stock.",
+     "reveal": 2
+    },
+    {
+     "say": "And mature tools for backups, monitoring and replication.",
+     "reveal": 3
+    },
+    {
+     "say": "The costs. Adding a column to a two billion row table can lock it for hours without online migration tools.",
+     "reveal": 4
+    },
+    {
+     "say": "Scaling writes past one machine is hard, and big joins get expensive without an index.",
+     "reveal": 5
+    },
+    {
+     "say": "In the interview, don't pick NoSQL for scale when your data is a few hundred gigabytes. One modern server handles tens of thousands of simple transactions a second.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s007",
+   "layout": "table",
+   "kicker": "Concept 3 of 24",
+   "title": "A transaction: moving 100 dollars",
+   "table": {
+    "head": [
+     "Step",
+     "What happens"
+    ],
+    "rows": [
+     [
+      "BEGIN",
+      "Open the envelope"
+     ],
+     [
+      "Alice -100",
+      "Change held, not yet final"
+     ],
+     [
+      "Bob +100",
+      "Second change held"
+     ],
+     [
+      "COMMIT",
+      "Both permanent, or ROLLBACK both"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Imagine Alice pays Bob a hundred dollars in our shop's wallet. That's two steps: take a hundred from Alice, add a hundred to Bob. If the server crashes in between, a hundred dollars vanishes. A transaction groups reads and writes into one unit: all happen, or none do.",
+     "reveal": 0
+    },
+    {
+     "say": "Step one: BEGIN starts the transaction.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two: subtract a hundred from Alice's balance.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three: add a hundred to Bob's balance.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four: COMMIT makes it permanent. If anything failed before this, ROLLBACK discards both changes. Think of a sealed envelope that's only acted on once both instructions are inside.",
+     "reveal": 4
+    }
+   ],
+   "caption": "Book: Fundamentals Part 3 · Transactions and ACID"
+  },
+  {
+   "id": "s008",
+   "layout": "bullets",
+   "title": "ACID: four promises",
+   "bullets": [
+    "Atomicity: all or nothing",
+    "Consistency: your rules hold",
+    "Isolation: no half-done work seen",
+    "Durability: committed survives crash",
+    "Interview: A, I, D are the DB; C is you"
+   ],
+   "steps": [
+    {
+     "say": "ACID names four promises. A is atomicity: all or nothing. If the server crashes before commit, Alice keeps her hundred. Atomic means cannot be split.",
+     "reveal": 1
+    },
+    {
+     "say": "C is consistency: data moves between valid states, meaning your declared rules, like balance never below zero. This is mostly the application's job.",
+     "reveal": 2
+    },
+    {
+     "say": "I is isolation: concurrent transactions don't see each other's half-done work. Ideally, as if they ran one after another.",
+     "reveal": 3
+    },
+    {
+     "say": "D is durability: once committed, the data survives a crash, because the change was logged to disk first.",
+     "reveal": 4
+    },
+    {
+     "say": "In the interview, say: A, I and D are database mechanisms, C is mostly your rules. And never hold a transaction open while calling a slow payment A-P-I. It keeps its locks and blocks others.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s009",
+   "layout": "number",
+   "title": "What strong guarantees cost",
+   "big": "fsync per commit = 0.1 to 2 ms on SSD",
+   "caption": "Isolation costs locks; durability costs a flush",
+   "steps": [
+    {
+     "say": "Guarantees aren't free. Isolation needs locks or version tracking. Durability needs a disk flush on every commit, often a tenth of a millisecond to two milliseconds on an S-S-D.",
+     "reveal": 0
+    },
+    {
+     "say": "And a transaction across several machines, a distributed transaction, is far slower again, because the machines must agree over the network. We'll meet those in episode four.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s010",
+   "layout": "bullets",
+   "kicker": "Concept 4 of 24",
+   "title": "Isolation anomalies",
+   "bullets": [
+    "Dirty read: saw uncommitted data",
+    "Non-repeatable read: row changed",
+    "Phantom read: new rows appeared",
+    "Lost update: 10+1+1 = 11",
+    "Write skew: two rows, rule broken"
+   ],
+   "steps": [
+    {
+     "say": "When overlapping transactions touch the same data, you get wrong results called anomalies. First, a dirty read. Transaction A reads a price B wrote but hasn't committed. B rolls back. A used a price that never existed.",
+     "reveal": 1
+    },
+    {
+     "say": "Non-repeatable read. A reads Alice's balance as five hundred. B changes it to four hundred and commits. A reads again and gets four hundred.",
+     "reveal": 2
+    },
+    {
+     "say": "Phantom read. A asks for Friday's bookings for room seven and gets two. B inserts a third. A's same query now returns three. The new row is the phantom.",
+     "reveal": 3
+    },
+    {
+     "say": "Lost update. Two buyers both read a counter as ten, both add one, both write eleven. It should be twelve.",
+     "reveal": 4
+    },
+    {
+     "say": "Write skew, the subtlest. Two transactions read the same rows, each decides it's safe, and each writes a different row. Together they break a rule.",
+     "reveal": 5
+    }
+   ],
+   "caption": "Book: Fundamentals Part 3 · Isolation levels and anomalies"
+  },
+  {
+   "id": "s011",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: the hospital on-call rule",
+   "table": {
+    "head": [
+     "Step",
+     "What happens"
+    ],
+    "rows": [
+     [
+      "Start",
+      "Alice and Bob on call (2)"
+     ],
+     [
+      "Alice reads",
+      "Count = 2, safe to leave"
+     ],
+     [
+      "Bob reads",
+      "Count = 2, safe to leave"
+     ],
+     [
+      "Both write",
+      "Each updates own row only"
+     ],
+     [
+      "Both commit",
+      "0 on call: rule broken"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's walk write skew through. A hospital rule: at least one doctor on call. Right now, Alice and Bob are.",
+     "reveal": 1
+    },
+    {
+     "say": "Step one: Alice clicks go off call. Her transaction counts on-call doctors and sees two. Fine for her to leave.",
+     "reveal": 2
+    },
+    {
+     "say": "Step two: at the same moment, Bob does the same. His transaction also sees two.",
+     "reveal": 3
+    },
+    {
+     "say": "Step three: Alice's transaction updates only her row. Bob's updates only his row.",
+     "reveal": 4
+    },
+    {
+     "say": "Step four: both commit. Zero doctors on call. No row was written twice, so row locks never noticed.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s012",
+   "layout": "quiz",
+   "title": "Pause and think: which level stops a dirty read?",
+   "bullets": [
+    "Read uncommitted",
+    "Read committed",
+    "Repeatable read",
+    "Serializable"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. Four standard isolation levels, weakest to strongest. Which is the weakest one that stops dirty reads? Answer on the next slide.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s013",
+   "layout": "table",
+   "title": "Isolation levels, weakest to strongest",
+   "table": {
+    "head": [
+     "Level",
+     "Stops",
+     "Still allows"
+    ],
+    "rows": [
+     [
+      "Read uncommitted",
+      "Almost nothing",
+      "Dirty, non-repeat, phantom"
+     ],
+     [
+      "Read committed",
+      "Dirty reads",
+      "Non-repeatable, phantom"
+     ],
+     [
+      "Repeatable read",
+      "Dirty, non-repeatable",
+      "Phantoms (per standard)"
+     ],
+     [
+      "Snapshot isolation",
+      "Dirty, non-repeat, most phantoms",
+      "Write skew"
+     ],
+     [
+      "Serializable",
+      "Everything",
+      "Nothing; more aborts"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "The answer is read committed. Level by level: read uncommitted allows all three anomalies. Almost nobody uses it.",
+     "reveal": 1
+    },
+    {
+     "say": "Read committed blocks dirty reads, but a row can still change under you. PostgreSQL's default.",
+     "reveal": 2
+    },
+    {
+     "say": "Repeatable read also blocks non-repeatable reads, but the standard allows phantoms. MySQL's default.",
+     "reveal": 3
+    },
+    {
+     "say": "Snapshot isolation: each transaction reads a frozen picture of the database as of its start, built with M-V-C-C, multi-version concurrency control. Rows keep old versions, so long reports and busy updates don't wait on each other. But write skew still gets through, so our hospital still breaks.",
+     "reveal": 4
+    },
+    {
+     "say": "Serializable: the result equals some one-at-a-time order, stopping everything, including write skew. The cost is more aborts to retry, or more lock waiting.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s014",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: selling the last ticket",
+   "table": {
+    "head": [
+     "Tool",
+     "Last ticket"
+    ],
+    "rows": [
+     [
+      "Atomic update",
+      "left = left - 1 WHERE left > 0"
+     ],
+     [
+      "Explicit lock",
+      "SELECT ... FOR UPDATE"
+     ],
+     [
+      "Optimistic version",
+      "WHERE version = 5, else retry"
+     ],
+     [
+      "Constraint",
+      "Unique index rejects duplicate"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "In the interview: two users buy the last ticket at once. How do you stop overselling? Four tools. First, an atomic update: set left to left minus one, where left is above zero. Then check exactly one row changed.",
+     "reveal": 1
+    },
+    {
+     "say": "Second, an explicit lock: select for update locks the row until you commit. The second buyer waits.",
+     "reveal": 2
+    },
+    {
+     "say": "Third, optimistic concurrency. Keep a version column, and write only where the version is still five. If zero rows changed, someone got there first, so retry.",
+     "reveal": 3
+    },
+    {
+     "say": "Fourth, a constraint. A unique index on room and date rejects a double booking. Most apps run read committed or snapshot, and add these only around money or stock.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s015",
+   "layout": "table",
+   "kicker": "Concept 5 of 24",
+   "title": "NoSQL families",
+   "table": {
+    "head": [
+     "Family",
+     "Shop use",
+     "Example"
+    ],
+    "rows": [
+     [
+      "Key-value",
+      "Carts, sessions",
+      "Redis, DynamoDB"
+     ],
+     [
+      "Document",
+      "Product with variants",
+      "MongoDB"
+     ],
+     [
+      "Wide-column",
+      "Activity log by user, time",
+      "Cassandra"
+     ],
+     [
+      "Graph",
+      "Also bought",
+      "Neo4j"
+     ],
+     [
+      "Time-series",
+      "Server metrics",
+      "Prometheus, InfluxDB"
+     ],
+     [
+      "Search",
+      "Product search",
+      "Elasticsearch"
+     ],
+     [
+      "Vector",
+      "Similar-looking products",
+      "pgvector, Pinecone"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "NoSQL means not only SQL: databases that don't use relational tables as main storage. Each family is a specialist, shaped around one access pattern and giving up something, often joins. Let's place each in our shop. Key-value: a giant dictionary of put and get, often under a millisecond. Carts and sessions go in Redis.",
+     "reveal": 1
+    },
+    {
+     "say": "Document: each record is a nested JSON document. A product with its sizes and seller is one MongoDB document, read whole.",
+     "reveal": 2
+    },
+    {
+     "say": "Wide-column: rows grouped by a partition key, sorted inside it, built for huge write volumes. The activity log, by user and time, fits Cassandra.",
+     "reveal": 3
+    },
+    {
+     "say": "Graph: nodes and edges. Customers who bought this also bought that is a few cheap hops.",
+     "reveal": 4
+    },
+    {
+     "say": "Time-series: time-stamped points with compression and expiry. Server metrics go to Prometheus.",
+     "reveal": 5
+    },
+    {
+     "say": "Search: an inverted index listing the documents for each word, so red shoe means intersecting two lists. Product search runs on Elasticsearch.",
+     "reveal": 6
+    },
+    {
+     "say": "Vector databases store embeddings, number lists where similar items sit close. Find shoes that look like this photo is a nearest neighbour search.",
+     "reveal": 7
+    }
+   ],
+   "caption": "Book: Fundamentals Part 3 · NoSQL database families"
+  },
+  {
+   "id": "s016",
+   "layout": "bullets",
+   "kicker": "Concept 6 of 24",
+   "title": "BASE: the opposite of ACID",
+   "bullets": [
+    "Basically available",
+    "Soft state",
+    "Eventually consistent"
+   ],
+   "steps": [
+    {
+     "say": "BASE is a tongue-in-cheek opposite of ACID, describing many early NoSQL systems. Basically available: it keeps answering when some machines fail, even if some answers are a little old.",
+     "reveal": 1
+    },
+    {
+     "say": "Soft state: copies can change without new writes, as they catch up with each other.",
+     "reveal": 2
+    },
+    {
+     "say": "Eventually consistent: if writes stop, all copies eventually agree. Until then two readers may see different values. ACID is a bank teller who checks the ledger before handing over cash. BASE is a coffee shop that takes your order at once and fixes the odd mix-up later.",
+     "reveal": 3
+    }
+   ],
+   "caption": "Book: Fundamentals Part 3 · SQL vs NoSQL and BASE"
+  },
+  {
+   "id": "s017",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: SQL or NoSQL for each shop need",
+   "table": {
+    "head": [
+     "Shop need",
+     "Lean towards"
+    ],
+    "rows": [
+     [
+      "Orders, payments, stock",
+      "SQL"
+     ],
+     [
+      "Reports with joins",
+      "SQL"
+     ],
+     [
+      "Changing nested product data",
+      "Document store"
+     ],
+     [
+      "Huge click stream by user, time",
+      "Wide-column"
+     ],
+     [
+      "Fits one box, team knows Postgres",
+      "SQL, almost always"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "So SQL or NoSQL? Name the access pattern first. Orders and payments need money to add up: SQL.",
+     "reveal": 1
+    },
+    {
+     "say": "Reports across users, orders and products need joins: SQL.",
+     "reveal": 2
+    },
+    {
+     "say": "Product details change shape often and are read whole: a document store.",
+     "reveal": 3
+    },
+    {
+     "say": "The click stream is a massive write volume read by user and time: wide-column.",
+     "reveal": 4
+    },
+    {
+     "say": "And if the team knows PostgreSQL and the data fits one machine: SQL, almost always. Several types in one system is normal, called polyglot persistence. And NoSQL isn't simply faster. Only for its own pattern.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s018",
+   "layout": "number",
+   "kicker": "Concept 7 of 24",
+   "title": "Indexes: scan versus lookup",
+   "big": "100M rows: scan = seconds, index = <1 ms",
+   "caption": "Book: Fundamentals Part 3 · Indexes",
+   "steps": [
+    {
+     "say": "Our shop has a hundred million users. Find the one with this email. With no index, the database reads every row, a full table scan. Many seconds.",
+     "reveal": 0
+    },
+    {
+     "say": "An index is an extra structure beside the table that finds rows by a column's value, like a textbook's index. With one, it's a few page reads, under a millisecond.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s019",
+   "layout": "diagram",
+   "title": "B-tree: the default index",
+   "mermaid": "flowchart TD\n  R[\"Root: 100 | 200\"]\n  A[\"Inner: 20 | 50 | 80\"]\n  B[\"Inner: 120 | 150 | 180\"]\n  C[\"Inner: 220 | 260 | 300\"]\n  L[\"Leaf: keys 120 to 149 + row pointers\"]\n  R -- \"< 100\" --> A\n  R -- \"100 to 199\" --> B\n  R -- \">= 200\" --> C\n  B -- \"120 to 149\" --> L",
+   "caption": "About 4 levels cover billions of rows",
+   "steps": [
+    {
+     "say": "The B-tree is the default in almost every relational database. It's a balanced tree of fixed-size pages, about eight or sixteen kilobytes each. Each page holds hundreds of sorted keys, so the tree stays shallow. About four levels cover billions of rows.",
+     "reveal": 0
+    },
+    {
+     "say": "Let's look up key one hundred thirty-five. The root says keys from one hundred to one ninety-nine go to the middle page. That page says one twenty to one forty-nine go to this leaf. The leaf points to the row. Three page reads. Because keys are sorted, ranges and order by work too. The catch: updates happen in place, which means random disk writes.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s020",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "LSM-tree: built for writes",
+   "table": {
+    "head": [
+     "Step",
+     "One activity-log write"
+    ],
+    "rows": [
+     [
+      "1. Log + memtable",
+      "Append to disk log, sort in memory"
+     ],
+     [
+      "2. Flush",
+      "At 64 MB, write one SSTable"
+     ],
+     [
+      "3. Compact",
+      "Merge files, keep newest, drop deletes"
+     ],
+     [
+      "4. Read",
+      "Memtable, then newest files first"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "The L-S-M tree, log-structured merge tree, powers write-heavy stores like Cassandra. It never modifies data in place. Follow one activity-log write. Step one: append it to a disk log for crash safety, and insert it into a sorted in-memory table, the memtable.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two: at, say, sixty-four megabytes, write the memtable out as one immutable sorted file, an S-S-table. A fast sequential write.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three: background compaction merges files, keeping each key's newest version and dropping deleted ones.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four: a read checks the memtable, then files newest first. A Bloom filter per file skips most of them. So L-S-M wins on writes, B-trees on predictable reads.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s021",
+   "layout": "table",
+   "title": "Other index types, on the shop",
+   "table": {
+    "head": [
+     "Type",
+     "Shop example"
+    ],
+    "rows": [
+     [
+      "Hash",
+      "Session id: exact match only"
+     ],
+     [
+      "Composite",
+      "(user_id, created_at)"
+     ],
+     [
+      "Covering",
+      "Add total: index-only scan"
+     ],
+     [
+      "Secondary",
+      "Email index points to row"
+     ],
+     [
+      "Full-text",
+      "Search product descriptions"
+     ],
+     [
+      "Geospatial",
+      "Stores near me"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "More types, each on our shop. A hash index maps key to location. Exact lookups in constant time, but no ranges. Good for session ids.",
+     "reveal": 1
+    },
+    {
+     "say": "A composite index on user id then created at, sorted like a phone book by last name then first. It helps queries on user id, or user id plus a date range. Not date alone.",
+     "reveal": 2
+    },
+    {
+     "say": "A covering index holds every column a query needs. Add the order total, and the my orders page never touches the table.",
+     "reveal": 3
+    },
+    {
+     "say": "A secondary index is any index besides the clustered one, which stores the rows themselves in order. Our email index is secondary, pointing back to the row.",
+     "reveal": 4
+    },
+    {
+     "say": "Full-text: an inverted index inside the database, for searching product descriptions.",
+     "reveal": 5
+    },
+    {
+     "say": "Geospatial: R-trees or geohashes, for find stores near me.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s022",
+   "layout": "quiz",
+   "title": "Pause and think: index on (country, city)",
+   "bullets": [
+    "Yes, fully",
+    "Generally no",
+    "Only if city is unique"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. You have a composite index on country, then city. A query filters only on city equals Lyon. Does it use the index? Answer on the next slide.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s023",
+   "layout": "bullets",
+   "kicker": "Concept 8 of 24",
+   "title": "Index trade-offs",
+   "bullets": [
+    "Writes: 6 indexes = 7 structures",
+    "Storage: can equal the table",
+    "Memory: hot pages must fit",
+    "Low selectivity rarely helps",
+    "Index what you filter, join, sort"
+   ],
+   "steps": [
+    {
+     "say": "Generally no. It's sorted by country first, so the Lyons are scattered. Now, what indexes cost. Every write gets slower: an insert into a table with six indexes updates seven structures.",
+     "reveal": 1
+    },
+    {
+     "say": "Storage: indexes can be as big as the table.",
+     "reveal": 2
+    },
+    {
+     "say": "Memory: an index is fast only while its hot pages fit in cache.",
+     "reveal": 3
+    },
+    {
+     "say": "Low-selectivity columns, like a true or false flag, rarely benefit.",
+     "reveal": 4
+    },
+    {
+     "say": "So index what your frequent queries filter, join and sort on, and nothing else. A read-heavy catalogue can afford more indexes than a write-heavy click log.",
+     "reveal": 5
+    }
+   ],
+   "caption": "Book: Fundamentals Part 3 · Indexes · Trade-offs"
+  },
+  {
+   "id": "s024",
+   "layout": "table",
+   "kicker": "Concept 9 of 24",
+   "title": "Normalization: each fact once",
+   "table": {
+    "head": [
+     "Form",
+     "Shop violation",
+     "Fix"
+    ],
+    "rows": [
+     [
+      "1NF",
+      "tags = 'red,blue,green'",
+      "A separate tags table"
+     ],
+     [
+      "2NF",
+      "product_title in order_items",
+      "Move to products"
+     ],
+     [
+      "3NF",
+      "city follows zip_code",
+      "A zip-code table"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Normalization stores each fact in exactly one place. Three normal forms, on our shop. First: one value per cell. A tags column holding red comma blue comma green breaks it. Use a tags table.",
+     "reveal": 1
+    },
+    {
+     "say": "Second: every non-key column depends on the whole key. In order items, keyed by order and product, the title depends only on the product, so it belongs in products.",
+     "reveal": 2
+    },
+    {
+     "say": "Third: non-key columns depend only on the key. If the city follows from the zip code, it belongs in a zip table. The key, the whole key, and nothing but the key.",
+     "reveal": 3
+    }
+   ],
+   "caption": "Book: Fundamentals Part 3 · Normalization and denormalization"
+  },
+  {
+   "id": "s025",
+   "layout": "number",
+   "title": "Why normalize: the update anomaly",
+   "big": "1 rename = 10,000 row updates",
+   "caption": "Duplicated facts drift out of sync",
+   "steps": [
+    {
+     "say": "Why bother? Imagine the product title is copied into ten thousand order rows. Rename the product, and you must update ten thousand rows. If that fails halfway, the copies disagree. Normalized, it's one update.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s026",
+   "layout": "twocol",
+   "title": "Denormalization: copy for fast reads",
+   "left": {
+    "heading": "Normalized",
+    "bullets": [
+     "Smaller storage",
+     "One place to update",
+     "Reads may need joins"
+    ]
+   },
+   "right": {
+    "heading": "Denormalized",
+    "bullets": [
+     "Fewer joins, faster reads",
+     "Many places to update",
+     "Copies can drift"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Denormalization deliberately stores a fact in several places for faster reads. Normalized data is smaller.",
+     "reveal": 1
+    },
+    {
+     "say": "Normalized writes go to one place.",
+     "reveal": 2
+    },
+    {
+     "say": "But reads may need joins.",
+     "reveal": 3
+    },
+    {
+     "say": "Denormalized, reads need fewer joins. Our shop stores a review count on each product instead of counting reviews every page view.",
+     "reveal": 4
+    },
+    {
+     "say": "Writes must update every copy. And the risk is copies drifting out of sync.",
+     "reveal": 5
+    },
+    {
+     "say": "So start normalized, and denormalize hot reads once measured. Decide how copies stay in sync: same transaction, a background job, or events.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s027",
+   "layout": "bullets",
+   "kicker": "Concept 10 of 24",
+   "title": "Replication: why keep copies",
+   "bullets": [
+    "Availability: a copy survives",
+    "Read scaling: 10 replicas, ~10x reads",
+    "Latency: Frankfurt 10-20 ms vs 80-100",
+    "Copy for reads, split for writes"
+   ],
+   "steps": [
+    {
+     "say": "Replication keeps copies of the same data on several machines, called replicas, kept in sync by sending every change. Three reasons. One, availability: if the shop's database machine dies, another copy serves.",
+     "reveal": 1
+    },
+    {
+     "say": "Two, read scaling: ten replicas serve roughly ten times the reads.",
+     "reveal": 2
+    },
+    {
+     "say": "Three, lower latency: a Frankfurt replica answers European shoppers in ten to twenty milliseconds, instead of eighty to a hundred to Virginia.",
+     "reveal": 3
+    },
+    {
+     "say": "But it does not help write throughput. Every copy must still apply every write. The rule to remember: copy for reads, split for writes.",
+     "reveal": 4
+    }
+   ],
+   "caption": "Book: Fundamentals Part 3 · Replication"
+  },
+  {
+   "id": "s028",
+   "layout": "diagram",
+   "title": "Leader-follower replication",
+   "mermaid": "flowchart LR\n  W[\"App: writes\"] --> L[\"Leader\"]\n  L -- \"replication stream\" --> F1[\"Follower 1\"]\n  L -- \"replication stream\" --> F2[\"Follower 2\"]\n  R[\"App: reads\"] --> F1\n  R --> F2",
+   "caption": "Leader takes writes; followers serve reads",
+   "steps": [
+    {
+     "say": "The first style is leader-follower. One leader accepts all writes, records each change in its log, and streams it to followers, which apply changes in the same order.",
+     "reveal": 0
+    },
+    {
+     "say": "Our shop's app writes orders to the leader, and reads product pages from the followers. It's the default in PostgreSQL, MySQL and MongoDB. Simple, with no write conflicts. But the leader limits write throughput, and you need failover when it dies.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s029",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Three replication styles",
+   "table": {
+    "head": [
+     "Style",
+     "Writes go to",
+     "Shop example"
+    ],
+    "rows": [
+     [
+      "Leader-follower",
+      "One leader",
+      "Orders DB, read replicas"
+     ],
+     [
+      "Multi-leader",
+      "One leader per region",
+      "US and EU carts; conflicts"
+     ],
+     [
+      "Leaderless",
+      "Any W of N replicas",
+      "N=3, W=2, R=2: overlap"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Three styles side by side. Leader-follower, which we just saw: one writer, simple, no conflicts.",
+     "reveal": 1
+    },
+    {
+     "say": "Multi-leader: several nodes take writes, usually one per region. Our shop has a leader in the US and one in Europe, so each writes locally and survives the other going dark. The hard part is conflicts: both regions change one cart at once. Last write wins silently drops one change. Or merge with app logic, or use C-R-D-Ts, data types that always merge cleanly.",
+     "reveal": 2
+    },
+    {
+     "say": "Leaderless: any replica takes reads and writes. With three copies, a write succeeds when two confirm, and a read asks two and takes the newest. R plus W is greater than N, so every read overlaps an up-to-date copy. That's a quorum, as in Cassandra.",
+     "reveal": 3
+    }
+   ]
+  },
+  {
+   "id": "s030",
+   "layout": "diagram",
+   "kicker": "Concept 11 of 24",
+   "title": "Synchronous versus asynchronous",
+   "mermaid": "flowchart LR\n  C[\"Client: pay\"] --> L[\"Leader\"]\n  L -- \"1. replicate\" --> S[\"Sync follower\"]\n  S -- \"2. ack\" --> L\n  L -- \"3. committed\" --> C\n  L -. \"4. later\" .-> A[\"Async follower\"]",
+   "caption": "Book: Fundamentals Part 3 · Replication · Types",
+   "steps": [
+    {
+     "say": "When does the leader tell the client done? Synchronous: it waits until a follower confirms. If the leader then dies, no committed data is lost. But every write waits a round trip, and a slow follower stalls writes.",
+     "reveal": 0
+    },
+    {
+     "say": "Asynchronous: reply once the leader's own write is durable, and ship changes in the background. Fast, but a dying leader loses the last changes no follower had.",
+     "reveal": 0
+    },
+    {
+     "say": "Semi-synchronous waits for one follower. In the interview, for payments, say: at least one synchronous copy so a committed payment survives losing the leader, plus asynchronous replicas for reads.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s031",
+   "layout": "bullets",
+   "kicker": "Concept 12 of 24",
+   "title": "Replication lag",
+   "bullets": [
+    "Read-your-own-writes: route to leader",
+    "Monotonic reads: pin user to a replica"
+   ],
+   "steps": [
+    {
+     "say": "Replication lag is how far a follower trails the leader. Usually milliseconds, sometimes seconds or minutes. It causes visible bugs. First, read your own writes. A shopper edits their address, the reload hits a lagging replica, and the change seems gone. Fix: read their own data from the leader for a short while after they write.",
+     "reveal": 1
+    },
+    {
+     "say": "Second, monotonic reads. Two refreshes hit different replicas and the second shows older data, as if time went backwards. Fix: pin each user to one replica.",
+     "reveal": 2
+    }
+   ],
+   "caption": "Book: Fundamentals Part 3 · Replication · How it works"
+  },
+  {
+   "id": "s032",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: failover when the shop's leader dies",
+   "table": {
+    "head": [
+     "Step",
+     "Shop database"
+    ],
+    "rows": [
+     [
+      "1. Detect",
+      "No heartbeat for 10-30 s"
+     ],
+     [
+      "2. Choose",
+      "Most up-to-date follower wins"
+     ],
+     [
+      "3. Reconfigure",
+      "App and followers repointed"
+     ],
+     [
+      "Risk: split brain",
+      "Old leader returns; fence it"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Failover promotes a follower when the leader fails. Step one, detect. The leader misses heartbeats, regular I am alive messages, for ten to thirty seconds. Too short, and a network hiccup triggers a needless failover.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two, choose a new leader, ideally the most up-to-date follower.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three, reconfigure. Point the app and other followers at it, by D-N-S, a proxy, or service discovery.",
+     "reveal": 3
+    },
+    {
+     "say": "The danger is split brain: the old leader was only cut off, returns, and still thinks it leads. Two nodes take writes. Defences: a majority must agree on the leader, and fencing blocks the old one. GitHub hit this in twenty eighteen, and untangling it took over a day.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s033",
+   "layout": "number",
+   "title": "A replica is not a backup",
+   "big": "DELETE FROM users -> every replica in ms",
+   "caption": "Replication copies mistakes too",
+   "steps": [
+    {
+     "say": "One warning. A replica is not a backup. Run delete from users by mistake, and it replicates to every copy within milliseconds. You need real backups, which we'll cover under durability.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s034",
+   "layout": "bullets",
+   "kicker": "Concept 13 of 24",
+   "title": "Partitioning and sharding",
+   "bullets": [
+    "Shard: a piece on its own machine",
+    "Horizontal: split rows",
+    "Vertical: split columns",
+    "Federation: split by feature"
+   ],
+   "steps": [
+    {
+     "say": "Replication can't help when data outgrows one machine, say fifty terabytes, or writes do, say two hundred thousand a second. Partitioning splits data into pieces. Sharding puts the pieces, called shards, on different machines. Ten shards each hold a tenth of the data and take a tenth of the writes.",
+     "reveal": 1
+    },
+    {
+     "say": "Horizontal partitioning splits rows: the first million users here, the next million there.",
+     "reveal": 2
+    },
+    {
+     "say": "Vertical partitioning splits columns: small hot ones like name in one table, big rare ones like bio in another.",
+     "reveal": 3
+    },
+    {
+     "say": "Federation splits by feature: users, products and orders databases on separate servers, losing joins between them. And each shard is usually replicated too.",
+     "reveal": 4
+    }
+   ],
+   "caption": "Book: Fundamentals Part 3 · Partitioning and sharding"
+  },
+  {
+   "id": "s035",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Four sharding strategies, on a chat app",
+   "table": {
+    "head": [
+     "Strategy",
+     "Chat app messages"
+    ],
+    "rows": [
+     [
+      "Range",
+      "By month: newest shard gets all writes"
+     ],
+     [
+      "Hash",
+      "hash(conversation_id) mod 8: even"
+     ],
+     [
+      "Directory",
+      "Lookup: big workspace on own shard"
+     ],
+     [
+      "Geo",
+      "EU users on EU shards"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "How does a row pick its shard? By its shard key. Let's switch to a chat app's messages, the classic case. Range-based: each shard owns a key range, like a month. Range queries hit one shard. But shard by timestamp and every new message hits the newest shard.",
+     "reveal": 1
+    },
+    {
+     "say": "Hash-based: shard equals hash of conversation id mod eight. Even spread, but range queries ask every shard. And going from eight to nine shards with plain mod moves almost every key.",
+     "reveal": 2
+    },
+    {
+     "say": "Directory-based: a lookup service maps keys to shards. Flexible: move one huge workspace to its own shard. But it's an extra lookup that must stay highly available.",
+     "reveal": 3
+    },
+    {
+     "say": "Geo-based: European users on European shards. Lower latency, and it helps data-residency laws like G-D-P-R. Uneven if regions differ in size.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s036",
+   "layout": "table",
+   "kicker": "Concept 14 of 24",
+   "title": "Choosing the shard key",
+   "table": {
+    "head": [
+     "Test",
+     "Chat app"
+    ],
+    "rows": [
+     [
+      "1. High cardinality",
+      "conversation_id, not country"
+     ],
+     [
+      "2. Even load",
+      "Data and traffic spread"
+     ],
+     [
+      "3. Matches main query",
+      "Read per conversation: 1 shard"
+     ],
+     [
+      "4. Not monotonic",
+      "No timestamp range key"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Choosing the shard key is the most important sharding decision, and changing it later is very expensive. Four tests, on our chat app. One, high cardinality, meaning many distinct values. Country is poor, about two hundred uneven values. Conversation id is good.",
+     "reveal": 1
+    },
+    {
+     "say": "Two, it spreads load evenly, both data and traffic.",
+     "reveal": 2
+    },
+    {
+     "say": "Three, it matches the main query. Messages are read per conversation, so each read touches one shard. Queries without the key go to every shard and merge, called scatter-gather, which gets worse as you add shards.",
+     "reveal": 3
+    },
+    {
+     "say": "Four, it doesn't grow in one direction under range sharding. Avoid auto-increment ids and timestamps as a range key.",
+     "reveal": 4
+    }
+   ],
+   "caption": "Book: Fundamentals Part 3 · Partitioning and sharding · How it works"
+  },
+  {
+   "id": "s037",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Hot keys: the giant group chat",
+   "table": {
+    "head": [
+     "Fix",
+     "Giant group chat"
+    ],
+    "rows": [
+     [
+      "Key salting",
+      "chat_42#0 ... #9 over 10 shards"
+     ],
+     [
+      "Caching",
+      "Reads served from cache"
+     ],
+     [
+      "Dedicated shard",
+      "Directory sends it to its own box"
+     ],
+     [
+      "Write buffering",
+      "Batch the counter updates"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "A hot spot is a shard with far more load than the rest, often caused by one hot key, like a group chat with millions of members. Hashing can't split one key. Four fixes. Key salting: add a suffix from zero to nine, spreading its writes over ten shards. Reads ask all ten.",
+     "reveal": 1
+    },
+    {
+     "say": "Caching: serve the hot item's reads from a cache in front of the database.",
+     "reveal": 2
+    },
+    {
+     "say": "A dedicated shard for known whales, via a directory.",
+     "reveal": 3
+    },
+    {
+     "say": "Write buffering: collect increments in memory and apply them in batches.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s038",
+   "layout": "bullets",
+   "title": "Resharding and the cost of sharding",
+   "bullets": [
+    "Fixed logical partitions: 1,024 on 8",
+    "Dynamic splitting past a size limit",
+    "Costs: joins, transactions, IDs, ops"
+   ],
+   "steps": [
+    {
+     "say": "As data grows you add shards: resharding. Option one: fixed logical partitions. Create far more partitions than machines on day one, say a thousand twenty-four on eight. Adding a machine moves whole partitions, and keys never change partition. Notion runs four hundred eighty logical shards this way.",
+     "reveal": 1
+    },
+    {
+     "say": "Option two: dynamic splitting. When a range passes a size limit, split it and move half.",
+     "reveal": 2
+    },
+    {
+     "say": "And sharding is costly: no cross-shard joins or easy transactions, no single auto-increment id, and every backup multiplied. So shard late. First tune queries, add indexes, caches and replicas, and scale up.",
+     "reveal": 3
+    }
+   ]
+  },
+  {
+   "id": "s039",
+   "layout": "number",
+   "kicker": "Concept 15 of 24",
+   "title": "Why hash mod N fails",
+   "big": "4 -> 5 servers: ~80% of keys move",
+   "caption": "Book: Fundamentals Part 3 · Consistent hashing and virtual nodes",
+   "steps": [
+    {
+     "say": "With plain hash mod N, a key with hash ten goes to server ten mod four, which is two. Add a fifth server and it's ten mod five, which is zero. It moved. Going from four to five servers, about eighty percent of all keys move. For a cache, that's a flood of misses. For a database, a huge migration.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s040",
+   "layout": "diagram",
+   "title": "The hash ring",
+   "mermaid": "flowchart LR\n  K1[\"alice @15\"] --> A[\"Server A @20\"]\n  K2[\"bob @47\"] --> B[\"Server B @55\"]\n  K3[\"carol @80\"] --> C[\"Server C @90\"]\n  K4[\"dave @95\"] -- \"wraps around\" --> A",
+   "caption": "Adding or removing one of N servers moves about 1/N of keys",
+   "steps": [
+    {
+     "say": "Consistent hashing fixes it. Step one: bend the hash range into a circle, the ring. Step two: hash each server onto it. Step three: hash each key and walk clockwise to the first server. Alice at fifteen goes to server A at twenty. Dave at ninety-five wraps past the top to A.",
+     "reveal": 0
+    },
+    {
+     "say": "Step four, add a server. It takes only the keys between its predecessor and itself, about one Nth. Step five, remove a server. Its keys move to the next one clockwise, nothing else. Step six, replication: store each key on its server plus the next two, for three copies, as Cassandra does.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s041",
+   "layout": "quiz",
+   "title": "Pause and think: 4 servers on a ring, one leaves",
+   "bullets": [
+    "Spread evenly over A, C, D",
+    "All onto the next server clockwise",
+    "Nowhere: keys are lost"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. Four servers on a ring, each owning about a quarter of the keys. Server B dies. Where does its whole load go? Answer on the next slide.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s042",
+   "layout": "bullets",
+   "kicker": "Concept 16 of 24",
+   "title": "Virtual nodes",
+   "bullets": [
+    "Many ring positions per server",
+    "Load evens out",
+    "Departing load spreads to many",
+    "Bigger machine, more vnodes"
+   ],
+   "steps": [
+    {
+     "say": "All onto the next server clockwise, doubling its load. And with few servers, arcs come out uneven. The fix is virtual nodes: give each server many ring positions, say a hundred to two hundred fifty-six, by hashing A one, A two, and so on.",
+     "reveal": 1
+    },
+    {
+     "say": "Load evens out statistically, because each server owns many small scattered arcs.",
+     "reveal": 2
+    },
+    {
+     "say": "When a server leaves, its many small arcs are picked up by many servers, so the extra load spreads.",
+     "reveal": 3
+    },
+    {
+     "say": "And a more powerful machine gets more virtual nodes, for a bigger share. The trade-off of any hashing: key order is gone, so range queries become scatter-gather.",
+     "reveal": 4
+    }
+   ],
+   "caption": "Book: Fundamentals Part 3 · Consistent hashing and virtual nodes"
+  },
+  {
+   "id": "s043",
+   "layout": "table",
+   "kicker": "Concept 17 of 24",
+   "title": "Block, file and object storage",
+   "table": {
+    "head": [
+     "Type",
+     "Access",
+     "Shop use"
+    ],
+    "rows": [
+     [
+      "Block",
+      "Attached disk, edit in place",
+      "Database files, VM disks"
+     ],
+     [
+      "File",
+      "Shared over NFS or SMB",
+      "Legacy app needing paths"
+     ],
+     [
+      "Object",
+      "HTTP key, replace whole",
+      "Product photos, backups"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Under every database and photo is raw storage, in three shapes. Block storage: a raw disk of fixed-size blocks, usually attached to one server. Low latency, and you can edit a few bytes in place. Our shop's database data files live on block storage, like Amazon E-B-S.",
+     "reveal": 1
+    },
+    {
+     "say": "File storage: a shared folder tree that many servers mount over the network. The shop's legacy invoice app that expects file paths uses it.",
+     "reveal": 2
+    },
+    {
+     "say": "Object storage: whole objects, bytes plus metadata, addressed by a key in a bucket, over H-T-T-P. No partial edits: replace the whole object. Cheapest per gigabyte, practically unlimited, and S-three is designed for eleven nines of durability. Product photos and backups go here.",
+     "reveal": 3
+    }
+   ],
+   "caption": "Book: Fundamentals Part 3 · Storage types: block, file and object"
+  },
+  {
+   "id": "s044",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: a seller uploads a product photo",
+   "table": {
+    "head": [
+     "Step",
+     "Product photo upload"
+    ],
+    "rows": [
+     [
+      "1. Ask",
+      "Browser asks app server"
+     ],
+     [
+      "2. Pre-signed URL",
+      "Time-limited, one key"
+     ],
+     [
+      "3. Upload direct",
+      "Browser PUTs to the bucket"
+     ],
+     [
+      "4. Save pointer",
+      "DB stores key, owner, size"
+     ],
+     [
+      "5. Serve",
+      "CDN in front of the bucket"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Here's the standard upload pattern. Step one: the seller's browser asks the app server for permission to upload.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two: the app server returns a pre-signed U-R-L, a time-limited link that allows one upload to one key.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three: the browser uploads straight to object storage, so gigabytes never pass through our app servers.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four: the app server stores only the key and metadata, like owner, size and type, in the database.",
+     "reveal": 4
+    },
+    {
+     "say": "Step five: shoppers download it through a C-D-N in front of the bucket. Never put big files in the database. File in object storage, pointer in the database.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s045",
+   "layout": "twocol",
+   "kicker": "Concept 18 of 24",
+   "title": "OLTP versus OLAP",
+   "left": {
+    "heading": "OLTP: the checkout",
+    "bullets": [
+     "Few rows, by key",
+     "Milliseconds",
+     "Row store"
+    ]
+   },
+   "right": {
+    "heading": "OLAP: the accountant",
+    "bullets": [
+     "Many rows, few columns",
+     "Seconds to minutes",
+     "Column store"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Two workloads. O-L-T-P, online transaction processing, is everyday app work: load user forty-two, insert this order. Few rows, by key.",
+     "reveal": 1
+    },
+    {
+     "say": "Millisecond latency, thousands per second.",
+     "reveal": 2
+    },
+    {
+     "say": "It's served by row-oriented databases like PostgreSQL.",
+     "reveal": 3
+    },
+    {
+     "say": "O-L-A-P, online analytical processing, is reporting: revenue per country per month for three years. Scans millions of rows but few columns.",
+     "reveal": 4
+    },
+    {
+     "say": "It takes seconds to minutes, and is run by analysts and dashboards.",
+     "reveal": 5
+    },
+    {
+     "say": "It's served by column stores like Snowflake. A big report on the live database slows every checkout, so copy data to a separate analytics system.",
+     "reveal": 6
+    }
+   ],
+   "caption": "Book: Fundamentals Part 3 · OLTP vs OLAP, row vs column storage"
+  },
+  {
+   "id": "s046",
+   "layout": "table",
+   "title": "Row store versus column store",
+   "caption": "Analytics reads few columns over many rows",
+   "steps": [
+    {
+     "say": "Same table, two layouts. A row store keeps each row's columns together: one, France, twenty, then two, US, thirty-five. Fetch order one reads one place. Great for O-L-T-P.",
+     "reveal": 1
+    },
+    {
+     "say": "A column store keeps each column together: all ids, all countries, all amounts. Sum amount by country reads two columns and skips the fifty others. Similar values compress several times smaller, and the C-P-U processes them in batches. Great for O-L-A-P.",
+     "reveal": 2
+    }
+   ],
+   "table": {
+    "head": [
+     "Layout",
+     "orders on disk",
+     "Best for"
+    ],
+    "rows": [
+     [
+      "Row store",
+      "(1,FR,20) (2,US,35) (3,FR,12)",
+      "Fetch one whole row: OLTP"
+     ],
+     [
+      "Column store",
+      "1,2,3 | FR,US,FR | 20,35,12",
+      "Sum one column: OLAP"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "s047",
+   "layout": "table",
+   "kicker": "Concept 19 of 24",
+   "title": "Lakes, warehouses and pipelines",
+   "table": {
+    "head": [
+     "Store",
+     "What it holds",
+     "Shop use"
+    ],
+    "rows": [
+     [
+      "Warehouse",
+      "Curated, fixed schema",
+      "Finance revenue reports"
+     ],
+     [
+      "Data lake",
+      "Raw, any format, cheap",
+      "Click logs for ML"
+     ],
+     [
+      "Lakehouse",
+      "Lake files + tables",
+      "One copy for both"
+     ],
+     [
+      "Pipeline",
+      "ETL, ELT, CDC",
+      "Orders DB to warehouse"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Where does analytics data live? A data warehouse holds cleaned, structured data from many sources, with a schema fixed in advance. Often a star schema: a big fact table of sales, ringed by dimension tables for product, customer and date. Our finance team reports from Snowflake.",
+     "reveal": 1
+    },
+    {
+     "say": "A data lake is a huge, cheap store of raw data in any format, usually in object storage. Decide structure when you read. The shop dumps click logs there for machine learning.",
+     "reveal": 2
+    },
+    {
+     "say": "A lakehouse adds a table format like Iceberg on lake files, bringing transactions and schemas.",
+     "reveal": 3
+    },
+    {
+     "say": "Pipelines move the data. E-T-L transforms before loading, E-L-T after, inside the warehouse. Change data capture streams every change from the database log, so analytics lag seconds, not a day.",
+     "reveal": 4
+    }
+   ],
+   "caption": "Book: Fundamentals Part 3 · OLTP vs OLAP · lakes and warehouses"
+  },
+  {
+   "id": "s048",
+   "layout": "table",
+   "kicker": "Concept 20 of 24",
+   "title": "Durability: one tool per threat",
+   "table": {
+    "head": [
+     "Threat",
+     "Protection"
+    ],
+    "rows": [
+     [
+      "Crash or power cut",
+      "WAL + fsync"
+     ],
+     [
+      "Disk or machine dies",
+      "Replication, RAID"
+     ],
+     [
+      "Data centre lost",
+      "Copy in another zone or region"
+     ],
+     [
+      "Bug or human delete",
+      "Backups + PITR"
+     ],
+     [
+      "Ransomware",
+      "Immutable, separate-account backups"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Durability means committed data survives crashes, dead disks and human mistakes. Each threat needs its own tool. A process crash or power cut: the write-ahead log plus fsync.",
+     "reveal": 1
+    },
+    {
+     "say": "One disk or machine dies: replication or RAID, which combines disks so one failure loses nothing.",
+     "reveal": 2
+    },
+    {
+     "say": "A whole data centre lost: copies in another zone or region.",
+     "reveal": 3
+    },
+    {
+     "say": "A bug or a person deletes data: backups and point-in-time recovery.",
+     "reveal": 4
+    },
+    {
+     "say": "Ransomware or a stolen account: immutable backups in a separate account.",
+     "reveal": 5
+    }
+   ],
+   "caption": "Book: Part 3 · Durability: WAL, fsync, backups and recovery"
+  },
+  {
+   "id": "s049",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "The write-ahead log, step by step",
+   "table": {
+    "head": [
+     "Step",
+     "Committing one order"
+    ],
+    "rows": [
+     [
+      "1. Change in memory",
+      "Rows updated in RAM"
+     ],
+     [
+      "2. Append to WAL",
+      "Change + commit record"
+     ],
+     [
+      "3. fsync",
+      "Forced to the device"
+     ],
+     [
+      "4. Reply",
+      "Client hears committed"
+     ],
+     [
+      "5. Checkpoint",
+      "Data files written later"
+     ],
+     [
+      "6. Crash recovery",
+      "Replay WAL since checkpoint"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Updating data files in place is slow, and a crash can leave a half-written page. So the rule is log first, then data. Let's commit one order. Step one: the transaction changes rows in memory.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two: on commit, the changes and a commit record are appended to the write-ahead log, the W-A-L. A fast, sequential write.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three: fsync forces the log to the physical device. That system call means really write this now, not just to a memory buffer.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four: only now is the client told committed.",
+     "reveal": 4
+    },
+    {
+     "say": "Step five: later, changed pages go to the data files. A checkpoint records how far they're up to date.",
+     "reveal": 5
+    },
+    {
+     "say": "Step six: after a crash, replay the log from the last checkpoint. Committed orders are redone, uncommitted ones discarded. The same log feeds replication too.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s050",
+   "layout": "number",
+   "title": "Why fsync matters",
+   "big": "no fsync = 'saved' data lost on power cut",
+   "caption": "Group commit: many commits share one fsync",
+   "steps": [
+    {
+     "say": "Why fsync? The operating system keeps writes in its memory page cache and flushes later. Without fsync, a power cut loses writes your program thought were saved. It costs up to several milliseconds, so databases batch many commits into one fsync, called group commit.",
+     "reveal": 0
+    },
+    {
+     "say": "Some settings trade safety for speed. Redis defaults to fsync once a second, so you can lose up to a second of writes.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s051",
+   "layout": "bullets",
+   "kicker": "Concept 21 of 24",
+   "title": "Backups",
+   "bullets": [
+    "Full: complete copy",
+    "Incremental: changes since last",
+    "Logical: SQL export, portable",
+    "Physical: raw data files",
+    "Snapshot: disk image in seconds",
+    "3-2-1: 3 copies, 2 media, 1 off-site"
+   ],
+   "steps": [
+    {
+     "say": "A backup is a separately stored copy kept for days or months. It recovers from what replication happily copies, like a dropped table. A full backup is a complete copy: simple, slow and large.",
+     "reveal": 1
+    },
+    {
+     "say": "An incremental backup holds only changes since the last one. Small, but a restore needs the whole chain.",
+     "reveal": 2
+    },
+    {
+     "say": "A logical backup exports rows as S-Q-L, like pg dump. Portable, but slow when big.",
+     "reveal": 3
+    },
+    {
+     "say": "A physical backup copies the raw data files.",
+     "reveal": 4
+    },
+    {
+     "say": "A snapshot is a disk image taken in seconds.",
+     "reveal": 5
+    },
+    {
+     "say": "And follow three two one: three copies, two kinds of media, one off-site, usually another region or account.",
+     "reveal": 6
+    }
+   ],
+   "caption": "Book: Fundamentals Part 3 · Durability · backups and recovery"
+  },
+  {
+   "id": "s052",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: undoing a bad deploy at 14:31",
+   "table": {
+    "head": [
+     "Step",
+     "Recovering the orders table"
+    ],
+    "rows": [
+     [
+      "1. Restore full backup",
+      "Last night's copy"
+     ],
+     [
+      "2. Replay archived WAL",
+      "Roll forward through today"
+     ],
+     [
+      "3. Stop at 14:31:06",
+      "Just before the bad delete"
+     ],
+     [
+      "Then: test restores",
+      "GitLab 2017 lost ~6 hours"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Point-in-time recovery restores to any moment. Imagine at two thirty-one and seven seconds in the afternoon, a bad deploy deletes the shop's orders. Step one: restore the last full backup, from last night.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two: replay the archived write-ahead log from that backup forward.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three: stop replaying at two thirty-one and six seconds, just before the delete. Nothing before it is lost.",
+     "reveal": 3
+    },
+    {
+     "say": "And test your restores. In twenty seventeen GitLab found several backup methods broken, and lost about six hours of data. A backup is unproven until you've rebuilt from it.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s053",
+   "layout": "bullets",
+   "kicker": "Concept 22 of 24",
+   "title": "Connection pooling",
+   "bullets": [
+    "In-app pool: HikariCP, driver pools",
+    "Proxy pool: PgBouncer, RDS Proxy",
+    "Size: a few times the DB's cores"
+   ],
+   "steps": [
+    {
+     "say": "Opening a database connection is expensive: a T-C-P handshake, often T-L-S, and authentication. Several milliseconds. PostgreSQL even starts a whole process per connection, and defaults to a hundred. A connection pool keeps connections open. A request borrows one and returns it, like a taxi rank. Pools live in two places. First, in the application, like HikariCP for Java.",
+     "reveal": 1
+    },
+    {
+     "say": "Second, as a proxy in front of the database, like PgBouncer. It lends a real connection for just one transaction, so a few dozen real connections serve thousands of clients.",
+     "reveal": 2
+    },
+    {
+     "say": "And bigger isn't better. A sixteen-core database can't run five hundred queries at once. A few times the core count usually performs best.",
+     "reveal": 3
+    }
+   ],
+   "caption": "Book: Fundamentals Part 3 · Connection pooling, ORMs and N+1 queries"
+  },
+  {
+   "id": "s054",
+   "layout": "number",
+   "kicker": "Example",
+   "title": "Example: mind the multiplication",
+   "big": "50 servers x 20 = 1,000 connections",
+   "caption": "vs a database limit of 100: put a proxy in front",
+   "steps": [
+    {
+     "say": "Our shop runs fifty app servers, each with a pool of twenty. That's a thousand connections at a database whose limit is a hundred. On Black Friday, autoscaling adds servers and everything fails with too many connections.",
+     "reveal": 0
+    },
+    {
+     "say": "The fix: shrink each pool, and put PgBouncer in front.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s055",
+   "layout": "bullets",
+   "kicker": "Concept 23 of 24",
+   "title": "ORMs",
+   "bullets": [
+    "Faster development",
+    "Parameters stop SQL injection",
+    "Schema migrations",
+    "Cost: hides the real queries"
+   ],
+   "steps": [
+    {
+     "say": "An O-R-M, object-relational mapper, maps rows to objects, so you write user dot orders instead of S-Q-L. Hibernate, Django and ActiveRecord are examples. It speeds up development.",
+     "reveal": 1
+    },
+    {
+     "say": "It prevents S-Q-L injection, because it sends values as parameters.",
+     "reveal": 2
+    },
+    {
+     "say": "It handles migrations, versioned scripts that change the schema.",
+     "reveal": 3
+    },
+    {
+     "say": "The cost: it hides the queries actually run, so slow code is easy to write without noticing. Use it for everyday work, read the generated S-Q-L on hot paths, and hand-write S-Q-L where needed.",
+     "reveal": 4
+    }
+   ],
+   "caption": "Book: Fundamentals Part 3 · Connection pooling, ORMs and N+1 queries"
+  },
+  {
+   "id": "s056",
+   "layout": "diagram",
+   "title": "The N+1 query problem",
+   "mermaid": "flowchart LR\n  A[\"Bad: 1 query, 50 posts\"] --> B[\"50 author queries\"]\n  B --> C[\"51 round trips\"]\n  D[\"Good: 1 query, 50 posts\"] --> E[\"1 query: authors WHERE id IN (...)\"]\n  E --> F[\"2 round trips\"]",
+   "caption": "51 ms versus 2 ms at 1 ms per round trip",
+   "steps": [
+    {
+     "say": "The most famous O-R-M trap is N plus one. Our shop's blog page loads fifty posts in one query. Then the loop prints each post's author name, and the O-R-M quietly runs one more query per post. Fifty-one queries.",
+     "reveal": 0
+    },
+    {
+     "say": "At one millisecond per round trip, that's fifty-one milliseconds instead of two. With a thousand items, a full second. Fix one: eager loading, fetching authors up front in a join. Fix two: batching the ids into one where id in query. Fix three: detect it by logging query counts per request. In the interview, a list page that slows as the list grows means N plus one.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s057",
+   "layout": "table",
+   "kicker": "Concept 24 of 24",
+   "title": "Choosing a database: six questions",
+   "table": {
+    "head": [
+     "Question",
+     "Online shop answer"
+    ],
+    "rows": [
+     [
+      "1. Main queries?",
+      "By key, joins, product search"
+     ],
+     [
+      "2. Data size, growth?",
+      "Hundreds of GB: one server"
+     ],
+     [
+      "3. Read/write ratio?",
+      "Read-heavy: replicas, cache"
+     ],
+     [
+      "4. Consistency?",
+      "Payments: transactions"
+     ],
+     [
+      "5. Multi-region?",
+      "Not yet"
+     ],
+     [
+      "6. What can we run?",
+      "Managed Postgres + Redis + S3"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Finally, choosing a database: justify it from access pattern, consistency and scale. Six questions, on our shop. One: main queries? Orders by id, reports with joins, product search.",
+     "reveal": 1
+    },
+    {
+     "say": "Two: how much data, growing how fast? A few hundred gigabytes of orders fits one server.",
+     "reveal": 2
+    },
+    {
+     "say": "Three: the read-to-write ratio. Product pages are read-heavy, so add replicas and a cache.",
+     "reveal": 3
+    },
+    {
+     "say": "Four: how strong must consistency be? Payments and stock need transactions. View counts can be eventual.",
+     "reveal": 4
+    },
+    {
+     "say": "Five: across regions? Only if writes must be local everywhere. For now, no.",
+     "reveal": 5
+    },
+    {
+     "say": "Six: what can the team run? A managed service often wins. So: PostgreSQL for orders, Redis for carts, Elasticsearch for search, S-three for photos, and a warehouse for reports.",
+     "reveal": 6
+    }
+   ],
+   "caption": "Book: Fundamentals Part 3 · Choosing a database"
+  },
+  {
+   "id": "s058",
+   "layout": "recap",
+   "kicker": "Episode 3 complete",
+   "title": "Episode 3 recap",
+   "bullets": [
+    "SQL + ACID default; anomalies vs levels",
+    "NoSQL: one family per access pattern",
+    "B-tree reads, LSM writes; indexes cost",
+    "Copy for reads, split for writes",
+    "Object storage; OLTP vs OLAP; WAL",
+    "Pool, avoid N+1, six questions"
+   ],
+   "steps": [
+    {
+     "say": "Let's recap. Relational with ACID is the default. Know the anomalies, from dirty read to write skew, and which level stops each.",
+     "reveal": 1
+    },
+    {
+     "say": "NoSQL families each serve one access pattern. Pick from the pattern, not fashion.",
+     "reveal": 2
+    },
+    {
+     "say": "B-trees for reads and ranges, L-S-M trees for writes. Every index slows writes.",
+     "reveal": 3
+    },
+    {
+     "say": "Copy for reads, split for writes. Mind lag, failover and split brain. Choose the shard key carefully, and use consistent hashing with virtual nodes.",
+     "reveal": 4
+    },
+    {
+     "say": "Media goes in object storage. O-L-T-P on row stores, O-L-A-P on column stores. Durability is layered: log and fsync, replicas, tested backups.",
+     "reveal": 5
+    },
+    {
+     "say": "Pool connections, watch for N plus one, and choose a database with six questions. Next time, in episode four, Fundamentals four: caching, async processing and consistency. See you there.",
+     "reveal": 6
+    }
+   ]
+  }
+ ]
+}

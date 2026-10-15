@@ -1,0 +1,1661 @@
+{
+ "series": "System Design Workshop",
+ "episode": 4,
+ "title": "Fundamentals IV: Caching, Async, Consistency",
+ "subtitle": "Fast copies, background work, and machines that agree",
+ "scenes": [
+  {
+   "layout": "title",
+   "title": "Fundamentals IV: Caching, Async, Consistency",
+   "subtitle": "Fast copies, background work, and machines that agree",
+   "steps": [
+    {
+     "say": "Welcome to episode four of the System Design Workshop: caching, async processing and consistency. By the end you'll be able to place and protect a cache, design a reliable queue, and explain CAP, quorums, Raft and sagas without hand-waving.",
+     "reveal": 0
+    },
+    {
+     "say": "Keep the Part four notes open alongside. Each concept here matches a section there, in order. Pause whenever a pause-and-think question appears.",
+     "reveal": 0
+    }
+   ],
+   "id": "s001"
+  },
+  {
+   "layout": "bullets",
+   "title": "Three ideas for systems that outgrow one machine",
+   "bullets": [
+    "Caching: keep popular data close",
+    "Async: hand slow work to a queue",
+    "Consistency: agree on the current value"
+   ],
+   "steps": [
+    {
+     "say": "Three ideas run through this episode. First, caching: keep a copy of popular data somewhere quicker, so you do less slow work.",
+     "reveal": 1
+    },
+    {
+     "say": "Second, asynchronous processing: put slow work on a queue and answer the user straight away.",
+     "reveal": 2
+    },
+    {
+     "say": "Third, consistency: once data lives on many machines, decide what the current value means and how the machines agree. Our main running example is an online shop.",
+     "reveal": 3
+    }
+   ],
+   "id": "s002"
+  },
+  {
+   "layout": "section",
+   "title": "Part A: Caching",
+   "steps": [
+    {
+     "say": "Part A, caching. Let's start with what a cache actually is.",
+     "reveal": 0
+    }
+   ],
+   "id": "s003"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 1 of 23",
+   "title": "Caching basics",
+   "bullets": [
+    "Cache: small fast copy of slow data",
+    "Hit = found; miss = go to the database",
+    "Hit ratio = hits / total lookups",
+    "TTL: how long an entry may live",
+    "Warm versus cold cache"
+   ],
+   "steps": [
+    {
+     "say": "Why does a product page load in two milliseconds instead of thirty? A cache. A cache is a small, fast store holding copies of data whose real home, the source of truth, is slow. Think of a chef's bowl of chopped onions by the stove.",
+     "reveal": 1
+    },
+    {
+     "say": "A hit means the data was in the cache. A miss means you go to the database, then usually store the answer for next time.",
+     "reveal": 2
+    },
+    {
+     "say": "The hit ratio is hits divided by total lookups. Zero point nine five means ninety-five of every hundred reads never touch the database.",
+     "reveal": 3
+    },
+    {
+     "say": "T-T-L, time to live, is how long an entry may stay before it expires. Once the source changes, the cached copy is stale.",
+     "reveal": 4
+    },
+    {
+     "say": "A warm cache already holds popular data. A cold cache, just restarted, misses on almost everything until it fills.",
+     "reveal": 5
+    }
+   ],
+   "id": "s004",
+   "caption": "Book: Fundamentals Part 4 · Caching basics"
+  },
+  {
+   "layout": "diagram",
+   "title": "The cache read path",
+   "mermaid": "flowchart LR\n    A[\"App server\"] -->|\"1. GET product:1001\"| C[\"Cache\"]\n    C -->|\"2a. hit - return\"| A\n    A -->|\"2b. miss - query\"| D[\"Database\"]\n    D -->|\"3. row\"| A\n    A -->|\"4. SET with TTL\"| C",
+   "caption": "Build key, ask cache, on miss load and store",
+   "steps": [
+    {
+     "say": "Here's the read path in four steps. One, build a key from the request, like product colon one thousand and one. Two, ask the cache. On a hit, return it.",
+     "reveal": 0
+    },
+    {
+     "say": "On a miss, three, read the database, and four, store the row with a T-T-L of, say, five minutes. It works because traffic is skewed: the top twenty percent of products might get eighty percent of views.",
+     "reveal": 0
+    }
+   ],
+   "id": "s005"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Hit ratio maths for our shop",
+   "table": {
+    "head": [
+     "Hit ratio",
+     "Average read",
+     "DB reads per 100"
+    ],
+    "rows": [
+     [
+      "90%",
+      "0.9×1 + 0.1×21 ≈ 3 ms",
+      "10"
+     ],
+     [
+      "99%",
+      "≈ 1.2 ms",
+      "1"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's work it. The cache takes one millisecond, the database twenty. At ninety percent hits, the average is zero point nine times one, plus zero point one times twenty-one, about three milliseconds. Ten of every hundred reads reach the database.",
+     "reveal": 1
+    },
+    {
+     "say": "At ninety-nine percent hits, the average is about one point two milliseconds. But look at the last column: database reads drop tenfold, from ten to one. That's what the database feels. The catch: if the cache is wiped, a database sized for one percent gets everything. In the interview, say what you cache, the key format and the T-T-L.",
+     "reveal": 2
+    }
+   ],
+   "id": "s006"
+  },
+  {
+   "layout": "diagram",
+   "kicker": "Concept 2 of 23",
+   "title": "Where caches live",
+   "mermaid": "flowchart LR\n    B[\"Browser cache\"] --> CDN[\"CDN edge\"]\n    CDN --> RP[\"Reverse proxy cache\"]\n    RP --> APP[\"App in-process cache\"]\n    APP --> DC[\"Redis or Memcached\"]\n    DC --> DB[\"Database buffer cache\"]",
+   "caption": "Book: Fundamentals Part 4 · Where caches live",
+   "steps": [
+    {
+     "say": "Copies can live at every hop between the user and the database. The rule: the closer to the user, the faster the hit, but the harder to update or delete. Let's walk the six layers with our shop.",
+     "reveal": 0
+    }
+   ],
+   "id": "s007"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Six cache layers, one shop",
+   "table": {
+    "head": [
+     "Layer",
+     "Shop example",
+     "Catch"
+    ],
+    "rows": [
+     [
+      "Browser",
+      "logo cached 1 day via max-age",
+      "can't delete; rename file"
+     ],
+     [
+      "CDN",
+      "product images at nearby edge",
+      "purge takes seconds"
+     ],
+     [
+      "Reverse proxy",
+      "NGINX serves whole home page",
+      "same page for all"
+     ],
+     [
+      "In-process",
+      "feature flags in app memory",
+      "10 servers, 10 copies"
+     ],
+     [
+      "Distributed",
+      "Redis: user:42 profile",
+      "a network hop, under 1 ms"
+     ],
+     [
+      "DB buffer",
+      "hot index pages in RAM",
+      "automatic, free"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "One, the browser cache. Cache-Control max-age of eighty-six thousand four hundred seconds keeps our logo for a day. You can't delete a copy on someone's phone, so you change the file name when content changes. That's cache busting.",
+     "reveal": 1
+    },
+    {
+     "say": "Two, the C-D-N, content delivery network. Product images sit on an edge server in the user's city. A purge A-P-I clears them in seconds.",
+     "reveal": 2
+    },
+    {
+     "say": "Three, the reverse proxy, like NGINX or Varnish, stores whole H-T-T-P responses, so the public home page never touches the app.",
+     "reveal": 3
+    },
+    {
+     "say": "Four, the in-process cache, a map inside the app. Nanosecond reads, but ten servers mean ten copies that can disagree, all lost on deploy. Good for feature flags.",
+     "reveal": 4
+    },
+    {
+     "say": "Five, the distributed cache, Redis or Memcached, shared by every server. Our user profiles live here. It survives deploys and scales to hundreds of gigabytes.",
+     "reveal": 5
+    },
+    {
+     "say": "Six, the database's own buffer cache keeps hot pages in memory for free. That's why a query's second run is faster. In the interview, go outside in: browser and C-D-N for static files, Redis for hot reads.",
+     "reveal": 6
+    }
+   ],
+   "id": "s008"
+  },
+  {
+   "layout": "table",
+   "kicker": "Concept 3 of 23",
+   "title": "Caching strategies",
+   "table": {
+    "head": [
+     "Strategy",
+     "Who writes the DB",
+     "Main risk"
+    ],
+    "rows": [
+     [
+      "Cache-aside",
+      "app; delete key on write",
+      "brief stale window"
+     ],
+     [
+      "Read-through",
+      "app; cache loads misses",
+      "same as cache-aside"
+     ],
+     [
+      "Write-through",
+      "cache, synchronously",
+      "slower writes"
+     ],
+     [
+      "Write-behind",
+      "cache, later in batches",
+      "lost writes on crash"
+     ],
+     [
+      "Write-around",
+      "app, skipping cache",
+      "first read is slow"
+     ],
+     [
+      "Refresh-ahead",
+      "read side only",
+      "wasted refreshes"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "A caching strategy is the rule for who reads and writes the cache, and in what order. One, cache-aside, the default. The app reads the cache, and on a miss loads the database and fills the cache. On a write, it updates the database, then deletes the key.",
+     "reveal": 1
+    },
+    {
+     "say": "Two, read-through. Same idea, but the cache itself calls the database on a miss, so the app only talks to the cache.",
+     "reveal": 2
+    },
+    {
+     "say": "Three, write-through. Every write goes to the cache, which writes the database before confirming. Reads after writes are fresh, but every write pays twice.",
+     "reveal": 3
+    },
+    {
+     "say": "Four, write-behind, also called write-back. The write lands in the cache only, and the cache flushes to the database later, say every second. Fast, but a crash loses unflushed writes.",
+     "reveal": 4
+    },
+    {
+     "say": "Five, write-around. Writes skip the cache entirely. Good for logs and bulk imports nobody reads soon.",
+     "reveal": 5
+    },
+    {
+     "say": "Six, refresh-ahead. Popular entries reload before they expire, so users never wait on a hot miss. The cost is refreshing things nobody asks for again.",
+     "reveal": 6
+    }
+   ],
+   "id": "s009",
+   "caption": "Book: Fundamentals Part 4 · Caching strategies"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Example",
+   "title": "Example: one shop, four data types",
+   "bullets": [
+    "Profile edit: write DB, then DELETE user:42",
+    "Why delete? Racing updates leave old value",
+    "Like counter: write-behind, 10 likes = 1 write",
+    "Order history import: write-around",
+    "Missing product IDs: cache 'not found' 30 s"
+   ],
+   "steps": [
+    {
+     "say": "Let's apply them. Alice edits her profile. With cache-aside we write the database, then delete user colon forty-two. The next read reloads the fresh row.",
+     "reveal": 1
+    },
+    {
+     "say": "Why delete instead of updating the cache? Two racing writers could leave the older value cached last. Deleting forces a fresh read. Keep a T-T-L as a safety net anyway.",
+     "reveal": 2
+    },
+    {
+     "say": "Likes on a product: write-behind. Ten likes in a second become one database write. Losing a few likes in a crash is fine. Never do this for orders or payments.",
+     "reveal": 3
+    },
+    {
+     "say": "A bulk import of old order history: write-around, so the cache isn't flooded with cold data.",
+     "reveal": 4
+    },
+    {
+     "say": "And requests for product I-Ds that don't exist: cache a short not-found marker. That's negative caching, and it stops attackers hammering the database with random I-Ds.",
+     "reveal": 5
+    }
+   ],
+   "id": "s010"
+  },
+  {
+   "layout": "table",
+   "kicker": "Concept 4 of 23",
+   "title": "Eviction policies",
+   "table": {
+    "head": [
+     "Policy",
+     "Evicts",
+     "Shop example"
+    ],
+    "rows": [
+     [
+      "LRU",
+      "least recently read",
+      "last month's sale page goes"
+     ],
+     [
+      "LFU",
+      "fewest reads",
+      "steady bestseller stays"
+     ],
+     [
+      "FIFO",
+      "oldest inserted",
+      "may drop an early hot item"
+     ],
+     [
+      "TTL",
+      "expired entries",
+      "price gone after 60 s"
+     ],
+     [
+      "Random",
+      "any item",
+      "cheap, surprisingly decent"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "When a full cache gets a new item, it must throw one out. The eviction policy picks the victim. That's different from expiry, which happens when the T-T-L runs out. Imagine a cache holding one thousand product pages. One, L-R-U, least recently used: evict the page nobody has read for longest. Last month's sale page goes first. It's the default almost everywhere.",
+     "reveal": 1
+    },
+    {
+     "say": "Two, L-F-U, least frequently used: evict the page with fewest reads, so a steady bestseller survives. Real L-F-U decays counts, so yesterday's viral item doesn't squat forever.",
+     "reveal": 2
+    },
+    {
+     "say": "Three, F-I-F-O, first in first out: evict the oldest insert, even if it's still hot.",
+     "reveal": 3
+    },
+    {
+     "say": "Four, T-T-L based: entries leave when they expire, which bounds staleness.",
+     "reveal": 4
+    },
+    {
+     "say": "Five, random: very cheap and surprisingly decent. In Redis you pick with max-memory-policy, like all-keys-L-R-U. Never set no-eviction on a cache, or it rejects writes when full. And watch out: one nightly scan can flush every hot item from an L-R-U cache.",
+     "reveal": 5
+    }
+   ],
+   "id": "s011",
+   "caption": "Book: Fundamentals Part 4 · Eviction policies"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 5 of 23",
+   "title": "Cache invalidation and stale data",
+   "bullets": [
+    "1. TTL only: up to 60 s old",
+    "2. Delete on write",
+    "3. Events from change data capture",
+    "4. Versioned keys: user:42:v7 to v8",
+    "5. CDN purge API"
+   ],
+   "steps": [
+    {
+     "say": "Cache invalidation means removing a cached copy when the truth changes. It's famously hard because cache and database are two systems with no single moment where both change. Five methods, simplest first. One, T-T-L only. A sixty-second T-T-L on a price means a change can take a minute to show.",
+     "reveal": 1
+    },
+    {
+     "say": "Two, delete on write, which is cache-aside.",
+     "reveal": 2
+    },
+    {
+     "say": "Three, event-driven. Change data capture, or C-D-C, reads the database's own change log, and a consumer deletes affected keys. This works even when many services write.",
+     "reveal": 3
+    },
+    {
+     "say": "Four, versioned keys. A write bumps user colon forty-two v seven to v eight. Readers look for the new key and the old one ages out.",
+     "reveal": 4
+    },
+    {
+     "say": "Five, a C-D-N purge clears a U-R-L worldwide in seconds. Stale data comes from T-T-Ls, lost deletes, races and replica lag. Decide per feature: a follower count can be minutes old, a bank balance on the transfer screen cannot.",
+     "reveal": 5
+    }
+   ],
+   "id": "s012",
+   "caption": "Book: Part 4 · Cache invalidation, stale data and stampedes"
+  },
+  {
+   "layout": "diagram",
+   "kicker": "Concept 6 of 23",
+   "title": "Thundering herd: the cache stampede",
+   "mermaid": "flowchart LR\n    K[\"Hot key expires\"] --> M[\"Thousands miss at once\"]\n    M --> Q[\"All run the same DB query\"]\n    Q --> O[\"DB overloaded, slower\"]\n    O --> M",
+   "caption": "Book: Fundamentals Part 4 · The thundering herd / cache stampede",
+   "steps": [
+    {
+     "say": "Imagine our home-page key, read ten thousand times a second. It expires. Rebuilding takes two hundred milliseconds. In that window, two thousand requests miss and all run the same expensive query.",
+     "reveal": 0
+    },
+    {
+     "say": "The database slows, nothing refills the cache, and more requests pile in. That's a cache stampede, also called a thundering herd or dog-piling.",
+     "reveal": 0
+    }
+   ],
+   "id": "s013"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Example",
+   "title": "Four stampede fixes",
+   "bullets": [
+    "Lock or coalesce: one rebuild per key",
+    "Early refresh before expiry",
+    "Jittered TTLs: 300 s ± 30 s",
+    "Stale-while-revalidate"
+   ],
+   "steps": [
+    {
+     "say": "Fix one, locking or request coalescing. The first miss takes a short lock, for example Redis SET with N-X and a five-second expiry. It rebuilds; the other one thousand nine hundred ninety-nine wait or get the old value. C-D-Ns call this request collapsing.",
+     "reveal": 1
+    },
+    {
+     "say": "Fix two, early refresh. As expiry nears, each reader has a small, growing chance to refresh early, so one request refreshes before the deadline, not everyone at it.",
+     "reveal": 2
+    },
+    {
+     "say": "Fix three, jittered T-T-Ls. Instead of exactly three hundred seconds, use three hundred plus or minus thirty. Keys loaded together then don't all expire together, which also prevents a cache avalanche.",
+     "reveal": 3
+    },
+    {
+     "say": "Fix four, stale-while-revalidate. Serve the expired page instantly while one background job refreshes it. H-T-T-P even has a header for it. In the interview, say: single flight, serve stale meanwhile, refresh hot keys early, jitter T-T-Ls.",
+     "reveal": 4
+    }
+   ],
+   "id": "s014"
+  },
+  {
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "A cache restarts at 9 a.m. What hits the database?",
+   "bullets": [
+    "A. Only the 5% miss traffic",
+    "B. Nearly all traffic, until the cache warms",
+    "C. Nothing, the CDN covers it"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. Your Redis cluster restarts at nine a.m. and your database is sized for five percent of reads. What happens?",
+     "reveal": 0
+    }
+   ],
+   "id": "s015"
+  },
+  {
+   "layout": "section",
+   "title": "Part B: Async processing",
+   "steps": [
+    {
+     "say": "Answer: B. A cold cache misses on almost everything, so the database gets nearly all traffic. Warm hot keys before sending traffic. Now Part B, asynchronous processing.",
+     "reveal": 0
+    }
+   ],
+   "id": "s016"
+  },
+  {
+   "layout": "diagram",
+   "kicker": "Concept 7 of 23",
+   "title": "Message queues",
+   "mermaid": "flowchart LR\n    P[\"Producer - web server\"] -->|\"send\"| Q[\"Queue - broker\"]\n    Q -->|\"receive\"| W1[\"Worker 1\"]\n    Q -->|\"receive\"| W2[\"Worker 2\"]\n    W1 -->|\"ack\"| Q\n    W2 -->|\"ack\"| Q",
+   "caption": "Book: Fundamentals Part 4 · Message queues",
+   "steps": [
+    {
+     "say": "Why should a user wait for a welcome email to send? A message queue is a middleman holding messages until a worker is ready. The producer sends a message, like send welcome email to user forty-two. The broker, such as Rabbit-M-Q or Amazon S-Q-S, stores it safely. The consumer, or worker, does the work.",
+     "reveal": 0
+    },
+    {
+     "say": "Think of a restaurant order rail: the waiter clips a ticket and goes back to customers, cooks take tickets when free. In a work queue, each message goes to exactly one worker. In pub-sub, every subscriber gets its own copy.",
+     "reveal": 0
+    }
+   ],
+   "id": "s017"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Example",
+   "title": "Example: a signup through a queue",
+   "bullets": [
+    "1. Web server sends; broker stores, says OK",
+    "2. Worker receives; hidden 30 s",
+    "3. Worker sends the email",
+    "4. Worker acks: delete it",
+    "5. No ack in 30 s? Visible again"
+   ],
+   "steps": [
+    {
+     "say": "Let's follow Alice signing up. Step one, the web server sends the message, the broker writes it to disk, and Alice sees signed up in fifty milliseconds.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two, a worker receives the message. S-Q-S hides it from other workers for a visibility timeout, thirty seconds by default.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three, the worker sends the email.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four, it sends an acknowledgement, or ack, meaning done, delete it.",
+     "reveal": 4
+    },
+    {
+     "say": "Step five, if the worker crashes and no ack arrives in thirty seconds, the message reappears for another worker. Queues also absorb spikes: ten thousand orders in a minute, with capacity for two thousand a minute, drain in five minutes instead of falling over. Monitor queue depth, and put large files in object storage, sending only the U-R-L.",
+     "reveal": 5
+    }
+   ],
+   "id": "s018"
+  },
+  {
+   "layout": "diagram",
+   "kicker": "Concept 8 of 23",
+   "title": "Event streaming: Kafka",
+   "mermaid": "flowchart LR\n    P[\"Producers\"] --> P0[\"Partition 0\"]\n    P --> P1[\"Partition 1\"]\n    P --> P2[\"Partition 2\"]\n    P0 --> C1[\"Group A - consumer 1\"]\n    P1 --> C2[\"Group A - consumer 2\"]\n    P2 --> C2\n    P0 --> D1[\"Group B - analytics\"]",
+   "caption": "Book: Fundamentals Part 4 · Event streaming",
+   "steps": [
+    {
+     "say": "A classic queue deletes a message once acked. An event stream like Apache Kafka keeps every message in an append-only log, seven days by default. It's a newspaper archive with a bookmark per reader, not a to-do pile thrown away.",
+     "reveal": 0
+    }
+   ],
+   "id": "s019"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: the payments topic",
+   "table": {
+    "head": [
+     "Term",
+     "Payments example"
+    ],
+    "rows": [
+     [
+      "Topic",
+      "payments: a named stream"
+     ],
+     [
+      "Partition",
+      "12 ordered logs, 12 machines"
+     ],
+     [
+      "Key",
+      "user 42 always to partition 5"
+     ],
+     [
+      "Offset",
+      "position 0, 1, 2 in a partition"
+     ],
+     [
+      "Consumer group",
+      "4 fraud workers, 3 partitions each"
+     ],
+     [
+      "Committed offset",
+      "resume at 1,500 after crash"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's build a payments stream. The topic is payments, a named stream of events.",
+     "reveal": 1
+    },
+    {
+     "say": "It's split into twelve partitions, each an ordered log, so twelve machines can write and read in parallel.",
+     "reveal": 2
+    },
+    {
+     "say": "Each message has a key, here the user I-D. It's hashed to pick a partition, so all of user forty-two's payments land in one partition, in order.",
+     "reveal": 3
+    },
+    {
+     "say": "An offset is a message's position number in a partition. Ordering holds only within a partition, never across the topic.",
+     "reveal": 4
+    },
+    {
+     "say": "A consumer group shares the work: four fraud workers each get three partitions. The analytics team is another group and gets its own full copy. A fifth worker beyond twelve would sit idle.",
+     "reveal": 5
+    },
+    {
+     "say": "Each group commits its offset, like partition three done up to fifteen hundred. After a crash, the replacement resumes there. Lag, newest minus committed, is your health metric. In the interview: one-off background jobs, use S-Q-S. Replayable events many services read, use Kafka.",
+     "reveal": 6
+    }
+   ],
+   "id": "s020"
+  },
+  {
+   "layout": "twocol",
+   "kicker": "Concept 9 of 23",
+   "title": "Delivery guarantees",
+   "left": {
+    "heading": "Promises",
+    "bullets": [
+     "At-most-once: ack before work",
+     "At-least-once: ack after work",
+     "Exactly-once: dedupe duplicates"
+    ]
+   },
+   "right": {
+    "heading": "Shop example",
+    "bullets": [
+     "Page-view metric: lose one, fine",
+     "Order email: maybe twice",
+     "Card charge: once, via a key"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Networks drop packets and machines crash, so a broker can never be sure a message was processed exactly once. One, at-most-once: ack before processing. A crash loses the message, but it never repeats.",
+     "reveal": 1
+    },
+    {
+     "say": "Two, at-least-once: ack after processing. Nothing is lost, but a crash after the work and before the ack brings the message back. This is the default almost everywhere.",
+     "reveal": 2
+    },
+    {
+     "say": "Three, exactly-once. True exactly-once delivery over a lossy network is impossible. What systems offer is exactly-once processing: duplicates arrive but are detected and ignored.",
+     "reveal": 3
+    },
+    {
+     "say": "Applied to our shop: a page-view metric can be at-most-once.",
+     "reveal": 4
+    },
+    {
+     "say": "An order-confirmation email is at-least-once; a rare duplicate is tolerable.",
+     "reveal": 5
+    },
+    {
+     "say": "But a card charge must take effect once. That needs idempotency.",
+     "reveal": 6
+    }
+   ],
+   "id": "s021",
+   "caption": "Book: Part 4 · Delivery guarantees, idempotency and retries"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Example",
+   "title": "Idempotency: charge order 9 once",
+   "bullets": [
+    "Worker charges $20, crashes before ack",
+    "Broker redelivers: charge again?",
+    "1. Client makes key k-9f3 once",
+    "2. Check processed-keys table",
+    "3. New: charge + save key, one transaction",
+    "4. Seen: skip, return saved result"
+   ],
+   "steps": [
+    {
+     "say": "Imagine a worker charges twenty dollars for order nine, then crashes before the ack.",
+     "reveal": 1
+    },
+    {
+     "say": "The broker redelivers, and without care the customer pays forty. Idempotent means doing it twice has the same effect as once. Set balance to a hundred is idempotent; add twenty is not.",
+     "reveal": 2
+    },
+    {
+     "say": "The fix, in four steps. One, the client generates a unique idempotency key once, and reuses it on every retry.",
+     "reveal": 3
+    },
+    {
+     "say": "Two, before working, the consumer checks a table of processed keys.",
+     "reveal": 4
+    },
+    {
+     "say": "Three, if the key is new, charge and record the key in the same database transaction.",
+     "reveal": 5
+    },
+    {
+     "say": "Four, if it's seen, skip and return the saved result. Stripe accepts an Idempotency-Key header for exactly this. Kafka's exactly-once only covers Kafka; your email or bank call still needs this.",
+     "reveal": 6
+    }
+   ],
+   "id": "s022"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 10 of 23",
+   "title": "Ordering, retries, DLQs, backpressure",
+   "bullets": [
+    "Order per key, not globally",
+    "Retry: 1 s, 2 s, 4 s, 8 s + jitter",
+    "Dead-letter queue after 5 failures",
+    "Backpressure: buffer, throttle, drop, scale"
+   ],
+   "steps": [
+    {
+     "say": "Four operational tools. One, ordering. Global order means one line of processing, which kills throughput. So order per key: all of order nine's events share one partition. If a retry delivers version five after version six, the consumer ignores the older version.",
+     "reveal": 1
+    },
+    {
+     "say": "Two, retries. For a timeout, retry with exponential backoff, one, two, four, eight seconds, plus jitter, random variation, so thousands of clients don't retry in sync. Cap the attempts.",
+     "reveal": 2
+    },
+    {
+     "say": "Three, the dead-letter queue, or D-L-Q. A poison message, like malformed J-S-O-N, fails forever. After five tries, the broker moves it aside, engineers get alerted, fix the bug, and redrive it. Without one, a stuck Kafka message stalls its whole partition.",
+     "reveal": 3
+    },
+    {
+     "say": "Four, backpressure: the slow part tells upstream to slow down. Buffer for spikes, throttle producers with a four-twenty-nine Too Many Requests, drop low-priority messages, or autoscale workers on queue depth.",
+     "reveal": 4
+    }
+   ],
+   "id": "s023",
+   "caption": "Book: Part 4 · Retries, dead-letter queues and backpressure"
+  },
+  {
+   "layout": "diagram",
+   "title": "Retry and dead-letter flow",
+   "mermaid": "flowchart LR\n    Q[\"Main queue\"] --> W[\"Worker\"]\n    W -->|\"success\"| D[\"Done\"]\n    W -->|\"fail, backoff\"| Q\n    W -->|\"failed 5 times\"| DLQ[\"Dead-letter queue\"]\n    DLQ -->|\"fix, redrive\"| Q",
+   "caption": "Retries for transient faults, DLQ for poison messages",
+   "steps": [
+    {
+     "say": "Here's the flow for an order for a deleted product. The worker fails, retries with backoff, fails five times, and the message lands in the dead-letter queue. After the fix, redrive sends it back to the main queue.",
+     "reveal": 0
+    }
+   ],
+   "id": "s024"
+  },
+  {
+   "layout": "twocol",
+   "kicker": "Concept 11 of 23",
+   "title": "Batch versus stream processing",
+   "left": {
+    "heading": "Batch",
+    "bullets": [
+     "Bounded pile, on a schedule",
+     "MapReduce, Spark",
+     "Nightly revenue report"
+    ]
+   },
+   "right": {
+    "heading": "Stream",
+    "bullets": [
+     "Each event as it arrives",
+     "Flink, Kafka Streams",
+     "Fraud score in 1 second"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Batch processing handles a bounded, already collected pile in one scheduled job. Baking the day's bread before opening.",
+     "reveal": 1
+    },
+    {
+     "say": "MapReduce is the classic. Counting words: map emits cat comma one for each cat, shuffle sends all cat pairs to one machine, and reduce adds them up to cat, three. Spark keeps the idea in memory, much faster.",
+     "reveal": 2
+    },
+    {
+     "say": "Our shop's nightly job reads yesterday's two terabytes of logs and computes revenue. Simple to re-run if it fails.",
+     "reveal": 3
+    },
+    {
+     "say": "Stream processing handles each event continuously, within milliseconds or seconds. A barista making each coffee as ordered.",
+     "reveal": 4
+    },
+    {
+     "say": "Flink or Kafka Streams read Kafka, keep state, and group events into windows, like orders per minute. Events arrive late, so engines track event time with watermarks.",
+     "reveal": 5
+    },
+    {
+     "say": "Our shop scores each payment for fraud in a second. Choose by freshness: reports in batch, alerts and trending in streams. Kappa architecture uses only a stream and replays the log to reprocess.",
+     "reveal": 6
+    }
+   ],
+   "id": "s025",
+   "caption": "Book: Fundamentals Part 4 · Batch vs stream processing"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 12 of 23",
+   "title": "Event-driven architecture",
+   "bullets": [
+    "Events: facts, past tense, OrderPlaced",
+    "Commands: requests, ShipOrder",
+    "Many services subscribe and react",
+    "Outbox: event in the same transaction"
+   ],
+   "steps": [
+    {
+     "say": "In event-driven architecture, services publish events, facts about something done, rather than calling each other. An event is past tense, like OrderPlaced. A listener can ignore it but not refuse it.",
+     "reveal": 1
+    },
+    {
+     "say": "A command, like ShipOrder, is a request the receiver may reject.",
+     "reveal": 2
+    },
+    {
+     "say": "Our order service saves an order and publishes OrderPlaced. Payment, inventory, email and analytics each react. A new loyalty service later needs no change to the order service.",
+     "reveal": 3
+    },
+    {
+     "say": "But saving and publishing are two writes. Crash between them and they disagree, the dual-write problem. The transactional outbox fixes it: insert the event into an outbox table in the same transaction, and a relay publishes it with retries.",
+     "reveal": 4
+    }
+   ],
+   "id": "s026",
+   "caption": "Book: Part 4 · Event-driven architecture, event sourcing and CQRS"
+  },
+  {
+   "layout": "twocol",
+   "kicker": "Example",
+   "title": "Event sourcing and CQRS",
+   "left": {
+    "heading": "Event sourcing",
+    "bullets": [
+     "Deposited 100",
+     "Withdrew 50",
+     "Deposited 20 → balance 70"
+    ]
+   },
+   "right": {
+    "heading": "CQRS",
+    "bullets": [
+     "Writes: normalized SQL",
+     "Reads: search index, views",
+     "Read side lags slightly"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Event sourcing stores the events as the truth, not just the current state. Our wallet: deposited a hundred.",
+     "reveal": 1
+    },
+    {
+     "say": "Withdrew fifty.",
+     "reveal": 2
+    },
+    {
+     "say": "Deposited twenty. Replay gives a balance of seventy. Snapshots avoid replaying millions of events. You get a full audit trail and can answer what was the balance last Tuesday. The cost is complexity and harder schema changes.",
+     "reveal": 3
+    },
+    {
+     "say": "C-Q-R-S, command query responsibility segregation, splits the model. Writes go to a normalized relational database.",
+     "reveal": 4
+    },
+    {
+     "say": "Events update read-optimised views, like an Elasticsearch product search index.",
+     "reveal": 5
+    },
+    {
+     "say": "Reads scale independently, but lag slightly behind writes. It pairs naturally with event sourcing but doesn't require it.",
+     "reveal": 6
+    }
+   ],
+   "id": "s027"
+  },
+  {
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "Is 'send welcome email' an event or a command?",
+   "bullets": [
+    "A. An event",
+    "B. A command",
+    "C. Both"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. Send welcome email: event or command? And what would the event version be called?",
+     "reveal": 0
+    }
+   ],
+   "id": "s028"
+  },
+  {
+   "layout": "section",
+   "title": "Part C: Consistency in distributed systems",
+   "steps": [
+    {
+     "say": "Answer: B, a command. It's an order the receiver may reject. The event version is a past-tense fact, UserSignedUp, and the email service decides to react. Now Part C, consistency.",
+     "reveal": 0
+    }
+   ],
+   "id": "s029"
+  },
+  {
+   "layout": "table",
+   "kicker": "Concept 13 of 23",
+   "title": "Consistency models, strongest first",
+   "table": {
+    "head": [
+     "Model",
+     "Promise",
+     "Profile-photo example"
+    ],
+    "rows": [
+     [
+      "Linearizable",
+      "looks like one copy",
+      "everyone sees v2 at once"
+     ],
+     [
+      "Sequential",
+      "same order for all",
+      "order needn't match clock"
+     ],
+     [
+      "Causal",
+      "cause before effect",
+      "no reply before the post"
+     ],
+     [
+      "Read-your-writes",
+      "you see your change",
+      "Alice sees v2 at once"
+     ],
+     [
+      "Monotonic reads",
+      "never go backwards",
+      "v2 never reverts to v1"
+     ],
+     [
+      "Eventual",
+      "converges sometime",
+      "others see v2 in a second"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "With replicas, a read may hit a copy that hasn't got the latest write. A consistency model is the promise about what a read can return. Our example: Alice uploads profile photo version two. Strongest is linearizability, or strong consistency. It behaves like one machine: once anyone sees v two, nobody ever sees v one again. Needed for locks, balances and unique usernames.",
+     "reveal": 1
+    },
+    {
+     "say": "Sequential consistency: all clients see all operations in the same order, but that order needn't match real time. Mostly a theory and C-P-U topic.",
+     "reveal": 2
+    },
+    {
+     "say": "Causal consistency: if one thing could have caused another, everyone sees them in that order. Nobody sees Bob's congratulations before Alice's I'm engaged. Unrelated posts may appear in any order.",
+     "reveal": 3
+    },
+    {
+     "say": "Now cheap session guarantees. Read-your-writes: Alice always sees her own new photo, even if others still see the old one. Read from the leader briefly after a write.",
+     "reveal": 4
+    },
+    {
+     "say": "Monotonic reads: once you've seen v two, a refresh never shows v one. Stick each user to one replica.",
+     "reveal": 5
+    },
+    {
+     "say": "Eventual consistency: if writes stop, replicas converge, with no time bound. D-N-S is the classic. Cheapest and most available. Don't confuse any of these with the C in A-C-I-D, which means valid data.",
+     "reveal": 6
+    }
+   ],
+   "id": "s030",
+   "caption": "Book: Fundamentals Part 4 · Consistency models"
+  },
+  {
+   "layout": "diagram",
+   "title": "How read-your-writes breaks",
+   "mermaid": "sequenceDiagram\n    participant Alice\n    participant Leader\n    participant Replica\n    Alice->>Leader: write photo v2\n    Leader-->>Alice: ok\n    Leader-)Replica: replicate v2 after 500 ms\n    Alice->>Replica: read after 100 ms\n    Replica-->>Alice: photo v1 - stale",
+   "caption": "Save, redirect, read from a lagging replica",
+   "steps": [
+    {
+     "say": "Alice writes v two to the leader and gets ok. Replication takes five hundred milliseconds. One hundred milliseconds later her page reads from the replica and shows v one. She thinks her upload failed. Fix: route her reads to the leader for a short while after she writes.",
+     "reveal": 0
+    }
+   ],
+   "id": "s031"
+  },
+  {
+   "layout": "diagram",
+   "kicker": "Concept 14 of 23",
+   "title": "CAP theorem",
+   "mermaid": "flowchart TD\n    P[\"Network partition happens\"] --> Q{\"Node cannot reach others\"}\n    Q -->|\"refuse until healed\"| CP[\"CP - consistent, some fail\"]\n    Q -->|\"answer with local data\"| AP[\"AP - available, maybe stale\"]",
+   "caption": "Book: Fundamentals Part 4 · CAP theorem and PACELC",
+   "steps": [
+    {
+     "say": "The C-A-P theorem: when the network partitions, a replicated store must choose consistency or availability. C is linearizability. A means every working node answers without error. P, partition tolerance, means surviving dropped links.",
+     "reveal": 0
+    },
+    {
+     "say": "Example: US and EU replicas, link cut. An EU user writes x equals two. A US user reads x. The US node can refuse, which is C-P, or answer x equals one, which is A-P. There's no third option: it can't know a write it can't hear.",
+     "reveal": 0
+    }
+   ],
+   "id": "s032"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "PACELC and per-feature choices",
+   "table": {
+    "head": [
+     "Shop feature",
+     "Partition",
+     "Else"
+    ],
+    "rows": [
+     [
+      "Checkout, inventory",
+      "PC: refuse",
+      "EC: wait for replicas"
+     ],
+     [
+      "Catalogue, likes",
+      "PA: serve stale",
+      "EL: fast local read"
+     ],
+     [
+      "Spanner",
+      "PC",
+      "EC"
+     ],
+     [
+      "Cassandra, DynamoDB",
+      "PA",
+      "EL"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "PACELC, from Daniel Abadi, adds the everyday case: if partition, choose availability or consistency; else, choose latency or consistency. Strong replicas mean waiting, even on a perfect network. Our checkout is P-C, E-C: better to fail than double-sell.",
+     "reveal": 1
+    },
+    {
+     "say": "The catalogue and likes are P-A, E-L: stale is fine, downtime isn't.",
+     "reveal": 2
+    },
+    {
+     "say": "Google Spanner is P-C, E-C: always consistent, paying latency.",
+     "reveal": 3
+    },
+    {
+     "say": "Cassandra and DynamoDB by default are P-A, E-L. In the interview, label components, not the whole system.",
+     "reveal": 4
+    }
+   ],
+   "id": "s033"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Example",
+   "title": "Misreadings of CAP",
+   "bullets": [
+    "Not 'pick any two': no CA when distributed",
+    "AP isn't 'never consistent'",
+    "CP isn't 'the system goes down'",
+    "CAP's C is not ACID's C"
+   ],
+   "steps": [
+    {
+     "say": "Four common misreadings. One, pick any two of three. You can't opt out of partitions, so a distributed system can't be C-A.",
+     "reveal": 1
+    },
+    {
+     "say": "Two, A-P means never consistent. No: it's consistent within milliseconds normally, only stale during a partition.",
+     "reveal": 2
+    },
+    {
+     "say": "Three, C-P means the system goes down. Only requests that can't be served safely fail, usually on the minority side.",
+     "reveal": 3
+    },
+    {
+     "say": "Four, C-A-P's C is linearizability, not A-C-I-D's valid data.",
+     "reveal": 4
+    }
+   ],
+   "id": "s034"
+  },
+  {
+   "layout": "diagram",
+   "kicker": "Concept 15 of 23",
+   "title": "Quorums: N, W, R",
+   "mermaid": "flowchart LR\n    C[\"Client\"] -->|\"write v2\"| A[\"Replica A - v2\"]\n    C -->|\"write v2\"| B[\"Replica B - v2\"]\n    C -.->|\"write lost\"| X[\"Replica C - v1\"]\n    R[\"Reader R=2\"] --> B\n    R --> X",
+   "caption": "Book: Fundamentals Part 4 · Quorums",
+   "steps": [
+    {
+     "say": "A quorum is the minimum number of replicas that must take part. N is replicas per item, often three. W must confirm a write. R must answer a read.",
+     "reveal": 0
+    },
+    {
+     "say": "If R plus W is greater than N, every read overlaps every write. N three, W two, R two: the write reaches A and B; the read asks B and C. B has v two, so the reader keeps v two and repairs C on the spot. That's read repair.",
+     "reveal": 0
+    }
+   ],
+   "id": "s035"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: tuning N = 3",
+   "table": {
+    "head": [
+     "W",
+     "R",
+     "Effect"
+    ],
+    "rows": [
+     [
+      "2",
+      "2",
+      "balanced; tolerates 1 down"
+     ],
+     [
+      "3",
+      "1",
+      "fast reads; any down blocks writes"
+     ],
+     [
+      "1",
+      "3",
+      "fast writes; any down blocks reads"
+     ],
+     [
+      "1",
+      "1",
+      "fastest; 2 is not > 3, may be stale"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "With three replicas: W two, R two is balanced and survives one replica down.",
+     "reveal": 1
+    },
+    {
+     "say": "W three, R one gives fast reads, but any one replica down blocks writes.",
+     "reveal": 2
+    },
+    {
+     "say": "W one, R three is the mirror: fast writes, fragile reads.",
+     "reveal": 3
+    },
+    {
+     "say": "W one, R one is fastest, but one plus one isn't greater than three, so reads may be stale. A majority is more than half. Five nodes tolerate two failures, and four nodes tolerate only one, the same as three. That's why clusters are odd-sized.",
+     "reveal": 4
+    }
+   ],
+   "id": "s036"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 16 of 23",
+   "title": "Consensus with Raft",
+   "bullets": [
+    "Follower, candidate, leader; numbered terms",
+    "Leader heartbeats; timeout 150 to 300 ms",
+    "Candidate: term 4 to 5, asks for votes",
+    "Majority votes: leader of term 5",
+    "Write committed once a majority stores it",
+    "Old term-4 leader rejected, steps down"
+   ],
+   "steps": [
+    {
+     "say": "Consensus means machines agreeing on one value, like who's leader, despite crashes. Without it you get split brain. Paxos, from Leslie Lamport, was first and famously hard. Raft, from 2014, was built to be understandable. Step one: each node is a follower, candidate or leader, and time is split into numbered terms, at most one leader each.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two: the leader sends heartbeats. A follower hearing nothing for its randomised timeout, between one hundred fifty and three hundred milliseconds, assumes the leader died.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three: it becomes a candidate, bumps the term from four to five, votes for itself and asks for votes.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four: each node votes once per term, only for a candidate whose log is at least as current. A majority makes it leader.",
+     "reveal": 4
+    },
+    {
+     "say": "Step five: clients write to the leader. Once a majority store the entry, it's committed.",
+     "reveal": 5
+    },
+    {
+     "say": "Step six: the old term-four leader comes back, its messages are rejected, and it steps down. A five-node cluster survives two failures. Leader election is the commonest use. Say five replicas of our shop, but only one may run the nightly billing job. They elect a leader through etcd, ZooKeeper or Consul, never home-made code, and only the leader runs it.",
+     "reveal": 6
+    }
+   ],
+   "id": "s037",
+   "caption": "Book: Part 4 · Consensus, leader election and distributed locks"
+  },
+  {
+   "layout": "diagram",
+   "kicker": "Concept 17 of 23",
+   "title": "Distributed locks and fencing tokens",
+   "mermaid": "sequenceDiagram\n    participant A as Client A\n    participant L as Lock service\n    participant B as Client B\n    participant S as Storage\n    A->>L: acquire\n    L-->>A: granted, token 33\n    Note over A: GC pause, lease expires\n    B->>L: acquire\n    L-->>B: granted, token 34\n    B->>S: write, token 34\n    A->>S: write, token 33\n    S-->>A: rejected, too old",
+   "caption": "Book: Fundamentals Part 4 · Distributed locks and fencing tokens",
+   "steps": [
+    {
+     "say": "A distributed lock lets one process across many machines do something at a time, like processing refund seventy-seven. It has a lease, an expiry, so a crashed holder doesn't block forever.",
+     "reveal": 0
+    },
+    {
+     "say": "The danger: client A takes a ten-second lease, then freezes fifteen seconds in a garbage-collection pause. The lease expires and client B gets the lock with token thirty-four and writes.",
+     "reveal": 0
+    },
+    {
+     "say": "A wakes, still believes it holds the lock, and writes with token thirty-three. Storage has seen thirty-four, so it rejects thirty-three. That increasing number is a fencing token. A plain Redis lock gives no token, so it's fine for saving duplicate work but not for correctness.",
+     "reveal": 0
+    }
+   ],
+   "id": "s038"
+  },
+  {
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "How many failures can a 4-node Raft cluster survive?",
+   "bullets": [
+    "A. Two",
+    "B. One",
+    "C. Three"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. Four nodes in a Raft cluster. How many can fail while writes continue?",
+     "reveal": 0
+    }
+   ],
+   "id": "s039"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 18 of 23",
+   "title": "Clocks and ordering",
+   "bullets": [
+    "Clock skew: A 12:00:00.000, B .150",
+    "Last-write-wins loses the real last write",
+    "Lamport: max(mine, received) + 1",
+    "Vector clock: one counter per node"
+   ],
+   "steps": [
+    {
+     "say": "Answer: B, one. A majority of four is three, so only one may fail, the same as three nodes. Now clocks. Clock skew is the gap between two machines' clocks. Machine A says noon exactly; machine B says noon plus a hundred fifty milliseconds. Clocks also drift, and N-T-P corrections can jump them backwards.",
+     "reveal": 1
+    },
+    {
+     "say": "So last-write-wins is dangerous. A later write on A carries an earlier timestamp than B's, and silently loses.",
+     "reveal": 2
+    },
+    {
+     "say": "Logical clocks order events without real time. A Lamport clock is a counter: add one per event, attach it to messages, and on receiving, take the max of yours and theirs, plus one. If X caused Y, X's number is smaller. But a smaller number doesn't prove causation.",
+     "reveal": 3
+    },
+    {
+     "say": "A vector clock keeps one counter per node, so it can also detect concurrent events. Use a monotonic clock for timeouts, never the wall clock.",
+     "reveal": 4
+    }
+   ],
+   "id": "s040",
+   "caption": "Book: Fundamentals Part 4 · Clocks and ordering"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: two offline cart edits",
+   "table": {
+    "head": [
+     "Event",
+     "Vector",
+     "Verdict"
+    ],
+    "rows": [
+     [
+      "Alice adds milk on A",
+      "[A:1, B:0]",
+      ""
+     ],
+     [
+      "Bob, synced, adds eggs on B",
+      "[A:1, B:1]",
+      "after Alice: replace"
+     ],
+     [
+      "Alice offline adds bread on A",
+      "[A:2, B:0]",
+      ""
+     ],
+     [
+      "Compare [A:2,B:0] with [A:1,B:1]",
+      "each has a bigger entry",
+      "concurrent: merge"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Walk it through with a shared cart. Alice adds milk on replica A. The vector is A one, B zero.",
+     "reveal": 1
+    },
+    {
+     "say": "Bob's replica has synced Alice's edit and he adds eggs: A one, B one. Every entry is at least Alice's, so it happened after. It safely replaces.",
+     "reveal": 2
+    },
+    {
+     "say": "Meanwhile Alice, offline, adds bread on A: A two, B zero.",
+     "reveal": 3
+    },
+    {
+     "say": "Now compare A two B zero with A one B one. Each has an entry bigger than the other's, so they're concurrent. Neither wins. The store keeps both siblings and the app merges the cart: milk, eggs, bread. A Lamport clock couldn't tell you that.",
+     "reveal": 4
+    }
+   ],
+   "id": "s041"
+  },
+  {
+   "layout": "diagram",
+   "kicker": "Concept 19 of 23",
+   "title": "Two-phase commit",
+   "mermaid": "sequenceDiagram\n    participant C as Coordinator\n    participant P1 as Payments DB\n    participant P2 as Orders DB\n    C->>P1: prepare\n    C->>P2: prepare\n    P1-->>C: yes\n    P2-->>C: yes\n    C->>P1: commit\n    C->>P2: commit",
+   "caption": "Book: Part 4 · Distributed transactions: two-phase commit and sagas",
+   "steps": [
+    {
+     "say": "A distributed transaction changes several databases all or nothing. Two-phase commit uses a coordinator. Phase one, prepare: each database does the work, locks rows and votes yes or no. A yes is a promise to commit even after a crash.",
+     "reveal": 0
+    },
+    {
+     "say": "Phase two: if all voted yes, the coordinator logs commit and tells everyone. Any no, everyone aborts. The weakness: it blocks. If the coordinator dies after the yes votes, rows stay locked while participants wait. So it's rare across microservices.",
+     "reveal": 0
+    }
+   ],
+   "id": "s042"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Example",
+   "title": "Saga: booking a trip",
+   "bullets": [
+    "1. Payment charges card (undo: refund)",
+    "2. Flight reserves seat (undo: release)",
+    "3. Hotel booking fails: no rooms",
+    "4. Compensate: release seat, refund card",
+    "Choreography: events; orchestration: a boss"
+   ],
+   "steps": [
+    {
+     "say": "A saga splits the big transaction into local transactions, each with a compensating undo. Our trip: step one, payment charges the card. Its compensation is a refund.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two, the flight service reserves a seat. Its compensation is releasing it.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three, the hotel booking fails: no rooms.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four, compensate in reverse: release the seat, then refund the card. Others may briefly see card charged, no seat, so sagas give up isolation. Use pending states and idempotent compensations.",
+     "reveal": 4
+    },
+    {
+     "say": "Choreography means services react to each other's events, fine for two or three steps. Orchestration uses a central orchestrator, like Temporal or Step Functions, which is easier to follow. In the interview: sagas across services, not two-phase commit.",
+     "reveal": 5
+    }
+   ],
+   "id": "s043"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 20 of 23",
+   "title": "Heartbeats, gossip, failure detection",
+   "bullets": [
+    "Heartbeat every 1 s; silent 5 s = suspect",
+    "Short timeout: false positives, flapping",
+    "Gossip: tell random peers each second",
+    "1,000 nodes informed in about 10 rounds"
+   ],
+   "steps": [
+    {
+     "say": "Over a network, a dead node, a slow node and a lossy link look the same. Failure detection is a good guess. A heartbeat is a regular I'm alive message, say every second. Five silent seconds marks a node as suspected dead.",
+     "reveal": 1
+    },
+    {
+     "say": "Short timeouts detect fast but cause false positives: a slow node declared dead, needless failovers, flapping. Long timeouts are safe but slow.",
+     "reveal": 2
+    },
+    {
+     "say": "Large clusters use gossip, like office rumours. Each second, a node picks a random peer and swaps its membership list with heartbeat counters. The receiver keeps the higher counter per node. A counter that stops rising means suspect.",
+     "reveal": 3
+    },
+    {
+     "say": "News reaches all N nodes in about log N rounds: about ten rounds for a thousand nodes, with no central monitor. Cassandra, Consul and Redis Cluster use it. And remember: a node declared dead may still be writing, so use fencing.",
+     "reveal": 4
+    }
+   ],
+   "id": "s044",
+   "caption": "Book: Fundamentals Part 4 · Heartbeats, gossip and failure detection"
+  },
+  {
+   "layout": "table",
+   "kicker": "Concept 21 of 23",
+   "title": "Bloom filter, HyperLogLog, count-min sketch",
+   "table": {
+    "head": [
+     "Structure",
+     "Answers",
+     "Shop example"
+    ],
+    "rows": [
+     [
+      "Bloom filter",
+      "in the set? no / probably",
+      "skip DB for fake product IDs"
+     ],
+     [
+      "HyperLogLog",
+      "how many distinct?",
+      "unique visitors, 12 KB"
+     ],
+     [
+      "Count-min sketch",
+      "how often?",
+      "trending search terms"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Three structures trade a small error for tiny memory. One, the Bloom filter answers definitely not, or probably yes. It's an array of bits plus several hash functions, say seven. To add alice, set her seven bits. To check bob, if any of his bits is zero, he was never added. About ten bits per item gives one percent false positives, never false negatives. Our shop blocks lookups for non-existent product I-Ds, and databases skip files on disk.",
+     "reveal": 1
+    },
+    {
+     "say": "Two, HyperLogLog counts distinct items. A hash starting with twenty zeros hints at about a million distinct items; many buckets average out the luck. Redis does it in twelve kilobytes with under one percent error, versus gigabytes for an exact set of five hundred million users.",
+     "reveal": 2
+    },
+    {
+     "say": "Three, the count-min sketch counts frequency. A grid of counters, one hash per row: add by bumping one counter per row, query by taking the minimum. Collisions only inflate counts, so it may overestimate, never under. Perfect for trending hashtags.",
+     "reveal": 3
+    }
+   ],
+   "id": "s045",
+   "caption": "Book: Part 4 · Probabilistic data structures and Merkle trees"
+  },
+  {
+   "layout": "diagram",
+   "title": "Merkle tree",
+   "mermaid": "flowchart TD\n    R[\"Root = H of H12 and H34\"] --> H12[\"H12\"]\n    R --> H34[\"H34\"]\n    H12 --> H1[\"H1 - block 1\"]\n    H12 --> H2[\"H2 - block 2\"]\n    H34 --> H3[\"H3 - block 3\"]\n    H34 --> H4[\"H4 - block 4\"]",
+   "caption": "Descend only where hashes differ",
+   "steps": [
+    {
+     "say": "A Merkle tree is a tree of hashes. Each leaf hashes a data block, each parent hashes its children, up to a root hash. Change one byte and the root changes.",
+     "reveal": 0
+    },
+    {
+     "say": "Two replicas compare. Step one, compare roots: equal means identical, done with one tiny message. Step two, they differ, so compare H one-two and H three-four; only H three-four differs. Step three, descend there and find block three. Copy just that block. Cassandra repair, Git and Bitcoin all use this idea.",
+     "reveal": 0
+    }
+   ],
+   "id": "s046"
+  },
+  {
+   "layout": "table",
+   "kicker": "Concept 22 of 23",
+   "title": "Unique ID generation",
+   "table": {
+    "head": [
+     "Approach",
+     "Example",
+     "Catch"
+    ],
+    "rows": [
+     [
+      "Auto-increment",
+      "order 1, 2, 3",
+      "bottleneck; guessable"
+     ],
+     [
+      "Ticket server",
+      "Flickr: central counter",
+      "one more service"
+     ],
+     [
+      "UUID v4 / v7",
+      "128 bits, no coordination",
+      "v4 random scatters index"
+     ],
+     [
+      "Snowflake",
+      "64-bit time + machine + seq",
+      "needs machine IDs, sane clocks"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Every order needs a unique I-D. One, auto-increment: one, two, three. Simple and ordered, but one database becomes a bottleneck, two shards both issue order one thousand, and competitors can read your volume from order numbers.",
+     "reveal": 1
+    },
+    {
+     "say": "Two, a ticket server, as Flickr used: one central counter, or shards stepping by shard count, so shard one issues odd numbers and shard two even ones.",
+     "reveal": 2
+    },
+    {
+     "say": "Three, U-U-I-D, a hundred-twenty-eight-bit I-D any machine can make. Version four is random, which scatters inserts across a B-tree index. Version seven starts with a millisecond timestamp, so it sorts by time. A good modern default.",
+     "reveal": 3
+    },
+    {
+     "say": "Four, Snowflake, from Twitter: sixty-four bits, time-sortable, no coordination per I-D.",
+     "reveal": 4
+    }
+   ],
+   "id": "s047",
+   "caption": "Book: Fundamentals Part 4 · Unique ID generation"
+  },
+  {
+   "layout": "number",
+   "title": "Snowflake ID layout",
+   "big": "1+41+10+12 = 64",
+   "caption": "bits: sign, ms timestamp, machine ID, sequence (4,096 per ms)",
+   "steps": [
+    {
+     "say": "The bits: one sign bit, always zero. Forty-one bits of milliseconds since a custom epoch, lasting about sixty-nine years. Ten bits of machine I-D, so up to one thousand twenty-four generators. Twelve bits of sequence, four thousand ninety-six I-Ds per machine per millisecond.",
+     "reveal": 0
+    },
+    {
+     "say": "That's about four million I-Ds a second per machine, sorted by time, fitting a big-int column. If the clock goes backwards, the generator waits.",
+     "reveal": 0
+    }
+   ],
+   "id": "s048"
+  },
+  {
+   "layout": "twocol",
+   "kicker": "Concept 23 of 23",
+   "title": "Geospatial: geohash and quadtree",
+   "left": {
+    "heading": "Geohash",
+    "bullets": [
+     "Halve the map, one bit per step",
+     "gcpvj, gcpvm: shared prefix, nearby",
+     "Search cell + 8 neighbours"
+    ]
+   },
+   "right": {
+    "heading": "Quadtree",
+    "bullets": [
+     "Node splits at 100 points",
+     "Dense city: deep, small cells",
+     "Ocean: one big cell"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Find restaurants within two kilometres. A normal index sorts one value at a time, so latitude plus longitude is slow. Geohash halves the world by longitude, then latitude, writing a bit each time, then encodes it as letters and digits.",
+     "reveal": 1
+    },
+    {
+     "say": "Longer strings mean smaller boxes: five characters is a box about five kilometres by five. A shared prefix means nearby. G-C-P-V-J and G-C-P-V-M are neighbouring cells in central London, so nearby becomes a prefix search.",
+     "reveal": 2
+    },
+    {
+     "say": "To catch places just over a cell edge, search the user's cell plus its eight neighbours.",
+     "reveal": 3
+    },
+    {
+     "say": "A quadtree starts with the world as one node. When a node holds over a hundred businesses, it splits into four: north-west, north-east, south-west, south-east.",
+     "reveal": 4
+    },
+    {
+     "say": "So dense London gets small, deep cells.",
+     "reveal": 5
+    },
+    {
+     "say": "And the empty ocean stays one big cell. To find drivers near a rider, walk down to the rider's leaf, check it and its neighbours, then compute exact distances for the few candidates.",
+     "reveal": 6
+    }
+   ],
+   "id": "s049",
+   "caption": "Book: Fundamentals Part 4 · Geospatial indexing: geohash and quadtree"
+  },
+  {
+   "layout": "recap",
+   "kicker": "Episode 4 complete",
+   "title": "Episode 4 recap",
+   "bullets": [
+    "Cache-aside + TTL; guard hot keys",
+    "Queues: at-least-once + idempotency",
+    "Kafka: partitions, groups, offsets",
+    "Pick consistency per feature; CAP, PACELC",
+    "Quorums, Raft, fencing, vector clocks",
+    "Sagas, gossip, sketches, IDs, geo"
+   ],
+   "steps": [
+    {
+     "say": "Let's recap. Cache-aside with a T-T-L is the default. Protect hot keys from stampedes with locks, early refresh, jitter and stale-while-revalidate.",
+     "reveal": 1
+    },
+    {
+     "say": "Assume at-least-once delivery, so make consumers idempotent, and add retries with backoff, a dead-letter queue and backpressure.",
+     "reveal": 2
+    },
+    {
+     "say": "Kafka keeps a replayable log: partitions for scale and order per key, consumer groups and offsets for progress.",
+     "reveal": 3
+    },
+    {
+     "say": "Choose consistency per feature. During a partition, refuse or serve stale; otherwise, trade latency for consistency.",
+     "reveal": 4
+    },
+    {
+     "say": "R plus W greater than N, majority-based Raft, fencing tokens on locks, and vector clocks to spot concurrent writes.",
+     "reveal": 5
+    },
+    {
+     "say": "Sagas across services, gossip for membership, Bloom filters and friends for tiny memory, Snowflake or U-U-I-D v seven for I-Ds, and geohash or quadtrees for nearby search. Next time, in episode five, Fundamentals five: architecture, ops and security. See you there.",
+     "reveal": 6
+    }
+   ],
+   "id": "s050"
+  }
+ ]
+}

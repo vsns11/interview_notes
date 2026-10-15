@@ -1,0 +1,1660 @@
+{
+  "series": "System Design Workshop",
+  "episode": 16,
+  "title": "AI-Era Systems: LLM and ML Infra",
+  "subtitle": "Feature stores, batching, GPU scaling, gateways, semantic caches, vector shards, RAG",
+  "scenes": [
+    {
+      "layout": "title",
+      "title": "AI-Era Systems: LLM and ML Infra",
+      "subtitle": "Feature stores, batching, GPU scaling, gateways, semantic caches, vector shards, RAG",
+      "steps": [
+        {
+          "say": "Welcome to episode sixteen of the System Design Workshop: AI-Era Systems, the infrastructure under machine learning and large language models.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll be able to keep training and live features identical, explain why batching cuts a GPU bill thirty times, scale GPUs that take ten minutes to boot, and design a production chatbot over your own documents.",
+          "reveal": 0
+        },
+        {
+          "say": "Keep the module eleven notes PDF open beside the video. When I say pause and think, pause, and answer before I do.",
+          "reveal": 0
+        }
+      ],
+      "id": "s001"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 1 of 18",
+      "title": "Nothing here is new. The physics changed.",
+      "steps": [
+        {
+          "say": "Here's the big claim of this episode. Every pattern you'll see today already appeared in earlier episodes. The LLM gateway is an API gateway pointed outward. Semantic caching is caching. Vector sharding is sharding.",
+          "reveal": 0
+        },
+        {
+          "say": "What changed are three constants, the physics these patterns run under. Let's walk through them one by one, using a support chatbot as our example.",
+          "reveal": 0
+        }
+      ],
+      "id": "s002",
+      "caption": "Book: Module 11 AI-Era Systems · Module Introduction"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 1 of 18",
+      "title": "The three constants that changed",
+      "bullets": [
+        "1. Work is counted in tokens; sizes vary 100x",
+        "2. Workers cost 100x and take minutes to boot",
+        "3. Equality became similarity",
+        "Term: embedding = meaning as a point in space",
+        "Term: KV cache = per-chat memory on the GPU",
+        "Term: TTFT = time to first token, the key SLO"
+      ],
+      "steps": [
+        {
+          "say": "Constant one. A token is a chunk of text, about three quarters of a word. In our chatbot, one question is ten tokens and the next pastes two thousand. So one request can cost a hundred times its neighbour, and a rate limiter that counts requests is silently wrong.",
+          "reveal": 1
+        },
+        {
+          "say": "Constant two. A GPU, the graphics processor that runs the model, costs about a hundred times a web server. A new copy must load around fourteen gigabytes of weights, the numbers the model learned, so a cold start takes minutes, not seconds.",
+          "reveal": 2
+        },
+        {
+          "say": "Constant three. Old caches match exact keys. AI systems ask what is near this. When a customer types where's my package, we want to match order status please. That's the one truly new idea.",
+          "reveal": 3
+        },
+        {
+          "say": "Three terms we'll reuse. An embedding is a list of numbers that places a piece of text in space, so nearby points mean similar things.",
+          "reveal": 4
+        },
+        {
+          "say": "The K-V cache is the model's working memory for one conversation. It lives in GPU memory, so later turns prefer the same machine. Sticky sessions are back.",
+          "reveal": 5
+        },
+        {
+          "say": "And T-T-F-T, time to first token, is how long before the first word appears. In a streaming chat, it's the delay users actually feel, so it's the main latency target. Recap: tokens, expensive slow workers, and similarity.",
+          "reveal": 6
+        }
+      ],
+      "id": "s003"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 2 of 18",
+      "title": "Feature store: one recipe, two kitchens",
+      "steps": [
+        {
+          "say": "Concept two: the feature store, for classic machine learning. Imagine a fraud model that catches forty percent more fraud than the old rules in testing. Three weeks into production, it does worse than those rules. Nothing errored. Why?",
+          "reveal": 0
+        }
+      ],
+      "id": "s004",
+      "caption": "Book: Module 11 AI-Era Systems · Feature Store"
+    },
+    {
+      "layout": "twocol",
+      "kicker": "Concept 2 of 18",
+      "title": "The incident: one feature, two versions",
+      "left": {
+        "heading": "Training (warehouse SQL)",
+        "bullets": [
+          "Windows by event time",
+          "Late events counted",
+          "Missing values become 0"
+        ]
+      },
+      "right": {
+        "heading": "Serving (Java on Redis)",
+        "bullets": [
+          "Windows by arrival time",
+          "Late events dropped",
+          "Missing values passed through"
+        ]
+      },
+      "steps": [
+        {
+          "say": "The feature is card velocity in the last hour: how many orders this card made. Data scientists wrote it in warehouse S-Q-L, grouping orders by when they happened.",
+          "reveal": 1
+        },
+        {
+          "say": "That training version counted late-arriving events.",
+          "reveal": 2
+        },
+        {
+          "say": "And it turned missing values into zero.",
+          "reveal": 3
+        },
+        {
+          "say": "Engineers rewrote it by hand in a Java service on Redis, a fast in-memory store, grouping orders by when they arrived.",
+          "reveal": 4
+        },
+        {
+          "say": "That version dropped late events.",
+          "reveal": 5
+        },
+        {
+          "say": "And passed missing values straight through. The model trained on one feature and was served another. That's training serving skew, and it fails silently. Each new feature also took three weeks, because it was written twice.",
+          "reveal": 6
+        }
+      ],
+      "id": "s005"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 2 of 18",
+      "title": "Feature store: one definition, two paths",
+      "mermaid": "flowchart LR\n  DEF[\"Feature definition (written once)\"] --> REG[\"Registry (versioned)\"]\n  DEF --> OFF[\"Offline path: history\"]\n  DEF --> ON[\"Online path: streaming\"]\n  OFF --> TRAIN[\"Training sets (point-in-time)\"]\n  ON --> STORE[\"Online store (3 ms reads)\"]\n  STORE --> MODEL[\"Live model\"]\n  STORE -.-> VER[\"Log and verify\"]",
+      "caption": "Write once, compile to both paths, verify they agree",
+      "steps": [
+        {
+          "say": "Here's the fix. You write the feature once, in the platform's small language, and it compiles into both a batch job and a streaming job. One author means the two paths can't disagree.",
+          "reveal": 0
+        },
+        {
+          "say": "The registry in the middle makes every feature findable, owned and versioned, like a public A-P-I.",
+          "reveal": 0
+        }
+      ],
+      "id": "s006"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 2 of 18",
+      "title": "Feature store, step by step",
+      "bullets": [
+        "1. Write each feature once, as code",
+        "2. Online path: stream into a fast store",
+        "3. Offline path: point-in-time joins",
+        "4. Registry: discoverable and versioned",
+        "5. Log and verify: assert zero difference"
+      ],
+      "steps": [
+        {
+          "say": "Step one, write once. Card velocity becomes about a dozen lines of definition, compiled into both S-Q-L and a streaming job.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, the online path. Order events stream into a sliding one-hour count per card, written to a Redis-class store. Values are about two hundred milliseconds behind reality, and reads take three milliseconds, inside the model's ten millisecond budget.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, the offline path. A training row labeled fraud on Tuesday at three P M must see the card's velocity as of Tuesday at three, not today. Joining today's values onto old labels is leakage: the model learns facts that didn't exist at decision time. That's the classic amazing offline, useless live.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, the registry. The growth team finds card velocity and reuses it instead of writing a third copy. Versions matter, because a model was trained on version one's meaning.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, log and verify. Serving logs what it computed, and a background job recomputes the same moments offline and checks for zero difference. That catches drift, even a compiler bug.",
+          "reveal": 5
+        }
+      ],
+      "id": "s007"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: the fraud feature, rebuilt",
+      "table": {
+        "head": [
+          "Measure",
+          "Before",
+          "After"
+        ],
+        "rows": [
+          [
+            "Time to ship a feature",
+            "3 weeks",
+            "About 2 days"
+          ],
+          [
+            "Serving read",
+            "Hand-coded",
+            "3 ms, 200 ms fresh"
+          ],
+          [
+            "Live versus offline",
+            "Worse than rules",
+            "Within noise"
+          ],
+          [
+            "Memory: 10M cards x 40 features",
+            "-",
+            "A few GB of RAM"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's put numbers on it. Shipping a new feature drops from three weeks to about two days, mostly validation.",
+          "reveal": 1
+        },
+        {
+          "say": "Serving reads take three milliseconds, with values about two hundred milliseconds old.",
+          "reveal": 2
+        },
+        {
+          "say": "After retraining on six months of history with point-in-time joins, live results land within noise of offline scores. That's the real product.",
+          "reveal": 3
+        },
+        {
+          "say": "The bill: ten million cards times forty features is a few gigabytes of RAM, plus a backfill replay for each new feature. In the interview, say: define once, point-in-time joins offline, streaming online, log and verify. Skip it for one team with a dozen features.",
+          "reveal": 4
+        }
+      ],
+      "id": "s008"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 3 of 18",
+      "title": "Three ways to keep features consistent",
+      "table": {
+        "head": [
+          "Strategy",
+          "Skew",
+          "New feature",
+          "Verdict"
+        ],
+        "rows": [
+          [
+            "Two implementations + review",
+            "Built in",
+            "Weeks",
+            "Avoid"
+          ],
+          [
+            "Log-and-wait",
+            "Gone for logged periods",
+            "Months of waiting",
+            "Verify only"
+          ],
+          [
+            "Feature store",
+            "Gone by design",
+            "Days",
+            "Use"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept three compares three strategies for our fraud feature. First, two implementations with careful review. Two codebases, two languages and two release schedules drift by construction. Review slows drift, but discipline never beats structure.",
+          "reveal": 1
+        },
+        {
+          "say": "Second, log and wait: log what serving computed and train on that. It removes skew, but a brand new feature has no logs, so you wait months, and the logs faithfully record serving bugs too.",
+          "reveal": 2
+        },
+        {
+          "say": "Third, the feature store: one definition, days to ship, leakage blocked by the platform. It costs a whole platform. So use the store, and keep logging as verification. Recap: structure beats discipline.",
+          "reveal": 3
+        }
+      ],
+      "id": "s009",
+      "caption": "Book: Module 11 AI-Era Systems · Feature Store"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "March labels + today's features score 0.97. Live?",
+      "bullets": [
+        "A. Even better, the model has more data",
+        "B. Much worse, this is leakage",
+        "C. The same, features are features"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. March labels, today's feature table, a score of zero point nine seven out of one.",
+          "reveal": 0
+        }
+      ],
+      "id": "s010"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 4 of 18",
+      "title": "Answer: B, leakage. Now, model serving",
+      "bullets": [
+        "Self-hosted 7B model, one request at a time",
+        "50 tokens a second; 400-token reply = 8 s",
+        "Peak 20 requests a second = 160 GPUs",
+        "160 x $35K = $5.6 million a year",
+        "Profiler: each GPU only 8% busy"
+      ],
+      "steps": [
+        {
+          "say": "The answer is B. Today's velocity may be high because of the March fraud, so the model peeks at the future. Rebuild with point-in-time joins. Now concept four, model serving. Our store self-hosts a seven-billion-parameter support model and serves one request at a time.",
+          "reveal": 1
+        },
+        {
+          "say": "One GPU produces about fifty tokens a second for a single request. A typical reply is four hundred tokens, so that's eight seconds of GPU per answer.",
+          "reveal": 2
+        },
+        {
+          "say": "At a peak of twenty requests a second, you need a hundred and sixty GPUs.",
+          "reveal": 3
+        },
+        {
+          "say": "At about thirty-five thousand dollars per GPU a year, that's five point six million dollars, ten times the budget.",
+          "reveal": 4
+        },
+        {
+          "say": "And each GPU is only eight percent busy. Why? Every token step streams tens of gigabytes of weights through the chip for a tiny bit of maths. The work is limited by memory bandwidth, not calculation.",
+          "reveal": 5
+        }
+      ],
+      "id": "s011",
+      "caption": "Book: Module 11 AI-Era Systems · Model Serving (and Batching)"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 4 of 18",
+      "title": "Dynamic batching: fill the bus",
+      "bullets": [
+        "Hold requests 5 to 10 ms, or until batch is full",
+        "Run the group in one pass over the weights",
+        "32 requests cost barely more than 1",
+        "About 20 to 30x throughput",
+        "Perfect for same-sized jobs: embeddings, images"
+      ],
+      "steps": [
+        {
+          "say": "The fix is batching. Think of a bus: it costs nearly the same to run with one rider or thirty-two. Dynamic batching waits five to ten milliseconds, or until the batch is full.",
+          "reveal": 1
+        },
+        {
+          "say": "Then it runs the whole group through one pass over the weights.",
+          "reveal": 2
+        },
+        {
+          "say": "Because streaming the weights is the fixed cost, thirty-two requests take barely longer than one.",
+          "reveal": 3
+        },
+        {
+          "say": "That's twenty to thirty times the throughput, for a few milliseconds of waiting.",
+          "reveal": 4
+        },
+        {
+          "say": "For jobs that are all the same size, like computing embeddings or classifying images, this is the whole solution. Recap: share one pass over the weights.",
+          "reveal": 5
+        }
+      ],
+      "id": "s012"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 5 of 18",
+      "title": "Static versus continuous batching",
+      "mermaid": "flowchart LR\n  Q[\"Waiting queue\"] --> STEP[\"Token step: one token each\"]\n  STEP -->|\"finished\"| OUT[\"Leave immediately\"]\n  STEP -->|\"still writing\"| STEP\n  Q -->|\"free slot\"| STEP\n  S1[\"Static: short reply done\"] --> W[\"Slot idle until longest ends\"]",
+      "caption": "Book: Module 11 AI-Era Systems · Model Serving (and Batching)",
+      "steps": [
+        {
+          "say": "Concept five. Language models have a twist: constant one, sizes vary a hundred times. In a static batch, nobody leaves until the slowest finishes. A ten-token reply waits for a two-thousand-token essay, and its slot sits empty. That's the convoy effect.",
+          "reveal": 0
+        },
+        {
+          "say": "Continuous, or in-flight, batching schedules by token step instead. Each step, every active request gets one token. Finished requests leave right away, and waiting ones join mid-flight. Capacity is recovered every single token.",
+          "reveal": 0
+        }
+      ],
+      "id": "s013"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: one batch, token by token",
+      "table": {
+        "head": [
+          "Step",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "Step 1",
+            "A wants 10 tokens, B wants 2,000; both start"
+          ],
+          [
+            "Step 10",
+            "A finishes and leaves at once"
+          ],
+          [
+            "Step 11",
+            "C joins A's freed slot from the queue"
+          ],
+          [
+            "Static batch instead",
+            "A's slot idles for 1,990 steps"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's walk it. At step one, request A wants a ten-token answer and request B wants a two-thousand-token essay. Both start in the batch.",
+          "reveal": 1
+        },
+        {
+          "say": "At step ten, A is done, and it leaves immediately. The user sees their full answer.",
+          "reveal": 2
+        },
+        {
+          "say": "At step eleven, request C from the queue takes A's slot. The GPU never idles.",
+          "reveal": 3
+        },
+        {
+          "say": "In a static batch, A's slot would sit empty for nineteen hundred and ninety steps. In the interview, say: request-level batching for chat causes the convoy effect, so batch by token.",
+          "reveal": 4
+        }
+      ],
+      "id": "s014"
+    },
+    {
+      "layout": "twocol",
+      "kicker": "Concept 6 of 18",
+      "title": "Paged KV-cache memory (PagedAttention)",
+      "left": {
+        "heading": "Naive allocation",
+        "bullets": [
+          "Reserve one big block per request",
+          "Free space left in scraps",
+          "Concurrency capped early"
+        ]
+      },
+      "right": {
+        "heading": "Paged allocation",
+        "bullets": [
+          "Small fixed-size pages",
+          "Pages need not be adjacent",
+          "2 to 4x more requests fit"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept six. Each request's K-V cache lives in GPU memory. The naive way reserves one big contiguous block per request, sized for the longest possible reply.",
+          "reveal": 1
+        },
+        {
+          "say": "Requests end at different times, so free memory gets left in scraps too small to use. That's fragmentation.",
+          "reveal": 2
+        },
+        {
+          "say": "So the batch can't grow, even though memory is technically free.",
+          "reveal": 3
+        },
+        {
+          "say": "PagedAttention borrows a trick from operating systems: virtual memory. It splits the cache into small fixed-size pages.",
+          "reveal": 4
+        },
+        {
+          "say": "A request's pages can sit anywhere, so no scraps are wasted.",
+          "reveal": 5
+        },
+        {
+          "say": "The result: two to four times more concurrent requests on the same GPU. Recap: page the K-V cache like an operating system pages memory.",
+          "reveal": 6
+        }
+      ],
+      "id": "s015",
+      "caption": "Book: Module 11 AI-Era Systems · Model Serving (and Batching)"
+    },
+    {
+      "layout": "twocol",
+      "kicker": "Concept 7 of 18",
+      "title": "Prefill versus decode",
+      "left": {
+        "heading": "Prefill: reading the prompt",
+        "bullets": [
+          "Whole prompt processed at once",
+          "Compute-bound",
+          "Giant prompt hogs token steps"
+        ]
+      },
+      "right": {
+        "heading": "Decode: writing the reply",
+        "bullets": [
+          "One token at a time",
+          "Memory-bandwidth-bound",
+          "Separate pool, tuned separately"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept seven. Every request has two phases. Prefill reads the whole prompt in one go.",
+          "reveal": 1
+        },
+        {
+          "say": "That's heavy maths, so prefill is compute-bound.",
+          "reveal": 2
+        },
+        {
+          "say": "Imagine a user pastes a fifty-page contract. That huge prefill hogs the token steps, and everyone's p ninety-nine time to first token jumps from two hundred milliseconds to over four seconds.",
+          "reveal": 3
+        },
+        {
+          "say": "Decode writes the reply, one token at a time.",
+          "reveal": 4
+        },
+        {
+          "say": "That's limited by memory bandwidth, the weight streaming we saw earlier.",
+          "reveal": 5
+        },
+        {
+          "say": "Because the two phases stress different resources, large fleets disaggregate them into separate pools, tuned separately. Smaller fixes: chunked prefill, which spreads the prompt read over many steps, and sending giant inputs to their own long-context pool.",
+          "reveal": 6
+        }
+      ],
+      "id": "s016",
+      "caption": "Book: Module 11 AI-Era Systems · Model Serving (and Batching)"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 8 of 18",
+      "title": "Dynamic versus continuous batching",
+      "table": {
+        "head": [
+          "",
+          "Dynamic",
+          "Continuous"
+        ],
+        "rows": [
+          [
+            "Batch membership",
+            "Fixed; all wait for last",
+            "Changes every token"
+          ],
+          [
+            "100x length variance",
+            "Convoy effect",
+            "Handled"
+          ],
+          [
+            "Good for",
+            "Embeddings, vision, rankers",
+            "LLM text generation"
+          ],
+          [
+            "Build it?",
+            "Window + size (Triton)",
+            "Buy vLLM, TGI, SGLang"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept eight puts the two side by side. Dynamic batching fixes membership at the start. Continuous batching changes it every token.",
+          "reveal": 1
+        },
+        {
+          "say": "Under a hundred times variance in output length, dynamic gets the convoy effect, continuous handles it.",
+          "reveal": 2
+        },
+        {
+          "say": "So the rule of thumb: same-sized jobs, batch by request. Varying sizes, batch by token. Our embedding endpoint uses dynamic batching, right beside the continuous-batching chat fleet.",
+          "reveal": 3
+        },
+        {
+          "say": "And buy the engine. A home-built token scheduler is a mistake, not an accomplishment.",
+          "reveal": 4
+        }
+      ],
+      "id": "s017",
+      "caption": "Book: Module 11 AI-Era Systems · Model Serving (and Batching)"
+    },
+    {
+      "layout": "number",
+      "kicker": "Example",
+      "title": "Example: the support fleet after batching",
+      "big": "160 GPUs -> 5 GPUs",
+      "caption": "$5.6M to about $175K a year: 30x from scheduling alone",
+      "steps": [
+        {
+          "say": "Back to our support model, now on a v-L-L-M-class engine. A batch of about thirty-two gives two and a half to three thousand tokens a second per GPU, versus fifty. Each GPU now serves six to seven requests a second.",
+          "reveal": 0
+        },
+        {
+          "say": "Twenty requests a second divided by six is about three point three, so four GPUs plus one spare: five instead of a hundred and sixty. Five point six million dollars becomes about a hundred and seventy-five thousand. Same model, same quality.",
+          "reveal": 0
+        },
+        {
+          "say": "The cost: twenty to thirty milliseconds more time to first token, invisible when streaming. Utilization goes from eight percent to about seventy. And the nightly job writing ten million product descriptions goes to a half-price provider batch A-P-I, kept separate from the chat fleet.",
+          "reveal": 0
+        }
+      ],
+      "id": "s018"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 9 of 18",
+      "title": "GPU auto-scaling: the morning show",
+      "bullets": [
+        "Traffic 4x within 15 minutes",
+        "Wrong signal: host CPU shows 12%",
+        "8 to 12 minutes from decision to first token",
+        "Region says: insufficient capacity",
+        "Night: 5 GPUs at 10%, about $20 an hour"
+      ],
+      "steps": [
+        {
+          "say": "Concept nine. Our five-GPU fleet runs at seventy percent. Then a morning television show mentions the store, and traffic quadruples within fifteen minutes. The web-style autoscaler fails three ways.",
+          "reveal": 1
+        },
+        {
+          "say": "First, the wrong signal. It watches host C-P-U, which reads twelve percent while requests pile up on the GPU. Only queue depth, requests waiting for a GPU, showed the truth.",
+          "reveal": 2
+        },
+        {
+          "say": "Second, boot time. Getting a node, pulling a fifteen gigabyte container and loading fourteen gigabytes of weights takes eight to twelve minutes. The spike is over first.",
+          "reveal": 3
+        },
+        {
+          "say": "Third, at minute twenty, the cloud region has no GPUs left. The real maximum was the provider's quota.",
+          "reveal": 4
+        },
+        {
+          "say": "And at night, five GPUs sit ten percent busy, burning about twenty dollars an hour. Idle costs a hundred times more than web servers, and cold starts last sixty times longer.",
+          "reveal": 5
+        }
+      ],
+      "id": "s019",
+      "caption": "Book: Module 11 AI-Era Systems · GPU Auto-Scaling"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 9 of 18",
+      "title": "Layered defenses: the warm pool",
+      "mermaid": "flowchart LR\n  Q[\"Queue depth and backlog age\"] --> SC[\"Scaler\"]\n  CAL[\"Launch calendar\"] --> SC\n  SC -->|\"admit in seconds\"| POOL[\"Warm pool\"]\n  POOL --> SERV[\"Serving rotation\"]\n  SC -->|\"boot 90 s to 10 min\"| BOOT[\"New node\"]\n  BOOT --> POOL\n  SERV -->|\"drain then park\"| POOL",
+      "caption": "Fast admission from the pool; slow refill off the critical path",
+      "steps": [
+        {
+          "say": "No single reactive loop can win, so we layer defenses. Queue depth drives the scaler. The scaler moves already-booted machines from a warm pool into service in seconds, while slow new boots refill the pool in the background.",
+          "reveal": 0
+        },
+        {
+          "say": "A launch calendar pre-warms before known events, and scale-down drains machines back into the pool. Now each layer, one at a time.",
+          "reveal": 0
+        }
+      ],
+      "id": "s020"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 9 of 18",
+      "title": "Seven layers, applied to the morning show",
+      "bullets": [
+        "1. Signal: queue depth and backlog age",
+        "2. Warm pool >= spike rate x boot time",
+        "3. Scheduled pre-warming from the calendar",
+        "4. Faster boots: 10 min down to 90 s",
+        "5. Degrade: queue, shed free tier, smaller model",
+        "6. Drain to scale down; 7. Reserve quota"
+      ],
+      "steps": [
+        {
+          "say": "Layer one, the signal. Scale on queue depth and backlog age, how long the oldest request has waited. Never on C-P-U.",
+          "reveal": 1
+        },
+        {
+          "say": "Layer two, the warm pool. Size it as spike arrival rate times boot time. If spikes add two GPUs of demand a minute and boots take ninety seconds, keep at least three GPUs warm. That's about a hundred and five thousand dollars a year of deliberate idleness, buying ten-second admission.",
+          "reveal": 2
+        },
+        {
+          "say": "Layer three, scheduling. The day before the show, the calendar grows the pool from two to five. The cheapest fix in this lesson is a meeting.",
+          "reveal": 3
+        },
+        {
+          "say": "Layer four, faster boots. Stream container images, keep weights on local fast disks, and boots drop from ten minutes to ninety seconds.",
+          "reveal": 4
+        },
+        {
+          "say": "Layer five, degrade in the gap. Queue with an honest wait time, shed free users before paid ones, then switch to a smaller model and say so. Users prefer a labeled weaker answer to a spinner.",
+          "reveal": 5
+        },
+        {
+          "say": "Layer six, scale down gently. Stop new admissions, let answers finish, park the machine, keep an overnight floor of two. Layer seven: quota is procured capacity, so reserve it and spill over to another region or provider through the gateway.",
+          "reveal": 6
+        }
+      ],
+      "id": "s021"
+    },
+    {
+      "id": "s021b",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: the morning show, replayed",
+      "table": {
+        "head": [
+          "Moment",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "Day before",
+            "Calendar grows the warm pool from 2 to 5"
+          ],
+          [
+            "First minute",
+            "Queue alarms fire; 5 pooled GPUs join in seconds"
+          ],
+          [
+            "Every 90 s",
+            "Fast boots add capacity and refill the pool"
+          ],
+          [
+            "Worst minute",
+            "p95 TTFT 3.8 s; 12% on the labeled small model"
+          ],
+          [
+            "3 AM",
+            "Floor of 2; preemptible batch jobs fill the gaps"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's replay the morning show with all the layers in place. The day before, the launch calendar grows the warm pool from two machines to five.",
+          "reveal": 1
+        },
+        {
+          "say": "At air time, traffic quadruples. Queue-depth alarms fire within the first minute, and the five pooled GPUs join in seconds, roughly doubling capacity.",
+          "reveal": 2
+        },
+        {
+          "say": "From ninety seconds on, fast boots add a machine every ninety seconds and refill the pool behind them.",
+          "reveal": 3
+        },
+        {
+          "say": "In the worst minute, p ninety-five time to first token is three point eight seconds. Free users wait briefly behind paid ones, and twelve percent of traffic gets the labeled smaller model. No error page.",
+          "reveal": 4
+        },
+        {
+          "say": "After twenty-five minutes demand falls, and scale-down drains and parks machines. At three A M, a floor of two GPUs runs preemptible nightly summaries, which get evicted instantly if real users arrive. That's seventy percent busy by day and sixty at night. Recap: signal, pool, calendar, fast boots, a ladder, and a gentle drain.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Min 0 GPUs, kill after 15 idle minutes: what breaks?",
+      "bullets": [
+        "A. Nothing, it saves money",
+        "B. Answers cut mid-sentence and slow mornings",
+        "C. Only the bill goes up"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Two symptoms show up, one at two A M and one at nine.",
+          "reveal": 0
+        }
+      ],
+      "id": "s022"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 10 of 18",
+      "title": "Answer: B. Then, own the fleet or rent it?",
+      "table": {
+        "head": [
+          "",
+          "Provider API",
+          "Serverless GPU",
+          "Own fleet"
+        ],
+        "rows": [
+          [
+            "Cold starts",
+            "Their problem",
+            "Eased by them",
+            "All yours"
+          ],
+          [
+            "Cost at high volume",
+            "Highest",
+            "Middle",
+            "Lowest if busy"
+          ],
+          [
+            "Privacy and control",
+            "Least",
+            "Middle",
+            "Full"
+          ],
+          [
+            "Ops burden",
+            "Almost none",
+            "Low",
+            "A whole team"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The answer is B. Immediate termination kills live answers mid-sentence, so drain instead. And minimum zero means the first morning users wait ten minutes, so keep a floor and pre-warm. With GPUs, scaling down hits users directly. Concept ten: do you even own GPUs? With a provider A-P-I, cold starts are their problem.",
+          "reveal": 1
+        },
+        {
+          "say": "But per token, it's the most expensive at high volume. Owning is cheapest, only if the GPUs stay busy.",
+          "reveal": 2
+        },
+        {
+          "say": "Owning gives full privacy and custom models.",
+          "reveal": 3
+        },
+        {
+          "say": "And it costs a whole team. So start with an A-P-I, and move one column right only when volume, privacy or custom models force you.",
+          "reveal": 4
+        }
+      ],
+      "id": "s023",
+      "caption": "Book: Module 11 AI-Era Systems · GPU Auto-Scaling"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 11 of 18",
+      "title": "LLM gateway: the incident",
+      "bullets": [
+        "14 services call model providers directly",
+        "A key leaks: 14 services to redeploy",
+        "$80K bill, nobody knows who; $40K runaway loop",
+        "Brownout: 6 fail, 5 hang, 3 improvise"
+      ],
+      "steps": [
+        {
+          "say": "Concept eleven. After eighteen months of enthusiasm, fourteen services call model providers directly. Then three bills arrive at once.",
+          "reveal": 1
+        },
+        {
+          "say": "First, a team ships a provider key inside browser code, and it shows up on a public paste site. To rotate it, you must find every copy across fourteen services and three languages, and redeploy them all.",
+          "reveal": 2
+        },
+        {
+          "say": "Second, eighty thousand dollars of spend that nobody can attribute. An experimental agent retried in a loop for two days and burned forty thousand unnoticed. There was nowhere to put a cap.",
+          "reveal": 3
+        },
+        {
+          "say": "Third, the provider has a brownout, a partial outage, at peak. Six services fail with no fallback, five hang with no timeout, and three run untested homemade degradation.",
+          "reveal": 4
+        }
+      ],
+      "id": "s024",
+      "caption": "Book: Module 11 AI-Era Systems · LLM Gateway"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 11 of 18",
+      "title": "One egress door for all model calls",
+      "mermaid": "flowchart LR\n  S1[\"Service A\"] --> GW[\"LLM Gateway\"]\n  S2[\"Agent\"] --> GW\n  GW --> POL[\"Keys, budgets, guardrails\"]\n  GW --> SC[\"Semantic cache\"]\n  GW -->|\"primary\"| P1[\"Provider 1\"]\n  GW -->|\"breaker open\"| P2[\"Provider 2\"]\n  GW -->|\"cheap tier\"| SH[\"Self-hosted small model\"]",
+      "caption": "An API gateway, pointed outward",
+      "steps": [
+        {
+          "say": "The fix: one internal gateway that every model call passes through. Services prove who they are with internal identity. Only the gateway holds provider keys.",
+          "reveal": 0
+        },
+        {
+          "say": "It checks budgets and the cache, sends traffic to the primary provider, and when a circuit breaker opens, falls down to a second provider or a self-hosted small model.",
+          "reveal": 0
+        }
+      ],
+      "id": "s025"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 11 of 18",
+      "title": "The gateway's jobs, replayed on the three bills",
+      "bullets": [
+        "1. Key custody: one key, zero redeploys",
+        "2. Token budgets with hard caps",
+        "3. Logical model names, canaried",
+        "4. Breaker per provider + fallback ladder",
+        "5. Stream through unbuffered",
+        "6. Stay thin: no prompts in the gateway"
+      ],
+      "steps": [
+        {
+          "say": "Job one, key custody. The leak now means rotating one key in one vault: minutes, zero deploys.",
+          "reveal": 1
+        },
+        {
+          "say": "Job two, token accounting. Count tokens per team, feature and user, with hard caps. The weekend agent stops at five hundred dollars, not forty thousand.",
+          "reveal": 2
+        },
+        {
+          "say": "Job three, logical routing. Services ask for chat premium, not a specific vendor model. Upgrading means sending five percent to the new model behind a flag, judging it on evals, and ramping up. One config change, not fourteen deploys.",
+          "reveal": 3
+        },
+        {
+          "say": "Job four, reliability per provider. In the brownout, the breaker opens in about twenty seconds. Eighty percent of traffic moves to the secondary provider, adding three hundred milliseconds. Cheap classification goes to the self-hosted model. Fifteen percent of chat is served from the cache. Zero services down, versus six. The full ladder is: primary provider, then a secondary provider, then a smaller self-hosted model, then the semantic cache, and last an honest, labeled error.",
+          "reveal": 4
+        },
+        {
+          "say": "Job five, stream replies through unbuffered, or time to first token is wrecked. Test that in C-I.",
+          "reveal": 5
+        },
+        {
+          "say": "Job six, stay thin. The gateway routes, meters and protects. It is also the one safety point: scrubbing personal data, screening for prompt injection, and audit logs with trace I-Ds. But prompts and templates belong to the services, or every prompt tweak becomes a platform ticket. Cost: three to eight milliseconds per call. Start from an open-source core like LiteLLM.",
+          "reveal": 6
+        }
+      ],
+      "id": "s026"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 12 of 18",
+      "title": "API gateway versus LLM gateway",
+      "table": {
+        "head": [
+          "Job",
+          "API gateway (inbound)",
+          "LLM gateway (outbound)"
+        ],
+        "rows": [
+          [
+            "Identity",
+            "Who sent this?",
+            "Key custody, caller attributed"
+          ],
+          [
+            "Fairness",
+            "Per-client rate limits",
+            "Token budgets, hard caps"
+          ],
+          [
+            "Routing",
+            "Paths to services",
+            "Logical models to providers"
+          ],
+          [
+            "Change safety",
+            "API versioning",
+            "Model flags + eval canaries"
+          ],
+          [
+            "Discipline",
+            "No domain logic",
+            "No prompts"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept twelve maps the jobs. The inbound A-P-I gateway asks who sent this request. The outbound L-L-M gateway is our identity toward providers, and attributes every caller.",
+          "reveal": 1
+        },
+        {
+          "say": "Rate limits per client become token budgets per team.",
+          "reveal": 2
+        },
+        {
+          "say": "Path routing becomes routing logical model names to providers.",
+          "reveal": 3
+        },
+        {
+          "say": "A-P-I versioning becomes model flags with canaries judged by evals.",
+          "reveal": 4
+        },
+        {
+          "say": "Both stay thin. Same pattern, opposite direction. Mature stacks run both, the L-L-M gateway sitting behind the A-P-I gateway, beside the services. In the interview, say: one egress door, custody, caps, logical routing, a fallback ladder, unbuffered streams, no prompts.",
+          "reveal": 5
+        }
+      ],
+      "id": "s027",
+      "caption": "Book: Module 11 AI-Era Systems · LLM Gateway"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 13 of 18",
+      "title": "Semantic caching: the 40% problem",
+      "bullets": [
+        "Assistant costs about $2,000 a day",
+        "40% of questions reword about 200 questions",
+        "Exact-key cache hit ratio: 4%",
+        "Normalizing text: only 7%",
+        "Fix: key the cache by meaning"
+      ],
+      "steps": [
+        {
+          "say": "Concept thirteen. Our support assistant costs about two thousand dollars a day.",
+          "reveal": 1
+        },
+        {
+          "say": "A week of logs shows forty percent of questions are rewordings of about two hundred common ones. Order status pls. When will my package arrive.",
+          "reveal": 2
+        },
+        {
+          "say": "A normal cache keyed on the exact string hits only four percent. It catches copy-pastes and nothing else.",
+          "reveal": 3
+        },
+        {
+          "say": "Lowercasing and trimming words to their roots gets you to seven. Where is my package and order status share no words.",
+          "reveal": 4
+        },
+        {
+          "say": "Two sentences with the same meaning need the same key. That's geometry, not string handling.",
+          "reveal": 5
+        }
+      ],
+      "id": "s028",
+      "caption": "Book: Module 11 AI-Era Systems · Semantic Caching"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 13 of 18",
+      "title": "How a semantic cache answers",
+      "bullets": [
+        "1. Embed the query: about 10 ms",
+        "2. Find the nearest cached question",
+        "3. Above threshold and guards pass: serve",
+        "4. Guards: entity check, nothing personal, TTL",
+        "5. Invalidate by topic tag",
+        "6. Sit at the gateway: exact, then semantic"
+      ],
+      "steps": [
+        {
+          "say": "Step one, embed the question with a small model. About ten milliseconds. The embedding is the new key.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, nearest-neighbour search over the embeddings of questions already answered.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, if the closest one scores above the similarity threshold, return its saved answer. Otherwise, generate, and store the new answer for the next person. Careful: there's a new outcome, the false hit. Cancel my order and cancel my subscription look close but mean different things.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, guard every hit. A question about order eight four one two must never get an answer naming another order. Never put personal answers in a shared cache. Give entries an expiry time, and grade a sample of real hits.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, you can't delete a fuzzy key by name, so tag entries by topic and purge the shipping policy tag when policy changes.",
+          "reveal": 5
+        },
+        {
+          "say": "Step six, put it at the gateway so every team shares it. Read path: exact cache, then semantic cache, then generation.",
+          "reveal": 6
+        }
+      ],
+      "id": "s029"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: tuning the threshold",
+      "table": {
+        "head": [
+          "Setting",
+          "Hit ratio",
+          "False hits"
+        ],
+        "rows": [
+          [
+            "Exact string match",
+            "4%",
+            "0%"
+          ],
+          [
+            "Similarity 0.92",
+            "31%",
+            "0.3%"
+          ],
+          [
+            "Similarity 0.94 + entity guard",
+            "27%",
+            "0.05%"
+          ],
+          [
+            "Savings at 27%",
+            "About $540 a day",
+            "About $200K a year"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's tune it. Exact match: four percent hits, no false hits.",
+          "reveal": 1
+        },
+        {
+          "say": "A threshold of zero point nine two gives thirty-one percent hits, but zero point three percent false hits in audits.",
+          "reveal": 2
+        },
+        {
+          "say": "Raising it to zero point nine four, plus the entity guard, gives twenty-seven percent hits and zero point zero five percent false hits. We gave up four points of hits for six times fewer wrong answers, because a false miss costs a fifth of a cent and a false hit costs trust.",
+          "reveal": 3
+        },
+        {
+          "say": "Twenty-seven percent of two thousand dollars a day is about five hundred and forty dollars, roughly two hundred thousand a year. Hits return in forty milliseconds instead of two and a half seconds. Skip it when answers are personal, creative, or repetition is low. Measure repetition first.",
+          "reveal": 4
+        }
+      ],
+      "id": "s030"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 14 of 18",
+      "title": "The caching stack: three different tools",
+      "table": {
+        "head": [
+          "",
+          "Exact",
+          "Semantic",
+          "Provider prompt cache"
+        ],
+        "rows": [
+          [
+            "Key",
+            "Identical string",
+            "Similar meaning",
+            "Identical prefix"
+          ],
+          [
+            "Reuses",
+            "Whole answer",
+            "Whole answer",
+            "Model's KV state"
+          ],
+          [
+            "False hits",
+            "Impossible",
+            "Managed risk",
+            "Impossible"
+          ],
+          [
+            "Wins",
+            "Copy-pastes",
+            "The 40% rewording",
+            "50 to 90% off input"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept fourteen. Don't confuse three caches. Exact caches key on identical strings, semantic caches on similar meaning, and provider prompt caching on an identical prefix, like your fixed system instructions.",
+          "reveal": 1
+        },
+        {
+          "say": "The first two reuse a whole answer. Prompt caching reuses the model's internal K-V state for that prefix, and still generates a fresh answer.",
+          "reveal": 2
+        },
+        {
+          "say": "So prompt caching has no false-hit risk at all.",
+          "reveal": 3
+        },
+        {
+          "say": "It cuts fifty to ninety percent off input tokens for long shared prompts. Use all three together, not one instead of another.",
+          "reveal": 4
+        }
+      ],
+      "id": "s031",
+      "caption": "Book: Module 11 AI-Era Systems · Semantic Caching"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "New embedder: hits fall 27% to 2%. Why?",
+      "bullets": [
+        "A. The new model is worse",
+        "B. Old and new vectors live in different spaces",
+        "C. The threshold drifted"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. What does an embedding's position actually mean?",
+          "reveal": 0
+        }
+      ],
+      "id": "s032"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 15 of 18",
+      "title": "Answer: B. Now, vector database sharding",
+      "bullets": [
+        "500M vectors x 1,536 numbers x 4 bytes",
+        "About 3 TB, plus index overhead, in RAM",
+        "Orders: customer_id routes to one shard",
+        "Nearest 10 vectors: no shard key at all",
+        "Proximity is a result, not an address"
+      ],
+      "steps": [
+        {
+          "say": "The answer is B. Each embedding model has its own coordinate system, so comparing across versions is meaningless. Tag vectors with model version, rebuild a second index, then cut over. An embedding model is a schema. That leads to concept fifteen, sharding a vector database.",
+          "reveal": 1
+        },
+        {
+          "say": "Five hundred million embeddings, each fifteen hundred thirty-six numbers of four bytes, is about three terabytes, plus the approximate-nearest-neighbour index on top.",
+          "reveal": 2
+        },
+        {
+          "say": "No single machine holds that. In ordinary sharding, a query for orders carries a customer I-D, which routes to one shard.",
+          "reveal": 3
+        },
+        {
+          "say": "But find the ten nearest vectors names no key.",
+          "reveal": 4
+        },
+        {
+          "say": "Proximity is a result, not an address, so the neighbours could be on any shard.",
+          "reveal": 5
+        }
+      ],
+      "id": "s033",
+      "caption": "Book: Module 11 AI-Era Systems · Vector Database Sharding"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 15 of 18",
+      "title": "Scatter-gather versus tenant routing",
+      "mermaid": "flowchart LR\n  Q[\"Query vector\"] --> CO[\"Coordinator\"]\n  CO --> SH1[\"Shard 1 top-k\"]\n  CO --> SH2[\"Shard 2 top-k\"]\n  CO --> SHN[\"Shard N top-k\"]\n  SH1 --> M[\"Merge global top-k\"]\n  SH2 --> M\n  SHN --> M",
+      "caption": "Default: ask every shard, merge the best",
+      "steps": [
+        {
+          "say": "By default, a coordinator sends the query to every shard. Each returns its local top ten, and the coordinator merges them into the global top ten. Correct, but every query costs N shard lookups, and the slowest shard sets the latency.",
+          "reveal": 0
+        }
+      ],
+      "id": "s034"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 15 of 18",
+      "title": "Three ways to split: a B2B example",
+      "bullets": [
+        "1. Even shards + scatter-gather: fan-out N",
+        "2. By tenant: fan-out 1, giants get own shard",
+        "3. By geometry (centroids): probe 2 to 3",
+        "Replicas per shard; index is a read model",
+        "Quantize first: 4 to 32x less memory"
+      ],
+      "steps": [
+        {
+          "say": "Our example: a business software company running document search for four thousand customer tenants, three of them enormous. Way one, spread vectors evenly and scatter-gather. Fan-out is all N shards, and you hedge slow shards by also asking a replica.",
+          "reveal": 1
+        },
+        {
+          "say": "Way two, shard by tenant. Every query here is scoped to one tenant, so the filter becomes the shard key. Fan-out is one. Pack small tenants together, give the three giants dedicated shards. Deleting a customer is one clean purge. This is the most common production design.",
+          "reveal": 2
+        },
+        {
+          "say": "Way three, cluster the space around centre points, centroids, and probe only the nearest two or three shards out of twelve. Cheaper, but recall becomes probabilistic, and popular topics form hot shards.",
+          "reveal": 3
+        },
+        {
+          "say": "Each shard runs replicas, since retrieval is mostly reads. The index is a rebuildable read model, so an embedder upgrade means a second index and a cutover.",
+          "reveal": 4
+        },
+        {
+          "say": "And before adding machines, compress: smaller numbers per vector cut memory four to thirty-two times. Rule: if every query carries a filter, shard on it.",
+          "reveal": 5
+        }
+      ],
+      "id": "s035"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 16 of 18",
+      "title": "RAG: the 60-day return policy",
+      "bullets": [
+        "Bot says 60 days; policy changed to 30",
+        "Customer returns on day 45; company pays",
+        "Weights can't update",
+        "Weights can't cite",
+        "Weights can't check permissions"
+      ],
+      "steps": [
+        {
+          "say": "Concept sixteen, retrieval-augmented generation, or RAG. Our assistant tells a customer they have sixty days to return an item. Last quarter, the policy became thirty.",
+          "reveal": 1
+        },
+        {
+          "say": "The customer returns on day forty-five, the dispute escalates, and the company pays. The model worked. Its knowledge was stale.",
+          "reveal": 2
+        },
+        {
+          "say": "Knowledge stored in weights has three limits. It can't be updated without retraining.",
+          "reveal": 3
+        },
+        {
+          "say": "It can't point to a source.",
+          "reveal": 4
+        },
+        {
+          "say": "And it knows everything for everyone, so it can't do access control. The fix: look up current documents at question time. Think of an open-book exam.",
+          "reveal": 5
+        }
+      ],
+      "id": "s036",
+      "caption": "Book: Module 11 AI-Era Systems · RAG Pipeline"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 16 of 18",
+      "title": "RAG: two pipelines",
+      "mermaid": "flowchart LR\n  SRC[\"Docs and catalog\"] -->|\"CDC\"| CH[\"Chunk and embed\"]\n  CH --> IDX[\"Sharded index + ACL tags\"]\n  QQ[\"Question\"] --> EMB[\"Cache check, then embed\"]\n  EMB --> RET[\"Retrieve top-50, ACL filtered\"]\n  IDX --> RET\n  RET --> RR[\"Rerank to top 5\"]\n  RR --> GEN[\"Cited answer via gateway\"]",
+      "caption": "Ingestion keeps the index fresh; the query path answers",
+      "steps": [
+        {
+          "say": "RAG is two pipelines. Ingestion runs all the time: documents are chunked, embedded and stored in a sharded index tagged with who may read them.",
+          "reveal": 0
+        },
+        {
+          "say": "The query pipeline runs per question: check the cache, embed, retrieve permitted chunks, rerank, and generate a cited answer.",
+          "reveal": 0
+        }
+      ],
+      "id": "s037"
+    },
+    {
+      "layout": "twocol",
+      "kicker": "Concept 16 of 18",
+      "title": "Both pipelines, step by step",
+      "left": {
+        "heading": "Ingestion",
+        "bullets": [
+          "1. Chunk by structure",
+          "2. Embed each chunk",
+          "3. Index with ACL tags",
+          "4. CDC: re-embed only edits"
+        ]
+      },
+      "right": {
+        "heading": "Query",
+        "bullets": [
+          "Embed with the same model",
+          "Retrieve top-50, ACL filtered",
+          "Rerank to 5 in 40 ms",
+          "Cited answer or I don't know"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Ingestion step one, chunk documents along headings and sections, with overlap. Never split mid-table. Chunking sets the quality ceiling. No reranker rescues bad chunks.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, embed every chunk.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, store vectors with access tags, a list of who may read each document.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, change data capture watches the content system. When the returns page is edited, only its changed chunks are re-embedded, within seconds.",
+          "reveal": 4
+        },
+        {
+          "say": "Query side. After the cache check, embed the question with the same model that embedded the chunks.",
+          "reveal": 5
+        },
+        {
+          "say": "Retrieve the top fifty, filtered by this user's permissions at retrieval time. Telling the model don't reveal secrets is not access control.",
+          "reveal": 6
+        },
+        {
+          "say": "A cross-encoder reranker reads question and chunk side by side and picks the best five, in about forty milliseconds.",
+          "reveal": 7
+        },
+        {
+          "say": "Then build the prompt from the chunks, their sources and the question. Tell the model to answer only from that context, cite its sources, and say I don't know when the context doesn't cover it. Generate through the gateway and stream the answer back. Those citations become the audit trail when a customer disputes an answer.",
+          "reveal": 8
+        }
+      ],
+      "id": "s038"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: the incident, replayed",
+      "table": {
+        "head": [
+          "Moment",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "14:02:11",
+            "Policy edited to 30 days"
+          ],
+          [
+            "14:02:19",
+            "CDC re-indexes 3 chunks: 8 s total"
+          ],
+          [
+            "Latency on a miss",
+            "10 + 25 + 40 ms, then 2 s generation"
+          ],
+          [
+            "Eval dashboard",
+            "recall@5 91%, faithfulness 96%"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "At two oh two and eleven seconds, someone edits the policy to thirty days.",
+          "reveal": 1
+        },
+        {
+          "say": "By nineteen seconds past, three chunks are re-indexed. Eight seconds from edit to truth, versus weeks for retraining.",
+          "reveal": 2
+        },
+        {
+          "say": "On a cache miss: ten milliseconds to embed, twenty-five to retrieve, forty to rerank. About seventy-five milliseconds on a two-second answer, under four percent.",
+          "reveal": 3
+        },
+        {
+          "say": "And evaluate the stages separately. Recall at five asks, did we fetch the right chunk? Faithfulness asks, did the answer stick to those chunks? Most the bot was wrong tickets are retrieval failures dressed up as generation failures, so debug retrieval first.",
+          "reveal": 4
+        }
+      ],
+      "id": "s039"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 17 of 18",
+      "title": "RAG versus fine-tuning versus long context",
+      "table": {
+        "head": [
+          "",
+          "RAG",
+          "Fine-tuning",
+          "Long context"
+        ],
+        "rows": [
+          [
+            "Freshness",
+            "Seconds",
+            "Weeks",
+            "Fresh, re-paste"
+          ],
+          [
+            "Citations",
+            "Built in",
+            "None",
+            "Possible"
+          ],
+          [
+            "Access control",
+            "Real, at retrieval",
+            "Impossible",
+            "All or nothing"
+          ],
+          [
+            "Best for",
+            "Big, changing knowledge",
+            "Tone and format",
+            "Small stable docs"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept seventeen. Three tools, three jobs. Freshness: RAG in seconds, fine-tuning, which is further training on your data, waits weeks for a training run, and long context, pasting everything into the prompt, is fresh but you pay for the whole corpus every question.",
+          "reveal": 1
+        },
+        {
+          "say": "Citations come built in with RAG. Fine-tuning gives none.",
+          "reveal": 2
+        },
+        {
+          "say": "Access control is real only with RAG. Weights can't check permissions.",
+          "reveal": 3
+        },
+        {
+          "say": "So, a half-million-document knowledge base with team permissions: RAG. Answer in our brand voice: fine-tuning, because voice is behaviour. A fifty-page handbook updated yearly: long context with prompt caching. They layer, too: a fine-tuned model fed RAG context is common.",
+          "reveal": 4
+        }
+      ],
+      "id": "s040",
+      "caption": "Book: Module 11 AI-Era Systems · RAG Pipeline"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 18 of 18",
+      "title": "Capstone: a production RAG chatbot",
+      "steps": [
+        {
+          "say": "Concept eighteen, the capstone. Five million users, two hundred business partners embedding the assistant under their brands, thirty model requests a second at peak, streamed cited answers, usage billing, and it must survive a provider brownout during a traffic spike. Let's design it plane by plane.",
+          "reveal": 0
+        }
+      ],
+      "id": "s041",
+      "caption": "Book: Module 11 · Capstone — A Production RAG Chatbot at Scale"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 18 of 18",
+      "title": "The five planes",
+      "bullets": [
+        "Knowledge: CDC, tenant shards, ACL tags",
+        "Conversation: SSE, sticky ring, history = truth",
+        "Serving: cache, gateway, batched warm fleet",
+        "Money: metering log; exactly-once invoices",
+        "Personal state: tool calls, not the index"
+      ],
+      "steps": [
+        {
+          "say": "The knowledge plane. C-D-C keeps the index fresh in seconds. The index is sharded by tenant, so each partner's query hits one shard, and the two biggest partners get their own. Access tags filter at retrieval. Embedder upgrades are dual-index migrations.",
+          "reveal": 1
+        },
+        {
+          "say": "The conversation plane. Stream with server-sent events, one-way over plain H-T-T-P with automatic reconnect. Route each conversation by its I-D on a consistent-hash ring, so later turns reach the warm K-V cache. The stream is just transport. Finished messages go to a history store, which is the truth after a reconnect.",
+          "reveal": 2
+        },
+        {
+          "say": "The serving plane. The semantic cache answers over twenty-five percent in forty milliseconds. Misses go to the gateway with per-tenant hard caps and a fallback ladder, then to a continuously batched fleet, scaled on queue depth with warm pools and a calendar, overflowing to provider A-P-Is.",
+          "reveal": 3
+        },
+        {
+          "say": "The money plane. The gateway meters every call and publishes usage events to a log partitioned by tenant. Live dashboards use idempotent upserts, forgiving and fresh. Invoices use exactly-once processing, because partners audit bills.",
+          "reveal": 4
+        },
+        {
+          "say": "The personal-state boundary. Where's my order is the top question, and it never enters the index. It's a tool call that reads the orders system, and the model only formats the result. Cancel that order is a write, so the tool call carries an idempotency key and starts the orders domain's own saga. Presentation composes reads. Domains own writes.",
+          "reveal": 5
+        }
+      ],
+      "id": "s042"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 18 of 18",
+      "title": "The bad day: Tuesday, 11 AM",
+      "table": {
+        "head": [
+          "Time",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "11:00",
+            "Traffic 3x lands on pre-warmed GPUs"
+          ],
+          [
+            "11:04",
+            "Provider browns out; breakers open in 20 s"
+          ],
+          [
+            "Spike",
+            "Cache serves trending questions 10,000 times"
+          ],
+          [
+            "Spend",
+            "Per-tenant budgets stop failover doubling cost"
+          ],
+          [
+            "Users",
+            "Slightly slower answers, one banner"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Now the failure walk. At eleven, marketing's segment airs and traffic triples. The calendar already pre-warmed the pool, so the surge lands on ready GPUs while queue-depth scaling boots more.",
+          "reveal": 1
+        },
+        {
+          "say": "At eleven oh four, the primary provider browns out. Breakers open after about twenty seconds of errors. Chat moves to the secondary provider, and classification work to the self-hosted small model.",
+          "reveal": 2
+        },
+        {
+          "say": "The semantic cache carries the most. Every spike brings trending questions, like is the sale still on, and one generation serves ten thousand askers.",
+          "reveal": 3
+        },
+        {
+          "say": "Per-tenant budgets stop the failover from doubling anyone's bill.",
+          "reveal": 4
+        },
+        {
+          "say": "Users see slightly slower answers and one labeled banner. And no human made a decision. Every branch was configuration written on a quiet afternoon. In the interview, say that line.",
+          "reveal": 5
+        }
+      ],
+      "id": "s043"
+    },
+    {
+      "layout": "recap",
+      "kicker": "Episode 16 complete",
+      "title": "Episode 16 recap",
+      "bullets": [
+        "Constants: tokens, costly slow GPUs, similarity",
+        "Feature store: define once, point-in-time joins",
+        "Serving: continuous batching + paged KV = 30x",
+        "GPU scaling: queue depth, warm pool, drain",
+        "Gateway + semantic cache: custody, caps, meaning",
+        "Vector shards by tenant; RAG with CDC and ACLs"
+      ],
+      "steps": [
+        {
+          "say": "Let's recap. Three constants changed: work counted in tokens, workers that cost a hundred times more and boot in minutes, and equality turned into similarity.",
+          "reveal": 1
+        },
+        {
+          "say": "Feature store: write each feature once, point-in-time joins offline, streaming online, log and verify.",
+          "reveal": 2
+        },
+        {
+          "say": "Serving: batch by token, page the K-V cache, separate prefill from decode at scale. Five GPUs instead of a hundred and sixty.",
+          "reveal": 3
+        },
+        {
+          "say": "GPU scaling: scale on queue depth, size the warm pool at spike rate times boot time, pre-warm from the calendar, drain before scaling down. Rent before you own.",
+          "reveal": 4
+        },
+        {
+          "say": "The gateway holds keys, caps tokens, routes logical models and falls down a ladder. The semantic cache keys on meaning, with a cautious threshold and guards.",
+          "reveal": 5
+        },
+        {
+          "say": "Shard vectors by tenant when every query has one. RAG is two pipelines, fresh through C-D-C and filtered by permissions. Next time, in episode seventeen: Algorithms One, Consensus to Percentiles. See you there.",
+          "reveal": 6
+        }
+      ],
+      "id": "s044"
+    }
+  ]
+}

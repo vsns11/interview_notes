@@ -1,0 +1,2220 @@
+{
+ "series": "LLD Workshop",
+ "episode": 10,
+ "title": "Behavioral Patterns Part 1",
+ "subtitle": "Chain of Responsibility, Command, Iterator, Mediator, Memento, Interpreter",
+ "scenes": [
+  {
+   "id": "s001",
+   "layout": "title",
+   "title": "Behavioral Patterns Part 1",
+   "subtitle": "Chain of Responsibility, Command, Iterator, Mediator, Memento, Interpreter",
+   "steps": [
+    {
+     "say": "Welcome to episode ten of the L-L-D Workshop, the low-level design series. Today: behavioral patterns, about how objects share work and talk.",
+     "reveal": 0
+    },
+    {
+     "say": "By the end you'll be able to explain, draw and defend six of them: Chain of Responsibility, Command, Iterator, Mediator, Memento and Interpreter. Plus the classic bug for each, and how to tell look-alikes apart.",
+     "reveal": 0
+    },
+    {
+     "say": "Keep the chapter ten PDF open beside the video. Every concept here matches a section there, with full Java code and real output. When a pause-and-think question appears, pause and answer before I do.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s002",
+   "layout": "section",
+   "kicker": "Concept 1 of 15",
+   "title": "Behavioral patterns: the big picture",
+   "steps": [
+    {
+     "say": "Episode eight was about how objects are made. Episode nine was about how they're put together. Today's question is different: once the objects exist, who does what, and who calls whom?",
+     "reveal": 0
+    },
+    {
+     "say": "Picture a restaurant kitchen. When an order arrives, who hears it first, who passes it on, and who can cancel it? That's behavior.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s003",
+   "layout": "bullets",
+   "kicker": "Concept 1 of 15",
+   "title": "What behavioral patterns help you do",
+   "bullets": [
+    "Let objects work together flexibly",
+    "Cut tight coupling between classes",
+    "Untangle many-object communication",
+    "Change behavior at run time, not only compile time"
+   ],
+   "steps": [
+    {
+     "say": "Four goals. One: let objects cooperate flexibly. In our kitchen, a new station can join without retraining everyone.",
+     "reveal": 1
+    },
+    {
+     "say": "Two: cut tight coupling. Coupling means one class depends heavily on another's internals. Less of it means each class is easier to change and to test.",
+     "reveal": 2
+    },
+    {
+     "say": "Three: untangle communication, so ten objects calling each other gets a shape you can follow.",
+     "reveal": 3
+    },
+    {
+     "say": "Four: change behavior at run time, like reordering checks from configuration, without recompiling.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s004",
+   "layout": "number",
+   "kicker": "Concept 1 of 15",
+   "title": "The one idea behind all of them",
+   "big": "hidden behavior  =>  a named object",
+   "caption": "a chain of ifs, a hard-coded call, a loop... becomes an object",
+   "steps": [
+    {
+     "say": "Here's the single idea that runs through every behavioral pattern. Take behavior that's hidden inside a big method, like a chain of ifs, a hard-coded call or a loop, and turn it into an object.",
+     "reveal": 0
+    },
+    {
+     "say": "Once it's an object you can name it, pass it around, swap it, store it and test it on its own. Keep that in mind; you'll see it six times today. Recap: behavioral patterns are about responsibility and communication.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s005",
+   "layout": "table",
+   "kicker": "Concept 2 of 15",
+   "title": "The eleven GoF patterns: six today",
+   "table": {
+    "head": [
+     "Pattern",
+     "One-line intent",
+     "Ep"
+    ],
+    "rows": [
+     [
+      "Chain of Responsibility",
+      "Pass a request down a row of handlers",
+      "10"
+     ],
+     [
+      "Command",
+      "Wrap a request in an object",
+      "10"
+     ],
+     [
+      "Interpreter",
+      "Grammar as classes; evaluate sentences",
+      "10"
+     ],
+     [
+      "Iterator",
+      "Walk a collection without seeing its storage",
+      "10"
+     ],
+     [
+      "Mediator",
+      "Route talk through one coordinator",
+      "10"
+     ],
+     [
+      "Memento",
+      "Private snapshot you can return to",
+      "10"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "The Gang of Four book lists eleven behavioral patterns. Six today, five next time. Chain of Responsibility hands a request down a row of handlers.",
+     "reveal": 1
+    },
+    {
+     "say": "Command wraps a request in an object.",
+     "reveal": 2
+    },
+    {
+     "say": "Interpreter represents the grammar of a tiny language as classes, and evaluates sentences in it.",
+     "reveal": 3
+    },
+    {
+     "say": "Iterator walks a collection one element at a time, without seeing how it's stored.",
+     "reveal": 4
+    },
+    {
+     "say": "Mediator routes communication between many objects through one coordinator.",
+     "reveal": 5
+    },
+    {
+     "say": "Memento lets an object privately snapshot its state and return to it.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s005b",
+   "layout": "table",
+   "kicker": "Concept 2 of 15",
+   "title": "The eleven GoF patterns: five next time",
+   "table": {
+    "head": [
+     "Pattern",
+     "One-line intent",
+     "Ep"
+    ],
+    "rows": [
+     [
+      "Observer",
+      "Notify all dependents on change",
+      "11"
+     ],
+     [
+      "State",
+      "Behavior changes with internal state",
+      "11"
+     ],
+     [
+      "Strategy",
+      "Swap interchangeable algorithms",
+      "11"
+     ],
+     [
+      "Template Method",
+      "Fixed skeleton, subclasses fill steps",
+      "11"
+     ],
+     [
+      "Visitor",
+      "Add operations without editing classes",
+      "11"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Next episode: Observer, which notifies every dependent when something changes.",
+     "reveal": 1
+    },
+    {
+     "say": "State, where an object's behavior changes with its internal state.",
+     "reveal": 2
+    },
+    {
+     "say": "Strategy, which picks one of several interchangeable algorithms at run time.",
+     "reveal": 3
+    },
+    {
+     "say": "Template Method, which fixes an algorithm's skeleton in a base class.",
+     "reveal": 4
+    },
+    {
+     "say": "And Visitor, which adds operations without editing classes.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s006",
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "Which two behavioral patterns use inheritance?",
+   "bullets": [
+    "A. Command and Memento",
+    "B. Template Method and Interpreter",
+    "C. Strategy and State",
+    "D. Iterator and Visitor"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. Most behavioral patterns use composition, objects holding references to other objects. Only two share behavior through inheritance. Which two?",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s007",
+   "layout": "twocol",
+   "kicker": "Concept 2 of 15",
+   "title": "Class scope versus object scope",
+   "left": {
+    "heading": "Class scope: inheritance",
+    "bullets": [
+     "Template Method, Interpreter",
+     "Fixed at compile time"
+    ]
+   },
+   "right": {
+    "heading": "Object scope: composition",
+    "bullets": [
+     "The other nine",
+     "Rewire objects at run time"
+    ]
+   },
+   "steps": [
+    {
+     "say": "The answer is B. Template Method and Interpreter are class-scoped: subclasses inherit and fill in behavior.",
+     "reveal": 1
+    },
+    {
+     "say": "That wiring is fixed when you compile.",
+     "reveal": 2
+    },
+    {
+     "say": "The other nine are object-scoped. They use composition: objects hold references to other objects.",
+     "reveal": 3
+    },
+    {
+     "say": "So you can rewire them while the program runs. Recap: eleven patterns, two by inheritance, nine by composition.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s008",
+   "layout": "section",
+   "kicker": "Concept 3 of 15",
+   "title": "Chain of Responsibility",
+   "steps": [
+    {
+     "say": "You call a support line. Level one tries first. If they can't help, you go to level two, then to an engineer. But you only dialled one number. That's Chain of Responsibility, or C-o-R.",
+     "reveal": 0
+    },
+    {
+     "say": "Definition: a request travels through a row of handler objects. Each one handles it, rejects it so nobody later sees it, or forwards it to the next. The sender only talks to the first handler and never learns who finished the job.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s009",
+   "layout": "bullets",
+   "kicker": "Concept 3 of 15",
+   "title": "The problem: one method doing every check",
+   "bullets": [
+    "Before creating an order: auth, rate limit, validation",
+    "The method grows with every new rule",
+    "The order of checks is hidden in the body",
+    "Some routes need only two checks: flags, copies"
+   ],
+   "steps": [
+    {
+     "say": "Running example: an online shop's create-order A-P-I. A request must pass authentication, who is calling, rate limiting, are they calling too often, and validation, is the data well-formed.",
+     "reveal": 1
+    },
+    {
+     "say": "Put it all in one method and problem one appears: every new rule makes it longer.",
+     "reveal": 2
+    },
+    {
+     "say": "Problem two: the order of the checks is buried in the body, yet it matters. Auth then rate limit is a different system from rate limit then auth.",
+     "reveal": 3
+    },
+    {
+     "say": "Problem three: some routes need only two of the checks. Soon you add boolean flags, then a second copy that somebody forgets to update.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s010",
+   "layout": "bullets",
+   "kicker": "Concept 3 of 15",
+   "title": "How it works, step by step",
+   "bullets": [
+    "1. A Handler type: handle(request) + a next link",
+    "2. One concrete handler per check: stop or pass on",
+    "3. A terminal handler does the real work",
+    "4. Wire once at start-up",
+    "5. The client calls only the first handler"
+   ],
+   "steps": [
+    {
+     "say": "Step one: an abstract Handler with a handle method and a reference to the next handler.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two: one small class per check. The Auth Handler checks the token. If it's missing, it returns false and the chain stops. Otherwise it passes the request on.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three: a terminal handler at the end does the real work. Here that's Create Order Handler, which never passes on.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four: wire it once at start-up: auth, set next rate limit, set next validate, set next create order.",
+     "reveal": 4
+    },
+    {
+     "say": "Step five: the client calls only the first handler. Now the line is configuration, not logic. A new rule is one class plus one wiring line.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s011",
+   "layout": "diagram",
+   "kicker": "Concept 3 of 15",
+   "title": "One chain, three different stopping points",
+   "mermaid": "flowchart LR\n  C[\"Client\"] --> A[\"Auth\"]\n  A -->|\"ok\"| R[\"Rate limit\"]\n  R -->|\"ok\"| V[\"Validate\"]\n  V -->|\"ok\"| O[\"Create order\"]\n  A -.->|\"no token\"| X1[\"Rejected\"]\n  R -.->|\"over limit\"| X2[\"Rejected\"]",
+   "caption": "each handler knows only the next one",
+   "steps": [
+    {
+     "say": "Here's the chain. A valid request flows all the way to Create Order.",
+     "reveal": 0
+    },
+    {
+     "say": "A request with no token stops at Auth. The rate limiter, validator and order code never even run.",
+     "reveal": 0
+    },
+    {
+     "say": "And a request over the limit stops at the rate limiter. Notice each handler knows only the next one, typed as the abstract Handler, so you can shuffle stages freely.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s012",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Walking four requests through the chain",
+   "table": {
+    "head": [
+     "Request",
+     "Path",
+     "Result"
+    ],
+    "rows": [
+     [
+      "alice, 1st",
+      "auth ok, limit 1 of 2, valid, created",
+      "handled"
+     ],
+     [
+      "bob, no token",
+      "auth rejects",
+      "stopped at auth"
+     ],
+     [
+      "alice, 2nd, empty body",
+      "auth ok, limit 2 of 2, invalid",
+      "stopped at validate"
+     ],
+     [
+      "alice, 3rd",
+      "auth ok, limit says 3 over 2",
+      "stopped at limiter"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Example time. Watch where each request stops.",
+     "reveal": 0
+    },
+    {
+     "say": "Let's run it with a limit of two requests per user. Alice's first request: auth okay, rate limit one of two, valid, order created for two widgets.",
+     "reveal": 1
+    },
+    {
+     "say": "Bob has no token. Auth rejects him, and nothing after auth runs.",
+     "reveal": 2
+    },
+    {
+     "say": "Alice's second request has an empty body. It passes auth and the limiter at two of two, then validation rejects it.",
+     "reveal": 3
+    },
+    {
+     "say": "Alice's third request is stopped by the limiter: three requests, limit two. Four requests, four different paths, one chain.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s013",
+   "layout": "bullets",
+   "kicker": "Concept 3 of 15",
+   "title": "Order is a decision no tool verifies",
+   "bullets": [
+    "Auth first: limiter can count per user",
+    "Auth first: anonymous floods can't burn a user's quota",
+    "Limit first: keys only on IP, but shields costly auth",
+    "Comment the reason beside the wiring"
+   ],
+   "steps": [
+    {
+     "say": "Should auth come before rate limiting? Auth first means the limiter knows the user, so it counts per user.",
+     "reveal": 1
+    },
+    {
+     "say": "It also means bad credentials are rejected before they use up a real user's quota.",
+     "reveal": 2
+    },
+    {
+     "say": "Rate limiting first can only key on something like the I-P address. But it protects an expensive auth step from huge floods. Both are reasonable. They just behave differently.",
+     "reveal": 3
+    },
+    {
+     "say": "No compiler checks this, so write the reason in a comment right next to the wiring. It's recorded nowhere else.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s014",
+   "layout": "twocol",
+   "kicker": "Concept 3 of 15",
+   "title": "Bugs and variants to know",
+   "left": {
+    "heading": "Common bugs",
+    "bullets": [
+     "Swallowing: neither handles nor passes on",
+     "No terminal handler: silent shrug",
+     "Shared stateful chain across requests"
+    ]
+   },
+   "right": {
+    "heading": "Real-world chains",
+    "bullets": [
+     "Servlet filters, Spring Security",
+     "Express next(), Go middleware",
+     "Logging levels, DOM event bubbling"
+    ]
+   },
+   "steps": [
+    {
+     "say": "The classic bug is swallowing: a handler checks and just returns, without passing on. No error, and orders sometimes vanish. Give every path an explicit outcome, and test each handler against a fake next.",
+     "reveal": 1
+    },
+    {
+     "say": "Second: no terminal handler. Falling off the end should throw, loudly.",
+     "reveal": 2
+    },
+    {
+     "say": "Third: a filter chain keeps a position, so it's one per request, never shared.",
+     "reveal": 3
+    },
+    {
+     "say": "Real chains: Java servlet filters and Spring Security.",
+     "reveal": 4
+    },
+    {
+     "say": "Express middleware calls next. Passing next as an argument makes a forgotten call easy to spot.",
+     "reveal": 5
+    },
+    {
+     "say": "And logging levels, where console, file and pager each act if severe enough. Strictly, if nobody can stop the flow, that's a pipeline.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s015",
+   "layout": "number",
+   "kicker": "Concept 3 of 15",
+   "title": "In the interview, say this",
+   "big": "handle  |  reject  |  pass on",
+   "caption": "Decorator: all layers run.  Observer: everyone hears.  CoR: first taker wins",
+   "steps": [
+    {
+     "say": "Say: Chain of Responsibility splits a series of checks into handler objects, each linked only to the next. Only the wiring knows the order, so adding or reordering rules is cheap. Servlet filters are the everyday example. I give every path an explicit outcome and put a terminal handler at the end.",
+     "reveal": 0
+    },
+    {
+     "say": "If they ask about Decorator: with Decorator every wrapper runs and the call always reaches the inside. With a chain, a handler can end the request. Recap: handle, reject, or pass on, and never swallow.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s016",
+   "layout": "section",
+   "kicker": "Concept 4 of 15",
+   "title": "Command",
+   "steps": [
+    {
+     "say": "In a restaurant, the waiter writes an order slip and pins it on a rail. The cook acts on it later. The slip can be queued, prioritized or cancelled. The slip is a request turned into a thing. That's the Command pattern.",
+     "reveal": 0
+    },
+    {
+     "say": "Definition: Command packages a request, like add two widgets to the cart, as an object holding everything needed to perform it later. Once it's an object, you can keep it, queue it, log it, retry it, and, if it knows its inverse, reverse it.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s017",
+   "layout": "bullets",
+   "kicker": "Concept 4 of 15",
+   "title": "Why a plain method call isn't enough",
+   "bullets": [
+    "Undo: reverse my last two changes",
+    "Queue: run later on a worker thread",
+    "Log of intent: what was requested",
+    "Retry with the same arguments",
+    "One action, many triggers: menu, hot-key, script"
+   ],
+   "steps": [
+    {
+     "say": "Running example: a shopping cart. Calling cart dot set discount ten runs immediately and is forgotten. That fails five needs. One: undo, reverse my last two changes.",
+     "reveal": 1
+    },
+    {
+     "say": "Two: a queue. Run the job later on a background worker thread, not the thread serving the user.",
+     "reveal": 2
+    },
+    {
+     "say": "Three: a log of intent, recording what people asked for, not only the final state.",
+     "reveal": 3
+    },
+    {
+     "say": "Four: retry a failed action with exactly the same arguments.",
+     "reveal": 4
+    },
+    {
+     "say": "Five: one action, many triggers. A menu item, a keyboard shortcut and a script all fire the same apply-discount. Command gives the request a body that outlives the call.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s018",
+   "layout": "table",
+   "kicker": "Concept 4 of 15",
+   "title": "The roles, in our cart",
+   "table": {
+    "head": [
+     "Role",
+     "Job",
+     "In our code"
+    ],
+    "rows": [
+     [
+      "Command",
+      "Interface: execute, maybe undo",
+      "Command, UndoableCommand"
+     ],
+     [
+      "Concrete command",
+      "Holds receiver + args; one operation",
+      "AddItem, ApplyDiscount"
+     ],
+     [
+      "Receiver",
+      "State really changes; unaware of commands",
+      "Cart"
+     ],
+     [
+      "Invoker",
+      "Runs and remembers; unaware of carts",
+      "CommandHistory"
+     ],
+     [
+      "Client",
+      "Builds commands, gives receiver",
+      "Main"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Interviewers want three roles, invoker, command and receiver, plus the client. First, the Command interface, with execute and optionally undo.",
+     "reveal": 1
+    },
+    {
+     "say": "A concrete command, like Add Item, stores its receiver, the cart, and its arguments: the S-K-U, meaning product code, and the quantity. It can do and undo exactly one operation.",
+     "reveal": 2
+    },
+    {
+     "say": "The receiver is the Cart. Its state really changes, and it has no idea commands exist.",
+     "reveal": 3
+    },
+    {
+     "say": "The invoker is Command History. It runs commands and remembers them, and it never mentions carts. So one history serves the whole app.",
+     "reveal": 4
+    },
+    {
+     "say": "And the client, Main, builds a command and hands it its receiver.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s019",
+   "layout": "bullets",
+   "kicker": "Concept 4 of 15",
+   "title": "Undo and redo, step by step",
+   "bullets": [
+    "1. Client builds command with receiver + args",
+    "2. Invoker executes; push on undo stack",
+    "3. Undo: pop, undo(), push on redo stack",
+    "4. Redo: pop redo, execute(), push back",
+    "5. A fresh command clears the redo stack"
+   ],
+   "steps": [
+    {
+     "say": "Let's walk it with the cart. Step one: the client builds Add Item widget times two, and hands it to the history.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two: the history calls execute and pushes it on the undo stack, which is last-in, first-out. We run add widget two, add gadget one, then discount ten percent.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three, undo: pop the top, call its undo, push it on the redo stack. Undo twice: the discount goes, then the gadget goes.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four, redo: pop from redo, execute again, push back on undo. The gadget returns.",
+     "reveal": 4
+    },
+    {
+     "say": "Step five: now we add three cables, a fresh command. The redo stack is cleared, so redo says nothing to redo.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s020",
+   "layout": "diagram",
+   "kicker": "Concept 4 of 15",
+   "title": "Command flow",
+   "mermaid": "flowchart LR\n  CL[\"Client\"] -->|\"builds\"| CMD[\"AddItem widget x2\"]\n  CL -->|\"hands to\"| INV[\"CommandHistory\"]\n  INV -->|\"execute\"| CMD\n  CMD -->|\"cart.add\"| REC[\"Cart\"]\n  INV --> U[\"Undo stack\"]\n  U <--> RD[\"Redo stack\"]",
+   "caption": "the invoker never knows what a command touches",
+   "steps": [
+    {
+     "say": "Here's the picture. The client builds a command and hands it to the invoker. The invoker calls execute, and the command calls the cart.",
+     "reveal": 0
+    },
+    {
+     "say": "The invoker stacks it for undo, and moves it between the undo and redo stacks. Notice the command carries its own cart reference, because by the time it runs, its creator may be long gone.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s021",
+   "layout": "twocol",
+   "kicker": "Concept 4 of 15",
+   "title": "Command: when it fits, when it doesn't",
+   "left": {
+    "heading": "Pros",
+    "bullets": [
+     "Undo, queues, logs, retries become possible",
+     "One history for all commands",
+     "Macro command: commands of commands"
+    ]
+   },
+   "right": {
+    "heading": "Skip it when",
+    "bullets": [
+     "Simple, immediate call nobody undoes",
+     "A lambda already defers it",
+     "The effect can't truly be undone"
+    ]
+   },
+   "steps": [
+    {
+     "say": "The wins: the request outlives the call, enabling undo, queues, logs and retries.",
+     "reveal": 1
+    },
+    {
+     "say": "The invoker knows nothing about what it runs, so one history serves everything.",
+     "reveal": 2
+    },
+    {
+     "say": "And a macro command, like a starter kit adding a keyboard, a mouse and fifteen percent off, runs steps in order and undoes them in reverse.",
+     "reveal": 3
+    },
+    {
+     "say": "Skip it when the call is simple and immediate. A Save Command nobody undoes, queues or logs is extra code for nothing.",
+     "reveal": 4
+    },
+    {
+     "say": "In Java, a Runnable already is a one-method command, and an Executor Service is its invoker. Write a class only for undo, a log name, or serialization.",
+     "reveal": 5
+    },
+    {
+     "say": "And some effects can't be undone at all. That's our next concept.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s022",
+   "layout": "section",
+   "kicker": "Concept 5 of 15",
+   "title": "Undo must restore, not recompute",
+   "steps": [
+    {
+     "say": "Here's a bug that looks harmless. The cart's undo for apply discount is written as: set the discount back to zero. What could go wrong?",
+     "reveal": 0
+    },
+    {
+     "say": "Rule of thumb: execute must record whatever undo will need. Usually that's just the fields it overwrites, not a copy of the whole object.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s023",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "The discount undo, guessed versus restored",
+   "table": {
+    "head": [
+     "Step",
+     "Guess: reset to 0",
+     "Restore captured"
+    ],
+    "rows": [
+     [
+      "Cart starts",
+      "discount 5%",
+      "discount 5%"
+     ],
+     [
+      "Execute ApplyDiscount 10%",
+      "discount 10%",
+      "save previous = 5%, set 10%"
+     ],
+     [
+      "Undo",
+      "discount 0%  (never existed)",
+      "discount 5%  (correct)"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Example time. Same cart, two undo implementations.",
+     "reveal": 0
+    },
+    {
+     "say": "Worked example. Our cart starts with a five percent discount, maybe a loyalty discount.",
+     "reveal": 1
+    },
+    {
+     "say": "We execute Apply Discount ten percent. The correct version first saves the previous value, five, in a field called previous percent, then sets ten.",
+     "reveal": 2
+    },
+    {
+     "say": "Now undo. The guessing version sets zero percent, a state the user never had. They just lost their loyalty discount. The restoring version sets five percent, exactly right. One field makes undo correct.",
+     "reveal": 3
+    }
+   ]
+  },
+  {
+   "id": "s024",
+   "layout": "bullets",
+   "kicker": "Concept 5 of 15",
+   "title": "Two more undo rules",
+   "bullets": [
+    "History is strictly last-in, first-out: a stack",
+    "Some effects escape: email sent, card charged",
+    "Honest options: keep out of history, or compensate",
+    "A refund is not an undo: both events stay recorded"
+   ],
+   "steps": [
+    {
+     "say": "Rule two: undo history is strictly last-in, first-out. Add, add, discount is undone as discount, then the second add, then the first. Any other order can produce states that never existed.",
+     "reveal": 1
+    },
+    {
+     "say": "Rule three: some effects escape your system, like a sent email or a charged card. An undo there promises the impossible.",
+     "reveal": 2
+    },
+    {
+     "say": "So either keep them out of the history, like our Send Receipt command, or use compensation: a new action reaching a similar end state.",
+     "reveal": 3
+    },
+    {
+     "say": "A refund for a charge is compensation. It's not an undo, because both the charge and the refund stay in the record. Recap: capture, then restore; use a stack; compensate what can't be undone.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s025",
+   "layout": "section",
+   "kicker": "Concept 6 of 15",
+   "title": "Iterator",
+   "steps": [
+    {
+     "say": "Think of your T-V remote's next channel button. You have no idea how the channels are stored. You just press next. That's Iterator.",
+     "reveal": 0
+    },
+    {
+     "say": "Definition: an iterator visits a collection's elements one at a time, in order, without knowing how they're stored: an array, a linked list, a tree, or a remote A-P-I that returns two results per page.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s026",
+   "layout": "bullets",
+   "kicker": "Concept 6 of 15",
+   "title": "The problem it solves",
+   "bullets": [
+    "Loops using get(i) assume an array",
+    "Many sources can't be indexed: trees, graphs, APIs",
+    "Every caller re-implements paging, some wrongly",
+    "Fix: a separate object with hasNext and next"
+   ],
+   "steps": [
+    {
+     "say": "Running example: search results from a remote search A-P-I. Problem one: a loop that calls get i assumes an array. Move the data and every loop gets rewritten.",
+     "reveal": 1
+    },
+    {
+     "say": "Problem two: many sources can't be indexed. A tree has several visiting orders. A graph has to remember visited nodes. A search A-P-I hands out pages.",
+     "reveal": 2
+    },
+    {
+     "say": "So every caller writes its own paging code, and some get it wrong.",
+     "reveal": 3
+    },
+    {
+     "say": "The fix: move the walking logic into a separate object that answers two questions. Has next: are there elements left? And next: give me the next one.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s027",
+   "layout": "bullets",
+   "kicker": "Concept 6 of 15",
+   "title": "How it works, step by step",
+   "bullets": [
+    "1. Aggregate: iterator() returns a NEW iterator",
+    "2. Iterator: hasNext(), next()",
+    "3. The cursor lives inside the iterator",
+    "4. Client loops, or uses for-each"
+   ],
+   "steps": [
+    {
+     "say": "Step one: the collection, which the Gang of Four calls the aggregate, has an iterator method that builds a brand-new iterator each time. In Java it implements Iterable. Our Paged Search Results does that.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two: the iterator implements has next and next. And next must throw No Such Element Exception when nothing is left. That's the contract.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three, the key detail: the current position, the cursor, lives inside the iterator, never in the collection. For paging, the cursor is the current page and an index into it. So two loops over the same data don't interfere.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four: the client writes while has next, use next. Or just a for-each loop, which the compiler turns into exactly that.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s028",
+   "layout": "diagram",
+   "kicker": "Concept 6 of 15",
+   "title": "A plain loop over a paged API",
+   "mermaid": "flowchart LR\n  L[\"for-each loop\"] -->|\"hasNext / next\"| IT[\"PagedIterator\"]\n  IT -->|\"buffer empty?\"| API[\"Search API\"]\n  API -->|\"2 results per page\"| IT\n  IT --> B[\"page buffer + index\"]",
+   "caption": "the loop never sees a page",
+   "steps": [
+    {
+     "say": "Here's the shape. The loop only calls has next and next.",
+     "reveal": 0
+    },
+    {
+     "say": "When the buffered page runs out, has next calls the A-P-I for the next page. So has next is not a passive question. It can hit the network. Never assume it's cheap.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s029",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: five results, two per page",
+   "table": {
+    "head": [
+     "Loop step",
+     "What happens"
+    ],
+    "rows": [
+     [
+      "hasNext #1",
+      "buffer empty: fetch page 1 -> result-1, result-2"
+     ],
+     [
+      "next, next",
+      "result-1, result-2 from buffer"
+     ],
+     [
+      "hasNext",
+      "fetch page 2 -> result-3, result-4"
+     ],
+     [
+      "hasNext",
+      "fetch page 3 -> result-5"
+     ],
+     [
+      "hasNext",
+      "fetch page 4 -> empty: done"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Example time. Watch the network calls.",
+     "reveal": 0
+    },
+    {
+     "say": "Let's trace it. The A-P-I has five results, two per page. The first has next finds an empty buffer, so it fetches page one.",
+     "reveal": 1
+    },
+    {
+     "say": "The loop sees result one and result two, straight from the buffer.",
+     "reveal": 2
+    },
+    {
+     "say": "The buffer runs out, so has next fetches page two: results three and four.",
+     "reveal": 3
+    },
+    {
+     "say": "Page three holds just result five.",
+     "reveal": 4
+    },
+    {
+     "say": "And then has next fetches page four, which is empty. That's how it learns the data ended. Five items, four network calls. Remember that number.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s030",
+   "layout": "twocol",
+   "kicker": "Concept 6 of 15",
+   "title": "Iterator variants and traps",
+   "left": {
+    "heading": "Kinds",
+    "bullets": [
+     "External: client drives, can break early",
+     "Internal: forEach, streams drive",
+     "Tree iterator: a stack is the cursor"
+    ]
+   },
+   "right": {
+    "heading": "Traps",
+    "bullets": [
+     "Modify list mid-loop: exception, or skip",
+     "Reuse a one-shot iterator: empty",
+     "Early break leaks a file or DB cursor"
+    ]
+   },
+   "steps": [
+    {
+     "say": "External iteration: the client drives, so it can stop early, like finding bob and breaking.",
+     "reveal": 1
+    },
+    {
+     "say": "Internal iteration: the collection drives and calls your lambda, as in for each and streams.",
+     "reveal": 2
+    },
+    {
+     "say": "A tree iterator keeps a stack of nodes still to visit. That stack is its position, so two iterators over one tree run independently.",
+     "reveal": 3
+    },
+    {
+     "say": "Trap one: removing from an Array List inside a for-each usually throws. But remove the second-to-last element and the loop silently skips the last one. Use the iterator's remove, or remove if.",
+     "reveal": 4
+    },
+    {
+     "say": "Trap two: a stream or Python generator is one-shot. Reuse it and you get nothing. That's why iterator must return a new object each time.",
+     "reveal": 5
+    },
+    {
+     "say": "Trap three: a lazy iterator holding a file or database cursor leaks it if you break early. Use try-with-resources.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s031",
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "Why did five results take four network calls?",
+   "bullets": [
+    "A. The iterator fetched page 1 twice",
+    "B. Without a total or next-page token, it must ask once more",
+    "C. hasNext always calls the API",
+    "D. The for-each loop retries"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. The search A-P-I returned five results, two per page, yet we made four calls. Why?",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s032",
+   "layout": "section",
+   "kicker": "Concept 7 of 15",
+   "title": "Hide the shape, not the cost",
+   "steps": [
+    {
+     "say": "The answer is B. The A-P-I gave neither a total count nor a next-page token, so the only way to learn the data ended was to ask for one more page and get nothing back. That's real behavior, not a demo bug.",
+     "reveal": 0
+    },
+    {
+     "say": "And here's the lesson. A tidy loop conceals the cost of each step. The famous N plus one query problem has exactly this shape: one query to load a list of orders, then one more query per order. A hundred orders, a hundred and one queries.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s033",
+   "layout": "bullets",
+   "kicker": "Concept 7 of 15",
+   "title": "Keep the cost visible",
+   "bullets": [
+    "Name the type honestly: PagedResults, not List",
+    "Offer a batch API with bigger pages",
+    "Return a total or a next-page cursor",
+    "Log or count fetches"
+   ],
+   "steps": [
+    {
+     "say": "Four ways to keep the cost visible. One: name the type honestly. Call it Paged Results or Lazy Search Results, not List, so the reader expects network calls.",
+     "reveal": 1
+    },
+    {
+     "say": "Two: offer a batch A-P-I. A caller who wants all ten thousand results can ask for pages of five hundred: twenty calls instead of five thousand.",
+     "reveal": 2
+    },
+    {
+     "say": "Three: return the total, or a next-page cursor, when the source knows it. With a total of five, our loop stops after page three. Three calls, not four.",
+     "reveal": 3
+    },
+    {
+     "say": "Four: log or count fetches, so a growing request count gets noticed in a dashboard. In the interview, say: iterators hide the shape of the data, but they shouldn't hide the cost. Recap: honest names, batches, totals, counters.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s034",
+   "layout": "table",
+   "kicker": "Concept 8 of 15",
+   "title": "Java's iterator family",
+   "table": {
+    "head": [
+     "Type",
+     "What it adds"
+    ],
+    "rows": [
+     [
+      "Iterable<T>",
+      "iterator(); enables for-each; forEach"
+     ],
+     [
+      "Iterator<T>",
+      "hasNext, next, optional remove"
+     ],
+     [
+      "ListIterator<T>",
+      "Both directions: previous, set, add"
+     ],
+     [
+      "Spliterator<T>",
+      "trySplit for parallel; SIZED, ORDERED"
+     ],
+     [
+      "Enumeration<E>",
+      "Old Java 1.0 version; prefer Iterator"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Java gives you a whole family of iterator types. One row at a time.",
+     "reveal": 0
+    },
+    {
+     "say": "Iterable: implementing it lets your class work in a for-each loop, like our Paged Search Results.",
+     "reveal": 1
+    },
+    {
+     "say": "Iterator: has next, next, and an optional remove, the safe way to delete while looping.",
+     "reveal": 2
+    },
+    {
+     "say": "List Iterator: goes both directions, and can set or add at the current spot.",
+     "reveal": 3
+    },
+    {
+     "say": "Spliterator: an iterator that splits itself for parallel streams. For one to eight, try split hands off one to four and keeps five to eight; the parallel sum is thirty-six.",
+     "reveal": 4
+    },
+    {
+     "say": "Enumeration: the old Java one point oh version. Use Iterator instead.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s035",
+   "layout": "table",
+   "kicker": "Concept 8 of 15",
+   "title": "Fail-fast, weakly consistent, snapshot",
+   "table": {
+    "head": [
+     "Iterator kind",
+     "Example",
+     "On a change mid-loop"
+    ],
+    "rows": [
+     [
+      "Fail-fast",
+      "ArrayList, HashMap",
+      "Usually throws; best-effort only"
+     ],
+     [
+      "Weakly consistent",
+      "ConcurrentHashMap",
+      "Never throws; may or may not see it"
+     ],
+     [
+      "Snapshot",
+      "CopyOnWriteArrayList",
+      "Never throws; sees the old copy"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Three behaviors when the collection changes during a loop. Fail-fast: Array List and Hash Map detect a structural change and throw Concurrent Modification Exception. But the docs say best-effort, so never rely on it. And despite the name, it's usually one thread changing its own list inside its own loop.",
+     "reveal": 1
+    },
+    {
+     "say": "Weakly consistent: Concurrent Hash Map's iterators never throw, and may or may not show changes made during the loop.",
+     "reveal": 2
+    },
+    {
+     "say": "Snapshot: Copy On Write Array List iterates a frozen copy. In our demo, looping over x and y while adding x-bang and y-bang ends with four items, and the loop never saw the new ones. Recap: know which of the three you're holding.",
+     "reveal": 3
+    }
+   ]
+  },
+  {
+   "id": "s036",
+   "layout": "section",
+   "kicker": "Concept 9 of 15",
+   "title": "Mediator",
+   "steps": [
+    {
+     "say": "Airplanes near an airport don't talk to each other. They all talk to the control tower, which holds the rules about spacing and order. That tower is a mediator.",
+     "reveal": 0
+    },
+    {
+     "say": "Definition: Mediator makes a group of objects talk through one coordinator instead of referencing each other. Each object only reports this just happened. The mediator decides how the others respond.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s037",
+   "layout": "bullets",
+   "kicker": "Concept 9 of 15",
+   "title": "The problem: four widgets that all know each other",
+   "bullets": [
+    "Country picker -> refreshes delivery methods",
+    "Delivery method -> changes the price",
+    "Price -> decides if submit is clickable",
+    "Some countries: no delivery at all"
+   ],
+   "steps": [
+    {
+     "say": "Running example: a checkout form with four widgets. Picking a country refreshes the list of delivery methods.",
+     "reveal": 1
+    },
+    {
+     "say": "Choosing a delivery method changes the price label.",
+     "reveal": 2
+    },
+    {
+     "say": "The price situation decides whether the submit button is clickable.",
+     "reveal": 3
+    },
+    {
+     "say": "And some destinations, like Antarctica, have no delivery at all. If widgets call each other directly, each holds references to the other three, and none of them can be reused on another screen.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s038",
+   "layout": "number",
+   "kicker": "Concept 9 of 15",
+   "title": "Links: everyone-to-everyone versus a hub",
+   "big": "n(n-1)/2  versus  n",
+   "caption": "4 widgets: 6 links vs 4.   5 widgets: 10 links vs 5",
+   "steps": [
+    {
+     "say": "Let's count. If every widget knows every other, n widgets need n times n minus one, over two links. Four widgets: six links. Five widgets: ten. That grows roughly with the square.",
+     "reveal": 0
+    },
+    {
+     "say": "With a mediator, each widget holds exactly one reference. Four widgets, four links. Add a promo code field and you get five, not ten. But here's the honest trade: the dependencies aren't removed. They're relocated into the mediator.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s039",
+   "layout": "bullets",
+   "kicker": "Concept 9 of 15",
+   "title": "How it works, step by step",
+   "bullets": [
+    "1. Mediator interface: notify(sender, event)",
+    "2. Each component holds only the mediator",
+    "3. On an event: mediator.notify(this, event)",
+    "4. Concrete mediator holds the rules",
+    "5. It calls back down: two-way traffic"
+   ],
+   "steps": [
+    {
+     "say": "Step one: a Mediator interface with one method, notify, taking the sender and the event.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two: each component, called a colleague, holds a reference to the mediator, and nothing else. Country Select doesn't know a price label exists.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three: when the user picks Germany, Country Select calls mediator dot notify, this, Germany. It reports up, and never calls a sibling.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four: the Shipping Form Mediator holds all the rules. When the country changes: reload methods, then show the price, then enable or disable submit.",
+     "reveal": 4
+    },
+    {
+     "say": "Step five: it calls back down into specific widgets. Traffic is two-way through one object.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s040",
+   "layout": "diagram",
+   "kicker": "Concept 9 of 15",
+   "title": "The shipping form hub",
+   "mermaid": "flowchart TB\n  M[\"ShippingFormMediator\"]\n  C[\"CountrySelect\"] -->|\"notify\"| M\n  M -->|\"setOptions\"| D[\"MethodSelect\"]\n  D -->|\"notify\"| M\n  M -->|\"show\"| P[\"PriceLabel\"]\n  M -->|\"setEnabled\"| S[\"SubmitButton\"]",
+   "caption": "widgets report up; the mediator instructs down",
+   "steps": [
+    {
+     "say": "Here's the hub. Widgets report upward with notify. The mediator instructs the widgets downward.",
+     "reveal": 0
+    },
+    {
+     "say": "No arrow goes from one widget to another. That's the guarantee, and one shortcut reference in code review breaks it.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s041",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: one click updates three widgets",
+   "table": {
+    "head": [
+     "User action",
+     "Mediator does"
+    ],
+    "rows": [
+     [
+      "Picks Germany",
+      "methods = standard, express; price 5.00; submit on"
+     ],
+     [
+      "Picks express",
+      "price 15.00"
+     ],
+     [
+      "Clicks submit",
+      "order placed: Germany / express"
+     ],
+     [
+      "Picks Antarctica",
+      "methods empty; no shipping; submit off"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Example time. Watch who calls whom.",
+     "reveal": 0
+    },
+    {
+     "say": "Let's run it. The user picks Germany. The mediator reloads methods to standard and express, defaults to standard, shows five euros, and enables submit. Order matters: methods first, then price.",
+     "reveal": 1
+    },
+    {
+     "say": "The user picks express. The method widget notifies, and the mediator shows fifteen.",
+     "reveal": 2
+    },
+    {
+     "say": "Submit is clicked, and the mediator places the order: Germany, express.",
+     "reveal": 3
+    },
+    {
+     "say": "Then Antarctica: no methods, price says shipping not available, submit disabled, and a click is ignored. One user action updated three widgets, and no widget called another.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s042",
+   "layout": "twocol",
+   "kicker": "Concept 9 of 15",
+   "title": "Keep the mediator from becoming a god object",
+   "left": {
+    "heading": "Risks",
+    "bullets": [
+     "Every new rule lands in the mediator",
+     "Merge conflicts in one shared file",
+     "It grows into a god object"
+    ]
+   },
+   "right": {
+    "heading": "Defences",
+    "bullets": [
+     "Split per screen area or workflow",
+     "Coordination only: no tax maths",
+     "Dispatch by table, not an if-chain"
+    ]
+   },
+   "steps": [
+    {
+     "say": "The risks. Every new rule lands in the mediator, so it keeps growing.",
+     "reveal": 1
+    },
+    {
+     "say": "Everyone editing the screen edits that one file, so merge conflicts pile up.",
+     "reveal": 2
+    },
+    {
+     "say": "And it can become a god object, a class that knows and does too much.",
+     "reveal": 3
+    },
+    {
+     "say": "Defence one: split it. One mediator per screen section or workflow. Two eighty-line mediators beat one with a hundred and sixty.",
+     "reveal": 4
+    },
+    {
+     "say": "Defence two: keep it to coordination. Tax and pricing go in their own classes. The mediator decides what to call, not how to compute.",
+     "reveal": 5
+    },
+    {
+     "say": "Defence three: dispatch with a map from event to handler, so each rule is easy to find. Real mediators: U-I view-models, chat servers, and saga orchestrators running payment, stock and shipping in order.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s043",
+   "layout": "table",
+   "kicker": "Concept 10 of 15",
+   "title": "Mediator or Observer?",
+   "table": {
+    "head": [
+     "",
+     "Mediator",
+     "Observer"
+    ],
+    "rows": [
+     [
+      "What travels",
+      "Event + decision on what follows",
+      "Only the event"
+     ],
+     [
+      "Reaction logic",
+      "One place: the mediator",
+      "Spread over observers"
+     ],
+     [
+      "Flow",
+      "Two-way",
+      "One-way"
+     ],
+     [
+      "Order of reactions",
+      "Written explicitly",
+      "Not guaranteed"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "This is a favourite interview question. Four differences, one row at a time.",
+     "reveal": 0
+    },
+    {
+     "say": "Both patterns decouple objects. The difference is what happens to the news. With Mediator, the event travels together with a decision about what should follow. With Observer, only the event travels.",
+     "reveal": 1
+    },
+    {
+     "say": "With Mediator, the reaction logic sits in one place. With Observer, it's spread across observers, each deciding alone.",
+     "reveal": 2
+    },
+    {
+     "say": "Mediator traffic is two-way: colleagues report in, and the mediator calls out. Observer is one-way: the subject publishes, observers respond.",
+     "reveal": 3
+    },
+    {
+     "say": "And order. A mediator writes the order explicitly. Observers should never depend on each other's order.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s044",
+   "layout": "twocol",
+   "kicker": "Concept 10 of 15",
+   "title": "The practical test: does something need coordinating?",
+   "left": {
+    "heading": "Observer",
+    "bullets": [
+     "Country changed: anyone interested, update",
+     "Listeners decide"
+    ]
+   },
+   "right": {
+    "heading": "Mediator",
+    "bullets": [
+     "Country changed: methods, then price, then submit",
+     "Hub decides and gives orders"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Apply it to our form. Country changed, anyone interested, update yourself. That's Observer, and it's lighter.",
+     "reveal": 1
+    },
+    {
+     "say": "With Observer, the listeners decide.",
+     "reveal": 2
+    },
+    {
+     "say": "But: country changed, so refresh methods, then price the new default, then decide submit. That's sequenced coordination. That's Mediator.",
+     "reveal": 3
+    },
+    {
+     "say": "The hub decides and gives orders. In microservices, a central saga orchestrator is mediator style, and services reacting to each other's events is observer style. Recap: when the sequence matters, pick Mediator.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s045",
+   "layout": "section",
+   "kicker": "Concept 11 of 15",
+   "title": "Memento",
+   "steps": [
+    {
+     "say": "In a video game you save your progress. The menu lists saves by name and date and loads one, but it never understands what's inside the save file. That's Memento.",
+     "reveal": 0
+    },
+    {
+     "say": "Definition: Memento lets an object record its internal state in a snapshot and later return to it, while nobody else can see inside the snapshot.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s046",
+   "layout": "bullets",
+   "kicker": "Concept 11 of 15",
+   "title": "The problem: rollback without breaking privacy",
+   "bullets": [
+    "Snapshot a deployment config before a risky rollout",
+    "Outside class reading every field breaks encapsulation",
+    "Field-by-field restore can stop half-way",
+    "Fix: the object snapshots itself into a sealed token"
+   ],
+   "steps": [
+    {
+     "say": "Running example: a deployment config with replicas, meaning how many copies run, an image, meaning which build, and environment variables, meaning named settings. Before a risky release we save it.",
+     "reveal": 1
+    },
+    {
+     "say": "If an outside history class reads and stores every field, encapsulation breaks. Every new config field changes the history class, and private details leak.",
+     "reveal": 2
+    },
+    {
+     "say": "And atomicity breaks, meaning all-or-nothing. A field-by-field restore can write three fields, hit an exception, and leave a combination that never existed.",
+     "reveal": 3
+    },
+    {
+     "say": "The fix: the object takes its own snapshot, and hands out a sealed token only it can open. Restore is one call into the object.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s047",
+   "layout": "table",
+   "kicker": "Concept 11 of 15",
+   "title": "The three roles",
+   "table": {
+    "head": [
+     "Role",
+     "Job",
+     "In our code"
+    ],
+    "rows": [
+     [
+      "Originator",
+      "Owns state; save() and restore()",
+      "DeploymentConfig"
+     ],
+     [
+      "Memento",
+      "Carries the state; opaque to others",
+      "Snapshot / private State"
+     ],
+     [
+      "Caretaker",
+      "Decides WHEN; never looks inside",
+      "DeploymentHistory"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Three roles. The originator owns the state, and produces and consumes snapshots: Deployment Config.",
+     "reveal": 1
+    },
+    {
+     "say": "The memento carries the state. To everyone else it's opaque. In Java, the public Snapshot interface exposes only a label. The data sits in a private nested record called State, which only Deployment Config can see.",
+     "reveal": 2
+    },
+    {
+     "say": "The caretaker, Deployment History, decides when to save and restore, and never looks inside. Quick check: if the caretaker names the config fields, it's not really a memento.",
+     "reveal": 3
+    }
+   ]
+  },
+  {
+   "id": "s048",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: checkpoint, bad rollout, rollback",
+   "table": {
+    "head": [
+     "Step",
+     "Live config"
+    ],
+    "rows": [
+     [
+      "Start",
+      "replicas 3, image api 1.4, LOG_LEVEL info"
+     ],
+     [
+      "Checkpoint 'before 2.0'",
+      "snapshot sealed and pushed on a stack"
+     ],
+     [
+      "Bad rollout",
+      "replicas 10, image api 2.0, debug, FEATURE_X on"
+     ],
+     [
+      "Rollback",
+      "replicas 3, image api 1.4, LOG_LEVEL info"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Example time. A real rollback, step by step.",
+     "reveal": 0
+    },
+    {
+     "say": "Let's run it. We start with three replicas, image A-P-I version one point four, log level info.",
+     "reveal": 1
+    },
+    {
+     "say": "The caretaker takes a checkpoint named before two point oh. The config hands back a sealed snapshot, and history pushes it on a stack.",
+     "reveal": 2
+    },
+    {
+     "say": "The rollout changes everything: ten replicas, version two point oh, debug logging, and a feature flag turned on in the live map.",
+     "reveal": 3
+    },
+    {
+     "say": "Rollback: history pops the snapshot and calls restore. The config checks the token is really one of its own, then assigns every field in one step. We're back to three replicas, version one point four, info. And if someone forges a snapshot, restore refuses it.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s049",
+   "layout": "section",
+   "kicker": "Concept 12 of 15",
+   "title": "The snapshot bug: aliasing mutable state",
+   "steps": [
+    {
+     "say": "Notice in that rollback, we changed the live environment map after saving, and the rollback still worked. That's not automatic. It's the most common Memento bug.",
+     "reveal": 0
+    },
+    {
+     "say": "If the snapshot holds a pointer to the very same map the object keeps changing, it's not a snapshot. That's called aliasing: two names for one mutable object.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s050",
+   "layout": "twocol",
+   "kicker": "Example",
+   "title": "Bad snapshot versus good snapshot",
+   "left": {
+    "heading": "Bad: shares the live map",
+    "bullets": [
+     "snapshot = liveEnv",
+     "live set to debug: snapshot shows debug"
+    ]
+   },
+   "right": {
+    "heading": "Good: owns a copy",
+    "bullets": [
+     "snapshot = copy of liveEnv",
+     "live set to debug: snapshot still info"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Worked example. The live map says log level info. The bad snapshot just points at the live map.",
+     "reveal": 1
+    },
+    {
+     "say": "Now we change live to debug. The bad snapshot also says debug, because it is the same map. Restore re-applies today's state. Nothing throws, until someone notices the rollback did nothing.",
+     "reveal": 2
+    },
+    {
+     "say": "The good snapshot copies the map. In our code, the State record's constructor does Map dot copy of.",
+     "reveal": 3
+    },
+    {
+     "say": "So when live changes to debug, the good snapshot still says info.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s051",
+   "layout": "bullets",
+   "kicker": "Concept 12 of 15",
+   "title": "Rules that keep snapshots honest",
+   "bullets": [
+    "Copy every mutable part: Map.copyOf, deep copies",
+    "Same shallow-versus-deep choice as Prototype",
+    "Bound the history: drop the oldest",
+    "Don't snapshot sockets, open files, other systems"
+   ],
+   "steps": [
+    {
+     "say": "Rule one: copy every mutable part. Map dot copy of, or a deep copy, meaning you duplicate the objects inside too.",
+     "reveal": 1
+    },
+    {
+     "say": "This is the same shallow-versus-deep decision you met with Prototype in episode eight.",
+     "reveal": 2
+    },
+    {
+     "say": "Rule two: bound the history. Ours holds two checkpoints, so saving a third drops the oldest. Kubernetes keeps ten revisions by default. An endless list is a memory leak.",
+     "reveal": 3
+    },
+    {
+     "say": "Rule three: some state can't be captured: live network connections, open files, data owned by another system. A snapshot claiming to cover those fails, usually long after the mistake. Recap: copy, bound, and only snapshot what you can restore.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s052",
+   "layout": "table",
+   "kicker": "Concept 13 of 15",
+   "title": "Memento versus Command undo",
+   "table": {
+    "head": [
+     "",
+     "Memento",
+     "Command undo"
+    ],
+    "rows": [
+     [
+      "Saved per step",
+      "Full copy of state",
+      "Operation + a little state"
+     ],
+     [
+      "How undo happens",
+      "Re-install a copy",
+      "Run the opposite operation"
+     ],
+     [
+      "Memory per step",
+      "Grows with state size",
+      "Grows with one operation"
+     ],
+     [
+      "Correctness risk",
+      "Low: copy was real",
+      "Every inverse must be right"
+     ],
+     [
+      "Prefer when",
+      "Reversal tricky, state small",
+      "Reversal simple, state big"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Here's a classic comparison. Five rows.",
+     "reveal": 0
+    },
+    {
+     "say": "Two ways to build undo. What's saved per step? Memento saves a full copy of the state. Command saves the operation plus the little bit of state its reversal needs.",
+     "reveal": 1
+    },
+    {
+     "say": "How does undo happen? Memento re-installs an earlier copy. Command runs the opposite operation.",
+     "reveal": 2
+    },
+    {
+     "say": "Memory: Memento grows with the size of the state. Command grows with the size of one operation.",
+     "reveal": 3
+    },
+    {
+     "say": "Correctness: Memento is low risk, because the copy was a real state. With Command, every inverse must be written correctly.",
+     "reveal": 4
+    },
+    {
+     "say": "So prefer Memento when reversal is tricky or the state is small. Prefer Command when reversal is simple or the state is big.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s053",
+   "layout": "bullets",
+   "kicker": "Concept 13 of 15",
+   "title": "Two examples, then the combination",
+   "bullets": [
+    "Drawing app: canvas per stroke runs out of memory",
+    "  so use Command: stroke added, here are its points",
+    "Wizard step changes six linked fields",
+    "  so use Memento: one snapshot beats six inverses",
+    "Real systems: periodic snapshots + replay commands"
+   ],
+   "steps": [
+    {
+     "say": "Example one: a drawing app. Say the canvas is eight megabytes. Snapshot it on every brush stroke, and a thousand strokes cost eight gigabytes.",
+     "reveal": 1
+    },
+    {
+     "say": "So use Command. Each step stores stroke added, here are its points. A few kilobytes.",
+     "reveal": 2
+    },
+    {
+     "say": "Example two: a multi-step form wizard. Step three changes six fields that interact.",
+     "reveal": 3
+    },
+    {
+     "say": "Writing six correct inverse operations is risky. One small snapshot is simpler and always correct. Memento wins.",
+     "reveal": 4
+    },
+    {
+     "say": "Real systems combine them. Take a snapshot every hundred edits, and log commands in between. To go back, restore the nearest snapshot and replay forward. Databases and event-sourced systems do exactly this. Recap: Memento stores state, Command stores actions; pick whichever is smaller.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s054",
+   "layout": "section",
+   "kicker": "Concept 14 of 15",
+   "title": "Interpreter",
+   "steps": [
+    {
+     "say": "A calculator reads two plus three times four. It knows times binds tighter, builds two plus three-times-four, and works from the inside out. That's Interpreter.",
+     "reveal": 0
+    },
+    {
+     "say": "Definition: Interpreter represents the grammar of a small language as classes, one class per grammar rule. It evaluates a sentence by building a tree of those objects and asking the root to interpret itself.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s055",
+   "layout": "bullets",
+   "kicker": "Concept 14 of 15",
+   "title": "The vocabulary",
+   "bullets": [
+    "Grammar: rules for valid sentences",
+    "DSL: a small language for one job",
+    "AST: the sentence as a tree",
+    "Terminal: a leaf, a number or variable",
+    "Nonterminal: built from other expressions",
+    "Context: outside info, like variable values"
+   ],
+   "steps": [
+    {
+     "say": "Six words to know. Grammar: the rules for valid sentences. For example, an expression is terms joined by plus or minus.",
+     "reveal": 1
+    },
+    {
+     "say": "D-S-L, a domain-specific language: a small language for one job, like pricing rules, search filters or feature-flag conditions.",
+     "reveal": 2
+    },
+    {
+     "say": "A-S-T, an abstract syntax tree: the sentence as a tree, operators inside, numbers and variables at the leaves.",
+     "reveal": 3
+    },
+    {
+     "say": "A terminal expression is a leaf rule: a number, or a variable.",
+     "reveal": 4
+    },
+    {
+     "say": "A nonterminal expression is built from others: addition, multiplication.",
+     "reveal": 5
+    },
+    {
+     "say": "And the context is outside information, like price is two hundred fifty. Why bother? Hard-coded rules need a redeploy each; a tiny language turns rules into data.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s056",
+   "layout": "bullets",
+   "kicker": "Concept 14 of 15",
+   "title": "How it works, step by step",
+   "bullets": [
+    "1. Write the grammar: expr, term, factor",
+    "2. One class per rule: Constant, Variable, Binary",
+    "3. Parse text into an AST (not part of the pattern)",
+    "4. Interpret: root asks children, combines",
+    "5. Parse once, interpret many times"
+   ],
+   "steps": [
+    {
+     "say": "Running example: price times qty minus discount. Step one, the grammar: an expr is terms joined by plus or minus, a term is factors joined by times or divide, and a factor is a number, a name, or brackets.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two: one class per rule. Constant and Variable are terminals. Negate and Binary are nonterminals. All implement interpret, taking a context.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three: build the tree. The Gang of Four deliberately leave parsing out of the pattern. Ours is recursive descent: one method per grammar rule, calling the others.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four: interpret. The root asks its children for their values and combines them, recursively.",
+     "reveal": 4
+    },
+    {
+     "say": "Step five: reuse the tree. Parse once, interpret many times with different contexts.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s057",
+   "layout": "diagram",
+   "kicker": "Concept 14 of 15",
+   "title": "The AST for price * qty - discount",
+   "mermaid": "flowchart TD\n  M[\"Binary minus\"] --> T[\"Binary times\"]\n  M --> D[\"Variable discount\"]\n  T --> P[\"Variable price\"]\n  T --> Q[\"Variable qty\"]",
+   "caption": "leaves and inner nodes share one interface: it's Composite + interpret",
+   "steps": [
+    {
+     "say": "Here's the tree. Minus is the root. Its left child is times, with price and qty under it. Its right child is discount.",
+     "reveal": 0
+    },
+    {
+     "say": "Leaves and inner nodes share one interface, so this is the Composite pattern from episode nine. Interpreter is basically Composite plus an interpret operation.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s058",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: evaluating with a context",
+   "table": {
+    "head": [
+     "Sentence",
+     "Result"
+    ],
+    "rows": [
+     [
+      "price*qty - discount (250, 3, 50)",
+      "750 - 50 = 700"
+     ],
+     [
+      "2 + 3 * 4",
+      "14: times binds tighter"
+     ],
+     [
+      "(2 + 3) * 4",
+      "20"
+     ],
+     [
+      "Same tree, qty = 1, 2, 4",
+      "200, 450, 950"
+     ],
+     [
+      "price * tax",
+      "error: unknown variable 'tax'"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Example time. One tree, many answers.",
+     "reveal": 0
+    },
+    {
+     "say": "Context: price two hundred fifty, qty three, discount fifty. Times first: seven hundred fifty. Minus fifty: seven hundred.",
+     "reveal": 1
+    },
+    {
+     "say": "Two plus three times four is fourteen. Why? The grammar handles times in term, one level below expr, so it binds tighter.",
+     "reveal": 2
+    },
+    {
+     "say": "With brackets, two plus three, times four, is twenty.",
+     "reveal": 3
+    },
+    {
+     "say": "Now reuse the same parsed tree. Quantity one gives two hundred, two gives four hundred fifty, four gives nine hundred fifty. No re-parsing.",
+     "reveal": 4
+    },
+    {
+     "say": "And good errors: price times tax says unknown variable tax. Bad syntax reports the position. One note: real money rules should use Big Decimal, not double.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s059",
+   "layout": "twocol",
+   "kicker": "Concept 14 of 15",
+   "title": "When to use it, when not",
+   "left": {
+    "heading": "Good fit",
+    "bullets": [
+     "Tiny DSLs: promotions, filters, flags",
+     "Regex Pattern, SpEL, cron expressions"
+    ]
+   },
+   "right": {
+    "heading": "Use something else",
+    "bullets": [
+     "Big grammar: ANTLR parser generator",
+     "Many operations on the tree: Visitor",
+     "Users and scripts: keep the DSL small"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Good fit: tiny D-S-Ls, like ten percent off if the cart is over nine ninety-nine and category is electronics.",
+     "reveal": 1
+    },
+    {
+     "say": "Real examples: Java's regex Pattern builds a node tree that a Matcher walks, and Spring's expression language does the same.",
+     "reveal": 2
+    },
+    {
+     "say": "Not a fit: a big grammar like S-Q-L. Use a parser generator such as ANTLR, which writes a parser from a grammar file.",
+     "reveal": 3
+    },
+    {
+     "say": "And when operations on the tree multiply, like type-check and pretty-print, move to Visitor, next episode.",
+     "reveal": 4
+    },
+    {
+     "say": "Security: never let users run a general-purpose script engine on your server. A small, restricted language is safer because it can only do what its grammar allows. Recap: one class per rule, parse once, interpret with a context.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s060",
+   "layout": "table",
+   "kicker": "Concept 15 of 15",
+   "title": "The six patterns side by side",
+   "table": {
+    "head": [
+     "Pattern",
+     "Object you create",
+     "Often confused with"
+    ],
+    "rows": [
+     [
+      "Chain of Responsibility",
+      "A handler per check",
+      "Decorator: all layers run"
+     ],
+     [
+      "Command",
+      "An object per request",
+      "Strategy: how versus what"
+     ],
+     [
+      "Iterator",
+      "A cursor object",
+      "Visitor: what to do at each node"
+     ],
+     [
+      "Mediator",
+      "One coordinator",
+      "Observer, Facade"
+     ],
+     [
+      "Memento",
+      "A sealed snapshot",
+      "Command undo, Prototype"
+     ],
+     [
+      "Interpreter",
+      "A node per grammar rule",
+      "Composite, Visitor"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Here's the whole chapter on one slide.",
+     "reveal": 0
+    },
+    {
+     "say": "Chain of Responsibility: a handler per check. Don't confuse it with Decorator, where every layer runs.",
+     "reveal": 1
+    },
+    {
+     "say": "Command: an object per request. Versus Strategy: Strategy is how a job is done, Command is which job.",
+     "reveal": 2
+    },
+    {
+     "say": "Iterator: a cursor object. Versus Visitor: Iterator decides how you move, Visitor decides what you do at each element.",
+     "reveal": 3
+    },
+    {
+     "say": "Mediator: one coordinator. Versus Observer, which only broadcasts. And versus Facade, which sits in front of a subsystem, one-way.",
+     "reveal": 4
+    },
+    {
+     "say": "Memento: a sealed snapshot. Versus Command undo, and versus Prototype, whose clone becomes a live object you keep using.",
+     "reveal": 5
+    },
+    {
+     "say": "Interpreter: a node per grammar rule. It's built on Composite, and it moves to Visitor when operations multiply.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s061",
+   "layout": "bullets",
+   "kicker": "Concept 15 of 15",
+   "title": "Combo facts and a final quiz",
+   "bullets": [
+    "The request in a chain is often a Command",
+    "A Mediator often creates and dispatches Commands",
+    "Memento + Command: snapshots + replay",
+    "Interpreter = Composite + evaluate",
+    "Five dependent form widgets? Mediator",
+    "Business users write discount rules? Interpreter"
+   ],
+   "steps": [
+    {
+     "say": "Interview combos. The request moving through a chain is often a Command, like a job checked by validation and authorization before a worker runs it.",
+     "reveal": 1
+    },
+    {
+     "say": "A mediator often creates and dispatches commands.",
+     "reveal": 2
+    },
+    {
+     "say": "Memento plus Command gives scalable undo: snapshots plus replay.",
+     "reveal": 3
+    },
+    {
+     "say": "Iterator plus Composite walks trees, and Interpreter is Composite plus evaluate.",
+     "reveal": 4
+    },
+    {
+     "say": "Quick quiz. Five form widgets depend on each other's values. Which pattern? Mediator.",
+     "reveal": 5
+    },
+    {
+     "say": "Business users need to write their own discount rules. Interpreter, a small D-S-L. And undo for a text editor? Command per edit, with Memento snapshots now and then.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s062",
+   "layout": "recap",
+   "title": "TL;DR: hidden control flow becomes named objects",
+   "bullets": [
+    "Behavior: hidden control flow -> named objects",
+    "CoR: handle / reject / pass on; terminal handler",
+    "Command: restore captured state; stack; compensate",
+    "Iterator: cursor in iterator; keep cost visible",
+    "Mediator: small hub. Memento: copy, bound",
+    "Interpreter: rule = class. Next: Ep 11"
+   ],
+   "steps": [
+    {
+     "say": "Behavioral patterns turn hidden control flow into named objects.",
+     "reveal": 1
+    },
+    {
+     "say": "Chain of Responsibility: handle, reject or pass on. Order matters, always have a terminal handler, and never swallow a request.",
+     "reveal": 2
+    },
+    {
+     "say": "Command: the request becomes an object. Undo restores captured state, history is a stack, and irreversible actions get compensation.",
+     "reveal": 3
+    },
+    {
+     "say": "Iterator: the position lives in the iterator. Implement Iterable, know fail-fast versus snapshot, and don't let a lazy loop hide its cost.",
+     "reveal": 4
+    },
+    {
+     "say": "Mediator: one hub, links grow linearly, but keep it small. Memento: the object snapshots itself, deep-copy mutable parts, bound the history.",
+     "reveal": 5
+    },
+    {
+     "say": "Interpreter: one class per grammar rule, parse once, interpret with a context. Use each one when the flexibility is real. Next time, episode eleven: Observer, State, Strategy, Template Method and Visitor. See you there.",
+     "reveal": 6
+    }
+   ]
+  }
+ ]
+}

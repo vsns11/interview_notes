@@ -1,0 +1,1903 @@
+{
+  "series": "System Design Workshop",
+  "episode": 13,
+  "title": "The Entry Point: API and Edge Patterns",
+  "subtitle": "Who gets in, who gets turned away, and who never reaches a server",
+  "scenes": [
+    {
+      "id": "s001",
+      "layout": "title",
+      "title": "The Entry Point: API and Edge Patterns",
+      "subtitle": "Who gets in, who gets turned away, and who never reaches a server",
+      "steps": [
+        {
+          "say": "Welcome to episode thirteen of the System Design Workshop: the entry point. Today we stand at the system boundary, where browsers, phones and partner systems first reach you.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll be able to draw the whole front door of any design: reverse proxy, CDN, API gateway, backends for frontends, rate limits, pagination, versioning, sidecars, service mesh, and a shared authorization service.",
+          "reveal": 0
+        },
+        {
+          "say": "Keep the Module eight notes open beside the video. One online store runs through every lesson, and we finish by assembling its full public API layer.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s002",
+      "layout": "section",
+      "title": "One Primitive, Two Directions",
+      "kicker": "Concept 1 of 19",
+      "steps": [
+        {
+          "say": "Concept one. Here's the hook: almost every box in this episode is the same building block wearing a different hat. That block is the proxy, a server that receives requests and passes them on.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Module 8 · Module Introduction · North-south vs. east-west"
+    },
+    {
+      "id": "s003",
+      "layout": "diagram",
+      "title": "One primitive, many roles",
+      "kicker": "Concept 1 of 19",
+      "mermaid": "flowchart TD\n  RP[\"Reverse proxy\"] -->|\"+ health checks\"| LB[\"Load balancer\"]\n  RP -->|\"+ auth, quotas, routing\"| GW[\"API gateway\"]\n  RP -->|\"+ cache in 200 cities\"| CDN[\"CDN\"]\n  RP -->|\"one per instance\"| SC[\"Sidecar\"]\n  SC -->|\"+ control plane\"| MESH[\"Service mesh\"]",
+      "caption": "Same proxy, different placement and config",
+      "steps": [
+        {
+          "say": "Start with a reverse proxy in front of your servers. Add health checks and traffic spreading, and it's a load balancer. Add API policy, like who may call and how often, and it's an API gateway.",
+          "reveal": 0
+        },
+        {
+          "say": "Copy it with a cache into two hundred cities, and it's a CDN. Put a small one beside every service, and it's a sidecar. Wire all the sidecars to a central brain, and it's a service mesh.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s004",
+      "layout": "twocol",
+      "title": "North-south versus east-west traffic",
+      "kicker": "Concept 1 of 19",
+      "left": {
+        "heading": "North-south",
+        "bullets": [
+          "Outside client to your system",
+          "Who is this user? Gateway, CDN, limits"
+        ]
+      },
+      "right": {
+        "heading": "East-west",
+        "bullets": [
+          "Service to service inside",
+          "Which service? Sidecars and mesh"
+        ]
+      },
+      "steps": [
+        {
+          "say": "North-south traffic crosses the system boundary. Imagine a shopper's phone loading the product page. It's governed by CDNs, gateways, rate limiters and version rules.",
+          "reveal": 1
+        },
+        {
+          "say": "Its trust question is: which user or client is this?",
+          "reveal": 2
+        },
+        {
+          "say": "East-west traffic flows between your own services. Imagine checkout calling inventory, which calls pricing. It needs service-to-service trust, retries and tracing, which means recording one request's path across hops.",
+          "reveal": 3
+        },
+        {
+          "say": "That's supplied by sidecars and a mesh. Same primitive, different trust. Interviewers love this split.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s005",
+      "layout": "bullets",
+      "title": "Why the edge is cheapest and strongest",
+      "kicker": "Concept 1 of 19",
+      "bullets": [
+        "Rejecting at the edge costs no app capacity",
+        "Cached static files skip app work",
+        "One place every request passes: policy once",
+        "Handle each request at the earliest layer"
+      ],
+      "steps": [
+        {
+          "say": "The cheapest request never reaches the app tier. Rejecting a bad login at the edge costs no service capacity.",
+          "reveal": 1
+        },
+        {
+          "say": "Serving cached files, like images and scripts that are identical for every user, skips app work entirely.",
+          "reveal": 2
+        },
+        {
+          "say": "And the edge is the single place every request passes. So authentication, limits and version rules are applied once there, not rebuilt slightly differently in eleven services.",
+          "reveal": 3
+        },
+        {
+          "say": "Recap: one primitive, two directions, and handle each request as early as you can.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s006",
+      "layout": "section",
+      "title": "Reverse Proxy",
+      "kicker": "Concept 2 of 19",
+      "steps": [
+        {
+          "say": "Concept two: the reverse proxy. The hook: why not just put your app servers on the internet? Because the internet is slow, hostile and messy, and app servers are bad at that.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Module 8 · Reverse Proxy"
+    },
+    {
+      "id": "s007",
+      "layout": "bullets",
+      "title": "The six jobs of a reverse proxy",
+      "kicker": "Concept 2 of 19",
+      "bullets": [
+        "Forward hides the asker; reverse hides the server",
+        "1. Terminate TLS in one place",
+        "2. Buffer slow clients",
+        "3. Static files  4. Reuse connections",
+        "5. Hide topology behind one address",
+        "6. Single enforcement point"
+      ],
+      "steps": [
+        {
+          "say": "A reverse proxy is a server in front of your app servers. A forward proxy hides who is asking; a reverse proxy hides who is answering. Let's walk its six jobs for our store.",
+          "reveal": 1
+        },
+        {
+          "say": "Job one, terminate TLS, the encryption behind HTTPS. Certificates live in one layer.",
+          "reveal": 2
+        },
+        {
+          "say": "Job two, buffer slow clients. A phone dribbling a photo upload over four seconds is held by the proxy's event loop for a few kilobytes. The app gets one complete request in a fast burst.",
+          "reveal": 3
+        },
+        {
+          "say": "Job three, serve static files. Images, JavaScript and stylesheets never touch app code. Job four, reuse connections, so handshakes are paid once.",
+          "reveal": 4
+        },
+        {
+          "say": "Job five, hide the topology. The store has one public address, and servers behind it can be renumbered or replaced freely.",
+          "reveal": 5
+        },
+        {
+          "say": "Job six, be the enforcement point. Every request passes here, so it's the natural home for authentication and limits.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s008",
+      "layout": "table",
+      "title": "Example: what buffering saves",
+      "kicker": "Example",
+      "table": {
+        "head": [
+          "",
+          "Rate",
+          "Time per thread",
+          "Threads busy"
+        ],
+        "rows": [
+          [
+            "Setup",
+            "300 req/s",
+            "3 s upload",
+            ""
+          ],
+          [
+            "Unbuffered",
+            "300 req/s",
+            "3 s",
+            "900"
+          ],
+          [
+            "Buffered",
+            "300 req/s",
+            "0.05 s",
+            "15 (98% freed)"
+          ],
+          [
+            "Rule",
+            "rate",
+            "x hold time",
+            "= threads"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's the worked number. Three hundred requests a second arrive from slow clients, each taking three seconds to upload.",
+          "reveal": 1
+        },
+        {
+          "say": "Unbuffered, an app thread waits for the whole transfer. Three hundred times three is nine hundred threads busy.",
+          "reveal": 2
+        },
+        {
+          "say": "Buffered, the app sees complete requests that take fifty milliseconds to process. Three hundred times zero point zero five is fifteen threads. About ninety-eight percent of the pool is freed.",
+          "reveal": 3
+        },
+        {
+          "say": "The rule is Little's law: threads in use equals request rate times how long each request holds a thread. Buffering shrinks the how long.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s009",
+      "layout": "bullets",
+      "title": "Trade-offs and the header trap",
+      "kicker": "Concept 2 of 19",
+      "bullets": [
+        "Sub-millisecond hop; must be redundant",
+        "App sees proxy IP; real one in X-Forwarded-For",
+        "Proxy overwrites; app trusts only its proxy",
+        "Interview: TLS, buffering, static, pools, hiding"
+      ],
+      "steps": [
+        {
+          "say": "The cost: one extra hop, well under a millisecond, and a component everything depends on. So run it redundantly, as a pair or with anycast, meaning one IP advertised from several places.",
+          "reveal": 1
+        },
+        {
+          "say": "The trap: the app now sees the proxy's IP. The proxy writes the real client address into the X-Forwarded-For header, but clients can forge that header too.",
+          "reveal": 2
+        },
+        {
+          "say": "Imagine the rate limiter thinks all traffic comes from one address, the proxy, and blocks it. Fix: the proxy overwrites the header, and the app trusts it only from its own proxy.",
+          "reveal": 3
+        },
+        {
+          "say": "In the interview, say: it terminates TLS, buffers slow clients, serves static files, pools connections and hides the topology, and I check client-address header trust. Recap: one front door that absorbs the internet's mess.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s010",
+      "layout": "section",
+      "title": "CDN",
+      "kicker": "Concept 3 of 19",
+      "steps": [
+        {
+          "say": "Concept three: the CDN, or content delivery network. The hook: the store opens in Australia. Virginia sees four hundred millisecond pages. Sydney sees six seconds. Yet the origin answers in twenty milliseconds. Where does the time go?",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Module 8 · CDN"
+    },
+    {
+      "id": "s011",
+      "layout": "number",
+      "title": "Distance, not compute",
+      "kicker": "Concept 3 of 19",
+      "big": "200 ms x 3 round trips = 600 ms before byte one",
+      "caption": "Origin compute is only about 3% of Sydney's delay",
+      "steps": [
+        {
+          "say": "It goes to distance. One Sydney to Virginia round trip is about two hundred milliseconds. The TLS handshake needs two or three of them, so four to six hundred milliseconds before any content.",
+          "reveal": 0
+        },
+        {
+          "say": "The server's twenty milliseconds is about three percent of the delay. No backend tuning can speed up light. The content must already be near the reader.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s012",
+      "layout": "diagram",
+      "title": "Users reach the nearest edge",
+      "kicker": "Concept 3 of 19",
+      "mermaid": "flowchart LR\n  U1[\"Sydney user\"] -->|\"15 ms\"| E1[\"Sydney edge cache\"]\n  U2[\"London user\"] -->|\"12 ms\"| E2[\"London edge cache\"]\n  E1 -->|\"miss\"| SH[\"Origin shield\"]\n  E2 -->|\"miss\"| SH\n  SH -->|\"once\"| O[\"Virginia origin\"]",
+      "caption": "Only misses travel to the origin",
+      "steps": [
+        {
+          "say": "A CDN copies the reverse proxy into two hundred plus cities, each with a cache. The Sydney user reaches the Sydney edge in fifteen milliseconds.",
+          "reveal": 0
+        },
+        {
+          "say": "On a miss, the edge asks an origin shield, a single middle-tier cache, which fetches from Virginia once. Popular content crosses the ocean once per edge, not once per user.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s013",
+      "layout": "bullets",
+      "title": "How it works, step by step",
+      "kicker": "Concept 3 of 19",
+      "bullets": [
+        "1. Nearest edge: TLS 45 ms, not 600 ms",
+        "2. Cache-Control: max-age, s-maxage, stale-*",
+        "3. Cache key: URL + declared headers",
+        "4. Origin shield: 200 misses become 1 fetch",
+        "5. Warm connections, DDoS absorption"
+      ],
+      "steps": [
+        {
+          "say": "Step one, route each user to the nearest edge, by D-N-S or anycast. The handshake now runs over fifteen milliseconds, so three trips cost forty-five milliseconds instead of six hundred.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, the rules travel in the Cache-Control header. S-maxage sets the lifetime in shared caches. Stale-while-revalidate serves the old copy during a refresh, and stale-if-error while the origin is down.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, the cache key: the URL plus any declared headers. Vary on every cookie and every request is unique, so the hit ratio, the share answered from cache, drops to zero.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, the origin shield. A hero image goes viral in a flash sale. Two hundred edges miss at once, the shield makes one origin fetch, and the edges serve the next ten million requests.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, warm edge-to-origin connections speed up even uncacheable requests, and the provider absorbs distributed denial-of-service floods.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s014",
+      "layout": "table",
+      "title": "Example: three Sydney numbers",
+      "kicker": "Example",
+      "table": {
+        "head": [
+          "Resource",
+          "Header policy",
+          "Result"
+        ],
+        "rows": [
+          [
+            "60 page assets",
+            "fingerprinted, cached forever",
+            "6 s page -> 1.2 s"
+          ],
+          [
+            "All requests",
+            "edge first",
+            "70%+ never reach origin"
+          ],
+          [
+            "Cart JSON",
+            "private, no-store",
+            "never shared"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "With warm caches, about ninety-five percent of the sixty assets come from the edge in about twenty milliseconds each. The page loads in about one point two seconds, down from six.",
+          "reveal": 1
+        },
+        {
+          "say": "Seventy percent or more of all requests stop at the edge and never reach the origin.",
+          "reveal": 2
+        },
+        {
+          "say": "The danger: cart JSON, or anything with Set-Cookie, must say private, no-store. One wrong header and a shared cache hands one user's dashboard to strangers. Review cache headers like auth code. Recap: a CDN beats distance, not slow code.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s015",
+      "layout": "section",
+      "title": "Fingerprinted URLs versus Purging",
+      "kicker": "Concept 4 of 19",
+      "steps": [
+        {
+          "say": "Concept four. You cached the store's JavaScript forever. Now you ship a fix. How do two hundred cities find out?",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Module 8 · CDN · Fingerprinted URLs vs. purging"
+    },
+    {
+      "id": "s016",
+      "layout": "table",
+      "title": "Never invalidate: change the name",
+      "kicker": "Concept 4 of 19",
+      "table": {
+        "head": [
+          "",
+          "Fingerprinted URL",
+          "Purge"
+        ],
+        "rows": [
+          [
+            "Propagation",
+            "Instant: a new URL",
+            "Seconds to minutes"
+          ],
+          [
+            "Stale copies?",
+            "Not by design",
+            "Yes, while it spreads"
+          ],
+          [
+            "Deploy drill",
+            "app.8c1d4e.js + 60 s HTML",
+            "Delete everywhere, hope"
+          ],
+          [
+            "Use for",
+            "Assets linked from HTML",
+            "HTML, emergencies, takedowns"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Option one, purge: tell every edge, delete slash banner dot jpg. That takes seconds to minutes to spread, and stale copies live until it does.",
+          "reveal": 1
+        },
+        {
+          "say": "Option two, fingerprinting. The build tool puts a content hash in the filename, like app dot three f nine a two c dot J-S, cached forever and marked immutable. Changed content gets a new URL, so nothing stale can exist at the new address.",
+          "reveal": 2
+        },
+        {
+          "say": "Walk a deploy. New code ships as app dot eight c one d four e dot J-S. The HTML, with a short s-maxage of sixty seconds, starts pointing at it within a minute. No purge, no coordination. The old file just sits unused.",
+          "reveal": 3
+        },
+        {
+          "say": "The standard setup: fingerprint assets forever, short TTL plus stale-while-revalidate on HTML, and purge only for emergencies and legal takedowns. Recap: two layers, forever assets and fresh pointers.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s017",
+      "layout": "section",
+      "title": "API Gateway",
+      "kicker": "Concept 5 of 19",
+      "steps": [
+        {
+          "say": "Concept five: the API gateway. The hook: the store has eleven services, and web, iOS and Android call each one directly. That's eleven front doors.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Module 8 · API Gateway"
+    },
+    {
+      "id": "s018",
+      "layout": "bullets",
+      "title": "The problem: eleven front doors",
+      "kicker": "Concept 5 of 19",
+      "bullets": [
+        "Auth built 11 times; one ignores revocation",
+        "Revoked thief still posts reviews",
+        "9 hardcoded hostnames; topology is public",
+        "Per-service policy always drifts"
+      ],
+      "steps": [
+        {
+          "say": "Authentication is built eleven times. An audit finds three versions in two languages. The reviews service's copy is fourteen months old and ignores token revocation.",
+          "reveal": 1
+        },
+        {
+          "say": "So after a stolen account's tokens were revoked, the thief could still post reviews. A real security incident.",
+          "reveal": 2
+        },
+        {
+          "say": "The mobile app hardcodes nine hostnames, and changing them needs an app-store release. Splitting the orders service breaks partners, because internal topology became public API.",
+          "reveal": 3
+        },
+        {
+          "say": "Root cause: rules for every request are built per service, at eleven deploy speeds. They will drift. Discipline can't fix structure; a single entrance can.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s019",
+      "layout": "bullets",
+      "title": "The five responsibilities",
+      "kicker": "Concept 5 of 19",
+      "bullets": [
+        "Single north-south entrance",
+        "1. Routing keeps topology private",
+        "2. Authenticate once, pass identity in",
+        "3. AuthN here, AuthZ in services",
+        "4. Limits, validation, TLS  5. Request IDs",
+        "Policy yes, product no: no domain words"
+      ],
+      "steps": [
+        {
+          "say": "The gateway is the one entrance for north-south traffic. Walk its five jobs for the store.",
+          "reveal": 1
+        },
+        {
+          "say": "One, routing. Slash orders star goes to the orders service behind one hostname. Split orders into order plus fulfillment, and clients notice nothing.",
+          "reveal": 2
+        },
+        {
+          "say": "Two, authentication once. It checks the token's signature, expiry and revocation in about a millisecond, then passes verified identity inward as trusted claims.",
+          "reveal": 3
+        },
+        {
+          "say": "Three, AuthN at the gateway, AuthZ in services. Authentication asks who are you. Authorization asks may you edit this review, and that's domain logic, so it stays in the service.",
+          "reveal": 4
+        },
+        {
+          "say": "Four, the policy set: rate limits, size caps, schema validation and TLS, applied uniformly. Five, the root of observability. It creates the request ID that every trace span hangs from, and writes one audit record per request.",
+          "reveal": 5
+        },
+        {
+          "say": "The rule: policy yes, product no. Test: can you state the rule without domain words? Reject expired tokens, yes. Apply the loyalty discount, no. Otherwise it becomes a central monolith every team waits on.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s020",
+      "layout": "table",
+      "title": "Example: one gateway for eleven services",
+      "kicker": "Example",
+      "table": {
+        "head": [
+          "Item",
+          "Before",
+          "After"
+        ],
+        "rows": [
+          [
+            "Auth implementations",
+            "3 versions, 11 copies",
+            "1, about 1 ms"
+          ],
+          [
+            "Mobile hostnames",
+            "9",
+            "1"
+          ],
+          [
+            "Cost per request",
+            "0",
+            "1 to 2 ms, redundant"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's the store after the gateway. Auth: one implementation, about one millisecond per token, revocation fixed in one deploy instead of eleven.",
+          "reveal": 1
+        },
+        {
+          "say": "Mobile: one hostname instead of nine, so internal moves need no app release.",
+          "reveal": 2
+        },
+        {
+          "say": "The bill: one to two milliseconds per request, and a component that sees all incoming traffic. So it runs redundantly behind load-balancer machinery and stays thin, so it's rarely deployed.",
+          "reveal": 3
+        },
+        {
+          "say": "In the interview, say: route by path, authenticate once, enforce shared limits, create the request ID, stay thin. Recap: one front desk, no cooking.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s021",
+      "layout": "table",
+      "title": "API gateway versus service mesh",
+      "kicker": "Concept 6 of 19",
+      "table": {
+        "head": [
+          "",
+          "API gateway",
+          "Service mesh"
+        ],
+        "rows": [
+          [
+            "Direction",
+            "North-south",
+            "East-west"
+          ],
+          [
+            "Identity",
+            "Which user? Tokens, keys",
+            "Which service? mTLS"
+          ],
+          [
+            "Policy",
+            "Auth, quotas, versions",
+            "Retries, timeouts, splits"
+          ],
+          [
+            "Shape and blast radius",
+            "One entrance; all traffic",
+            "Sidecar per service; one"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept six. Direction: the gateway handles north-south, the outside world to you. The mesh handles east-west, your services to one another.",
+          "reveal": 1
+        },
+        {
+          "say": "Identity: the gateway asks which user or client, using tokens and API keys. The mesh asks which service, using mutual TLS certificates.",
+          "reveal": 2
+        },
+        {
+          "say": "Policy: the gateway does auth, quotas and versions, product-facing rules. The mesh does retries, timeouts and traffic splits, infrastructure rules.",
+          "reveal": 3
+        },
+        {
+          "say": "Shape: one redundant entrance versus a sidecar per service. So a gateway failure hits all incoming traffic, while a sidecar failure hits one instance. Never route internal calls out through the gateway. They complement each other.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Module 8 · API Gateway · API Gateway vs. Service Mesh"
+    },
+    {
+      "id": "s022",
+      "layout": "section",
+      "title": "Backend for Frontend",
+      "kicker": "Concept 7 of 19",
+      "steps": [
+        {
+          "say": "Concept seven: backend for frontend, or B-F-F. The hook: the mobile product screen needs data from six services. That's six cellular round trips of about three hundred milliseconds each, and each response has forty fields when the phone shows six.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Module 8 · Backend for Frontend"
+    },
+    {
+      "id": "s023",
+      "layout": "diagram",
+      "title": "One call out, six calls in",
+      "kicker": "Concept 7 of 19",
+      "mermaid": "flowchart LR\n  M[\"Mobile app\"] -->|\"1 call\"| GW[\"Gateway\"]\n  GW --> MB[\"Mobile BFF, mobile team\"]\n  MB --> C[\"Catalog\"]\n  MB --> R[\"Reviews\"]\n  MB --> P[\"Pricing\"]\n  MB --> I[\"Inventory and 2 more\"]",
+      "caption": "Chatty calls on the fast network; cross the slow one once",
+      "steps": [
+        {
+          "say": "A BFF is a thin backend for one client experience, owned by that client's team. The phone makes one call through the gateway.",
+          "reveal": 0
+        },
+        {
+          "say": "The mobile BFF fans out six parallel calls of about five milliseconds each to catalog, reviews, pricing, inventory, recommendations and shipping, then returns exactly the screen's fields.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s024",
+      "layout": "bullets",
+      "title": "The four rules",
+      "kicker": "Concept 7 of 19",
+      "bullets": [
+        "1. Gather and shape; no domain rules",
+        "2. The client team owns it",
+        "3. One per experience; iOS + Android share",
+        "4. BFFs never call one another"
+      ],
+      "steps": [
+        {
+          "say": "Rule one, gather and shape, nothing else. Pricing, totals and permissions stay in services. Imagine the mobile BFF applies a loyalty discount and the web BFF doesn't: one customer sees two different totals. If two BFFs could disagree about a value, it was never presentation logic.",
+          "reveal": 1
+        },
+        {
+          "say": "Rule two, the client team owns it. Mobile changes its screen data on its own release schedule, no backend ticket. That ownership shift is the real point.",
+          "reveal": 2
+        },
+        {
+          "say": "Rule three, one per experience, not per screen. Web, mobile and TV each get one, and iOS and Android share the mobile BFF until they truly diverge. Partners get a stable, versioned public API instead.",
+          "reveal": 3
+        },
+        {
+          "say": "Rule four, BFFs never call each other. Client to gateway to BFF to services, one direction only.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s025",
+      "layout": "table",
+      "title": "Example: the mobile product screen",
+      "kicker": "Example",
+      "table": {
+        "head": [
+          "",
+          "Before",
+          "After BFF"
+        ],
+        "rows": [
+          [
+            "Cellular round trips",
+            "6 x 300 ms",
+            "1 (saves 1.8 s+)"
+          ],
+          [
+            "Server-side gathering",
+            "none",
+            "6 parallel, about 20 ms"
+          ],
+          [
+            "Payload",
+            "about 45 KB",
+            "6 KB"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Before: six cellular round trips at three hundred milliseconds, mostly in sequence, returning about forty-five kilobytes.",
+          "reveal": 1
+        },
+        {
+          "say": "After: one cellular round trip, saving at least one point eight seconds. Inside the datacenter, six parallel five millisecond calls finish in about twenty milliseconds. The response is six kilobytes.",
+          "reveal": 2
+        },
+        {
+          "say": "The cost: each BFF needs a pipeline and an on-call owner, so skip it with one client or a tiny team. Recap: a personal shopper per client, never setting prices.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s026",
+      "layout": "table",
+      "title": "BFF versus GraphQL",
+      "kicker": "Concept 8 of 19",
+      "table": {
+        "head": [
+          "",
+          "BFF",
+          "GraphQL"
+        ],
+        "rows": [
+          [
+            "Fixes",
+            "Over- and under-fetching",
+            "Over- and under-fetching"
+          ],
+          [
+            "Who shapes",
+            "Client team, per experience",
+            "Client query, per request"
+          ],
+          [
+            "Server cost",
+            "N thin services",
+            "One graph; N+1, cost limits"
+          ],
+          [
+            "HTTP caching",
+            "Easy",
+            "Harder (POST)"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept eight. Both fix over-fetching, unused fields, and under-fetching, too many calls per screen. GraphQL lets the client's query pick exactly the shape it wants.",
+          "reveal": 1
+        },
+        {
+          "say": "Who shapes: with a BFF, the client team's server code, per experience. With GraphQL, the query, per request, with no deploy.",
+          "reveal": 2
+        },
+        {
+          "say": "Server complexity: BFFs are a few thin services. GraphQL is one graph with resolvers, per-field fetch functions, so you manage the N plus one problem, one query per item instead of one batch, plus query cost limits.",
+          "reveal": 3
+        },
+        {
+          "say": "Caching: fixed BFF endpoints cache easily, while GraphQL queries usually go as POST, which caches skip. Rule of thumb: BFFs for a few stable experiences, GraphQL when many clients' needs change faster than you can deploy. You can also mix them.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Module 8 · Backend for Frontend · BFF vs. GraphQL"
+    },
+    {
+      "id": "s027",
+      "layout": "section",
+      "title": "Rate Limiting",
+      "kicker": "Concept 9 of 19",
+      "steps": [
+        {
+          "say": "Concept nine: rate limiting. The hook: one partner ships a bug that retries in a loop with no backoff. Their traffic jumps from forty requests a second to four thousand. All valid, so the gateway passes them, and one customer's bug becomes everyone's outage.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Module 8 · Rate Limiting"
+    },
+    {
+      "id": "s028",
+      "layout": "bullets",
+      "title": "Why the obvious fixes fail",
+      "kicker": "Concept 9 of 19",
+      "bullets": [
+        "Block IP: bans paying customers, campuses",
+        "Scale up: their bug, your bill",
+        "Email: days; nobody counts how often"
+      ],
+      "steps": [
+        {
+          "say": "Block their IP? They're a paying customer who should be slowed, not cut off. And NAT, network address translation, puts many users behind one IP. Block a university and five thousand students are locked out.",
+          "reveal": 1
+        },
+        {
+          "say": "Scale up to soak it? Then their bug becomes your server bill.",
+          "reveal": 2
+        },
+        {
+          "say": "Email the partner? Their fix may take days. The gap is simple: the entrance checks who you are, but nobody counts how often.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s029",
+      "layout": "bullets",
+      "title": "The four decisions",
+      "kicker": "Concept 9 of 19",
+      "bullets": [
+        "Count per identity; refuse at the door",
+        "1. Contract: 429, Retry-After, budget headers",
+        "2. Algorithm: token bucket, rate r, burst b",
+        "3. Key: API key or account; tiers, costs",
+        "4. Counters: shared Redis or synced local"
+      ],
+      "steps": [
+        {
+          "say": "Rate limiting means counting requests per identity at the entrance and refusing politely when a budget runs out. Four decisions.",
+          "reveal": 1
+        },
+        {
+          "say": "Decision one, a refusal is a contract. Return HTTP four twenty-nine, too many requests, with a Retry-After of thirty seconds and remaining-budget headers. A good SDK backs off by itself.",
+          "reveal": 2
+        },
+        {
+          "say": "Decision two, the algorithm. The default is a token bucket: each identity's bucket holds at most b tokens and refills at r per second. Each request takes one token; empty means four twenty-nine. r is the sustainable rate, b is the forgiven burst.",
+          "reveal": 3
+        },
+        {
+          "say": "Decision three, the key. Count per API key or account. Use IP only as a generous backstop for anonymous callers. Add tiers, like free ten a minute and paid one thousand, and cost weights.",
+          "reveal": 4
+        },
+        {
+          "say": "Decision four, where counters live. Twelve gateway instances each enforcing one hundred a second really allow twelve hundred. So share counters in Redis with atomic increments, about half a millisecond, or sync local buckets, approximate but fine for protection.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s030",
+      "layout": "table",
+      "title": "Example: Tuesday's bug, replayed",
+      "kicker": "Example",
+      "table": {
+        "head": [
+          "Traffic",
+          "Rule",
+          "Outcome"
+        ],
+        "rows": [
+          [
+            "Partner, 4,000/s",
+            "r=100/s, b=200",
+            "200 burst, then 100/s"
+          ],
+          [
+            "Refused 3,900/s",
+            "429 in 0.1 ms",
+            "500x cheaper than serving"
+          ],
+          [
+            "Login",
+            "5/min per account",
+            "Stuffing: thousands to dozens"
+          ],
+          [
+            "Search",
+            "10 tokens each",
+            "Scraper drains 10x faster"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Replay the incident with r equals one hundred a second and b equals two hundred. The partner sends four thousand a second. The first two hundred use the burst.",
+          "reveal": 1
+        },
+        {
+          "say": "After that, one hundred a second pass, and three thousand nine hundred a second get a four twenty-nine in about zero point one milliseconds each. Serving costs about fifty milliseconds, so refusing is about five hundred times cheaper.",
+          "reveal": 2
+        },
+        {
+          "say": "Every other partner has its own bucket, so nobody else notices. Login gets its own rule, five attempts per minute per account, so credential stuffing drops from thousands of tries to a few dozen.",
+          "reveal": 3
+        },
+        {
+          "say": "A scraper's searches cost ten tokens each. In the interview, say: token bucket per API key, a four twenty-nine contract, counters in Redis. Recap: fairness becomes arithmetic.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s031",
+      "layout": "section",
+      "title": "Rate-Limiting Algorithms Compared",
+      "kicker": "Concept 10 of 19",
+      "steps": [
+        {
+          "say": "Concept ten: five algorithms. Use one running rule for all of them: one hundred requests per minute for one API key.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Module 8 · Rate Limiting · The algorithms compared"
+    },
+    {
+      "id": "s032",
+      "layout": "bullets",
+      "title": "Five algorithms, one rule: 100 per minute",
+      "kicker": "Concept 10 of 19",
+      "bullets": [
+        "1. Fixed window: 200 in 2 s at the edge",
+        "2. Sliding log: exact, one timestamp each",
+        "3. Sliding counter: two blended counters",
+        "4. Token bucket: honest bursts allowed",
+        "5. Leaky bucket: fixed-rate, smooth output"
+      ],
+      "steps": [
+        {
+          "say": "One, fixed window. Count per calendar minute, reset at the top of each minute. But it has a boundary burst: one hundred at eleven fifty-nine fifty-nine and one hundred at twelve oh oh oh one. Two hundred in two seconds, all allowed.",
+          "reveal": 1
+        },
+        {
+          "say": "Two, sliding log. Store a timestamp for every request and count those in the last sixty seconds. Exact, but it stores up to one hundred timestamps per key.",
+          "reveal": 2
+        },
+        {
+          "say": "Three, sliding window counter. Twenty seconds into a minute, count the previous minute at two-thirds weight plus the current minute. Two counters, almost exact.",
+          "reveal": 3
+        },
+        {
+          "say": "Four, token bucket. A bucket of b tokens refilling at r per second. It allows honest bursts, like a page load firing ten requests at once, while capping the long-term average. That's why it's the default.",
+          "reveal": 4
+        },
+        {
+          "say": "Five, leaky bucket. Requests join a queue that drains at a fixed rate, like water leaking from a hole. Output is perfectly smooth, but bursts wait or get dropped.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s033",
+      "layout": "table",
+      "title": "The algorithms side by side",
+      "kicker": "Concept 10 of 19",
+      "table": {
+        "head": [
+          "Algorithm",
+          "Boundary burst",
+          "Natural bursts",
+          "Memory per key"
+        ],
+        "rows": [
+          [
+            "Fixed window",
+            "Yes, 2x",
+            "By accident",
+            "1 counter"
+          ],
+          [
+            "Sliding log / counter",
+            "No",
+            "Smoothed",
+            "Log / 2 counters"
+          ],
+          [
+            "Leaky bucket",
+            "No",
+            "Queued, smooth out",
+            "Queue"
+          ],
+          [
+            "Token bucket (default)",
+            "No",
+            "Yes, via b",
+            "Tokens + timestamp"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Boundary burst flaw: only the fixed window has it.",
+          "reveal": 1
+        },
+        {
+          "say": "Natural bursts: only the token bucket allows them on purpose, through b. The leaky bucket and the sliding windows smooth them out.",
+          "reveal": 2
+        },
+        {
+          "say": "Memory per key: one counter, a full log, two counters, a token count plus a timestamp, or a queue.",
+          "reveal": 3
+        },
+        {
+          "say": "Reach for fixed window for rough protection, sliding log or counter when you need precision near billing, leaky bucket to shield a fragile downstream, and token bucket by default. Recap: the token bucket matches how real clients behave.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s034",
+      "layout": "quiz",
+      "title": "Pause and think: a campus gets 429s",
+      "kicker": "Pause and think",
+      "bullets": [
+        "A. The token bucket's r is too high",
+        "B. IP was the main key, and the campus shares one NAT IP",
+        "C. Redis counters were lost"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. At a university launch, thousands of students get four twenty-nines within an hour. Traffic is modest and services are healthy. What went wrong?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s035",
+      "layout": "bullets",
+      "title": "Answer: key on the right identity",
+      "kicker": "Answer",
+      "bullets": [
+        "Campus = one NAT IP = one bucket",
+        "Key on account or API key; IP as backstop"
+      ],
+      "steps": [
+        {
+          "say": "The answer is B. The whole campus sits behind one NAT address, so thousands of students counted as one identity. The limiter caused the outage.",
+          "reveal": 1
+        },
+        {
+          "say": "Fix: key authenticated requests by account or API key, and keep IP only as a generous anonymous backstop. An IP is a network location, not a person.",
+          "reveal": 2
+        }
+      ]
+    },
+    {
+      "id": "s036",
+      "layout": "section",
+      "title": "Cursor-Based Pagination",
+      "kicker": "Concept 11 of 19",
+      "steps": [
+        {
+          "say": "Concept eleven: cursor pagination. The hook: a partner exports orders with page equals five thousand, and it takes eight hundred milliseconds per page. Page one took two.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Module 8 · Cursor-Based Pagination"
+    },
+    {
+      "id": "s037",
+      "layout": "twocol",
+      "title": "Offset pagination fails two ways",
+      "kicker": "Concept 11 of 19",
+      "left": {
+        "heading": "1. Drift",
+        "bullets": [
+          "Page = position in a moving list",
+          "3 inserts: 3 duplicates on page 2"
+        ]
+      },
+      "right": {
+        "heading": "2. Deep-page cost",
+        "bullets": [
+          "OFFSET 100000: scan and discard",
+          "Page 1: 2 ms, page 5,000: 800 ms"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Offset pagination asks for a numbered page. Page two becomes offset twenty, limit twenty, so the database skips rows.",
+          "reveal": 1
+        },
+        {
+          "say": "Failure one, drift. You read page one of your order feed. Three new orders arrive at the top, every row shifts down three, and page two starts with three items you already saw. Deletes cause skips instead.",
+          "reveal": 2
+        },
+        {
+          "say": "Failure two, deep-page cost. An offset of one hundred thousand can't jump to that row. It scans and throws away one hundred thousand rows.",
+          "reveal": 3
+        },
+        {
+          "say": "So work grows linearly: two milliseconds on page one, eight hundred on page five thousand.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s038",
+      "layout": "diagram",
+      "title": "Offset scans; cursor seeks",
+      "kicker": "Concept 11 of 19",
+      "mermaid": "flowchart LR\n  subgraph Offset\n    O1[\"OFFSET 100000 LIMIT 20\"] --> O2[\"Scan and discard 100,020 rows\"]\n  end\n  subgraph Cursor\n    C1[\"WHERE (created_at, id) before cursor\"] --> C2[\"Index seek, read 20 rows\"]\n  end",
+      "caption": "Cost tied to a row, not a count",
+      "steps": [
+        {
+          "say": "A cursor is an opaque bookmark, a token clients can't look inside, saying where you stopped. For example, everything after order eight four one two.",
+          "reveal": 0
+        },
+        {
+          "say": "The next request asks for rows whose created at and id come before the cursor values, sorted by those, limit twenty. An index takes the database straight there, reading exactly twenty rows at any depth.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s039",
+      "layout": "bullets",
+      "title": "How it works and three correctness rules",
+      "kicker": "Concept 11 of 19",
+      "bullets": [
+        "Return cursor; seek via index; tied to a row",
+        "1. Tiebreaker: (created_at, id)",
+        "2. Opaque token, never a public format",
+        "3. Stable, indexed sort"
+      ],
+      "steps": [
+        {
+          "say": "Step one, return a cursor with every page, the last row's sort values encoded. Step two, seek through an index from those values. Step three, progress is tied to a row, so inserts above it can't cause drift.",
+          "reveal": 1
+        },
+        {
+          "say": "Rule one, a tiebreaker is mandatory. Imagine a nightly export missing about two percent of orders, clustered in busy seconds. The cursor held only created at, and strictly after this timestamp skipped other rows sharing it. Use created at plus id.",
+          "reveal": 2
+        },
+        {
+          "say": "Rule two, opaque means opaque. If partners parse your cursor, your sort key becomes a public contract.",
+          "reveal": 3
+        },
+        {
+          "say": "Rule three, a stable, indexed sort, or the database still scans. Recap: a bookmark, not a page number.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s040",
+      "layout": "table",
+      "title": "Offset versus cursor",
+      "kicker": "Concept 12 of 19",
+      "table": {
+        "head": [
+          "",
+          "Offset ?page=47",
+          "Cursor ?after=token"
+        ],
+        "rows": [
+          [
+            "Cost at depth",
+            "Linear scan",
+            "Constant seek"
+          ],
+          [
+            "Changes while scrolling",
+            "Duplicates, skips",
+            "Unaffected"
+          ],
+          [
+            "Jumps and totals",
+            "Natural",
+            "Next/prev; seek by value"
+          ],
+          [
+            "Fits",
+            "200-row admin table",
+            "Feeds, APIs, exports"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept twelve. Cost at depth: offset is linear, cursor is constant.",
+          "reveal": 1
+        },
+        {
+          "say": "Changes while scrolling: offset gives duplicates and skips; cursor is unaffected.",
+          "reveal": 2
+        },
+        {
+          "say": "Random jumps: offset's single advantage is jump to page forty-seven. Cursors only go next and previous, though you can seek by value, like start from last Tuesday. Totals like page three of eight twelve are natural for offset and awkward for cursors.",
+          "reveal": 3
+        },
+        {
+          "say": "So: bank transaction history, cursor. A constantly updated social feed, cursor. A two hundred row internal config table where admins jump to page four, offset is fine. Recap: cursors by default, offsets for small shallow tables.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Module 8 · Cursor-Based Pagination · Offset vs. cursor"
+    },
+    {
+      "id": "s041",
+      "layout": "section",
+      "title": "API Versioning",
+      "kicker": "Concept 13 of 19",
+      "steps": [
+        {
+          "say": "Concept thirteen: API versioning. The hook: a team renames order dot state to order dot status, because state confused people. Within an hour, two hundred partner integrations break, and an eighteen-month-old mobile build, used by a third of users, shows empty order screens.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Module 8 · API Versioning"
+    },
+    {
+      "id": "s042",
+      "layout": "bullets",
+      "title": "The three rules",
+      "kicker": "Concept 13 of 19",
+      "bullets": [
+        "Published APIs can't be taken back",
+        "1. Additive first; tolerant readers",
+        "2. Coarse /v2 via gateway adapter",
+        "3. Retire on a dated lifecycle; max 2 live"
+      ],
+      "steps": [
+        {
+          "say": "Once published, an API can't be taken back. Clients you can't see or update build on every field. So three rules.",
+          "reveal": 1
+        },
+        {
+          "say": "Rule one, additive first. Add fields, endpoints and optional parameters; never remove, rename or retype. Clients are tolerant readers that ignore unknown fields. For the rename, add status beside state, document both, and remove state only in a major version.",
+          "reveal": 2
+        },
+        {
+          "say": "Rule two, for unavoidable breaks, version explicitly and coarsely. The gateway routes v one through a thin adapter onto today's backend. One backend, two interfaces. Version the whole API, never single endpoints.",
+          "reveal": 3
+        },
+        {
+          "say": "Rule three, retire on a lifecycle. Announce a specific date, send Deprecation and Sunset headers, track usage per client, contact the remaining users, run brownouts, then remove. Keep at most two live versions.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s043",
+      "layout": "diagram",
+      "title": "One backend, two interfaces",
+      "kicker": "Concept 13 of 19",
+      "mermaid": "flowchart LR\n  C1[\"Old clients /v1\"] --> GW[\"Gateway\"]\n  C2[\"New clients /v2\"] --> GW\n  GW --> AD[\"v1 adapter\"]\n  AD --> BE[\"Current backend\"]\n  GW --> BE",
+      "caption": "Translate at the edge; never fork the backend",
+      "steps": [
+        {
+          "say": "Here's rule two drawn. Old clients call slash v one, new clients call slash v two, both through the gateway.",
+          "reveal": 0
+        },
+        {
+          "say": "Version one passes through an adapter that translates old requests and responses. There's no forked implementation to maintain.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s044",
+      "layout": "table",
+      "title": "Example: additive or breaking?",
+      "kicker": "Example",
+      "table": {
+        "head": [
+          "Change",
+          "Verdict"
+        ],
+        "rows": [
+          [
+            "Add order.estimated_delivery",
+            "Additive"
+          ],
+          [
+            "Rename state -> status",
+            "Breaking: add status first"
+          ],
+          [
+            "Optional field becomes required",
+            "Breaking"
+          ],
+          [
+            "Add an endpoint",
+            "Additive"
+          ],
+          [
+            "amount: integer cents -> decimal string",
+            "Breaking"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Classify five changes. Add order dot estimated delivery: additive, since tolerant readers ignore it.",
+          "reveal": 1
+        },
+        {
+          "say": "Rename state to status: breaking. Safe path: add status first.",
+          "reveal": 2
+        },
+        {
+          "say": "Make an optional request field required: breaking, because requests that used to be valid now fail. Add a new endpoint: additive, old clients never call it.",
+          "reveal": 3
+        },
+        {
+          "say": "Change amount from integer cents to a decimal string: breaking, the type and meaning change under the same name.",
+          "reveal": 4
+        },
+        {
+          "say": "And the brownout: imagine slash v one still carries thirty percent of traffic. After headers and outreach, you schedule announced fifteen-minute windows of HTTP four ten, gone. Recap: add, version coarsely, retire on a date.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s045",
+      "layout": "section",
+      "title": "Sidecar",
+      "kicker": "Concept 14 of 19",
+      "steps": [
+        {
+          "say": "Concept fourteen: the sidecar. Now we turn inward. The hook: east-west calls need mutual TLS, where both sides prove identity, plus timeouts, retries and tracing. Doing that with libraries across eleven services in three languages gives eleven slightly different retry behaviors.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Module 8 · Sidecar"
+    },
+    {
+      "id": "s046",
+      "layout": "diagram",
+      "title": "A proxy beside every instance",
+      "kicker": "Concept 14 of 19",
+      "mermaid": "flowchart LR\n  A[\"Checkout, Go\"] -->|\"localhost, plain\"| S1[\"Sidecar\"]\n  S1 -->|\"mTLS, retries, metrics\"| S2[\"Sidecar\"]\n  S2 -->|\"localhost, plain\"| B[\"Inventory, Python\"]",
+      "caption": "If traffic can't come to one proxy, bring a proxy to every instance",
+      "steps": [
+        {
+          "say": "A sidecar is a small helper process next to every service instance on the same machine. The Go checkout service talks plain text over localhost to its sidecar.",
+          "reveal": 0
+        },
+        {
+          "say": "The only off-machine hop is sidecar to sidecar, over mutual TLS. That's where timeouts, retries, circuit breaking, metrics and traces happen. The Python inventory service has the identical binary beside it.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s047",
+      "layout": "bullets",
+      "title": "How it works, step by step",
+      "kicker": "Concept 14 of 19",
+      "bullets": [
+        "1. One helper per instance via localhost",
+        "2. Same binary in every language",
+        "3. Policy upgrades with zero app deploys",
+        "4. Retry and breaker code leaves the app",
+        "5. Needs a control plane: the mesh"
+      ],
+      "steps": [
+        {
+          "say": "Step one, one helper per instance. Checkout just calls localhost; the sidecar adds TLS, timeouts and telemetry.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, language-agnostic. It's a separate process, not a linked library, so Go, Python and Java run the same binary.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, upgrades at infrastructure speed. A new retry policy reaches every service by rolling the sidecar fleet, with zero application deploys.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, retry and circuit-breaker code leaves the app.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, it's a building block. Four hundred forty sidecars still need certificates and routes from somewhere. That's the mesh, coming up.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s048",
+      "layout": "table",
+      "title": "Example: always multiply by the fleet",
+      "kicker": "Example",
+      "table": {
+        "head": [
+          "Item",
+          "Per sidecar",
+          "Fleet of 440"
+        ],
+        "rows": [
+          [
+            "Memory",
+            "about 50 MB",
+            "about 22 GB"
+          ],
+          [
+            "Latency",
+            "about 0.5 ms",
+            "about 1 ms per call"
+          ],
+          [
+            "Startup race",
+            "first calls fail",
+            "readiness gate"
+          ],
+          [
+            "Crash",
+            "one instance",
+            "not the whole fleet"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Memory: about fifty megabytes per sidecar sounds tiny. But eleven services times forty instances is four hundred forty sidecars, about twenty-two gigabytes just for networking.",
+          "reveal": 1
+        },
+        {
+          "say": "Latency: about half a millisecond per sidecar, two per call, so about one millisecond. The p ninety-nine may rise about two milliseconds with TLS. That's a cost to budget.",
+          "reveal": 2
+        },
+        {
+          "say": "The lifecycle bug: if the app is ready before its sidecar, its first calls fail after every deploy. That's a defect. Fix it with a readiness gate, and on shutdown stop the app first so the sidecar drains.",
+          "reveal": 3
+        },
+        {
+          "say": "A crashed sidecar takes only its own instance out of rotation. Recap: a personal assistant for every service, priced per instance.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s049",
+      "layout": "table",
+      "title": "Sidecar versus shared library",
+      "kicker": "Concept 15 of 19",
+      "table": {
+        "head": [
+          "",
+          "Shared library",
+          "Sidecar"
+        ],
+        "rows": [
+          [
+            "Languages",
+            "One per language, drifts",
+            "One binary everywhere"
+          ],
+          [
+            "Upgrades",
+            "Wait on N teams",
+            "Fleet-wide in minutes"
+          ],
+          [
+            "Cost",
+            "Zero latency, shared memory",
+            "about 1 ms, 50 MB each"
+          ],
+          [
+            "Fits",
+            "5 Go services, 1 team",
+            "30 services, 4 languages"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept fifteen. Languages: a library needs one implementation per language, drifting apart. A sidecar is one binary everywhere.",
+          "reveal": 1
+        },
+        {
+          "say": "Upgrades: a library waits on every team's deploy. A sidecar rolls fleet-wide in minutes.",
+          "reveal": 2
+        },
+        {
+          "say": "Speed and memory: the library is in-process with zero added latency. The sidecar costs about one millisecond per call and fifty megabytes per instance.",
+          "reveal": 3
+        },
+        {
+          "say": "Apply it. Fleet A has five Go services and one team: use a library. Fleet B has thirty services, four languages and nine teams: use sidecars. The deciding factor is organizational. Recap: count language-times-team combinations.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Module 8 · Sidecar · Sidecar vs. shared library"
+    },
+    {
+      "id": "s050",
+      "layout": "section",
+      "title": "Service Mesh",
+      "kicker": "Concept 16 of 19",
+      "steps": [
+        {
+          "say": "Concept sixteen: the service mesh. The hook: four hundred forty sidecars, six months later. Certificates expire every ninety days, and at two AM checkout can't call inventory: certificate expired. Eleven drifting libraries became four hundred forty drifting config files.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Module 8 · Service Mesh"
+    },
+    {
+      "id": "s051",
+      "layout": "diagram",
+      "title": "Control plane and data plane",
+      "kicker": "Concept 16 of 19",
+      "mermaid": "flowchart TD\n  CP[\"Control plane: registry, CA, policy\"] -->|\"xDS config and certs\"| S1[\"Checkout sidecar\"]\n  CP -->|\"xDS\"| S2[\"Inventory sidecar\"]\n  CP -->|\"xDS\"| S3[\"Payments sidecar\"]\n  S1 -->|\"mTLS\"| S2\n  S1 -->|\"mTLS\"| S3",
+      "caption": "Sidecars do the work; the control plane decides",
+      "steps": [
+        {
+          "say": "A mesh has two planes. The data plane is the sidecars, carrying and policing traffic on every hop.",
+          "reveal": 0
+        },
+        {
+          "say": "The control plane is a central coordinator. It watches the registry of what's running, issues and rotates certificates, holds policy, and streams each sidecar's config over long-lived streams called x-D-S.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s052",
+      "layout": "bullets",
+      "title": "What the mesh does, step by step",
+      "kicker": "Concept 16 of 19",
+      "bullets": [
+        "1. Hourly workload certificates: zero trust",
+        "2. Routes streamed within seconds",
+        "3. Declarative retries and timeouts",
+        "4. Only checkout, refunds may call payments",
+        "5. Free dashboards; 5% canary by config",
+        "6. Fails static: traffic flows, changes freeze"
+      ],
+      "steps": [
+        {
+          "say": "One, certificates take care of themselves. The control plane is a certificate authority issuing each workload an identity, like checkout in prod, rotated hourly. Services trust identity, not network location. That's zero-trust networking.",
+          "reveal": 1
+        },
+        {
+          "say": "Two, routing at platform speed. As autoscaling changes instance addresses every few seconds, new routes stream to sidecars within seconds.",
+          "reveal": 2
+        },
+        {
+          "say": "Three, central declarative policy. Retries, timeouts and outlier detection become versioned config objects.",
+          "reveal": 3
+        },
+        {
+          "say": "Four, authorization has a home. One policy says only checkout and refunds may call payments, enforced by the payments sidecar against the caller's certificate.",
+          "reveal": 4
+        },
+        {
+          "say": "Five, free observability and traffic control. Every service pair gets rate, errors and p ninety-nine dashboards, and one config block sends five percent of inventory calls to inventory version two as a canary.",
+          "reveal": 5
+        },
+        {
+          "say": "Six, the data plane fails static. If the control plane dies, sidecars keep their last config. Traffic flows, changes freeze, and new instances can't get routes or certificates.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s053",
+      "layout": "bullets",
+      "title": "Example: the global retry rule",
+      "kicker": "Example",
+      "bullets": [
+        "Global rule: retry every failure 3x",
+        "Non-idempotent POSTs: duplicate orders",
+        "Review, stage, canary; skip unsafe writes",
+        "Central policy spreads mistakes fast too"
+      ],
+      "steps": [
+        {
+          "say": "Imagine someone adds a mesh-wide rule: retry every failed request three times. Sounds reliable.",
+          "reveal": 1
+        },
+        {
+          "say": "Then finance reports duplicate orders. Order POSTs aren't idempotent, meaning running them twice isn't the same as once. One purchase ran several times.",
+          "reveal": 2
+        },
+        {
+          "say": "The mesh didn't create the unsafe write, but it spread a bad policy everywhere, instantly. Guardrails: policy as code, staged rollout, canary on one service first, and retries skip non-idempotent methods unless idempotency keys are used.",
+          "reveal": 3
+        },
+        {
+          "say": "Recap: central policy fixes drift fast, and spreads mistakes just as fast.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s054",
+      "layout": "table",
+      "title": "Service mesh adoption steps",
+      "kicker": "Concept 17 of 19",
+      "table": {
+        "head": [
+          "Step",
+          "What it is",
+          "Right when"
+        ],
+        "rows": [
+          [
+            "1. Shared libraries",
+            "Kit inside the code",
+            "1 language, few services"
+          ],
+          [
+            "2. Ad-hoc sidecars",
+            "Proxies, hand config",
+            "Languages drifting"
+          ],
+          [
+            "3. Full mesh",
+            "Sidecars + control plane",
+            "Dozens, zero trust, platform team"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept seventeen: when to adopt. Think of it as a ladder. Step one, shared libraries: a reliability kit in the code. Right for one language, few services, one team.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, ad-hoc sidecars configured by hand. Right when several languages start drifting but config is still manageable.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, a full mesh with a control plane. The bar needs all four: many languages, several dozen services, a zero-trust requirement, and a staffed platform team.",
+          "reveal": 3
+        },
+        {
+          "say": "Apply it. Eight services in one language: step one. Sixty services, five languages, zero trust, a six-person platform team: step three. Move up only when coordinating the current step becomes the bottleneck. Recap: an unowned mesh is worse than none.",
+          "reveal": 3
+        }
+      ],
+      "caption": "Book: Module 8 · Service Mesh · The adoption steps"
+    },
+    {
+      "id": "s055",
+      "layout": "section",
+      "title": "Authorization Service",
+      "kicker": "Concept 18 of 19",
+      "steps": [
+        {
+          "say": "Concept eighteen: the authorization service. The hook: a seller edits a URL from invoice eight eight one one to eight eight one two, and reads a competitor's invoice. The service only checked that he was logged in. That's broken object-level authorization, number one on the OWASP API security top ten.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Module 8 · Authorization Service"
+    },
+    {
+      "id": "s056",
+      "layout": "bullets",
+      "title": "The problem: thirty permission systems",
+      "kicker": "Concept 18 of 19",
+      "bullets": [
+        "BOLA: logged in is not allowed",
+        "Removed employee still sees titles in search",
+        "2-second queries; unanswerable audit",
+        "Not in the token, not in the gateway"
+      ],
+      "steps": [
+        {
+          "say": "The store's seller portal has two hundred thousand seller organisations, two million staff accounts and five hundred million invoices. Thirty services each wrote their own checks.",
+          "reveal": 1
+        },
+        {
+          "say": "A removed finance employee still saw invoice titles in search, which cached his membership for a day.",
+          "reveal": 2
+        },
+        {
+          "say": "Nested folders made what can I see queries take two seconds. And nobody could answer the audit: who can read our payout data, and why?",
+          "reveal": 3
+        },
+        {
+          "say": "Roles in the token can't say can view these forty thousand invoices, and a thin gateway mustn't know what an invoice is. So the decision moves to one shared service.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s057",
+      "layout": "bullets",
+      "title": "Policy points and permission models",
+      "kicker": "Concept 18 of 19",
+      "bullets": [
+        "PEP enforces in the service; PDP decides",
+        "RBAC: roles; breaks by role explosion",
+        "ABAC: attributes and context",
+        "ReBAC: relationship paths; combine all three"
+      ],
+      "steps": [
+        {
+          "say": "Split enforcement from decision. The policy enforcement point, or PEP, is code in the service at the moment of access. It asks, may user forty-two view invoice eight eight one two, and obeys. The policy decision point, or PDP, is the shared service answering allow or deny, with a reason.",
+          "reveal": 1
+        },
+        {
+          "say": "Model one, RBAC, role-based: finance viewer may read invoices. It breaks when roles must exist per organisation per team. That's role explosion.",
+          "reveal": 2
+        },
+        {
+          "say": "Model two, ABAC, attribute-based: allow if the user's org matches the invoice's org, multi-factor login is on, and it's between eight AM and eight PM. But who can see this folder means evaluating every user.",
+          "reveal": 3
+        },
+        {
+          "say": "Model three, ReBAC, relationship-based. User is member of team, team views folder, folder is parent of invoice. Real systems combine all three: RBAC for staff roles, ReBAC for sharing, ABAC conditions on top.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s058",
+      "layout": "diagram",
+      "title": "A Zanzibar-style check, walked",
+      "kicker": "Concept 18 of 19",
+      "mermaid": "flowchart LR\n  Q[\"Check: may li view invoice 8812?\"] --> I[\"invoice:8812\"]\n  I -->|\"parent\"| F[\"folder:acme-payouts\"]\n  F -->|\"viewer\"| T[\"team:acme-finance members\"]\n  T -->|\"member\"| U[\"user:li\"]\n  U --> A[\"Allow: path of 3 tuples\"]",
+      "caption": "The path is the audit reason",
+      "steps": [
+        {
+          "say": "Google's Zanzibar stores every fact as a tuple: object, relation, subject. Invoice eight eight one two has parent folder acme payouts. That folder's viewers are members of team acme finance. Li is a member of acme finance.",
+          "reveal": 0
+        },
+        {
+          "say": "Check: may Li view invoice eight eight one two? Walk invoice to folder, folder to team, team to Li. Three hops, so allow, and the path itself is the audit reason. When Li leaves the team, the product deletes one tuple, and every service knows.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s059",
+      "layout": "bullets",
+      "title": "Freshness and speed, with numbers",
+      "kicker": "Example",
+      "bullets": [
+        "Bob removed 10:00:00; report at 10:00:05",
+        "Consistency token: checks at least that fresh",
+        "12,000 checks/s; 80% cache: 2,400; p99 < 10 ms",
+        "Fail closed; log every decision"
+      ],
+      "steps": [
+        {
+          "say": "The new enemy problem. Bob is removed from finance at ten o'clock exactly. At five seconds past, a payout report is uploaded. A check against a replica ten seconds behind lets Bob read it.",
+          "reveal": 1
+        },
+        {
+          "say": "The fix is a consistency token, called a zookie, saved with the content. Checks on that content must use permission data at least that fresh.",
+          "reveal": 2
+        },
+        {
+          "say": "Speed: about twelve thousand checks a second. An eighty percent decision cache leaves about twenty-four hundred, with p ninety-nine under ten milliseconds. Bulk-check list pages, and pre-filter search by indexing who may read each document.",
+          "reveal": 3
+        },
+        {
+          "say": "Fail closed: if the service is down, deny. A leak is worse than an error. Log every decision with its reason. Recap: logged in is never allowed.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s060",
+      "layout": "section",
+      "title": "Capstone: The Entry Point, Assembled",
+      "kicker": "Concept 19 of 19",
+      "steps": [
+        {
+          "say": "Concept nineteen, the capstone. The brief: web, iOS, Android, a TV app and two hundred partners. Forty thousand requests a second at peak, about sixty percent static or publicly cacheable. About thirty services in three languages. Partners must never break, no tenant may starve others, and east-west encryption is on the roadmap.",
+          "reveal": 0
+        },
+        {
+          "say": "Two rules: every layer is the same proxy primitive, and handle each request at the earliest layer that can.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Module 8 · Capstone - The Entry Point, Assembled"
+    },
+    {
+      "id": "s061",
+      "layout": "bullets",
+      "title": "Six stages, one request from Sydney",
+      "kicker": "Concept 19 of 19",
+      "bullets": [
+        "1. CDN: 24,000 of 40,000 req/s stop here",
+        "2. Gateway: 12 instances, thin, AuthN once",
+        "3. Web, mobile, TV BFFs; partner API product",
+        "4. Token buckets per key; Redis counters",
+        "5. Cursors; versions born with Sunset dates",
+        "6. Sidecars now; mesh when team is staffed"
+      ],
+      "steps": [
+        {
+          "say": "Stage one, the edge. Fingerprinted assets and shared catalog responses stop at the CDN, and authenticated responses are private, no-store. About twenty-four thousand of the forty thousand requests a second stop here.",
+          "reveal": 1
+        },
+        {
+          "say": "Stage two, the gateway. The other sixteen thousand reach twelve redundant gateway instances. They authenticate, rate-limit, validate, route and create request IDs, and refuse to know discounts or shaping.",
+          "reveal": 2
+        },
+        {
+          "say": "Stage three, BFFs. A web BFF, one shared mobile BFF and a TV BFF, each owned by its client team. Partners get a versioned public API product instead.",
+          "reveal": 3
+        },
+        {
+          "say": "Stage four, rate limits. Token buckets per API key, tiers and cost weights, counters in Redis across all twelve instances. The buggy partner's three thousand nine hundred a second are refused cheaply.",
+          "reveal": 4
+        },
+        {
+          "say": "Stage five, contracts. Opaque cursors on created at plus id for partner exports, additive changes by default, and every version born with its Sunset date. Two live versions at most.",
+          "reveal": 5
+        },
+        {
+          "say": "Stage six, the turn inward. Thirty services and three languages justify a mesh, but the platform team is two people. So honestly: sidecars with templated config now, and the full mesh once the team is hired.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s062",
+      "layout": "diagram",
+      "title": "The entry point, assembled",
+      "kicker": "Concept 19 of 19",
+      "mermaid": "flowchart LR\n  C[\"Clients: 40,000 req/s\"] --> CDN[\"CDN: 24,000 stop\"]\n  CDN -->|\"16,000/s\"| GW[\"Gateway x12, rate limits\"]\n  GW -.->|\"3,900/s refused\"| X[\"429\"]\n  GW --> BFF[\"Web, mobile, TV BFFs\"]\n  GW --> PA[\"Partner API v1, v2\"]\n  BFF --> S[\"30 services + sidecars\"]\n  PA --> S\n  S --> AZ[\"Authorization service\"]",
+      "caption": "Same primitive, six roles, earliest capable layer",
+      "steps": [
+        {
+          "say": "Here's the whole picture. Forty thousand requests a second arrive. Twenty-four thousand stop at the CDN. Sixteen thousand pass the gateway, where the buggy partner's flood is refused.",
+          "reveal": 0
+        },
+        {
+          "say": "BFFs and the partner API shape responses, and about thirty services talk east-west through sidecars, checking object permissions against the authorization service. Each request stops at the earliest layer that can handle it.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s063",
+      "layout": "recap",
+      "title": "Recap",
+      "bullets": [
+        "One primitive; north-south vs east-west",
+        "Proxy buffers; CDN beats distance",
+        "Gateway thin; BFF per client team",
+        "Token buckets, cursors, additive versions",
+        "Sidecar, mesh, shared authorization",
+        "Next: Ep 14, Operating in Production"
+      ],
+      "steps": [
+        {
+          "say": "Let's recap. One proxy primitive plays every role. North-south is outside to inside; east-west is service to service.",
+          "reveal": 1
+        },
+        {
+          "say": "The reverse proxy terminates TLS and buffers slow clients: nine hundred threads become fifteen. The CDN beats distance; fingerprint assets, purge only in emergencies.",
+          "reveal": 2
+        },
+        {
+          "say": "The gateway routes, authenticates once and creates request IDs: policy yes, product no. BFFs give each client team one shaped call.",
+          "reveal": 3
+        },
+        {
+          "say": "Token buckets per API key, with a four twenty-nine contract. Cursors with tiebreakers. Additive changes, coarse versions, dated retirement.",
+          "reveal": 4
+        },
+        {
+          "say": "Sidecars bring the proxy to every instance; the mesh adds a control plane when a platform team can own it. And an authorization service answers may this user touch this object.",
+          "reveal": 5
+        },
+        {
+          "say": "Thanks for watching. Next up, Episode fourteen: Operating in Production.",
+          "reveal": 6
+        }
+      ]
+    }
+  ]
+}

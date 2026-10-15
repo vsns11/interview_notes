@@ -1,0 +1,1808 @@
+{
+ "series": "LLD Workshop",
+ "episode": 19,
+ "title": "Games: Blackjack, Chess, Tic-Tac-Toe",
+ "subtitle": "Rules, turns, state and strategies in three classic designs",
+ "scenes": [
+  {
+   "id": "s001",
+   "layout": "title",
+   "title": "Games: Blackjack, Chess, Tic-Tac-Toe",
+   "subtitle": "Rules, turns, state and strategies in three classic designs",
+   "steps": [
+    {
+     "say": "Welcome to the L-L-D Workshop, episode nineteen: Games. Blackjack, Chess, and Tic-Tac-Toe. L-L-D means low-level design: the classes, methods and rules inside one program.",
+     "reveal": 0
+    },
+    {
+     "say": "Games are an interviewer favourite. The rules are exact, so every rule has to live in some class, and the interviewer will ask you which one.",
+     "reveal": 0
+    },
+    {
+     "say": "By the end you'll be able to design a generic deck of cards, score a blackjack hand with aces, build chess pieces that know their own moves, add undo to chess, and detect a tic-tac-toe win in constant time.",
+     "reveal": 0
+    },
+    {
+     "say": "Keep the chapter seventeen PDF open beside the video. Every demo output I quote is printed there, and you can pause and check each number yourself.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s002",
+   "layout": "section",
+   "kicker": "Concept 1 of 4",
+   "title": "What game problems test",
+   "steps": [
+    {
+     "say": "Let's start with a question. Why do interviewers pick games, and not, say, a parking lot? Because a game is a closed world of rules. If you can't say where a rule lives, the design is not finished.",
+     "reveal": 0
+    }
+   ],
+   "caption": "Book: Ch 17 Games & Rules · What games test in an LLD interview"
+  },
+  {
+   "id": "s003",
+   "layout": "bullets",
+   "title": "Six skills a game interview checks",
+   "bullets": [
+    "Rule encapsulation: each rule lives in one class",
+    "Turn management: whose turn, what can they do",
+    "Polymorphic pieces: one call, many behaviours",
+    "Pluggable strategies: bots, dealers, dice",
+    "Deterministic tests: randomness handed in",
+    "State and status: in progress, won, draw"
+   ],
+   "steps": [
+    {
+     "say": "Skill one, rule encapsulation. Encapsulation means hiding a rule inside the class that owns it. A king's blackjack value lives in one scoring class, not in scattered if statements.",
+     "reveal": 1
+    },
+    {
+     "say": "Skill two, turn management. Whose turn is it, and what may they do? In tic-tac-toe it's an index into a list of players. In chess, a colour that flips.",
+     "reveal": 2
+    },
+    {
+     "say": "Skill three, polymorphic pieces. Polymorphism means many shapes: you make one method call and each object answers its own way. Ask a knight and a rook where they can go, and you get two different answers.",
+     "reveal": 3
+    },
+    {
+     "say": "Skill four, pluggable strategies. Anything that varies, like how a bot plays or when the dealer draws, sits behind an interface. That's the Strategy pattern.",
+     "reveal": 4
+    },
+    {
+     "say": "Skill five, deterministic testing. Deterministic means same input, same result, every run. So the game never creates its own randomness. You hand it in from outside, and tests hand in a fixed, seeded one.",
+     "reveal": 5
+    },
+    {
+     "say": "Skill six, state and status. A game moves through states, like in progress, won, or draw. A move after the game is won is rejected. Those six are your checklist.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s004",
+   "layout": "number",
+   "title": "Seeded randomness",
+   "big": "new Random(42) = same shuffle every run",
+   "caption": "Inject the Random; never call Math.random inside the game",
+   "steps": [
+    {
+     "say": "Here's the key trick behind skill five. Java's Random class is pseudo-random. Its numbers are computed from a starting value called the seed. Same seed, same sequence, every single time.",
+     "reveal": 0
+    },
+    {
+     "say": "Imagine a blackjack test. You pass new Random of forty-two into the shoe. Today the first dealer card is the ace of spades. Tomorrow, on another laptop, it's still the ace of spades. Your test can assert exact cards.",
+     "reveal": 0
+    },
+    {
+     "say": "Production passes an unseeded source. The rule: never call new Random or Math dot random inside the game. Accept it as a parameter. That's dependency injection.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s005",
+   "layout": "diagram",
+   "title": "A reusable skeleton for any game",
+   "mermaid": "flowchart LR\n    G[\"Game: turns and status\"] --> B[\"Board or Deck: state\"]\n    G --> P[\"Players with a Strategy\"]\n    G --> R[\"Rules: legality, scoring, win\"]\n    G --> RNG[\"Randomness: Dice, Shoe\"]\n    R --> B",
+   "caption": "Name these five parts in the first five minutes",
+   "steps": [
+    {
+     "say": "Almost every board or card game has the same five parts. The Game controller in the middle owns turns and status. It talks to the state, the players, the rules, and the randomness source.",
+     "reveal": 0
+    },
+    {
+     "say": "Notice the Rules box points at the Board. Rules read the state to decide whether a move is legal.",
+     "reveal": 0
+    },
+    {
+     "say": "Name these five parts early. The rest of the hour is filling in details.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s006",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: the skeleton applied to blackjack",
+   "table": {
+    "head": [
+     "Part",
+     "Question",
+     "Blackjack class"
+    ],
+    "rows": [
+     [
+      "State",
+      "What does the table look like?",
+      "Shoe, Hand"
+     ],
+     [
+      "Actors",
+      "Who acts, and how do they decide?",
+      "Player + PlayerStrategy"
+     ],
+     [
+      "Rules",
+      "Allowed? Scoring? Who won?",
+      "BlackjackScoring, DealerPolicy"
+     ],
+     [
+      "Controller",
+      "Whose turn? Which state?",
+      "BlackjackGame"
+     ],
+     [
+      "Randomness",
+      "Where does chance come from?",
+      "Random injected into Shoe"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's apply it to blackjack right now. State: the shoe of undealt cards, and each hand on the table.",
+     "reveal": 1
+    },
+    {
+     "say": "Actors: a player, who decides through a player strategy. A human clicking buttons and a bot are both strategies.",
+     "reveal": 2
+    },
+    {
+     "say": "Rules: a scoring class that knows a king is worth ten, and a dealer policy that says when the dealer draws.",
+     "reveal": 3
+    },
+    {
+     "say": "Controller: the blackjack game class, which runs one round from bet to payout.",
+     "reveal": 4
+    },
+    {
+     "say": "Randomness: a Random object passed into the shoe. In the interview, say this: state, actors, rules, controller, randomness, and I'll inject the randomness so tests repeat.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s007",
+   "layout": "section",
+   "kicker": "Concept 2 of 4",
+   "title": "Blackjack and a deck of cards",
+   "steps": [
+    {
+     "say": "On to blackjack. The interviewer often says: design a deck of cards, then use it to build blackjack. The first half checks that your deck is generic. The second half checks where you put the rules.",
+     "reveal": 0
+    }
+   ],
+   "caption": "Book: Ch 17 Games & Rules · Design Blackjack and a Deck of Cards"
+  },
+  {
+   "id": "s008",
+   "layout": "bullets",
+   "title": "Blackjack rules in one minute",
+   "bullets": [
+    "Each player plays only against the dealer",
+    "Get close to 21; over 21 is a bust, you lose",
+    "2 to 10 face value; J, Q, K are 10; ace 1 or 11",
+    "Blackjack: ace plus a ten-card in two cards",
+    "Dealer: one card up, one hidden hole card",
+    "Dealer hits on 16 or less, stands on 17+"
+   ],
+   "steps": [
+    {
+     "say": "Quick rules first. Every player competes only against the dealer, the casino employee who plays for the house.",
+     "reveal": 1
+    },
+    {
+     "say": "Everyone tries to get as close to twenty-one points as possible. Go over twenty-one and you bust. That's an instant loss.",
+     "reveal": 2
+    },
+    {
+     "say": "Cards two to ten are worth their number. Jack, queen and king are worth ten. And the ace is worth one or eleven, whichever helps you.",
+     "reveal": 3
+    },
+    {
+     "say": "A blackjack, also called a natural, is exactly two cards worth twenty-one: an ace plus a ten-point card. It pays three to two instead of the usual one to one.",
+     "reveal": 4
+    },
+    {
+     "say": "The dealer gets one card face up, called the up card, and one face down, called the hole card. So players decide with incomplete information.",
+     "reveal": 5
+    },
+    {
+     "say": "And the dealer has no choices at all. Hit while sixteen or less, stand on seventeen or more. That becomes a strategy object later.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s009",
+   "layout": "table",
+   "title": "Clarifying questions, with our answers",
+   "table": {
+    "head": [
+     "Question",
+     "Assumed answer"
+    ],
+    "rows": [
+     [
+      "One deck or several?",
+      "A shoe of several decks; casinos use 6 to 8"
+     ],
+     [
+      "Which player options?",
+      "Hit, stand, double, split once, insurance"
+     ],
+     [
+      "Payouts?",
+      "Win 1:1, blackjack 3:2, tie returns bet"
+     ],
+     [
+      "Money type?",
+      "Whole chips in an int; ante must be even"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Before any classes, ask questions. One deck or several? A shoe holds several decks shuffled together.",
+     "reveal": 1
+    },
+    {
+     "say": "Which options? Hit takes a card, stand stops, double down doubles the bet for exactly one more card, split turns a pair into two hands, and insurance is a side bet when the dealer shows an ace.",
+     "reveal": 2
+    },
+    {
+     "say": "Payouts? A normal win pays one to one. Blackjack pays three to two: bet ten, win fifteen. A tie, called a push, returns your bet.",
+     "reveal": 3
+    },
+    {
+     "say": "Money? Whole chips stored in an int, never a double, because doubles are inexact. And the ante, the starting bet, must be even, so every payout stays whole. We'll see why in a moment.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s010",
+   "layout": "bullets",
+   "title": "Card record and generic Deck",
+   "bullets": [
+    "Card: a record holding rank and suit only",
+    "Card knows nothing about blackjack",
+    "Deck<T>: shuffle(Random) and draw() for any T",
+    "Deck.standard52(): 13 ranks times 4 suits",
+    "Shoe: several decks, reshuffles at the cut card"
+   ],
+   "steps": [
+    {
+     "say": "First entity, the card. It's a record: a compact Java class that just holds fixed values. Rank and suit. That's all. Once created, it never changes.",
+     "reveal": 1
+    },
+    {
+     "say": "Here's the point the interviewer is fishing for. The card knows nothing about blackjack. The same card serves poker, bridge and solitaire. A king being worth ten is a game rule, not a card fact.",
+     "reveal": 2
+    },
+    {
+     "say": "Next, the deck is generic. Deck of T means it works for any card type you plug in. It has shuffle, which takes a Random, and draw, which takes the top card. Uno cards or tarot cards reuse the same code.",
+     "reveal": 3
+    },
+    {
+     "say": "To build a normal French deck, call the factory method standard fifty-two. It loops over four suits and thirteen ranks: fifty-two cards.",
+     "reveal": 4
+    },
+    {
+     "say": "The shoe combines several decks. It deals one card at a time and reshuffles when it passes the cut card, a marker near the end. For six decks at seventy-five percent penetration, that's after about two hundred thirty-four of three hundred twelve cards.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s011",
+   "layout": "twocol",
+   "title": "Where does a king's value 10 live?",
+   "left": {
+    "heading": "Rejected: on Card",
+    "bullets": [
+     "card.getValue() returns 10 for a king",
+     "Poker and bridge now get wrong values",
+     "Every game edits the shared Card class"
+    ]
+   },
+   "right": {
+    "heading": "Chosen: in the game",
+    "bullets": [
+     "BlackjackScoring.points(KING) returns 10",
+     "Card stays reusable by every game",
+     "Course version: BlackjackCard subclass"
+    ]
+   },
+   "steps": [
+    {
+     "say": "So where does the king's value of ten go? Option one: a get value method on Card that returns ten for a king.",
+     "reveal": 1
+    },
+    {
+     "say": "That breaks every other game. Poker would think a king is worth ten. Bridge doesn't use points at all.",
+     "reveal": 2
+    },
+    {
+     "say": "And every new game would want to edit the shared Card class. That violates the Open-Closed principle: open to extension, closed to modification.",
+     "reveal": 3
+    },
+    {
+     "say": "Option two, our choice: a small scoring class. Points of king returns ten. Points of ace returns one, and the hand decides when it becomes eleven.",
+     "reveal": 4
+    },
+    {
+     "say": "Now Card stays clean and reusable by every game.",
+     "reveal": 5
+    },
+    {
+     "say": "The course does it with a BlackjackCard subclass that adds the game value. That's valid too. Say both in the interview. The point is the same: the game value doesn't live on the generic card.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s012",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: scoring a hand with aces",
+   "table": {
+    "head": [
+     "Cards",
+     "Hard total",
+     "Best total"
+    ],
+    "rows": [
+     [
+      "Ace, 6",
+      "7",
+      "soft 17"
+     ],
+     [
+      "Ace, 6, 10",
+      "17",
+      "17 (hard)"
+     ],
+     [
+      "Ace, Ace, 9",
+      "11",
+      "soft 21"
+     ],
+     [
+      "King, Queen, 5",
+      "25",
+      "bust 25"
+     ],
+     [
+      "Ace, King",
+      "11",
+      "BLACKJACK"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Now the ace problem, with real hands from the demo. Here's the trick: at most one ace can ever count as eleven, because two elevens make twenty-two, a bust. So step one, count every ace as one. That's the hard total. Step two, if there's an ace and hard plus ten is twenty-one or less, it's soft and the best total is hard plus ten. Ace and six: hard seven, plus ten is soft seventeen.",
+     "reveal": 1
+    },
+    {
+     "say": "Add a ten. Hard total seventeen. Plus ten would be twenty-seven, too much, so the ace drops back to one. Hard seventeen.",
+     "reveal": 2
+    },
+    {
+     "say": "Ace, ace, nine. Hard total eleven. Plus ten is twenty-one, which fits. Soft twenty-one. Only one of the two aces became eleven.",
+     "reveal": 3
+    },
+    {
+     "say": "King, queen, five. No ace, hard twenty-five. That's over twenty-one, so it's a bust.",
+     "reveal": 4
+    },
+    {
+     "say": "Ace and king. Hard eleven, soft twenty-one, and exactly two cards not from a split. That's a blackjack. The whole thing is one pass over the cards, no searching combinations, and you get the soft flag for free.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s013",
+   "layout": "number",
+   "title": "The whole ace rule",
+   "big": "best = hard + 10 if ace and hard + 10 <= 21",
+   "caption": "Soft means one ace is counted as 11",
+   "steps": [
+    {
+     "say": "Here's the entire scoring rule on one line. Best total equals hard total plus ten, if the hand has an ace and that still fits under twenty-one. Otherwise it's just the hard total.",
+     "reveal": 0
+    },
+    {
+     "say": "We expose hard total, best total and is soft, instead of a list of every possible total.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s014",
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "Dealer has Ace, 6. Under hit-soft-17, does it draw?",
+   "bullets": [
+    "A. No, 17 always stands",
+    "B. Yes, it is a soft 17",
+    "C. Only if a player has 18"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. The dealer holds an ace and a six. The casino uses the hit soft seventeen rule. Does the dealer draw another card? Pause the video now.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s015",
+   "layout": "bullets",
+   "title": "Dealer rule as a Strategy",
+   "bullets": [
+    "Answer: B. Ace and 6 is a soft 17, so it hits",
+    "DealerPolicy: shouldHit(dealerHand)",
+    "standOnAll17(): hit while best total <= 16",
+    "hitSoft17(): also hit on a soft 17",
+    "A casino variant is one line, not an if-branch"
+   ],
+   "steps": [
+    {
+     "say": "Answer: B. Ace and six is a soft seventeen. Under hit soft seventeen, the dealer takes another card.",
+     "reveal": 1
+    },
+    {
+     "say": "That's why the dealer rule is a strategy. Dealer policy is an interface with one method: should hit, given the dealer's hand.",
+     "reveal": 2
+    },
+    {
+     "say": "The factory method stand on all seventeen returns a policy that hits while the best total is sixteen or less. Casinos call it S-seventeen.",
+     "reveal": 3
+    },
+    {
+     "say": "Hit soft seventeen, called H-seventeen, also hits when the total is exactly seventeen and soft. It needs the is soft flag our scoring gives for free.",
+     "reveal": 4
+    },
+    {
+     "say": "To test it: use a stacked shoe, deal the dealer ace and six, and assert it draws under H-seventeen and stands under S-seventeen. Recap: a casino variant is one line of configuration, not a new if-branch in the game.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s016",
+   "layout": "bullets",
+   "title": "Player decisions as a Strategy",
+   "bullets": [
+    "PlayerStrategy.decide(hand, upCard, canDouble, canSplit)",
+    "Returns an Action: HIT, STAND, DOUBLE or SPLIT",
+    "BasicStrategy: split 8s and aces, double on 11",
+    "MimicDealerStrategy: hits below 17, buys insurance",
+    "A human UI would be just a third strategy"
+   ],
+   "steps": [
+    {
+     "say": "Players decide through another interface, player strategy. Its decide method gets the hand, the dealer's up card, and two flags: can I double, and can I split. The game tells the strategy what is allowed.",
+     "reveal": 1
+    },
+    {
+     "say": "It returns an action, an enum, which is a type with a fixed list of named values: hit, stand, double, or split.",
+     "reveal": 2
+    },
+    {
+     "say": "Bot one, basic strategy, uses a simplified casino table. For example, always split aces and eights, and double on eleven.",
+     "reveal": 3
+    },
+    {
+     "say": "Bot two, mimic dealer, is a naive player. It hits below seventeen like the dealer and always buys insurance.",
+     "reveal": 4
+    },
+    {
+     "say": "A real human clicking buttons is just a third strategy. The game class never asks, is this a human? Recap: what varies goes behind an interface.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s017",
+   "layout": "table",
+   "kicker": "Pattern",
+   "title": "Factory methods: named constructors",
+   "table": {
+    "head": [
+     "Factory",
+     "What it builds"
+    ],
+    "rows": [
+     [
+      "Deck.standard52()",
+      "A French deck of 52 cards"
+     ],
+     [
+      "Shoe.stacked(cards...)",
+      "A shoe dealing in a fixed order"
+     ],
+     [
+      "DealerPolicy.standOnAll17()",
+      "The S17 dealer rule"
+     ],
+     [
+      "DealerPolicy.hitSoft17()",
+      "The H17 dealer rule"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "A factory method is a static method that builds an object and has a meaningful name. Deck dot standard fifty-two says exactly what you get, better than a constructor with flags.",
+     "reveal": 1
+    },
+    {
+     "say": "Shoe dot stacked is the test hero. You list the cards, and they come out in exactly that order. So you can force a scenario like a pair of eights against a dealer six.",
+     "reveal": 2
+    },
+    {
+     "say": "Stand on all seventeen gives you the S-seventeen rule as an object.",
+     "reveal": 3
+    },
+    {
+     "say": "And hit soft seventeen gives you H-seventeen. Far clearer than new DealerPolicy of true, false.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s018",
+   "layout": "diagram",
+   "title": "The states of one round",
+   "mermaid": "flowchart LR\n    B[\"Betting\"] --> D[\"Dealing\"]\n    D -->|\"ace or ten up\"| PK[\"Insurance and peek\"]\n    D -->|\"otherwise\"| PT[\"Player turns\"]\n    PK --> PT\n    PK -->|\"dealer blackjack\"| S[\"Settled\"]\n    PT --> DT[\"Dealer turn\"]\n    DT --> S",
+   "caption": "Dealer blackjack or all players bust skip straight to Settled",
+   "steps": [
+    {
+     "say": "Here's one round as states. Betting, then dealing. If the up card is an ace, offer insurance. If it's an ace or a ten-value card, the dealer peeks at the hole card. With any other up card, play goes straight to the player turns.",
+     "reveal": 0
+    },
+    {
+     "say": "If the dealer has blackjack, the round ends right there and jumps to settled. Otherwise players take their turns, then the dealer plays, then everyone is settled.",
+     "reveal": 0
+    },
+    {
+     "say": "And if every player busts, the dealer doesn't play.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s019",
+   "layout": "bullets",
+   "title": "Walking one round, step by step",
+   "bullets": [
+    "1. Bets: debit each player's ante",
+    "2. Deal: two cards each, dealer one up, one hole",
+    "3. Insurance and peek on an ace or ten up",
+    "4. Player turns: hit, stand, double or split",
+    "5. Dealer turn: while shouldHit, draw",
+    "6. Settle: 3:2, 1:1, push, or lose"
+   ],
+   "steps": [
+    {
+     "say": "Let's walk the six steps with Alice, ante ten, against a dealer showing a six. Step one, bets. Alice's balance drops by ten before any card is dealt.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two, deal. Alice gets eight and eight. The dealer's second card is the hidden hole card.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three, insurance and peek. The dealer shows a six, which is neither an ace nor a ten, so no insurance and no peek. The dealer can't have blackjack.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four, player turns. Alice's strategy says split. Now she has two hands, eight-three and eight-two. Each hand is played in turn.",
+     "reveal": 4
+    },
+    {
+     "say": "Step five, dealer turn. The dealer reveals ten under the six: sixteen. Should hit says yes, draws a seven, twenty-three. Bust.",
+     "reveal": 5
+    },
+    {
+     "say": "Step six, settle. Every non-bust hand beats a busted dealer. Let's see the exact chips on the next slide.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s020",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: Alice splits 8s, then doubles both",
+   "table": {
+    "head": [
+     "Event",
+     "Hand",
+     "Bet"
+    ],
+    "rows": [
+     [
+      "Dealt a pair of eights",
+      "8, 8 = 16",
+      "10"
+     ],
+     [
+      "Splits: pays a second 10",
+      "8,3 = 11 and 8,2 = 10",
+      "10 and 10"
+     ],
+     [
+      "Doubles hand 1, one card",
+      "8, 3, 9 = 20",
+      "20"
+     ],
+     [
+      "Doubles hand 2, one card",
+      "8, 2, 5 = 15",
+      "20"
+     ],
+     [
+      "Dealer: 6, 10, 7 = 23 bust",
+      "both hands win",
+      "+20 and +20"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "This is a stacked shoe from the demo. Alice gets eight and eight, sixteen, a terrible total. Bet ten.",
+     "reveal": 1
+    },
+    {
+     "say": "She splits. She pays a second bet of ten. Each eight gets a new card: eight-three is eleven, and eight-two is ten.",
+     "reveal": 2
+    },
+    {
+     "say": "Eleven is a great double. She pays another ten, the bet becomes twenty, and she gets exactly one card, a nine. Twenty.",
+     "reveal": 3
+    },
+    {
+     "say": "Hand two doubles too. Bet twenty, one card, a five. Fifteen. Not great.",
+     "reveal": 4
+    },
+    {
+     "say": "But the dealer busts at twenty-three. Both hands win one to one. She staked forty chips and won forty, so her balance goes from one hundred to one hundred forty. Notice each hand carried its own bet.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s021",
+   "layout": "bullets",
+   "title": "Betting and validation",
+   "bullets": [
+    "Hand stores its own bet, not the Player",
+    "Ante must be positive and even",
+    "Chips are an int; never a double",
+    "Game passes canDouble and canSplit",
+    "Game re-checks the choice and throws if illegal"
+   ],
+   "steps": [
+    {
+     "say": "Now the money rules. Why does the hand store its bet, not the player? You just saw it. After a split, one player has two hands with separate bets. After a double, only that one hand's bet changes.",
+     "reveal": 1
+    },
+    {
+     "say": "The ante must be a positive even number, or play round throws an illegal argument exception. Why even? Three to two on a five-chip bet is seven and a half. On ten it's fifteen. Even antes keep every payout whole.",
+     "reveal": 2
+    },
+    {
+     "say": "Chips live in an int. A double can't store values like zero point one exactly. If fractions ever appear, use BigDecimal.",
+     "reveal": 3
+    },
+    {
+     "say": "Validation, part one. Before asking the strategy, the game computes can double and can split. For example, can double means two cards and enough chips for another bet.",
+     "reveal": 4
+    },
+    {
+     "say": "Part two. The game doesn't trust the answer. If the strategy says double when can double was false, the game throws an illegal state exception.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s022",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: insurance as a hedge",
+   "table": {
+    "head": [
+     "Item",
+     "Chips"
+    ],
+    "rows": [
+     [
+      "Bob's ante, hand 10 and 9 = 19",
+      "10"
+     ],
+     [
+      "Dealer shows an ace; insurance = half ante",
+      "5"
+     ],
+     [
+      "Dealer peeks: ace and king = blackjack",
+      "round over"
+     ],
+     [
+      "Insurance pays 2:1",
+      "+10"
+     ],
+     [
+      "Main bet loses",
+      "-10"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "One more money example: insurance. Bob bets ten and holds a nineteen.",
+     "reveal": 1
+    },
+    {
+     "say": "The dealer shows an ace. Bob is offered insurance, a side bet of half the ante, so five chips. It pays two to one if the dealer has blackjack.",
+     "reveal": 2
+    },
+    {
+     "say": "The dealer peeks at the hole card. A king. Blackjack. The round ends immediately.",
+     "reveal": 3
+    },
+    {
+     "say": "Insurance wins: two to one on five is ten.",
+     "reveal": 4
+    },
+    {
+     "say": "His main ten-chip bet loses. Net: he paid five for insurance, won ten on it, and lost ten. His balance stays at one hundred. Insurance was a hedge.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s023",
+   "layout": "twocol",
+   "title": "Honest weaknesses",
+   "left": {
+    "heading": "Today",
+    "bullets": [
+     "playRound owns the whole sequence",
+     "Payout rules are inside the game too",
+     "Each new option adds another branch"
+    ]
+   },
+   "right": {
+    "heading": "Longer design",
+    "bullets": [
+     "State pattern: one class per round state",
+     "PayoutTable owns 3:2, 1:1 and 2:1",
+     "Wallet service debits atomically"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Now be honest about your own design. Interviewers reward this. Today, play round owns the whole sequence of play.",
+     "reveal": 1
+    },
+    {
+     "say": "It also owns the payout rules.",
+     "reveal": 2
+    },
+    {
+     "say": "So every new option, like surrender or a side bet, adds another branch inside one big method.",
+     "reveal": 3
+    },
+    {
+     "say": "A longer design models the round with the State pattern. Each state, betting, dealing, player turns, dealer turn, settled, becomes its own class and only accepts the commands valid in that state.",
+     "reveal": 4
+    },
+    {
+     "say": "Payouts move to a payout table.",
+     "reveal": 5
+    },
+    {
+     "say": "And in a real casino, balances are shared across tables, so debit and credit move to a wallet service with atomic operations, debiting before dealing. In the interview, say this: here's where my design will strain, and here's the fix.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s024",
+   "layout": "section",
+   "kicker": "Concept 3 of 4",
+   "title": "Chess",
+   "steps": [
+    {
+     "say": "Now chess. An eight by eight board, sixty-four squares, sixteen pieces per side. The goal is checkmate: attack the enemy king so it has no legal escape. We design an online two-player game with the full international rules.",
+     "reveal": 0
+    }
+   ],
+   "caption": "Book: Ch 17 Games & Rules · Design Chess"
+  },
+  {
+   "id": "s025",
+   "layout": "bullets",
+   "title": "Chess requirements that shape the design",
+   "bullets": [
+    "White moves first; turns alternate",
+    "Reject moves that leave your own king in check",
+    "Castling, en passant and promotion",
+    "Detect check, checkmate and stalemate",
+    "Resign, forfeit, move log, undo for analysis",
+    "New piece types without editing old ones"
+   ],
+   "steps": [
+    {
+     "say": "Requirement one: white moves first and turns alternate. Sides are assigned randomly, with an injected Random, of course.",
+     "reveal": 1
+    },
+    {
+     "say": "Two: a player may only move their own piece, only in a way that piece can move, and never in a way that leaves their own king attacked.",
+     "reveal": 2
+    },
+    {
+     "say": "Three: the special moves. Castling, en passant, and promotion. We'll define each one when we need it.",
+     "reveal": 3
+    },
+    {
+     "say": "Four: detect check, where the king is attacked, checkmate, which is check with no legal move, and stalemate, which is no legal move while not in check. Stalemate is a draw.",
+     "reveal": 4
+    },
+    {
+     "say": "Five: resignation, forfeit, a log of every move, and undo. Undo isn't allowed in a rated game, but analysis mode and tests want it.",
+     "reveal": 5
+    },
+    {
+     "say": "Six, the non-functional one: adding a new piece type for a chess variant must not touch existing pieces. That points straight at polymorphism.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s026",
+   "layout": "diagram",
+   "title": "Polymorphic, sealed pieces",
+   "mermaid": "flowchart TB\n    P[\"Piece: abstract, sealed\"] --> K[\"King\"]\n    P --> N[\"Knight\"]\n    P --> PW[\"Pawn\"]\n    P --> SP[\"SlidingPiece\"]\n    SP --> R[\"Rook\"]\n    SP --> B[\"Bishop\"]\n    SP --> Q[\"Queen\"]",
+   "caption": "Each piece overrides targets(board, from)",
+   "steps": [
+    {
+     "say": "Here's the piece hierarchy. Piece is abstract, meaning you can't create a plain piece, only a subclass. Its key method is targets: given the board and my square, which squares can I reach?",
+     "reveal": 0
+    },
+    {
+     "say": "King, knight and pawn each override it. King and knight jump to fixed offsets.",
+     "reveal": 0
+    },
+    {
+     "say": "Rook, bishop and queen share a middle class, sliding piece. They all slide in straight lines until blocked, so that loop is written once. The parent owns the loop; each child lists its directions.",
+     "reveal": 0
+    },
+    {
+     "say": "And the hierarchy is sealed. Sealed means only the listed subclasses are allowed. The set of chess pieces is closed, so the compiler knows every case and can check that a switch over piece types handles them all.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s027",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: a rook slides until blocked",
+   "table": {
+    "head": [
+     "Direction step",
+     "Square",
+     "Result"
+    ],
+    "rows": [
+     [
+      "Start: white rook on a1",
+      "a1",
+      "-"
+     ],
+     [
+      "Up 1",
+      "a2",
+      "empty: add, keep going"
+     ],
+     [
+      "Up 2",
+      "a3",
+      "empty: add, keep going"
+     ],
+     [
+      "Up 3",
+      "a4",
+      "white pawn: stop, don't add"
+     ],
+     [
+      "Right 1",
+      "b1",
+      "black knight: add capture, stop"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's run the sliding loop by hand. A white rook stands on a1. Its directions are the four straight lines. Take up first.",
+     "reveal": 1
+    },
+    {
+     "say": "a2 is empty. Add it as a target and keep sliding.",
+     "reveal": 2
+    },
+    {
+     "say": "a3 is empty too. Add it.",
+     "reveal": 3
+    },
+    {
+     "say": "a4 has a white pawn, our own piece. Stop, and don't add it. You can't capture yourself. That's the demo's rejection: rook on a1 cannot move to a4.",
+     "reveal": 4
+    },
+    {
+     "say": "Now the direction right. Imagine b1 holds a black knight. That's an enemy, so add it as a capture, then stop. A bishop runs exactly the same loop with diagonal directions. A queen uses all eight.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s028",
+   "layout": "bullets",
+   "title": "The pawn is the odd one out",
+   "bullets": [
+    "Moves straight forward onto empty squares",
+    "Two squares from its starting rank",
+    "Captures diagonally only",
+    "attacks() differs from targets(): override it"
+   ],
+   "steps": [
+    {
+     "say": "The pawn breaks the pattern. It moves one square straight forward, but only onto an empty square.",
+     "reveal": 1
+    },
+    {
+     "say": "From its starting rank, it may move two.",
+     "reveal": 2
+    },
+    {
+     "say": "And it captures diagonally, never straight.",
+     "reveal": 3
+    },
+    {
+     "say": "So for check detection, Piece has a second method, attacks. For every piece it equals targets, except the pawn. A pawn on e4 attacks d5 and f5 even if they're empty, because a king can't step there. So Pawn overrides attacks. That's a classic interview self-check question.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s029",
+   "layout": "twocol",
+   "title": "Immutable positions and pieces",
+   "left": {
+    "heading": "Position record",
+    "bullets": [
+     "A value: file a to h, rank 1 to 8",
+     "Validates bounds, parses \"e4\"",
+     "Two e4s are equal: free equals, hashCode"
+    ]
+   },
+   "right": {
+    "heading": "Immutable pieces",
+    "bullets": [
+     "A piece never changes after creation",
+     "Board.copy() copies 64 references only",
+     "Trial moves and undo snapshots are cheap"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Next, immutability. Immutable means the object can't change after it's created. Position is a record: file a to h, rank one to eight.",
+     "reveal": 1
+    },
+    {
+     "say": "It validates its bounds and parses text like e4.",
+     "reveal": 2
+    },
+    {
+     "say": "It's a value, so two e4 objects are equal. Records generate equals and hash code, which list lookups rely on.",
+     "reveal": 3
+    },
+    {
+     "say": "Pieces are immutable too. A rook has no has-moved flag. It never changes.",
+     "reveal": 4
+    },
+    {
+     "say": "That makes copying the board trivial. Board copy just copies sixty-four references.",
+     "reveal": 5
+    },
+    {
+     "say": "That matters because the legal-move filter and undo both copy the board constantly.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s030",
+   "layout": "bullets",
+   "title": "Legal moves in four steps",
+   "bullets": [
+    "1. Pseudo-legal: what the pieces allow",
+    "2. Add castling, en passant, promotions",
+    "3. Try each on a copy; drop if own king attacked",
+    "4. Opponent has zero moves: mate or stalemate"
+   ],
+   "steps": [
+    {
+     "say": "Now the heart of the chess engine, the stateless rules class. Step one, pseudo-legal moves: ask every one of my pieces for its targets. These respect piece movement but ignore king safety.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two, add the special moves: castling, en passant, and the four promotion choices for a pawn reaching the last rank.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three, the filter. For each candidate, copy the board, apply the move, and keep it only if my king is not attacked afterwards. Example: my knight on d2 shields my king on e1 from a bishop on b4. That's a pin. Moving the knight exposes the king, so the filter drops every knight move. No special pin code needed.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four, after a move, look at the opponent. If they have zero legal moves, it's checkmate when their king is in check, otherwise stalemate. That's one move deep, all rule enforcement needs.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s031",
+   "layout": "bullets",
+   "title": "Making a move, step by step",
+   "caption": "Rejected moves throw IllegalMoveException with a reason",
+   "steps": [
+    {
+     "say": "Here's one move end to end. The client asks to move e2 to e4. Step one, Game checks the cheap things first: is the game active, is there a piece on e2, and is it your colour?",
+     "reveal": 1
+    },
+    {
+     "say": "Step two, Rules computes every legal move using the copy, apply, and king-safety filter.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three, Game looks for the requested move among them. If it isn't there, it throws an illegal move exception with a reason, like would leave the king in check.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four, if it's found, Game first saves a snapshot of the current state. That's what undo will use.",
+     "reveal": 4
+    },
+    {
+     "say": "Step five, it applies the move, updates the castling rights and the en passant square, and flips the turn. For e2 to e4, the en passant square becomes e3.",
+     "reveal": 5
+    },
+    {
+     "say": "Step six, it checks the opponent. Zero legal moves means mate or stalemate, exactly as we just saw.",
+     "reveal": 6
+    }
+   ],
+   "bullets": [
+    "1. Game checks: active, a piece, your colour",
+    "2. Rules.legalMoves: copy, apply, king safe?",
+    "3. Not in the list: IllegalMoveException",
+    "4. Found: save a Snapshot first",
+    "5. Apply, update rights and en passant, flip turn",
+    "6. Opponent has zero moves: mate or stalemate"
+   ]
+  },
+  {
+   "id": "s032",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: Scholar's mate, and a stalemate",
+   "table": {
+    "head": [
+     "Game",
+     "Final move",
+     "Status"
+    ],
+    "rows": [
+     [
+      "White: e4, Bc4, Qh5, Qxf7",
+      "Qh5xf7#",
+      "CHECKMATE, white wins"
+     ],
+     [
+      "Black in check?",
+      "yes",
+      "-"
+     ],
+     [
+      "Black legal moves",
+      "0",
+      "-"
+     ],
+     [
+      "Sam Loyd's 10-move game",
+      "Qc8-e6",
+      "STALEMATE, a draw"
+     ],
+     [
+      "Black in check? Legal moves?",
+      "no, 0",
+      "-"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's test step four with the demo. Scholar's mate: white plays e4, bishop to c4, queen to h5, then queen takes f7.",
+     "reveal": 1
+    },
+    {
+     "say": "After queen takes f7, black's king is attacked. In check: yes.",
+     "reveal": 2
+    },
+    {
+     "say": "Black's legal moves: zero. In check plus zero moves equals checkmate. White wins.",
+     "reveal": 3
+    },
+    {
+     "say": "Now Sam Loyd's famous ten-move stalemate. After white's tenth move, queen to e6.",
+     "reveal": 4
+    },
+    {
+     "say": "Black is not in check, but every black move would be illegal. Zero legal moves without check is stalemate, a draw. Same counting, different verdict. That's the whole difference between mate and stalemate.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s033",
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "Has the king ever moved? Where does that knowledge live?",
+   "bullets": [
+    "A. A hasMoved flag on the King piece",
+    "B. In Game and Rules, as castling rights",
+    "C. In the Board's squares"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. Castling is only allowed if the king and that rook have never moved. Where should that knowledge live? Pause now.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s034",
+   "layout": "bullets",
+   "title": "History-based rules live outside pieces",
+   "bullets": [
+    "Answer: B. History belongs to Game and Rules",
+    "Castling: neither piece moved, path empty",
+    "...king not in check, not crossing an attack",
+    "CastlingRights: four booleans, lost for good",
+    "En passant square: set only after a 2-step"
+   ],
+   "steps": [
+    {
+     "say": "Answer: B. A piece sees only the board. The board shows where things are now, not where they've been. So history-based rules live in Game and Rules.",
+     "reveal": 1
+    },
+    {
+     "say": "Castling: the king moves two squares toward a rook, and the rook jumps to the square the king crossed. Allowed only if neither piece has moved and the squares between them are empty.",
+     "reveal": 2
+    },
+    {
+     "say": "And the king must not be in check, and must not pass through or land on an attacked square. In the demo, white can't castle to g1 because a bishop on a6 attacks f1.",
+     "reveal": 3
+    },
+    {
+     "say": "Castling rights is a record of four booleans, king side and queen side for each colour. Once the king or that rook moves, or the rook is captured on its corner, that right is lost for good.",
+     "reveal": 4
+    },
+    {
+     "say": "En passant, meaning in passing: if a pawn advances two squares and lands beside an enemy pawn, that pawn may capture it as if it moved one, but only on the very next move. So Game stores an en passant square, cleared after every other move.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s035",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "MoveType: a move as data",
+   "table": {
+    "head": [
+     "MoveType",
+     "Extra work in apply()",
+     "Demo"
+    ],
+    "rows": [
+     [
+      "NORMAL",
+      "none",
+      "e2-e4"
+     ],
+     [
+      "CASTLE_KINGSIDE",
+      "also move rook h1 to f1",
+      "O-O"
+     ],
+     [
+      "CASTLE_QUEENSIDE",
+      "also move rook a1 to d1",
+      "O-O-O"
+     ],
+     [
+      "EN_PASSANT",
+      "remove pawn beside, not on target",
+      "e5xd6 e.p."
+     ],
+     [
+      "PROMOTION",
+      "replace pawn with chosen piece",
+      "c7xd8=Q+"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "A move is a record: from, to, a move type, and an optional promotion piece. The type tells apply what extra work to do. Normal: just move the piece. e2 to e4.",
+     "reveal": 1
+    },
+    {
+     "say": "Castle king side moves two pieces. The king goes e1 to g1, and apply also moves the rook from h1 to f1. It's written O, dash, O.",
+     "reveal": 2
+    },
+    {
+     "say": "Castle queen side: king to c1, rook from a1 to d1.",
+     "reveal": 3
+    },
+    {
+     "say": "En passant captures a piece that isn't on the target square. In the demo, white plays e5 takes d6, and apply removes the black pawn from d5.",
+     "reveal": 4
+    },
+    {
+     "say": "Promotion replaces the pawn with the chosen piece. In the demo, c7 takes d8 and becomes a queen, giving check. Without a MoveType, castling gets special-cased inside Game, scattering the rules.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s036",
+   "layout": "bullets",
+   "title": "Factory method: Piece.create(type, colour)",
+   "bullets": [
+    "One switch over every piece type",
+    "Board set-up: 16 pieces per side",
+    "Promotion: create(QUEEN, WHITE) on d8",
+    "No scattered new Rook(...) calls"
+   ],
+   "steps": [
+    {
+     "say": "Pieces come from one factory method, Piece dot create, given a type and a colour. Inside is one switch over every type, checked complete by the compiler.",
+     "reveal": 1
+    },
+    {
+     "say": "Board set-up calls it thirty-two times: eight pawns, two rooks, two knights, two bishops, a queen and a king for each side.",
+     "reveal": 2
+    },
+    {
+     "say": "Promotion calls it too: a pawn landing on d8 becomes create of queen, white. No choice means a queen.",
+     "reveal": 3
+    },
+    {
+     "say": "So new calls aren't scattered around the code. Add an archbishop for a variant, and you add one subclass and one switch case.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s037",
+   "layout": "bullets",
+   "title": "Undo: Command plus Memento",
+   "bullets": [
+    "Command: the Move, an action stored as data",
+    "Memento: a Snapshot of state before the move",
+    "Snapshot: board, turn, rights, en passant, status",
+    "History is a stack of entries",
+    "undo(): pop, restore every field"
+   ],
+   "steps": [
+    {
+     "say": "Now undo. We combine two patterns. The Command pattern stores an action as an object. Our move record is that command.",
+     "reveal": 1
+    },
+    {
+     "say": "The Memento pattern saves a copy of an object's state so you can restore it later. Our memento is called snapshot.",
+     "reveal": 2
+    },
+    {
+     "say": "A snapshot holds everything needed to restore the position: a board copy, whose turn, castling rights, the en passant square, the status and the winner.",
+     "reveal": 3
+    },
+    {
+     "say": "Every move pushes a history entry onto a stack, last in, first out. The entry holds the player, the move, its notation, and the snapshot from before.",
+     "reveal": 4
+    },
+    {
+     "say": "Undo pops the top entry and restores every field from its snapshot. That's it. No inverse logic.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s038",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: undo after Scholar's mate",
+   "table": {
+    "head": [
+     "Moment",
+     "Status",
+     "To move",
+     "Legal moves"
+    ],
+    "rows": [
+     [
+      "After Qh5xf7#",
+      "CHECKMATE",
+      "black",
+      "0"
+     ],
+     [
+      "undo() pops Qh5xf7#",
+      "ACTIVE",
+      "white",
+      "43"
+     ],
+     [
+      "Undo after promotion c7xd8=Q",
+      "pawn back on c7",
+      "-",
+      "-"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's see it. After queen takes f7, mate, status is checkmate with black to move and zero legal moves.",
+     "reveal": 1
+    },
+    {
+     "say": "Call undo. It pops that entry and restores the snapshot. The demo prints: status active, white to move, forty-three legal moves. Exactly the position before the mate.",
+     "reveal": 2
+    },
+    {
+     "say": "And here's why snapshots are safe. Undo a promotion, and the old board simply has the pawn back on c7. With a hand-written inverse, you'd have to remember to remove the queen and recreate the pawn. That's a classic bug source.",
+     "reveal": 3
+    }
+   ]
+  },
+  {
+   "id": "s039",
+   "layout": "twocol",
+   "title": "Undo trade-offs",
+   "left": {
+    "heading": "Memento snapshot",
+    "bullets": [
+     "64 references, about half a kilobyte",
+     "Always correct, even for special moves",
+     "Fine for a few hundred moves"
+    ]
+   },
+   "right": {
+    "heading": "Incremental undo",
+    "bullets": [
+     "Store only what changed: captured piece...",
+     "...old rights, old en passant square",
+     "Needed by engines searching millions"
+    ]
+   },
+   "steps": [
+    {
+     "say": "So what does a snapshot cost? A board copy is sixty-four references, about half a kilobyte.",
+     "reveal": 1
+    },
+    {
+     "say": "It's always correct, even for castling, en passant and promotion, because it never reverses anything. It just restores.",
+     "reveal": 2
+    },
+    {
+     "say": "For a human game, that's nothing.",
+     "reveal": 3
+    },
+    {
+     "say": "The alternative stores only what the move changed: the captured piece,",
+     "reveal": 4
+    },
+    {
+     "say": "plus the old castling rights and the old en passant square, and reverses the move.",
+     "reveal": 5
+    },
+    {
+     "say": "A chess engine searching millions of positions a second needs that, because copying the board each time would cost too much. In the interview, say: memento for correctness here, incremental undo for an engine.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s040",
+   "layout": "bullets",
+   "title": "Chess concurrency and gaps",
+   "bullets": [
+    "Game methods are synchronized; one lock per game",
+    "Name the gaps: threefold repetition, 50-move rule"
+   ],
+   "steps": [
+    {
+     "say": "Online, black might resign at the same instant white moves. Without a lock, the result depends on which thread runs first, a race. So move, undo and resign are synchronized, and each game is its own lock, so games never block each other.",
+     "reveal": 1
+    },
+    {
+     "say": "And name what you didn't build: threefold repetition, the fifty-move rule, and clocks. Recap of chess: sealed polymorphic pieces, immutable values, history in rules, MoveType for special moves, and undo by command plus memento.",
+     "reveal": 2
+    }
+   ]
+  },
+  {
+   "id": "s041",
+   "layout": "section",
+   "kicker": "Concept 4 of 4",
+   "title": "Tic-Tac-Toe",
+   "steps": [
+    {
+     "say": "Last game, tic-tac-toe. Players take turns placing marks on a grid. Fill a whole row, column or diagonal and you win. Fill the board with no winner and it's a draw. Interviewers generalise it to N by N and ask for fast win detection.",
+     "reveal": 0
+    }
+   ],
+   "caption": "Book: Ch 17 Games & Rules · Design Tic-Tac-Toe"
+  },
+  {
+   "id": "s042",
+   "layout": "bullets",
+   "title": "Board, players and turns",
+   "bullets": [
+    "Board: N by N grid, N at least 3",
+    "Cell record: row and column",
+    "Player record: name, mark, MoveStrategy",
+    "Game: list of players plus a turn index",
+    "next = (current + 1) % players.size()",
+    "GameState: IN_PROGRESS, WON, DRAW"
+   ],
+   "steps": [
+    {
+     "say": "The entities are small. Board is an N by N grid, with N at least three. The classic game is three by three.",
+     "reveal": 1
+    },
+    {
+     "say": "A cell is a record holding a row and a column.",
+     "reveal": 2
+    },
+    {
+     "say": "A player is a record: a name, a mark like X or O, and a move strategy.",
+     "reveal": 3
+    },
+    {
+     "say": "Game holds a list of players and an index for the current one. That works for two players or five.",
+     "reveal": 4
+    },
+    {
+     "say": "After each valid move, the index moves on: current plus one, modulo the number of players. Modulo means remainder, so with three players the index goes zero, one, two, then wraps back to zero. No hard-coded X-O toggling.",
+     "reveal": 5
+    },
+    {
+     "say": "And the state is an enum: in progress, won, or draw. A move after the game ends throws an illegal state exception. An off-board or occupied cell is rejected by the board, and the same player tries again.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s043",
+   "layout": "bullets",
+   "title": "O(1) win detection in four steps",
+   "bullets": [
+    "1. rows[p][r] and cols[p][c] count p's marks",
+    "2. diag[p] when r == c; anti[p] when r + c == N-1",
+    "3. On a move, increment that cell's counters",
+    "4. Any counter reaching N means p wins"
+   ],
+   "steps": [
+    {
+     "say": "The naive win check scans every row, column and diagonal after each move. On an N by N board that's order N squared work. Order N squared means the work quadruples when N doubles. But a move at row r, column c can only complete row r, column c, and maybe the two diagonals. So keep counters. Step one: rows of p, r counts how many marks player p has in row r. Same for columns.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two: diag of p counts p's marks on the main diagonal, where row equals column. Anti of p counts the anti-diagonal, where row plus column equals N minus one.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three: when player p places a mark, increment the counters that cell belongs to. At most four of them.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four: if any of those counters reaches N, player p owns that whole line. Only p's marks increase p's counters, so there's no need to check the opponent. Four increments, four comparisons: order one, constant time.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s044",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: Xena's diagonal win on 3x3",
+   "table": {
+    "head": [
+     "Move",
+     "X counters changed",
+     "Win?"
+    ],
+    "rows": [
+     [
+      "X at (0,0)",
+      "row0=1, col0=1, diag=1",
+      "no"
+     ],
+     [
+      "O tries (0,0): taken, retry",
+      "nothing",
+      "-"
+     ],
+     [
+      "X at (1,1)",
+      "row1=1, col1=1, diag=2, anti=1",
+      "no"
+     ],
+     [
+      "X at (2,2)",
+      "row2=1, col2=1, diag=3",
+      "yes, diag = N"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Here's the demo's first game, N equals three. Xena plays X at zero, zero. That's row zero, column zero, and the main diagonal, because row equals column. Three counters go to one.",
+     "reveal": 1
+    },
+    {
+     "say": "Omar tries zero, zero too. The board throws, because the cell is taken. Game catches it, logs rejected, try again, and Omar stays current.",
+     "reveal": 2
+    },
+    {
+     "say": "Xena plays the centre, one, one. The centre is on both diagonals: one equals one, and one plus one equals two. So the main diagonal goes to two and the anti-diagonal goes to one. That's why the code uses two independent ifs.",
+     "reveal": 3
+    },
+    {
+     "say": "Xena plays two, two. Main diagonal reaches three, which equals N. Place returns true, the state becomes won, and Xena wins. No scan of the board at all.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s045",
+   "layout": "number",
+   "title": "Cost of the counters",
+   "big": "O(1) time per move, O(P x N) memory",
+   "caption": "P players, N rows + N cols + 2 diagonals each",
+   "steps": [
+    {
+     "say": "So the price is memory: for each player, N row counters, N column counters, and two diagonal counters. For two players on three by three, that's sixteen integers. Trivial.",
+     "reveal": 0
+    },
+    {
+     "say": "A draw is just as cheap. Keep a count of filled cells. No win and filled equals N squared means draw.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s046",
+   "layout": "twocol",
+   "title": "Per-player counters vs the +1/-1 trick",
+   "left": {
+    "heading": "Per-player counters",
+    "bullets": [
+     "One counter per line per player",
+     "Works for any number of players",
+     "Gives 'would win' for any player"
+    ]
+   },
+   "right": {
+    "heading": "Shared +1/-1 counter",
+    "bullets": [
+     "X adds 1, O subtracts 1",
+     "|count| == N means a win",
+     "Half the memory, exactly two players only"
+    ]
+   },
+   "steps": [
+    {
+     "say": "You'll see a different trick online. Let's compare. Our design keeps one counter per line per player.",
+     "reveal": 1
+    },
+    {
+     "say": "It works for any number of players. The demo plays five by five with three players.",
+     "reveal": 2
+    },
+    {
+     "say": "And it gives a free would-win check for any player, which our bot needs next.",
+     "reveal": 3
+    },
+    {
+     "say": "The trick: one shared counter per line. X adds one, O subtracts one.",
+     "reveal": 4
+    },
+    {
+     "say": "If the absolute value reaches N, someone owns the line. Plus three is X, minus three is O.",
+     "reveal": 5
+    },
+    {
+     "say": "It uses half the memory, but only works for exactly two players. Mention it, then explain why you chose per-player counters.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s047",
+   "layout": "bullets",
+   "title": "Player Strategy: three bots and a human",
+   "bullets": [
+    "MoveStrategy.nextMove(board, me, playerCount)",
+    "ScriptedStrategy: replays fixed moves for tests",
+    "RandomStrategy: picks an empty cell, seeded",
+    "RuleBasedStrategy: win, block, centre, corner",
+    "wouldWin: a line already has N-1 of p's marks"
+   ],
+   "steps": [
+    {
+     "say": "Each player has a move strategy with one method, next move. It gets the board, my player index, and the player count, and returns a cell.",
+     "reveal": 1
+    },
+    {
+     "say": "Scripted strategy replays fixed moves, for tests and replays.",
+     "reveal": 2
+    },
+    {
+     "say": "Random strategy picks any empty cell using an injected Random. Seed seven gives the same game every run.",
+     "reveal": 3
+    },
+    {
+     "say": "Rule-based strategy goes in order: win if I can, else block an opponent who could win, else take the centre, else the first corner, else anything empty.",
+     "reveal": 4
+    },
+    {
+     "say": "Win and block both use the board's would-win check, also order one. An empty cell wins for p if any of its lines already holds N minus one of p's marks. Example: X has two in the main diagonal of a three by three board, so the empty corner on that diagonal is a winning cell.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s048",
+   "layout": "diagram",
+   "title": "One turn",
+   "mermaid": "flowchart LR\n    S[\"Strategy picks a cell\"] --> B[\"Board.place\"]\n    B --> X{\"Valid?\"}\n    X -->|\"no\"| RT[\"Same player retries\"]\n    X -->|\"yes\"| W[\"Won, draw, or next\"]",
+   "caption": "The board protects its invariant; the game decides the policy",
+   "steps": [
+    {
+     "say": "Here's one turn. Game asks the current player's strategy for a cell, then calls board place.",
+     "reveal": 0
+    },
+    {
+     "say": "If the cell is off the board or taken, the board throws. The board protects its invariant, a fact that must always stay true: one mark per cell. The game decides the policy: log it and let the same player retry.",
+     "reveal": 0
+    },
+    {
+     "say": "If it's valid, place returns the won flag. Won ends the game. Otherwise it's a draw if the board is full, or the turn passes on. Win detection lives inside place, because the only moment a win can appear is right after a move, so no caller can forget to check.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s049",
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "Gomoku: 5 in a row on 15x15. Do counters still work?",
+   "bullets": [
+    "A. Yes, unchanged",
+    "B. No: walk out from the new cell, O(K)",
+    "C. No: rescan the board, O(N squared)"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. Gomoku needs five in a row on a fifteen by fifteen board. Do our full-line counters still work? Pause now.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s050",
+   "layout": "bullets",
+   "title": "Tic-Tac-Toe extensions",
+   "bullets": [
+    "Answer: B. Walk 4 directions from the new cell",
+    "Undo: pop a move stack, decrement counters",
+    "Unbeatable bot: minimax as another strategy"
+   ],
+   "steps": [
+    {
+     "say": "Answer: B. Counters count a whole line, but five in a row is shorter than the board. So after each move, walk out from the new cell in four directions, horizontal, vertical and the two diagonals, counting consecutive own marks. That's order K per move, with K equals five.",
+     "reveal": 1
+    },
+    {
+     "say": "Undo is easy here: keep moves on a stack, and undo clears the cell and decrements the counters. Counters are reversible, unlike a boolean won flag.",
+     "reveal": 2
+    },
+    {
+     "say": "An unbeatable bot uses minimax, searching the whole game tree. Three by three has at most nine factorial, about three hundred sixty-three thousand move orders, easily searched. It's just another move strategy.",
+     "reveal": 3
+    }
+   ]
+  },
+  {
+   "id": "s051",
+   "layout": "recap",
+   "title": "Recap",
+   "bullets": [
+    "Skeleton: state, actors, rules, controller, RNG",
+    "Blackjack: generic Card, scoring in the game",
+    "Hand: hard + 10 if an ace fits; hand owns bet",
+    "Chess: sealed pieces, legal = king stays safe",
+    "Chess: history in Rules, Command + Memento undo",
+    "Tic-Tac-Toe: line counters give an O(1) win"
+   ],
+   "steps": [
+    {
+     "say": "Let's recap. Every game has five parts: state, actors, rules, a controller, and an injected randomness source. Seed it, and tests repeat.",
+     "reveal": 1
+    },
+    {
+     "say": "Blackjack: keep the card and deck generic, and put the game's values in a scoring class. Dealer and player behaviour are strategies.",
+     "reveal": 2
+    },
+    {
+     "say": "A hand's best total is the hard total plus ten if an ace fits. Each hand owns its bet, and the game re-checks every choice.",
+     "reveal": 3
+    },
+    {
+     "say": "Chess: polymorphic, sealed, immutable pieces. A move is legal if it's allowed by the piece and leaves your own king safe. Zero legal moves means mate or stalemate.",
+     "reveal": 4
+    },
+    {
+     "say": "History-based rules like castling and en passant live in rules and game, a move type says what extra work a move does, and undo restores a snapshot.",
+     "reveal": 5
+    },
+    {
+     "say": "Tic-Tac-Toe: per-player line counters detect a win in constant time, and players plug in as strategies. Next episode, episode twenty: Games, part two, with Snake and Ladder, twenty forty-eight, and a Jigsaw puzzle. See you there.",
+     "reveal": 6
+    }
+   ]
+  }
+ ]
+}

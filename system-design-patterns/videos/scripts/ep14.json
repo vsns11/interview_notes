@@ -1,0 +1,1841 @@
+{
+ "series": "System Design Workshop",
+ "episode": 14,
+ "title": "Operating in Production",
+ "subtitle": "Health checks, tracing, blue-green, canary, flags, Kubernetes, CI/CD",
+ "scenes": [
+  {
+   "layout": "title",
+   "title": "Operating in Production",
+   "subtitle": "Health checks, tracing, blue-green, canary, flags, Kubernetes, CI/CD",
+   "steps": [
+    {
+     "say": "Welcome to episode fourteen of the System Design Workshop: Operating in Production.",
+     "reveal": 0
+    },
+    {
+     "say": "By the end you'll be able to design health checks that never take down a whole fleet, find where a slow request spent its time, ship a release with a cheap undo button, and migrate a live database with zero downtime.",
+     "reveal": 0
+    },
+    {
+     "say": "Keep the module nine notes PDF open beside the video. When I say pause and think, pause, and answer before I do.",
+     "reveal": 0
+    }
+   ],
+   "id": "s001"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Module introduction",
+   "title": "Most outages are self-inflicted",
+   "bullets": [
+    "A deploy: new code on servers",
+    "A config tweak",
+    "A database migration",
+    "Observe first, then change carefully"
+   ],
+   "steps": [
+    {
+     "say": "Here's an uncomfortable fact. Some outages come from hardware or traffic spikes, but most come from changes we make ourselves.",
+     "reveal": 1
+    },
+    {
+     "say": "A deploy, meaning putting new code on servers.",
+     "reveal": 2
+    },
+    {
+     "say": "A config tweak.",
+     "reveal": 3
+    },
+    {
+     "say": "Or a database migration, a scripted change to tables or stored data.",
+     "reveal": 4
+    },
+    {
+     "say": "So this episode turns inward. Think of an operating room: the monitors come first, then careful surgery, and you can pause or reverse any step when a monitor turns red. Two patterns observe production. Three change it safely.",
+     "reveal": 4
+    }
+   ],
+   "id": "s002",
+   "caption": "Book: Module 9 Operating in Production · Module Introduction"
+  },
+  {
+   "layout": "twocol",
+   "kicker": "Module introduction",
+   "title": "Two facts that organize the episode",
+   "left": {
+    "heading": "Fact 1: deploy is not release",
+    "bullets": [
+     "Deploy: code is on servers",
+     "Release: users experience it"
+    ]
+   },
+   "right": {
+    "heading": "Fact 2: rollback is everyday",
+    "bullets": [
+     "Every delivery design",
+     "needs a built-in undo design"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Fact one. Deploying and releasing are two separate events.",
+     "reveal": 1
+    },
+    {
+     "say": "Deploy means the new code is sitting on servers. Release means users actually feel it. Traditionally they happen at the same moment. The patterns today pull them apart by different amounts.",
+     "reveal": 2
+    },
+    {
+     "say": "Fact two. Rolling back should be an everyday move.",
+     "reveal": 3
+    },
+    {
+     "say": "Switching back in seconds beats building a revert and pushing it through the pipeline for twenty minutes while users suffer. So every delivery design needs an undo design.",
+     "reveal": 4
+    }
+   ],
+   "id": "s003"
+  },
+  {
+   "layout": "table",
+   "kicker": "Module introduction",
+   "title": "Four terms we'll use all episode",
+   "table": {
+    "head": [
+     "Term",
+     "Meaning"
+    ],
+    "rows": [
+     [
+      "Deploy vs release",
+      "Code on servers vs users feel it"
+     ],
+     [
+      "Blast radius",
+      "How many users a bad change can hurt"
+     ],
+     [
+      "Roll back vs roll forward",
+      "Reverse the change vs fix on top"
+     ],
+     [
+      "Golden signals",
+      "Traffic, errors, latency, saturation"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Four terms. Deploy versus release, which you just met.",
+     "reveal": 1
+    },
+    {
+     "say": "Blast radius: how many users a bad change can hurt before it's stopped. A naive release hits one hundred percent. A canary hits about one percent.",
+     "reveal": 2
+    },
+    {
+     "say": "Roll back versus roll forward: reversing the change, or pushing a fix on top. Rolling back is usually quicker, when it's available.",
+     "reveal": 3
+    },
+    {
+     "say": "And the golden signals, the four numbers to watch during any change: traffic, error rate, latency, and saturation, which means how close your resources are to full.",
+     "reveal": 4
+    }
+   ],
+   "id": "s004"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 1 of 9",
+   "title": "Health check endpoint",
+   "steps": [
+    {
+     "say": "Concept one: the health check endpoint. A tiny endpoint, with fleet-wide consequences.",
+     "reveal": 0
+    }
+   ],
+   "id": "s005",
+   "caption": "Book: Module 9 · Health Check Endpoint"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 1 of 9",
+   "title": "Naive health checks lie both ways",
+   "bullets": [
+    "Endpoint like /healthz, polled every ~2 s",
+    "Asks: should THIS instance get traffic?",
+    "Shallow check: green while useless",
+    "Deep check: shared DB blip pulls whole fleet"
+   ],
+   "steps": [
+    {
+     "say": "A health check is a tiny H-T-T-P endpoint on each instance, often called health-z. The load balancer, the orchestrator and the auto-scaler call it every couple of seconds.",
+     "reveal": 1
+    },
+    {
+     "say": "It answers one question: should this instance get traffic right now? And the callers act drastically on the answer.",
+     "reveal": 2
+    },
+    {
+     "say": "Here's the trap. A shallow check just says I'm alive, two hundred O-K. It stays green even when the instance can't reach its database, so users keep landing on a useless server.",
+     "reveal": 3
+    },
+    {
+     "say": "A deep check pings the database. Now imagine the shared database hiccups for ten seconds. Every instance fails at once, and the load balancer pulls the whole fleet. A partial slowdown just became a full outage.",
+     "reveal": 4
+    }
+   ],
+   "id": "s006"
+  },
+  {
+   "layout": "table",
+   "kicker": "Concept 1 of 9",
+   "title": "Two verdicts, two consequences",
+   "table": {
+    "head": [
+     "",
+     "Liveness",
+     "Readiness"
+    ],
+    "rows": [
+     [
+      "Question",
+      "Am I broken at a basic level?",
+      "Should traffic come to me now?"
+     ],
+     [
+      "On failure",
+      "Restart (drastic)",
+      "De-route (mild, reversible)"
+     ],
+     [
+      "Dependencies?",
+      "Never",
+      "Only essential ones, on purpose"
+     ],
+     [
+      "Healthy but says no?",
+      "No",
+      "Yes: warming up or draining"
+     ],
+     [
+      "If designed badly",
+      "Restart storms",
+      "Whole fleet removed"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "The fix is to split the question in two. Liveness asks: am I broken at a basic level? Readiness asks: should traffic come to me right now?",
+     "reveal": 1
+    },
+    {
+     "say": "The consequences differ. Fail liveness and the platform restarts you. That's drastic. Fail readiness and you're just taken out of rotation for a while. Mild and reversible.",
+     "reveal": 2
+    },
+    {
+     "say": "So liveness never includes dependencies. Restarting your app can't fix a broken database. Readiness may include a dependency only if the service is truly useless without it.",
+     "reveal": 3
+    },
+    {
+     "say": "And a perfectly healthy instance can honestly say not ready, while it's warming caches at startup, or draining at shutdown.",
+     "reveal": 4
+    },
+    {
+     "say": "Get liveness wrong and you get restart storms. Get readiness wrong and the whole fleet vanishes from the load balancer.",
+     "reveal": 5
+    }
+   ],
+   "id": "s007"
+  },
+  {
+   "layout": "diagram",
+   "kicker": "Concept 1 of 9",
+   "title": "Lifecycle honesty with readiness",
+   "mermaid": "flowchart LR\n  S[\"Starting\"] -->|\"pools built, caches warm\"| R[\"Ready\"]\n  R -->|\"essential dep lost\"| U[\"Unready\"]\n  U -->|\"dep back\"| R\n  R -->|\"shutdown signal\"| Dr[\"Draining\"]\n  Dr -->|\"in-flight done\"| X[\"Exit\"]",
+   "caption": "Ready only after warm-up; always draining on the way out",
+   "steps": [
+    {
+     "say": "Follow one instance through its life. At startup, readiness is false while it builds connection pools and warms caches. Only then does it flip to ready, so no user hits a cold instance.",
+     "reveal": 0
+    },
+    {
+     "say": "If a truly essential dependency disappears, it can go briefly unready, and come back when the dependency returns.",
+     "reveal": 0
+    },
+    {
+     "say": "At shutdown, readiness goes false first. The load balancer steers away, in-flight requests finish, and then it exits. During a rolling deploy, this stops every new instance from being slow for its first thirty seconds.",
+     "reveal": 0
+    }
+   ],
+   "id": "s008"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 1 of 9",
+   "title": "Three rules that keep health checks safe",
+   "bullets": [
+    "1. Check yourself, not the architecture",
+    "2. Cost almost nothing: about 1 ms, in memory",
+    "3. Tell the truth at every lifecycle stage"
+   ],
+   "steps": [
+    {
+     "say": "Three rules. Rule one: check yourself, not the architecture. Say our checkout service uses a database, a Redis cache, and a recommendations widget. Liveness checks only the process. Readiness includes the database plus warm-up state. Redis misses fall back to the database, and recommendations are optional, so neither goes in. If recommendations die, hide the widget. Don't take the fleet offline.",
+     "reveal": 1
+    },
+    {
+     "say": "Rule two: cost almost nothing. Do the math. Thirty services times forty instances, probed every two seconds, is six hundred checks a second, forever. A database query per probe means six hundred useless queries a second, and a slow probe can time out and make healthy capacity look dead. Aim for an in-memory check of about one millisecond.",
+     "reveal": 2
+    },
+    {
+     "say": "Rule three: tell the truth at every stage. Not ready until warm. Not ready while draining.",
+     "reveal": 3
+    }
+   ],
+   "id": "s009",
+   "caption": "Book: Module 9 · Three rules that keep health checks safe"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: the 3 AM restart storm",
+   "table": {
+    "head": [
+     "Time",
+     "What happened"
+    ],
+    "rows": [
+     [
+      "3:07 AM",
+      "DB fails over for 90 seconds"
+     ],
+     [
+      "3:07",
+      "Liveness pings DB, every instance 'broken'"
+     ],
+     [
+      "Next",
+      "Six services restart, come back cold"
+     ],
+     [
+      "20 minutes",
+      "Pools rebuild, hammer the DB, fail again"
+     ],
+     [
+      "Fix",
+      "Liveness: process only. DB in readiness if essential"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Here's a real-feeling example. At three oh seven A M, the database does a ninety-second failover, promoting a replica to primary.",
+     "reveal": 1
+    },
+    {
+     "say": "But liveness included a database call. So every instance of six services looks broken.",
+     "reveal": 2
+    },
+    {
+     "say": "The platform restarts them all. They throw away in-flight work and come back cold.",
+     "reveal": 3
+    },
+    {
+     "say": "Every restart rebuilds its connection pools, hammering the recovering database, so they fail again. A ninety-second blip becomes a twenty-minute outage.",
+     "reveal": 4
+    },
+    {
+     "say": "The fix: liveness checks only the process. The database goes in readiness only if it's truly essential, and circuit breakers handle the rest.",
+     "reveal": 5
+    }
+   ],
+   "id": "s010"
+  },
+  {
+   "layout": "twocol",
+   "kicker": "Concept 1 of 9",
+   "title": "Routing checks vs monitoring checks",
+   "left": {
+    "heading": "Routing checks",
+    "bullets": [
+     "Per instance, every ~2 s",
+     "Cheap, local",
+     "Drive restart and de-route"
+    ]
+   },
+   "right": {
+    "heading": "Monitoring checks",
+    "bullets": [
+     "Central, less often",
+     "Synthetic checkout, deep probes",
+     "Drive alerts for people"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Now separate two kinds of check. Routing checks run per instance, every couple of seconds.",
+     "reveal": 1
+    },
+    {
+     "say": "They're cheap and local.",
+     "reveal": 2
+    },
+    {
+     "say": "And their answers drive machines: restart, or de-route.",
+     "reveal": 3
+    },
+    {
+     "say": "Monitoring checks run centrally, maybe once a minute.",
+     "reveal": 4
+    },
+    {
+     "say": "They use synthetic transactions, scripted pretend requests like a test checkout, plus deep dependency probes.",
+     "reveal": 5
+    },
+    {
+     "say": "And they produce alerts for humans, never routing decisions. Keep them on separate endpoints. Merging them is exactly how deep dependency tests creep into fleet-wide restarts. In the interview, say: two endpoints, liveness never touches dependencies, readiness is false while warming and draining, and deep checks belong to central monitoring.",
+     "reveal": 6
+    }
+   ],
+   "id": "s011",
+   "caption": "Book: Module 9 · Routing checks vs. monitoring checks"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 2 of 9",
+   "title": "Distributed tracing",
+   "steps": [
+    {
+     "say": "Concept two: distributed tracing. Where did this one request spend its time?",
+     "reveal": 0
+    }
+   ],
+   "id": "s012",
+   "caption": "Book: Module 9 · Distributed Tracing"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 2 of 9",
+   "title": "The time hides between the logs",
+   "bullets": [
+    "Checkout p99: 4.2 s vs 800 ms budget",
+    "One checkout: 12 services, 40+ calls",
+    "Every log says 'I was fast'",
+    "Logs: what did this component do?",
+    "Need: which path, where did time go?"
+   ],
+   "steps": [
+    {
+     "say": "Imagine checkout is slow sometimes. The p ninety-nine, the latency only the slowest one percent exceed, is four point two seconds against an eight hundred millisecond budget.",
+     "reveal": 1
+    },
+    {
+     "say": "One checkout crosses twelve services through more than forty calls.",
+     "reveal": 2
+    },
+    {
+     "say": "Twelve engineers each search their own service's logs. Every service says I was fast. Checkout itself logged eight milliseconds of work.",
+     "reveal": 3
+    },
+    {
+     "say": "Every log is correct. None answers the question. Logs tell you what one component did.",
+     "reveal": 4
+    },
+    {
+     "say": "The question was which path this request took and where its time went. The four seconds were spent between the records. Adding a correlation I-D helps you find lines, but it doesn't show which call triggered which.",
+     "reveal": 5
+    }
+   ],
+   "id": "s013"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 2 of 9",
+   "title": "How tracing works, step by step",
+   "bullets": [
+    "1. Gateway creates a trace ID",
+    "2. Each operation records a span",
+    "3. Context propagation carries IDs",
+    "4. Collector builds the waterfall",
+    "5. Sampling keeps the right traces"
+   ],
+   "steps": [
+    {
+     "say": "Step one. The A-P-I gateway sees every external request first, so it creates a trace I-D. For our slow checkout, say trace seven F three A.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two. Every operation records a span: a name, a start and end time, its parent span, and attributes like the U-R-L and status. Payment's call to fraud check is one span, whose parent is the payment span.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three, context propagation. On H-T-T-P calls, the trace and span I-Ds travel in a standard header called traceparent. On queue messages they ride in the message metadata, so the worker's span links back to the producer, and the gap shows queue wait. If one service forgets to pass the header on, every later span is an orphan.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four. All spans go to a collector, which rebuilds them into a waterfall: one timeline showing exactly where the time went.",
+     "reveal": 4
+    },
+    {
+     "say": "Step five, sampling, which we'll cover in a moment.",
+     "reveal": 5
+    }
+   ],
+   "id": "s014"
+  },
+  {
+   "layout": "diagram",
+   "kicker": "Concept 2 of 9",
+   "title": "Context propagation, sync and async",
+   "mermaid": "flowchart LR\n  G[\"Gateway: trace T, root span\"] -->|\"traceparent\"| C[\"Checkout\"]\n  C -->|\"traceparent\"| P[\"Payment\"]\n  C -->|\"metadata carries T\"| Q[\"Queue\"]\n  Q --> W[\"Worker: linked span\"]\n  C -.-> X[\"Collector\"]\n  P -.-> X\n  W -.-> X",
+   "caption": "IDs ride in headers and queue metadata to the collector",
+   "steps": [
+    {
+     "say": "Here's the picture. The gateway starts trace T. Checkout calls payment, passing traceparent. Checkout also drops a message on a queue, with T in the metadata.",
+     "reveal": 0
+    },
+    {
+     "say": "The worker picks it up and records a span linked to the producer. Every service ships its spans to the collector, which builds one waterfall for the whole request.",
+     "reveal": 0
+    }
+   ],
+   "id": "s015"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: reading the slow checkout's waterfall",
+   "table": {
+    "head": [
+     "Span",
+     "Time"
+    ],
+    "rows": [
+     [
+      "checkout svc",
+      "4,190 ms"
+     ],
+     [
+      "  payment svc",
+      "4,110 ms"
+     ],
+     [
+      "    fraud check (timeout)",
+      "1,210 ms"
+     ],
+     [
+      "    fraud check (retry 1)",
+      "1,240 ms"
+     ],
+     [
+      "    fraud check (retry 2)",
+      "1,190 ms"
+     ],
+     [
+      "    charge",
+      "180 ms"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Now the same incident, with tracing. Minute one: filter for traces longer than four seconds. Checkout took four point one nine seconds.",
+     "reveal": 1
+    },
+    {
+     "say": "Inside it, payment took four point one one seconds.",
+     "reveal": 2
+    },
+    {
+     "say": "Inside payment: a fraud check that timed out at about one point two seconds.",
+     "reveal": 3
+    },
+    {
+     "say": "Then a retry, another one point two.",
+     "reveal": 4
+    },
+    {
+     "say": "Then a second retry. Three sequential fraud checks. Fraud's latency had crept past payment's timeout, so every affected checkout paid the timeout three times, about three point nine seconds.",
+     "reveal": 5
+    },
+    {
+     "say": "The charge itself was only one hundred eighty milliseconds. Root cause found in four minutes, versus six engineer-days of guessing with logs.",
+     "reveal": 6
+    }
+   ],
+   "id": "s016"
+  },
+  {
+   "layout": "twocol",
+   "kicker": "Concept 2 of 9",
+   "title": "Sampling: you can't keep everything",
+   "left": {
+    "heading": "Head sampling",
+    "bullets": [
+     "Decide at the start, keep 1%",
+     "Cheap, simple",
+     "99% chance to drop the slow one"
+    ]
+   },
+   "right": {
+    "heading": "Tail sampling",
+    "bullets": [
+     "Decide after it finishes",
+     "Keep all errors and outliers",
+     "Must buffer every trace"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Why sample? Forty thousand requests a second times about forty spans is one point six million spans a second. Head sampling decides at the start, say keep one percent.",
+     "reveal": 1
+    },
+    {
+     "say": "It's cheap and simple.",
+     "reveal": 2
+    },
+    {
+     "say": "But it's blind to the outcome. There's a ninety-nine percent chance it throws away the slow trace you wanted.",
+     "reveal": 3
+    },
+    {
+     "say": "Tail sampling decides after the request completes.",
+     "reveal": 4
+    },
+    {
+     "say": "It keeps every error, every request over its latency target, plus a small random baseline. In our example that's about two thousand spans a second stored. Manageable.",
+     "reveal": 5
+    },
+    {
+     "say": "The price: you must buffer every trace until the decision. In practice, use tail rules for errors and outliers, plus a head-sampled baseline.",
+     "reveal": 6
+    }
+   ],
+   "id": "s017"
+  },
+  {
+   "layout": "table",
+   "kicker": "Concept 2 of 9",
+   "title": "The three pillars of observability",
+   "table": {
+    "head": [
+     "",
+     "Question",
+     "Cost"
+    ],
+    "rows": [
+     [
+      "Metrics",
+      "How much, how fast, overall? (alerts)",
+      "Small"
+     ],
+     [
+      "Traces",
+      "Which path did this request take?",
+      "Medium, sampled"
+     ],
+     [
+      "Logs",
+      "What exactly happened here?",
+      "Largest"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Tracing is one of three pillars of observability. Metrics are numbers over time, cheap enough to keep forever, and they're the layer that alerts.",
+     "reveal": 1
+    },
+    {
+     "say": "Traces are sampled trees of timed spans. They rarely alert, but they explain the alerts.",
+     "reveal": 2
+    },
+    {
+     "say": "Logs are high-volume text events, the most expensive. Use them in order: metrics ring the alarm, p ninety-nine is over target. Traces localize it, fraud retries inside payment. Logs explain it, the exact exception. Put the trace I-D in every log line so you can jump between them. In the interview, say: gateway mints the trace I-D, spans everywhere, propagation through queues too, and tail sampling for errors and outliers.",
+     "reveal": 3
+    }
+   ],
+   "id": "s018",
+   "caption": "Book: Module 9 · The three pillars of observability"
+  },
+  {
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "Traces stop at payment since Tuesday. Why?",
+   "bullets": [
+    "A. The collector is overloaded",
+    "B. Payment stopped forwarding traceparent",
+    "C. Fraud service is down"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. Since Tuesday, every checkout trace stops at payment. The fraud spans are gone, but the calls still happen. What changed?",
+     "reveal": 0
+    }
+   ],
+   "id": "s019"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 3 of 9",
+   "title": "Blue-green deployment",
+   "steps": [
+    {
+     "say": "The answer is B. Payment stopped forwarding traceparent, probably a library update swapped its H-T-T-P client, so fraud's spans became orphans. Now, concept three: blue-green deployment.",
+     "reveal": 0
+    }
+   ],
+   "id": "s020",
+   "caption": "Book: Module 9 · Blue-Green Deployment"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 3 of 9",
+   "title": "Blue-green: two stages, one switch",
+   "bullets": [
+    "1. Deploy v1.42 to idle green",
+    "2. Verify green: smoke tests, warm-up",
+    "3. Switch the router: all traffic to green",
+    "4. Keep blue on standby for hours"
+   ],
+   "steps": [
+    {
+     "say": "The problem: an in-place rollback means rebuilding the old version and pushing it through the pipeline, fifteen to twenty-five minutes of limping. Blue-green fixes that with two identical production environments. Blue is live with version one point four one. Step one: deploy one point four two to green, the idle one. Green is real production, same infrastructure, same config, same database.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two: verify green before any user touches it. Run smoke tests, quick basic checks, on real infrastructure. Wait for readiness, warm caches and pools.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three: switch. The router sends new traffic to green, all at once. Blue drains, finishing its in-flight requests. Sessions survive because they live in a shared store.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four: keep blue running for an undo window, usually hours. Rollback is just switching back, about ten seconds, no build. Like a theatre with two stages, where the seats swivel.",
+     "reveal": 4
+    }
+   ],
+   "id": "s021"
+  },
+  {
+   "layout": "diagram",
+   "kicker": "Concept 3 of 9",
+   "title": "Blue-green at the switch",
+   "mermaid": "flowchart LR\n  R[\"Router\"] -->|\"100 pct before switch\"| B[\"Blue v1.41 live\"]\n  R -.->|\"100 pct after switch\"| G[\"Green v1.42 warm\"]\n  B --> DB[(\"Shared database\")]\n  G --> DB",
+   "caption": "The router flips; the shared database does not",
+   "steps": [
+    {
+     "say": "Look at the picture. The router points at blue, then flips to green. Blue stays up as the undo button.",
+     "reveal": 0
+    },
+    {
+     "say": "But notice the one thing in the middle that does not switch: the shared database. That's our next concept.",
+     "reveal": 0
+    }
+   ],
+   "id": "s022"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 3 of 9",
+   "title": "The database does not blue-green",
+   "bullets": [
+    "Blue and green share one database",
+    "Both versions must read and write it safely",
+    "Expand: add new structures, write both forms",
+    "Contract: remove old only after undo window"
+   ],
+   "steps": [
+    {
+     "say": "Both versions use the same database.",
+     "reveal": 1
+    },
+    {
+     "say": "So throughout the rollback window, old code and new code must both read and write the same data safely.",
+     "reveal": 2
+    },
+    {
+     "say": "Schema changes follow expand-contract. Expand: add new structures without destroying anything, and write both the old and new forms.",
+     "reveal": 3
+    },
+    {
+     "say": "Contract: remove the old structure only when no version that needs it could ever come back.",
+     "reveal": 4
+    }
+   ],
+   "id": "s023",
+   "caption": "Book: Module 9 · The database does not blue-green"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: the rollback that made it worse",
+   "table": {
+    "head": [
+     "Time",
+     "What happened"
+    ],
+    "rows": [
+     [
+      "14:00",
+      "Green v1.42 live; its migration renamed a column"
+     ],
+     [
+      "14:00 to 14:30",
+      "Green writes orders in the new shape"
+     ],
+     [
+      "14:30",
+      "Bug found, switch back to blue"
+     ],
+     [
+      "14:30",
+      "Blue can't read recent orders: new outage"
+     ],
+     [
+      "Lesson",
+      "Roll forward; contract only after the window"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Here's the classic failure. At two P M, green with one point four two goes live. Its migration renamed a column.",
+     "reveal": 1
+    },
+    {
+     "say": "For thirty minutes green writes orders in the new shape.",
+     "reveal": 2
+    },
+    {
+     "say": "At two thirty, someone finds a bug and switches back to blue.",
+     "reveal": 3
+    },
+    {
+     "say": "But blue can't read the orders written in the new shape. The rollback caused a second outage.",
+     "reveal": 4
+    },
+    {
+     "say": "Now the only way out is to fix one point four two and roll forward. Prevention: expand-contract, with the contract step held until the undo window closes.",
+     "reveal": 5
+    }
+   ],
+   "id": "s024"
+  },
+  {
+   "layout": "table",
+   "kicker": "Concept 3 of 9",
+   "title": "Blue-green vs rolling deploy",
+   "table": {
+    "head": [
+     "",
+     "Rolling",
+     "Blue-green"
+    ],
+    "rows": [
+     [
+      "Extra capacity",
+      "About 1 instance",
+      "2x for the window"
+     ],
+     [
+      "Rollback",
+      "Redeploy: minutes",
+      "Switch back: seconds"
+     ],
+     [
+      "Version mixing",
+      "v1 and v2 serve together",
+      "Never: atomic switch"
+     ],
+     [
+      "Blast radius",
+      "Grows instance by instance",
+      "100% at the switch"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "A rolling deploy replaces instances in place, a few at a time. It needs about one extra instance. Blue-green needs double capacity during the window. In the cloud that's a few hours of extra machines. On-premises it may be permanently idle hardware.",
+     "reveal": 1
+    },
+    {
+     "say": "Rollback: rolling has to redeploy, minutes. Blue-green switches back, seconds.",
+     "reveal": 2
+    },
+    {
+     "say": "Version mixing: during a rolling deploy, old and new both serve, so they must be compatible. Blue-green never mixes.",
+     "reveal": 3
+    },
+    {
+     "say": "Blast radius: rolling grows gradually. Blue-green moves one hundred percent of users at once. So a bug that slipped verification hits everyone. Rolling is the cheap default. Blue-green earns its cost when you need an instant undo, or versions can't coexist. In the interview, always mention the shared database.",
+     "reveal": 4
+    }
+   ],
+   "id": "s025"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 4 of 9",
+   "title": "Canary deployment",
+   "steps": [
+    {
+     "say": "Concept four: canary deployment. It runs is not the same as it behaves.",
+     "reveal": 0
+    }
+   ],
+   "id": "s026",
+   "caption": "Book: Module 9 · Canary Deployment"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 4 of 9",
+   "title": "Why blue-green wasn't enough",
+   "bullets": [
+    "v1.43 passes all blue-green checks, 14:00",
+    "14:08: checkout fails for 3% of users",
+    "Saved card AND non-US locale",
+    "Real traffic: the only complete test suite"
+   ],
+   "steps": [
+    {
+     "say": "Version one point four three passes every blue-green check and switches at two P M.",
+     "reveal": 1
+    },
+    {
+     "say": "At two oh eight, support reports checkout failing for three percent of users.",
+     "reveal": 2
+    },
+    {
+     "say": "Only users with a saved payment method and a non-U-S locale. No test covered that pair. And the atomic switch exposed all of them at once.",
+     "reveal": 3
+    },
+    {
+     "say": "Green proved the version runs. Not that it behaves. Real user combinations multiply faster than any test suite. Real traffic is the only complete test suite. The trick is to use it without exposing everyone. Miners carried canaries because the bird reacted to bad air first, but only if someone was watching it.",
+     "reveal": 4
+    }
+   ],
+   "id": "s027"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 4 of 9",
+   "title": "How a canary works, step by step",
+   "bullets": [
+    "1. Split: 1% of traffic to v1.43",
+    "2. Sticky: hash user ID, stay on one version",
+    "3. Compare to live baseline, not yesterday",
+    "4. Golden signals + business metrics + traces",
+    "5. Automated gates: 1, 5, 25, 100%",
+    "6. Size the slice: cohort x effect frequency"
+   ],
+   "steps": [
+    {
+     "say": "Step one, the split. Load balancer weights or a service mesh send one percent of traffic to version one point four three.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two, stickiness. Hash each user I-D so a user stays on one version for the whole checkout. Bouncing between versions mid-flow could break it.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three: compare against the concurrent baseline, the other ninety-nine percent right now, under the same traffic and conditions. Not yesterday's numbers, which swing with time of day.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four: compare the right things. Golden signals, plus business metrics like conversion, the share of visitors who complete a purchase, plus traces.",
+     "reveal": 4
+    },
+    {
+     "say": "Step five: automated gates. Each stage, one, five, twenty-five, one hundred percent, advances only when analysis passes, and a failing score drains the canary in seconds. No humans staring at dashboards.",
+     "reveal": 5
+    },
+    {
+     "say": "Step six: respect statistics. At forty thousand requests a second, one percent is four hundred a second. A bug hitting one in a thousand requests gives about twenty-four bad events a minute, caught fast. A rarer bug needs longer or a bigger slice.",
+     "reveal": 6
+    }
+   ],
+   "id": "s028"
+  },
+  {
+   "layout": "diagram",
+   "kicker": "Concept 4 of 9",
+   "title": "Canary versus live baseline",
+   "mermaid": "flowchart LR\n  S[\"Splitter\"] -->|\"99 pct\"| B[\"Baseline v1.42\"]\n  S -->|\"1 pct\"| C[\"Canary v1.43\"]\n  B --> A[\"Live comparison: errors, latency, conversion\"]\n  C --> A\n  A -->|\"pass\"| G[\"Grow 5, 25, 100 pct\"]\n  A -->|\"fail\"| D[\"Drain in seconds\"]",
+   "caption": "The verdict comes from comparison, not a fixed threshold",
+   "steps": [
+    {
+     "say": "The splitter sends ninety-nine percent to the baseline and one percent to the canary. Both feed a live comparison.",
+     "reveal": 0
+    },
+    {
+     "say": "Canary about equal to baseline? Grow the slice. Worse? Drain it in seconds.",
+     "reveal": 0
+    }
+   ],
+   "id": "s029"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: two canary rescues",
+   "table": {
+    "head": [
+     "Time",
+     "What happened"
+    ],
+    "rows": [
+     [
+      "14:00",
+      "Sticky 1% cohort gets v1.43"
+     ],
+     [
+      "14:06",
+      "Canary errors 2.1% vs baseline 0.3%: drained"
+     ],
+     [
+      "15:30",
+      "Fixed v1.43 clears 1, 5, 25, 100%"
+     ],
+     [
+      "2 weeks later",
+      "v1.44: no errors, conversion down 8%"
+     ],
+     [
+      "Cause",
+      "CSS hid pay button on small screens: drained"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Replay one point four three as a canary. At two P M, a sticky one percent cohort gets it.",
+     "reveal": 1
+    },
+    {
+     "say": "At two oh six, the canary shows two point one percent errors against zero point three on the baseline. Drained automatically. One percent of users, for six minutes.",
+     "reveal": 2
+    },
+    {
+     "say": "At three thirty, the fixed version clears every gate.",
+     "reveal": 3
+    },
+    {
+     "say": "Two weeks later, version one point four four throws no errors and has normal latency, but conversion in the canary drops eight percent.",
+     "reveal": 4
+    },
+    {
+     "say": "A C-S-S bug hid the payment button on small screens. Only the business metric caught it. Technical metrics alone don't tell the whole story.",
+     "reveal": 5
+    }
+   ],
+   "id": "s030"
+  },
+  {
+   "layout": "table",
+   "kicker": "Concept 4 of 9",
+   "title": "Canary vs blue-green",
+   "table": {
+    "head": [
+     "",
+     "Blue-green",
+     "Canary"
+    ],
+    "rows": [
+     [
+      "Exposure",
+      "100% at the switch",
+      "1, 5, 25, 100%, gated"
+     ],
+     [
+      "Verifies",
+      "The environment runs",
+      "Behavior on real traffic"
+     ],
+     [
+      "Version mixing",
+      "Not allowed",
+      "Required"
+     ],
+     [
+      "Capacity / speed",
+      "2x / seconds",
+      "About 1% extra / hours"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Side by side. Blue-green exposes everyone at the switch. Canary exposes a gated slice.",
+     "reveal": 1
+    },
+    {
+     "say": "Blue-green verifies the environment runs. Canary verifies behavior across real traffic.",
+     "reveal": 2
+    },
+    {
+     "say": "Blue-green forbids version mixing. Canary requires it, so schemas and A-P-Is must stay mixed-version compatible, always.",
+     "reveal": 3
+    },
+    {
+     "say": "Blue-green costs double capacity and takes seconds. Canary costs about one percent extra and takes hours. Mature teams combine them: build green, then shift traffic onto it canary-style. Skip canaries when traffic is tiny. One percent of three hundred requests a second is three a second, almost no signal. And never run canary theater, a timer that bumps percentages with no automated verdict.",
+     "reveal": 4
+    }
+   ],
+   "id": "s031"
+  },
+  {
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "Why did the canary miss screen-reader users?",
+   "bullets": [
+    "A. The baseline was wrong",
+    "B. 0.4% of a 1% slice is far too few sessions",
+    "C. Gates were too strict"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. Version one point four five clears every gate. Two days later, screen-reader users, zero point four percent of traffic, can't check out. Why did the canary miss it?",
+     "reveal": 0
+    }
+   ],
+   "id": "s032"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 5 of 9",
+   "title": "Feature flags",
+   "steps": [
+    {
+     "say": "The answer is B. Zero point four percent of a one percent slice is zero point zero zero four percent of traffic, too few sessions to notice. You need to include that group by name. Which brings us to concept five: feature flags.",
+     "reveal": 0
+    }
+   ],
+   "id": "s033",
+   "caption": "Book: Module 9 · Feature Flags"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 5 of 9",
+   "title": "The problem: deploy is doing release's job",
+   "bullets": [
+    "Timing: launch Tuesday 9 AM, web + iOS + Android",
+    "Integration: six-week branch, two-day merge",
+    "Reversal: one bad feature rolls back three"
+   ],
+   "steps": [
+    {
+     "say": "Imagine a feature called wishlist sharing. Timing: marketing promised Tuesday at nine A M on web and both mobile apps. But mobile code must enter app-store review days earlier. Deploy time and release time can't be the same moment.",
+     "reveal": 1
+    },
+    {
+     "say": "Integration: half-built wishlist code can't merge because users would see it, so it lives on a six-week branch, and the final merge takes two days of conflict resolution.",
+     "reveal": 2
+    },
+    {
+     "say": "Reversal: at eleven A M Tuesday, wishlist swamps the database with an N plus one query, one query per item instead of one for all. The only off switch is a rollback that also removes two other teams' features. Killing one feature kills three.",
+     "reveal": 3
+    }
+   ],
+   "id": "s034"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 5 of 9",
+   "title": "How flags work, step by step",
+   "bullets": [
+    "1. Evaluate locally from cached rules",
+    "2. Fail static: last rules + safe defaults",
+    "3. Target: employees, beta, 1%, 10%, 100%",
+    "4. Know the flag type and its lifecycle",
+    "5. Flag debt: owner, expiry, delete the if",
+    "6. Flags switch code, not data shapes"
+   ],
+   "steps": [
+    {
+     "say": "A flag is a switch in running code, like: if wishlist sharing is enabled for this user. Its rules change without a deploy. Step one: evaluate locally. Flag checks run on every request, so the S-D-K in each service checks cached rules in microseconds, with no network call. Rule changes stream in.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two: fail static. If the flag service goes down, instances keep the last known rules, and every flag has a safe default. Users notice nothing.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three: targeting. Release wishlist to five hundred employees, then an opted-in beta, then one percent, ten, one hundred. A named cohort can deliberately include screen-reader users, the ones the canary's sample missed.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four: know the type. A release flag lives weeks then gets deleted. An ops kill-switch is permanent and tested. An experiment flag lasts for its A-B test. A permission flag is really product configuration.",
+     "reveal": 4
+    },
+    {
+     "say": "Step five: flag debt. Every forgotten flag leaves a dead, untested branch. Knight Capital reused an old flag name. One server missed the deploy, ran revived dead code, and lost four hundred sixty million dollars in forty-five minutes. Give every flag an owner and an expiry, and never reuse a name. Done means the if statement is deleted.",
+     "reveal": 5
+    },
+    {
+     "say": "Step six: flags switch code paths, not data shapes. A flag in front of a destructive migration doesn't make it reversible.",
+     "reveal": 6
+    }
+   ],
+   "id": "s035"
+  },
+  {
+   "layout": "diagram",
+   "kicker": "Concept 5 of 9",
+   "title": "Flag evaluation with fail-static",
+   "mermaid": "flowchart LR\n  CP[\"Flag service: rules\"] -->|\"stream updates\"| SDK[\"In-process SDK cache\"]\n  Req[\"Request\"] --> App[\"Service\"]\n  App -->|\"enabled for user?\"| SDK\n  SDK -->|\"on or off, local\"| App\n  CP -.->|\"down\"| FS[\"SDK keeps last rules\"]",
+   "caption": "The flag service streams rules; the service only asks its local cache",
+   "steps": [
+    {
+     "say": "The service asks its local S-D-K cache, never the network. The flag service only streams updates in. If it goes down, the S-D-K keeps the last rules, and operators simply can't edit for a while.",
+     "reveal": 0
+    }
+   ],
+   "id": "s036"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: wishlist with flags",
+   "table": {
+    "head": [
+     "When",
+     "What happens"
+    ],
+    "rows": [
+     [
+      "Weeks before",
+      "Merge daily behind dark flag; apps pass review"
+     ],
+     [
+      "Wednesday",
+      "On for 500 employees"
+     ],
+     [
+      "Thursday",
+      "Opted-in beta incl. accessibility cohort"
+     ],
+     [
+      "Tuesday 9:00",
+      "Ramp to 100% in 10 min on all platforms"
+     ],
+     [
+      "11:04 AM",
+      "N+1 at peak: kill-switch in 30 seconds"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Same launch with flags. For weeks, small pieces merge daily behind a dark flag, and the mobile builds clear app-store review with the feature off.",
+     "reveal": 1
+    },
+    {
+     "say": "Wednesday: on for five hundred employees.",
+     "reveal": 2
+    },
+    {
+     "say": "Thursday: on for the beta, including the accessibility cohort. A screen-reader bug hits dozens of beta users, not thousands of customers.",
+     "reveal": 3
+    },
+    {
+     "say": "Tuesday at nine: a rule change ramps to one hundred percent in ten minutes on web, i-O-S and Android at once.",
+     "reveal": 4
+    },
+    {
+     "say": "At eleven oh four, the N plus one bug hits. An operator flips the kill-switch in thirty seconds. Wishlist vanishes, checkout and search keep running. Fix ships Wednesday, flag deleted next sprint.",
+     "reveal": 5
+    }
+   ],
+   "id": "s037"
+  },
+  {
+   "layout": "table",
+   "kicker": "Concept 5 of 9",
+   "title": "The progressive delivery stack",
+   "table": {
+    "head": [
+     "Layer",
+     "Question",
+     "Undo"
+    ],
+    "rows": [
+     [
+      "Blue-green",
+      "Is the environment healthy?",
+      "Switch back: seconds"
+     ],
+     [
+      "Canary",
+      "Is the binary safe on real traffic?",
+      "Drain: seconds"
+     ],
+     [
+      "Flags",
+      "Should THIS user see THIS feature now?",
+      "Flip: instant"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Progressive delivery means releasing in measured stages, observing each one. The three patterns stack. Blue-green asks: is the environment healthy?",
+     "reveal": 1
+    },
+    {
+     "say": "Canary asks: is the binary safe with real traffic?",
+     "reveal": 2
+    },
+    {
+     "say": "Flags ask: should this user see this feature right now? A mature pipeline creates green, canaries traffic onto it, then turns features on inside it on their own schedule. One line to remember: canaries select traffic statistically, flags select people by name. In the interview, mention fail-static evaluation and deleting flags after launch.",
+     "reveal": 3
+    }
+   ],
+   "id": "s038",
+   "caption": "Book: Module 9 · The progressive delivery stack"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 6 of 9",
+   "title": "Containers and Kubernetes",
+   "steps": [
+    {
+     "say": "Concept six: containers and Kubernetes, the platform these deploys run on.",
+     "reveal": 0
+    }
+   ],
+   "id": "s039",
+   "caption": "Book: Module 9 · Containers and Kubernetes"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 6 of 9",
+   "title": "What a container really is",
+   "bullets": [
+    "Problem: 440 instances on 440 hand-kept VMs",
+    "Namespaces: what the process can see",
+    "Cgroups: CPU and memory it may use",
+    "Image: layered, read-only, by digest"
+   ],
+   "steps": [
+    {
+     "say": "Imagine thirty services running as four hundred forty instances on four hundred forty virtual machines. Average C-P-U use is fifteen percent, baking a machine image takes forty minutes, and a crashed process pages a human at three A M.",
+     "reveal": 1
+    },
+    {
+     "say": "A container is just an ordinary process the Linux kernel isolates. Namespaces control what it can see: its own process list, network and filesystem.",
+     "reveal": 2
+    },
+    {
+     "say": "Control groups, or cgroups, control what it may use. Go over the memory limit and it's killed, O-O-M killed. Hit the C-P-U limit and it's throttled, paused briefly, which shows up as mysterious latency spikes.",
+     "reveal": 3
+    },
+    {
+     "say": "It starts from an image: read-only layers, base O-S, runtime, libraries, then your app. Deploy by digest, the content hash, never a moving tag like latest, so the image you tested is the image you run. Containers share the host kernel, so they start in under a second, but isolation is weaker than a V-M.",
+     "reveal": 4
+    }
+   ],
+   "id": "s040"
+  },
+  {
+   "layout": "diagram",
+   "kicker": "Concept 6 of 9",
+   "title": "Kubernetes: desired state and control loops",
+   "mermaid": "flowchart LR\n  DEV[\"kubectl or CI: desired state\"] --> API[\"API server\"]\n  API <--> ETCD[(\"etcd\")]\n  SCH[\"Scheduler\"] <--> API\n  CM[\"Controllers\"] <--> API\n  API <--> K1[\"Node: kubelet + runtime\"]\n  K1 --> P1[\"Pods\"]",
+   "caption": "You declare what you want; control loops keep closing the gap",
+   "steps": [
+    {
+     "say": "Kubernetes runs containers across a fleet. You never say start this on host twelve. You declare desired state: twenty copies of checkout, version four point two, one C-P-U each. Everything goes through the A-P-I server, which stores state in etcd.",
+     "reveal": 0
+    },
+    {
+     "say": "The scheduler picks a node with free resources for each new pod. Controllers keep comparing desired and actual state and close the gap. On each node, the kubelet starts containers and reports back. If a machine dies, the loop notices and reschedules.",
+     "reveal": 0
+    }
+   ],
+   "id": "s041"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 6 of 9",
+   "title": "The objects you use every day",
+   "bullets": [
+    "Pod: containers scheduled together",
+    "Deployment: keep N pods, roll out in waves",
+    "Service: stable name in front of pods",
+    "Probes: readiness, liveness, startup",
+    "Scheduling: requests, limits, spread zones"
+   ],
+   "steps": [
+    {
+     "say": "Images, we covered. A pod is one or more containers scheduled together, sharing a network address. It's the unit of scheduling.",
+     "reveal": 1
+    },
+    {
+     "say": "A Deployment says keep N identical pods running and roll changes out gradually. Our checkout Deployment keeps twenty.",
+     "reveal": 2
+    },
+    {
+     "say": "A Service gives those pods a stable name and virtual I-P. Pods come and go with new addresses, but callers just use the name checkout.",
+     "reveal": 3
+    },
+    {
+     "say": "Probes are our health check verdicts. Readiness controls traffic, liveness controls restarts, and a startup probe gives slow starters time before liveness begins. Same rule: liveness never checks a shared dependency.",
+     "reveal": 4
+    },
+    {
+     "say": "Scheduling: a request is what the scheduler reserves, say half a C-P-U and one gibibyte. A limit is the hard ceiling. Spread replicas across zones so losing one zone removes a third of your pods, not all of them.",
+     "reveal": 5
+    }
+   ],
+   "id": "s042"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: the 440 instances, containerised",
+   "table": {
+    "head": [
+     "Item",
+     "Numbers"
+    ],
+    "rows": [
+     [
+      "Packing",
+      "440 x 0.5 CPU = 220 CPUs, about 24 nodes"
+     ],
+     [
+      "Utilisation",
+      "15% to about 60%"
+     ],
+     [
+      "Rolling update",
+      "20 pods, surge 5: 4 waves, 2 to 3 min"
+     ],
+     [
+      "Bad version",
+      "Readiness never passes: rollout stalls"
+     ],
+     [
+      "OOM trap",
+      "1 GiB heap in 1 GiB limit: cap heap at 75%"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's run the numbers. Each instance needs about half a C-P-U, so four hundred forty times half is two hundred twenty C-P-Us. A sixteen-C-P-U node gives about fourteen, so sixteen nodes, plus headroom for rollouts and a lost zone: about twenty-four nodes instead of four hundred forty machines.",
+     "reveal": 1
+    },
+    {
+     "say": "Utilisation goes from fifteen percent to about sixty.",
+     "reveal": 2
+    },
+    {
+     "say": "A rolling update of twenty pods with five extra allowed and none missing runs in four readiness-gated waves of about thirty seconds. Two to three minutes, no capacity lost.",
+     "reveal": 3
+    },
+    {
+     "say": "And if the new version's readiness never passes? Five new pods start, none get ready, no old pods are removed. The rollout stalls instead of becoming an outage.",
+     "reveal": 4
+    },
+    {
+     "say": "One trap: a Java service with a one gibibyte heap inside a one gibibyte limit keeps getting killed, because the J-V-M needs memory outside the heap. Cap the heap at about seventy-five percent of the limit. And for a handful of services, consider a managed container service instead of running a cluster.",
+     "reveal": 5
+    }
+   ],
+   "id": "s043"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 7 of 9",
+   "title": "CI/CD pipelines and deployment strategies",
+   "steps": [
+    {
+     "say": "Concept seven: C-I C-D pipelines, the one trusted path from commit to production.",
+     "reveal": 0
+    }
+   ],
+   "id": "s044",
+   "caption": "Book: Module 9 · CI/CD Pipelines and Deployment Strategies"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 7 of 9",
+   "title": "The pipeline, stage by stage",
+   "bullets": [
+    "1. Commit stage: build, tests, scans, < 10 min",
+    "2. Package once: image by digest, signed",
+    "3. Test env: integration + contract tests",
+    "4. Staging: smoke tests, rehearse migrations",
+    "5. Production: canary with verdicts, auto-rollback"
+   ],
+   "steps": [
+    {
+     "say": "Continuous integration means everyone merges small changes to main at least daily, and every merge is built and tested. Continuous delivery means every passing change could ship at a button press. Continuous deployment ships it automatically. Imagine a team that used to ship four hundred commits once a month. Step one, the commit stage: compile, unit tests, linters, security scans, in under ten minutes. Theirs takes eight.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two: package once. One immutable image, by digest, signed, with a list of every component inside. Every later stage deploys that exact artifact. Only configuration differs between environments.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three: a test environment with integration tests, and contract tests that check each service still honours its consumers' A-P-I. Twelve minutes.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four: staging, with smoke tests and rehearsed migrations.",
+     "reveal": 4
+    },
+    {
+     "say": "Step five: production, canary at one, ten, fifty, one hundred percent, with a ten-minute bake per step and automatic rollback. About forty-five minutes from merge to full traffic, and a hotfix in twenty-five minutes instead of six hours.",
+     "reveal": 5
+    }
+   ],
+   "id": "s045"
+  },
+  {
+   "layout": "table",
+   "kicker": "Concept 7 of 9",
+   "title": "Deployment strategies compared",
+   "table": {
+    "head": [
+     "Strategy",
+     "Downtime",
+     "Rollback",
+     "Exposed to bad version"
+    ],
+    "rows": [
+     [
+      "Recreate",
+      "Yes",
+      "Redeploy, minutes",
+      "100%"
+     ],
+     [
+      "Rolling",
+      "No",
+      "Waves, minutes",
+      "Grows wave by wave"
+     ],
+     [
+      "Blue-green",
+      "No",
+      "Switch, seconds",
+      "100%, briefly"
+     ],
+     [
+      "Canary",
+      "No",
+      "Drain, seconds",
+      "1 to 10%"
+     ],
+     [
+      "Shadow",
+      "No",
+      "Nothing to undo",
+      "0%"
+     ],
+     [
+      "Feature flag",
+      "No",
+      "Flip, instant",
+      "Any chosen cohort"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Now the strategy for each change. Recreate: stop everything old, start everything new. Downtime, and everyone sees a bad version.",
+     "reveal": 1
+    },
+    {
+     "say": "Rolling: replace in waves, the Kubernetes default. Rollback in minutes.",
+     "reveal": 2
+    },
+    {
+     "say": "Blue-green: full new environment, switch at once, back in seconds.",
+     "reveal": 3
+    },
+    {
+     "say": "Canary: a small slice, widened on good verdicts.",
+     "reveal": 4
+    },
+    {
+     "say": "Shadow, or mirroring: copy real requests to the new version and throw its answers away. Zero users exposed, but a mirrored place order must never charge a card, so writes are stubbed.",
+     "reveal": 5
+    },
+    {
+     "say": "Feature flag: deployed dark, released by rule. One hidden requirement for all of them: old and new versions run together, so they must share the same database and message formats safely.",
+     "reveal": 6
+    }
+   ],
+   "id": "s046"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 7 of 9",
+   "title": "Infrastructure as code, GitOps, DORA",
+   "bullets": [
+    "IaC: Terraform plan shows the diff",
+    "GitOps: cluster pulls desired state from Git",
+    "Short-lived OIDC tokens, no CI keys",
+    "DORA: frequency, lead time, failure, restore"
+   ],
+   "steps": [
+    {
+     "say": "Infrastructure as code means load balancers and databases are described in version-controlled files. Terraform's plan shows the diff from reality before you apply it. When our team imported their hand-made setup, the first plan showed seventeen differences between staging and production.",
+     "reveal": 1
+    },
+    {
+     "say": "GitOps: each environment's desired state lives in Git, and an agent in the cluster keeps pulling and reconciling. Deploying is a reviewed commit that changes an image digest. Rollback is reverting it.",
+     "reveal": 2
+    },
+    {
+     "say": "So the pipeline doesn't need production credentials, and C-I proves its identity with short-lived tokens instead of long-lived keys.",
+     "reveal": 3
+    },
+    {
+     "say": "Measure with the four DORA metrics: deployment frequency, lead time from commit to production, change failure rate, and time to restore. The research finding: speed and stability rise together. In the interview, say build once, promote the same artifact, and pick the strategy per change.",
+     "reveal": 4
+    }
+   ],
+   "id": "s047"
+  },
+  {
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "Strategy for a tool at 20 requests an hour?",
+   "bullets": [
+    "A. Canary at 1%",
+    "B. Blue-green or rolling with smoke tests",
+    "C. Shadow traffic"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. Which strategy suits an internal tool that gets twenty requests an hour?",
+     "reveal": 0
+    }
+   ],
+   "id": "s048"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 8 of 9",
+   "title": "Capstone: the zero-downtime migration",
+   "steps": [
+    {
+     "say": "The answer is B. A one percent canary of twenty requests an hour sees almost nothing, so use blue-green or rolling with smoke tests. Now, concept eight, the capstone: a zero-downtime migration.",
+     "reveal": 0
+    }
+   ],
+   "id": "s049",
+   "caption": "Book: Module 9 · Capstone - The Zero-Downtime Migration"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 8 of 9",
+   "title": "The brief",
+   "bullets": [
+    "Orders store total as FLOAT: cents drift",
+    "Finance wants total_cents as an integer",
+    "400 writes a second, no maintenance window",
+    "12 consumers must keep working",
+    "Rule: the database does not blue-green"
+   ],
+   "steps": [
+    {
+     "say": "An audit finds orders store money as a floating-point total. Binary fractions can't hold cents exactly, so totals have drifted from the payment provider's records.",
+     "reveal": 1
+    },
+    {
+     "say": "Finance wants a new integer column, total cents.",
+     "reveal": 2
+    },
+    {
+     "say": "There are four hundred writes a second, nonstop, and no maintenance window.",
+     "reveal": 3
+    },
+    {
+     "say": "Twelve consumers, including reporting and read copies, must keep working.",
+     "reveal": 4
+    },
+    {
+     "say": "And the database does not blue-green. At every stage, ask: what is the undo button right now, and what does pressing it cost?",
+     "reveal": 5
+    }
+   ],
+   "id": "s050"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 8 of 9",
+   "title": "The five stages",
+   "bullets": [
+    "1. Expand: add nullable total_cents",
+    "2. Flagged dual-write + backfill 200M rows",
+    "3. Verify: compare job + shadow reads",
+    "4. Switch reads: flag ramp with verdicts",
+    "5. Contract: stop old writes, then drop"
+   ],
+   "steps": [
+    {
+     "say": "Stage one, expand. Add total cents as a nullable column that nobody writes or reads. Nothing changes. Still, run it through a canary, because an alter table can take unexpected locks. Undo: drop the column, free.",
+     "reveal": 1
+    },
+    {
+     "say": "Stage two, dual-write. Code that writes both columns deploys dark, and a flag turns it on, so undo is a thirty-second flip. Then backfill two hundred million old rows with total times one hundred, rounded. Make the job idempotent so failed batches just rerun, rate-limited so production wins, and checkpointed so it resumes. Undo: flag off, stop the job. The old column is still the truth.",
+     "reveal": 2
+    },
+    {
+     "say": "Stage three, verify, the stage everyone skips. A comparison job counts rows where the columns disagree. It finds several thousand mismatches from an old code path that never dual-wrote. Fix it, re-backfill, and wait for zero, sustained for days. Shadow reads compute from both columns, return the old value, and log mismatches with a trace I-D.",
+     "reveal": 3
+    },
+    {
+     "say": "Stage four, switch reads with a flag ramp: internal users, one percent, ten, one hundred, with canary-style verdicts on golden signals plus business metrics, like order-total disputes. Rollback is instant and safe, because dual-write keeps both columns current. That's exactly what went wrong in the blue-green example. Here nothing falls behind.",
+     "reveal": 4
+    },
+    {
+     "say": "Stage five, contract, in two steps weeks apart. Five A, stop writing the old column. Now it goes stale, so this needs gates: zero mismatches for weeks, every consumer migrated, found using the tracing dependency map, and written sign-off from finance. Five B, take a backup snapshot, drop the column, and delete both flags. Deleting the two-column code is what finishes the migration.",
+     "reveal": 5
+    }
+   ],
+   "id": "s051"
+  },
+  {
+   "layout": "diagram",
+   "kicker": "Concept 8 of 9",
+   "title": "Expand-contract: five stages in order",
+   "mermaid": "flowchart LR\n  E[\"1 Expand\"] --> DW[\"2 Dual-write\"]\n  DW --> V[\"3 Verify\"]\n  V --> SR[\"4 Ramp reads\"]\n  SR --> SW[\"5a Stop old writes\"]\n  SW --> DR[\"5b Drop column\"]",
+   "caption": "Cheap undo through stage 4; 5a is the one-way door",
+   "steps": [
+    {
+     "say": "Here's the pipeline, left to right. Stages one through four each keep a cheap undo: drop the column, flip the dual-write flag off, nothing to undo while verifying, flip reads back.",
+     "reveal": 0
+    },
+    {
+     "say": "Stage five A is where the only way out becomes rolling forward. That one-way door comes last, on purpose, after all the evidence is in.",
+     "reveal": 0
+    }
+   ],
+   "id": "s052"
+  },
+  {
+   "layout": "table",
+   "kicker": "Concept 9 of 9",
+   "title": "The undo column",
+   "table": {
+    "head": [
+     "Stage",
+     "Undo button",
+     "Cost"
+    ],
+    "rows": [
+     [
+      "1. Expand",
+      "Drop the column",
+      "Free"
+     ],
+     [
+      "2. Dual-write + backfill",
+      "Flag off, stop the job",
+      "Free"
+     ],
+     [
+      "3. Verify",
+      "Nothing changes",
+      "None"
+     ],
+     [
+      "4. Switch reads",
+      "Flip back (dual-write still on)",
+      "Seconds"
+     ],
+     [
+      "5a. Stop old writes",
+      "Roll forward only: gates",
+      "One-way"
+     ],
+     [
+      "5b. Drop + cleanup",
+      "Backup snapshot, disasters only",
+      "One-way"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Concept nine, the debrief: the undo column. Read down it. Expand: drop it, free.",
+     "reveal": 1
+    },
+    {
+     "say": "Dual-write: flag off, free.",
+     "reveal": 2
+    },
+    {
+     "say": "Verify: nothing to undo.",
+     "reveal": 3
+    },
+    {
+     "say": "Switch reads: flip back in seconds.",
+     "reveal": 4
+    },
+    {
+     "say": "Stop old writes: roll forward only, which is why the gates exist.",
+     "reveal": 5
+    },
+    {
+     "say": "Drop: a backup for disasters only. Free, free, nothing, seconds, then deliberately gone. Sequencing the undo options is the migration design. And every pattern played a part: canaries check binaries, flags release behavior, health checks gate deploys, traces tie mismatches to requests, and expand-contract governs the schema. In the interview, say: expand, dual-write and backfill, verify, ramp reads, contract in two gated steps.",
+     "reveal": 6
+    }
+   ],
+   "id": "s053",
+   "caption": "Book: Module 9 Capstone · Debrief: the undo column"
+  },
+  {
+   "layout": "recap",
+   "kicker": "Episode 14 complete",
+   "title": "Episode 14 recap",
+   "bullets": [
+    "Health: liveness restarts, readiness de-routes",
+    "Tracing: trace ID, spans, propagation, tail sampling",
+    "Blue-green: switch in seconds; DB doesn't switch",
+    "Canary: sticky 1%, live baseline, automated gates",
+    "Flags: deploy dark, release by rule, delete after",
+    "K8s + CI/CD; migrations: sequence the undo"
+   ],
+   "steps": [
+    {
+     "say": "Let's recap. Health checks: liveness restarts, so never dependencies. Readiness de-routes, false while warming and draining. Both cost about a millisecond.",
+     "reveal": 1
+    },
+    {
+     "say": "Tracing: the gateway mints a trace I-D, every operation records a span, context rides in headers and queue metadata, and tail sampling keeps errors and outliers.",
+     "reveal": 2
+    },
+    {
+     "say": "Blue-green: verify green, switch in seconds, keep blue as the undo. The database doesn't switch, so use expand-contract.",
+     "reveal": 3
+    },
+    {
+     "say": "Canary: a sticky one percent, compared against the live baseline on golden signals and business metrics, with automated gates.",
+     "reveal": 4
+    },
+    {
+     "say": "Flags: deploy dark, release by rule to named cohorts, fail static, and delete the flag when done.",
+     "reveal": 5
+    },
+    {
+     "say": "Kubernetes keeps declared state true, the pipeline builds once and promotes, and migrations sequence the undo buttons, one-way door last. Next time, in episode fifteen: Batch and Streaming Systems. See you there.",
+     "reveal": 6
+    }
+   ],
+   "id": "s054"
+  }
+ ]
+}

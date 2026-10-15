@@ -1,0 +1,2328 @@
+{
+  "series": "LLD Workshop",
+  "episode": 14,
+  "title": "Classic Concurrency Problems",
+  "subtitle": "FooBar, ZeroEvenOdd, FizzBuzz, H2O, philosophers, and six thread-safe designs",
+  "scenes": [
+    {
+      "id": "s001",
+      "layout": "title",
+      "title": "Classic Concurrency Problems",
+      "steps": [
+        {
+          "say": "Welcome to the L-L-D Workshop, episode fourteen: Classic Concurrency Problems. Last episode gave you the toolbox: locks, semaphores, condition variables, barriers and atomics. Today we use that toolbox on the exact problems interviewers ask.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll be able to solve the five classic LeetCode concurrency puzzles, and design six thread-safe components in a machine-coding round: a cache with expiry, a concurrent hash map, a blocking queue, a Bloom filter, a parallel merge sort and a rate limiter.",
+          "reveal": 0
+        },
+        {
+          "say": "Keep the chapter thirteen PDF open beside the video; it has the full Java code and real output.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s002",
+      "layout": "section",
+      "kicker": "Before we start",
+      "title": "A five-step checklist for any concurrency problem",
+      "steps": [
+        {
+          "say": "Here's a checklist for every problem today, applied right away to our first puzzle.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 13 Concurrency Problems · Reusable mental checklist"
+    },
+    {
+      "id": "s003",
+      "layout": "bullets",
+      "title": "The concurrency checklist",
+      "bullets": [
+        "1. What is the shared state?",
+        "2. What ordering or invariant must hold?",
+        "3. Who waits, for what, and who signals?",
+        "4. Pick the primitive that fits",
+        "5. Check liveness: does everyone progress and exit?"
+      ],
+      "steps": [
+        {
+          "say": "Step one, find the shared state. In FooBar, it's simply whose turn it is.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, name the invariant, a rule that's always true. For FooBar: foo and bar strictly alternate.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, who waits and who signals. The bar thread waits until foo has printed; foo signals it. Then the roles flip.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, pick the primitive. Turn-taking, semaphores. Waiting for a condition, a condition variable. Groups, a barrier. Mutual exclusion, a lock. One variable, an atomic.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, check liveness: can anyone wait forever, and does every thread exit? Most bugs hide here.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s004",
+      "layout": "section",
+      "kicker": "Problem 1 of 11",
+      "title": "Print FooBar Alternately",
+      "steps": [
+        {
+          "say": "Problem one, LeetCode eleven fifteen. One object, two threads. Thread A calls foo and prints foo, n times. Thread B calls bar and prints bar, n times. The output must be foobar, foobar, foobar, whichever thread the scheduler starts first.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 13 · 13.1 Print FooBar Alternately"
+    },
+    {
+      "id": "s005",
+      "layout": "bullets",
+      "title": "Approach: two semaphores as a baton",
+      "bullets": [
+        "fooTurn starts with 1 permit, barTurn with 0",
+        "foo: acquire fooTurn, print, release barTurn",
+        "bar: acquire barTurn, print, release fooTurn",
+        "Alternative: one monitor plus a boolean turn flag"
+      ],
+      "steps": [
+        {
+          "say": "Think of a relay baton. A semaphore counts permits: acquire takes one or waits, release gives one back. fooTurn starts with one permit, so foo may go first. barTurn starts with zero, so bar must wait.",
+          "reveal": 1
+        },
+        {
+          "say": "The foo thread acquires its own semaphore, prints foo, then releases the other one, handing the baton to bar.",
+          "reveal": 2
+        },
+        {
+          "say": "Bar is the mirror image: acquire barTurn, print bar, release fooTurn. The baton goes back.",
+          "reveal": 3
+        },
+        {
+          "say": "You can also do it with one monitor: a boolean called fooTurn, a while loop that waits until it's your turn, then flip the flag and notify all.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s006",
+      "layout": "diagram",
+      "title": "The baton passing between threads",
+      "mermaid": "sequenceDiagram\n    participant A as \"foo thread\"\n    participant S as \"semaphores\"\n    participant B as \"bar thread\"\n    B->>S: barTurn.acquire waits\n    A->>S: fooTurn.acquire ok\n    A->>A: print foo\n    A->>S: barTurn.release\n    S-->>B: wakes\n    B->>B: print bar\n    B->>S: fooTurn.release",
+      "caption": "One permit total, always held by exactly one side",
+      "steps": [
+        {
+          "say": "Here's the important case: the bar thread starts first, on purpose. It calls acquire on barTurn, which has zero permits, so it simply blocks. Foo acquires, prints, releases barTurn. Bar wakes, prints, releases fooTurn. Order is forced no matter who starts.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s007",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: n equals 2, bar thread starts first",
+      "table": {
+        "head": [
+          "Moment",
+          "fooTurn",
+          "barTurn",
+          "Output"
+        ],
+        "rows": [
+          [
+            "Start",
+            "1",
+            "0",
+            "(empty)"
+          ],
+          [
+            "bar tries acquire",
+            "1",
+            "0, blocks",
+            "(empty)"
+          ],
+          [
+            "foo acquires, prints",
+            "0",
+            "0",
+            "foo"
+          ],
+          [
+            "foo releases barTurn",
+            "0",
+            "1",
+            "foo"
+          ],
+          [
+            "bar prints, releases fooTurn",
+            "1",
+            "0",
+            "foobar"
+          ],
+          [
+            "second round",
+            "1",
+            "0",
+            "foobarfoobar"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's trace n equals two. At the start, fooTurn has one permit and barTurn has zero. Add them: one.",
+          "reveal": 1
+        },
+        {
+          "say": "Bar starts first and blocks, because barTurn is zero.",
+          "reveal": 2
+        },
+        {
+          "say": "Foo acquires its permit, so both are zero for a moment, and prints foo.",
+          "reveal": 3
+        },
+        {
+          "say": "Foo releases barTurn. Total permits: one again.",
+          "reveal": 4
+        },
+        {
+          "say": "Bar wakes, prints bar, releases fooTurn. We have foobar.",
+          "reveal": 5
+        },
+        {
+          "say": "Round two repeats exactly. The total is always one, so at most one thread prints at a time, and they strictly alternate.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s008",
+      "layout": "twocol",
+      "title": "Why it's correct, and the pitfalls",
+      "left": {
+        "heading": "Correct because",
+        "bullets": [
+          "Permits across both semaphores always total 1",
+          "Release happens-before the acquire it enables",
+          "Each loop runs n times; every acquire is matched"
+        ]
+      },
+      "right": {
+        "heading": "Pitfalls",
+        "bullets": [
+          "One shared semaphore: a thread re-takes its own permit",
+          "if instead of while in the monitor version",
+          "Busy-waiting on a volatile flag burns a core"
+        ]
+      },
+      "steps": [
+        {
+          "say": "The invariant: total permits are always exactly one.",
+          "reveal": 1
+        },
+        {
+          "say": "Visibility is free. In the Java memory model, a release happens-before the acquire it enables, so bar sees everything foo wrote.",
+          "reveal": 2
+        },
+        {
+          "say": "Termination: both loops run exactly n times, and every acquire has a matching release, so both threads exit.",
+          "reveal": 3
+        },
+        {
+          "say": "Pitfall one: using a single semaphore for both. A thread can release and then immediately grab its own permit back, and print foo twice.",
+          "reveal": 4
+        },
+        {
+          "say": "Pitfall two: an if instead of a while in the monitor version, which breaks on spurious wake-ups.",
+          "reveal": 5
+        },
+        {
+          "say": "Pitfall three: spinning on a volatile flag burns a whole C-P-U core. Real-world cousins: ping-pong protocols and double-buffering.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s009",
+      "layout": "number",
+      "title": "In the interview: FooBar",
+      "big": "2 semaphores, 1 permit total",
+      "caption": "Follow-up: three threads A, B, C? A ring of three semaphores",
+      "steps": [
+        {
+          "say": "Say this: two semaphores as a baton; foo's starts at one, bar's at zero; each thread acquires its own, prints, and releases the other's; total permits are always one, so they alternate. If they ask for three threads printing A, B, C, use three semaphores in a ring, A at one, B and C at zero, each releasing the next.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s010",
+      "layout": "section",
+      "kicker": "Problem 2 of 11",
+      "title": "Print Zero Even Odd",
+      "steps": [
+        {
+          "say": "Problem two, LeetCode eleven sixteen. Three threads share one object. One may only print zero, one only even numbers, one only odd numbers. Together they must print zero one, zero two, zero three, up to n. For n equals five that's zero one zero two zero three zero four zero five.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 13 · 13.2 Print Zero Even Odd"
+    },
+    {
+      "id": "s011",
+      "layout": "bullets",
+      "title": "Approach: zero is the dispatcher",
+      "bullets": [
+        "Semaphores: zeroTurn 1, oddTurn 0, evenTurn 0",
+        "zero: acquire zeroTurn, print 0, release odd or even",
+        "odd and even: acquire own, print number, release zeroTurn",
+        "Loop counts: zero n, odd ceil(n/2), even floor(n/2)"
+      ],
+      "steps": [
+        {
+          "say": "Three semaphores. Zero starts with the only permit.",
+          "reveal": 1
+        },
+        {
+          "say": "The zero thread is a dispatcher, a coordinator that decides who goes next. For position i, it prints zero, then releases oddTurn if i is odd, or evenTurn if i is even.",
+          "reveal": 2
+        },
+        {
+          "say": "That thread prints its number and hands control straight back through zeroTurn.",
+          "reveal": 3
+        },
+        {
+          "say": "The loop counts must match the permits each thread receives. Zero loops n times. Odd loops over one, three, five. Even over two, four, six.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s012",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: n equals 4, step by step",
+      "table": {
+        "head": [
+          "i",
+          "zero prints",
+          "then releases",
+          "worker prints"
+        ],
+        "rows": [
+          [
+            "1",
+            "0",
+            "oddTurn",
+            "odd prints 1"
+          ],
+          [
+            "2",
+            "0",
+            "evenTurn",
+            "even prints 2"
+          ],
+          [
+            "3",
+            "0",
+            "oddTurn",
+            "odd prints 3"
+          ],
+          [
+            "4",
+            "0",
+            "evenTurn",
+            "even prints 4"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's walk n equals four. i is one: zero prints zero, one is odd, so it releases oddTurn. Odd prints one and releases zeroTurn.",
+          "reveal": 1
+        },
+        {
+          "say": "i is two: zero prints zero, releases evenTurn, even prints two.",
+          "reveal": 2
+        },
+        {
+          "say": "i is three: odd again, prints three.",
+          "reveal": 3
+        },
+        {
+          "say": "i is four: even prints four. Output: zero one zero two zero three zero four. So how many times did odd acquire? Twice, for one and three. Even also twice. And for n equals one, even's loop runs zero times and exits cleanly.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s013",
+      "layout": "twocol",
+      "title": "Correctness and pitfalls",
+      "left": {
+        "heading": "Correct because",
+        "bullets": [
+          "Exactly one semaphore holds a permit at any moment",
+          "Zero's index i decides the parity of the next number",
+          "Loop counts equal permits received: nobody hangs"
+        ]
+      },
+      "right": {
+        "heading": "Pitfalls",
+        "bullets": [
+          "Workers computing 'next number' from an unsynced counter",
+          "Loop bounds that don't match permits: program hangs"
+        ]
+      },
+      "steps": [
+        {
+          "say": "One permit circulates among three semaphores, so exactly one thread prints at a time.",
+          "reveal": 1
+        },
+        {
+          "say": "The dispatcher's index picks the right worker.",
+          "reveal": 2
+        },
+        {
+          "say": "Every thread gets exactly as many permits as loop iterations, so everyone exits.",
+          "reveal": 3
+        },
+        {
+          "say": "Pitfall: letting odd and even compute the next number from a shared counter without synchronization.",
+          "reveal": 4
+        },
+        {
+          "say": "Pitfall: off-by-one loop bounds. If even loops one time too many, it waits forever and the program hangs. Real systems use this dispatcher-worker shape, like an interpreter routing instructions. In the interview: zero dispatches, one permit circulates.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s014",
+      "layout": "section",
+      "kicker": "Problem 3 of 11",
+      "title": "Fizz Buzz Multithreaded",
+      "steps": [
+        {
+          "say": "Problem three, LeetCode eleven ninety-five. Four threads together print one to n. Multiples of fifteen print fizzbuzz. Multiples of three only print fizz. Multiples of five only print buzz. Everything else prints the number. Each kind belongs to a different thread.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 13 · 13.3 Fizz Buzz Multithreaded"
+    },
+    {
+      "id": "s015",
+      "layout": "bullets",
+      "title": "Approach: shared counter plus per-thread predicate",
+      "bullets": [
+        "One counter 'current', guarded by the object's monitor",
+        "Wait while current is not mine and not past n",
+        "If current is past n: notifyAll and exit",
+        "Else print, increment, notifyAll",
+        "One helper runWhile(predicate, action) for all four"
+      ],
+      "steps": [
+        {
+          "say": "This is the condition-variable pattern. A predicate is a yes-or-no test. There's one shared counter called current, and every read and write happens inside synchronized on the object.",
+          "reveal": 1
+        },
+        {
+          "say": "Step one: each thread waits in a while loop while current is not its number and still not past n.",
+          "reveal": 2
+        },
+        {
+          "say": "Step two: if current has passed n, notify all and exit, so the others wake up and exit too.",
+          "reveal": 3
+        },
+        {
+          "say": "Step three: otherwise print, increment current, and notify all, because the next number might belong to anyone.",
+          "reveal": 4
+        },
+        {
+          "say": "All four threads share one helper that takes a predicate and an action. That's DRY, don't repeat yourself.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s016",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: who acts on 13, 14 and 15?",
+      "table": {
+        "head": [
+          "current",
+          "fizz",
+          "buzz",
+          "fizzbuzz",
+          "number"
+        ],
+        "rows": [
+          [
+            "13",
+            "waits",
+            "waits",
+            "waits",
+            "prints 13"
+          ],
+          [
+            "14",
+            "waits",
+            "waits",
+            "waits",
+            "prints 14"
+          ],
+          [
+            "15",
+            "waits",
+            "waits",
+            "prints",
+            "waits"
+          ],
+          [
+            "16, past n",
+            "exits",
+            "exits",
+            "exits",
+            "exits"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Take n equals fifteen. At thirteen, only the number thread's predicate is true, so it prints and notifies all. The other three wake, check, and go back to waiting.",
+          "reveal": 1
+        },
+        {
+          "say": "Same for fourteen.",
+          "reveal": 2
+        },
+        {
+          "say": "At fifteen, only fizzbuzz matches. Notice fizz's predicate is divisible by three and not by five, so it does not claim fifteen.",
+          "reveal": 3
+        },
+        {
+          "say": "Current becomes sixteen, past n. The last notify all wakes everyone, each sees current past n, and all four exit. The predicates partition the numbers: each number satisfies exactly one.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s017",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Why notifyAll here, and not notify?",
+      "bullets": [
+        "A. notify is slower",
+        "B. notify might wake the wrong thread, and the right one never wakes",
+        "C. notify doesn't release the lock"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Four threads wait on one monitor for four different conditions. Which answer is right?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s018",
+      "layout": "twocol",
+      "title": "Answer: B. Plus the other pitfalls",
+      "left": {
+        "heading": "Correct because",
+        "bullets": [
+          "Predicates partition 1..n: one thread per number",
+          "current only touched inside synchronized",
+          "notifyAll guarantees the right thread wakes"
+        ]
+      },
+      "right": {
+        "heading": "Pitfalls",
+        "bullets": [
+          "notify(): lost wake-ups, random hangs",
+          "No 'past n' exit check: threads wait forever",
+          "Overlapping predicates: two threads fight over 15"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Answer B. With notify, Java might wake the fizz thread when the number belongs to buzz. Fizz checks, goes back to sleep, and buzz is never woken. The program hangs.",
+          "reveal": 1
+        },
+        {
+          "say": "And because current is only touched inside the lock, there are no races and visibility is guaranteed.",
+          "reveal": 2
+        },
+        {
+          "say": "Notify all wakes every waiter, so the right one always gets a chance.",
+          "reveal": 3
+        },
+        {
+          "say": "Pitfalls: notify instead of notify all.",
+          "reveal": 4
+        },
+        {
+          "say": "Forgetting the past-n exit check, so threads sleep forever after the last number.",
+          "reveal": 5
+        },
+        {
+          "say": "Or overlapping predicates. Real-world cousin: pipeline stages, each waiting until a job reaches its stage. A semaphore version avoids the thundering herd, where many threads wake but only one can proceed, at the cost of more code.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s019",
+      "layout": "section",
+      "kicker": "Problem 4 of 11",
+      "title": "Building H2O",
+      "steps": [
+        {
+          "say": "Problem four, LeetCode eleven seventeen. Hydrogen and oxygen threads arrive in any order. They must leave in groups of three, each forming one water molecule: exactly two H and one O. All three atoms of one molecule must leave before any atom of the next.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 13 · 13.4 Building H2O"
+    },
+    {
+      "id": "s020",
+      "layout": "bullets",
+      "title": "Approach: slots decide who, a barrier decides when",
+      "bullets": [
+        "hSlots = Semaphore(2): at most 2 H per molecule",
+        "oSlots = Semaphore(1): at most 1 O per molecule",
+        "CyclicBarrier(3): the three atoms wait for each other",
+        "Return your slot only AFTER you've been released"
+      ],
+      "steps": [
+        {
+          "say": "Two kinds of tool. First, slots. The hydrogen semaphore has two permits, so at most two hydrogens are inside the current molecule.",
+          "reveal": 1
+        },
+        {
+          "say": "The oxygen semaphore has one permit.",
+          "reveal": 2
+        },
+        {
+          "say": "Second, a cyclic barrier of three. A barrier holds threads until all three parties arrive, then lets them all go. Cyclic means it resets itself for the next round.",
+          "reveal": 3
+        },
+        {
+          "say": "The crucial detail: a thread gives its slot back only after it has printed and left. That way the next molecule can't form until this one is finished.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s021",
+      "layout": "diagram",
+      "title": "H2O flow",
+      "mermaid": "flowchart LR\n    H[\"H thread\"] --> HS[\"hSlots acquire, max 2\"]\n    O[\"O thread\"] --> OS[\"oSlots acquire, max 1\"]\n    HS --> BAR[\"CyclicBarrier 3 await\"]\n    OS --> BAR\n    BAR --> REL[\"release and print\"]\n    REL --> BACK[\"give slot back\"]",
+      "caption": "Slots cap the group; the barrier releases it together",
+      "steps": [
+        {
+          "say": "Follow the arrows. An H thread grabs one of two H slots, an O thread grabs the single O slot. All of them meet at the barrier. When the third arrives, all three print, and only then return their slots.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s022",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: arrivals O, H, O, H, H",
+      "table": {
+        "head": [
+          "Arrival",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "O1",
+            "takes the only O slot, waits at barrier (1 of 3)"
+          ],
+          [
+            "H1",
+            "takes H slot 1, waits at barrier (2 of 3)"
+          ],
+          [
+            "O2",
+            "no O slot free, blocks on oSlots"
+          ],
+          [
+            "H2",
+            "takes H slot 2, barrier trips: H1 H2 O1 print"
+          ],
+          [
+            "slots freed",
+            "O2 gets the O slot; H3 joins the next molecule"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Imagine arrivals O, H, O, H, H. The first oxygen takes the only O slot and waits at the barrier, one of three.",
+          "reveal": 1
+        },
+        {
+          "say": "The first hydrogen takes an H slot. Two of three.",
+          "reveal": 2
+        },
+        {
+          "say": "The second oxygen can't get in. No O slot is free, so it blocks on the semaphore and never reaches the barrier.",
+          "reveal": 3
+        },
+        {
+          "say": "The second hydrogen arrives, three of three, the barrier trips, and H, H, O print together.",
+          "reveal": 4
+        },
+        {
+          "say": "Only after printing do they return slots. Now the waiting oxygen and the third hydrogen start molecule two. ",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s023",
+      "layout": "twocol",
+      "title": "Correctness and pitfalls",
+      "left": {
+        "heading": "Correct because",
+        "bullets": [
+          "Slots let at most 2 H and 1 O reach the barrier",
+          "Barrier needs 3, so each trip is exactly H, H, O",
+          "Slots freed after printing: no mixing"
+        ]
+      },
+      "right": {
+        "heading": "Pitfalls",
+        "bullets": [
+          "Release slot before printing: molecules interleave",
+          "Semaphores without barrier: atoms don't leave together",
+          "Counts not exactly 2 to 1: last threads wait forever"
+        ]
+      },
+      "steps": [
+        {
+          "say": "The semaphores cap who can reach the barrier.",
+          "reveal": 1
+        },
+        {
+          "say": "The barrier needs three, so every trip is exactly two H and one O.",
+          "reveal": 2
+        },
+        {
+          "say": "And because slots return only after printing, the next group can't print until the previous one is done.",
+          "reveal": 3
+        },
+        {
+          "say": "Pitfall: freeing the slot before printing. A new hydrogen could print before the old oxygen.",
+          "reveal": 4
+        },
+        {
+          "say": "Pitfall: semaphores alone, with no barrier. Nothing forces the three to leave together.",
+          "reveal": 5
+        },
+        {
+          "say": "And if the thread counts aren't exactly two to one, the leftovers wait forever. Real-world, this is batching: matchmaking two players plus a server slot, or assembling an order from parts. In the interview: slots decide who joins, the barrier decides when they leave.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s024",
+      "layout": "section",
+      "kicker": "Problem 5 of 11",
+      "title": "Dining Philosophers",
+      "steps": [
+        {
+          "say": "Problem five, the most famous one, LeetCode twelve twenty-six. Five philosophers sit at a round table with one fork between each pair, five forks total. To eat, you need both adjacent forks.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 13 · 13.5 Dining Philosophers"
+    },
+    {
+      "id": "s025",
+      "layout": "table",
+      "title": "Five philosophers, five forks",
+      "steps": [
+        {
+          "say": "Philosopher p uses fork p on the left and fork p plus one on the right, wrapping around, so philosopher four uses forks four and zero.",
+          "reveal": 5
+        },
+        {
+          "say": "Now imagine everyone picks up their left fork at the same instant. Each holds one fork and waits forever for the next. That's deadlock. All four Coffman conditions hold: mutual exclusion, hold-and-wait, no preemption, and circular wait. Break any one and deadlock is impossible.",
+          "reveal": 5
+        }
+      ],
+      "table": {
+        "head": [
+          "Philosopher",
+          "Left fork",
+          "Right fork",
+          "Naive: holds, waits for"
+        ],
+        "rows": [
+          [
+            "P0",
+            "fork 0",
+            "fork 1",
+            "holds 0, waits for 1"
+          ],
+          [
+            "P1",
+            "fork 1",
+            "fork 2",
+            "holds 1, waits for 2"
+          ],
+          [
+            "P2",
+            "fork 2",
+            "fork 3",
+            "holds 2, waits for 3"
+          ],
+          [
+            "P3",
+            "fork 3",
+            "fork 4",
+            "holds 3, waits for 4"
+          ],
+          [
+            "P4",
+            "fork 4",
+            "fork 0 (wraps)",
+            "holds 4, waits for 0: cycle"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "s026",
+      "layout": "bullets",
+      "title": "Three ways to break the deadlock",
+      "bullets": [
+        "1. Resource ordering: always take the lower-numbered fork",
+        "2. Waiter: a semaphore lets only n minus 1 try at once",
+        "3. tryLock both forks, back off randomly on failure"
+      ],
+      "steps": [
+        {
+          "say": "Fix one, resource ordering. Number the forks zero to four and always pick up the lower number first. Philosophers zero to three behave normally. But philosopher four, between forks four and zero, picks up fork zero first. That one person breaking the pattern makes a cycle impossible.",
+          "reveal": 1
+        },
+        {
+          "say": "Fix two, a waiter. A semaphore with four seats lets at most four of the five try at once. Four people, five forks: by the pigeonhole principle, at least one gets both forks, eats and frees them. Make the semaphore fair, first come first served, so nobody starves waiting for a seat.",
+          "reveal": 2
+        },
+        {
+          "say": "Fix three, try-lock. Try both forks; if you can't get the second, put the first down, wait a random short time, and retry. That breaks hold-and-wait instead. Without the random back-off you risk livelock: everyone politely retrying in lockstep forever.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s027",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: everyone grabs at once, with ordering",
+      "table": {
+        "head": [
+          "Philosopher",
+          "Forks",
+          "Takes first",
+          "Result"
+        ],
+        "rows": [
+          [
+            "P0",
+            "0 and 1",
+            "fork 0",
+            "blocks: P4 also wants fork 0"
+          ],
+          [
+            "P1",
+            "1 and 2",
+            "fork 1",
+            "holds 1, waits for 2"
+          ],
+          [
+            "P2",
+            "2 and 3",
+            "fork 2",
+            "holds 2, waits for 3"
+          ],
+          [
+            "P3",
+            "3 and 4",
+            "fork 3",
+            "gets 4 too: EATS"
+          ],
+          [
+            "P4",
+            "4 and 0",
+            "fork 0",
+            "races P0 for fork 0"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's replay the disaster with ordering on. Philosopher zero wants fork zero first.",
+          "reveal": 1
+        },
+        {
+          "say": "Philosopher one takes fork one and waits for two.",
+          "reveal": 2
+        },
+        {
+          "say": "Philosopher two takes two and waits for three.",
+          "reveal": 3
+        },
+        {
+          "say": "Philosopher three takes fork three, and fork four is free, because philosopher four never picks four first. So philosopher three eats, then frees forks three and four, and the chain unblocks.",
+          "reveal": 4
+        },
+        {
+          "say": "Philosopher four competes with zero for fork zero. One of them waits; nobody holds a higher fork while waiting for a lower one, so no cycle. In the demo, all five philosophers eat ten thousand meals each under both fixes, with no hangs.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s028",
+      "layout": "twocol",
+      "title": "Where you'll meet this, and what to say",
+      "left": {
+        "heading": "Real world",
+        "bullets": [
+          "Bank transfer: lock two accounts by id order",
+          "Moving stock between two inventories",
+          "Databases: detect deadlock, abort one transaction"
+        ]
+      },
+      "right": {
+        "heading": "In the interview",
+        "bullets": [
+          "Naive left-then-right: circular wait, deadlock",
+          "Ordering or n minus 1 waiter breaks circular wait",
+          "Fair semaphore or fair locks stop starvation"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Any code needing two locks at once is dining philosophers. A bank transfer locks two accounts: lower id first.",
+          "reveal": 1
+        },
+        {
+          "say": "Moving stock between two inventories too.",
+          "reveal": 2
+        },
+        {
+          "say": "Databases instead detect the deadlock and abort one transaction.",
+          "reveal": 3
+        },
+        {
+          "say": "In the interview: naive left-then-right is circular wait.",
+          "reveal": 4
+        },
+        {
+          "say": "Break it with a global fork order, or a waiter allowing n minus one diners.",
+          "reveal": 5
+        },
+        {
+          "say": "Fairness prevents starvation. And with five forks, at most two can eat at once.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s029",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Which Coffman condition does tryLock with back-off break?",
+      "bullets": [
+        "A. Mutual exclusion",
+        "B. Hold-and-wait",
+        "C. Circular wait"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Ordering and the waiter both break circular wait. What does try-lock break?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s030",
+      "layout": "section",
+      "kicker": "Problem 6 of 11",
+      "title": "Thread-safe cache with TTL",
+      "steps": [
+        {
+          "say": "The answer was B, hold-and-wait: if you can't get the second fork, you put the first one down, so you never hold while waiting. Now we switch from puzzles to machine coding: design a thread-safe X.",
+          "reveal": 0
+        },
+        {
+          "say": "Problem six: an in-memory cache, a fast store of copies, used by many threads, where every entry expires after a time-to-live, or T-T-L. Requirements: get returns nothing for expired entries; getOrLoad loads on a miss without a stampede; expired entries eventually leave memory; and it's testable without sleeping.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 13 · 13.6 Thread-safe cache with TTL"
+    },
+    {
+      "id": "s031",
+      "layout": "bullets",
+      "title": "Approach: five design decisions",
+      "bullets": [
+        "Immutable Entry(value, expiresAt) in a ConcurrentHashMap",
+        "Lazy expiry: get checks, then remove(key, entry)",
+        "Active expiry: a daemon sweeper every few milliseconds",
+        "No stampede: getOrLoad uses map.compute",
+        "Injected Ticker clock, so tests use a fake clock"
+      ],
+      "steps": [
+        {
+          "say": "One: store immutable entries, a value plus an expiry time, in a concurrent hash map. A reader sees the old entry or the new one, never a half-written one.",
+          "reveal": 1
+        },
+        {
+          "say": "Two: lazy expiry. On get, check the expiry. If expired, remove it with the conditional remove, key and entry, which deletes only if the map still holds that exact entry. If another thread just put a fresh value, it survives.",
+          "reveal": 2
+        },
+        {
+          "say": "Three: active expiry. A daemon thread, one that doesn't keep the program alive, sweeps expired entries on a timer, so keys nobody reads again don't leak memory.",
+          "reveal": 3
+        },
+        {
+          "say": "Four: no cache stampede. A stampede is many threads all loading the same missing key at once. compute runs atomically per key, so concurrent misses wait and the loader runs once. This is called single-flight.",
+          "reveal": 4
+        },
+        {
+          "say": "Five: time comes from an injected Ticker interface, so tests use a fake clock you can advance. That's dependency inversion.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s032",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: login sessions and one-time passwords",
+      "table": {
+        "head": [
+          "Time",
+          "Action",
+          "Result"
+        ],
+        "rows": [
+          [
+            "t = 0 ms",
+            "put session=alice (100 ms), otp (30 ms)",
+            "both stored"
+          ],
+          [
+            "t = 50 ms",
+            "get session, get otp",
+            "alice, otp expired"
+          ],
+          [
+            "t = 110 ms",
+            "get session",
+            "expired"
+          ],
+          [
+            "16 threads",
+            "getOrLoad user 7 at the same instant",
+            "loader ran 1 time"
+          ],
+          [
+            "real clock",
+            "1,000 puts, wait 200 ms",
+            "sweeper leaves size 0"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Imagine a login service. At time zero we store alice's session with a one hundred millisecond T-T-L, and a one-time password, an O-T-P, with thirty.",
+          "reveal": 1
+        },
+        {
+          "say": "Advance the fake clock to fifty milliseconds. The session is still there; the O-T-P has expired.",
+          "reveal": 2
+        },
+        {
+          "say": "At one hundred ten milliseconds the session is gone too.",
+          "reveal": 3
+        },
+        {
+          "say": "Now sixteen threads, released together by a latch, all call getOrLoad for user seven. The loader runs exactly once and all sixteen get the same value. No stampede.",
+          "reveal": 4
+        },
+        {
+          "say": "With a real clock, a thousand short-lived puts are all gone after two hundred milliseconds, thanks to the sweeper.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s033",
+      "layout": "twocol",
+      "title": "Pitfalls and real-world versions",
+      "left": {
+        "heading": "Pitfalls",
+        "bullets": [
+          "currentTimeMillis can jump; use monotonic nanoTime",
+          "Slow loader inside compute blocks a whole bin",
+          "Lazy only leaks; active only serves stale data",
+          "No max size: needs an LRU or LFU eviction policy"
+        ]
+      },
+      "right": {
+        "heading": "Real world",
+        "bullets": [
+          "Caffeine: the production Java version",
+          "Redis EXPIRE: lazy plus periodic sampling",
+          "Sessions, OTPs, DNS caches, seat holds"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Pitfall one: wall-clock time can jump when the network time protocol corrects it. nanoTime only moves forward.",
+          "reveal": 1
+        },
+        {
+          "say": "Pitfall two: a slow loader inside compute blocks other keys in that bin. Store a CompletableFuture, a placeholder filled later, instead.",
+          "reveal": 2
+        },
+        {
+          "say": "Pitfall three: lazy alone leaks; active alone serves stale values between sweeps. Use both.",
+          "reveal": 3
+        },
+        {
+          "say": "Pitfall four: no size limit. A real cache evicts by L-R-U, least recently used, or L-F-U, least frequently used.",
+          "reveal": 4
+        },
+        {
+          "say": "The real-world version is Caffeine, the standard Java caching library.",
+          "reveal": 5
+        },
+        {
+          "say": "Redis does the same mix: lazy expiry on access plus periodic sampling.",
+          "reveal": 6
+        },
+        {
+          "say": "Plus sessions, D-N-S caches and seat holds. In the interview: concurrent map of immutable entries, lazy plus scheduled expiry, compute for single-flight, injected clock.",
+          "reveal": 7
+        }
+      ]
+    },
+    {
+      "id": "s034",
+      "layout": "section",
+      "kicker": "Problem 7 of 11",
+      "title": "A simplified ConcurrentHashMap",
+      "steps": [
+        {
+          "say": "Problem seven: build a hash map many threads can use at once, with get, put, remove, compute and automatic resizing, faster than one global lock around a HashMap. The technique is lock striping: N locks, each guarding its own slice of the data.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 13 · 13.7 Simplified Concurrent HashMap, lock striping"
+    },
+    {
+      "id": "s035",
+      "layout": "bullets",
+      "title": "Approach: lock striping step by step",
+      "bullets": [
+        "Buckets: array of linked lists (separate chaining)",
+        "Stripes: S locks, S a power of two",
+        "stripe = h AND (S - 1); bucket = h AND (length - 1)",
+        "Each operation locks only its own stripe",
+        "Resize: take ALL stripe locks in order, rehash, publish",
+        "Size kept in an AtomicInteger"
+      ],
+      "steps": [
+        {
+          "say": "Buckets are an array of linked lists. Separate chaining means each bucket lists all entries whose hash lands there.",
+          "reveal": 1
+        },
+        {
+          "say": "Next to that, a small fixed array of S locks, where S is a power of two, say sixteen.",
+          "reveal": 2
+        },
+        {
+          "say": "For hash h, the stripe is h AND S minus one, the low bits. The bucket is h AND table length minus one. The key point: the stripe depends only on the hash, not on the table length, so a key's lock never changes when the table grows.",
+          "reveal": 3
+        },
+        {
+          "say": "Every operation locks just its stripe, so threads on different stripes run in parallel.",
+          "reveal": 4
+        },
+        {
+          "say": "Resize happens when size passes zero point seven five times the bucket count. Take every stripe lock in index order, which avoids deadlock, re-check, rehash into a table twice as big, publish it through a volatile field, and unlock in reverse.",
+          "reveal": 5
+        },
+        {
+          "say": "Size is an atomic integer.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s036",
+      "layout": "diagram",
+      "title": "From key to lock to bucket",
+      "mermaid": "flowchart TB\n    K[\"key\"] --> H[\"spread hashCode\"]\n    H --> S[\"stripe = h AND S-1\"]\n    H --> B[\"bucket = h AND len-1\"]\n    S --> L[\"lock stripe\"]\n    L --> B\n    B --> C[\"walk chain, update, unlock\"]",
+      "caption": "Every bucket belongs to exactly one stripe",
+      "steps": [
+        {
+          "say": "Here's the path. Spread the hash code by mixing in its high bits. Use the low bits to pick a stripe and lock it. Then use the low bits again to pick a bucket, walk the chain, update, unlock.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s037",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: 4 stripes, 16 buckets, hash 45",
+      "table": {
+        "head": [
+          "Table size",
+          "Bucket of 45",
+          "Stripe of 45"
+        ],
+        "rows": [
+          [
+            "16 buckets",
+            "45 AND 15 = 13",
+            "45 AND 3 = 1"
+          ],
+          [
+            "32 buckets",
+            "45 AND 31 = 13",
+            "45 AND 3 = 1"
+          ],
+          [
+            "64 buckets",
+            "45 AND 63 = 45",
+            "45 AND 3 = 1"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's do numbers. Four stripes, sixteen buckets, a key with hash forty-five. Bucket: forty-five AND fifteen is thirteen. Stripe: forty-five AND three is one. And notice thirteen AND three is also one: the stripe is just the low bits of the bucket index, so every key in bucket thirteen shares stripe one.",
+          "reveal": 1
+        },
+        {
+          "say": "Grow to thirty-two buckets: still bucket thirteen, still stripe one.",
+          "reveal": 2
+        },
+        {
+          "say": "Grow to sixty-four: now bucket forty-five, but still stripe one. The key's lock never moved. In the demo, eight threads doing twenty thousand puts each end with exactly one hundred sixty thousand entries.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s038",
+      "layout": "twocol",
+      "title": "Correctness and pitfalls",
+      "left": {
+        "heading": "Correct because",
+        "bullets": [
+          "S divides length: one bucket, one stripe",
+          "Resize holds every lock, re-checks, volatile publish",
+          "Normal ops hold 1 lock; resize takes all in order"
+        ]
+      },
+      "right": {
+        "heading": "Pitfalls",
+        "bullets": [
+          "Stripe from current bucket index: lock moves on resize",
+          "Resizing while holding a stripe: deadlock",
+          "Reading table without lock or volatile: stale table",
+          "Allowing null keys or values: get is ambiguous"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Because both sizes are powers of two and S is at most the table length, every bucket maps to exactly one stripe. Two threads never edit the same chain.",
+          "reveal": 1
+        },
+        {
+          "say": "Resize holds every lock, so nothing else runs. It re-checks the load because another thread may already have resized, and the volatile write publishes the new table.",
+          "reveal": 2
+        },
+        {
+          "say": "No deadlock: normal operations hold one lock. Resize takes all of them in order, and only after the caller has released its own stripe.",
+          "reveal": 3
+        },
+        {
+          "say": "Pitfall: deriving the stripe from the current bucket index. After a resize a key can move to a different lock while some thread holds the old one.",
+          "reveal": 4
+        },
+        {
+          "say": "Pitfall: calling resize while still holding your stripe. Two resizers would deadlock.",
+          "reveal": 5
+        },
+        {
+          "say": "Pitfall: reading the table field without a lock or volatile, so you see a stale table.",
+          "reveal": 6
+        },
+        {
+          "say": "And allowing nulls. If get returns null, does that mean absent or a null value? The real ConcurrentHashMap forbids nulls for exactly this reason.",
+          "reveal": 7
+        }
+      ]
+    },
+    {
+      "id": "s039",
+      "layout": "table",
+      "title": "How the real ConcurrentHashMap goes further",
+      "table": {
+        "head": [
+          "Aspect",
+          "Our striped map",
+          "JDK 8+ ConcurrentHashMap"
+        ],
+        "rows": [
+          [
+            "Reads",
+            "lock the stripe",
+            "lock-free volatile reads"
+          ],
+          [
+            "Writes",
+            "one of S stripe locks",
+            "CAS into empty bin, else lock bin head"
+          ],
+          [
+            "Long chains",
+            "linked list",
+            "red-black tree past 8 nodes"
+          ],
+          [
+            "Resize",
+            "stop-the-world",
+            "incremental, threads help move bins"
+          ],
+          [
+            "Size",
+            "AtomicInteger",
+            "LongAdder-style counter cells"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Java seven's ConcurrentHashMap used our idea, with sixteen segments. Java eight goes further: reads take no lock at all.",
+          "reveal": 1
+        },
+        {
+          "say": "Writes into an empty bin use compare-and-swap, C-A-S; otherwise they lock just that bin's first node, a lock per bucket.",
+          "reveal": 2
+        },
+        {
+          "say": "A chain longer than eight nodes becomes a red-black tree, so lookups stay fast even with bad hashes.",
+          "reveal": 3
+        },
+        {
+          "say": "Resize is incremental: threads touching the map help move bins, instead of everyone pausing.",
+          "reveal": 4
+        },
+        {
+          "say": "And size uses spread-out counter cells. In the interview: N locks for M buckets, stripe by hash bits, resize under all locks in order, publish through volatile.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 13 · 13.7 How the real ConcurrentHashMap goes further"
+    },
+    {
+      "id": "s040",
+      "layout": "section",
+      "kicker": "Problem 8 of 11",
+      "title": "Bounded blocking queue, two ways",
+      "steps": [
+        {
+          "say": "Problem eight: a fixed-capacity, first-in-first-out queue for producers and consumers. put blocks while it's full, take blocks while it's empty, and timed versions, offer and poll, give up after a timeout.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 13 · 13.8 Thread-safe bounded Blocking Queue"
+    },
+    {
+      "id": "s041",
+      "layout": "bullets",
+      "title": "Storage: a circular array",
+      "bullets": [
+        "items array, plus head, tail and count",
+        "enqueue: write at tail, tail = (tail + 1) mod capacity",
+        "dequeue: read at head, null the slot, advance head",
+        "Wait while full or empty, always in a while loop"
+      ],
+      "steps": [
+        {
+          "say": "The storage is a circular array, also called a ring buffer: when you reach the end you wrap to the start. Three fields: head, tail and count.",
+          "reveal": 1
+        },
+        {
+          "say": "Enqueue writes at tail, then moves tail forward, wrapping with modulo capacity, and increments count.",
+          "reveal": 2
+        },
+        {
+          "say": "Dequeue reads at head, sets that slot to null so the garbage collector can reclaim the object, moves head forward and decrements count.",
+          "reveal": 3
+        },
+        {
+          "say": "Producers wait while count equals capacity; consumers wait while count is zero. Always in a while loop, for spurious wake-ups and for when another thread got there first.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s042",
+      "layout": "diagram",
+      "title": "Queue states",
+      "mermaid": "stateDiagram-v2\n    [*] --> Empty\n    Empty --> Partial : put\n    Partial --> Partial : put or take\n    Partial --> Full : put reaches capacity\n    Full --> Partial : take\n    Partial --> Empty : take last item",
+      "caption": "take waits in Empty; put waits in Full",
+      "steps": [
+        {
+          "say": "Three states: empty, partial and full. In empty, take waits. In full, put waits. Every other move is immediate.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s043",
+      "layout": "twocol",
+      "title": "Way 1 monitor versus Way 2 Lock plus Conditions",
+      "left": {
+        "heading": "Way 1: synchronized",
+        "bullets": [
+          "while (full) wait()",
+          "notifyAll: producers and consumers share one wait set",
+          "Wakes everyone: thundering herd"
+        ]
+      },
+      "right": {
+        "heading": "Way 2: ReentrantLock",
+        "bullets": [
+          "Two Conditions: notFull and notEmpty",
+          "while (full) notFull.await()",
+          "signal() wakes exactly one of the right kind"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Way one: synchronized methods. Wait while full or empty.",
+          "reveal": 1
+        },
+        {
+          "say": "But producers and consumers sleep in the same wait set, so you must notify all. A plain notify might wake another producer when a consumer was needed, and the right thread never wakes.",
+          "reveal": 2
+        },
+        {
+          "say": "The cost: everyone wakes on every change, a thundering herd.",
+          "reveal": 3
+        },
+        {
+          "say": "Way two, how Java's ArrayBlockingQueue is built: one reentrant lock with two condition queues, notFull and notEmpty.",
+          "reveal": 4
+        },
+        {
+          "say": "Producers wait only on notFull, consumers only on notEmpty.",
+          "reveal": 5
+        },
+        {
+          "say": "So after an enqueue you signal notEmpty, waking exactly one consumer, and after a dequeue you signal notFull. Targeted signal is safe because each queue holds only one kind of waiter.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s044",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: capacity 2, a logging pipeline",
+      "table": {
+        "head": [
+          "Event",
+          "count",
+          "Who waits / wakes"
+        ],
+        "rows": [
+          [
+            "P1 puts log A",
+            "1",
+            "-"
+          ],
+          [
+            "P2 puts log B",
+            "2",
+            "queue is full"
+          ],
+          [
+            "P3 puts log C",
+            "2",
+            "P3 waits on notFull"
+          ],
+          [
+            "Consumer takes A",
+            "1",
+            "signal notFull: P3 wakes"
+          ],
+          [
+            "P3 puts C",
+            "2",
+            "signal notEmpty"
+          ],
+          [
+            "poll(30 ms) on empty",
+            "0",
+            "returns null on timeout"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Imagine a logging pipeline, capacity two, three producer threads, one consumer. Producer one puts log A. Count one.",
+          "reveal": 1
+        },
+        {
+          "say": "Producer two puts B. Count two, full.",
+          "reveal": 2
+        },
+        {
+          "say": "Producer three tries to put C and waits on notFull.",
+          "reveal": 3
+        },
+        {
+          "say": "The consumer takes A. Dequeue signals notFull, waking only producer three.",
+          "reveal": 4
+        },
+        {
+          "say": "Producer three re-checks the while condition, finds room, puts C, and signals notEmpty.",
+          "reveal": 5
+        },
+        {
+          "say": "And for timeouts: poll for thirty milliseconds on an empty queue returns null. awaitNanos returns the time left, so spurious wake-ups can't stretch the total wait. ",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s045",
+      "layout": "twocol",
+      "title": "Pitfalls and real world",
+      "left": {
+        "heading": "Pitfalls",
+        "bullets": [
+          "if instead of while; notify with one shared monitor",
+          "Forgetting items[head] = null: memory leak",
+          "Accepting null when null means 'timed out'",
+          "lock() instead of lockInterruptibly()"
+        ]
+      },
+      "right": {
+        "heading": "Real world",
+        "bullets": [
+          "ArrayBlockingQueue: exactly Way 2",
+          "LinkedBlockingQueue: separate put and take locks",
+          "Thread pools, loggers, Kafka producer internals"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Pitfalls: if instead of while, and notify with one shared monitor.",
+          "reveal": 1
+        },
+        {
+          "say": "Forgetting to null out the dequeued slot, so the array keeps big objects alive.",
+          "reveal": 2
+        },
+        {
+          "say": "Accepting null items when your poll uses null to mean timed out.",
+          "reveal": 3
+        },
+        {
+          "say": "And plain lock instead of lockInterruptibly, which makes cancelling a blocked thread harder.",
+          "reveal": 4
+        },
+        {
+          "say": "ArrayBlockingQueue is exactly way two.",
+          "reveal": 5
+        },
+        {
+          "say": "LinkedBlockingQueue uses two locks, one for put and one for take, so a producer and consumer can work at the same moment. That's your answer if they ask for higher throughput.",
+          "reveal": 6
+        },
+        {
+          "say": "Thread pools, loggers and Kafka's producer rely on it. In the interview: circular buffer, one lock, wait in loops; monitor means notify all, Lock means two conditions.",
+          "reveal": 7
+        }
+      ]
+    },
+    {
+      "id": "s046",
+      "layout": "section",
+      "kicker": "Problem 9 of 11",
+      "title": "Concurrent Bloom filter",
+      "steps": [
+        {
+          "say": "Problem nine: a Bloom filter that many threads add to and query at once. A Bloom filter is a tiny probabilistic set. It answers either definitely not present, or probably present.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 13 · 13.9 Concurrent Bloom Filter"
+    },
+    {
+      "id": "s047",
+      "layout": "bullets",
+      "title": "How a Bloom filter works",
+      "bullets": [
+        "1. An array of m bits, all 0",
+        "2. Add: compute k hash positions, set those bits to 1",
+        "3. Query: any of the k bits is 0 = definitely absent",
+        "4. All k bits are 1 = probably present",
+        "No false negatives, no deletion"
+      ],
+      "steps": [
+        {
+          "say": "Step one: start with m bits, all zero.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, add: hash the item to k positions and set those bits. Double hashing makes this cheap: compute two hashes once, then use h one plus i times h two for i from zero to k minus one.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, query: check the same k positions. If any bit is zero, this item was definitely never added.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: if all are one, it was probably added, because other items might have set those bits. That's a false positive.",
+          "reveal": 4
+        },
+        {
+          "say": "There are never false negatives. And you can't delete, because clearing a bit might erase other items. A counting Bloom filter, with small counters instead of bits, does support deletes.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s048",
+      "layout": "number",
+      "kicker": "Example",
+      "title": "Example: sizing for 80,000 usernames",
+      "big": "n = 80,000, p = 1% gives m = 766,805 bits, k = 7",
+      "caption": "About 9.6 bits per item, about 94 kibibytes total",
+      "steps": [
+        {
+          "say": "Imagine a sign-up page checking whether a username is taken, before hitting the database. We expect n equals eighty thousand names and want a false-positive rate p of one percent. The formula for bits is minus n times the natural log of p, divided by the natural log of two, squared. That gives seven hundred sixty-six thousand eight hundred five bits, about ninety-four kibibytes. Hashes k is m over n times the natural log of two, which rounds to seven. That's about nine point six bits per item, no matter how long the names are. In the demo, the measured false-positive rate is one point zero one percent, right on target.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s049",
+      "layout": "twocol",
+      "title": "Thread safety without locks",
+      "left": {
+        "heading": "The trick",
+        "bullets": [
+          "Bits in an AtomicLongArray, 64 per word",
+          "Set a bit with atomic OR: getAndAccumulate",
+          "Queries are plain volatile reads",
+          "Bits only go 0 to 1: monotonic"
+        ]
+      },
+      "right": {
+        "heading": "Why plain OR fails",
+        "bullets": [
+          "words[i] |= mask is read, modify, write",
+          "Two threads, same word: one bit is lost",
+          "Lost bit means a false negative"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Store the bits in an atomic long array, sixty-four bits per word.",
+          "reveal": 1
+        },
+        {
+          "say": "Set a bit with an atomic OR, getAndAccumulate, which is a compare-and-swap loop inside. Two threads setting different bits in the same word both succeed.",
+          "reveal": 2
+        },
+        {
+          "say": "Queries need no lock. They're just volatile reads.",
+          "reveal": 3
+        },
+        {
+          "say": "Because bits only ever go from zero to one, the state is monotonic. A query racing with an unfinished add can at worst miss it, which is fine, since that add hadn't happened yet. And OR is commutative, so the final bits are identical whatever the interleaving.",
+          "reveal": 4
+        },
+        {
+          "say": "Now why does the plain version break? words at i, OR-equals mask, is three steps: read, modify, write.",
+          "reveal": 5
+        },
+        {
+          "say": "Thread one reads the word, thread two reads the same word, both write back. One thread's bit is overwritten.",
+          "reveal": 6
+        },
+        {
+          "say": "And a lost bit means a false negative, the one thing a Bloom filter must never produce.",
+          "reveal": 7
+        }
+      ]
+    },
+    {
+      "id": "s050",
+      "layout": "bullets",
+      "title": "Pitfalls, real world, interview line",
+      "bullets": [
+        "Weak hashes cluster bits: mix with FNV-1a plus Murmur finalizer",
+        "Adding far more than n: false positives climb fast",
+        "Cassandra, HBase, RocksDB: skip disk reads per SSTable",
+        "Guava BloomFilter, RedisBloom BF.ADD and BF.EXISTS"
+      ],
+      "steps": [
+        {
+          "say": "Pitfalls: weak hashes, like String hashCode with small offsets, cluster the bits and push false positives way up. Mix the bits with strong, fast hashes like F-N-V one-A and the MurmurHash finalizer.",
+          "reveal": 1
+        },
+        {
+          "say": "And overfilling: past n items the false-positive rate climbs fast. Build a bigger filter, or chain filters.",
+          "reveal": 2
+        },
+        {
+          "say": "Real world: Cassandra, HBase, RocksDB and LevelDB keep a Bloom filter per S-S-Table, a sorted file on disk, to skip disk reads for keys that aren't there.",
+          "reveal": 3
+        },
+        {
+          "say": "Guava's BloomFilter uses atomic long arrays like this, and Redis has BF dot ADD. In the interview: no is certain, yes is probable, atomic OR is lock-free and correct.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s051",
+      "layout": "section",
+      "kicker": "Problem 10 of 11",
+      "title": "Multi-threaded merge sort with Fork/Join",
+      "steps": [
+        {
+          "say": "Problem ten: sort a big integer array using all your C-P-U cores. Merge sort is divide and conquer: sort both halves independently, then merge. Independent halves means they can run in parallel. Java's Fork Join framework is built exactly for this.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 13 · 13.10 Multi-threaded Merge Sort (Fork/Join)"
+    },
+    {
+      "id": "s052",
+      "layout": "bullets",
+      "title": "Approach: four steps",
+      "bullets": [
+        "1. Range of 8,192 or less: Arrays.sort it sequentially",
+        "2. Else split at mid = (lo + hi) >>> 1, invokeAll both",
+        "3. Merge with ONE shared scratch buffer, own range only",
+        "4. Work stealing keeps every core busy"
+      ],
+      "steps": [
+        {
+          "say": "Step one, the threshold. If the range has eight thousand one hundred ninety-two elements or fewer, just sort it sequentially. Below that, splitting costs more than it saves.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: split at the midpoint. Use an unsigned shift right by one instead of dividing by two, so huge indexes can't overflow. invokeAll forks both halves and waits for both.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: merge using one scratch buffer allocated once. Each task touches only its own slice, so concurrent tasks share nothing.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: work stealing. Every pool thread has its own deque of tasks. An idle thread steals from the far end of a busy thread's deque, so all cores stay busy.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s053",
+      "layout": "diagram",
+      "title": "Split, sort small pieces, merge back up",
+      "mermaid": "flowchart TB\n    A[\"sort 0..N\"] --> B[\"sort 0..N/2\"]\n    A --> C[\"sort N/2..N\"]\n    B --> D[\"small: Arrays.sort\"]\n    B --> E[\"small: Arrays.sort\"]\n    C --> F[\"small: Arrays.sort\"]\n    C --> G[\"small: Arrays.sort\"]\n    D --> M1[\"merge\"]\n    E --> M1\n    F --> M2[\"merge\"]\n    G --> M2",
+      "caption": "Children finish before the parent merges",
+      "steps": [
+        {
+          "say": "Read it top down for splitting and bottom up for merging. Four leaves sort in parallel, two merges run in parallel, then one final merge.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s054",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: 4 million ints on 8 cores",
+      "table": {
+        "head": [
+          "Level",
+          "Tasks",
+          "Size each"
+        ],
+        "rows": [
+          [
+            "0",
+            "1",
+            "4,000,000"
+          ],
+          [
+            "1",
+            "2",
+            "2,000,000"
+          ],
+          [
+            "5",
+            "32",
+            "125,000"
+          ],
+          [
+            "9",
+            "512",
+            "about 7,800, sorted sequentially"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Imagine sorting four million random integers on an eight-core laptop. One task covers everything.",
+          "reveal": 1
+        },
+        {
+          "say": "Level one: two tasks of two million.",
+          "reveal": 2
+        },
+        {
+          "say": "Level five: thirty-two tasks, more than cores, and work stealing balances them.",
+          "reveal": 3
+        },
+        {
+          "say": "Level nine: five hundred twelve leaves of about seven thousand eight hundred each, under the threshold, so each just calls Arrays dot sort. Then merges climb back up, and the result matches Arrays dot sort.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s055",
+      "layout": "twocol",
+      "title": "Correctness and pitfalls",
+      "left": {
+        "heading": "Correct because",
+        "bullets": [
+          "Subtasks touch disjoint ranges: no data race",
+          "invokeAll and join give happens-before",
+          "Ties take from the left run: a stable sort"
+        ]
+      },
+      "right": {
+        "heading": "Pitfalls",
+        "bullets": [
+          "No threshold: millions of tiny tasks",
+          "New buffer per merge: heavy garbage collection",
+          "Blocking I/O inside Fork/Join tasks",
+          "Amdahl: the final merge is sequential"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Disjoint ranges of the array and the buffer mean no locks are needed.",
+          "reveal": 1
+        },
+        {
+          "say": "invokeAll returns only when both children finish, and join gives happens-before, so the parent sees the children's writes.",
+          "reveal": 2
+        },
+        {
+          "say": "On ties, take from the left. That keeps the sort stable, meaning equal elements keep their order, which matters for objects.",
+          "reveal": 3
+        },
+        {
+          "say": "Pitfall: no threshold, so overhead swamps the work.",
+          "reveal": 4
+        },
+        {
+          "say": "A new buffer per merge, and the garbage collector drowns.",
+          "reveal": 5
+        },
+        {
+          "say": "Blocking I-O inside Fork Join tasks. The pool is for C-P-U work.",
+          "reveal": 6
+        },
+        {
+          "say": "And Amdahl's law: the sequential part, here the final merge, caps your speed-up. Real world: Arrays dot parallelSort and parallel streams run on the same common pool, and Spark and MapReduce do divide-sort-merge across machines. In the interview: split until small, sort sequentially, merge, disjoint ranges, no locks.",
+          "reveal": 7
+        }
+      ]
+    },
+    {
+      "id": "s056",
+      "layout": "section",
+      "kicker": "Problem 11 of 11",
+      "title": "Token-bucket rate limiter, thread-safe",
+      "steps": [
+        {
+          "say": "The last problem: a rate limiter for an A-P-I, an application programming interface. Allow short bursts up to B requests, and a sustained rate of R per second, per client, correctly under many concurrent requests.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 13 · 13.11 Rate limiter, token bucket"
+    },
+    {
+      "id": "s057",
+      "layout": "bullets",
+      "title": "The token bucket, step by step",
+      "bullets": [
+        "1. Bucket holds up to capacity tokens, starts full",
+        "2. Tokens drip in at refillRate per second, capped",
+        "3. Each request takes one token; none means HTTP 429",
+        "4. Refill lazily: tokens += elapsed times rate"
+      ],
+      "steps": [
+        {
+          "say": "Step one: a bucket holds up to capacity tokens. Capacity is your allowed burst. It starts full.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: tokens drip in at the refill rate, never above capacity.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: every request takes one token. No token? Reject with H-T-T-P four twenty-nine, too many requests.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: refill lazily. Store just two numbers, tokens and lastRefill. On each request add elapsed time times rate. No background thread at all.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s058",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: capacity 5, refill 2 per second",
+      "table": {
+        "head": [
+          "Time",
+          "Requests",
+          "Result",
+          "Why"
+        ],
+        "rows": [
+          [
+            "0.0 s",
+            "7",
+            "YYYYYnn",
+            "full bucket: 5 pass, 2 rejected"
+          ],
+          [
+            "1.0 s",
+            "3",
+            "YYn",
+            "1 s times 2 = 2 new tokens"
+          ],
+          [
+            "1.25 s",
+            "1",
+            "n",
+            "only 0.5 token so far"
+          ],
+          [
+            "1.5 s",
+            "1",
+            "Y",
+            "now 1 full token"
+          ],
+          [
+            "after 1 idle hour",
+            "100 at once",
+            "5 pass",
+            "capped at capacity 5"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Imagine a weather A-P-I, capacity five, refill two per second. At time zero, seven requests: five pass, two rejected.",
+          "reveal": 1
+        },
+        {
+          "say": "One second later, two new tokens have dripped in. Three requests: two pass, one rejected.",
+          "reveal": 2
+        },
+        {
+          "say": "At one point two five seconds, only half a token has accumulated. Rejected.",
+          "reveal": 3
+        },
+        {
+          "say": "At one point five seconds, a full token. Allowed.",
+          "reveal": 4
+        },
+        {
+          "say": "Then the client goes idle for an hour, and a hundred requests arrive at the same instant. Only five pass, because tokens are capped at capacity. The burst never exceeds five.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s059",
+      "layout": "twocol",
+      "title": "Two thread-safe versions",
+      "left": {
+        "heading": "1. synchronized",
+        "bullets": [
+          "Refill, check and take inside one method",
+          "Simple and correct"
+        ]
+      },
+      "right": {
+        "heading": "2. Lock-free CAS",
+        "bullets": [
+          "Immutable State(tokens, lastRefill)",
+          "Held in one AtomicReference",
+          "Compute next state, compareAndSet, retry",
+          "Clamp now so time never goes backwards"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's the race to avoid: if refill, check and take are separate steps, two threads both see one token and both take it. They must be one atomic step.",
+          "reveal": 1
+        },
+        {
+          "say": "Version one: make tryAcquire synchronized. Simple and correct.",
+          "reveal": 2
+        },
+        {
+          "say": "Version two, lock-free. Put tokens and lastRefill together in one immutable State record.",
+          "reveal": 3
+        },
+        {
+          "say": "Keep it in an atomic reference. That's the trick: several fields, one immutable object, one C-A-S.",
+          "reveal": 4
+        },
+        {
+          "say": "Read the current state, compute the next one, and compareAndSet. If another thread changed it first, the C-A-S fails and you recompute. Each token is granted at most once.",
+          "reveal": 5
+        },
+        {
+          "say": "And clamp now to at least lastRefill, so a thread that read the clock slightly earlier can't move time backwards.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s060",
+      "layout": "twocol",
+      "title": "Per client, pitfalls, and many servers",
+      "left": {
+        "heading": "Per client",
+        "bullets": [
+          "ConcurrentHashMap: client id to bucket",
+          "computeIfAbsent: exactly one bucket per client",
+          "alice spams YYYn, bob still gets YY"
+        ]
+      },
+      "right": {
+        "heading": "Pitfalls",
+        "bullets": [
+          "Separate refill() and take(): token spent twice",
+          "A timer thread per bucket: thousands of threads",
+          "Unbounded bucket map: evict idle ones with a TTL",
+          "In-memory is per server: use Redis plus Lua"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Per client, keep a concurrent hash map from client id, like a user id, A-P-I key or I-P address, to a bucket.",
+          "reveal": 1
+        },
+        {
+          "say": "computeIfAbsent is atomic, so two simultaneous first requests can't create two buckets and double the limit.",
+          "reveal": 2
+        },
+        {
+          "say": "With a burst of three, alice spams four requests and gets yes, yes, yes, no, and bob still gets his yes, yes. Alice's spam doesn't hurt bob.",
+          "reveal": 3
+        },
+        {
+          "say": "Pitfalls: a separate refill and take means a token spent twice.",
+          "reveal": 4
+        },
+        {
+          "say": "A background timer per bucket means thousands of threads; lazy refill needs none.",
+          "reveal": 5
+        },
+        {
+          "say": "An unbounded map of buckets leaks memory; evict idle buckets, for example with our T-T-L cache from problem six.",
+          "reveal": 6
+        },
+        {
+          "say": "And an in-memory limiter only limits per server. For a global limit across ten servers, keep the bucket in Redis and update it atomically with a Lua script, which Redis runs as one uninterruptible step.",
+          "reveal": 7
+        }
+      ]
+    },
+    {
+      "id": "s061",
+      "layout": "table",
+      "title": "Rate-limiting algorithms compared",
+      "table": {
+        "head": [
+          "Algorithm",
+          "Bursts",
+          "Memory"
+        ],
+        "rows": [
+          [
+            "Token bucket",
+            "up to capacity",
+            "2 numbers"
+          ],
+          [
+            "Leaky bucket",
+            "smoothed to constant rate",
+            "a queue"
+          ],
+          [
+            "Fixed window counter",
+            "2x burst at window edges",
+            "1 counter"
+          ],
+          [
+            "Sliding window log",
+            "exact",
+            "1 timestamp per request"
+          ],
+          [
+            "Sliding window counter",
+            "approximate, smooth",
+            "2 counters"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Token bucket is the most common for A-P-Is. Stripe has described using token buckets backed by Redis, and Amazon A-P-I Gateway throttling is configured with exactly a rate and a burst.",
+          "reveal": 1
+        },
+        {
+          "say": "Leaky bucket smooths traffic to a constant output rate. The engine-X web server's request limiter works this way.",
+          "reveal": 2
+        },
+        {
+          "say": "Fixed window counter is simplest, but allows double the burst at window edges.",
+          "reveal": 3
+        },
+        {
+          "say": "Sliding window log is exact but stores a timestamp per request.",
+          "reveal": 4
+        },
+        {
+          "say": "Sliding window counter is a good compromise. In the interview: capacity for burst, rate for average, lazy refill, atomic refill-check-take, one bucket per client, Redis across servers.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s062",
+      "layout": "section",
+      "kicker": "Wrap-up",
+      "title": "Chapter summary and self-check",
+      "steps": [
+        {
+          "say": "That's all eleven. For each one, the single most valuable thing to say in an interview is its invariant. Here they are side by side.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 13 · 13.12 Chapter summary, 13.13 self-check, 13.14 TL;DR"
+    },
+    {
+      "id": "s063",
+      "layout": "table",
+      "title": "One invariant per problem",
+      "table": {
+        "head": [
+          "Problem",
+          "Primitive",
+          "Invariant to state"
+        ],
+        "rows": [
+          [
+            "FooBar, ZeroEvenOdd",
+            "2 or 3 semaphores",
+            "exactly one permit circulates"
+          ],
+          [
+            "FizzBuzz",
+            "monitor + notifyAll",
+            "predicates partition 1..n"
+          ],
+          [
+            "H2O",
+            "semaphores + barrier",
+            "2 H, 1 O; slot freed after release"
+          ],
+          [
+            "Philosophers",
+            "ordered locks / n-1 seats",
+            "no circular wait"
+          ],
+          [
+            "TTL cache, striped map",
+            "CHM compute / lock array",
+            "load once; one stripe per bucket"
+          ],
+          [
+            "Queue, Bloom, sort, limiter",
+            "conditions / OR / ForkJoin / CAS",
+            "count in range; bits 0 to 1; disjoint; atomic take"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "FooBar and Zero Even Odd: exactly one permit circulates.",
+          "reveal": 1
+        },
+        {
+          "say": "FizzBuzz: the predicates partition one to n.",
+          "reveal": 2
+        },
+        {
+          "say": "H-two-O: at most two H and one O per round, and slots are freed only after release.",
+          "reveal": 3
+        },
+        {
+          "say": "Philosophers: no circular wait.",
+          "reveal": 4
+        },
+        {
+          "say": "T-T-L cache: never return expired data, and load once per key. Striped map: each bucket belongs to exactly one stripe.",
+          "reveal": 5
+        },
+        {
+          "say": "Blocking queue: count stays between zero and capacity, and you wait in loops. Bloom filter: bits only go zero to one, so no false negatives. Merge sort: subtasks touch disjoint ranges. Rate limiter: refill plus take is one atomic step.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s064",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Why must a stripe depend only on the hash?",
+      "bullets": [
+        "A. It's faster to compute",
+        "B. So a key's lock doesn't change when the table resizes",
+        "C. So the map can store nulls"
+      ],
+      "steps": [
+        {
+          "say": "Quick self-check from the chapter. Pause and answer, then I'll go through more.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s065",
+      "layout": "bullets",
+      "title": "Self-check answers",
+      "bullets": [
+        "Striped map: B, a key's lock must survive a resize",
+        "FooBar: start order doesn't matter, the other blocks",
+        "H2O: free the slot after printing, so molecules don't mix",
+        "TTL cache: remove(key, entry) keeps a fresh value",
+        "signal() is safe when one change enables exactly one waiter",
+        "Global token bucket on 10 servers: Redis plus Lua"
+      ],
+      "steps": [
+        {
+          "say": "The answer is B. If the stripe came from the bucket index, a resize could move a key to a different lock while someone holds the old one.",
+          "reveal": 1
+        },
+        {
+          "say": "In FooBar, why doesn't start order matter? The thread without a permit just blocks until the other releases.",
+          "reveal": 2
+        },
+        {
+          "say": "In H-two-O, why free the slot after printing? So the next molecule can't form until this one has left.",
+          "reveal": 3
+        },
+        {
+          "say": "Why does the T-T-L cache use remove with key and entry? So it never deletes a fresh value another thread just wrote.",
+          "reveal": 4
+        },
+        {
+          "say": "When is a single signal safe? When each condition queue holds one kind of waiter, and each change enables exactly one of them.",
+          "reveal": 5
+        },
+        {
+          "say": "And a token bucket across ten servers? Redis, updated atomically by a Lua script.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s066",
+      "layout": "recap",
+      "kicker": "Recap",
+      "title": "Chapter TL;DR",
+      "bullets": [
+        "Ordering puzzles: semaphores as batons, barriers for groups",
+        "Predicate waiting: lock + while-wait + notifyAll or signal",
+        "Multi-lock: break circular wait by ordering or limiting",
+        "Data structures: immutable entries, CAS, striping, clocks",
+        "Parallel algorithms: Fork/Join, threshold, disjoint data"
+      ],
+      "steps": [
+        {
+          "say": "Let's recap the whole episode in five lines. Ordering puzzles, FooBar, Zero Even Odd and H-two-O: semaphores as batons, barriers for groups, and exactly-one-permit invariants.",
+          "reveal": 1
+        },
+        {
+          "say": "Predicate waiting, FizzBuzz and the blocking queue: a lock, a while loop around wait or await, and notify all or a targeted signal.",
+          "reveal": 2
+        },
+        {
+          "say": "Multi-lock problems like the dining philosophers: break circular wait with ordering or by limiting who tries.",
+          "reveal": 3
+        },
+        {
+          "say": "Thread-safe data structures, the cache, map, queue, Bloom filter and rate limiter: immutable entries, atomic compound operations, striping, C-A-S on immutable state, and injected clocks so time is testable.",
+          "reveal": 4
+        },
+        {
+          "say": "Parallel algorithms like merge sort: Fork Join with a threshold and disjoint data.",
+          "reveal": 5
+        },
+        {
+          "say": "Next up, episode fifteen: Case Studies, where we design a Parking Lot, a Vending Machine and a Coffee Machine end to end. See you there.",
+          "reveal": 5
+        }
+      ]
+    }
+  ]
+}

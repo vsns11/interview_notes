@@ -1,0 +1,1940 @@
+{
+ "series": "LLD Workshop",
+ "episode": 16,
+ "title": "Case Studies: ATM, Elevator, Traffic, Locker",
+ "subtitle": "State, Strategy, Chain of Responsibility, Command and Observer on four everyday machines",
+ "scenes": [
+  {
+   "id": "s001",
+   "layout": "title",
+   "title": "Case Studies: ATM, Elevator, Traffic, Locker",
+   "steps": [
+    {
+     "say": "Welcome to the L-L-D Workshop, episode sixteen: Case Studies, part two. Today we design four machines you meet every day: an A-T-M, an elevator system, a traffic signal controller, and a parcel locker like Amazon Locker.",
+     "reveal": 0
+    },
+    {
+     "say": "By the end you'll be able to walk an interviewer through each one: the states, the one hard method, the patterns, and the concurrency traps. And you'll see the same few patterns, State, Strategy, Observer, Chain of Responsibility and Command, solve very different problems.",
+     "reveal": 0
+    },
+    {
+     "say": "Keep the chapter fourteen PDF open beside the video. It has the full Java code and the real program output I quote today. Pause when I ask a question.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s002",
+   "layout": "bullets",
+   "kicker": "The method",
+   "title": "How we attack every case study",
+   "bullets": [
+    "1. Clarify scope and assumptions",
+    "2. Name the entities and their jobs",
+    "3. Draw the state machine",
+    "4. Code the one hard method",
+    "5. Concurrency and edge cases"
+   ],
+   "steps": [
+    {
+     "say": "Every case today follows the same five steps. Step one, clarify. For the A-T-M: which transactions, which notes are loaded, and what happens after a wrong PIN.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two, entities. One class per job: an account, a card, a cash dispenser, a transaction.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three, draw the states. An A-T-M session goes idle, card inserted, signed in, and back to idle.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four, find the one hard method and spend most of your time there. For the A-T-M, that's withdrawal.",
+     "reveal": 4
+    },
+    {
+     "say": "Step five, ask what breaks when two things happen at once. Two A-T-Ms, one account, same second. Let's start.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s003",
+   "layout": "section",
+   "kicker": "Case 1 of 4",
+   "title": "Design an ATM",
+   "steps": [
+    {
+     "say": "Case one, the A-T-M, an automated teller machine. The interviewer checks three things. Money stays correct: never dispense without debiting, never debit without dispensing, never let two machines overdraw one account. You authenticate before anything else. And you model the session states cleanly.",
+     "reveal": 0
+    }
+   ],
+   "caption": "Book: Ch 14 Everyday Objects · 14.4 Design an ATM"
+  },
+  {
+   "id": "s004",
+   "layout": "bullets",
+   "title": "What the ATM does",
+   "bullets": [
+    "Parts: card reader, keypad, screen, dispenser, slot, printer",
+    "Card plus PIN, checked by the bank, 3 tries",
+    "5 transactions: balance, cash in, check in, withdraw, transfer",
+    "Card stays inside the whole session, cancel anytime",
+    "A journal of every action for the operator",
+    "Notes loaded: $100, $50, $20, $10"
+   ],
+   "steps": [
+    {
+     "say": "The machine has a card reader, a keypad, a screen, a cash dispenser, a deposit slot, a printer, and a network link to the bank. None of these parts knows what a transaction is.",
+     "reveal": 1
+    },
+    {
+     "say": "The customer inserts a card and types a PIN, a personal identification number. The A-T-M asks the bank to check it. Three wrong tries and the card is blocked and kept.",
+     "reveal": 2
+    },
+    {
+     "say": "Five transactions. Our running example is Alice: she checks her balance, withdraws cash, deposits a check, and transfers money to Bob.",
+     "reveal": 3
+    },
+    {
+     "say": "The machine keeps the card for the whole session. The customer can cancel at any time, and every exit path must hand the card back or keep it.",
+     "reveal": 4
+    },
+    {
+     "say": "Every action goes into a journal, an internal log, so the operator and the bank can trace problems later.",
+     "reveal": 5
+    },
+    {
+     "say": "The cassettes hold hundred, fifty, twenty and ten dollar notes. Remember those four; they become a chain in a minute.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s005",
+   "layout": "twocol",
+   "kicker": "ATM concept",
+   "title": "Two balances, not one",
+   "left": {
+    "heading": "Total balance",
+    "bullets": [
+     "Everything credited",
+     "Check raises it at once"
+    ]
+   },
+   "right": {
+    "heading": "Available balance",
+    "bullets": [
+     "What you may spend now",
+     "Check adds only when it clears"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Here's a modelling decision interviewers love. An account keeps two balances. The total balance is everything credited to it.",
+     "reveal": 1
+    },
+    {
+     "say": "When Alice deposits a five hundred dollar check, the total goes up immediately.",
+     "reveal": 2
+    },
+    {
+     "say": "The available balance is what she may spend right now.",
+     "reveal": 3
+    },
+    {
+     "say": "The check money joins the available balance only after the bank clears it. With one balance, you can't express a check hold at all.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s006",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Alice deposits a $500 check",
+   "table": {
+    "head": [
+     "Moment",
+     "Total",
+     "Available"
+    ],
+    "rows": [
+     [
+      "Start",
+      "$1,000",
+      "$1,000"
+     ],
+     [
+      "Withdraw $280",
+      "$720",
+      "$720"
+     ],
+     [
+      "Deposit $500 check",
+      "$1,220",
+      "$720"
+     ],
+     [
+      "Bank clears it overnight",
+      "$1,220",
+      "$1,220"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Alice starts with a thousand dollars in checking. Both balances are a thousand.",
+     "reveal": 1
+    },
+    {
+     "say": "She withdraws two hundred eighty. Both drop to seven hundred twenty.",
+     "reveal": 2
+    },
+    {
+     "say": "She deposits a five hundred dollar check. Total jumps to twelve hundred twenty, but available stays at seven hundred twenty. If she tries to withdraw eight hundred now, she's refused.",
+     "reveal": 3
+    },
+    {
+     "say": "Overnight the bank clears the check, and available catches up to twelve hundred twenty. Changing that policy is one line in the bank, not the A-T-M.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s007",
+   "layout": "diagram",
+   "title": "ATM session states",
+   "mermaid": "flowchart LR\n    I[\"Idle\"] -->|\"insert card\"| C[\"CardInserted\"]\n    C -->|\"wrong PIN, tries left\"| C\n    C -->|\"PIN OK\"| A[\"Authenticated\"]\n    C -->|\"3rd wrong PIN, card kept\"| I\n    A -->|\"transaction\"| A\n    A -->|\"finish, card ejected\"| I\n    A -->|\"cash empty after eject\"| O[\"OutOfService\"]\n    O -->|\"operator refills\"| I",
+   "caption": "The State pattern: each button means something different per state",
+   "steps": [
+    {
+     "say": "The session is a state machine, so we use the State pattern: one class per state, and the A-T-M forwards every button press to its current state.",
+     "reveal": 0
+    },
+    {
+     "say": "Idle accepts only insert card. Card inserted accepts a PIN. A wrong PIN with tries left stays put; the third wrong PIN keeps the card and goes back to idle.",
+     "reveal": 0
+    },
+    {
+     "say": "Authenticated accepts transactions until the customer finishes, then the card comes out. If the cash ran out, the machine moves to out of service only after ejecting the card, and an operator refill brings it back.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s008",
+   "layout": "bullets",
+   "kicker": "Example",
+   "title": "Walk the states with Bob",
+   "bullets": [
+    "Idle: perform is refused, 'please sign in first'",
+    "CardInserted: wrong PIN, 2 tries left, then 1",
+    "Third wrong PIN: card retained, back to Idle",
+    "Blocked at the bank: ATM-9 refuses even the right PIN",
+    "Key switch refused mid-session; allowed only when idle"
+   ],
+   "steps": [
+    {
+     "say": "Each state class overrides only the buttons it accepts; everything else is a polite refusal. Press withdraw on an idle machine and it says, please sign in first. No nested if statements.",
+     "reveal": 1
+    },
+    {
+     "say": "Bob inserts his card and forgets his PIN. The bank answers wrong PIN, two tries left. Then one.",
+     "reveal": 2
+    },
+    {
+     "say": "Third wrong PIN: the bank answers blocked, the screen says the card is retained, and the machine returns to idle.",
+     "reveal": 3
+    },
+    {
+     "say": "Because the counter lives at the bank, not the machine, Bob can't just walk to A-T-M nine and try again. It refuses even his correct PIN.",
+     "reveal": 4
+    },
+    {
+     "say": "And the operator's key switch is refused while a customer is mid-session. The requirement says never shut down while serving.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s009",
+   "layout": "bullets",
+   "kicker": "ATM concept",
+   "title": "Chain of Responsibility for cash",
+   "bullets": [
+    "$100 handler takes what it can, passes the rest",
+    "$50 handler, then $20, then $10",
+    "Plan first: a dry run that changes nothing",
+    "Dispense only if the plan covers every cent",
+    "New $5 cassette = one new handler in the chain"
+   ],
+   "steps": [
+    {
+     "say": "Now the dispenser. We use Chain of Responsibility: a line of handlers where each one handles what it can and passes the rest to the next. Here each handler is one cassette of notes. The hundred handler takes as many hundreds as fit and are loaded.",
+     "reveal": 1
+    },
+    {
+     "say": "Whatever's left goes to the fifty handler, then the twenty, then the ten.",
+     "reveal": 2
+    },
+    {
+     "say": "The first pass is a dry run, a plan. It counts notes but removes nothing, so a failed plan leaves the cassettes untouched.",
+     "reveal": 3
+    },
+    {
+     "say": "If the chain ends with money still uncovered, the whole withdrawal is refused before we even call the bank.",
+     "reveal": 4
+    },
+    {
+     "say": "Adding a five dollar cassette means linking one more handler. The algorithm doesn't change.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s010",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Dispensing $280 through the chain",
+   "table": {
+    "head": [
+     "Handler",
+     "Remaining in",
+     "Takes",
+     "Passes on"
+    ],
+    "rows": [
+     [
+      "$100",
+      "$280",
+      "2 notes",
+      "$80"
+     ],
+     [
+      "$50",
+      "$80",
+      "1 note",
+      "$30"
+     ],
+     [
+      "$20",
+      "$30",
+      "1 note",
+      "$10"
+     ],
+     [
+      "$10",
+      "$10",
+      "1 note",
+      "$0, plan OK"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Alice asks for two hundred eighty. The hundred handler takes two notes, two hundred, and passes eighty on.",
+     "reveal": 1
+    },
+    {
+     "say": "The fifty takes one, passes thirty.",
+     "reveal": 2
+    },
+    {
+     "say": "The twenty takes one, passes ten.",
+     "reveal": 3
+    },
+    {
+     "say": "The ten takes one, and nothing is left, so the plan succeeds: two hundreds, a fifty, a twenty and a ten. Watch the weakness, though. Greedy can miss a combination. Sixty dollars with one fifty and three twenties but no tens: greedy grabs the fifty and can't make ten, though three twenties would work. Mention a dynamic programming planner if asked.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s011",
+   "layout": "table",
+   "title": "Withdrawal: plan, debit, dispense, compensate",
+   "caption": "Withdrawal is the one hard method",
+   "steps": [
+    {
+     "say": "Here's the one hard method, in five steps, with Alice taking out two hundred eighty. Step one, validate: is the amount a multiple of ten? Two eighty is fine. Eighty-five dollars would be refused right here.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two, plan the notes with the dry run on the chain: two hundreds, a fifty, a twenty and a ten. Nothing leaves the cassettes yet.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three, ask the bank to debit. The bank locks the account, checks the rule, and debits, all in one step. Alice goes from a thousand to seven hundred twenty.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four, dispense. On the happy path the notes come out and the journal records it.",
+     "reveal": 4
+    },
+    {
+     "say": "Step five, only if the dispenser jams: run a compensating action, reverse the debit by transaction id. Alice's balance comes back, and the journal records it so the bank can reconcile, which means comparing two sets of records and fixing differences.",
+     "reveal": 5
+    }
+   ],
+   "table": {
+    "head": [
+     "Step",
+     "What happens",
+     "Alice, $280"
+    ],
+    "rows": [
+     [
+      "1. Validate",
+      "Amount must be a multiple of $10",
+      "OK; $85 would be refused"
+     ],
+     [
+      "2. Plan",
+      "Dry run on the note chain",
+      "2x$100, $50, $20, $10"
+     ],
+     [
+      "3. Debit",
+      "Bank locks account, checks rule, debits",
+      "$1,000 becomes $720"
+     ],
+     [
+      "4. Dispense",
+      "Notes come out",
+      "Cash in hand"
+     ],
+     [
+      "5. Compensate",
+      "On a jam: reverse(txnId), journal it",
+      "Balance back to $1,000"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "s012",
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "Debit before dispensing, or after?",
+   "bullets": [
+    "A. Debit first, reverse if the hardware fails",
+    "B. Dispense first, debit afterwards",
+    "C. Either has a gap; real systems hold, then confirm"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. Should the bank debit before the notes come out, or after? What happens if the power fails halfway?",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s013",
+   "layout": "bullets",
+   "kicker": "Answer",
+   "title": "Answer: both orders have a gap",
+   "bullets": [
+    "Debit then dispense: crash leaves customer short",
+    "Dispense then debit: crash leaves the bank short",
+    "Real fix: hold at the bank, dispense, then confirm",
+    "On restart, read the journal: confirm or reverse"
+   ],
+   "steps": [
+    {
+     "say": "The answer is C. Our code debits first and reverses on a jam. But if the power dies between the two, the customer paid for cash never received.",
+     "reveal": 1
+    },
+    {
+     "say": "The course does the opposite: count the notes out, then debit. A crash there leaves the bank short.",
+     "reveal": 2
+    },
+    {
+     "say": "Real systems make the pair atomic: put a hold on the money, dispense, then confirm.",
+     "reveal": 3
+    },
+    {
+     "say": "On restart the machine reads its journal and either confirms or reverses. Say this out loud; it's the classic power-fails follow-up.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s014",
+   "layout": "bullets",
+   "kicker": "ATM concept",
+   "title": "Command and sealed types",
+   "bullets": [
+    "Each transaction = one record with execute(ctx)",
+    "Rules live in one place; journal, queue or replay",
+    "Sealed Transaction: the compiler knows all 5",
+    "Sealed AuthResult: Ok, WrongPin, Blocked",
+    "ATM talks only to a BankService interface"
+   ],
+   "steps": [
+    {
+     "say": "The five transactions use the Command pattern: each request is an object with one execute method. Withdrawal is a small record holding an account and an amount.",
+     "reveal": 1
+    },
+    {
+     "say": "So each rule has exactly one home, and because transactions are objects, the A-T-M can journal them, queue them, or replay them. No giant switch on the transaction type.",
+     "reveal": 2
+    },
+    {
+     "say": "Transaction is a sealed interface, a Java feature that lists every allowed subtype. The compiler knows there are exactly five.",
+     "reveal": 3
+    },
+    {
+     "say": "The bank's answer to a PIN is also sealed: Ok with the account list, WrongPin with tries left, or Blocked. A switch over it must handle all three, or it won't compile.",
+     "reveal": 4
+    },
+    {
+     "say": "And the A-T-M never touches balances. It calls a BankService interface, so the bank can be in memory, a real network, or a test fake.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s015",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "ATM concurrency and edge cases",
+   "table": {
+    "head": [
+     "Situation",
+     "Risk",
+     "Fix"
+    ],
+    "rows": [
+     [
+      "2 ATMs, $300 each, $500 joint",
+      "Overdraft",
+      "Check + debit under account lock"
+     ],
+     [
+      "A to B and B to A at once",
+      "Deadlock",
+      "Lock accounts in id order"
+     ],
+     [
+      "Jam after the debit",
+      "Charged, no cash",
+      "Reverse by txn id, journal"
+     ],
+     [
+      "Account not on this card",
+      "Unauthorised access",
+      "Check session accounts"
+     ],
+     [
+      "Customer walks away",
+      "Next person uses session",
+      "Session timeout ejects card"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Imagine a joint account with five hundred dollars, two cards, two A-T-Ms, three hundred each, at the same instant. If check and debit are separate, both see five hundred and both pay. The fix: check and debit under the account's lock at the bank. In the demo, exactly three hundred comes out and two hundred is left.",
+     "reveal": 1
+    },
+    {
+     "say": "Alice sends to Bob while Bob sends to Alice. Each locks their own account first and waits for the other: deadlock. Lock both in a fixed order, by account id. The demo runs two thousand opposite transfers on eight threads with no deadlock, and the total is conserved.",
+     "reveal": 2
+    },
+    {
+     "say": "A jam after the debit gets the reverse, plus a journal line.",
+     "reveal": 3
+    },
+    {
+     "say": "Alice tries to act on Bob's account from her session: the authenticated state refuses accounts not linked to her card.",
+     "reveal": 4
+    },
+    {
+     "say": "And a customer who walks away gets a session timeout that ejects or keeps the card.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s016",
+   "layout": "bullets",
+   "kicker": "Recap",
+   "title": "ATM: in the interview",
+   "bullets": [
+    "State for the session, Command for 5 transactions",
+    "Chain of Responsibility for note cassettes",
+    "Total vs available balance for checks",
+    "Plan, atomic debit, dispense, reverse on failure",
+    "Per-account lock; transfers lock in id order"
+   ],
+   "steps": [
+    {
+     "say": "Your thirty-second answer: the session is a State machine, and the five transactions are Command objects.",
+     "reveal": 1
+    },
+    {
+     "say": "The dispenser is a Chain of Responsibility over the cassettes.",
+     "reveal": 2
+    },
+    {
+     "say": "Accounts keep total and available balances so checks can be held.",
+     "reveal": 3
+    },
+    {
+     "say": "Withdrawal plans notes, debits atomically at the bank, dispenses, and reverses if the hardware fails.",
+     "reveal": 4
+    },
+    {
+     "say": "The bank locks per account, and transfers lock in id order. PINs are checked at the bank, never on the machine.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s017",
+   "layout": "section",
+   "kicker": "Case 2 of 4",
+   "title": "Design an Elevator System",
+   "steps": [
+    {
+     "say": "Case two, the elevator. A real building runs several cars as a group. Two decisions carry this interview: dispatching, which car answers a call from a floor, and scheduling, in what order one car visits its stops.",
+     "reveal": 0
+    }
+   ],
+   "caption": "Book: Ch 14 Everyday Objects · 14.5 Design an Elevator System"
+  },
+  {
+   "id": "s018",
+   "layout": "bullets",
+   "title": "Clarify the elevator",
+   "bullets": [
+    "Floors 0 to 9, several cars serving all floors",
+    "Hall panel: UP and DOWN (none off the ends)",
+    "Car panel: one button per floor, open, close",
+    "Max load: an overloaded car won't move",
+    "Maintenance mode and fire recall",
+    "Simulated: one step() = one action"
+   ],
+   "steps": [
+    {
+     "say": "Our running building has floors zero to nine and two cars. Car one starts at floor zero, car two at floor eight.",
+     "reveal": 1
+    },
+    {
+     "say": "Each floor has a hall panel with up and down buttons. The top floor has no up button, the ground floor no down button. Pressing up on floor nine is an error: that button doesn't exist.",
+     "reveal": 2
+    },
+    {
+     "say": "Inside each car there's one button per floor, plus door open and door close.",
+     "reveal": 3
+    },
+    {
+     "say": "Each car has a maximum load, here six hundred eighty kilograms. Overloaded, it refuses to move and says so.",
+     "reveal": 4
+    },
+    {
+     "say": "An engineer can take a car out of service, and a fire alarm recalls every car to the lobby.",
+     "reveal": 5
+    },
+    {
+     "say": "And we simulate time: one call to step does exactly one action. That makes the whole system testable without a clock.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s019",
+   "layout": "table",
+   "kicker": "Elevator concept",
+   "title": "Scheduling: one car, many stops",
+   "table": {
+    "head": [
+     "Algorithm",
+     "Rule",
+     "Problem"
+    ],
+    "rows": [
+     [
+      "FCFS",
+      "Arrival order",
+      "Zig-zags, wasteful"
+     ],
+     [
+      "SSTF",
+      "Nearest stop next",
+      "Far floor can starve"
+     ],
+     [
+      "SCAN",
+      "Sweep to shaft end, reverse",
+      "Travels to empty ends"
+     ],
+     [
+      "LOOK",
+      "Sweep to last request, reverse",
+      "A bit more bookkeeping"
+     ],
+     [
+      "C-LOOK",
+      "One direction, jump back",
+      "Empty return trips"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Scheduling ideas come from disk-arm scheduling, a head moving along a line of requests. Imagine a car at floor four with calls on floors two, nine and three, in that order. F-C-F-S, first come first served, goes four to two to nine to three: zig-zag.",
+     "reveal": 1
+    },
+    {
+     "say": "S-S-T-F, shortest seek time first, always goes to the nearest stop: three, then two, then nine. Short trips, but if people keep calling floors two and three, floor nine waits forever. That's starvation.",
+     "reveal": 2
+    },
+    {
+     "say": "SCAN, the elevator algorithm, sweeps up to the very top of the shaft, then reverses. No starvation, but it rides to floor nine even when nobody's there.",
+     "reveal": 3
+    },
+    {
+     "say": "LOOK sweeps only as far as the last request, then reverses. No starvation and no wasted travel. That's what we use.",
+     "reveal": 4
+    },
+    {
+     "say": "C-LOOK serves in one direction only and jumps back to the start, giving more uniform waits at the cost of empty return trips.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s020",
+   "layout": "bullets",
+   "kicker": "Elevator concept",
+   "title": "Why stops live in two sets",
+   "bullets": [
+    "Stop = floor + direction the car leaves in",
+    "Up-set and down-set, both sorted",
+    "Floor 5 UP and floor 5 DOWN are two stops",
+    "Sorted sets answer 'nearest at or above' fast",
+    "StopList chooses; Elevator only drives"
+   ],
+   "steps": [
+    {
+     "say": "A stop isn't just a floor. It's a floor plus the direction the car will leave in.",
+     "reveal": 1
+    },
+    {
+     "say": "So the stop list keeps two sorted sets: stops to serve going up, and stops to serve going down.",
+     "reveal": 2
+    },
+    {
+     "say": "Two people wait on floor five, one going up and one down. A single list records five once, and the car either stops twice for nothing or picks up the wrong person. Two sets keep them apart.",
+     "reveal": 3
+    },
+    {
+     "say": "Java's TreeSet gives nearest at or above, and nearest at or below, in log time.",
+     "reveal": 4
+    },
+    {
+     "say": "And the rule lives in the stop list, not the elevator. The car drives, the list decides. That's single responsibility.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s021",
+   "layout": "table",
+   "title": "LOOK going up: four rules in order",
+   "caption": "Going down is the mirror image; an idle car picks the nearest side",
+   "steps": [
+    {
+     "say": "Here's LOOK for a car going up, as four rules tried in order. Rule one: any up-stop at or above me? Go to the nearest.",
+     "reveal": 1
+    },
+    {
+     "say": "Rule two: none? If someone above wants to go down, go up to the highest such floor, then turn and collect the rest on the way down.",
+     "reveal": 2
+    },
+    {
+     "say": "Rule three: otherwise turn now, to the nearest down-stop at or below me.",
+     "reveal": 3
+    },
+    {
+     "say": "Rule four: the only work left is up-stops below me, so go down to the lowest and serve upward. With nothing at all, go idle and wait where you are. Going down is the mirror image.",
+     "reveal": 4
+    }
+   ],
+   "table": {
+    "head": [
+     "Rule",
+     "If there is...",
+     "Then go to"
+    ],
+    "rows": [
+     [
+      "1",
+      "an up-stop at or above the car",
+      "the nearest one"
+     ],
+     [
+      "2",
+      "a down-stop above the car",
+      "the highest one, then turn"
+     ],
+     [
+      "3",
+      "a down-stop at or below the car",
+      "turn now, the nearest one"
+     ],
+     [
+      "4",
+      "only up-stops below the car",
+      "the lowest one, or idle if none"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "s022",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "LOOK worked example",
+   "table": {
+    "head": [
+     "Car at 4 going up",
+     "Rule",
+     "Next stop"
+    ],
+    "rows": [
+     [
+      "Up-stop 6 ahead",
+      "1: nearest up-stop",
+      "6"
+     ],
+     [
+      "Car button 9 ahead",
+      "1 again",
+      "9"
+     ],
+     [
+      "Nothing above; down-stop 2",
+      "3: turn, go down",
+      "2"
+     ],
+     [
+      "Only up-stop 1 below",
+      "4: lowest up-stop",
+      "1"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Car at floor four, going up. Stops: six going up, nine pressed inside the car, two going down, and one going up. Rule one finds six.",
+     "reveal": 1
+    },
+    {
+     "say": "Still going up, rule one finds nine.",
+     "reveal": 2
+    },
+    {
+     "say": "Nothing above nine, so the car turns at nine, not at the top of the shaft. Rule three finds two going down.",
+     "reveal": 3
+    },
+    {
+     "say": "From two, only one going up remains, so the car serves it. Service order: six, nine, two, one. It never ran to an empty end. That's LOOK, not SCAN.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s023",
+   "layout": "bullets",
+   "kicker": "Elevator states",
+   "title": "One step = one action",
+   "bullets": [
+    "Maintenance: do nothing",
+    "Doors open and overloaded: stay open, say so",
+    "Doors open: close them",
+    "No stops: go idle",
+    "At the target: stop and open doors",
+    "Otherwise: move one floor"
+   ],
+   "steps": [
+    {
+     "say": "A car's step does exactly one thing. If it's in maintenance, nothing. It's parked.",
+     "reveal": 1
+    },
+    {
+     "say": "Doors open and too heavy? Stay open and show overload. In the demo, ten more people squeeze into car two: seven hundred seventy-five kilograms against six eighty. The doors stay open until two people step out.",
+     "reveal": 2
+    },
+    {
+     "say": "Doors open and load fine? Close them. Notice the car never moves with doors open; safety checks come before scheduling.",
+     "reveal": 3
+    },
+    {
+     "say": "Doors closed, ask the stop list. No stops: go idle and wait on this floor.",
+     "reveal": 4
+    },
+    {
+     "say": "Target is this floor: remove the stop, open the doors, report arrived.",
+     "reveal": 5
+    },
+    {
+     "say": "Otherwise move one floor toward the target. Every test becomes: press these buttons, run N steps, expect these events. No sleeps, no flaky tests.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s024",
+   "layout": "diagram",
+   "title": "Elevator car states",
+   "mermaid": "flowchart LR\n    I[\"Idle\"] -->|\"stop above or below\"| M[\"Moving\"]\n    I -->|\"stop here\"| D[\"DoorsOpen\"]\n    M -->|\"reached a stop\"| D\n    D -->|\"overloaded\"| D\n    D -->|\"closed, more stops\"| M\n    D -->|\"closed, no stops\"| I\n    I -->|\"engineer\"| X[\"Maintenance\"]\n    X -->|\"back in service\"| I\n    M -->|\"fire alarm\"| F[\"FireRecall\"]",
+   "caption": "Modes are a small enum here; switch to State classes if they grow",
+   "steps": [
+    {
+     "say": "Here are the car states. Idle, moving, doors open, and back. Overload loops on doors open.",
+     "reveal": 0
+    },
+    {
+     "say": "Two modes sit beside them: maintenance, which an engineer switches on and off, and fire recall, where every stop is dropped, the car drives to the lobby, opens its doors and ignores car buttons.",
+     "reveal": 0
+    },
+    {
+     "say": "With only three modes, an enum inside the car is lighter than full State classes. If modes grew, say VIP service or an emergency stop, refactor to the State pattern.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s025",
+   "layout": "table",
+   "kicker": "Elevator concept",
+   "title": "Dispatch Strategy: nearest suitable car",
+   "table": {
+    "head": [
+     "Car situation",
+     "Cost"
+    ],
+    "rows": [
+     [
+      "Idle",
+      "distance"
+     ],
+     [
+      "Coming this way, same direction",
+      "distance"
+     ],
+     [
+      "Anything else",
+      "distance + 2 x building height"
+     ],
+     [
+      "Out of service",
+      "skipped"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Which car answers a hall call? That rule sits behind a Dispatch Strategy interface. Strategy means the algorithm is a swappable object. An idle car costs its distance.",
+     "reveal": 1
+    },
+    {
+     "say": "A car already heading toward you in the direction you want also costs its distance.",
+     "reveal": 2
+    },
+    {
+     "say": "Any other car pays distance plus two building heights, so it only wins when nothing better is free.",
+     "reveal": 3
+    },
+    {
+     "say": "Out-of-service cars are skipped. A morning office rush and a quiet hotel night want different rules; you swap one class.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s026",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Dispatch example: floors 0 to 9",
+   "table": {
+    "head": [
+     "Call",
+     "Car 1",
+     "Car 2",
+     "Winner"
+    ],
+    "rows": [
+     [
+      "Hall 5 UP",
+      "at 0, idle: 5",
+      "at 8, idle: 3",
+      "Car 2"
+     ],
+     [
+      "Hall 1 UP",
+      "at 0, idle: 1",
+      "at 8, idle: 7",
+      "Car 1"
+     ],
+     [
+      "Hall 3 UP",
+      "at 2, going up: 1",
+      "at 5, going up to 9: 22",
+      "Car 1"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "A rider presses up on floor five. Car one is idle at zero, cost five. Car two is idle at eight, cost three. Car two wins.",
+     "reveal": 1
+    },
+    {
+     "say": "Then up on floor one. Car one costs one; car two, still idle at eight, costs seven. Car one wins. Had car two been moving away in the wrong direction, it would pay its distance plus twenty, two building heights.",
+     "reveal": 2
+    },
+    {
+     "say": "Later, up on floor three. Car one is at two, already going up to seven, so floor three is on its way: cost one. Car two sits at five, but it's heading up to nine, away from floor three. That's distance two plus the twenty penalty, so twenty-two. Car one gets the call.",
+     "reveal": 3
+    }
+   ]
+  },
+  {
+   "id": "s027",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Elevator concurrency and edge cases",
+   "table": {
+    "head": [
+     "Situation",
+     "Handling"
+    ],
+    "rows": [
+     [
+      "Riders press while cars step",
+      "Per-car lock, synchronized dispatcher"
+     ],
+     [
+      "Same hall button twice",
+      "Already lit: no second dispatch"
+     ],
+     [
+      "Car leaves service with calls",
+      "Re-dispatch, or queue"
+     ],
+     [
+      "No car available",
+      "Queue, retry every tick"
+     ],
+     [
+      "8 riders press at once",
+      "All 8 served, 11 ticks"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Riders press buttons from many threads while a controller thread steps the cars. Each car's methods are synchronized, guarding its stop list, the dispatcher is synchronized, and hall lights are a concurrent set. No global lock across cars.",
+     "reveal": 1
+    },
+    {
+     "say": "Press the same hall button twice and the set says already lit, so there's no second dispatch.",
+     "reveal": 2
+    },
+    {
+     "say": "Take car one out of service while it owes floor four a pickup. Its accepted calls go back to the dispatcher and move to car two. A call must never be lost.",
+     "reveal": 3
+    },
+    {
+     "say": "If no car is free, the call is queued and retried every tick. Queued is not the same as rejected.",
+     "reveal": 4
+    },
+    {
+     "say": "In the demo, eight threads press hall buttons at the same instant, and all eight calls are served in eleven ticks.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s028",
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "Why LOOK and not SSTF?",
+   "bullets": [
+    "A. LOOK has shorter average trips",
+    "B. SSTF can starve a distant floor",
+    "C. SSTF can't handle two directions"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. Nearest-stop-first gives short trips. So why do we choose LOOK?",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s029",
+   "layout": "bullets",
+   "kicker": "Recap",
+   "title": "Elevator: in the interview",
+   "bullets": [
+    "Answer B: LOOK serves every stop in one round trip",
+    "Two sorted sets of stops plus LOOK",
+    "step() = one action; safety overrides scheduling",
+    "Strategy for dispatch, queue when no car is free",
+    "Per-car lock, synchronized dispatcher"
+   ],
+   "steps": [
+    {
+     "say": "The answer is B. S-S-T-F can starve a far floor. LOOK serves every accepted stop within one sweep up and one sweep down.",
+     "reveal": 1
+    },
+    {
+     "say": "Your thirty-second answer: each car keeps up-stops and down-stops in two sorted sets and runs LOOK.",
+     "reveal": 2
+    },
+    {
+     "say": "Step does one action, so it's testable without a clock, and doors, load, maintenance and fire recall always beat scheduling.",
+     "reveal": 3
+    },
+    {
+     "say": "A Dispatch Strategy picks the car, nearest suitable by default, and queues calls when no car is free.",
+     "reveal": 4
+    },
+    {
+     "say": "Concurrency: lock per car and a synchronized dispatcher.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s030",
+   "layout": "section",
+   "kicker": "Case 3 of 4",
+   "title": "Design a Traffic Signal Controller",
+   "steps": [
+    {
+     "say": "Case three, the traffic signal. It tests a timed state machine with one hard safety rule: two crossing flows must never be green at the same time, not even for an instant. Plus an emergency override that must interrupt the cycle safely.",
+     "reveal": 0
+    }
+   ],
+   "caption": "Book: Ch 14 · 14.6 Design a Traffic Signal Control System"
+  },
+  {
+   "id": "s031",
+   "layout": "bullets",
+   "kicker": "Traffic concept",
+   "title": "Words first",
+   "bullets": [
+    "Approach: one road entering (N, S, E, W)",
+    "Phase: approaches that may be green together",
+    "Yellow: warning before red",
+    "All-red: clearance, the junction empties",
+    "Flashing red: fault mode, an all-way stop"
+   ],
+   "steps": [
+    {
+     "say": "Two words. An approach is one road entering the intersection: north, south, east or west.",
+     "reveal": 1
+    },
+    {
+     "say": "A phase is a set of approaches whose paths don't cross, so they may be green together. Our running example has two phases: north-south, and east-west.",
+     "reveal": 2
+    },
+    {
+     "say": "Between phases we insert yellow, a warning.",
+     "reveal": 3
+    },
+    {
+     "say": "Then all-red, a clearance interval where every light is red so cars already inside can get out.",
+     "reveal": 4
+    },
+    {
+     "say": "And if the controller faults, every head flashes red, which drivers treat as an all-way stop.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s032",
+   "layout": "diagram",
+   "title": "The controller is a timed State machine",
+   "mermaid": "flowchart LR\n    G[\"Green\"] -->|\"time over or emergency elsewhere\"| Y[\"Yellow\"]\n    Y -->|\"time over, never cut short\"| R[\"AllRed\"]\n    R -->|\"next or emergency phase\"| G\n    G -->|\"emergency for this phase\"| H[\"EmergencyHold\"]\n    R -->|\"emergency phase next\"| H\n    H -->|\"cleared\"| Y\n    G -->|\"fault\"| F[\"FlashingRed\"]\n    F -->|\"recover\"| R",
+   "caption": "A timer calls tick() each second; each state counts down",
+   "steps": [
+    {
+     "say": "Each interval is a State class with two methods: enter, which sets the lights and loads a countdown, and on tick, which counts down and names the next state.",
+     "reveal": 0
+    },
+    {
+     "say": "Green goes to yellow, yellow to all-red, all-red to the next phase's green. Emergency hold keeps a phase green until the ambulance passes. Any state can fault into flashing red, and recovery goes through all-red.",
+     "reveal": 0
+    },
+    {
+     "say": "One twist versus the A-T-M: these states carry data, the seconds remaining, so we create a new state object per transition instead of sharing one instance.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s033",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "One fixed cycle: green 5, yellow 2, all-red 1",
+   "table": {
+    "head": [
+     "Time",
+     "N-S",
+     "E-W",
+     "State"
+    ],
+    "rows": [
+     [
+      "t 0",
+      "Green",
+      "Red",
+      "GREEN north-south"
+     ],
+     [
+      "t 5",
+      "Yellow",
+      "Red",
+      "YELLOW north-south"
+     ],
+     [
+      "t 7",
+      "Red",
+      "Red",
+      "ALL RED"
+     ],
+     [
+      "t 8",
+      "Red",
+      "Green",
+      "GREEN east-west"
+     ],
+     [
+      "t 13 to 16",
+      "Red",
+      "Yellow, all red",
+      "back to N-S at 16"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's watch one cycle with green five seconds, yellow two, all-red one. At second zero, north and south are green.",
+     "reveal": 1
+    },
+    {
+     "say": "At five, north-south turns yellow.",
+     "reveal": 2
+    },
+    {
+     "say": "At seven, everything is red for one second.",
+     "reveal": 3
+    },
+    {
+     "say": "At eight, east-west turns green.",
+     "reveal": 4
+    },
+    {
+     "say": "At thirteen east-west goes yellow, at fifteen all red, and at sixteen north-south is green again. A sixteen second cycle.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s034",
+   "layout": "bullets",
+   "kicker": "Traffic concept",
+   "title": "Strategy for timing",
+   "bullets": [
+    "TimingPolicy: green seconds for a phase",
+    "FixedTiming: always the same, say 5 s",
+    "QueueAdaptive: cars x seconds, clamped min to max",
+    "12 cars waiting E-W: green hits the 10 s max",
+    "Minimum green: a quiet road isn't starved"
+   ],
+   "steps": [
+    {
+     "say": "How long is green? We ask a Timing Policy, a Strategy interface with one method: green seconds for this phase, given how many cars are waiting.",
+     "reveal": 1
+    },
+    {
+     "say": "Fixed timing always answers the same number, five seconds in our demo.",
+     "reveal": 2
+    },
+    {
+     "say": "Queue adaptive timing multiplies waiting cars by seconds per car and clamps the result between a minimum and a maximum. Sensors report the queue lengths.",
+     "reveal": 3
+    },
+    {
+     "say": "In the demo, twelve cars wait east-west and two north-south. East-west gets its full ten-second maximum: green from second twenty-four to thirty-four.",
+     "reveal": 4
+    },
+    {
+     "say": "The minimum stops a quiet road from being starved, and every phase still gets its turn. Time-of-day plans or a night mode are just more strategies.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s035",
+   "layout": "bullets",
+   "kicker": "Traffic concept",
+   "title": "Observer, red-first, and a safety monitor",
+   "bullets": [
+    "Each light publishes changes to listeners",
+    "Displays, logs, central monitor subscribe",
+    "Show a phase: set others RED first, then GREEN",
+    "SafetyMonitor checks the invariant on every green",
+    "Violation: real cabinets force flashing red"
+   ],
+   "steps": [
+    {
+     "say": "Every traffic light publishes its changes to listeners. That's the Observer pattern: subscribers register, and the subject notifies them all.",
+     "reveal": 1
+    },
+    {
+     "say": "Displays, logs and a central monitoring system subscribe independently. The intersection doesn't call each one.",
+     "reveal": 2
+    },
+    {
+     "say": "Now safety by construction. To show a phase, we first set every other light red, and only then set the phase green. So there's never an instant with two crossing greens, even mid-switch.",
+     "reveal": 3
+    },
+    {
+     "say": "On top of that, a safety monitor listens, and every time a light turns green it checks the invariant: all green or yellow approaches belong to one phase. That's defence in depth, several independent safety layers.",
+     "reveal": 4
+    },
+    {
+     "say": "It mirrors real conflict monitors, which force the intersection into flash if a bug ever shows conflicting greens. Our demo saw forty-eight light changes and zero violations.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s036",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Ambulance from the west while N-S is green",
+   "table": {
+    "head": [
+     "Time",
+     "What happens"
+    ],
+    "rows": [
+     [
+      "t 38",
+      "Emergency request: WEST, flag set"
+     ],
+     [
+      "t 39",
+      "Next tick: N-S green ends early, yellow"
+     ],
+     [
+      "t 41",
+      "Yellow ran its full 2 s; all red"
+     ],
+     [
+      "t 42",
+      "E-W green and HELD"
+     ],
+     [
+      "t 45 to 49",
+      "Cleared; yellow, all red, normal cycle"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Here's the emergency override. At second thirty-eight an ambulance approaches from the west. The request doesn't jump the lights. It just sets a flag: the emergency phase is east-west.",
+     "reveal": 1
+    },
+    {
+     "say": "On the next tick, the green state reads the flag and ends north-south green early, going to yellow.",
+     "reveal": 2
+    },
+    {
+     "say": "But yellow never reads the flag. It runs its full two seconds, then all-red its full one second. Cars already in the junction need that time to clear.",
+     "reveal": 3
+    },
+    {
+     "say": "At forty-two, all-red picks the emergency phase, and east-west goes green and is held.",
+     "reveal": 4
+    },
+    {
+     "say": "At forty-five the ambulance has passed and the request is cleared. On the next tick the hold leaves through yellow and all-red, and normal cycling resumes at forty-nine.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s037",
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "Should the controller be a Singleton?",
+   "bullets": [
+    "A. Yes, there's one traffic controller",
+    "B. No, one per intersection, many per city",
+    "C. Yes, but only for thread safety"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. The popular reference design makes the traffic controller a Singleton, a class with exactly one global instance. Do you agree?",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s038",
+   "layout": "bullets",
+   "kicker": "Answer",
+   "title": "Answer: no Singleton, and concurrency",
+   "bullets": [
+    "B: a city has thousands of intersections",
+    "A TrafficControlCenter can own them all",
+    "Every public method synchronized",
+    "Emergency between ticks: stored, next tick acts",
+    "Lost clear: add a maximum hold time"
+   ],
+   "steps": [
+    {
+     "say": "The answer is B. Each intersection has its own controller, and a city has thousands. A Singleton is a hidden global that blocks running two in one test. Our demo runs two.",
+     "reveal": 1
+    },
+    {
+     "say": "If you need coordination, say a green wave, a traffic control center object owns many intersections.",
+     "reveal": 2
+    },
+    {
+     "say": "Concurrency: a timer thread calls tick once a second while sensor and emergency inputs arrive from other threads. Every public method is synchronized, so a transition is never seen half done. Listeners sit in a copy-on-write list.",
+     "reveal": 3
+    },
+    {
+     "say": "An emergency request between ticks is just stored; the next tick acts on it. During yellow, yellow still runs in full.",
+     "reveal": 4
+    },
+    {
+     "say": "And if the clear message is lost, add a maximum hold time so the cycle eventually resumes.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s039",
+   "layout": "section",
+   "kicker": "Case 4 of 4",
+   "title": "Design a Shipping Locker (Amazon Locker)",
+   "steps": [
+    {
+     "say": "Case four, the parcel locker: a wall of numbered doors in a shop or lobby. A courier puts a parcel behind one door, and the customer types a code to open it. It looks like the parking lot, but adds deadlines, a secret code, and a network of stations.",
+     "reveal": 0
+    }
+   ],
+   "caption": "Book: Ch 14 · 14.7 Design a Shipping Locker System"
+  },
+  {
+   "id": "s040",
+   "layout": "bullets",
+   "title": "Clarify the locker",
+   "bullets": [
+    "Door sizes: small, medium, large; upsize if needed",
+    "Carrier reserves a door ahead: 2 h hold",
+    "6-digit one-time code, sent to the customer only",
+    "Pickup window: 3 days, then expire and return",
+    "5 wrong codes: keypad locks 15 minutes",
+    "Returns, a city network, broken doors"
+   ],
+   "steps": [
+    {
+     "say": "Doors come in three sizes. A parcel may go into a bigger door if its own size is full.",
+     "reveal": 1
+    },
+    {
+     "say": "The carrier's system reserves a door when the parcel is sorted, so the courier never arrives to a full station. The hold lasts two hours.",
+     "reveal": 2
+    },
+    {
+     "say": "On deposit, the customer gets a six-digit, one-time code by text. The courier never sees it.",
+     "reveal": 3
+    },
+    {
+     "say": "The parcel can stay three days, then it expires, and the courier takes it back on the next visit.",
+     "reveal": 4
+    },
+    {
+     "say": "To stop guessing, five wrong codes in a row lock the keypad for fifteen minutes.",
+     "reveal": 5
+    },
+    {
+     "say": "Plus customer returns, a network of stations, and technicians taking broken doors out of service.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s041",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Locker-size Strategy: SmallestFit vs FirstFit",
+   "table": {
+    "head": [
+     "Station",
+     "Small parcel",
+     "Then large parcel"
+    ],
+    "rows": [
+     [
+      "F: FirstFit (door 01 LARGE, 02 SMALL)",
+      "F-01, LARGE",
+      "REJECTED"
+     ],
+     [
+      "S: SmallestFit, same doors",
+      "S-02, SMALL",
+      "S-01, LARGE"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Which door? A Compartment Selector strategy decides. First fit takes the lowest-numbered door that fits. On station F, door one is large and door two small. A tiny parcel grabs the large door, and then a large parcel has nowhere to go: rejected.",
+     "reveal": 1
+    },
+    {
+     "say": "Smallest fit takes the smallest door that fits. On station S, the tiny parcel gets the small door, and the large parcel still gets the large one. Smallest fit is the default; a station could also prefer lowest door first, or eye-level for accessibility. Each is one small class.",
+     "reveal": 2
+    }
+   ]
+  },
+  {
+   "id": "s042",
+   "layout": "bullets",
+   "kicker": "Example",
+   "title": "Does the box fit? Sort both sides",
+   "bullets": [
+    "SMALL door: 10 x 40 x 60 cm",
+    "Mug box: 9 x 12 x 12, sorted 9, 12, 12",
+    "9 to 10, 12 to 40, 12 to 60: fits",
+    "Both small doors taken: mug upsizes to MEDIUM",
+    "50 x 50 x 70 box: no door fits, refused"
+   ],
+   "steps": [
+    {
+     "say": "Fit is checked by sorting. A small door is ten by forty by sixty centimetres.",
+     "reveal": 1
+    },
+    {
+     "say": "A mug box is nine by twelve by twelve. Sort the parcel's sides and the door's sides.",
+     "reveal": 2
+    },
+    {
+     "say": "Compare smallest to smallest: nine against ten, twelve against forty, twelve against sixty. All fit. Sorting handles a box on its side without trying six rotations.",
+     "reveal": 3
+    },
+    {
+     "say": "In the demo both small doors were already taken, so the mug was upsized to a medium door.",
+     "reveal": 4
+    },
+    {
+     "say": "A fifty by fifty by seventy box fits nothing and is refused with a clear message.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s043",
+   "layout": "diagram",
+   "title": "Booking lifecycle",
+   "mermaid": "flowchart LR\n    R[\"RESERVED\"] -->|\"deposit, send code\"| D[\"DEPOSITED\"]\n    R -->|\"hold expired\"| X[\"CANCELLED\"]\n    D -->|\"right code\"| P[\"PICKED_UP\"]\n    D -->|\"3 days over\"| E[\"EXPIRED\"]\n    E -->|\"courier collects\"| T[\"RETURNED\"]\n    R -->|\"return drop-off code\"| O[\"DROPPED_OFF\"]\n    O -->|\"courier collects\"| T",
+   "caption": "Door states are separate: FREE, RESERVED, OCCUPIED, OUT_OF_SERVICE",
+   "steps": [
+    {
+     "say": "There are two small state machines. The booking tells one parcel's story: reserved, deposited, then picked up, or expired and returned. A hold that runs out becomes cancelled. A customer return goes reserved, dropped off, returned.",
+     "reveal": 0
+    },
+    {
+     "say": "The door has its own simpler machine: free, reserved, occupied, out of service. Keeping them apart means a door is reused many times while each booking keeps its own history and deadlines.",
+     "reveal": 0
+    },
+    {
+     "say": "Illegal moves throw. A technician can only take a free door out of service; an occupied door must be emptied first.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s044",
+   "layout": "bullets",
+   "kicker": "Locker concept",
+   "title": "Codes: random, single-use, hashed",
+   "bullets": [
+    "6 random digits, unique among live codes",
+    "Store only SHA-256(station + code)",
+    "Pickup: hash what was typed, look it up",
+    "Success: free the door, delete the code",
+    "Notify customer via Observer, outside the lock"
+   ],
+   "steps": [
+    {
+     "say": "On deposit we generate six random digits, and retry on the rare clash with another live code at this station.",
+     "reveal": 1
+    },
+    {
+     "say": "We store only a hash: S-H-A two fifty-six of the station id plus the code. A hash is a one-way fingerprint. If the database or logs leak, nobody can open doors.",
+     "reveal": 2
+    },
+    {
+     "say": "At the keypad, we hash what was typed and look up that hash.",
+     "reveal": 3
+    },
+    {
+     "say": "On success the door opens, frees, and the code is deleted, so it works once. Type the same code again and you get wrong code.",
+     "reveal": 4
+    },
+    {
+     "say": "The customer hears about the code through a Locker Listener, the Observer pattern. We call it after releasing the station lock, so a slow text-message gateway never blocks the keypad.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s045",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Sealed keypad results, walked through",
+   "table": {
+    "head": [
+     "Typed",
+     "Result"
+    ],
+    "rows": [
+     [
+      "Typo 123456",
+      "WrongCode, 4 attempts left"
+     ],
+     [
+      "Right code 694696",
+      "DoorOpened, MG01-01"
+     ],
+     [
+      "Guesses 1 to 4 more",
+      "KeypadLocked, 900 s"
+     ],
+     [
+      "Code of a 3-day-old mug",
+      "ParcelExpired"
+     ],
+     [
+      "Return drop-off code",
+      "DropOffDoorOpened"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Every keypad outcome is its own type in a sealed Pickup Result, not a magic string. The UI must handle all five, and the compiler checks it. First, a typo: wrong code, four attempts left.",
+     "reveal": 1
+    },
+    {
+     "say": "The right code: door opened, compartment MG zero one, zero one.",
+     "reveal": 2
+    },
+    {
+     "say": "Now someone guesses codes. The earlier typo already counted, so the fourth guess is the fifth wrong in a row: keypad locked for nine hundred seconds. Even the real owner waits fifteen minutes. With a million possible codes, that makes guessing hopeless.",
+     "reveal": 3
+    },
+    {
+     "say": "The mug owner comes back after three days: parcel expired, the courier will return it.",
+     "reveal": 4
+    },
+    {
+     "say": "And a return code opens an empty door for the customer to drop a parcel in.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s046",
+   "layout": "bullets",
+   "kicker": "Locker concept",
+   "title": "Lazy expiry: deadlines checked on every call",
+   "bullets": [
+    "Every public method first runs expireOverdue()",
+    "RESERVED past 2 h: CANCELLED, door FREE",
+    "DEPOSITED past 3 days: EXPIRED, door stays shut",
+    "Scheduler down for an hour: doors still free",
+    "sweep() only sends the 'not collected' texts"
+   ],
+   "steps": [
+    {
+     "say": "Lazy expiry means deadlines are checked whenever the data is next touched, not by a timer. Every public method starts by expiring anything overdue.",
+     "reveal": 1
+    },
+    {
+     "say": "The carrier reserved a door for some shoes but never came. Two hours later, the next call sees the hold passed: booking cancelled, door free.",
+     "reveal": 2
+    },
+    {
+     "say": "The mug wasn't collected in three days: booking expired. The door stays occupied until the courier collects.",
+     "reveal": 3
+    },
+    {
+     "say": "So if the scheduler is down for an hour, doors still come back correctly on the next operation.",
+     "reveal": 4
+    },
+    {
+     "say": "The scheduled sweep, every minute, only sends the not-collected messages, outside the lock. We inject the clock and the random generator, so tests can jump three days forward.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s047",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Locker concurrency and edge cases",
+   "table": {
+    "head": [
+     "Situation",
+     "Handling"
+    ],
+    "rows": [
+     [
+      "50 carriers reserve, 20 doors",
+      "One station lock: 20 booked, 30 refused"
+     ],
+     [
+      "Courier late, hold expired",
+      "Deposit refused; reserve again"
+     ],
+     [
+      "Same parcel reserved twice",
+      "Rejected while booking is active"
+     ],
+     [
+      "Station full",
+      "Network: nearest station with space"
+     ],
+     [
+      "Slow SMS gateway",
+      "Listeners run outside the lock"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Fifty carriers reserve at the same instant on a twenty-door station. Choose a door and mark it reserved happen under one station lock, as one step. Result: exactly twenty bookings on twenty different doors, thirty refused. One lock is fine here: tens of doors, microseconds per call.",
+     "reveal": 1
+    },
+    {
+     "say": "A courier who arrives after the hold expired finds the booking cancelled, so deposit is refused and the carrier reserves again.",
+     "reveal": 2
+    },
+    {
+     "say": "A retry that reserves the same parcel twice is rejected while it has an active booking, which makes reserve idempotent: repeating it has the same effect as calling it once.",
+     "reveal": 3
+    },
+    {
+     "say": "If a station is full, the network sorts stations by distance, keeps those within the radius, and suggests the nearest that fits. That's only a hint: if the reservation then fails, try the next one.",
+     "reveal": 4
+    },
+    {
+     "say": "And the slow text gateway never holds the lock.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s048",
+   "layout": "bullets",
+   "kicker": "Recap",
+   "title": "Locker: in the interview",
+   "bullets": [
+    "Strategy picks the smallest free door that fits",
+    "Choose-and-mark atomic under the station lock",
+    "Two state machines: door and booking",
+    "Codes random, single-use, hashed; lockout after 5",
+    "Lazy expiry on every call; inject clock and random"
+   ],
+   "steps": [
+    {
+     "say": "Your thirty-second answer: a Strategy picks the smallest free door that fits.",
+     "reveal": 1
+    },
+    {
+     "say": "Choose and mark happen under the station's lock, so two carriers never get the same door.",
+     "reveal": 2
+    },
+    {
+     "say": "Doors and bookings are two small state machines.",
+     "reveal": 3
+    },
+    {
+     "say": "Codes are random, single-use and stored as hashes, sent through an observer outside the lock, with a keypad lockout after five wrong tries.",
+     "reveal": 4
+    },
+    {
+     "say": "Deadlines are enforced lazily on every call, and the clock and randomness are injected for tests.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s049",
+   "layout": "table",
+   "kicker": "Chapter summary",
+   "title": "Chapter summary: seven everyday objects",
+   "table": {
+    "head": [
+     "Problem",
+     "Key patterns",
+     "Concurrency tool"
+    ],
+    "rows": [
+     [
+      "Parking lot",
+      "Strategy, Factory, Observer",
+      "pollFirst + CAS"
+     ],
+     [
+      "Vending / coffee",
+      "State; Observer, sealed",
+      "One machine lock"
+     ],
+     [
+      "ATM",
+      "State, Chain, Command",
+      "Account lock, id order"
+     ],
+     [
+      "Elevator",
+      "Strategy (+ modes)",
+      "Per-car lock"
+     ],
+     [
+      "Traffic signal",
+      "State, Strategy, Observer",
+      "Synchronized tick"
+     ],
+     [
+      "Shipping locker",
+      "Strategy, Observer, sealed",
+      "Station lock, lazy expiry"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's zoom out over the whole chapter. The parking lot from last episode: Strategy, Factory and Observer, with atomic poll-first and compare-and-set.",
+     "reveal": 1
+    },
+    {
+     "say": "The vending and coffee machines: State, Observer and sealed results, each behind one machine lock.",
+     "reveal": 2
+    },
+    {
+     "say": "The A-T-M: State, Chain of Responsibility and Command, with per-account locks and ordered locking for transfers.",
+     "reveal": 3
+    },
+    {
+     "say": "The elevator: Strategy for dispatch plus modes, with a lock per car.",
+     "reveal": 4
+    },
+    {
+     "say": "The traffic signal: State, Strategy and Observer, with a synchronized tick.",
+     "reveal": 5
+    },
+    {
+     "say": "The locker: Strategy, Observer and sealed results, one lock per station, and lazy expiry.",
+     "reveal": 6
+    }
+   ],
+   "caption": "Book: Ch 14 Everyday Objects · Chapter summary"
+  },
+  {
+   "id": "s050",
+   "layout": "bullets",
+   "kicker": "Pause and think",
+   "title": "Chapter self-check",
+   "bullets": [
+    "Stateless states vs states with data?",
+    "Check-then-act race in the ATM?",
+    "Where did we reject a Singleton?",
+    "Where does greedy fail?",
+    "Which designs are tick-driven, and why?",
+    "Which case enforces deadlines lazily?"
+   ],
+   "steps": [
+    {
+     "say": "Quick self-check. Answer each before I do. Which designs share stateless state objects, and which need states with data? Vending machine and A-T-M share stateless singletons; the traffic signal's states hold countdowns, so they're created per transition.",
+     "reveal": 1
+    },
+    {
+     "say": "The A-T-M race: two machines overdraw one account. Fix: check and debit under the account lock.",
+     "reveal": 2
+    },
+    {
+     "say": "We rejected Singletons for the parking lot, the coffee machine and the traffic controller. Real deployments have many of each, and Singletons block testing.",
+     "reveal": 3
+    },
+    {
+     "say": "Greedy fails at change-making with limited coins, and at notes with limited cassettes. Bounded coin-change dynamic programming fixes it.",
+     "reveal": 4
+    },
+    {
+     "say": "The elevator and the traffic signal are tick-driven, which gives deterministic, clock-free tests. A real timer just calls tick or step.",
+     "reveal": 5
+    },
+    {
+     "say": "And the locker enforces deadlines lazily, so doors come back even if the scheduler is late.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s051",
+   "layout": "recap",
+   "title": "Chapter TL;DR",
+   "bullets": [
+    "Find the one hard method; spend your time there",
+    "State, Strategy, Observer, Chain, Command",
+    "Atomic check-then-act, ordered locks, notify outside",
+    "Injected instances, cents, tick-driven logic",
+    "Deadlines checked lazily; codes hashed, single-use"
+   ],
+   "steps": [
+    {
+     "say": "Let's recap. Find the one hard method in each problem: withdrawal, next stop, next phase, reserve and pickup. Spend your interview time there.",
+     "reveal": 1
+    },
+    {
+     "say": "State for machines whose buttons mean different things over time. Strategy for rules that change, like dispatch, timing and door choice. Observer for displays, alerts and monitors. Chain of Responsibility and Command for the A-T-M.",
+     "reveal": 2
+    },
+    {
+     "say": "Make every check-then-act atomic, lock at the smallest useful scope, lock in a fixed order, and call listeners outside locks.",
+     "reveal": 3
+    },
+    {
+     "say": "Prefer injected instances over Singletons, integer cents over doubles, and tick-driven logic over sleeps.",
+     "reveal": 4
+    },
+    {
+     "say": "For deadlines, check on every call, and keep secrets hashed and single-use.",
+     "reveal": 5
+    },
+    {
+     "say": "Next time, episode seventeen: Booking systems. We design a library, movie tickets, concert tickets and a hotel, where the hard part is holding a seat or a room without selling it twice. See you there.",
+     "reveal": 5
+    }
+   ]
+  }
+ ]
+}

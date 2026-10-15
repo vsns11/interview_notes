@@ -1,0 +1,2106 @@
+{
+  "series": "LLD Workshop",
+  "episode": 9,
+  "title": "Structural Design Patterns",
+  "subtitle": "Adapter, Bridge, Composite, Decorator, Facade, Flyweight, Proxy",
+  "scenes": [
+    {
+      "id": "s001",
+      "layout": "title",
+      "title": "Structural Design Patterns",
+      "subtitle": "Adapter, Bridge, Composite, Decorator, Facade, Flyweight, Proxy",
+      "steps": [
+        {
+          "say": "Welcome to episode nine of the L-L-D Workshop, the low-level design series. Last time we created objects. Today we put objects together: we connect them, wrap them, nest them and share them.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll be able to explain all seven structural patterns, Adapter, Bridge, Composite, Decorator, Facade, Flyweight and Proxy, each with a worked example, its classic trap, and the one-line answer to tell look-alikes apart.",
+          "reveal": 0
+        },
+        {
+          "say": "Keep the chapter nine PDF open beside the video. It has runnable Java for every pattern. Pause at each pause-and-think question.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s002",
+      "layout": "section",
+      "kicker": "Concept 1 of 9",
+      "title": "What structural patterns are",
+      "steps": [
+        {
+          "say": "You have lots of small classes. How do you combine them into something bigger without a tangle? That's the job of structural patterns.",
+          "reveal": 0
+        },
+        {
+          "say": "Remember the Gang of Four's three families. Creational patterns answer: how do I create objects? Behavioral patterns answer: how do objects talk? Structural patterns answer: how do I combine classes and objects into bigger structures, and keep them flexible?",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 9 Structural · 9.0 What structural patterns are"
+    },
+    {
+      "id": "s003",
+      "layout": "bullets",
+      "kicker": "Concept 1 of 9",
+      "title": "What structural patterns buy you",
+      "bullets": [
+        "Simplify complex structures: Facade, Composite",
+        "Promote reuse: Adapter reuses a misfit class",
+        "Decouple: Bridge, Decorator, Proxy",
+        "Maintainability: clear links, local changes"
+      ],
+      "steps": [
+        {
+          "say": "First, they simplify. A Facade hides many steps behind one call, and a Composite hides nesting, so a folder and a file answer the same question.",
+          "reveal": 1
+        },
+        {
+          "say": "Second, reuse. An Adapter lets you reuse a payment library whose method names don't match yours, instead of rewriting it.",
+          "reveal": 2
+        },
+        {
+          "say": "Third, decoupling: each class depends less on the others' details, as in Bridge, Decorator and Proxy.",
+          "reveal": 3
+        },
+        {
+          "say": "Fourth, maintainability. The relationships are clear, so a change stays in one place.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s004",
+      "layout": "twocol",
+      "kicker": "Concept 1 of 9",
+      "title": "Three words you need first",
+      "left": {
+        "heading": "Building blocks",
+        "bullets": [
+          "Composition: has-a, holds a reference",
+          "Delegation: forward the call to it",
+          "Interface: methods a caller can use"
+        ]
+      },
+      "right": {
+        "heading": "The key insight",
+        "bullets": [
+          "Adapter, Decorator, Proxy, Facade",
+          "Same shape: hold one, forward calls",
+          "Intent tells them apart"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Three words before we start. Composition, or has-a: an object holds a reference to another. A checkout holds a payment gateway. Almost every structural pattern is built on it.",
+          "reveal": 1
+        },
+        {
+          "say": "Delegation: forwarding a call to the object you hold. The wrapper's pay method calls the inner object's charge method.",
+          "reveal": 2
+        },
+        {
+          "say": "Interface, in the design sense: the set of methods a caller can use on an object.",
+          "reveal": 3
+        },
+        {
+          "say": "Now the insight that saves you in interviews. Adapter, Decorator, Proxy and Facade look physically the same.",
+          "reveal": 4
+        },
+        {
+          "say": "One object holds another and forwards calls.",
+          "reveal": 5
+        },
+        {
+          "say": "What tells them apart is intent: what changes as the call passes through. We'll put them side by side at the end.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s005",
+      "layout": "section",
+      "kicker": "Concept 2 of 9",
+      "title": "Adapter: make it fit",
+      "steps": [
+        {
+          "say": "Think of a travel plug adapter. Your US charger doesn't fit an Indian socket. You don't rewire the charger or the wall. You put a small translator in between.",
+          "reveal": 0
+        },
+        {
+          "say": "The Adapter pattern does that for code. It converts the interface of a class into the interface your code expects. The other side is usually not yours to change: a vendor library, another team's service, or code with dozens of callers. It's also called Wrapper.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 9 Structural · 9.1 Adapter Pattern"
+    },
+    {
+      "id": "s006",
+      "layout": "table",
+      "kicker": "Concept 2 of 9",
+      "title": "Four roles, one checkout",
+      "table": {
+        "head": [
+          "Role",
+          "In our checkout"
+        ],
+        "rows": [
+          [
+            "Target: the interface you want",
+            "PaymentGateway.pay(Money)"
+          ],
+          [
+            "Adaptee: the misfit class",
+            "StripeClient.charge(cents, code)"
+          ],
+          [
+            "Adapter: the translator",
+            "StripeGateway"
+          ],
+          [
+            "Client: uses only the Target",
+            "checkout(...)"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Our running example is a checkout. Role one, the Target: the interface in your own words. Ours is Payment Gateway, with one method, pay, that takes Money and returns a Receipt.",
+          "reveal": 1
+        },
+        {
+          "say": "Role two, the Adaptee: the existing class with the wrong shape. Stripe's client wants charge, with whole cents and a lowercase currency.",
+          "reveal": 2
+        },
+        {
+          "say": "Role three, the Adapter: Stripe Gateway. It implements our interface and holds the Stripe client.",
+          "reveal": 3
+        },
+        {
+          "say": "Role four, the Client: the checkout function. It sees only Payment Gateway, and never learns which vendor answered.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s007",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Walk one payment through the adapter",
+      "table": {
+        "head": [
+          "Step",
+          "What happens for 42 dollars 50"
+        ],
+        "rows": [
+          [
+            "1. Target in our words",
+            "pay(Money 42.50 USD)"
+          ],
+          [
+            "2. One adapter per vendor",
+            "StripeGateway holds StripeClient"
+          ],
+          [
+            "3. Translate input",
+            "4250 cents, currency 'usd'"
+          ],
+          [
+            "4. Call the adaptee",
+            "client.charge(4250, 'usd')"
+          ],
+          [
+            "5. Translate output and errors",
+            "charge id to Receipt; vendor error to ours"
+          ],
+          [
+            "6. Client sees only Target",
+            "checkout never imports Stripe"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's walk a forty-two dollar fifty payment through, step by step. Step one, the target speaks our language: pay, with a Money of forty-two fifty U-S-D.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, one adapter class per vendor. Stripe Gateway holds the Stripe client.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, translate the input. Forty-two fifty dollars becomes four thousand two hundred fifty cents, and the currency becomes lowercase u-s-d.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, call the adaptee: charge, four two five zero, u-s-d.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, translate back, and that includes errors. Stripe's charge id becomes our Receipt. A Stripe card exception becomes our own Payment Failed exception.",
+          "reveal": 5
+        },
+        {
+          "say": "Step six, the checkout depends only on Payment Gateway. Adding PayPal is one new class. The rule that makes it work: the adapter's public methods mention only your types. Let one Stripe type leak, and you're coupled again.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s008",
+      "layout": "twocol",
+      "kicker": "Concept 2 of 9",
+      "title": "Object adapter versus class adapter",
+      "left": {
+        "heading": "Object adapter: holds",
+        "bullets": [
+          "Works with final classes",
+          "Wraps any subclass passed in",
+          "Shows only Target methods"
+        ]
+      },
+      "right": {
+        "heading": "Class adapter: extends",
+        "bullets": [
+          "Fails on final: StripeClient is final",
+          "Leaks readFahrenheit() to callers",
+          "Target must be an interface in Java"
+        ]
+      },
+      "steps": [
+        {
+          "say": "There are two ways to build an adapter. An object adapter holds the adaptee. It works even when the adaptee is final, and our Stripe client is final.",
+          "reveal": 1
+        },
+        {
+          "say": "It can wrap any subclass you pass in, so one adapter covers a whole family.",
+          "reveal": 2
+        },
+        {
+          "say": "And callers see only the target methods. Nothing extra leaks.",
+          "reveal": 3
+        },
+        {
+          "say": "A class adapter extends the adaptee instead. Imagine a legacy Fahrenheit thermometer, and a Thermometer Class Adapter that extends it and implements Celsius Sensor. Impossible for Stripe, which is final.",
+          "reveal": 4
+        },
+        {
+          "say": "Worse, every public method of the thermometer, like read Fahrenheit, now sits on the adapter too.",
+          "reveal": 5
+        },
+        {
+          "say": "And since Java has no multiple class inheritance, the target must be an interface. Prefer the object adapter.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s009",
+      "layout": "bullets",
+      "kicker": "Concept 2 of 9",
+      "title": "Two-way adapter, and Adapter's look-alikes",
+      "bullets": [
+        "Two-way: implements both interfaces",
+        "New dashboard sees 100.0 C, old report 212.0 F",
+        "Adapter translates, same work",
+        "Decorator extends work, Proxy gates it",
+        "Facade replaces many interfaces with one",
+        "Test: would it die if the vendor matched us?"
+      ],
+      "steps": [
+        {
+          "say": "A two-way adapter implements both interfaces, so one object serves clients on either side.",
+          "reveal": 1
+        },
+        {
+          "say": "Our temperature adapter is both a Celsius and a Fahrenheit sensor. The new dashboard reads one hundred degrees Celsius, the old US report reads two hundred twelve Fahrenheit, from the same object. Handy during a migration.",
+          "reveal": 2
+        },
+        {
+          "say": "Now the quick view of the look-alikes. Adapter translates the interface, and the work stays the same.",
+          "reveal": 3
+        },
+        {
+          "say": "Decorator keeps the interface and extends the work. Proxy keeps both, but gates the work: delays it, caches it, or refuses it.",
+          "reveal": 4
+        },
+        {
+          "say": "Facade replaces many interfaces with one simpler one.",
+          "reveal": 5
+        },
+        {
+          "say": "A sharp test: if Stripe rewrote its A-P-I to match yours tomorrow and your class would lose its reason to exist, it was an adapter.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s010",
+      "layout": "bullets",
+      "kicker": "Concept 2 of 9",
+      "title": "Adapter: traps and the interview line",
+      "bullets": [
+        "Leaking vendor types or exceptions",
+        "Business logic like retries in the adapter",
+        "One giant adapter with if vendor == STRIPE",
+        "Skip it when you own both sides",
+        "JDK: Arrays.asList, InputStreamReader"
+      ],
+      "steps": [
+        {
+          "say": "The classic mistakes. First, leaking a vendor type: a Stripe Charge return type or a Stripe exception escaping. Then nothing is decoupled.",
+          "reveal": 1
+        },
+        {
+          "say": "Second, logic creeping in, like discounts or retries. Adapters translate. They don't decide.",
+          "reveal": 2
+        },
+        {
+          "say": "Third, one giant adapter with an if-vendor-equals-Stripe branch. That's the branch the pattern removes. One adapter per adaptee.",
+          "reveal": 3
+        },
+        {
+          "say": "And skip it when you own both sides. Just change one interface.",
+          "reveal": 4
+        },
+        {
+          "say": "Real example: Arrays dot as List adapts an array to a List without copying. In the interview, say this: an Adapter converts one interface into the one my client expects, at a boundary I don't control. It translates inputs, outputs and errors, and I prefer the object adapter. Recap: Adapter means make it fit.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s011",
+      "layout": "section",
+      "kicker": "Concept 3 of 9",
+      "title": "Bridge: split it",
+      "steps": [
+        {
+          "say": "Picture universal TV remotes and TV brands. There's no Basic Sony Remote class. Any remote drives any TV, through a common protocol. Remotes and TVs are designed and sold separately.",
+          "reveal": 0
+        },
+        {
+          "say": "Bridge splits one class that varies in two independent ways into two separate hierarchies, joined by one reference. That reference is the bridge. The Gang of Four's intent: decouple an abstraction from its implementation, so the two can vary independently.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 9 Structural · 9.2 Bridge Pattern"
+    },
+    {
+      "id": "s012",
+      "layout": "number",
+      "kicker": "Concept 3 of 9",
+      "title": "The class explosion",
+      "big": "3x3 = 9 vs 3+3 = 6",
+      "caption": "Two hierarchies: multiplication becomes addition",
+      "steps": [
+        {
+          "say": "Our running example: notifications. Three kinds, alert, reminder and digest, times three channels, email, S-M-S and push. In one hierarchy you need a class per combination: three times three, nine classes.",
+          "reveal": 0
+        },
+        {
+          "say": "Add one channel and it's twelve. Add one more kind too, sixteen. With a bridge, the counts add instead: three plus three is six, four plus four is eight.",
+          "reveal": 0
+        },
+        {
+          "say": "The smell to spot is a class name made of two nouns: Email Alert, S-M-S Digest.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s013",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Four terms, applied to notifications",
+      "table": {
+        "head": [
+          "Term",
+          "In our code"
+        ],
+        "rows": [
+          [
+            "Abstraction: what the client uses",
+            "Notification, holds a Channel"
+          ],
+          [
+            "Refined abstraction",
+            "Alert, Reminder, Digest"
+          ],
+          [
+            "Implementor: low-level work",
+            "Channel.deliver(title, body)"
+          ],
+          [
+            "Concrete implementor",
+            "EmailChannel, SmsChannel, PushChannel"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Interviewers expect four terms. The Abstraction is the high-level side: Notification, an abstract class holding a Channel. That field is the bridge.",
+          "reveal": 1
+        },
+        {
+          "say": "Refined abstractions are its subclasses: alert, reminder, digest. Each builds its title and body.",
+          "reveal": 2
+        },
+        {
+          "say": "The Implementor is the low-level side's interface: Channel, with one method, deliver, taking a title and a body. Naming trap: implementation here means the low-level half, not a class that implements an interface.",
+          "reveal": 3
+        },
+        {
+          "say": "Concrete implementors do the physical work: email, S-M-S and push channels. Now pair them at run time: new Alert Notification, with an S-M-S channel. Adding Slack, or a promo notification, is one new class.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s014",
+      "layout": "diagram",
+      "kicker": "Concept 3 of 9",
+      "title": "Bridge: two hierarchies, one reference",
+      "mermaid": "flowchart LR\n    A[\"Alert\"] --> N[\"Notification (abstraction)\"]\n    R[\"Reminder\"] --> N\n    D[\"Digest\"] --> N\n    N -->|\"channel: the bridge\"| C[\"Channel (implementor)\"]\n    E[\"EmailChannel\"] --> C\n    S[\"SmsChannel\"] --> C\n    P[\"PushChannel\"] --> C",
+      "caption": "Each side grows on its own",
+      "steps": [
+        {
+          "say": "Here's the shape. On the left, the kinds of notification extend Notification. On the right, the channels implement Channel. One reference connects them.",
+          "reveal": 0
+        },
+        {
+          "say": "Follow a call. An alert builds the text, high CPU on server seven, then calls channel dot deliver. It never asks which channel it has. The S-M-S channel truncates the message to fit, and that rule lives only inside the S-M-S channel.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s015",
+      "layout": "twocol",
+      "kicker": "Concept 3 of 9",
+      "title": "Bridge versus Strategy",
+      "left": {
+        "heading": "Bridge",
+        "bullets": [
+          "A whole dimension varies",
+          "Chosen once, at construction",
+          "Decided up front, structurally"
+        ]
+      },
+      "right": {
+        "heading": "Strategy",
+        "bullets": [
+          "One algorithm varies",
+          "Swapped often, even per call",
+          "Added when a second algorithm appears"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Written down, Bridge and Strategy are identical: an object holds an interface and delegates. The difference is why the reference is there. In Bridge, a whole dimension of the design varies, like the delivery channel.",
+          "reveal": 1
+        },
+        {
+          "say": "It's usually chosen once, when the object is built, and it stays.",
+          "reveal": 2
+        },
+        {
+          "say": "And it's an up-front structural decision, to stop two hierarchies multiplying.",
+          "reveal": 3
+        },
+        {
+          "say": "In Strategy, one algorithm varies, like the comparator you pass to list dot sort.",
+          "reveal": 4
+        },
+        {
+          "say": "It's often swapped, even per call.",
+          "reveal": 5
+        },
+        {
+          "say": "And it's usually added later, when a second algorithm appears. Test: a new kind of thing the system supports, like a channel, means Bridge. One more way to do a step, like compression, means Strategy.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s016",
+      "layout": "bullets",
+      "kicker": "Concept 3 of 9",
+      "title": "Getting the split wrong",
+      "bullets": [
+        "Leak upward: if channel instanceof SmsChannel",
+        "Implementor shaped like one class: setEmailReplyTo",
+        "Don't build it for one channel",
+        "Forbidden combos? Bridge builds them anyway"
+      ],
+      "steps": [
+        {
+          "say": "The code is small. The hard part is the split, and it's costly to re-cut later. Trap one: details leaking upward. If Alert Notification checks whether its channel is an S-M-S channel, the bridge has failed. Move that rule into the S-M-S channel.",
+          "reveal": 1
+        },
+        {
+          "say": "Trap two: an implementor shaped around one implementation. Add set Email Reply To on Channel, and S-M-S and push must implement a method they can only throw from. Keep it minimal, which is why deliver takes two plain strings.",
+          "reveal": 2
+        },
+        {
+          "say": "And don't build it while an axis has one member. Wait for the second channel.",
+          "reveal": 3
+        },
+        {
+          "say": "Also skip it if some combinations are forbidden, like digests never by S-M-S. In the interview, say this: two hierarchies turn type times channel into type plus channel, with the pairing chosen at run time. Real example: J-D-B-C drivers. Recap: Bridge means split it.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s017",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Five notification types, four channels. How many classes?",
+      "bullets": [
+        "20 without Bridge, 9 with",
+        "9 without, 20 with",
+        "20 either way",
+        "25 without, 10 with"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Five notification types and four channels. How many concrete classes in one hierarchy, and how many with a bridge?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s018",
+      "layout": "section",
+      "kicker": "Concept 4 of 9",
+      "title": "Composite: nest it",
+      "steps": [
+        {
+          "say": "Answer: twenty without, because five times four, and nine with, because five plus four. Multiplication became addition.",
+          "reveal": 0
+        },
+        {
+          "say": "Now a new question. Ask anyone on an org chart, what's your team's total salary? A manager asks each report and adds it up. An individual just gives their own. Same question, same answer shape. That's Composite: one interface for a single object and a whole tree, so the caller never checks which one it has.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 9 Structural · 9.3 Composite Pattern"
+    },
+    {
+      "id": "s019",
+      "layout": "table",
+      "kicker": "Concept 4 of 9",
+      "title": "Four roles in a file system",
+      "table": {
+        "head": [
+          "Role",
+          "In our code"
+        ],
+        "rows": [
+          [
+            "Component: shared interface",
+            "FileSystemNode: name, size, print"
+          ],
+          [
+            "Leaf: no children",
+            "FileNode, answers its own size"
+          ],
+          [
+            "Composite: holds children",
+            "FolderNode, List of FileSystemNode"
+          ],
+          [
+            "Client: uses Components only",
+            "report(node)"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Our running example is a file system. The Component is the shared interface, File System Node, with name, size and print.",
+          "reveal": 1
+        },
+        {
+          "say": "A Leaf has no children and does the work itself. A File Node answers size with its byte count.",
+          "reveal": 2
+        },
+        {
+          "say": "A Composite holds children and delegates. A Folder Node keeps a list typed as File System Node, the interface, not the leaf type. That one choice is what lets folders hold folders.",
+          "reveal": 3
+        },
+        {
+          "say": "And the client, a report function, takes any node. Without the pattern, every operation starts with the same is-it-a-folder-or-a-file test.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s020",
+      "layout": "diagram",
+      "kicker": "Example",
+      "title": "One call, whatever it lands on",
+      "mermaid": "flowchart TD\n    P[\"project/ size = 2150\"] --> R[\"README.md 1200\"]\n    P --> S[\"src/ size = 950\"]\n    S --> M[\"main.js 600\"]\n    S --> U[\"util.js 350\"]",
+      "caption": "A folder asks each child and sums",
+      "steps": [
+        {
+          "say": "Let's call size on the project folder, step by step. The project asks its first child, README, which is a leaf and says twelve hundred bytes.",
+          "reveal": 0
+        },
+        {
+          "say": "Then it asks src. Src is a folder, so it asks its own children: main dot j-s says six hundred, util dot j-s says three hundred fifty. Src returns nine hundred fifty.",
+          "reveal": 0
+        },
+        {
+          "say": "The project adds twelve hundred and nine fifty: two thousand one hundred fifty. The recursion is written once and works at any depth.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s021",
+      "layout": "twocol",
+      "kicker": "Concept 4 of 9",
+      "title": "Transparent versus safe composite",
+      "left": {
+        "heading": "Transparent",
+        "bullets": [
+          "add/remove on every node",
+          "Full uniformity, no casts",
+          "leaf.add() compiles, throws at run time"
+        ]
+      },
+      "right": {
+        "heading": "Safe",
+        "bullets": [
+          "add/remove only on the folder",
+          "Builders must hold a FolderNode",
+          "file.add() won't even compile"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Where do add and remove belong? The Gang of Four named two answers. Transparent: put them on the shared interface, so every node looks the same.",
+          "reveal": 1
+        },
+        {
+          "say": "You get full uniformity. No casts, meaning no forcing a value into a more specific type.",
+          "reveal": 2
+        },
+        {
+          "say": "The cost: our restaurant menu does this, and calling add on Tea compiles, then throws at run time, Tea is a leaf.",
+          "reveal": 3
+        },
+        {
+          "say": "Safe: add lives only on the folder.",
+          "reveal": 4
+        },
+        {
+          "say": "Code that builds the tree must hold a Folder Node.",
+          "reveal": 5
+        },
+        {
+          "say": "But the compiler rejects adding to a file. Choose safe when the tree is built in one place and read in many. Choose transparent when callers add children anywhere, like a U-I editor. The real defect is a throwing add nobody chose.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s022",
+      "layout": "bullets",
+      "kicker": "Concept 4 of 9",
+      "title": "Two traps, and the interview line",
+      "bullets": [
+        "Cycles: project inside its own src/",
+        "Validate on insert, not during traversal",
+        "Repeated work: print() recomputes size()",
+        "Cache subtree totals, invalidate upward",
+        "Real: HTML DOM, java.awt.Container, ASTs"
+      ],
+      "steps": [
+        {
+          "say": "Trap one, cycles. Imagine putting the project folder inside its own src folder. Now size recurses forever and you get a stack overflow.",
+          "reveal": 1
+        },
+        {
+          "say": "So check when inserting, not while walking the tree. By then you're stuck. Our add method asks: does this child already contain me? If so, it rejects it, with cycle, project already contains src.",
+          "reveal": 2
+        },
+        {
+          "say": "Trap two, repeated work. Print calls size at every level, recomputing the same subtotals. On a deep tree that's roughly quadratic.",
+          "reveal": 3
+        },
+        {
+          "say": "For big trees, store each subtree's total and invalidate upward on change, using a parent pointer.",
+          "reveal": 4
+        },
+        {
+          "say": "You use composites daily: the browser's D-O-M, where elements hold elements, and A-W-T's Container. In the interview, say this: leaf and container share one interface, and the pattern deletes the instanceof branch from every operation. Recap: Composite means nest it.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s023",
+      "layout": "section",
+      "kicker": "Concept 5 of 9",
+      "title": "Decorator: add to it",
+      "steps": [
+        {
+          "say": "Order an espresso. Wrap it in mocha, then more mocha, then whipped cream. Each topping adds to the price and the description, but the result is still a drink.",
+          "reveal": 0
+        },
+        {
+          "say": "Decorator extends what a single object does, while the program runs, by wrapping it in an object with the same interface. The key property: a decorator is a Component and has a Component. So it can wrap the real object, another decorator, or a test fake, and the caller can't tell.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 9 Structural · 9.4 Decorator Pattern"
+    },
+    {
+      "id": "s024",
+      "layout": "number",
+      "kicker": "Concept 5 of 9",
+      "title": "Why not subclass?",
+      "big": "4 optional concerns: 2^4 = 16 subclasses vs 4 decorators",
+      "caption": "Each concern its own class, stacked at run time",
+      "steps": [
+        {
+          "say": "Our running example: a user repository, an object that loads and saves users. It needs logging, caching, later retries and metrics, and each caller wants its own mix.",
+          "reveal": 0
+        },
+        {
+          "say": "With subclassing, four optional concerns give two to the fourth, sixteen combinations, doubling with every new concern. And flags on one class, new Repo true false true true, are unreadable.",
+          "reveal": 0
+        },
+        {
+          "say": "With decorators, four concerns means four classes. Each caller assembles its stack by wrapping.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s025",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Build a decorator, step by step",
+      "table": {
+        "head": [
+          "Step",
+          "In the repository"
+        ],
+        "rows": [
+          [
+            "1. Component interface",
+            "UserRepository: findName, rename"
+          ],
+          [
+            "2. Concrete component",
+            "DatabaseUserRepository"
+          ],
+          [
+            "3. Abstract base decorator",
+            "RepositoryDecorator forwards everything"
+          ],
+          [
+            "4. Concrete decorators",
+            "LoggingRepository, CachingRepository"
+          ],
+          [
+            "5. Compose by wrapping",
+            "new Logging(new Caching(new Database()))"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Step one, the component interface: User Repository, with find Name and rename.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, the concrete component that does the real work: the database repository.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, an abstract base decorator. It implements the interface, holds an inner repository typed as the interface, and forwards every method by default. That's your guard against a decorator that overrides find Name but silently swallows rename.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, concrete decorators override only what they change. Logging prints, then delegates. Caching answers from its map on a hit, otherwise delegates and stores. And its rename throws away the stale copy.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, compose by wrapping. The caller holds the outermost layer. Follow find Name of seven: logging logs it, caching misses, the database returns Ada, caching stores it, and Ada flows back.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s026",
+      "layout": "table",
+      "title": "Layer order changes behaviour",
+      "table": {
+        "head": [
+          "Pair",
+          "Outside",
+          "Inside"
+        ],
+        "rows": [
+          [
+            "Logging vs cache",
+            "Logs every request",
+            "Logs only database hits"
+          ],
+          [
+            "Retry vs cache",
+            "Repeats whole lookup",
+            "Repeats only the DB call"
+          ],
+          [
+            "Metrics vs cache",
+            "Time the caller feels",
+            "Time the database takes"
+          ],
+          [
+            "Auth vs cache",
+            "Correct: always checked",
+            "Security bug: hit skips check"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's what bites in practice: order. Same classes, different stack, different behaviour. Logger outside the cache logs every request, so the log records what callers asked for. Cache outside the logger logs only misses, what hit the database. Both are valid. They answer different questions.",
+          "reveal": 1
+        },
+        {
+          "say": "Retry outside the cache repeats the whole lookup. Inside, only the database call. Put retry next to the thing that fails.",
+          "reveal": 2
+        },
+        {
+          "say": "Metrics outside time what the caller feels. Inside, they time the database alone.",
+          "reveal": 3
+        },
+        {
+          "say": "And authorization, checking the caller is allowed. Outside the cache, every request is checked. Inside, a cache hit returns data without the check ever running. That's a security bug, and the compiler accepts every order. Comment why where the stack is built.",
+          "reveal": 4
+        }
+      ],
+      "kicker": "Concept 5 of 9"
+    },
+    {
+      "id": "s027",
+      "layout": "twocol",
+      "kicker": "Concept 5 of 9",
+      "title": "Decorator versus inheritance",
+      "left": {
+        "heading": "Subclassing",
+        "bullets": [
+          "Chosen at compile time",
+          "N features: up to 2^N classes",
+          "Can reach protected state"
+        ]
+      },
+      "right": {
+        "heading": "Decorator",
+        "bullets": [
+          "Chosen at run time, any order",
+          "N features: N classes",
+          "Works on final classes you don't own"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Side by side. Subclassing picks behaviour at compile time, one subclass at a time.",
+          "reveal": 1
+        },
+        {
+          "say": "N optional features can need up to two to the N classes. Five features, thirty-two.",
+          "reveal": 2
+        },
+        {
+          "say": "Its one advantage: it can reach protected state.",
+          "reveal": 3
+        },
+        {
+          "say": "A decorator picks behaviour at run time, any number of layers, any order. Double mocha is just wrapping twice.",
+          "reveal": 4
+        },
+        {
+          "say": "N features, N classes. Five features, five classes.",
+          "reveal": 5
+        },
+        {
+          "say": "And it works on final classes you don't own, because it only needs the interface. Two related traps. The wrapper is a different object, so equals and instanceof surprise callers. And a stateful decorator, like a call counter, applied twice counts every call twice.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s028",
+      "layout": "bullets",
+      "kicker": "Concept 5 of 9",
+      "title": "Java I/O: the decorator you already use",
+      "bullets": [
+        "new BufferedReader(new InputStreamReader(",
+        "  new FileInputStream(\"data.txt\"), UTF_8))",
+        "FileInputStream: concrete component",
+        "InputStreamReader: an adapter, bytes to chars",
+        "BufferedReader: a decorator on Reader"
+      ],
+      "steps": [
+        {
+          "say": "You've written this line. Buffered Reader, wrapping Input Stream Reader, wrapping File Input Stream.",
+          "reveal": 1
+        },
+        {
+          "say": "Read it from the inside out, starting at the file name.",
+          "reveal": 2
+        },
+        {
+          "say": "File Input Stream is the concrete component. It reads bytes from a file.",
+          "reveal": 3
+        },
+        {
+          "say": "Input Stream Reader is strictly an adapter, not a decorator, because it changes the interface from bytes to characters.",
+          "reveal": 4
+        },
+        {
+          "say": "Buffered Reader is the decorator. Same Reader interface, plus buffering and read Line. Filter Input Stream is the byte-side base decorator. In the interview, say this: Decorator wraps to add behaviour at run time, holds the interface so layers stack, and order matters. Recap: Decorator means add to it.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s029",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Bytes in, characters out: which pattern?",
+      "bullets": [
+        "Decorator",
+        "Adapter",
+        "Proxy",
+        "Facade"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. If a class turns a byte stream into a character stream, is it adding behaviour, or changing the interface?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s030",
+      "layout": "section",
+      "kicker": "Concept 6 of 9",
+      "title": "Facade: simplify it",
+      "steps": [
+        {
+          "say": "Trick question, and the answer is Adapter. Changing bytes into characters changes the interface, so Input Stream Reader is an adapter, even though it sits in a stream stack.",
+          "reveal": 0
+        },
+        {
+          "say": "Now, a hotel concierge. You say, book me dinner and a taxi, and they call the restaurant, the taxi firm and the front desk in the right order. You can still phone the restaurant yourself. That's a Facade: one simple front door to a complicated subsystem.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 9 Structural · 9.5 Facade Pattern"
+    },
+    {
+      "id": "s031",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Place an order, step by step",
+      "table": {
+        "head": [
+          "Step",
+          "Order for 2 copies of BOOK-42"
+        ],
+        "rows": [
+          [
+            "1. Find the common path",
+            "reserve, charge, ship, email"
+          ],
+          [
+            "2. Facade holds the services",
+            "OrderFacade: 4 services"
+          ],
+          [
+            "3. One intention-revealing method",
+            "placeOrder(customer, sku, qty, ...)"
+          ],
+          [
+            "4. Own the failure path",
+            "card declined: release reservation"
+          ],
+          [
+            "5. Keep the subsystem public",
+            "inventory.reserve still callable"
+          ],
+          [
+            "6. Add no business rules",
+            "sequences, never decides"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Our running example is an online shop. Step one, find the common path many callers repeat: reserve stock, charge the card, create a shipment, send a confirmation.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, a facade class holds the four services: inventory, payment, shipping and email. None of them knows the facade exists.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, expose one method that says what it does: place Order. Ada orders two copies of book forty-two: reserved, charged, shipped, emailed.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, and this is the real value, own the failure. Bob orders one copy for two hundred fifty dollars and the card is declined. Stock was already reserved, so the facade releases it, and Bob gets a failed result saying payment declined. That undo is a compensating action, exactly what copy-pasting callers forget.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, keep the subsystem public. A facade is a convenience, not a wall. Unusual callers can still call inventory reserve directly.",
+          "reveal": 5
+        },
+        {
+          "say": "Step six, no business rules. The facade sequences. It does not decide.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s032",
+      "layout": "table",
+      "kicker": "Concept 6 of 9",
+      "title": "Facade versus Adapter versus Mediator",
+      "table": {
+        "head": [
+          "",
+          "Facade",
+          "Adapter",
+          "Mediator"
+        ],
+        "rows": [
+          [
+            "Objects wrapped",
+            "Several",
+            "One",
+            "Several peers"
+          ],
+          [
+            "Who chose the interface",
+            "You",
+            "Someone else",
+            "You"
+          ],
+          [
+            "Do they know about it?",
+            "No, one-way",
+            "No",
+            "Yes, talk through it"
+          ],
+          [
+            "Example",
+            "OrderFacade",
+            "StripeGateway",
+            "Air-traffic tower"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Three look-alikes. The quickest tell is how many objects are wrapped. A facade fronts several. An adapter fronts exactly one, as do Decorator and Proxy. A mediator coordinates several peers.",
+          "reveal": 1
+        },
+        {
+          "say": "Who chose the interface? With a facade, you did, a simpler one. With an adapter, someone else did, and you must fit it.",
+          "reveal": 2
+        },
+        {
+          "say": "Do the wrapped objects know? Subsystem classes never know the facade exists. A mediator's colleagues do know, and talk through it both ways, like planes and an air-traffic tower.",
+          "reveal": 3
+        },
+        {
+          "say": "One more test: if the subsystem changed its A-P-I to suit callers, an adapter becomes pointless, but a facade stays useful: its value was simplification.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s033",
+      "layout": "bullets",
+      "kicker": "Concept 6 of 9",
+      "title": "The failure mode: the god facade",
+      "bullets": [
+        "Day one: four calls in order",
+        "Then: a discount rule sneaks in",
+        "Then: a fraud check",
+        "A year later: a god object nobody edits",
+        "Rule: a facade orchestrates, never decides"
+      ],
+      "steps": [
+        {
+          "say": "Facades pull in features. Here's how it happens. Day one, four calls in order. Clean.",
+          "reveal": 1
+        },
+        {
+          "say": "Then someone adds a ten percent discount rule. Orders are placed here, after all.",
+          "reveal": 2
+        },
+        {
+          "say": "Then a fraud check.",
+          "reveal": 3
+        },
+        {
+          "say": "A year later it's a god object, one class that knows and does almost everything, and everyone fears editing it.",
+          "reveal": 4
+        },
+        {
+          "say": "The rule: a facade orchestrates, it does not decide. If it makes a business decision instead of calling the service that does, move that logic out. Example: S-L-F-four-J's Logger Factory. In the interview, say this: one entry point that knows the sequence and the cleanup, wraps several objects, keeps the subsystem public, and stays free of business rules. Recap: Facade means simplify it.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s034",
+      "layout": "section",
+      "kicker": "Concept 7 of 9",
+      "title": "Flyweight: share it",
+      "steps": [
+        {
+          "say": "On a printed page, every letter e uses the same type design. Only its position differs. Why store the design a thousand times?",
+          "reveal": 0
+        },
+        {
+          "say": "Flyweight shares the part of each object that's the same across many objects, so huge numbers of them fit in memory.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 9 Structural · 9.6 Flyweight Pattern"
+    },
+    {
+      "id": "s035",
+      "layout": "number",
+      "kicker": "Concept 7 of 9",
+      "title": "The map with 100,000 markers",
+      "big": "100,000 x 2 MB icon = about 195 GB",
+      "caption": "With 3 shared styles: about 6 MB",
+      "steps": [
+        {
+          "say": "Our running example: a map app showing one hundred thousand markers. Each has a latitude and longitude, plus an icon bitmap, a colour and a size. The icon is two megabytes, by far the largest field.",
+          "reveal": 0
+        },
+        {
+          "say": "One hundred thousand copies of a two megabyte bitmap is about one hundred ninety-five gigabytes. The program simply runs out of memory.",
+          "reveal": 0
+        },
+        {
+          "say": "But there are only three styles: fuel, hospital and so on. Share them, and icon memory drops to about six megabytes.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s036",
+      "layout": "twocol",
+      "kicker": "Concept 7 of 9",
+      "title": "Intrinsic versus extrinsic state",
+      "left": {
+        "heading": "Intrinsic: inside",
+        "bullets": [
+          "Same for every holder",
+          "Icon bitmap, colour, size",
+          "Lives in the shared flyweight"
+        ]
+      },
+      "right": {
+        "heading": "Extrinsic: outside",
+        "bullets": [
+          "Different per holder",
+          "Latitude, longitude",
+          "Passed in: draw(lat, lon)"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Two terms carry the whole pattern. Intrinsic state is identical for every holder.",
+          "reveal": 1
+        },
+        {
+          "say": "For a marker: the icon, colour and size.",
+          "reveal": 2
+        },
+        {
+          "say": "It lives inside the shared flyweight, Marker Style.",
+          "reveal": 3
+        },
+        {
+          "say": "Extrinsic state varies with context.",
+          "reveal": 4
+        },
+        {
+          "say": "For a marker: latitude and longitude.",
+          "reveal": 5
+        },
+        {
+          "say": "It stays outside and is handed in as method arguments, draw at this latitude and longitude. Memory hook: intrinsic is inside, extrinsic is supplied from outside. Quick check with chess: a piece's type and colour are intrinsic, the square it's on is extrinsic.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s037",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Build the flyweight, step by step",
+      "table": {
+        "head": [
+          "Step",
+          "Map markers"
+        ],
+        "rows": [
+          [
+            "1. Split the state",
+            "style vs position"
+          ],
+          [
+            "2. Immutable flyweight",
+            "MarkerStyle: final fields, no setters"
+          ],
+          [
+            "3. Pass extrinsic as arguments",
+            "style.draw(40.71, -74.00)"
+          ],
+          [
+            "4. Factory owns the pool",
+            "computeIfAbsent on a ConcurrentHashMap"
+          ],
+          [
+            "5. Clients use only the factory",
+            "constructor not public"
+          ],
+          [
+            "6. Context keeps a reference",
+            "Marker(lat, lon, style)"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Step one, split the state: style is intrinsic, position is extrinsic.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, make the flyweight immutable: final fields, no setters, the bitmap never leaks out.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, pass extrinsic state in: draw a green fuel marker at forty point seven one, minus seventy-four.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, a factory owns the pool, keyed by the intrinsic values. Compute If Absent on a Concurrent Hash Map makes get-or-create thread-safe and atomic, so two threads can't create duplicate styles.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, clients must go through the factory. Call the constructor directly and you get identical copies, and the saving is gone.",
+          "reveal": 5
+        },
+        {
+          "say": "Step six, the context, a Marker, keeps its position plus a reference, not a copy, to the style. Result: one hundred thousand markers, three styles in the pool.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s038",
+      "layout": "bullets",
+      "kicker": "Concept 7 of 9",
+      "title": "Flyweights already in Java",
+      "bullets": [
+        "Integer.valueOf caches -128 to 127",
+        "Integer 127 == 127 is true, 128 == 128 false",
+        "Always compare boxed numbers with equals",
+        "String pool: \"hel\" + \"lo\" == \"hello\"",
+        "Enums: one instance per constant"
+      ],
+      "steps": [
+        {
+          "say": "Java ships flyweights. Integer dot value Of, used by autoboxing, returns cached objects from minus one twenty-eight to one twenty-seven.",
+          "reveal": 1
+        },
+        {
+          "say": "So two boxed one twenty-sevens compared with double equals give true. Two boxed one twenty-eights give false on a default J-V-M. Different objects.",
+          "reveal": 2
+        },
+        {
+          "say": "The lesson: always compare boxed numbers with equals.",
+          "reveal": 3
+        },
+        {
+          "say": "The String pool: literals and compile-time constants are interned, stored once and reused. So hel plus lo is the same object as hello. But new String hello is always a new object.",
+          "reveal": 4
+        },
+        {
+          "say": "And enums: exactly one instance per constant, shared everywhere.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s039",
+      "layout": "table",
+      "kicker": "Concept 7 of 9",
+      "title": "Flyweight is not a cache",
+      "table": {
+        "head": [
+          "",
+          "Flyweight",
+          "Cache"
+        ],
+        "rows": [
+          [
+            "Purpose",
+            "Make data fit in memory",
+            "Make repeated work faster"
+          ],
+          [
+            "Contents",
+            "Shared immutable state",
+            "Stored results"
+          ],
+          [
+            "Remove entries?",
+            "Not while referenced",
+            "Any time"
+          ],
+          [
+            "Remove one, and",
+            "Holders break or duplicate",
+            "Next call is slower"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "These two get mixed up constantly. A flyweight exists so the data fits at all. A cache exists to make repeated work faster.",
+          "reveal": 1
+        },
+        {
+          "say": "A flyweight holds one copy of immutable state that many holders point to. A cache holds results of costly lookups.",
+          "reveal": 2
+        },
+        {
+          "say": "So a cache may drop any entry at any moment. A flyweight pool can't drop an entry while a holder still points to it.",
+          "reveal": 3
+        },
+        {
+          "say": "Drop a cache entry, and the next request is just slower. Drop a flyweight, and holders lose it, or duplicates get created.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s040",
+      "layout": "bullets",
+      "kicker": "Concept 7 of 9",
+      "title": "Mistakes, and measure first",
+      "bullets": [
+        "A flyweight that can change: setColour",
+        "Unbounded pool keyed by user input: a leak",
+        "Measure: how many objects at once?",
+        "How much of each is identical?",
+        "No numbers: too early"
+      ],
+      "steps": [
+        {
+          "say": "Two mistakes undo the pattern. One, a mutable flyweight. Add set Colour, and changing one marker repaints every marker sharing that style, far from the cause.",
+          "reveal": 1
+        },
+        {
+          "say": "Two, a pool keyed by open-ended input, like user-chosen names. It never stops growing: a memory leak dressed up as an optimisation. Flyweight is safe when keys are small and bounded, three styles or a few hundred glyphs.",
+          "reveal": 2
+        },
+        {
+          "say": "Measure first: Flyweight trades readability for memory. A thousand objects never need it. A million might. Ask with numbers: how many of these objects exist at once?",
+          "reveal": 3
+        },
+        {
+          "say": "And how much of each object is identical across all of them? If objects are mostly unique, there's nothing to share.",
+          "reveal": 4
+        },
+        {
+          "say": "No numbers, too early. In the interview, say this: intrinsic state shared and immutable, extrinsic passed in, a thread-safe factory, and only after measuring. Recap: Flyweight means share it.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s041",
+      "layout": "section",
+      "kicker": "Concept 8 of 9",
+      "title": "Proxy: guard it",
+      "steps": [
+        {
+          "say": "A credit card stands in for your bank account. It's accepted wherever cash is, same interface, but it adds limits and fraud checks, and moves money only when needed.",
+          "reveal": 0
+        },
+        {
+          "say": "A Proxy is a stand-in with the identical interface, placed in front of a real object to control who may use it, when it's created, or how much each use costs. Because the interface is the same, you can insert it without editing any caller. That's also its danger: a slow call looks just like a cheap one.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 9 Structural · 9.7 Proxy Pattern"
+    },
+    {
+      "id": "s042",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Kinds of proxy, one example each",
+      "table": {
+        "head": [
+          "Kind",
+          "Controls",
+          "Example"
+        ],
+        "rows": [
+          [
+            "Virtual",
+            "When it's created",
+            "LazyReport loads 100 MB on render"
+          ],
+          [
+            "Protection",
+            "Who may call",
+            "AuditedReport refuses VIEWER"
+          ],
+          [
+            "Remote",
+            "Where it lives",
+            "Stub sends 'rate|USD|INR'"
+          ],
+          [
+            "Caching",
+            "Whether to call at all",
+            "5 calls, 4 real lookups"
+          ],
+          [
+            "Logging",
+            "Records each call",
+            "Dynamic proxy logs title()"
+          ],
+          [
+            "Smart reference",
+            "Bookkeeping",
+            "Device closes at count 0"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's walk every kind with a concrete run. Virtual proxy controls when the expensive object is created. Lazy Report holds just the name. The first render loads one hundred megabytes, once. Later renders reuse it.",
+          "reveal": 1
+        },
+        {
+          "say": "Protection proxy controls who may call. Audited Report wraps the lazy report. Finance can render payroll. A viewer is refused, and nothing was loaded, because the check came first.",
+          "reveal": 2
+        },
+        {
+          "say": "Remote proxy controls where the object lives. A client stub turns rate, U-S-D to I-N-R, into a message sent over the wire, and a server skeleton unpacks it.",
+          "reveal": 3
+        },
+        {
+          "say": "Caching proxy decides whether the real call is needed. Ours is bounded, at most two entries, and time-limited, sixty seconds. Five calls cause four real lookups: the second U-S-D to euro hits, and the last one misses because it was evicted.",
+          "reveal": 4
+        },
+        {
+          "say": "Logging proxy records each call before and after forwarding.",
+          "reveal": 5
+        },
+        {
+          "say": "Smart reference does bookkeeping. Two handles share one device. The count goes to two, then down to zero, and only then does the device close. The Gang of Four named four kinds. Caching and logging are later variants.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s043",
+      "layout": "diagram",
+      "kicker": "Concept 8 of 9",
+      "title": "Protection proxy wrapping a virtual proxy",
+      "mermaid": "flowchart LR\n    C[\"Caller holds a Report\"] --> A[\"AuditedReport: role allowed?\"]\n    A -->|\"no\"| X[\"SecurityException, nothing loaded\"]\n    A -->|\"yes\"| L[\"LazyReport: real == null?\"]\n    L -->|\"first time\"| R[\"Build RealReport, load 100 MB\"]\n    L -->|\"later\"| U[\"Reuse RealReport\"]",
+      "caption": "Same interface at every layer",
+      "steps": [
+        {
+          "say": "Here's that stack as a flow. The caller holds a plain Report. First, the protection proxy checks the role. A viewer gets a security exception, and nothing loads.",
+          "reveal": 0
+        },
+        {
+          "say": "If allowed, the virtual proxy checks whether the real report exists. First time, it builds it. Double-checked locking with a volatile field ensures two threads build only one. Later calls reuse it.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s044",
+      "layout": "twocol",
+      "kicker": "Concept 8 of 9",
+      "title": "Static versus dynamic proxies",
+      "left": {
+        "heading": "Static",
+        "bullets": [
+          "Hand-written class per interface",
+          "Compiler checks every method",
+          "For type-specific logic: lazy load"
+        ]
+      },
+      "right": {
+        "heading": "Dynamic",
+        "bullets": [
+          "Generated at run time: $Proxy0",
+          "One InvocationHandler, any interface",
+          "Interfaces only; CGLIB for classes"
+        ]
+      },
+      "steps": [
+        {
+          "say": "A static proxy is a class you write by hand, like Lazy Report.",
+          "reveal": 1
+        },
+        {
+          "say": "The compiler checks every method.",
+          "reveal": 2
+        },
+        {
+          "say": "It's good for logic specific to one type, like lazy loading.",
+          "reveal": 3
+        },
+        {
+          "say": "A dynamic proxy is generated at run time. Proxy dot new Proxy Instance takes a class loader, a list of interfaces and a handler, and builds a class named like dollar Proxy zero.",
+          "reveal": 4
+        },
+        {
+          "say": "Every call goes to the handler's invoke method, which does its extra work, like logging, then forwards with method dot invoke. One handler serves any interface, which is ideal for cross-cutting concerns, needs shared by many classes, like logging, timing and transactions. Unwrap the Invocation Target Exception, so callers see the real error.",
+          "reveal": 5
+        },
+        {
+          "say": "The limit: J-D-K proxies need interfaces. For plain classes, libraries like C-G-LIB generate a subclass.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s045",
+      "layout": "bullets",
+      "kicker": "Concept 8 of 9",
+      "title": "The self-invocation trap and Spring AOP",
+      "bullets": [
+        "convert() calls this.rate(): not logged",
+        "Spring @Transactional, @Cacheable = proxies",
+        "Self-call skips the proxy silently",
+        "CGLIB: no final classes or final methods",
+        "Fix: move the method to another bean"
+      ],
+      "steps": [
+        {
+          "say": "Here's the trap. In our demo, convert went through the logging proxy. But inside, convert called rate on this, the real object. That inner call never passed the proxy, so it wasn't logged.",
+          "reveal": 1
+        },
+        {
+          "say": "This is exactly how Spring A-O-P, aspect-oriented programming, works. Transactional, Cacheable, Async and Pre Authorize are implemented by wrapping your bean in a proxy.",
+          "reveal": 2
+        },
+        {
+          "say": "So imagine place Order calls this dot save Audit, annotated Transactional with requires new. The annotation is silently ignored. The call never left the object.",
+          "reveal": 3
+        },
+        {
+          "say": "With C-G-LIB, final classes can't be proxied, and final or private methods can't be advised.",
+          "reveal": 4
+        },
+        {
+          "say": "The fix, in order of preference: move the method into another bean, or inject the bean's own proxy.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s046",
+      "layout": "twocol",
+      "kicker": "Concept 8 of 9",
+      "title": "Proxy versus Decorator",
+      "left": {
+        "heading": "Proxy: controls access",
+        "bullets": [
+          "May defer, cache or refuse",
+          "Often creates the real object itself",
+          "Client doesn't know; usually one layer"
+        ]
+      },
+      "right": {
+        "heading": "Decorator: adds behaviour",
+        "bullets": [
+          "Normally always forwards",
+          "Caller hands in the object",
+          "Client builds the stack; many layers"
+        ]
+      },
+      "steps": [
+        {
+          "say": "The hardest pair. Same structure, different purpose. A proxy controls access. The call may not get through: it may be deferred, cached or refused.",
+          "reveal": 1
+        },
+        {
+          "say": "A proxy often creates or locates the real object itself.",
+          "reveal": 2
+        },
+        {
+          "say": "And the client usually doesn't know. A factory hands it the proxy as if it were real. Usually one layer.",
+          "reveal": 3
+        },
+        {
+          "say": "A decorator adds behaviour, and normally forwards the call.",
+          "reveal": 4
+        },
+        {
+          "say": "The caller hands in the object to wrap.",
+          "reveal": 5
+        },
+        {
+          "say": "The client builds the stack, often several layers. Practical test: check the constructor. Lazy Report takes a name and builds its subject. Logging Repository is handed an inner one. A caching wrapper sits on the line.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s047",
+      "layout": "bullets",
+      "kicker": "Concept 8 of 9",
+      "title": "Where proxies go wrong",
+      "bullets": [
+        "Unsynchronised lazy creation",
+        "Caching proxy with no size limit or expiry",
+        "Remote call hidden inside a loop",
+        "ORM N+1: 100 orders, 101 queries"
+      ],
+      "steps": [
+        {
+          "say": "Four ways proxies go wrong. One, lazy creation without synchronisation. Two threads both build the object.",
+          "reveal": 1
+        },
+        {
+          "say": "Two, a caching proxy with no bound or expiry. It's a cache, so it leaks memory and serves stale data.",
+          "reveal": 2
+        },
+        {
+          "say": "Three, hiding a real cost. A remote proxy that looks local invites calls inside a loop. The cure is making the cost visible, with batch A-P-Is and names like fetch.",
+          "reveal": 3
+        },
+        {
+          "say": "Four, the O-R-M N plus one problem. An O-R-M maps database rows to objects, and lazy associations are proxies. Load one hundred orders, touch each order's customer name, and you fire one hundred and one queries. Fix it with fetch joins. In the interview, say this: name the kind, warn that the identical interface hides cost, and make lazy creation thread-safe. Recap: Proxy means guard it.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s048",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Why is @Transactional ignored on this.saveAudit()?",
+      "bullets": [
+        "saveAudit is public",
+        "The self-call bypasses the proxy",
+        "Spring needs an interface",
+        "Transactions can't nest"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think, before the final comparison. Why does the annotation do nothing when a method in the same class calls it?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s049",
+      "layout": "section",
+      "kicker": "Concept 9 of 9",
+      "title": "Putting it all together",
+      "steps": [
+        {
+          "say": "Answer: the self-call bypasses the proxy. Spring's proxy only sees calls that come through it. This dot save Audit goes straight to the real object.",
+          "reveal": 0
+        },
+        {
+          "say": "Now let's line all seven up. First, how modern languages change the picture, then the patterns people confuse, then one table and seven memory hooks.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 9 Structural · 9.8 Putting it all together"
+    },
+    {
+      "id": "s050",
+      "layout": "table",
+      "kicker": "Concept 9 of 9",
+      "title": "Patterns in modern languages",
+      "table": {
+        "head": [
+          "Language feature",
+          "Becomes"
+        ],
+        "rows": [
+          [
+            "Lambda for a one-method interface",
+            "A complete Adapter"
+          ],
+          [
+            "Python @lru_cache, Go middleware",
+            "Decorator with syntax"
+          ],
+          [
+            "Sealed types + exhaustive switch",
+            "Composite, compiler-checked"
+          ],
+          [
+            "Module exporting one function",
+            "A Facade with no class"
+          ],
+          [
+            "JavaScript Proxy, C# Lazy<T>",
+            "Built-in Proxy"
+          ],
+          [
+            "Records, Object.freeze + a Map",
+            "Flyweight in a few lines"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Many patterns shrink in modern languages. For a one-method target, a lambda is a whole adapter, in one line.",
+          "reveal": 1
+        },
+        {
+          "say": "Python's l-r-u cache decorator is the same idea with syntax. Go middleware wraps handlers in layers.",
+          "reveal": 2
+        },
+        {
+          "say": "Java's sealed types, plus a switch that must cover every subtype, give you a Composite where the compiler catches a forgotten node type.",
+          "reveal": 3
+        },
+        {
+          "say": "A module exporting one function, with the rest private, is a facade with no class.",
+          "reveal": 4
+        },
+        {
+          "say": "JavaScript has a built-in Proxy object. C sharp's Lazy of T is a virtual proxy for one value.",
+          "reveal": 5
+        },
+        {
+          "say": "And a Java record plus a map is a whole flyweight. The names stay useful even when the code shrinks.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s051",
+      "layout": "table",
+      "kicker": "Concept 9 of 9",
+      "title": "Commonly confused pairs",
+      "table": {
+        "head": [
+          "Pair",
+          "The tell"
+        ],
+        "rows": [
+          [
+            "Adapter vs Bridge",
+            "After the fact vs up front"
+          ],
+          [
+            "Bridge vs Strategy",
+            "A dimension vs one algorithm"
+          ],
+          [
+            "Decorator vs Proxy",
+            "Adds behaviour vs controls access"
+          ],
+          [
+            "Decorator vs Composite",
+            "Wraps one vs holds many"
+          ],
+          [
+            "Flyweight vs Singleton",
+            "One per value vs one total"
+          ],
+          [
+            "Flyweight vs Object Pool",
+            "Shared immutable vs lent mutable"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The pairs interviewers love. Adapter versus Bridge: same boxes, opposite timing. An adapter is bolted on after the fact to reconcile two existing things. A bridge is planned up front so two hierarchies never fuse.",
+          "reveal": 1
+        },
+        {
+          "say": "Bridge versus Strategy: a whole dimension, chosen once, versus one replaceable algorithm.",
+          "reveal": 2
+        },
+        {
+          "say": "Decorator versus Proxy: adds behaviour and is handed its object, versus controls access and often builds its object.",
+          "reveal": 3
+        },
+        {
+          "say": "Decorator versus Composite: a decorator wraps exactly one child and adds behaviour. A composite holds many children and combines results.",
+          "reveal": 4
+        },
+        {
+          "say": "Flyweight versus Singleton: one instance per distinct value, three styles, versus one instance total.",
+          "reveal": 5
+        },
+        {
+          "say": "Flyweight versus Object Pool: shared immutable objects, versus mutable ones lent out and returned, like database connections.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s052",
+      "layout": "table",
+      "kicker": "Concept 9 of 9",
+      "title": "The five wrappers, side by side",
+      "table": {
+        "head": [
+          "",
+          "Interface",
+          "Behaviour",
+          "Wraps"
+        ],
+        "rows": [
+          [
+            "Adapter",
+            "Different (yours)",
+            "Translated",
+            "One"
+          ],
+          [
+            "Decorator",
+            "Same",
+            "Extended",
+            "One, stackable"
+          ],
+          [
+            "Proxy",
+            "Same",
+            "Controlled",
+            "One, often self-made"
+          ],
+          [
+            "Facade",
+            "New, simpler",
+            "Fewer calls",
+            "Several"
+          ],
+          [
+            "Bridge",
+            "Abstraction's own",
+            "Delegated",
+            "One implementor"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's the comparison that settles most arguments. Ask: what changes as the call passes through, and how many objects are wrapped? Adapter: the interface changes, to yours. Behaviour is just translated. It wraps one. Trigger: the vendor A-P-I doesn't match ours.",
+          "reveal": 1
+        },
+        {
+          "say": "Decorator: same interface, extended behaviour, wraps one, and stacks. Trigger: sometimes logging, sometimes caching, sometimes both.",
+          "reveal": 2
+        },
+        {
+          "say": "Proxy: same interface, controlled behaviour, wraps one, and often creates it. Trigger: it's expensive, remote or restricted.",
+          "reveal": 3
+        },
+        {
+          "say": "Facade: a new, simpler interface, over several objects. Trigger: every caller copies these five steps.",
+          "reveal": 4
+        },
+        {
+          "say": "Bridge: the abstraction's own interface, delegating to one implementor by reference. Trigger: class names made of two nouns.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s053",
+      "layout": "table",
+      "kicker": "Concept 9 of 9",
+      "title": "Which structural pattern?",
+      "caption": "Start from the signal in the requirement",
+      "steps": [
+        {
+          "say": "Here's a decision guide. Does the client need a different interface? If one object has the wrong shape, Adapter. If you want one simple door to many objects, Facade.",
+          "reveal": 2
+        },
+        {
+          "say": "Same interface? Ask what the wrapper does. Adds behaviour and forwards: Decorator. Controls access: Proxy.",
+          "reveal": 4
+        },
+        {
+          "say": "And the other three have their own signals: two dimensions multiplying classes means Bridge, a part-whole tree means Composite, and millions of near-identical objects mean Flyweight.",
+          "reveal": 7
+        }
+      ],
+      "table": {
+        "head": [
+          "Signal in the requirement",
+          "Pattern"
+        ],
+        "rows": [
+          [
+            "One object has the wrong interface",
+            "Adapter"
+          ],
+          [
+            "One simple door to many objects",
+            "Facade"
+          ],
+          [
+            "Same interface, adds behaviour",
+            "Decorator"
+          ],
+          [
+            "Same interface, controls access",
+            "Proxy"
+          ],
+          [
+            "Two dimensions multiplying classes",
+            "Bridge"
+          ],
+          [
+            "A part-whole tree",
+            "Composite"
+          ],
+          [
+            "Millions of near-identical objects",
+            "Flyweight"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "s054",
+      "layout": "bullets",
+      "kicker": "Concept 9 of 9",
+      "title": "Seven memory hooks",
+      "bullets": [
+        "Adapter: make it fit",
+        "Decorator: add to it",
+        "Proxy: guard it",
+        "Facade: simplify it",
+        "Bridge: split it",
+        "Composite: nest it. Flyweight: share it"
+      ],
+      "steps": [
+        {
+          "say": "Seven hooks, one line each. Adapter: make it fit. It changes the interface.",
+          "reveal": 1
+        },
+        {
+          "say": "Decorator: add to it. Same interface, more behaviour, stackable.",
+          "reveal": 2
+        },
+        {
+          "say": "Proxy: guard it. Same interface, controlled access.",
+          "reveal": 3
+        },
+        {
+          "say": "Facade: simplify it. One door, many rooms.",
+          "reveal": 4
+        },
+        {
+          "say": "Bridge: split it. Two hierarchies, add instead of multiply.",
+          "reveal": 5
+        },
+        {
+          "say": "Composite: nest it, one interface for leaf and tree. Flyweight: share it, intrinsic inside, extrinsic passed in.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s055",
+      "layout": "bullets",
+      "title": "Self-check",
+      "bullets": [
+        "Which wrap exactly one object?",
+        "Cached results, same interface: which pattern?",
+        "WindowsButton, MacButton... Linux coming?",
+        "Why is Integer.valueOf(100) == itself true?"
+      ],
+      "steps": [
+        {
+          "say": "Four self-check questions. Which patterns wrap exactly one object? Adapter, Decorator and Proxy. Facade wraps several, and Composite holds many.",
+          "reveal": 1
+        },
+        {
+          "say": "A wrapper returns cached results with the same interface. Decorator or Proxy? Either is defensible. The question that matters is whether the cache is bounded and invalidated.",
+          "reveal": 2
+        },
+        {
+          "say": "You have Windows Button, Mac Button, Windows Checkbox, Mac Checkbox, and a Linux port is coming. That's Bridge: widget abstraction times platform implementor, often with an Abstract Factory picking the implementor.",
+          "reveal": 3
+        },
+        {
+          "say": "And why is Integer value Of one hundred double-equals itself true? Flyweight. The Integer cache shares one object for one hundred.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s056",
+      "layout": "recap",
+      "title": "TL;DR: putting objects together",
+      "bullets": [
+        "Same shape, different intent: what changes, how many",
+        "Adapter: translate, no leaks. Bridge: add not multiply",
+        "Composite: one interface; reject cycles on insert",
+        "Decorator: order matters. Facade: sequence, not decide",
+        "Flyweight: immutable, measure first. Proxy: self-call trap",
+        "Next: Episode 10, Behavioral Patterns Part 1"
+      ],
+      "steps": [
+        {
+          "say": "Here's the whole episode. Structural patterns compose objects into bigger structures. Adapter, Decorator, Proxy and Facade share a shape. Tell them apart by what changes as the call passes through, and how many objects are wrapped.",
+          "reveal": 1
+        },
+        {
+          "say": "Adapter translates at a boundary you don't own, with no vendor types leaking. Bridge turns three times three into three plus three.",
+          "reveal": 2
+        },
+        {
+          "say": "Composite gives leaf and tree one interface. Guard against cycles on insert.",
+          "reveal": 3
+        },
+        {
+          "say": "Decorator stacks behaviour at run time, and order matters: authorization outside the cache. Facade sequences, never decides.",
+          "reveal": 4
+        },
+        {
+          "say": "Flyweight shares immutable intrinsic state from a factory. Measure first. Proxy controls access, and self-calls skip Spring's proxies.",
+          "reveal": 5
+        },
+        {
+          "say": "Next time, episode ten: Behavioral Patterns, part one, where objects start talking to each other. See you there.",
+          "reveal": 6
+        }
+      ]
+    }
+  ]
+}

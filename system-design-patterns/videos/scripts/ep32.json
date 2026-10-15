@@ -1,0 +1,2268 @@
+{
+  "series": "System Design Workshop",
+  "episode": 32,
+  "title": "Quick-Fire Review: Questions and Glossary",
+  "subtitle": "The question bank, answer skeletons, Top 60 and the A to Z",
+  "scenes": [
+    {
+      "layout": "title",
+      "title": "Quick-Fire Review: Questions and Glossary",
+      "subtitle": "The question bank, answer skeletons, Top 60 and the A to Z",
+      "steps": [
+        {
+          "say": "Welcome to the System Design Workshop, episode thirty-two, the last one: Quick-Fire Review, Questions and Glossary. A fast lap around everything, the way interviewers ask it.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll give a one-line skeleton for the most-asked Design X prompts, answer concept questions in thirty seconds, and define key terms from A to Z.",
+          "reveal": 0
+        },
+        {
+          "say": "It follows Module twenty-two, the question bank, plus the Top sixty and the glossary at the end of Module zero. Treat it as a drill: pause, answer out loud, then compare.",
+          "reveal": 0
+        }
+      ],
+      "id": "s001"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 1 of 24",
+      "title": "How to use the question bank",
+      "bullets": [
+        "★ = asked again and again: drill those first",
+        "Part A: 'Design X' prompts, each as a short outline",
+        "Part B: concept questions with 30-second answers",
+        "Drill: read, cover, answer aloud, then compare",
+        "Mark what you stumbled on; redo it the next day",
+        "Part A timing: 2-minute outline, then one deep dive"
+      ],
+      "caption": "Book: Module 22 · How to use this bank",
+      "steps": [
+        {
+          "say": "First, how to use the bank. A star marks a question asked again and again. Do those first.",
+          "reveal": 1
+        },
+        {
+          "say": "Part A is the Design X prompts, each an outline in whiteboard order: requirements, components, probes, then scale.",
+          "reveal": 2
+        },
+        {
+          "say": "Part B is concept questions, each answered in about thirty seconds.",
+          "reveal": 3
+        },
+        {
+          "say": "The drill is simple. Read the question, cover the answer, say yours out loud or sketch the boxes, then compare.",
+          "reveal": 4
+        },
+        {
+          "say": "Mark the ones you stumbled on, and redo them the next day.",
+          "reveal": 5
+        },
+        {
+          "say": "For Part A, time yourself. Two minutes for the outline, then pick one deep dive and go further.",
+          "reveal": 6
+        }
+      ],
+      "id": "s002"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Drilling one prompt: the URL shortener",
+      "bullets": [
+        "Read: 'Design TinyURL.' Cover the outline, start 2 minutes",
+        "Requirements: 7-char codes, reads 100 to 1 over writes",
+        "Components: key generator, KV store, Redis, CDN",
+        "Probes: base62 counter, 301 vs 302, duplicate URLs",
+        "Compare: forgot 302 for analytics? Mark it, redo tomorrow"
+      ],
+      "steps": [
+        {
+          "say": "Let's run the drill once. Read: design TinyURL. Cover the answer and start a two-minute timer.",
+          "reveal": 1
+        },
+        {
+          "say": "Requirements: seven-character codes, fast redirects, reads outnumber writes a hundred to one.",
+          "reveal": 2
+        },
+        {
+          "say": "Components: a key generator, a key-value store, a Redis cache, and redirects behind a C-D-N.",
+          "reveal": 3
+        },
+        {
+          "say": "Probes: how you make the key, three-oh-one versus three-oh-two, and what happens when the same long U-R-L arrives twice.",
+          "reveal": 4
+        },
+        {
+          "say": "Now compare. Forgot that analytics needs a three-oh-two? Mark it, and redo it tomorrow.",
+          "reveal": 5
+        }
+      ],
+      "id": "s003"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 2 of 24",
+      "title": "Design X: building blocks",
+      "table": {
+        "head": [
+          "Prompt",
+          "One-line answer skeleton"
+        ],
+        "rows": [
+          [
+            "URL shortener",
+            "base62 counter key, KV store, cache, CDN"
+          ],
+          [
+            "Rate limiter",
+            "token bucket in gateway, atomic Redis, 429"
+          ],
+          [
+            "Unique IDs",
+            "Snowflake: 41 time, 10 worker, 12 sequence"
+          ],
+          [
+            "Key-value store",
+            "hash ring, N=3, R+W>N, LSM, gossip"
+          ],
+          [
+            "Web crawler",
+            "frontier per host, Bloom filter, politeness"
+          ],
+          [
+            "Message queue",
+            "partitioned log, in-sync replicas, offsets"
+          ]
+        ]
+      },
+      "caption": "Book: Module 22 · Building blocks",
+      "steps": [
+        {
+          "say": "Now Part A, by category. First, building blocks. URL shortener: base-sixty-two encode a counter, store it in a key-value store, cache it, redirect behind a C-D-N.",
+          "reveal": 1
+        },
+        {
+          "say": "Rate limiter: a token bucket in the gateway, an atomic check-and-increment in Redis, and a four-twenty-nine with Retry-After.",
+          "reveal": 2
+        },
+        {
+          "say": "Unique I-D generator: a Snowflake I-D. Forty-one bits of milliseconds, ten bits of worker I-D, twelve bits of sequence. No coordination needed.",
+          "reveal": 3
+        },
+        {
+          "say": "Key-value store: a consistent-hash ring, three replicas, quorums where R plus W is greater than N, an L-S-M storage engine, and gossip for membership.",
+          "reveal": 4
+        },
+        {
+          "say": "Web crawler: one frontier queue per host for politeness, and a Bloom filter for U-R-Ls already seen.",
+          "reveal": 5
+        },
+        {
+          "say": "Message queue: brokers holding partitioned append-only logs, in-sync replicas for durability, and consumers that track offsets. The bank also covers caches, notifications, locks, login and webhooks.",
+          "reveal": 6
+        }
+      ],
+      "id": "s004"
+    },
+    {
+      "layout": "number",
+      "kicker": "Example",
+      "title": "How many short codes?",
+      "big": "62^7 ≈ 3.5 trillion",
+      "caption": "7 characters of a-z, A-Z, 0-9",
+      "steps": [
+        {
+          "say": "Worked number: seven characters from sixty-two symbols gives about three and a half trillion codes. At a thousand new links a second, that lasts a hundred years.",
+          "reveal": 0
+        },
+        {
+          "say": "And the redirect choice: a three-oh-one is permanent, so browsers cache it and your load drops. A three-oh-two sends every click back to you, which you need for analytics. Say which you want and why.",
+          "reveal": 0
+        }
+      ],
+      "id": "s005"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 3 of 24",
+      "title": "Design X: social and content",
+      "table": {
+        "head": [
+          "Prompt",
+          "One-line answer skeleton"
+        ],
+        "rows": [
+          [
+            "News feed",
+            "hybrid fan-out: push normal, pull celebrities"
+          ],
+          [
+            "Twitter",
+            "timeline cache per user, Snowflake IDs sort it"
+          ],
+          [
+            "Instagram",
+            "pre-signed upload to object store, CDN reads"
+          ],
+          [
+            "TikTok",
+            "retrieve, rank about 1,000, re-rank, preload"
+          ],
+          [
+            "Search engine",
+            "inverted index, shard by doc, scatter-gather"
+          ],
+          [
+            "Recently viewed",
+            "Redis sorted set per user, trim to last 20"
+          ]
+        ]
+      },
+      "caption": "Book: Module 22 · Social and content",
+      "steps": [
+        {
+          "say": "Second, social and content. News feed: push post I-Ds to followers for normal users, pull celebrities' posts at read time.",
+          "reveal": 1
+        },
+        {
+          "say": "Twitter: per-user timeline caches in Redis lists, and Snowflake I-Ds give time order for free.",
+          "reveal": 2
+        },
+        {
+          "say": "Instagram: clients upload straight to object storage with a pre-signed U-R-L, and the C-D-N serves most reads.",
+          "reveal": 3
+        },
+        {
+          "say": "TikTok: retrieve by embedding, rank about a thousand, re-rank, and preload the next videos.",
+          "reveal": 4
+        },
+        {
+          "say": "Search engine: an inverted index sharded by document, queried by scatter-gather.",
+          "reveal": 5
+        },
+        {
+          "say": "Recently viewed: one Redis sorted set per user, scored by timestamp, trimmed to the last twenty.",
+          "reveal": 6
+        }
+      ],
+      "id": "s006"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Example",
+      "title": "Hybrid fan-out",
+      "mermaid": "flowchart LR\n  P[\"New post\"] --> F{\"Millions of followers?\"}\n  F -->|\"no\"| W[\"Push ID into follower feeds\"]\n  F -->|\"yes\"| S[\"Store once, no fan-out\"]\n  W --> R[\"Read feed\"]\n  S -->|\"merge at read\"| R",
+      "caption": "Push for most users, pull for the few huge accounts",
+      "steps": [
+        {
+          "say": "Imagine fifty million followers. Fan-out on write means fifty million cache writes per post. Fan-out on read makes every read slow.",
+          "reveal": 0
+        },
+        {
+          "say": "So split it. A normal user's post is pushed into each follower's cache. A celebrity's post is stored once, and merged in when a follower reads their feed. Reads stay fast, and no single post causes a write storm.",
+          "reveal": 0
+        }
+      ],
+      "id": "s007"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 4 of 24",
+      "title": "Design X: counting, ranking, analytics",
+      "table": {
+        "head": [
+          "Prompt",
+          "One-line answer skeleton"
+        ],
+        "rows": [
+          [
+            "Top K",
+            "1-minute buckets, count-min sketch plus heap"
+          ],
+          [
+            "Trending",
+            "growth versus baseline, not raw volume"
+          ],
+          [
+            "Like counter",
+            "N sub-counters per hot item, sum on read"
+          ],
+          [
+            "Viewing now",
+            "heartbeats into an expiring set per page"
+          ],
+          [
+            "Ad clicks",
+            "watermarks for late events, exactly-once"
+          ],
+          [
+            "Analytics",
+            "Kafka, stream rollups, columnar OLAP, HLL"
+          ]
+        ]
+      },
+      "caption": "Book: Module 22 · Counting, ranking and analytics",
+      "steps": [
+        {
+          "say": "Third, counting, ranking and analytics. Top K: per-minute counts, and a count-min sketch plus a heap when exact counts cost too much.",
+          "reveal": 1
+        },
+        {
+          "say": "Trending means growth, not volume, so good morning doesn't trend every day.",
+          "reveal": 2
+        },
+        {
+          "say": "Like counter: a viral post makes one counter row hot, so split it into sub-counters and sum on read.",
+          "reveal": 3
+        },
+        {
+          "say": "N users viewing this page: clients heartbeat every ten to thirty seconds into a per-page set with expiry, and you count the fresh entries.",
+          "reveal": 4
+        },
+        {
+          "say": "Ad clicks: billing needs exactly-once effect, so checkpoints, idempotent sinks, and watermarks for late events.",
+          "reveal": 5
+        },
+        {
+          "say": "Analytics: Kafka, stream rollups, and a columnar O-L-A-P store.",
+          "reveal": 6
+        }
+      ],
+      "id": "s008"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Top K over the last hour",
+      "bullets": [
+        "Keep 60 one-minute buckets of counts per item",
+        "Each minute: drop the oldest bucket, add the newest",
+        "Each partition computes a local top K",
+        "Merge: take more than K per partition, e.g. 2K",
+        "Fast approximate stream path, exact nightly batch"
+      ],
+      "steps": [
+        {
+          "say": "Top K for the last hour, over millions of shares a second. Step one: keep sixty one-minute buckets of counts.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: every minute, drop the oldest bucket and add the newest. The hourly count is the sum of sixty numbers.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: events are partitioned by article, so each partition computes its own top K.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: merge the partial lists. Take somewhat more than K from each partition, say twice K, so an item that's tenth everywhere isn't lost.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five: serve the fast approximate answer now; a batch job gives exact numbers later.",
+          "reveal": 5
+        }
+      ],
+      "id": "s009"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 5 of 24",
+      "title": "Design X: messaging and real-time",
+      "table": {
+        "head": [
+          "Prompt",
+          "One-line answer skeleton"
+        ],
+        "rows": [
+          [
+            "Chat",
+            "WebSocket gateways, per-chat sequence, acks"
+          ],
+          [
+            "Email",
+            "shard by user, SPF, DKIM, DMARC"
+          ],
+          [
+            "Live comments",
+            "pub/sub per stream, gateways fan out, sample"
+          ],
+          [
+            "Video calls",
+            "UDP media, SFU forwards, simulcast"
+          ],
+          [
+            "Leaderboard",
+            "Redis sorted set: ZINCRBY, rank, top N"
+          ],
+          [
+            "Card game",
+            "one server owns a table, append move log"
+          ]
+        ]
+      },
+      "caption": "Book: Module 22 · Messaging and real-time",
+      "steps": [
+        {
+          "say": "Fourth, messaging and real-time. Chat: WebSocket gateways, a registry of who's on which gateway, and a server-assigned sequence number per conversation.",
+          "reveal": 1
+        },
+        {
+          "say": "Email: shard by user, and authenticate senders with S-P-F, D-K-I-M and D-MARC, so your mail lands in inboxes, not spam.",
+          "reveal": 2
+        },
+        {
+          "say": "Live comments: one pub-sub topic per stream, and gateways subscribe, so one message per gateway crosses the network, not one per viewer.",
+          "reveal": 3
+        },
+        {
+          "say": "Zoom: media over U-D-P, because a late packet is useless, and a selective forwarding unit that forwards streams without decoding.",
+          "reveal": 4
+        },
+        {
+          "say": "Leaderboard: a Redis sorted set. Update the score, get my rank, get the top ten, each in log time.",
+          "reveal": 5
+        },
+        {
+          "say": "Card game: one server owns each table and is the only one that changes it, with an append-only move log for crash recovery.",
+          "reveal": 6
+        }
+      ],
+      "id": "s010"
+    },
+    {
+      "layout": "number",
+      "kicker": "Example",
+      "title": "Live comments on a huge stream",
+      "big": "1M viewers × 5,000/s = 5 billion/s",
+      "caption": "impossible and unreadable, so fan out twice and sample",
+      "steps": [
+        {
+          "say": "Imagine one stream with a million viewers posting five thousand comments a second. Sending every comment to every viewer is five billion deliveries a second. Impossible, and nobody could read it.",
+          "reveal": 0
+        },
+        {
+          "say": "So fan out in two levels: comment service, pub-sub, a few thousand gateways, then local sockets. And above a threshold, send each viewer a sample, friends first, at a readable rate like ten a second.",
+          "reveal": 0
+        }
+      ],
+      "id": "s011"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 6 of 24",
+      "title": "Design X: location",
+      "table": {
+        "head": [
+          "Prompt",
+          "One-line answer skeleton"
+        ],
+        "rows": [
+          [
+            "Uber",
+            "in-memory geo index, match by ETA, no double-assign"
+          ],
+          [
+            "Yelp",
+            "geohash prefix plus 8 neighbours, or quadtree"
+          ],
+          [
+            "Nearby friends",
+            "pub/sub channel per user, TTL on location"
+          ],
+          [
+            "Google Maps",
+            "tiles on CDN, contraction hierarchies"
+          ],
+          [
+            "Food delivery",
+            "dispatch to food-ready time, batch orders"
+          ],
+          [
+            "Surge pricing",
+            "demand/supply per hex cell, smoothed"
+          ]
+        ]
+      },
+      "caption": "Book: Module 22 · Location",
+      "steps": [
+        {
+          "say": "Fifth, location. Uber: driver locations in an in-memory geo index. Match by arrival time, and use a conditional update so a driver is never assigned twice.",
+          "reveal": 1
+        },
+        {
+          "say": "Yelp: a geohash prefix search plus the eight neighbouring cells, or a quadtree that adapts to density.",
+          "reveal": 2
+        },
+        {
+          "say": "Nearby friends: a channel per user, friends subscribe and filter by distance.",
+          "reveal": 3
+        },
+        {
+          "say": "Google Maps: tiles on a C-D-N, and precomputed routing hierarchies for fast routes.",
+          "reveal": 4
+        },
+        {
+          "say": "Food delivery: dispatch the courier for when the food will be ready, not when it was ordered, and batch two or three orders per courier.",
+          "reveal": 5
+        },
+        {
+          "say": "Surge pricing: demand over supply per hexagon cell, smoothed, with the quoted price locked for a few minutes.",
+          "reveal": 6
+        }
+      ],
+      "id": "s012"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Food delivery by the numbers",
+      "bullets": [
+        "3M orders a day, about 125 a second at dinner peak",
+        "300K couriers send GPS every 5 seconds",
+        "300,000 ÷ 5 = 60,000 location writes a second",
+        "So: locations in memory, history written async",
+        "Orders: a saga with timers; pickup is no return"
+      ],
+      "steps": [
+        {
+          "say": "Let's put numbers on food delivery. Three million orders a day is about a hundred and twenty-five a second at the dinner peak. That's modest.",
+          "reveal": 1
+        },
+        {
+          "say": "But three hundred thousand couriers each send a G-P-S point every five seconds.",
+          "reveal": 2
+        },
+        {
+          "say": "Three hundred thousand divided by five is sixty thousand location writes a second. That's the heaviest load in the system, far above orders.",
+          "reveal": 3
+        },
+        {
+          "say": "So the design follows: keep live locations in memory, sharded by zone, and write history asynchronously.",
+          "reveal": 4
+        },
+        {
+          "say": "The order itself is a saga, with durable timers for a restaurant that goes silent. Once the courier picks up, there's no going back.",
+          "reveal": 5
+        }
+      ],
+      "id": "s013"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Two-stream plan. A phone dies mid-movie. Counter or lease?",
+      "bullets": [
+        "A counter: +1 on start, -1 on stop",
+        "A lease per stream with a TTL, renewed by heartbeats"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. A Netflix plan allows two streams. A phone dies mid-movie and never sends stop. Do you track this with a counter or with leases? Answer next.",
+          "reveal": 0
+        }
+      ],
+      "id": "s014"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 7 of 24",
+      "title": "Design X: media",
+      "table": {
+        "head": [
+          "Prompt",
+          "One-line answer skeleton"
+        ],
+        "rows": [
+          [
+            "YouTube",
+            "parallel chunk transcode, adaptive bitrate, CDN"
+          ],
+          [
+            "Netflix",
+            "push catalog to ISP caches overnight"
+          ],
+          [
+            "Screen limit",
+            "leases with TTL, atomic check-and-add"
+          ],
+          [
+            "Twitch",
+            "ingest, live transcode, short HLS segments"
+          ],
+          [
+            "Spotify",
+            "prefetch next track; exact royalty counts"
+          ],
+          [
+            "Resumable upload",
+            "5 to 8 MB parts, ask which parts arrived"
+          ]
+        ]
+      },
+      "caption": "Book: Module 22 · Media",
+      "steps": [
+        {
+          "say": "The answer is leases, and that's our sixth category, media. YouTube: transcode chunks in parallel into many bitrates, and let the player pick each segment's quality from its bandwidth.",
+          "reveal": 1
+        },
+        {
+          "say": "Netflix: the catalog is known ahead of time, so push content to its own caches inside internet providers overnight, instead of pulling on demand.",
+          "reveal": 2
+        },
+        {
+          "say": "Screen limit: a lease per stream with a time to live. A counter leaks when a device dies without saying stop. A lease just expires.",
+          "reveal": 3
+        },
+        {
+          "say": "Twitch: live transcode into short H-L-S segments; shorter cuts delay but adds load.",
+          "reveal": 4
+        },
+        {
+          "say": "Spotify: prefetch the next track, and keep royalty counts exact.",
+          "reveal": 5
+        },
+        {
+          "say": "Resumable upload: chunks of five to eight megabytes. After reconnecting, the client asks which parts arrived and sends only the missing ones.",
+          "reveal": 6
+        }
+      ],
+      "id": "s015"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Screen limit, step by step",
+      "bullets": [
+        "Start: drop expired leases, count, add if under K",
+        "All of it in one atomic step per account",
+        "Player heartbeats every 60 s; lease TTL about 2 to 3 beats",
+        "Phone dies: no heartbeat, lease expires in minutes",
+        "Store down: fail open, log it, enforce when back"
+      ],
+      "steps": [
+        {
+          "say": "On playback start, the concurrency service removes expired leases, counts the rest, and adds a new lease if the count is below the plan limit.",
+          "reveal": 1
+        },
+        {
+          "say": "That has to be one atomic step per account, with a Lua script or a conditional write. Otherwise two devices starting together both grab the last slot.",
+          "reveal": 2
+        },
+        {
+          "say": "While playing, the player heartbeats every sixty seconds, and the lease lives two or three heartbeats.",
+          "reveal": 3
+        },
+        {
+          "say": "So when the phone dies, the heartbeats stop and the lease expires within a few minutes, freeing the slot.",
+          "reveal": 4
+        },
+        {
+          "say": "And if the lease store is down, fail open and log it. Wrongly blocking a paying user is worse than a brief over-allowance.",
+          "reveal": 5
+        }
+      ],
+      "id": "s016"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 8 of 24",
+      "title": "Design X: files and collaboration",
+      "table": {
+        "head": [
+          "Prompt",
+          "One-line answer skeleton"
+        ],
+        "rows": [
+          [
+            "Dropbox",
+            "4 MB hashed chunks, delta sync, strong metadata"
+          ],
+          [
+            "Google Docs",
+            "one owner per doc; OT or CRDT; op log"
+          ],
+          [
+            "Calendar",
+            "RRULE in the event's own time zone"
+          ],
+          [
+            "BitTorrent",
+            "rarest-first pieces, tit-for-tat, hashes"
+          ],
+          [
+            "Downloader",
+            "Range requests, resume, rename .part atomically"
+          ]
+        ]
+      },
+      "caption": "Book: Module 22 · Files and collaboration",
+      "steps": [
+        {
+          "say": "Seventh, files and collaboration. Dropbox: four megabyte chunks addressed by hash, so only changed chunks upload. Two offline edits make a conflicted copy.",
+          "reveal": 1
+        },
+        {
+          "say": "Google Docs: route every editor of a document to one owner server. Operational transformation needs that central order. C-R-D-Ts merge without one, at the cost of extra metadata.",
+          "reveal": 2
+        },
+        {
+          "say": "Google Calendar: store a recurring event once, as a rule, in the event's own time zone, so nine a-m every Monday stays at nine after daylight saving changes.",
+          "reveal": 3
+        },
+        {
+          "say": "BitTorrent: peers fetch the rarest pieces first, upload to whoever gives them the best rate, and check every piece against its hash.",
+          "reveal": 4
+        },
+        {
+          "say": "File downloader: range requests for resume, then verify and rename the dot-part file atomically.",
+          "reveal": 5
+        }
+      ],
+      "id": "s017"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Delta sync in numbers",
+      "bullets": [
+        "A 1 GB file = 256 chunks of 4 MB",
+        "You edit one paragraph: one chunk's hash changes",
+        "Upload 4 MB instead of 1 GB: 256 times less",
+        "Same chunk hash elsewhere? Store it once: dedup"
+      ],
+      "steps": [
+        {
+          "say": "A one gigabyte file at four megabytes a chunk is two hundred and fifty-six chunks.",
+          "reveal": 1
+        },
+        {
+          "say": "You edit one paragraph. Only one chunk's content hash changes.",
+          "reveal": 2
+        },
+        {
+          "say": "So the client uploads four megabytes instead of a gigabyte, two hundred and fifty-six times less data.",
+          "reveal": 3
+        },
+        {
+          "say": "And if two users have a chunk with the same hash, it's stored once. That's dedup for free.",
+          "reveal": 4
+        }
+      ],
+      "id": "s018"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 9 of 24",
+      "title": "Design X: commerce and payments",
+      "table": {
+        "head": [
+          "Prompt",
+          "One-line answer skeleton"
+        ],
+        "rows": [
+          [
+            "Ticketmaster",
+            "HELD where AVAILABLE, hold TTL, waiting room"
+          ],
+          [
+            "Hotel booking",
+            "reserved <= total, version column, idempotent"
+          ],
+          [
+            "Payments",
+            "idempotency keys, double-entry ledger, reconcile"
+          ],
+          [
+            "Flash sale",
+            "waiting room, atomic counter, sold out at edge"
+          ],
+          [
+            "Coupons",
+            "atomic decrement plus unique per-user row"
+          ],
+          [
+            "Stock exchange",
+            "sequencer, single-threaded matching engine"
+          ]
+        ]
+      },
+      "caption": "Book: Module 22 · Commerce and payments",
+      "steps": [
+        {
+          "say": "Eighth, commerce and payments. Ticketmaster: a conditional update sets a seat to held only where it's still available, so one user wins each seat. Holds expire.",
+          "reveal": 1
+        },
+        {
+          "say": "Hotel booking: an inventory row per hotel, room type and date, where reserved never exceeds total.",
+          "reveal": 2
+        },
+        {
+          "say": "Payments: idempotency keys everywhere, a double-entry ledger, and reconciliation against bank files.",
+          "reveal": 3
+        },
+        {
+          "say": "Flash sale: a waiting room, an atomic Redis counter, and sold out answered at the edge.",
+          "reveal": 4
+        },
+        {
+          "say": "Coupons: an atomic conditional decrement for the usage limit, plus a unique key on campaign and user for one per person.",
+          "reveal": 5
+        },
+        {
+          "say": "Stock exchange: a sequencer stamps every order, and a single-threaded matching engine per symbol is deterministic, so replicas replay the same input for failover.",
+          "reveal": 6
+        }
+      ],
+      "id": "s019"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Give away 6 million burgers in an hour",
+      "bullets": [
+        "Pre-split stock: 600 shards × 10,000 vouchers",
+        "Atomic decrement per shard; empty? try another",
+        "6M ÷ 3,600 s ≈ 1,700 claims a second on average",
+        "First minutes: 10 to 100 times that, so queue it",
+        "One per person: unique key on the verified identity"
+      ],
+      "steps": [
+        {
+          "say": "Give away exactly six million burger vouchers in one hour. Step one: pre-split the stock into six hundred shards of ten thousand vouchers, so no single counter is hot.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: route each claim to a random shard and decrement atomically. If that shard's empty, try another.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, the math: six million over three thousand six hundred seconds is about seventeen hundred claims a second on average.",
+          "reveal": 3
+        },
+        {
+          "say": "But the first minutes see ten to a hundred times that, so a waiting room at the edge queues and smooths the burst.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five: one per person. A unique key on the verified identity, account plus phone or card, matters more than the counter.",
+          "reveal": 5
+        }
+      ],
+      "id": "s020"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 10 of 24",
+      "title": "Design X: infrastructure",
+      "table": {
+        "head": [
+          "Prompt",
+          "One-line answer skeleton"
+        ],
+        "rows": [
+          [
+            "Millions of users",
+            "DB apart, LB, replicas, cache, CDN, shard"
+          ],
+          [
+            "Multi-region",
+            "active-passive or active-active, async RPO"
+          ],
+          [
+            "S3 storage",
+            "metadata service, erasure coding, repair"
+          ],
+          [
+            "Metrics",
+            "pull or push, TSDB, watch label cardinality"
+          ],
+          [
+            "Job scheduler",
+            "leases with fencing tokens, idempotent jobs"
+          ],
+          [
+            "Logging",
+            "agents, Kafka buffer, hot index, cold storage"
+          ]
+        ]
+      },
+      "caption": "Book: Module 22 · Infrastructure",
+      "steps": [
+        {
+          "say": "Ninth, infrastructure. Scale to millions: separate database, load balancer, stateless servers, replicas, cache, C-D-N, queues, then sharding.",
+          "reveal": 1
+        },
+        {
+          "say": "Multiple regions: active-passive is simple; active-active needs conflict handling. Most replicate asynchronously and accept a small loss window.",
+          "reveal": 2
+        },
+        {
+          "say": "S-three: a metadata service maps bucket and key to chunks, data nodes store them, and background repair keeps eleven nines of durability.",
+          "reveal": 3
+        },
+        {
+          "say": "Metrics monitoring: pull or push collection into a time-series database. Watch cardinality: a label like user I-D creates a new series per user and blows up storage.",
+          "reveal": 4
+        },
+        {
+          "say": "Job scheduler: workers take leases with fencing tokens, and jobs are idempotent, because exactly-once isn't realistic.",
+          "reveal": 5
+        },
+        {
+          "say": "Logging: agents batch into Kafka, recent logs go to a search index, older ones to cheap object storage.",
+          "reveal": 6
+        }
+      ],
+      "id": "s021"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Replication versus erasure coding",
+      "table": {
+        "head": [
+          "",
+          "3 copies",
+          "8 data + 4 parity"
+        ],
+        "rows": [
+          [
+            "Storage used",
+            "3×",
+            "1.5×"
+          ],
+          [
+            "Lost pieces survived",
+            "any 2",
+            "any 4"
+          ],
+          [
+            "Repair cost",
+            "copy one replica",
+            "read 8 chunks, more CPU"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's the S-three probe, worked. Three full copies cost three times the storage. Eight data chunks plus four parity chunks cost twelve over eight, one and a half times.",
+          "reveal": 1
+        },
+        {
+          "say": "And erasure coding survives any four lost chunks, versus any two lost copies.",
+          "reveal": 2
+        },
+        {
+          "say": "The catch: repair reads eight chunks and burns more C-P-U.",
+          "reveal": 3
+        }
+      ],
+      "id": "s022"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 11 of 24",
+      "title": "Design X: developer and AI platforms",
+      "table": {
+        "head": [
+          "Prompt",
+          "One-line answer skeleton"
+        ],
+        "rows": [
+          [
+            "Online judge",
+            "queue, sandboxed workers, no network, limits"
+          ],
+          [
+            "Deployments",
+            "immutable artifacts, canary, then waves"
+          ],
+          [
+            "ChatGPT",
+            "token rate limits, SSE stream, batched GPUs"
+          ],
+          [
+            "A/B testing",
+            "hash(user + experiment) into buckets"
+          ],
+          [
+            "Recommendations",
+            "candidates, rank, re-rank; feature store"
+          ],
+          [
+            "Weather app",
+            "round location to grid cell, cache by cell"
+          ]
+        ]
+      },
+      "caption": "Book: Module 22 · Developer and AI platforms",
+      "steps": [
+        {
+          "say": "Tenth, developer and A-I platforms. Online judge: a queue, and sandboxed workers with no network and hard limits.",
+          "reveal": 1
+        },
+        {
+          "say": "Deployments: one immutable artifact, then canary, then waves, with automatic rollback.",
+          "reveal": 2
+        },
+        {
+          "say": "ChatGPT: token rate limits, answers streamed over server-sent events, and continuous batching to stretch scarce G-P-Us.",
+          "reveal": 3
+        },
+        {
+          "say": "A-B testing: hash the user I-D plus the experiment I-D into a bucket. It's deterministic, so assignment needs no database lookup.",
+          "reveal": 4
+        },
+        {
+          "say": "Recommendations: a funnel. Generate candidates, rank them with a model, then re-rank for diversity and freshness.",
+          "reveal": 5
+        },
+        {
+          "say": "Weather app: round the location to a grid cell, so requests share cache entries. Newer prompts add pub-sub, Twilio, code assistants and support bots.",
+          "reveal": 6
+        }
+      ],
+      "id": "s023"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "The recommendation funnel in 100 ms",
+      "bullets": [
+        "10M items: scoring all of them per request is impossible",
+        "Candidates: several sources, a few hundred each",
+        "Rank about 1,000 with a model and feature store",
+        "Re-rank: diversity, freshness, drop already-seen",
+        "Ranker times out? Fall back to a cached list"
+      ],
+      "steps": [
+        {
+          "say": "Let's work the funnel. Ten million items, a hundred milliseconds. Scoring ten million items per request is impossible.",
+          "reveal": 1
+        },
+        {
+          "say": "Stage one: several candidate sources, like embedding neighbours and trending, each return a few hundred items.",
+          "reveal": 2
+        },
+        {
+          "say": "Stage two: a ranking model scores about a thousand candidates with features from the feature store.",
+          "reveal": 3
+        },
+        {
+          "say": "Stage three: re-rank with business rules, diversity and freshness, and drop items already consumed.",
+          "reveal": 4
+        },
+        {
+          "say": "And if the ranker times out, return candidates in a simple order, or a cached list per user. Recap: narrow first, then rank.",
+          "reveal": 5
+        }
+      ],
+      "id": "s024"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 12 of 24",
+      "title": "Concepts: performance and scale",
+      "bullets": [
+        "Latency = one request's time; throughput = per second",
+        "p99 shows your slowest users; averages hide them",
+        "Estimate: DAU × actions ÷ 100,000 s, × 2 to 3 for peak",
+        "Little's law: L = λ × W sizes pools and threads",
+        "Nines: 99.9% ≈ 8.8 h/year; series parts multiply",
+        "SLI measures, SLO targets, SLA contracts; error budget"
+      ],
+      "caption": "Book: Module 22 · Performance and scale",
+      "steps": [
+        {
+          "say": "Now Part B, the concept questions. First, performance and scale. Latency is how long one request takes, say forty milliseconds. Throughput is how many finish per second, say five thousand.",
+          "reveal": 1
+        },
+        {
+          "say": "Why p ninety-nine, not the average? The average hides the slow few. p ninety-nine is what your unluckiest one percent feel.",
+          "reveal": 2
+        },
+        {
+          "say": "Estimates: daily users times actions, over a hundred thousand seconds, times two or three for peak.",
+          "reveal": 3
+        },
+        {
+          "say": "Little's law: requests in flight equals arrival rate times time inside. It tells you how many threads or connections you need.",
+          "reveal": 4
+        },
+        {
+          "say": "Availability: ninety-nine point nine percent allows about eight point eight hours down a year. Parts in series multiply, so two of them give about ninety-nine point eight.",
+          "reveal": 5
+        },
+        {
+          "say": "S-L-I is the measurement, S-L-O the internal target, S-L-A the contract with penalties. The error budget is one hundred percent minus the S-L-O.",
+          "reveal": 6
+        }
+      ],
+      "id": "s025"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Four numbers to say out loud",
+      "table": {
+        "head": [
+          "Question",
+          "Worked answer"
+        ],
+        "rows": [
+          [
+            "Average lies",
+            "99 at 10 ms + 1 at 5 s: mean ≈ 60 ms"
+          ],
+          [
+            "Fan-out tail",
+            "100 calls: 1 − 0.99^100 ≈ 63% hit a p99"
+          ],
+          [
+            "Little's law",
+            "1,000/s × 0.2 s = 200 in flight"
+          ],
+          [
+            "QPS",
+            "10M × 10 = 100M/day ÷ 10^5 ≈ 1,000 QPS"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here are the numbers. Ninety-nine requests at ten milliseconds and one at five seconds average about sixty milliseconds. That describes nobody.",
+          "reveal": 1
+        },
+        {
+          "say": "A page calling a hundred backends hits at least one backend's p ninety-nine on about sixty-three percent of requests. Fan-out makes the tail the norm.",
+          "reveal": 2
+        },
+        {
+          "say": "Little's law: a thousand requests a second at two hundred milliseconds each means about two hundred in flight.",
+          "reveal": 3
+        },
+        {
+          "say": "And Q-P-S: ten million daily users times ten actions is a hundred million a day. Divide by a hundred thousand: about a thousand Q-P-S average, two to three thousand at peak.",
+          "reveal": 4
+        }
+      ],
+      "id": "s026"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 13 of 24",
+      "title": "Concepts: networking and APIs",
+      "bullets": [
+        "Type a URL: DNS, TCP or QUIC, TLS, HTTP, render",
+        "TCP reliable and ordered; UDP fast; QUIC = UDP + streams",
+        "HTTP/2 multiplexes; HTTP/3 ends TCP head-of-line block",
+        "REST public; gRPC internal; GraphQL varied clients",
+        "Polling, long polling, SSE one-way, WebSocket two-way",
+        "Idempotent: GET, PUT, DELETE; cursor pagination"
+      ],
+      "caption": "Book: Module 22 · Networking and APIs",
+      "steps": [
+        {
+          "say": "Second, networking and A-P-Is. What happens when you type a U-R-L? D-N-S lookup, a T-C-P or QUIC connection, a T-L-S handshake, an H-T-T-P request through a load balancer, then rendering.",
+          "reveal": 1
+        },
+        {
+          "say": "T-C-P is reliable and ordered. U-D-P has no guarantees, fine for calls and games. QUIC adds reliable, independent streams on U-D-P.",
+          "reveal": 2
+        },
+        {
+          "say": "H-T-T-P two multiplexes streams on one connection, but one lost packet stalls them all. H-T-T-P three runs on QUIC, so streams recover independently.",
+          "reveal": 3
+        },
+        {
+          "say": "REST for public A-P-Is, g-R-P-C for internal calls, GraphQL when clients need exactly their fields.",
+          "reveal": 4
+        },
+        {
+          "say": "Real-time: server-sent events for one-way feeds, WebSockets for two-way chat and games.",
+          "reveal": 5
+        },
+        {
+          "say": "GET, PUT and DELETE are idempotent. POST isn't, so payments add an idempotency key. And prefer cursor pagination.",
+          "reveal": 6
+        }
+      ],
+      "id": "s027"
+    },
+    {
+      "layout": "twocol",
+      "kicker": "Example",
+      "title": "Offset versus cursor, page 500",
+      "left": {
+        "heading": "Offset",
+        "bullets": [
+          "LIMIT 20 OFFSET 10000",
+          "Scans and discards 10,000 rows",
+          "New posts shift items: repeats"
+        ]
+      },
+      "right": {
+        "heading": "Cursor",
+        "bullets": [
+          "WHERE (created_at, id) < cursor",
+          "Index seek: fast at any depth",
+          "Stable while data changes"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Imagine a feed, twenty items a page, and the user is on page five hundred. Offset pagination asks for limit twenty, offset ten thousand.",
+          "reveal": 1
+        },
+        {
+          "say": "The database still scans and throws away ten thousand rows.",
+          "reveal": 2
+        },
+        {
+          "say": "And while you scroll, new posts arrive, items shift, and you see repeats or miss some.",
+          "reveal": 3
+        },
+        {
+          "say": "Cursor pagination hands back a token holding the last seen sort key, and asks for items older than it.",
+          "reveal": 4
+        },
+        {
+          "say": "That's an index seek, fast at any depth.",
+          "reveal": 5
+        },
+        {
+          "say": "And it's stable as data changes. The only cost is you can't jump to an arbitrary page.",
+          "reveal": 6
+        }
+      ],
+      "id": "s028"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Which of these is NOT idempotent?",
+      "bullets": [
+        "GET /orders/42",
+        "PUT /orders/42",
+        "DELETE /orders/42",
+        "POST /payments"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Four requests. Which one is not idempotent, so repeating it after a timeout could do damage? Answer next.",
+          "reveal": 0
+        }
+      ],
+      "id": "s029"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 14 of 24",
+      "title": "Concepts: load balancing and caching",
+      "bullets": [
+        "L4 routes by IP and port; L7 reads HTTP",
+        "Liveness = restart me; readiness = no traffic yet",
+        "Forward proxy for clients; reverse proxy for servers",
+        "Cache-aside, read-through, write-through, write-behind",
+        "LRU default; LFU keeps the popular; TTL as safety net",
+        "Write the DB, then delete the key; fix stampedes"
+      ],
+      "caption": "Book: Module 22 · Load balancing and caching",
+      "steps": [
+        {
+          "say": "It was POST: repeat it and you may charge twice. Now, load balancing and caching. An L-four balancer routes by I-P and port, very fast. An L-seven balancer reads H-T-T-P, so it can route by path, terminate T-L-S and retry.",
+          "reveal": 1
+        },
+        {
+          "say": "Health checks: a failed liveness check means restart the process. A failed readiness check means stop sending traffic. Keep liveness cheap and local.",
+          "reveal": 2
+        },
+        {
+          "say": "A forward proxy acts for clients; a reverse proxy acts for servers. An A-P-I gateway is a reverse proxy doing auth and rate limits once.",
+          "reveal": 3
+        },
+        {
+          "say": "Cache-aside: check the cache, read the database on a miss, fill the cache. Write-through writes both. Write-behind writes the cache and flushes later, fast but risky.",
+          "reveal": 4
+        },
+        {
+          "say": "L-R-U is the default eviction. L-F-U keeps popular items. A T-T-L is the safety net.",
+          "reveal": 5
+        },
+        {
+          "say": "To stay consistent, update the database, then delete the key, rather than overwrite it.",
+          "reveal": 6
+        }
+      ],
+      "id": "s030"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "A cache stampede, and four fixes",
+      "bullets": [
+        "Hot product key expires; 5,000 requests miss at once",
+        "Fix 1: single flight: one request rebuilds the key",
+        "Fix 2: serve stale while one refresh runs",
+        "Fix 3: refresh early, before expiry",
+        "Fix 4: TTL jitter, e.g. 300 s ± 30 s"
+      ],
+      "steps": [
+        {
+          "say": "Imagine a hot product page cached with a five minute T-T-L. It expires, and five thousand requests miss in the same second and all hit the database.",
+          "reveal": 1
+        },
+        {
+          "say": "Fix one: single flight. One request takes a lock and rebuilds the key. The others wait for it.",
+          "reveal": 2
+        },
+        {
+          "say": "Fix two: serve the stale value while that one refresh runs in the background.",
+          "reveal": 3
+        },
+        {
+          "say": "Fix three: refresh hot keys probabilistically before they expire, so they never go cold.",
+          "reveal": 4
+        },
+        {
+          "say": "Fix four: add jitter to T-T-Ls, say three hundred seconds plus or minus thirty, so keys don't all expire together.",
+          "reveal": 5
+        }
+      ],
+      "id": "s031"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 15 of 24",
+      "title": "Concepts: databases and storage",
+      "bullets": [
+        "SQL for joins and ACID; NoSQL for simple access at scale",
+        "Families: key-value, document, wide-column, graph",
+        "Isolation: read committed, snapshot, serializable",
+        "B-tree reads fast; LSM tree writes fast",
+        "Optimistic vs pessimistic locking; MVCC snapshots",
+        "WAL for durability; pooling; avoid N+1 queries"
+      ],
+      "caption": "Book: Module 22 · Databases and storage",
+      "steps": [
+        {
+          "say": "Next, databases and storage. Choose S-Q-L for joins and transactions, like orders and payments. Choose No-S-Q-L when access is simple and scale is huge. Default to S-Q-L.",
+          "reveal": 1
+        },
+        {
+          "say": "No-S-Q-L families: key-value for sessions, document for catalogs, wide-column for heavy time-ordered writes, graph for friends of friends.",
+          "reveal": 2
+        },
+        {
+          "say": "Isolation levels: read committed stops dirty reads. Snapshot isolation gives a stable view but still allows write skew. Serializable prevents it all, at the cost of aborts.",
+          "reveal": 3
+        },
+        {
+          "say": "A B-tree updates sorted pages in place, so reads and range scans are fast. An L-S-M tree buffers writes and merges sorted files later, so writes are fast.",
+          "reveal": 4
+        },
+        {
+          "say": "Pessimistic locking locks before reading. Optimistic locking checks a version at write time. M-V-C-C keeps old row versions so readers never block writers.",
+          "reveal": 5
+        },
+        {
+          "say": "The write-ahead log gives durability and feeds replication. Connection pools limit expensive connections.",
+          "reveal": 6
+        }
+      ],
+      "id": "s032"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Two fixes with real numbers",
+      "bullets": [
+        "Optimistic: read row at version 7",
+        "UPDATE … WHERE id = 42 AND version = 7",
+        "Someone else wrote first: 0 rows updated, retry",
+        "N+1: 1 query for 100 posts + 100 author queries",
+        "Fix: one IN (…) batch: 101 queries become 2"
+      ],
+      "steps": [
+        {
+          "say": "Two worked fixes. Optimistic locking: you read row forty-two at version seven.",
+          "reveal": 1
+        },
+        {
+          "say": "You write with update, where i-d is forty-two and version is still seven, setting version to eight.",
+          "reveal": 2
+        },
+        {
+          "say": "If someone wrote first, zero rows change, and you retry. No lock was held while the user was thinking.",
+          "reveal": 3
+        },
+        {
+          "say": "Now the N plus one problem. An O-R-M loads a hundred posts with one query, then fetches each author separately: a hundred more.",
+          "reveal": 4
+        },
+        {
+          "say": "Batch the authors into one query with an IN list. A hundred and one queries become two.",
+          "reveal": 5
+        }
+      ],
+      "id": "s033"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 16 of 24",
+      "title": "Concepts: replication and partitioning",
+      "bullets": [
+        "Replication copies everything; sharding splits it",
+        "Leader-follower, multi-leader, leaderless",
+        "Sync: no loss, slower; async: fast, lag, small loss",
+        "Conflicts: last-write-wins, version vectors, CRDTs",
+        "Shard key: even spread, in most queries, not time",
+        "Consistent hashing with virtual nodes; reshard live"
+      ],
+      "caption": "Book: Module 22 · Replication and partitioning",
+      "steps": [
+        {
+          "say": "Replication and partitioning. Replication copies everything for reads and availability. Sharding splits data for write capacity. Big systems do both.",
+          "reveal": 1
+        },
+        {
+          "say": "Leader-follower: one writer, no conflicts. Multi-leader: local writes per region, but conflicts. Leaderless, like Cassandra: quorums for reads and writes.",
+          "reveal": 2
+        },
+        {
+          "say": "Synchronous replication loses nothing but every write waits. Asynchronous is fast, but replicas lag, so read your own recent writes from the leader.",
+          "reveal": 3
+        },
+        {
+          "say": "Conflicts: last-write-wins is simple but drops data. Version vectors detect true concurrency. C-R-D-Ts always merge to the same result.",
+          "reveal": 4
+        },
+        {
+          "say": "A good shard key spreads load and appears in most queries, like user I-D. Never a timestamp, which sends every new write to one shard. For a celebrity key, add a random suffix and merge on read.",
+          "reveal": 5
+        },
+        {
+          "say": "To reshard live, use many more partitions than machines, copy a snapshot, stream changes, then switch.",
+          "reveal": 6
+        }
+      ],
+      "id": "s034"
+    },
+    {
+      "layout": "number",
+      "kicker": "Example",
+      "title": "Adding a fifth node",
+      "big": "mod N: ~80% move · ring: ~20% move",
+      "caption": "hash(key) mod 4 → mod 5 versus consistent hashing",
+      "steps": [
+        {
+          "say": "Here's why consistent hashing matters. Go from four nodes to five. With hash of key mod N, a key stays put only if its value mod four equals its value mod five. That's about one in five, so about eighty percent of keys move.",
+          "reveal": 0
+        },
+        {
+          "say": "On a hash ring, the new node takes just its slice, about one N-th, so about twenty percent move. And with virtual nodes, many points per server, that slice comes evenly from all four old nodes.",
+          "reveal": 0
+        }
+      ],
+      "id": "s035"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 17 of 24",
+      "title": "Concepts: consistency and consensus",
+      "bullets": [
+        "CAP: in a partition pick CP or AP; PACELC: else L or C",
+        "Strong, read-your-writes, monotonic, causal, eventual",
+        "Quorum: R + W > N, e.g. N=3, W=2, R=2",
+        "2PC blocks on its coordinator; sagas compensate",
+        "Raft: majority elects a leader; 5 nodes survive 2",
+        "Locks need leases and fencing; clocks need logic"
+      ],
+      "caption": "Book: Module 22 · Consistency and consensus",
+      "steps": [
+        {
+          "say": "Consistency and consensus. CAP: during a partition, refuse requests to stay consistent, or answer with maybe-stale data. PACELC adds: else, latency versus consistency.",
+          "reveal": 1
+        },
+        {
+          "say": "Consistency models run from linearizable, through read-your-writes and causal, to eventual. Pick the weakest each feature tolerates.",
+          "reveal": 2
+        },
+        {
+          "say": "Quorums: write to W, read from R of N replicas. If R plus W is greater than N, every read overlaps the latest write.",
+          "reveal": 3
+        },
+        {
+          "say": "Two-phase commit: prepare, then commit, atomic but blocking if the coordinator dies. A saga chains local transactions with compensations, like refund or release seat.",
+          "reveal": 4
+        },
+        {
+          "say": "Raft: a follower that misses heartbeats becomes a candidate, and a majority vote makes it leader. Five nodes tolerate two failures.",
+          "reveal": 5
+        },
+        {
+          "say": "Distributed locks need leases and fencing tokens. And since wall clocks drift, order events with Lamport, vector or hybrid logical clocks.",
+          "reveal": 6
+        }
+      ],
+      "id": "s036"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Example",
+      "title": "Fencing token in action",
+      "mermaid": "flowchart LR\n  L[\"Lock service\"] -->|\"token 33\"| A[\"Worker A\"]\n  A -->|\"long GC pause\"| X[\"Lease expires\"]\n  L -->|\"token 34\"| B[\"Worker B\"]\n  B -->|\"write with 34\"| S[\"Storage: max seen 34\"]\n  A -->|\"late write with 33\"| S\n  S -->|\"reject 33\"| A",
+      "caption": "Storage rejects any token older than the newest it has seen",
+      "steps": [
+        {
+          "say": "Imagine worker A holds a lock with token thirty-three, then freezes in a long garbage-collection pause. Its lease expires.",
+          "reveal": 0
+        },
+        {
+          "say": "Worker B gets the lock with token thirty-four and writes. Storage now remembers thirty-four.",
+          "reveal": 0
+        },
+        {
+          "say": "A wakes up and writes with thirty-three. Storage rejects it as stale. Without the token, both writes would land and corrupt the data.",
+          "reveal": 0
+        }
+      ],
+      "id": "s037"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Flight, hotel and car in 3 services: 2PC or saga?",
+      "bullets": [
+        "Two-phase commit across all three",
+        "A saga with compensating actions"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. One trip books a flight, a hotel and a car, each owned by a different service or even a different company. Two-phase commit or a saga? Answer next.",
+          "reveal": 0
+        }
+      ],
+      "id": "s038"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 18 of 24",
+      "title": "Concepts: messaging and streaming",
+      "bullets": [
+        "Queue: one consumer per message; pub/sub: all of them",
+        "At-most-once, at-least-once; exactly-once effect",
+        "Kafka orders within a partition; key by entity",
+        "Batch vs stream; Lambda two paths, Kappa one",
+        "Event sourcing, CQRS, CDC, transactional outbox",
+        "Dead-letter queue for poison messages"
+      ],
+      "caption": "Book: Module 22 · Messaging and streaming",
+      "steps": [
+        {
+          "say": "A saga: local bookings, each with a compensation like cancel the flight, and no cross-company locks. Now, messaging. A queue gives each message to one consumer; pub-sub gives it to every subscriber. Kafka keeps a replayable log.",
+          "reveal": 1
+        },
+        {
+          "say": "At-most-once can lose. At-least-once can duplicate, and it's the default. True exactly-once delivery isn't possible; you get exactly-once effect with idempotent processing or Kafka transactions.",
+          "reveal": 2
+        },
+        {
+          "say": "Kafka orders only within a partition, so key messages by entity, like order I-D. Partitions cap a consumer group's parallelism, and offsets let consumers resume or replay.",
+          "reveal": 3
+        },
+        {
+          "say": "Batch is simple but hours old; streams are fresh but handle late events. Lambda runs both paths; Kappa replays one stream.",
+          "reveal": 4
+        },
+        {
+          "say": "Event sourcing stores every event as the truth. C-Q-R-S separates write and read models. C-D-C streams the database log, and the outbox avoids dual writes.",
+          "reveal": 5
+        },
+        {
+          "say": "A dead-letter queue parks messages that keep failing, so one poison message can't block the queue.",
+          "reveal": 6
+        }
+      ],
+      "id": "s039"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "An idempotent payment, step by step",
+      "bullets": [
+        "Client sends POST /payments, key = a1b2 (a UUID)",
+        "Server charges, stores key + result in one transaction",
+        "Response is lost; client times out and retries",
+        "Server finds key a1b2: returns the stored result",
+        "Customer charged once, not twice"
+      ],
+      "steps": [
+        {
+          "say": "An idempotent payment. The client sends a payment POST with an idempotency key, a fresh U-U-I-D, say a-one-b-two.",
+          "reveal": 1
+        },
+        {
+          "say": "The server charges the card and stores the key with the result in the same transaction as the work.",
+          "reveal": 2
+        },
+        {
+          "say": "The response is lost on the network. The client times out and retries with the same key.",
+          "reveal": 3
+        },
+        {
+          "say": "The server finds a-one-b-two already stored and returns the saved result instead of charging again.",
+          "reveal": 4
+        },
+        {
+          "say": "The customer is charged once. That's exactly-once effect built on at-least-once delivery.",
+          "reveal": 5
+        }
+      ],
+      "id": "s040"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 19 of 24",
+      "title": "Concepts: reliability and resilience",
+      "bullets": [
+        "Remove SPOFs; active-passive vs active-active",
+        "Timeout from p99; retry few, idempotent, with jitter",
+        "Circuit breaker fails fast; bulkhead isolates pools",
+        "Backpressure, load shedding, graceful degradation",
+        "RPO = data you can lose; RTO = time you can be down",
+        "Rate limits: token bucket, leaky, windows; 429"
+      ],
+      "caption": "Book: Module 22 · Reliability and resilience",
+      "steps": [
+        {
+          "say": "Reliability and resilience. Remove single points of failure. Active-passive keeps an idle standby; active-active serves from all copies.",
+          "reveal": 1
+        },
+        {
+          "say": "Every network call needs a timeout, set from the dependency's p ninety-nine. Retry only idempotent calls, a few times, with backoff and jitter, at one layer only.",
+          "reveal": 2
+        },
+        {
+          "say": "A circuit breaker counts failures, opens to fail fast, then goes half-open to test. A bulkhead gives each dependency its own pool, so one slow one can't sink the service.",
+          "reveal": 3
+        },
+        {
+          "say": "Backpressure tells producers to slow down. Load shedding rejects some requests so the rest succeed. Graceful degradation turns off extras, like recommendations, to keep the core path alive.",
+          "reveal": 4
+        },
+        {
+          "say": "R-P-O is how much data you can lose, in time. R-T-O is how long you can be down.",
+          "reveal": 5
+        },
+        {
+          "say": "Rate limiting: token bucket allows bursts, leaky bucket smooths, fixed windows allow double bursts at the edges.",
+          "reveal": 6
+        }
+      ],
+      "id": "s041"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Token bucket, worked",
+      "bullets": [
+        "Bucket holds B = 10 tokens; refills R = 5 a second",
+        "A burst of 10 requests: all pass, bucket empty",
+        "Request 11 at once: 429 with Retry-After",
+        "After 1 second: 5 tokens back, 5 more pass",
+        "Long run: average 5/s, bursts up to 10"
+      ],
+      "steps": [
+        {
+          "say": "A token bucket. It holds up to ten tokens and refills at five a second.",
+          "reveal": 1
+        },
+        {
+          "say": "A client fires ten requests at once. Each takes a token, all pass, and the bucket is empty.",
+          "reveal": 2
+        },
+        {
+          "say": "The eleventh request gets a four-twenty-nine with a Retry-After header.",
+          "reveal": 3
+        },
+        {
+          "say": "One second later, five tokens are back, so five more requests pass.",
+          "reveal": 4
+        },
+        {
+          "say": "Over time, the client averages five a second, but can burst up to ten. That's why the token bucket is the most common choice.",
+          "reveal": 5
+        }
+      ],
+      "id": "s042"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 20 of 24",
+      "title": "Concepts: security",
+      "bullets": [
+        "AuthN = who you are; AuthZ = what you may do",
+        "Sessions revoke easily; JWTs scale, short-lived",
+        "OAuth 2.0 delegates; OIDC adds login; SSO",
+        "CORS, CSRF, XSS, SQL injection and their fixes",
+        "DDoS: absorb at the edge; WAF blocks bad patterns",
+        "Slow salted hashes, KMS, vault; least privilege"
+      ],
+      "caption": "Book: Module 22 · Security",
+      "steps": [
+        {
+          "say": "Security. Authentication checks who you are. Authorization decides what you may do, and it always comes second.",
+          "reveal": 1
+        },
+        {
+          "say": "Sessions are easy to revoke but need a lookup. A J-W-T verifies without a lookup but is hard to revoke, so keep it short-lived.",
+          "reveal": 2
+        },
+        {
+          "say": "O-Auth two delegates access; OpenID Connect adds login; single sign-on reuses it across apps.",
+          "reveal": 3
+        },
+        {
+          "say": "CORS relaxes a browser rule; it doesn't protect your server. CSRF is fixed with SameSite cookies and tokens. XSS with output escaping and a content security policy. S-Q-L injection with parameterized queries.",
+          "reveal": 4
+        },
+        {
+          "say": "D-DoS: let C-D-Ns and anycast absorb floods, and rate limit application floods. A web application firewall blocks known attack patterns.",
+          "reveal": 5
+        },
+        {
+          "say": "Hash passwords with a slow, salted function like Argon-two or bcrypt. Keep keys in a K-M-S and secrets in a vault. Least privilege and zero trust shrink the blast radius.",
+          "reveal": 6
+        }
+      ],
+      "id": "s043"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Log in with OpenID Connect",
+      "bullets": [
+        "App redirects you to the identity provider, with PKCE",
+        "You log in and consent; the app gets a one-time code",
+        "App swaps the code for tokens on the back channel",
+        "ID token: who you are; access token: 15 min to call APIs",
+        "Refresh token gets new access tokens; rotate it"
+      ],
+      "steps": [
+        {
+          "say": "A login with OpenID Connect. Step one: the app redirects you to the identity provider, using PKCE to prove it's the same app at the end.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: you log in and consent, and the provider sends the app a one-time code.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: the app exchanges that code for tokens, server to server, never in the browser's address bar.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: the I-D token says who you are. The access token, valid for maybe fifteen minutes, lets the app call A-P-Is.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five: a refresh token gets new access tokens. Rotate it on every use, so a stolen one is detected when it's reused.",
+          "reveal": 5
+        }
+      ],
+      "id": "s044"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 21 of 24",
+      "title": "Concepts: operations",
+      "bullets": [
+        "Start with a modular monolith; split when it hurts",
+        "Discovery, sidecars, service mesh with mTLS",
+        "Blue-green switches; canary widens; flags release",
+        "Metrics, logs, traces, tied by one trace ID",
+        "Alert on SLO burn rate, not CPU; golden signals",
+        "Containers and Kubernetes; autoscale with a cap"
+      ],
+      "caption": "Book: Module 22 · Operations",
+      "steps": [
+        {
+          "say": "Operations. Monolith or microservices? Start with a modular monolith, and split when team size or scaling needs justify it.",
+          "reveal": 1
+        },
+        {
+          "say": "A service mesh is sidecar proxies plus a control plane, giving every call m-T-L-S, retries and metrics.",
+          "reveal": 2
+        },
+        {
+          "say": "Blue-green runs two environments and switches all traffic at once. A canary sends one percent, then ten, and widens or rolls back. Feature flags separate deploying code from releasing a feature.",
+          "reveal": 3
+        },
+        {
+          "say": "Observability: metrics for dashboards and alerts, structured logs for detail, traces for one request's path, all joined by a trace I-D.",
+          "reveal": 4
+        },
+        {
+          "say": "Alert on symptoms users feel, measured against S-L-Os, with burn-rate alerts. Dashboards follow the four golden signals: latency, traffic, errors and saturation.",
+          "reveal": 5
+        },
+        {
+          "say": "Kubernetes schedules and restarts containers. Autoscaling needs cooldowns and a maximum.",
+          "reveal": 6
+        }
+      ],
+      "id": "s045"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Rename a column with zero downtime",
+      "bullets": [
+        "Expand: add new column; old code still works",
+        "Deploy code that writes both old and new",
+        "Backfill old rows in small batches",
+        "Switch reads to new; check results match",
+        "Contract: stop writing old, then drop it"
+      ],
+      "steps": [
+        {
+          "say": "Rename a column with zero downtime, using expand and contract. Step one, expand: add the new column.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: deploy code that writes to both columns.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: backfill existing rows in small batches, so you don't lock the table.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: switch reads to the new column and check the results match.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, contract: stop writing the old column, then drop it. Every step can roll back on its own.",
+          "reveal": 5
+        }
+      ],
+      "id": "s046"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 22 of 24",
+      "title": "Concepts: algorithms and data structures",
+      "bullets": [
+        "Bloom filter, HyperLogLog, count-min sketch",
+        "Merkle trees find differences; anti-entropy repairs",
+        "Geohash prefixes plus 8 neighbours; quadtree adapts",
+        "IDs: auto-increment, UUIDv4, UUIDv7, Snowflake",
+        "Top K: heap; inverted index with BM25 ranking",
+        "Skip list in Redis sorted sets; HNSW vector search"
+      ],
+      "caption": "Book: Module 22 · Algorithms and data structures",
+      "steps": [
+        {
+          "say": "Last of Part B, algorithms and data structures. These trade a little accuracy for big memory savings. A Bloom filter says definitely not, or probably yes. HyperLogLog counts distinct items. A count-min sketch estimates frequency and never undercounts.",
+          "reveal": 1
+        },
+        {
+          "say": "A Merkle tree is a tree of hashes. Replicas compare roots and walk down only branches that differ.",
+          "reveal": 2
+        },
+        {
+          "say": "Geohash: a shared prefix means nearby, so search the cell and its eight neighbours. A quadtree splits busy squares into four, adapting to density.",
+          "reveal": 3
+        },
+        {
+          "say": "I-Ds: UUID version four is random and scatters index inserts; version seven and Snowflake are time-ordered.",
+          "reveal": 4
+        },
+        {
+          "say": "Top K: a hash map and a min-heap of size K. An inverted index maps each term to its documents, ranked by T-F-I-D-F or B-M-twenty-five.",
+          "reveal": 5
+        },
+        {
+          "say": "Redis sorted sets use a skip list plus a hash table, perfect for leaderboards. Vector search uses approximate nearest neighbour indexes like H-N-S-W, trading a little recall for speed.",
+          "reveal": 6
+        }
+      ],
+      "id": "s047"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "A crawler's Bloom filter",
+      "bullets": [
+        "Billions of URLs: a full set won't fit in memory",
+        "New URL: check the Bloom filter",
+        "'Definitely not seen': crawl it, add it",
+        "'Probably seen': skip; rare false positives OK",
+        "Never a false negative: no page fetched twice by it"
+      ],
+      "steps": [
+        {
+          "say": "A crawler has seen billions of U-R-Ls. A full set won't fit in memory.",
+          "reveal": 1
+        },
+        {
+          "say": "So every new U-R-L is checked against a Bloom filter, a bit array with a few hash functions.",
+          "reveal": 2
+        },
+        {
+          "say": "If it says definitely not seen, crawl it and add it.",
+          "reveal": 3
+        },
+        {
+          "say": "If it says probably seen, skip it. Missing the odd page is an acceptable price.",
+          "reveal": 4
+        },
+        {
+          "say": "It never gives a false negative, so a seen U-R-L is never crawled twice.",
+          "reveal": 5
+        }
+      ],
+      "id": "s048"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 23 of 24",
+      "title": "Top 60 fundamentals questions",
+      "bullets": [
+        "Q1 to Q13: foundations and performance",
+        "Q14 to Q28: networking and communication",
+        "Q29 to Q40: data storage",
+        "Q41 to Q54: caching, async and consistency",
+        "Q55 to Q60: architecture, reliability, security",
+        "Goal: each answer in your own words, with a number"
+      ],
+      "caption": "Book: Module 0 · Top 60 interview questions",
+      "steps": [
+        {
+          "say": "Now the Top sixty from Module zero, the questions asked most in phone screens. One to thirteen are foundations, like Little's law and the nines.",
+          "reveal": 1
+        },
+        {
+          "say": "Fourteen to twenty-eight: networking, from D-N-S to load balancers and pagination.",
+          "reveal": 2
+        },
+        {
+          "say": "Twenty-nine to forty: data storage, from A-C-I-D to shard keys.",
+          "reveal": 3
+        },
+        {
+          "say": "Forty-one to fifty-four: caching, queues, idempotency, CAP, quorums and sagas.",
+          "reveal": 4
+        },
+        {
+          "say": "Fifty-five to sixty: architecture, reliability and security. Circuit breakers, jitter, token buckets, auth, R-P-O and R-T-O.",
+          "reveal": 5
+        },
+        {
+          "say": "The test: if you can answer all sixty in your own words, each with a number or an example, you have the fundamentals an interviewer expects.",
+          "reveal": 6
+        }
+      ],
+      "id": "s049"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Top 60: answers with numbers",
+      "table": {
+        "head": [
+          "Question",
+          "Answer with a number"
+        ],
+        "rows": [
+          [
+            "Four nines?",
+            "99.99% ≈ 52.6 min down a year"
+          ],
+          [
+            "Error budget at 99.9%?",
+            "0.1% ≈ 43 min a month"
+          ],
+          [
+            "Replication lag?",
+            "read own writes from the primary"
+          ],
+          [
+            "Sticky sessions?",
+            "uneven load; use a shared session store"
+          ],
+          [
+            "Backoff and jitter?",
+            "1, 2, 4, 8 s, randomised"
+          ],
+          [
+            "RPO 5 minutes?",
+            "replication never over 5 min behind"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Rapid fire. What does four nines mean? Ninety-nine point nine nine percent, about fifty-two and a half minutes down a year.",
+          "reveal": 1
+        },
+        {
+          "say": "Error budget at three nines? Point one percent of requests, about forty-three minutes a month.",
+          "reveal": 2
+        },
+        {
+          "say": "Replication lag? A user may not see their own comment. Read their recent writes from the primary.",
+          "reveal": 3
+        },
+        {
+          "say": "Sticky sessions? They work, but load is uneven and sessions die with the server. Prefer a shared session store.",
+          "reveal": 4
+        },
+        {
+          "say": "Why jitter? Backoff of one, two, four, eight seconds gives room, but clients that failed together retry together. Randomness spreads them.",
+          "reveal": 5
+        },
+        {
+          "say": "R-P-O of five minutes? Backups or replication must never fall more than five minutes behind.",
+          "reveal": 6
+        }
+      ],
+      "id": "s050"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 24 of 24",
+      "title": "Glossary A to E",
+      "table": {
+        "head": [
+          "Term",
+          "One line, with an example"
+        ],
+        "rows": [
+          [
+            "Anycast",
+            "one IP, many sites; nearest one answers"
+          ],
+          [
+            "Backpressure",
+            "slow consumer tells producers to slow"
+          ],
+          [
+            "Blast radius",
+            "how much a failure can hit; cells limit it"
+          ],
+          [
+            "CDC",
+            "stream DB changes from its log (Debezium)"
+          ],
+          [
+            "Denormalization",
+            "copy author name into posts: no join"
+          ],
+          [
+            "Error budget",
+            "1 − SLO: 99.9% leaves 0.1%"
+          ]
+        ]
+      },
+      "caption": "Book: Module 0 · Master A–Z glossary",
+      "steps": [
+        {
+          "say": "Finally, the A to Z glossary from Module zero. Anycast: many servers announce one I-P, and the network routes each user to the nearest. C-D-Ns use it.",
+          "reveal": 1
+        },
+        {
+          "say": "Backpressure: a slow consumer tells producers to slow down, instead of letting a queue grow until memory runs out.",
+          "reveal": 2
+        },
+        {
+          "say": "Blast radius: how much of the system one failure can hit. Cell-based architecture caps it.",
+          "reveal": 3
+        },
+        {
+          "say": "Change data capture: streaming a database's changes from its own log, for example with Debezium, to keep search and caches in sync.",
+          "reveal": 4
+        },
+        {
+          "say": "Denormalization: copying data, like the author's name into every post, so reads skip a join.",
+          "reveal": 5
+        },
+        {
+          "say": "Error budget: one minus the S-L-O. At three nines, that's point one percent of requests.",
+          "reveal": 6
+        }
+      ],
+      "id": "s051"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Glossary F to Q",
+      "table": {
+        "head": [
+          "Term",
+          "One line, with an example"
+        ],
+        "rows": [
+          [
+            "Fencing token",
+            "rising number; storage drops stale holders"
+          ],
+          [
+            "Hot key",
+            "celebrity profile overloads one cache node"
+          ],
+          [
+            "Idempotency key",
+            "client UUID so retries act once"
+          ],
+          [
+            "Lease",
+            "a lock that expires unless renewed"
+          ],
+          [
+            "PACELC",
+            "no partition? still latency vs consistency"
+          ],
+          [
+            "Quorum",
+            "N=3, W=2, R=2 overlap on the latest write"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "F to Q. Fencing token: a number that rises with every lock grant, so storage rejects a paused old holder.",
+          "reveal": 1
+        },
+        {
+          "say": "Hot key: one entry, like a celebrity profile, so popular it maxes out the node that holds it.",
+          "reveal": 2
+        },
+        {
+          "say": "Idempotency key: a client-supplied I-D so a retried request acts only once.",
+          "reveal": 3
+        },
+        {
+          "say": "Lease: a lock or role that expires unless renewed, so a crashed holder can't block forever.",
+          "reveal": 4
+        },
+        {
+          "say": "PACELC: even without a partition, you still trade latency against consistency.",
+          "reveal": 5
+        },
+        {
+          "say": "Quorum: the minimum replicas that must take part. Three, two, two means every read overlaps the latest write.",
+          "reveal": 6
+        }
+      ],
+      "id": "s052"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Glossary R to Z",
+      "table": {
+        "head": [
+          "Term",
+          "One line, with an example"
+        ],
+        "rows": [
+          [
+            "Read-your-writes",
+            "you always see your own new comment"
+          ],
+          [
+            "Saga",
+            "local steps plus compensations: refund"
+          ],
+          [
+            "Split brain",
+            "two leaders after a partition; majority fixes"
+          ],
+          [
+            "Tail latency",
+            "p99 and p999: the slowest requests"
+          ],
+          [
+            "Write skew",
+            "two on-call doctors both sign off"
+          ],
+          [
+            "Zero trust",
+            "verify every call, even inside the network"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "R to Z. Read-your-writes: you always see your own recent update, like the comment you just posted.",
+          "reveal": 1
+        },
+        {
+          "say": "Saga: a chain of local transactions with compensations, like a refund, instead of one distributed lock.",
+          "reveal": 2
+        },
+        {
+          "say": "Split brain: a partition leaves two nodes both acting as leader. A majority quorum and fencing prevent it.",
+          "reveal": 3
+        },
+        {
+          "say": "Tail latency: the slowest requests, p ninety-nine and p nine-nine-nine. Fan-out makes them common.",
+          "reveal": 4
+        },
+        {
+          "say": "Write skew: two transactions each read that two doctors are on call, each lets one go home, and together they leave nobody. Only serializable isolation stops it.",
+          "reveal": 5
+        },
+        {
+          "say": "Zero trust: never trust a call just because it's inside the network. Authenticate every request, for example with mutual T-L-S.",
+          "reveal": 6
+        }
+      ],
+      "id": "s053"
+    },
+    {
+      "layout": "recap",
+      "title": "Recap",
+      "bullets": [
+        "Drill: read, cover, say it aloud, compare, retry tomorrow",
+        "Design X: requirements, components, probes, scale",
+        "Ten categories, one skeleton line each",
+        "Concepts: 30 seconds, one number, one trade-off",
+        "Top 60 in your own words; the A to Z as flash cards",
+        "Next: a new series, Low-Level Design"
+      ],
+      "steps": [
+        {
+          "say": "Let's recap. Use the bank as a drill: read, cover, say it out loud, compare, and retry what you missed the next day.",
+          "reveal": 1
+        },
+        {
+          "say": "Every Design X answer runs in the same order: requirements, components, the probes, then scale.",
+          "reveal": 2
+        },
+        {
+          "say": "You now have one skeleton line for each prompt across ten categories, from building blocks to A-I platforms.",
+          "reveal": 3
+        },
+        {
+          "say": "Every concept answer is thirty seconds, with one number and one trade-off.",
+          "reveal": 4
+        },
+        {
+          "say": "Say the Top sixty in your own words, and treat the glossary as flash cards.",
+          "reveal": 5
+        },
+        {
+          "say": "And that's the end of the System Design Workshop. Next up is a new subject and a new series: Low-Level Design, where we zoom in from boxes and arrows to classes, objects and design patterns. See you there.",
+          "reveal": 6
+        }
+      ],
+      "id": "s054"
+    }
+  ]
+}

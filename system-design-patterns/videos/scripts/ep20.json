@@ -1,0 +1,1622 @@
+{
+  "series": "System Design Workshop",
+  "episode": 20,
+  "title": "Case Studies: Building Blocks",
+  "subtitle": "ID generator, URL shortener, key-value store, message queue, crawler, autocomplete",
+  "scenes": [
+    {
+      "layout": "title",
+      "title": "Case Studies: Building Blocks",
+      "subtitle": "ID generator, URL shortener, key-value store, message queue, crawler, autocomplete",
+      "steps": [
+        {
+          "say": "Welcome to episode twenty of the System Design Workshop: Case Studies, Building Blocks.",
+          "reveal": 0
+        },
+        {
+          "say": "Last time we composed big products. Today we go one level down, to six systems that other systems are built on: an ID generator, a URL shortener, a key-value store, a message queue, a web crawler and search autocomplete.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll be able to design each one end to end, with real numbers, and name the two or three patterns each one really tests.",
+          "reveal": 0
+        },
+        {
+          "say": "Keep the module thirteen notes PDF open beside the video. When I say pause and think, pause, and answer before I do.",
+          "reveal": 0
+        }
+      ],
+      "id": "s001"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 1 of 9",
+      "title": "The case format",
+      "steps": [
+        {
+          "say": "Think of today like a kitchen. Last episode cooked full meals. Today we make the stock, the sauce and the bread. Humble, but every meal depends on them.",
+          "reveal": 0
+        },
+        {
+          "say": "No new patterns today. Every design reuses lessons you already know. What's new is the format we walk each case through.",
+          "reveal": 0
+        }
+      ],
+      "id": "s002",
+      "caption": "Book: Module 13 · Module Introduction"
+    },
+    {
+      "layout": "bullets",
+      "title": "Nine stages for every case",
+      "bullets": [
+        "1. Requirements and numbers",
+        "2. Five questions: flow, storage, speed, failure, growth",
+        "3. API and data model",
+        "4. Architecture, each pattern named",
+        "5. Deep dives: the 2 to 4 hard parts",
+        "6. Failure walk, 7. trade-offs, 8. follow-ups, 9. manifest"
+      ],
+      "steps": [
+        {
+          "say": "Stage one, requirements and numbers. For a URL shortener: create and redirect links, then estimate. A hundred million new links a day is about a thousand writes a second.",
+          "reveal": 1
+        },
+        {
+          "say": "Stage two, the five questions. Flow: who waits? Storage: what's the source of truth? Speed: what's cached? Failure: what breaks? Growth: what grows fastest? For the shortener, redirects grow with virality.",
+          "reveal": 2
+        },
+        {
+          "say": "Stage three, the API and data model. Interviewers judge these prompts on them, so write the endpoint and the table. For example, GET slash code returns a redirect, and the links table is keyed by code.",
+          "reveal": 3
+        },
+        {
+          "say": "Stage four, draw the architecture and label every box with its pattern. Cache-aside here, a queue there, sharding by code.",
+          "reveal": 4
+        },
+        {
+          "say": "Stage five, deep dives. Pick the two to four truly hard sub-problems. For the shortener, that's code generation and the redirect status.",
+          "reveal": 5
+        },
+        {
+          "say": "Then walk failures one dependency at a time, state trade-offs with their costs, answer follow-ups, and finish with a pattern manifest and a one-line answer. Same nine stages, six times.",
+          "reveal": 6
+        }
+      ],
+      "id": "s003"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 2 of 9",
+      "title": "Case 1: Unique ID generator",
+      "steps": [
+        {
+          "say": "Here's the hook. Hundreds of servers need IDs for new rows, messages and events. Every ID must be unique, fit in sixty-four bits, and sort roughly by creation time. How, with no central counter?",
+          "reveal": 0
+        }
+      ],
+      "id": "s004",
+      "caption": "Book: Module 13 · Case 1 — Design a Unique ID Generator"
+    },
+    {
+      "layout": "bullets",
+      "title": "Why it's hard",
+      "bullets": [
+        "One database counter: perfect IDs, one bottleneck",
+        "Random UUIDs: no coordination, but 128 bits, unsorted",
+        "Goal: nothing shared on the hot path, still time-sortable",
+        "500 servers, peak 2 million IDs a second",
+        "Busiest server: 20,000 a second = 20 per millisecond"
+      ],
+      "steps": [
+        {
+          "say": "A single database counter gives perfect IDs, but every write in the company waits on one machine.",
+          "reveal": 1
+        },
+        {
+          "say": "Random IDs, like a U-U-I-D, a universally unique identifier, need no coordination. But they're a hundred and twenty-eight bits, and random order scatters inserts across an index.",
+          "reveal": 2
+        },
+        {
+          "say": "So the goal is no coordinator on the hot path, meaning the code that runs on every request, yet IDs that still sort by time.",
+          "reveal": 3
+        },
+        {
+          "say": "Our numbers: five hundred application servers, a company-wide peak of two million IDs a second.",
+          "reveal": 4
+        },
+        {
+          "say": "The busiest server needs twenty thousand a second. That's just twenty per millisecond. Keep that number, we'll use it.",
+          "reveal": 5
+        }
+      ],
+      "id": "s005"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: the 63-bit Snowflake layout",
+      "table": {
+        "head": [
+          "Bits",
+          "Field",
+          "Ceiling it sets"
+        ],
+        "rows": [
+          [
+            "1",
+            "sign, always 0",
+            "ID stays positive"
+          ],
+          [
+            "41",
+            "ms since a custom epoch",
+            "2^41 ms = about 69.7 years"
+          ],
+          [
+            "10",
+            "worker ID",
+            "1,024 workers"
+          ],
+          [
+            "12",
+            "sequence within one ms",
+            "4,096 IDs per ms per worker"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Twitter published this layout for Snowflake in twenty ten, and it's still the default. First, one sign bit, always zero, so the number stays positive.",
+          "reveal": 1
+        },
+        {
+          "say": "Next, forty-one bits of milliseconds since a custom epoch, a start date you choose, say January first twenty twenty-four. Two to the forty-one milliseconds is about sixty-nine point seven years.",
+          "reveal": 2
+        },
+        {
+          "say": "Then ten bits of worker ID: which generator process issued it. That's one thousand and twenty-four workers. With five hundred servers, room to double.",
+          "reveal": 3
+        },
+        {
+          "say": "Last, twelve bits of sequence, a counter inside one millisecond. Four thousand and ninety-six IDs per millisecond per worker. Our busiest server needs twenty. Lots of headroom, so you could even move two bits from sequence to worker if you expect huge growth.",
+          "reveal": 4
+        }
+      ],
+      "id": "s006"
+    },
+    {
+      "layout": "diagram",
+      "title": "Generated in-process, leased worker IDs",
+      "mermaid": "flowchart LR\n    App[\"Service code\"] -->|\"next_id()\"| Gen[\"ID library: time + worker + seq\"]\n    Gen -.->|\"lease worker ID, renew every 10 s\"| Coord[\"etcd / ZooKeeper\"]\n    NTP[\"NTP time source\"] -.->|\"slews clock\"| Gen\n    Gen --> DB[(\"Databases, queues, logs\")]",
+      "caption": "The only coordination: leasing a worker number at start-up",
+      "steps": [
+        {
+          "say": "The ID library lives inside every service process, so next ID is just a function call. Nanoseconds, no network hop.",
+          "reveal": 0
+        },
+        {
+          "say": "At start-up it leases one of the thousand and twenty-four worker numbers from a coordination service, like etcd or ZooKeeper, and renews in the background.",
+          "reveal": 0
+        },
+        {
+          "say": "N-T-P, the Network Time Protocol, keeps the clock near real time. Compare the options: a ticket server costs a network hop per I-D, range leasing a hop per block, U-U-I-D version seven is time-ordered but still sixteen bytes. Our layout wins because coordination happens once per process start.",
+          "reveal": 0
+        }
+      ],
+      "id": "s007"
+    },
+    {
+      "layout": "bullets",
+      "title": "Danger 1: the clock goes backwards",
+      "bullets": [
+        "NTP correction or a VM migration jumps the clock back",
+        "Rule 1: remember the last timestamp issued",
+        "Rule 2: behind by a few ms? Wait",
+        "Rule 3: behind by more, say 100 ms? Refuse and alert",
+        "Rule 4: configure NTP to slew, not step"
+      ],
+      "steps": [
+        {
+          "say": "Imagine the wall clock jumps back three milliseconds after an N-T-P correction, or a virtual machine migrates hosts. A trusting generator re-issues timestamps it already used. Duplicates, silently.",
+          "reveal": 1
+        },
+        {
+          "say": "Rule one, remember the last timestamp you issued from.",
+          "reveal": 2
+        },
+        {
+          "say": "Rule two, if the clock is behind by a few milliseconds, just wait until it catches up.",
+          "reveal": 3
+        },
+        {
+          "say": "Rule three, if it's behind by more, say a hundred milliseconds, refuse and alert. The simulation prints: clock moved back three milliseconds, refusing to issue IDs. A short visible failure beats invisible duplicates.",
+          "reveal": 4
+        },
+        {
+          "say": "Rule four, configure N-T-P to slew, meaning adjust gradually, rather than step the clock in one jump.",
+          "reveal": 5
+        }
+      ],
+      "id": "s008"
+    },
+    {
+      "layout": "bullets",
+      "title": "Dangers 2 and 3: workers and sequences",
+      "bullets": [
+        "Two processes as worker 17 = identical IDs",
+        "Lease a free number: TTL 30 s, renew every 10 s",
+        "GC pause past the lease? Check expiry, stop issuing",
+        "Last net: database unique constraint on the key",
+        "Over 4,096 in one ms? Wait for the next ms, never wrap"
+      ],
+      "steps": [
+        {
+          "say": "Danger two: if two live processes both think they're worker seventeen, they produce identical IDs in the same millisecond. Hard-coded numbers break once you autoscale.",
+          "reveal": 1
+        },
+        {
+          "say": "So lease a free number with a time to live, say thirty seconds, and renew every ten.",
+          "reveal": 2
+        },
+        {
+          "say": "A process frozen by a long garbage-collection pause may lose its lease to another. So the generator checks lease expiry before issuing, and stops if it might have lapsed.",
+          "reveal": 3
+        },
+        {
+          "say": "And the last safety net is the database unique constraint on the primary key. It turns a silent duplicate into a loud insert error.",
+          "reveal": 4
+        },
+        {
+          "say": "Danger three, sequence exhaustion. In the simulation, three workers issue five thousand IDs each in one burst. Worker one runs out of its four thousand and ninety-six and waits one millisecond. All fifteen thousand IDs come out unique and sorted. Never wrap the counter silently.",
+          "reveal": 5
+        }
+      ],
+      "id": "s009"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Pause and think: why not put Snowflake IDs in public URLs?",
+      "bullets": [
+        "A. They're too long",
+        "B. They leak creation time and volume",
+        "C. They aren't unique across regions"
+      ],
+      "steps": [
+        {
+          "say": "Snowflake IDs are time-ordered. What does that tell an outsider? Pause and think.",
+          "reveal": 0
+        }
+      ],
+      "id": "s010"
+    },
+    {
+      "layout": "bullets",
+      "title": "Answer: they leak time and volume",
+      "bullets": [
+        "Answer: B. Time-ordered IDs reveal when and how many",
+        "They're also roughly guessable",
+        "Interview line: 41 + 10 + 12 bits, lease workers, guard clocks"
+      ],
+      "steps": [
+        {
+          "say": "The answer is B. Anyone can decode when a record was created, and by diffing two IDs, roughly how busy you are.",
+          "reveal": 1
+        },
+        {
+          "say": "They're also roughly guessable, so never use sequential IDs for password-reset links. Public IDs are often a separate random token.",
+          "reveal": 2
+        },
+        {
+          "say": "In the interview, say: generate IDs in-process as timestamp plus worker plus sequence. Forty-one bits give seventy years, ten bits give a thousand workers, twelve give four thousand per millisecond. Backwards clocks and duplicate workers are handled by waiting, refusing, and a unique constraint.",
+          "reveal": 3
+        }
+      ],
+      "id": "s011"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 3 of 9",
+      "title": "Case 2: URL shortener",
+      "steps": [
+        {
+          "say": "A user submits a long URL and gets back something like sho dot r-t slash a-Z-3-k-9-Q-x. Opening it redirects. The design is small, which is why interviewers use it to watch how you think.",
+          "reveal": 0
+        }
+      ],
+      "id": "s012",
+      "caption": "Book: Module 13 · Case 2 — Design a URL Shortener"
+    },
+    {
+      "layout": "bullets",
+      "title": "Example: sizing the shortener",
+      "bullets": [
+        "100M links/day = about 1,000 writes/s, 5,000 peak",
+        "Reads 10 to 1: about 10,000/s, 50,000 peak",
+        "10 years = 365 billion links",
+        "62^7 = 3.5 trillion, so 7 characters",
+        "500 B per row: about 180 TB over 10 years",
+        "Hot 20% of links: about 10 GB of cache"
+      ],
+      "steps": [
+        {
+          "say": "A hundred million new links a day, divided by about a hundred thousand seconds in a day, is about a thousand writes a second. Plan for five thousand at peak.",
+          "reveal": 1
+        },
+        {
+          "say": "Reads outnumber writes ten to one, so about ten thousand redirects a second, fifty thousand at peak.",
+          "reveal": 2
+        },
+        {
+          "say": "Over ten years that's three hundred and sixty-five billion links.",
+          "reveal": 3
+        },
+        {
+          "say": "Base sixty-two means digits, lower-case and upper-case letters. Sixty-two to the seventh is about three point five trillion. Seven characters gives about ten times headroom.",
+          "reveal": 4
+        },
+        {
+          "say": "At about five hundred bytes per row with indexes, that's fifty gigabytes a day, about a hundred and eighty terabytes over ten years. Too big for one machine, so we shard by code.",
+          "reveal": 5
+        },
+        {
+          "say": "Reads are skewed. If the hot twenty percent of links take eighty percent of clicks, that's twenty million links times five hundred bytes, about ten gigabytes. A few cache nodes.",
+          "reveal": 6
+        }
+      ],
+      "id": "s013"
+    },
+    {
+      "layout": "diagram",
+      "title": "The shortener, annotated",
+      "mermaid": "flowchart LR\n    U[\"Browser\"] --> CDN[\"CDN edge cache\"]\n    CDN --> R[\"Redirect service\"]\n    R -->|\"1. get code\"| C[(\"Redis cache\")]\n    R -->|\"2. on miss\"| KV[(\"Links store, sharded by code\")]\n    R -->|\"click event\"| Q[\"Queue\"] --> A[\"Analytics\"]\n    W[\"Create service\"] -->|\"lease ID block\"| K[\"Key range service\"]\n    W -->|\"conditional insert\"| KV",
+      "caption": "Tiny write path, huge cacheable read path",
+      "steps": [
+        {
+          "say": "Follow a redirect. It first hits the C-D-N, the content delivery network, where popular links are cached briefly.",
+          "reveal": 0
+        },
+        {
+          "say": "On a miss, a stateless redirect service checks Redis, cache-aside style, then the links store sharded by code, and fills the cache.",
+          "reveal": 0
+        },
+        {
+          "say": "It drops a small click event on a queue and returns. Analytics never sits on the redirect's critical path.",
+          "reveal": 0
+        },
+        {
+          "say": "On the create side, the service validates the URL, gets a code, and writes with a conditional insert, only if the code doesn't exist. Collisions become errors, not silent overwrites.",
+          "reveal": 0
+        }
+      ],
+      "id": "s014"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: three ways to make the code",
+      "table": {
+        "head": [
+          "Option",
+          "How",
+          "Catch"
+        ],
+        "rows": [
+          [
+            "Hash and truncate",
+            "SHA-256 of URL, keep 7 chars",
+            "Collisions grow; retry with salt"
+          ],
+          [
+            "Counter in base 62",
+            "Leased block of 10,000 numbers",
+            "Guessable unless scrambled"
+          ],
+          [
+            "Pre-generated pool",
+            "Background job makes random codes",
+            "A pool to manage"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Option one, hash and truncate. Hash the long URL and keep seven characters. No coordination. But collisions grow with the table, the birthday effect. After a billion links, the next insert collides about one time in three thousand five hundred. So every insert must be conditional, with retries.",
+          "reveal": 1
+        },
+        {
+          "say": "Option two, base sixty-two of a unique number. A hundred and twenty-five million becomes 8-s-u-d-2. No collisions ever. Each create server leases a block of ten thousand numbers, so it calls the key service once per ten thousand links. But 8-s-u-d-2, 8-s-u-d-3 are guessable. Fix: pass the number through a reversible scramble first, still unique, but neighbours look unrelated.",
+          "reveal": 2
+        },
+        {
+          "say": "Option three, a pre-generated pool of random codes that servers take in batches. Collision-free at use time, at the cost of running a pool. The pick: option two, counter plus scramble plus base sixty-two. A crashed server only wastes the rest of its block.",
+          "reveal": 3
+        }
+      ],
+      "id": "s015"
+    },
+    {
+      "layout": "twocol",
+      "title": "301 versus 302",
+      "left": {
+        "heading": "301 Moved Permanently",
+        "bullets": [
+          "Browsers and proxies cache it forever",
+          "Less load on you",
+          "No analytics, can't disable a bad link"
+        ]
+      },
+      "right": {
+        "heading": "302 Found",
+        "bullets": [
+          "Every click reaches your edge",
+          "Analytics and full control",
+          "Middle ground: 302 + CDN max-age=300"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Three oh one means moved permanently. Browsers and proxies may cache it indefinitely.",
+          "reveal": 1
+        },
+        {
+          "say": "So repeat clicks never reach you. Less load.",
+          "reveal": 2
+        },
+        {
+          "say": "But you lose click analytics, and you can't expire or disable the link for those users. That matters when a link turns malicious.",
+          "reveal": 3
+        },
+        {
+          "say": "Three oh two means found, a temporary redirect. Clients ask every time, so every click reaches your edge.",
+          "reveal": 4
+        },
+        {
+          "say": "You get accurate analytics and full control. Most commercial shorteners use it.",
+          "reveal": 5
+        },
+        {
+          "say": "The middle ground: three oh two plus a CDN cache of three hundred seconds. The edge absorbs spikes, and you can still kill a link within five minutes.",
+          "reveal": 6
+        }
+      ],
+      "id": "s016"
+    },
+    {
+      "layout": "bullets",
+      "title": "Hot links, cold misses, abuse, expiry",
+      "bullets": [
+        "Hot: 50,000 clicks in a minute, CDN and Redis absorb",
+        "Single-flight on a miss protects the shard",
+        "Cold: scanners hit random codes, cache 'not found'",
+        "Abuse: safe-browsing check at create and later",
+        "Expiry: lazy 410 at read time, slow sweeper"
+      ],
+      "steps": [
+        {
+          "say": "Imagine a celebrity shares a link. Fifty thousand clicks in the first minute. The CDN and Redis absorb nearly all of it.",
+          "reveal": 1
+        },
+        {
+          "say": "When the cache entry expires, thousands of requests miss at once. Single-flight, letting just one request fetch from the store while the rest wait, keeps them off one shard. That's cache stampede prevention.",
+          "reveal": 2
+        },
+        {
+          "say": "The opposite problem: scanners hitting random codes that all miss. Cache the negative result, not found, briefly, and rate-limit by client I-P.",
+          "reveal": 3
+        },
+        {
+          "say": "Abuse: check new URLs against a malicious-URL list, like Google Safe Browsing, at creation and again periodically, because a harmless page can turn bad. Disabling sets the status, clears the cache, and returns four ten, gone.",
+          "reveal": 4
+        },
+        {
+          "say": "Expiry is lazy: at read time, if it's expired, return four ten. A slow sweeper deletes old rows later. And don't reuse expired codes soon, old links live on in emails.",
+          "reveal": 5
+        }
+      ],
+      "id": "s017"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 4 of 9",
+      "title": "Variant: Pastebin",
+      "steps": [
+        {
+          "say": "A common follow-up: now store the text itself. Users paste code or logs and get a short link. Code generation and caching carry over. What changes is the value: up to several megabytes instead of a hundred bytes.",
+          "reveal": 0
+        }
+      ],
+      "id": "s018",
+      "caption": "Book: Module 13 · Variant: Pastebin"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Example: split metadata from content",
+      "bullets": [
+        "10M pastes x 10 KB = 100 GB/day of text",
+        "Metadata row in the KV store: code, owner, size, key",
+        "Text in object storage, like S3",
+        "Write the object first, then the row",
+        "Cache only small pastes, under 64 KB",
+        "Cap size at the edge: 413; expire at read: 410"
+      ],
+      "steps": [
+        {
+          "say": "Ten million pastes a day at ten kilobytes each is a hundred gigabytes a day of text, versus about five gigabytes of metadata. Bytes, not requests, set the bill.",
+          "reveal": 1
+        },
+        {
+          "say": "So keep the small row, code, owner, size, content hash, expiry and an object key, in the code-sharded key-value store.",
+          "reveal": 2
+        },
+        {
+          "say": "Put the text itself in object storage, cheap durable blobs by key. Big values in the database would bloat replication, backups and caches.",
+          "reveal": 3
+        },
+        {
+          "say": "Order matters. Write the object first, then the row, so a row never points at a missing object. A crash in between leaves an orphan object, which a cleanup job removes.",
+          "reveal": 4
+        },
+        {
+          "say": "Cache only small hot pastes in Redis. One ten-megabyte value would evict hundreds of small entries.",
+          "reveal": 5
+        },
+        {
+          "say": "Reject oversized uploads at the edge with four thirteen, content too large. Enforce expiry at read time with four ten. Burn after reading needs an atomic update so only one reader wins.",
+          "reveal": 6
+        }
+      ],
+      "id": "s019"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 5 of 9",
+      "title": "Case 3: Distributed key-value store",
+      "steps": [
+        {
+          "say": "Think Amazon's Dynamo or Cassandra. Put and get small values across dozens of machines, and stay writable while machines fail. A shopping cart that rejects add to cart loses money.",
+          "reveal": 0
+        }
+      ],
+      "id": "s020",
+      "caption": "Book: Module 13 · Case 3 — Distributed Key-Value Store"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Example: sizing the store",
+      "bullets": [
+        "10 billion keys x 1 KB = 10 TB, x3 replicas = 30 TB",
+        "Peak 1M ops/s: 70% reads, 30% writes",
+        "Writes: 300K x 3 = 900K replica writes/s",
+        "Reads: 700K x 2 = 1.4M replica reads/s",
+        "2.3M / 40K per node = about 60 nodes",
+        "500 GB each: throughput sets the size, not disk"
+      ],
+      "steps": [
+        {
+          "say": "Ten billion keys at one kilobyte is ten terabytes. Three replicas makes thirty.",
+          "reveal": 1
+        },
+        {
+          "say": "Peak is one million operations a second, seventy percent reads.",
+          "reveal": 2
+        },
+        {
+          "say": "Each write touches three replicas: three hundred thousand times three is nine hundred thousand replica writes a second.",
+          "reveal": 3
+        },
+        {
+          "say": "Each quorum read asks two replicas: seven hundred thousand times two is one point four million.",
+          "reveal": 4
+        },
+        {
+          "say": "That's about two point three million replica operations a second. One fast N-V-M-e node does about forty thousand, so we need about sixty nodes.",
+          "reveal": 5
+        },
+        {
+          "say": "Thirty terabytes over sixty nodes is just five hundred gigabytes each. Throughput, not disk, sets the node count.",
+          "reveal": 6
+        }
+      ],
+      "id": "s021"
+    },
+    {
+      "layout": "diagram",
+      "title": "One write through the store",
+      "mermaid": "flowchart LR\n    Cl[\"Client\"] --> Co[\"Coordinator = any node\"]\n    Co --> A[\"Node A\"]\n    Co --> B[\"Node B\"]\n    Co --> Cn[\"Node C\"]\n    Co -.->|\"C down: write + hint\"| D[\"Node D stand-in\"]\n    D -.->|\"hinted handoff\"| Cn\n    A <-.->|\"gossip\"| B",
+      "caption": "Ring placement, quorum, hints, gossip",
+      "steps": [
+        {
+          "say": "The client sends put to any node. That node becomes the coordinator.",
+          "reveal": 0
+        },
+        {
+          "say": "It hashes the key onto a ring and walks clockwise to the first three distinct physical machines. That's the key's preference list.",
+          "reveal": 0
+        },
+        {
+          "say": "It writes to all three and replies once two acknowledge.",
+          "reveal": 0
+        },
+        {
+          "say": "If node C is unreachable, C's copy goes to the next healthy node, D, with a hint saying this belongs to C. D hands it back when C returns. Meanwhile, nodes gossip about who's alive.",
+          "reveal": 0
+        }
+      ],
+      "id": "s022"
+    },
+    {
+      "layout": "bullets",
+      "title": "Ring partitioning with virtual nodes",
+      "bullets": [
+        "1 position per node: busiest has 33,828 keys, idlest 66",
+        "256 vnodes per node: spread within about 5%",
+        "Add an 11th node: 9.4% of keys move (ideal 9.1%)",
+        "Same change with hash mod N: 90.7% move",
+        "Replicas = next 3 distinct machines clockwise"
+      ],
+      "steps": [
+        {
+          "say": "Consistent hashing places nodes and keys on the same ring. With one position per node, a ten-node ring is wildly uneven. In the simulation with a hundred thousand keys, one node got thirty-three thousand keys and another just sixty-six.",
+          "reveal": 1
+        },
+        {
+          "say": "Give each machine two hundred and fifty-six virtual nodes, many small positions, and the spread drops to about five percent.",
+          "reveal": 2
+        },
+        {
+          "say": "Add an eleventh node and only nine point four percent of keys move, all to the new node. Ideal is one eleventh, nine point one.",
+          "reveal": 3
+        },
+        {
+          "say": "Compare plain hash mod N: ninety point seven percent of keys move. That's why we use a ring.",
+          "reveal": 4
+        },
+        {
+          "say": "A key's replicas are the next three distinct machines clockwise, skipping extra virtual nodes of a machine already chosen, and preferring different racks.",
+          "reveal": 5
+        }
+      ],
+      "id": "s023"
+    },
+    {
+      "layout": "bullets",
+      "title": "Quorums: N, W, R",
+      "bullets": [
+        "N = 3 copies; W acks per write; R replies per read",
+        "W + R > N, like 2 + 2 > 3: read and write sets overlap",
+        "W = 1, R = 1: fast but may be stale",
+        "Sloppy quorum: write to any 3 healthy nodes + hints",
+        "Price: available, not linearizable"
+      ],
+      "steps": [
+        {
+          "say": "N is how many copies, three. W is how many acknowledgements a write waits for. R is how many replies a read waits for.",
+          "reveal": 1
+        },
+        {
+          "say": "If W plus R is greater than N, say two plus two is greater than three, every read set overlaps every write set. So a read normally sees the latest acknowledged write.",
+          "reveal": 2
+        },
+        {
+          "say": "W of one and R of one is faster but may read stale data. W of three is safest, but one slow node blocks every write.",
+          "reveal": 3
+        },
+        {
+          "say": "To stay always writable when two home nodes are down, a sloppy quorum accepts the write on any three healthy nodes further round the ring, with hints. Hinted handoff delivers them home later.",
+          "reveal": 4
+        },
+        {
+          "say": "The price: during that window, overlap no longer guarantees a fresh read. Say it plainly. This store chooses availability over linearizability, which means every read seeing the latest write as if there were one copy.",
+          "reveal": 5
+        }
+      ],
+      "id": "s024"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Example: two carts, one key",
+      "bullets": [
+        "Partition: Alice adds milk via node A, Bob adds eggs via B",
+        "Last write wins: higher timestamp kept, other lost",
+        "Version vectors: one counter per replica",
+        "Concurrent? Keep both as siblings",
+        "Client merges: cart = milk + eggs, writes back"
+      ],
+      "steps": [
+        {
+          "say": "Imagine a network partition. One shared cart key. Alice adds milk through node A. Bob adds eggs through node B.",
+          "reveal": 1
+        },
+        {
+          "say": "Last write wins keeps whichever has the higher timestamp and silently drops the other. It's simple, and Cassandra's default, but clock skew makes later unreliable. Eggs vanish.",
+          "reveal": 2
+        },
+        {
+          "say": "Version vectors carry one counter per replica in the context. They tell B replaced A apart from A and B were concurrent.",
+          "reveal": 3
+        },
+        {
+          "say": "Here they were concurrent, so the store keeps both values as siblings and returns both on the next read.",
+          "reveal": 4
+        },
+        {
+          "say": "The client merges, the union of items, milk and eggs, and writes back with the combined context. Use last write wins only where losing an overwrite is fine, like a profile photo.",
+          "reveal": 5
+        }
+      ],
+      "id": "s025"
+    },
+    {
+      "layout": "bullets",
+      "title": "Failure detection and repair",
+      "bullets": [
+        "Gossip every second: node plus heartbeat counter",
+        "Counter stuck 10 s: node suspected down",
+        "Hinted handoff covers short outages",
+        "Read repair: fix a stale replica seen during a read",
+        "Merkle trees: compare roots, descend into differences"
+      ],
+      "steps": [
+        {
+          "say": "There's no master saying who's alive. Every second, each node gossips with a random peer, swapping each node's heartbeat counter. News spreads like a rumour.",
+          "reveal": 1
+        },
+        {
+          "say": "If a node's counter stops rising for, say, ten seconds, it's suspected down.",
+          "reveal": 2
+        },
+        {
+          "say": "For short outages, hinted handoff covers it.",
+          "reveal": 3
+        },
+        {
+          "say": "Longer outages leave replicas out of sync. Read repair fixes a key when a read notices a stale replica.",
+          "reveal": 4
+        },
+        {
+          "say": "Anti-entropy fixes the rest. Each replica builds a Merkle tree, where each parent hashes its children. Two replicas compare roots, and only descend into subtrees that differ. A few kilobytes of hashes find a handful of stale keys among millions.",
+          "reveal": 5
+        }
+      ],
+      "id": "s026"
+    },
+    {
+      "layout": "bullets",
+      "title": "Inside one node: write and read path",
+      "bullets": [
+        "Write: commit log, then memtable, then ack",
+        "At about 64 MB, flush memtable to an SSTable",
+        "Read: memtable, then SSTables newest first",
+        "Bloom filter per file skips most files",
+        "Compaction merges files, drops old values",
+        "Tombstones kept 10 days, or deletes resurrect"
+      ],
+      "steps": [
+        {
+          "say": "Inside each node is an L-S-M tree, a log-structured merge tree. A write appends to the commit log first, for crash safety, inserts into the memtable, a sorted in-memory map, and acknowledges.",
+          "reveal": 1
+        },
+        {
+          "say": "When the memtable reaches about sixty-four megabytes, it's flushed as a new immutable sorted file, an S-S-Table.",
+          "reveal": 2
+        },
+        {
+          "say": "A read checks the memtable, then S-S-Tables from newest to oldest.",
+          "reveal": 3
+        },
+        {
+          "say": "Each file has a Bloom filter that says definitely not here or probably here, so a read usually touches one or two files.",
+          "reveal": 4
+        },
+        {
+          "say": "In the background, compaction merges files and drops overwritten values.",
+          "reveal": 5
+        },
+        {
+          "say": "Deletes are tombstones, markers that replicate. They're kept for a grace period, Cassandra's default is ten days. If a dead replica is away longer than that, it can resurrect the deleted value.",
+          "reveal": 6
+        }
+      ],
+      "id": "s027"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Pause and think: does W + R > N give linearizability?",
+      "bullets": [
+        "A. Yes, always",
+        "B. Not with sloppy quorums, LWW and partial failures",
+        "C. Only if N is odd"
+      ],
+      "steps": [
+        {
+          "say": "With W of two and R of two, can you promise every read sees the latest write? Pause and think.",
+          "reveal": 0
+        }
+      ],
+      "id": "s028"
+    },
+    {
+      "layout": "bullets",
+      "title": "Answer: no, and that's the trap",
+      "bullets": [
+        "Answer: B. Overlap is normal-case, not a guarantee",
+        "Strong consistency: a leader per partition + Raft",
+        "Interview line: ring, quorums, hints, vectors, Merkle"
+      ],
+      "steps": [
+        {
+          "say": "The answer is B. Sloppy quorums put writes on nodes the reader doesn't ask, and clock-based last write wins can drop writes. Claiming W plus R greater than N alone gives linearizability is a classic trap.",
+          "reveal": 1
+        },
+        {
+          "say": "If you need strong consistency, use one leader per partition replicated by consensus, Raft or Paxos, like etcd or Spanner. You lose writes during elections.",
+          "reveal": 2
+        },
+        {
+          "say": "In the interview, say: keys on a ring with virtual nodes, three copies, quorums of two, sloppy quorum and hinted handoff for availability, version vectors for conflicts, gossip for liveness, Merkle trees for repair, and an L-S-M tree in each node.",
+          "reveal": 3
+        }
+      ],
+      "id": "s029"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 6 of 9",
+      "title": "Case 4: Distributed message queue",
+      "steps": [
+        {
+          "say": "Now a Kafka-like log. Producers publish to topics. Many consumer groups read in order, at their own pace, and can replay. Millions of messages a second, and no loss of acknowledged messages.",
+          "reveal": 0
+        }
+      ],
+      "id": "s030",
+      "caption": "Book: Module 13 · Case 4 — Distributed Message Queue"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Example: sizing the log",
+      "bullets": [
+        "Peak 1M msgs/s x 1 KB = 1 GB/s in",
+        "Average 500 MB/s x 7 days = about 300 TB",
+        "Replication factor 3: about 900 TB",
+        "33 TB usable per broker: about 30 brokers",
+        "600 MB/s topic at 10 MB/s per consumer: 60+ partitions",
+        "Choose 128 partitions for headroom"
+      ],
+      "steps": [
+        {
+          "say": "Peak is one million messages a second at one kilobyte. That's one gigabyte a second coming in.",
+          "reveal": 1
+        },
+        {
+          "say": "Average is five hundred megabytes a second. Keep seven days, about six hundred thousand seconds, and that's about three hundred terabytes.",
+          "reveal": 2
+        },
+        {
+          "say": "Three copies of everything makes about nine hundred terabytes.",
+          "reveal": 3
+        },
+        {
+          "say": "A broker, meaning a server, with twelve four-terabyte disks kept under seventy percent holds about thirty-three terabytes. So about thirty brokers. Disk space, not bandwidth, sets the count.",
+          "reveal": 4
+        },
+        {
+          "say": "Partitions are the unit of parallelism. If one consumer handles ten megabytes a second, a six-hundred-megabyte topic needs at least sixty partitions.",
+          "reveal": 5
+        },
+        {
+          "say": "Pick a hundred and twenty-eight for headroom, because reducing partitions later is hard.",
+          "reveal": 6
+        }
+      ],
+      "id": "s031"
+    },
+    {
+      "layout": "diagram",
+      "title": "Partitions, leaders, followers, groups",
+      "mermaid": "flowchart TB\n    P1[\"Producer\"] -->|\"hash key to partition\"| L0[\"Broker 1: leader of P0\"]\n    Ctl[\"Controller quorum (Raft)\"] -.->|\"picks leaders\"| L0\n    L0 -->|\"followers fetch\"| F0[\"Followers on brokers 2, 3\"]\n    L0 -->|\"own offsets\"| G[\"Groups: billing, search\"]",
+      "caption": "Each partition: one leader, in-sync followers, many groups",
+      "steps": [
+        {
+          "say": "A producer hashes the key to pick a partition, so all messages for one key land in one partition and stay in order.",
+          "reveal": 0
+        },
+        {
+          "say": "Each partition has one leader broker taking writes. Followers copy the log by fetching, just like consumers.",
+          "reveal": 0
+        },
+        {
+          "say": "A small controller quorum, running Raft, picks leaders and tracks which followers are caught up.",
+          "reveal": 0
+        },
+        {
+          "say": "Within the billing group, each partition goes to exactly one consumer. A different group, like search, reads the same partition with its own offset.",
+          "reveal": 0
+        }
+      ],
+      "id": "s032"
+    },
+    {
+      "layout": "bullets",
+      "title": "Why an append-only log is fast",
+      "bullets": [
+        "Sequential appends: hundreds of MB/s, even on HDDs",
+        "Recent data sits in the OS page cache",
+        "Zero-copy: file bytes straight to the socket",
+        "Batching + compression: 3 to 5x less I/O",
+        "Position = one offset integer per partition"
+      ],
+      "steps": [
+        {
+          "say": "Each partition is an append-only log in segment files. Sequential appends run at hundreds of megabytes a second, even on spinning disks.",
+          "reveal": 1
+        },
+        {
+          "say": "Recent data sits in the operating system's page cache, so caught-up consumers read from memory.",
+          "reveal": 2
+        },
+        {
+          "say": "Brokers don't transform messages, so they send file bytes straight to the network socket, zero-copy, skipping extra copies.",
+          "reveal": 3
+        },
+        {
+          "say": "Producers batch, say up to sixty-four kilobytes or five milliseconds, and compress each batch, cutting disk and network three to five times for text.",
+          "reveal": 4
+        },
+        {
+          "say": "And a consumer's position is one integer per partition, its offset, not an ack record per message.",
+          "reveal": 5
+        }
+      ],
+      "id": "s033"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: acks and the in-sync replica set",
+      "table": {
+        "head": [
+          "acks",
+          "Producer told ok when",
+          "Lose acked data?"
+        ],
+        "rows": [
+          [
+            "0",
+            "the message is sent",
+            "Yes, freely"
+          ],
+          [
+            "1",
+            "the leader wrote it",
+            "Yes, if leader dies first"
+          ],
+          [
+            "all",
+            "every ISR member has it",
+            "No, while one ISR member lives"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "First, the I-S-R, the in-sync replica set: the leader plus followers caught up recently, say within thirty seconds. A message is committed once every I-S-R member has it, the high watermark. Consumers only see committed messages. Now, acks equals zero: the producer is told okay as soon as it sends. Fastest, and data can vanish freely.",
+          "reveal": 1
+        },
+        {
+          "say": "Acks equals one: okay once the leader has written it. Imagine the leader dies a millisecond later, before followers copy it. That acknowledged message is gone.",
+          "reveal": 2
+        },
+        {
+          "say": "Acks equals all: okay once every I-S-R member has it. Pair it with min in-sync replicas of two, so if the I-S-R shrinks to the leader alone, writes are rejected rather than accepted with one copy. And forbid unclean leader election, promoting an out-of-sync follower.",
+          "reveal": 3
+        }
+      ],
+      "id": "s034"
+    },
+    {
+      "layout": "bullets",
+      "title": "Consumer groups, offsets, delivery",
+      "bullets": [
+        "Members heartbeat; join or leave triggers rebalance",
+        "Commit before processing: crash skips, at-most-once",
+        "Commit after processing: crash repeats, at-least-once",
+        "Exactly-once in the log: idempotent producer",
+        "Plus transactions: output and offset together"
+      ],
+      "steps": [
+        {
+          "say": "Group members heartbeat to a group coordinator. A join or leave triggers a rebalance, reassigning partitions. Cooperative rebalancing moves only the ones that must move.",
+          "reveal": 1
+        },
+        {
+          "say": "When you commit the offset decides the semantics. Imagine a billing consumer reads offset one hundred. Commit before processing, then crash: on restart it starts at one hundred and one, so message one hundred is skipped. At-most-once.",
+          "reveal": 2
+        },
+        {
+          "say": "Commit after processing, then crash before the commit: on restart it processes one hundred again. At-least-once, the default. So make handlers idempotent.",
+          "reveal": 3
+        },
+        {
+          "say": "For effectively exactly-once inside the log, first an idempotent producer: the broker drops retries using a producer ID and sequence numbers.",
+          "reveal": 4
+        },
+        {
+          "say": "Then transactions write the output messages and the offset commit atomically. Side effects outside the log, like an email, still need idempotency keys.",
+          "reveal": 5
+        }
+      ],
+      "id": "s035"
+    },
+    {
+      "layout": "twocol",
+      "title": "Retention versus compaction",
+      "left": {
+        "heading": "Time or size retention",
+        "bullets": [
+          "Delete whole old segments, e.g. after 7 days",
+          "Cheap: drop a file"
+        ]
+      },
+      "right": {
+        "heading": "Log compaction",
+        "bullets": [
+          "Keep the latest message per key forever",
+          "A durable changelog of current state"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Retention by time or size drops whole old segment files, say one-gigabyte segments older than seven days.",
+          "reveal": 1
+        },
+        {
+          "say": "That's cheap, you just delete a file. Messages are deleted by retention, never by consumption.",
+          "reveal": 2
+        },
+        {
+          "say": "Log compaction instead keeps the latest message for each key forever, removing older same-key values in the background.",
+          "reveal": 3
+        },
+        {
+          "say": "That turns a topic into a durable changelog of current state. It's exactly how consumer offsets themselves are stored. In the interview, say: partitioned, replicated append-only log, acks all with min I-S-R two, pull consumers committing offsets.",
+          "reveal": 4
+        }
+      ],
+      "id": "s036"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 7 of 9",
+      "title": "Case 5: Web crawler",
+      "steps": [
+        {
+          "say": "Download about a billion pages a month for a search index. Fetching one page is trivial. The hard parts are manners and hostility: don't overload sites, don't fetch twice, don't get trapped, and pick what to fetch next.",
+          "reveal": 0
+        }
+      ],
+      "id": "s037",
+      "caption": "Book: Module 13 · Case 5 — Design a Web Crawler"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Example: sizing the crawl",
+      "bullets": [
+        "1B pages/month = about 385/s; design for 1,000/s",
+        "100 KB/page: about 310 Mbit/s average",
+        "About 25 TB/month compressed",
+        "1 s per fetch: about 1,000 fetches in flight",
+        "1 visit per host per 2 s: at least 2,000 hosts busy"
+      ],
+      "steps": [
+        {
+          "say": "A billion pages a month, over about two point six million seconds, is about three hundred and eighty-five pages a second. Design for a thousand, for catch-up.",
+          "reveal": 1
+        },
+        {
+          "say": "At a hundred kilobytes a page, that's about three hundred and ten megabits a second.",
+          "reveal": 2
+        },
+        {
+          "say": "A hundred terabytes a month raw, about twenty-five compressed.",
+          "reveal": 3
+        },
+        {
+          "say": "Each fetch takes about a second, D-N-S, connect, download. So a thousand pages a second means about a thousand fetches in flight.",
+          "reveal": 4
+        },
+        {
+          "say": "And here's the key insight. If we visit each host at most once every two seconds, we need at least two thousand different hosts in progress at once. Keep many hosts busy, not a few hosts fast.",
+          "reveal": 5
+        }
+      ],
+      "id": "s038"
+    },
+    {
+      "layout": "diagram",
+      "title": "The crawl pipeline",
+      "mermaid": "flowchart TB\n    F[\"URL frontier\"] --> W[\"Fetcher + DNS, robots caches\"]\n    W --> P[\"Parser: text + links\"]\n    P -->|\"content new?\"| ST[(\"Content store\")]\n    P -->|\"normalise, filter\"| US[\"URL seen? Bloom filter\"]\n    US -->|\"new URLs\"| F",
+      "caption": "Async stages joined by queues",
+      "steps": [
+        {
+          "say": "The frontier picks the next URL. A fetcher resolves the host through a local D-N-S cache, checks cached robots dot t-x-t rules, which say what crawlers may fetch, and downloads with timeouts.",
+          "reveal": 0
+        },
+        {
+          "say": "The parser extracts text and links. If the page's content fingerprint was already seen under another URL, it's not stored again.",
+          "reveal": 0
+        },
+        {
+          "say": "Links are normalised: lower-case host, drop the fragment, drop tracking parameters. Then filtered.",
+          "reveal": 0
+        },
+        {
+          "say": "Finally the URL-seen filter decides which links are new, and only those go back to the frontier.",
+          "reveal": 0
+        }
+      ],
+      "id": "s039"
+    },
+    {
+      "layout": "bullets",
+      "title": "The frontier: priority and politeness",
+      "bullets": [
+        "Front queues: one per priority level",
+        "Selector favours high priority, not exclusively",
+        "Back queues: each holds exactly one host",
+        "Min-heap of each host's next allowed fetch time",
+        "Pop due host, take one URL, push back with time + delay",
+        "Keep about 3x as many back queues as fetchers"
+      ],
+      "steps": [
+        {
+          "say": "This is the Mercator design from nineteen ninety-nine, two layers. Front queues handle priority, one queue per level, fed by site importance, change rate and newness.",
+          "reveal": 1
+        },
+        {
+          "say": "A selector favours higher priority queues, but not exclusively, so low priority still gets a share.",
+          "reveal": 2
+        },
+        {
+          "say": "Back queues handle politeness. Each holds URLs for exactly one host. Say one for wikipedia dot org and one for a small blog.",
+          "reveal": 3
+        },
+        {
+          "say": "A min-heap, which always returns its smallest item, holds each back queue's next allowed fetch time.",
+          "reveal": 4
+        },
+        {
+          "say": "A fetcher pops the blog, whose time has come, takes one URL, and pushes the blog back with now plus its delay, say two seconds. Wikipedia waits its turn.",
+          "reveal": 5
+        },
+        {
+          "say": "Keep about three times as many back queues as fetcher threads, so some host is always ready. Queue heads stay in memory, tails on disk.",
+          "reveal": 6
+        }
+      ],
+      "id": "s040"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Example: seen it before?",
+      "bullets": [
+        "10B URLs exact = about 1 TB, too big",
+        "Bloom filter at 1% false positives: 12 GB, 7 hashes",
+        "False positive: skip 1% of new URLs, acceptable",
+        "Never says new for a seen URL",
+        "Content: exact hash, plus SimHash, 3 bits or fewer"
+      ],
+      "steps": [
+        {
+          "say": "We know about ten billion distinct URLs. An exact set at a hundred bytes each is about a terabyte, checked twenty thousand times a second. Too big for memory.",
+          "reveal": 1
+        },
+        {
+          "say": "A Bloom filter at one percent false positives needs just twelve gigabytes and seven hash functions. The simulation measured one point oh six percent, with zero false negatives.",
+          "reveal": 2
+        },
+        {
+          "say": "A false positive means we skip one percent of genuinely new URLs. Acceptable, because important pages have many inbound links and get offered again.",
+          "reveal": 3
+        },
+        {
+          "say": "And a Bloom filter never says new for a URL it has seen, so it never causes a re-fetch.",
+          "reveal": 4
+        },
+        {
+          "say": "For content, an exact hash catches identical pages under different URLs. Sim-Hash catches near-duplicates, same article with different ads. Two pages whose sixty-four-bit fingerprints differ in three bits or fewer count as duplicates.",
+          "reveal": 5
+        }
+      ],
+      "id": "s041"
+    },
+    {
+      "layout": "bullets",
+      "title": "Traps, freshness, distribution",
+      "bullets": [
+        "Trap: infinite calendar 'next month' links",
+        "Defences: max URL length, depth, per-host budget",
+        "Freshness: re-crawl by measured change rate",
+        "Conditional GET: unchanged = 304, cheap",
+        "Hash hostnames onto a ring: politeness stays local"
+      ],
+      "steps": [
+        {
+          "say": "A crawler trap is an endless URL space. Imagine a calendar page with a next month link, forever. Or session IDs on every link.",
+          "reveal": 1
+        },
+        {
+          "say": "Defences: a maximum URL length, say two thousand characters, and path depth. A per-host page budget, say ten thousand pages for an unknown site until it earns more. Plus timeouts, size caps, and backoff per host.",
+          "reveal": 2
+        },
+        {
+          "say": "Freshness: a news home page changes every few minutes, an archived article never. Estimate each page's change rate and revisit accordingly. A counter-intuitive finding: don't chase pages that change faster than you can keep up with.",
+          "reveal": 3
+        },
+        {
+          "say": "Use conditional requests, if-modified-since or an E-tag, so an unchanged page costs only a three oh four, not modified.",
+          "reveal": 4
+        },
+        {
+          "say": "To distribute, assign hosts to machines by consistent hashing of the hostname. A host's queue, robots rules and timer all live on one machine, so politeness needs no coordination. Ten to twenty machines with async I-O suffice.",
+          "reveal": 5
+        }
+      ],
+      "id": "s042"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 8 of 9",
+      "title": "Case 6: Search autocomplete",
+      "steps": [
+        {
+          "say": "As you type, show the top ten completions of your prefix, ranked by popularity. The answer must beat the next keystroke. So we can't compute it at request time. We precompute, and the real problem becomes the offline pipeline.",
+          "reveal": 0
+        }
+      ],
+      "id": "s043",
+      "caption": "Book: Module 13 · Case 6 — Design Search Autocomplete"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Example: sizing autocomplete",
+      "bullets": [
+        "10M users x 10 searches x 6 requests = 600M/day",
+        "About 6,000/s average, 20,000/s peak",
+        "Server p99 under 20 ms",
+        "20M queries pass filters: 100 to 200M trie nodes",
+        "About 100 B per node: 10 to 20 GB, fits in memory"
+      ],
+      "steps": [
+        {
+          "say": "Ten million daily users, ten searches each, about six suggestion requests per search. Six, not one per keystroke, because the browser debounces, waiting for a typing pause.",
+          "reveal": 1
+        },
+        {
+          "say": "That's six hundred million requests a day, about six thousand a second, twenty thousand at peak.",
+          "reveal": 2
+        },
+        {
+          "say": "The server gets under twenty milliseconds at p ninety-nine. The rest of the hundred-millisecond budget is network and rendering.",
+          "reveal": 3
+        },
+        {
+          "say": "Of about two hundred million distinct weekly queries, around twenty million pass the filters. That's a hundred to two hundred million trie nodes.",
+          "reveal": 4
+        },
+        {
+          "say": "At about a hundred bytes per node, ten to twenty gigabytes. It fits in one server's memory, so we replicate instead of sharding.",
+          "reveal": 5
+        }
+      ],
+      "id": "s044"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: trie with cached top-k (k = 3)",
+      "table": {
+        "head": [
+          "Prefix",
+          "Stored top-3"
+        ],
+        "rows": [
+          [
+            "t",
+            "translate, tree, trip advisor"
+          ],
+          [
+            "tra",
+            "translate, train times, transformer model"
+          ],
+          [
+            "tri",
+            "trip advisor, trivia, trie"
+          ],
+          [
+            "tr, after rebuild",
+            "trip advisor, translate, tree"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "A trie is a prefix tree. Each node is one character, and the path from the root spells a prefix. A plain trie answers t-r-a by searching the whole subtree below it, millions of nodes. So instead, every node stores its own top-k list. Here, node t stores translate, tree, trip advisor.",
+          "reveal": 1
+        },
+        {
+          "say": "Type t-r-a: walk three steps, read the list. Translate, train times, transformer model. Lookup cost depends only on the prefix length.",
+          "reveal": 2
+        },
+        {
+          "say": "T-r-i gives trip advisor, trivia, trie. Notice true crime never appears. It was blocked by a filter before the build.",
+          "reveal": 3
+        },
+        {
+          "say": "After a surge in trip advisor searches, the next rebuild moves it to the top of t-r. Answers change only when a new snapshot is published. The cost is memory, k entries per node, which is why builds are offline.",
+          "reveal": 4
+        }
+      ],
+      "id": "s045"
+    },
+    {
+      "layout": "diagram",
+      "title": "Serve online, build offline",
+      "mermaid": "flowchart LR\n    B[\"Browser: debounce + cache\"] --> CDN[\"CDN\"]\n    CDN --> API[\"Suggest API\"]\n    API --> TS[\"Trie replicas in memory\"]\n    Logs[\"Query logs\"] --> Agg[\"Daily aggregation, time decay\"]\n    Agg --> Filt[\"Filters\"]\n    Filt --> Build[\"Trie builder: snapshot\"]\n    Build -->|\"validate, blue/green swap\"| TS",
+      "caption": "Logs are the write model, the trie is the read model",
+      "steps": [
+        {
+          "say": "Serving: the browser waits about a hundred milliseconds after the last keystroke and checks its cache. Short prefixes, like t-h, are the same for everyone, so the C-D-N caches them. Misses go to in-memory trie replicas.",
+          "reveal": 0
+        },
+        {
+          "say": "Building: a daily batch job turns query logs into counts with time decay, say weights halving every seven days.",
+          "reveal": 0
+        },
+        {
+          "say": "Filters remove rare or unsafe queries, and the builder emits a versioned snapshot. If the top answers for the thousand most common prefixes differ wildly from yesterday, stop and alert.",
+          "reveal": 0
+        },
+        {
+          "say": "Servers load the new snapshot beside the old one and switch atomically, blue-green style. Rollback is instant. Updating the trie per query in real time is a trap, and a small streaming job handles trending instead.",
+          "reveal": 0
+        }
+      ],
+      "id": "s046"
+    },
+    {
+      "layout": "bullets",
+      "title": "Scaling, skew and filtering",
+      "bullets": [
+        "20,000/s at 50,000/s per server: 3 or 4 replicas",
+        "Shard only if memory forces it, by prefix range",
+        "Balance by volume: split 's', not 'x'",
+        "Filter: minimum count and distinct users",
+        "Blocklists and PII patterns; runtime blocklist"
+      ],
+      "steps": [
+        {
+          "say": "Twenty thousand requests a second at peak, and one in-memory server handles about fifty thousand. So three or four full replicas, plus spares across zones.",
+          "reveal": 1
+        },
+        {
+          "say": "Shard only when one locale's index outgrows memory. Then shard by prefix range.",
+          "reveal": 2
+        },
+        {
+          "say": "But balance by measured volume, not by first letter. Far more English queries start with s or c than x or q. So split s into several ranges.",
+          "reveal": 3
+        },
+        {
+          "say": "Filtering matters, because suggestions are said by the product. Require a minimum count from enough distinct users, so one person can't promote a phrase or leak an address.",
+          "reveal": 4
+        },
+        {
+          "say": "Remove blocklisted terms and personal data like phone numbers. And a runtime blocklist in the API kills a bad suggestion within minutes, without waiting for a rebuild.",
+          "reveal": 5
+        }
+      ],
+      "id": "s047"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Pause and think: why not update the trie on every search?",
+      "bullets": [
+        "A. It's too slow to write",
+        "B. Reads stop being lock-free, and bots poison it instantly",
+        "C. Tries can't be updated"
+      ],
+      "steps": [
+        {
+          "say": "Real-time sounds fresher. What goes wrong? Pause and think.",
+          "reveal": 0
+        }
+      ],
+      "id": "s048"
+    },
+    {
+      "layout": "bullets",
+      "title": "Answer: locks and poisoning",
+      "bullets": [
+        "Answer: B. Write-heavy, and no validation step",
+        "Trending: a small streaming layer, merged in the API"
+      ],
+      "steps": [
+        {
+          "say": "The answer is B. Per-query updates turn a read-only, lock-free structure into a write-heavy one, and a burst of bot searches could poison suggestions instantly, with no validation.",
+          "reveal": 1
+        },
+        {
+          "say": "For news-driven freshness, a small streaming job counts the last hour and the API merges in a few fast risers. Batch plus speed layer, the Lambda shape.",
+          "reveal": 2
+        }
+      ],
+      "id": "s049"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 9 of 9",
+      "title": "Pattern review: the building blocks",
+      "steps": [
+        {
+          "say": "Six cases, and the same few moves keep coming back. Let's name them, each with an example from today.",
+          "reveal": 0
+        }
+      ],
+      "id": "s050",
+      "caption": "Book: Module 13 · Pattern Review (building blocks)"
+    },
+    {
+      "layout": "bullets",
+      "title": "Recurring moves across the six",
+      "bullets": [
+        "Precompute the read",
+        "Hash to place, range to scan",
+        "Coordinate rarely, not per request",
+        "Append, then compact",
+        "Probabilistic structures pay their way",
+        "Duplicates are normal; make them harmless"
+      ],
+      "steps": [
+        {
+          "say": "One, precompute the read. Autocomplete stores top-k at every trie node. The shortener caches immutable mappings. Heavy reads push work to build time.",
+          "reveal": 1
+        },
+        {
+          "say": "Two, hash to place, range to scan. The key-value ring and crawler hosts are hashed, spreading load. Autocomplete shards and queue offsets use ranges, which keep order but need skew handling.",
+          "reveal": 2
+        },
+        {
+          "say": "Three, coordinate rarely. Worker-ID leases, the shortener's ten-thousand-number blocks, partition leaders. Coordination happens once per lease, never per request.",
+          "reveal": 3
+        },
+        {
+          "say": "Four, append, then compact. The K-V commit log and S-S-Tables, queue segments, the crawler's on-disk frontier. Sequential appends plus background cleanup.",
+          "reveal": 4
+        },
+        {
+          "say": "Five, probabilistic structures. A twelve-gigabyte Bloom filter replaces a terabyte set at one percent error.",
+          "reveal": 5
+        },
+        {
+          "say": "Six, duplicates are normal, so make them harmless. Producer retries, crawler re-fetches, concurrent cart writes. Idempotency, fingerprints and version vectors, never it won't happen.",
+          "reveal": 6
+        }
+      ],
+      "id": "s051"
+    },
+    {
+      "layout": "table",
+      "title": "The six cases on one page",
+      "table": {
+        "head": [
+          "Case",
+          "The number that shapes it"
+        ],
+        "rows": [
+          [
+            "ID generator",
+            "4,096/ms/worker, 1,024 workers, 69.7 years"
+          ],
+          [
+            "URL shortener",
+            "10K redirects/s; 365B links = 7 chars"
+          ],
+          [
+            "KV store",
+            "1M ops/s = 2.3M replica ops = 60 nodes"
+          ],
+          [
+            "Message queue",
+            "1 GB/s in, 7 days = about 900 TB"
+          ],
+          [
+            "Web crawler",
+            "1,000 pages/s, 2,000+ hosts, 12 GB Bloom"
+          ],
+          [
+            "Autocomplete",
+            "20K req/s, under 20 ms, 10 to 20 GB trie"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Cover a column and rebuild it from memory. The ID generator: four thousand and ninety-six per millisecond per worker, a thousand workers, seventy years.",
+          "reveal": 1
+        },
+        {
+          "say": "The shortener: ten thousand redirects a second, three hundred and sixty-five billion links, so seven characters.",
+          "reveal": 2
+        },
+        {
+          "say": "The key-value store: a million operations become two point three million replica operations, so about sixty nodes.",
+          "reveal": 3
+        },
+        {
+          "say": "The queue: a gigabyte a second for seven days, about nine hundred terabytes replicated.",
+          "reveal": 4
+        },
+        {
+          "say": "The crawler: a thousand pages a second across two thousand hosts, and a twelve-gigabyte Bloom filter.",
+          "reveal": 5
+        },
+        {
+          "say": "Autocomplete: twenty thousand requests a second, under twenty milliseconds, from a trie that fits in memory.",
+          "reveal": 6
+        }
+      ],
+      "id": "s052"
+    },
+    {
+      "layout": "recap",
+      "kicker": "Episode 20 complete",
+      "title": "Episode 20 recap",
+      "bullets": [
+        "Nine-stage case format, numbers first",
+        "IDs: 41 time + 10 worker + 12 seq; guard clocks",
+        "Shortener: leased counter, base 62, 302 + cache",
+        "KV: ring, N/W/R, hints, vectors, Merkle, LSM",
+        "Queue: replicated log, ISR, acks=all, offsets",
+        "Crawler: polite frontier, Bloom; trie with top-k"
+      ],
+      "steps": [
+        {
+          "say": "Let's recap. Every case runs the same nine stages, starting with numbers and ending with a pattern manifest.",
+          "reveal": 1
+        },
+        {
+          "say": "The ID generator: forty-one bits of time, ten of worker, twelve of sequence, made in-process. Wait or refuse when the clock goes back, and lease worker numbers.",
+          "reveal": 2
+        },
+        {
+          "say": "The shortener: a leased counter, scrambled, in base sixty-two. Three oh two redirects through the C-D-N and cache-aside, with clicks on a queue. Pastebin splits metadata from content.",
+          "reveal": 3
+        },
+        {
+          "say": "The key-value store: a ring with virtual nodes, quorums of two out of three, sloppy quorum with hinted handoff, version vectors, gossip, Merkle repair and an L-S-M tree in each node.",
+          "reveal": 4
+        },
+        {
+          "say": "The queue: a partitioned, replicated append-only log, acks all with min I-S-R two, and consumers committing offsets after processing.",
+          "reveal": 5
+        },
+        {
+          "say": "And the crawler's two-layer frontier with a Bloom filter, plus autocomplete's trie with top-k, built offline and swapped. Next time, in episode twenty-one: Case Studies, Messaging and Media. See you there.",
+          "reveal": 6
+        }
+      ],
+      "id": "s053"
+    }
+  ]
+}

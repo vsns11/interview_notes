@@ -1,0 +1,1639 @@
+{
+  "series": "LLD Workshop",
+  "episode": 25,
+  "title": "Components: Splitwise, Notifications, Cache",
+  "subtitle": "Pattern-driven building blocks: a bill-splitting ledger, a multi-channel notifier, and a cache with pluggable eviction",
+  "scenes": [
+    {
+      "id": "s001",
+      "layout": "title",
+      "title": "Components: Splitwise, Notifications, Cache",
+      "subtitle": "Pattern-driven building blocks: a bill-splitting ledger, a multi-channel notifier, and a cache with pluggable eviction",
+      "steps": [
+        {
+          "say": "Welcome to the L-L-D Workshop, episode twenty-five: Components, Splitwise, Notifications and Cache. L-L-D means low-level design, the class-by-class design of one piece of software.",
+          "reveal": 0
+        },
+        {
+          "say": "Today's three problems are building blocks that sit inside almost every real system: a ledger that splits money between friends, a service that sends emails, texts and push alerts, and an in-memory cache. Then the classic interview question, an L-R-U cache from scratch.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll be able to design all three, name the pattern each one is anchored on, and say exactly what change that pattern absorbs. Keep the chapter twenty PDF open. Every number I quote comes from the program output printed there, so you can pause and check.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s002",
+      "layout": "table",
+      "kicker": "Overview",
+      "title": "Pattern-driven components",
+      "table": {
+        "head": [
+          "Component",
+          "Anchor pattern(s)",
+          "Change it absorbs"
+        ],
+        "rows": [
+          [
+            "Splitwise",
+            "Strategy (split rules)",
+            "A new way to split a bill"
+          ],
+          [
+            "Notification service",
+            "Template Method, Strategy, Observer, Factory",
+            "New channel, new rule, new watcher"
+          ],
+          [
+            "In-memory cache",
+            "Strategy (eviction), Observer, Builder",
+            "A new eviction rule"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let me show you the map for today before we dive in.",
+          "reveal": 0
+        },
+        {
+          "say": "Here's the big idea. A component is a part that other parts use. It has a small public surface, maybe five methods, and lots of hidden rules behind it. That's why interviewers love it. They can keep asking, what if this rule changes? Splitwise is anchored on Strategy: each split rule is its own class behind one interface.",
+          "reveal": 1
+        },
+        {
+          "say": "The notification service uses four patterns, and each soaks up a different kind of change. Template Method for the retry loop, Strategy for reasons not to send, Observer for anyone who wants to watch outcomes, and a Simple Factory for creating channels.",
+          "reveal": 2
+        },
+        {
+          "say": "The cache is anchored on Strategy again, this time for the eviction rule, plus Observer for removals and Builder for setup. The winning answer to every what-if today is the same: one new class, nothing else touched.",
+          "reveal": 3
+        }
+      ],
+      "caption": "Book: Ch 20 · Case Studies: Pattern-Driven Components"
+    },
+    {
+      "id": "s003",
+      "layout": "section",
+      "kicker": "Part 1 of 4",
+      "title": "Design Splitwise",
+      "steps": [
+        {
+          "say": "Part one: Splitwise. It's an app that remembers who paid for what when friends share costs, and tells everyone who owes whom. Think of it as a shared notebook that does the maths.",
+          "reveal": 0
+        },
+        {
+          "say": "Here's the key insight up front. The hard part isn't the screens. The real decision is which class owns the money arithmetic, so the books still balance after every single operation.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 20 · 20.1 Design Splitwise"
+    },
+    {
+      "id": "s004",
+      "layout": "bullets",
+      "title": "Clarify first: our assumptions",
+      "bullets": [
+        "Splits: equal, exact amounts, percentage",
+        "Shares must add up exactly, or nothing changes",
+        "Money has 2 decimals; no cent lost or created",
+        "At least two people per expense (payer counts)",
+        "Settle up and simplify debts: yes",
+        "Currencies, receipts, undo: out of scope"
+      ],
+      "steps": [
+        {
+          "say": "Before drawing anything, ask questions. Which split types? We'll assume three: split equally, exact amounts per person, or percentages. More may come later, and that's a hint we'll need a pattern.",
+          "reveal": 1
+        },
+        {
+          "say": "Must shares add up to the total? Yes, and if they don't, the whole expense is refused and no balance changes at all.",
+          "reveal": 2
+        },
+        {
+          "say": "Rounding: money has two decimal places, and no cent may ever be lost. We'll use BigDecimal, Java's exact decimal type, never double, because a double can't even store zero point one exactly.",
+          "reveal": 3
+        },
+        {
+          "say": "Can someone pay only for themselves? No. That's not shared spending. At least two people must be involved, and the payer counts as one of them. So Alice buying Bob's lunch is fine.",
+          "reveal": 4
+        },
+        {
+          "say": "We do support settling up, which records a real payment, and simplifying debts, which replaces many small debts with fewer transfers.",
+          "reveal": 5
+        },
+        {
+          "say": "Multiple currencies, receipts and undo are out of scope. Say so out loud.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s005",
+      "layout": "bullets",
+      "title": "Strategy: one class per split rule",
+      "bullets": [
+        "SplitStrategy.split(total, people) returns Shares",
+        "EqualSplit: divide down, hand out spare cents",
+        "ExactSplit: caller states each amount",
+        "PercentSplit: must total 100; last absorbs rest",
+        "New rule (2:1:1 ratio) = one new class"
+      ],
+      "steps": [
+        {
+          "say": "Strategy means each interchangeable rule lives in its own class behind one interface. Here the interface is SplitStrategy, with one method: split a total among a list of people, and return one Share per person. A Share is just a person and an amount.",
+          "reveal": 1
+        },
+        {
+          "say": "Rule one, EqualSplit. It divides the total, rounding down to the cent, works out the leftover cents, and hands them out one at a time to the first people in the list.",
+          "reveal": 2
+        },
+        {
+          "say": "Rule two, ExactSplit. The caller simply says how much each person owes, and the rule passes it through.",
+          "reveal": 3
+        },
+        {
+          "say": "Rule three, PercentSplit. The percentages must add up to a hundred. Each share is rounded with banker's rounding, where a half goes to the even neighbour, and the last person absorbs whatever is left so the sum is exact.",
+          "reveal": 4
+        },
+        {
+          "say": "The alternative, an if-else chain on split type, edits old tested code for every new type. With Strategy, a split by ratio, like two to one to one, is one new class.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s006",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: splitting without losing a cent",
+      "table": {
+        "head": [
+          "Bill",
+          "Rule",
+          "Shares"
+        ],
+        "rows": [
+          [
+            "Hotel 100.00, paid by Alice",
+            "Equal, 3 people",
+            "Alice 33.34, Bob 33.33, Carol 33.33"
+          ],
+          [
+            "Dinner 60.00, paid by Bob",
+            "Exact",
+            "Alice 10.00, Bob 20.00, Carol 30.00"
+          ],
+          [
+            "Taxi 50.00, paid by Carol",
+            "Percent, about a third each",
+            "Alice 16.66, Bob 16.66, Dave 16.68"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's our running example: four friends, Alice, Bob, Carol and Dave, on a trip.",
+          "reveal": 0
+        },
+        {
+          "say": "Let's run a real trip through it. Alice pays a hundred for the hotel, split equally three ways. A hundred divided by three, rounded down, is thirty-three thirty-three. Three times that is ninety-nine ninety-nine, so one cent is left over. EqualSplit gives that spare cent to the first person, Alice. Thirty-three thirty-four plus thirty-three thirty-three plus thirty-three thirty-three is exactly a hundred.",
+          "reveal": 1
+        },
+        {
+          "say": "Bob pays sixty for dinner, split by exact amounts: Alice ten, Bob twenty, Carol thirty. Those add to sixty, so it's accepted.",
+          "reveal": 2
+        },
+        {
+          "say": "Carol pays fifty for a taxi, split by percentage, about a third each. Each third rounds to sixteen sixty-six, and Dave, the last person, absorbs the remainder: sixteen sixty-eight. Again the total is exact. We'll keep using this trip for the rest of Splitwise.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s007",
+      "layout": "bullets",
+      "title": "Expense validates itself: static factory",
+      "bullets": [
+        "Expense.create(...) builds or refuses",
+        "problem() returns the reason, not true or false",
+        "'shares add up to 15.00 but the total is 30.00'",
+        "'an expense needs at least two people'",
+        "An invalid Expense can never exist"
+      ],
+      "steps": [
+        {
+          "say": "Next decision: where do we check that the shares are valid? Inside the Expense itself, using a static factory. A static factory is a static method that builds the object instead of calling new directly. Here it's Expense dot create.",
+          "reveal": 1
+        },
+        {
+          "say": "Create calls a helper named problem, which returns the reason something is wrong, or nothing. Why a reason and not a simple true or false? Because the user needs to know why.",
+          "reveal": 2
+        },
+        {
+          "say": "For example, someone tries a thirty dollar bill where the exact shares only add up to fifteen. The message says: shares add up to fifteen but the total is thirty.",
+          "reveal": 3
+        },
+        {
+          "say": "Or Dave tries to pay only for Dave. Refused: an expense needs at least two people. And percentages that add to ninety are refused too.",
+          "reveal": 4
+        },
+        {
+          "say": "The payoff: the check runs once, at creation. After that, every other class can trust an expense's shares, because an invalid one simply can't exist.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s008",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Ledger: one signed number per pair",
+      "table": {
+        "head": [
+          "Step",
+          "Pair key",
+          "Stored value means"
+        ],
+        "rows": [
+          [
+            "Hotel: adjust(bob, alice, 33.33)",
+            "(alice, bob)",
+            "bob owes alice 33.33"
+          ],
+          [
+            "Dinner: adjust(alice, bob, 10.00)",
+            "(alice, bob)",
+            "cancels: bob owes alice 23.33"
+          ],
+          [
+            "Taxi: adjust(alice, carol, 16.66)",
+            "(alice, carol)",
+            "33.33 minus 16.66: carol owes alice 16.67"
+          ],
+          [
+            "Settle up: adjust(to, from, amount)",
+            "same pair",
+            "a reverse debt that cancels"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Watch the ledger change as our trip happens.",
+          "reveal": 0
+        },
+        {
+          "say": "Now the heart of the design, the Ledger. It stores exactly one signed number per pair of people. The key is the two names sorted, so Alice and Bob, or Bob and Alice, is the same key. The sign says who owes whom. And there's only one mutator, a method that changes state, called adjust. Let's apply our trip. The hotel: Bob owes Alice thirty-three thirty-three.",
+          "reveal": 1
+        },
+        {
+          "say": "Dinner: Alice owes Bob ten. That's the same pair, money moving the other way, so it simply subtracts. Bob now owes Alice twenty-three thirty-three. No separate code for cancelling. It falls out of the sign.",
+          "reveal": 2
+        },
+        {
+          "say": "Taxi: Alice owes Carol sixteen sixty-six, but Carol already owed Alice thirty-three thirty-three from the hotel. Net result, Carol owes Alice sixteen sixty-seven. That's exactly what the program prints.",
+          "reveal": 3
+        },
+        {
+          "say": "Settling up is just adjust in the reverse direction, so it cancels. The service refuses to pay more than is owed, so a debt can never flip direction by accident. Why one number per pair? Two maps, A owes B and B owes A, would be two places for the truth. Same reason groups hold no balances: Bob and Alice in a flat and on a trip would have two copies of one debt.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s009",
+      "layout": "diagram",
+      "title": "Adding an expense: ledger touched last",
+      "mermaid": "flowchart LR\n  A[\"addExpense\"] --> B[\"Check users and group\"]\n  B --> C[\"strategy.split\"]\n  C --> D[\"Expense.create validates\"]\n  D -->|\"problem found\"| E[\"Refused, nothing changes\"]\n  D -->|\"valid\"| F[\"ledger.adjust per share\"]\n  F --> G[\"Store expense\"]",
+      "caption": "Nothing touches the ledger until every check passes",
+      "steps": [
+        {
+          "say": "Here's the flow for adding an expense. First, the service checks that the payer and every participant exist and belong to the group. Then it asks the strategy to split the total into shares.",
+          "reveal": 0
+        },
+        {
+          "say": "Then it builds the Expense, which validates itself. If there's a problem, the expense is refused and nothing at all has changed.",
+          "reveal": 0
+        },
+        {
+          "say": "Only when it's valid does the service loop over the shares and call adjust, sharer owes payer, for each one. The payer's own share is adjust Alice to Alice, which does nothing by design. That order is exactly our requirement: a bad bill changes nothing.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s010",
+      "layout": "bullets",
+      "title": "Splitwise is a Facade",
+      "bullets": [
+        "One class the app talks to",
+        "Orders the steps; contains no arithmetic",
+        "addExpense, settleUp, simplifyAndApply, owes, net",
+        "Fair critique: it holds four collections"
+      ],
+      "steps": [
+        {
+          "say": "The class named Splitwise is a Facade. A Facade is one simple front class that hides several classes behind it. The app talks only to it.",
+          "reveal": 1
+        },
+        {
+          "say": "It orders the steps but decides nothing. The split rule does the dividing, the expense does the checking, and the ledger does the arithmetic.",
+          "reveal": 2
+        },
+        {
+          "say": "Its public methods read like the use cases: add expense, settle up, simplify and apply, owes, and net.",
+          "reveal": 3
+        },
+        {
+          "say": "A fair criticism: it holds users, groups, expenses and the ledger. At larger scale, give each its own repository, a store class, and let the facade shrink to the part that orders steps. Say this before the interviewer does.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s011",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Split 10.00 equally among 3 people. What are the shares?",
+      "bullets": [
+        "3.33, 3.33, 3.33",
+        "3.34, 3.33, 3.33",
+        "3.34, 3.34, 3.32"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Ten dollars, split equally three ways. What does EqualSplit produce?",
+          "reveal": 0
+        },
+        {
+          "say": "Hint: divide down to the cent, then count the leftover cents.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s012",
+      "layout": "bullets",
+      "title": "Simplifying debts: greedy minimum cash flow",
+      "bullets": [
+        "1. Net position = owed to me minus I owe",
+        "2. Creditors and debtors in two max-heaps",
+        "3. Pop biggest of each; debtor pays min of the two",
+        "4. Push back whoever still has a remainder",
+        "5. Stop when a heap is empty"
+      ],
+      "steps": [
+        {
+          "say": "Answer: three thirty-four, three thirty-three, three thirty-three. Ten divided by three rounds down to three thirty-three, that's nine ninety-nine, so one spare cent goes to the first person. Now, debt simplification. Step one: for each member, compute the net position, what others owe them minus what they owe others. Positive means creditor, negative means debtor. The nets always sum to zero.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: put creditors in one max-heap and debtors in another. A max-heap is a priority queue that always hands back its biggest item first. Ties are broken by name, so the output is the same every run.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: pop the biggest creditor and the biggest debtor. Let x be the smaller of their two amounts. Suggest: the debtor pays the creditor x.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: whichever side still has something left goes back into its heap.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five: stop when a heap is empty. Each round zeroes out at least one person, so for n people you get at most n minus one payments.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s013",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: four debts become three payments",
+      "table": {
+        "head": [
+          "Person",
+          "Net before",
+          "Greedy payment",
+          "Net after plan"
+        ],
+        "rows": [
+          [
+            "Alice",
+            "+40.00",
+            "receives all three",
+            "+40.00"
+          ],
+          [
+            "Dave",
+            "-16.68",
+            "Dave pays Alice 16.68",
+            "-16.68"
+          ],
+          [
+            "Carol",
+            "-13.33",
+            "Carol pays Alice 13.33",
+            "-13.33"
+          ],
+          [
+            "Bob",
+            "-9.99",
+            "Bob pays Alice 9.99",
+            "-9.99"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's simplify our trip. Before, there were four pairwise debts: Bob owes Alice twenty-three thirty-three, Carol owes Alice sixteen sixty-seven, Carol owes Bob thirteen thirty-four, and Dave owes Carol sixteen sixty-eight. Alice's net is plus forty: she's the only creditor.",
+          "reveal": 1
+        },
+        {
+          "say": "Round one: the biggest debtor is Dave, at sixteen sixty-eight. Alice can absorb all of it, so Dave pays Alice sixteen sixty-eight. Dave is now at zero.",
+          "reveal": 2
+        },
+        {
+          "say": "Round two: Carol's net is minus thirteen thirty-three. Carol pays Alice thirteen thirty-three.",
+          "reveal": 3
+        },
+        {
+          "say": "Round three: Bob pays Alice nine ninety-nine, and everyone's at zero. Four debts became three payments, and notice every net position is identical before and after. That's how you prove the simplification is safe.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s014",
+      "layout": "twocol",
+      "title": "Greedy is not always optimal",
+      "left": {
+        "heading": "Greedy: 4 payments",
+        "bullets": [
+          "Nets: A -6, B -5, C +2, D +4, E +5",
+          "A pays E 5; B pays D 4",
+          "A pays C 1; B pays C 1"
+        ]
+      },
+      "right": {
+        "heading": "Optimal: 3 payments",
+        "bullets": [
+          "B pays E 5 (they cancel exactly)",
+          "A pays D 4 and C 2",
+          "Finding the true minimum is NP-hard"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Interviewers love this follow-up: is greedy always optimal? No. Take five people with nets: A minus six, B minus five, C plus two, D plus four, E plus five.",
+          "reveal": 1
+        },
+        {
+          "say": "Greedy pairs the biggest: A pays E five. Then B pays D four.",
+          "reveal": 2
+        },
+        {
+          "say": "Now A and B each have one left, and both pay C one. That's four payments.",
+          "reveal": 3
+        },
+        {
+          "say": "But look: B owes five and E is owed five. They cancel exactly in one payment.",
+          "reveal": 4
+        },
+        {
+          "say": "Then A pays D four and C two. Three payments total.",
+          "reveal": 5
+        },
+        {
+          "say": "The true minimum means grouping people into as many zero-sum subgroups as possible, which is N-P-hard: no fast algorithm is known. Greedy is the accepted interview answer. Just say it isn't always minimal before you're asked.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s015",
+      "layout": "bullets",
+      "title": "Related problem: The Ledger Co.",
+      "bullets": [
+        "Geektrust / Navi machine-coding round",
+        "Bank loans: simple interest, fixed EMI, lump sums",
+        "Same shape: one authoritative record",
+        "Same money rules: BigDecimal + named rounding",
+        "Different rules: 'how much repaid by month m?'"
+      ],
+      "steps": [
+        {
+          "say": "A cousin of Splitwise shows up in machine-coding rounds, where you write a full runnable program in an hour or two: The Ledger Co., from Geektrust and Navi.",
+          "reveal": 1
+        },
+        {
+          "say": "Instead of bills between friends, it tracks bank loans: simple interest, which is charged only on the original amount, a fixed monthly instalment, and lump-sum prepayments made early. We build it fully in chapter twenty-one.",
+          "reveal": 2
+        },
+        {
+          "say": "The shape is the same. Both keep one authoritative record and compute every answer from it. Splitwise keeps one signed balance per pair. Ledger Co. keeps one loan per bank and borrower, with its lump sums.",
+          "reveal": 3
+        },
+        {
+          "say": "Both use BigDecimal with an explicitly named rounding mode.",
+          "reveal": 4
+        },
+        {
+          "say": "What differs is only the rule set. Splitwise answers who owes whom. Ledger Co. answers how much has been repaid by a given month.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 20.1 · Related machine-coding problem: The Ledger Co."
+    },
+    {
+      "id": "s016",
+      "layout": "bullets",
+      "title": "Splitwise: concurrency and the interview",
+      "bullets": [
+        "Public methods synchronized: atomic add",
+        "Scale: lock per group or pair, or a DB transaction",
+        "Simplify touches every debt between members",
+        "Edit/delete: append a reversing entry",
+        "Plan: splits early, invest time in the ledger"
+      ],
+      "steps": [
+        {
+          "say": "Concurrency. Every public method on Splitwise is synchronized, so only one thread at a time can run them. That makes build, validate, adjust one indivisible step.",
+          "reveal": 1
+        },
+        {
+          "say": "At scale you'd lock per group or per pair of users, or keep balances in a database and update them in one transaction, where all changes succeed or none do.",
+          "reveal": 2
+        },
+        {
+          "say": "An honest edge case: because the ledger has one number per pair, simplifying a group rewrites all debts between its members, even ones from another group. That's the price of a single source of truth.",
+          "reveal": 3
+        },
+        {
+          "say": "To support editing or deleting an expense, make the ledger an append-only list of entries, like an accounting journal. Delete becomes appending a reversing entry.",
+          "reveal": 4
+        },
+        {
+          "say": "In the interview, reach the split rules early and say, one class per split rule, while you draw them. Then spend your time on the ledger, because one number per pair is what keeps everything else short.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s017",
+      "layout": "section",
+      "kicker": "Part 2 of 4",
+      "title": "Design a Notification Service",
+      "steps": [
+        {
+          "say": "Part two: a notification service, the component that sends emails, text messages and push alerts. Your order has shipped. Your login code is four eight two nine one three.",
+          "reveal": 0
+        },
+        {
+          "say": "Picture a post office counter. Many departments hand it letters. The counter picks the delivery method, respects do-not-disturb notes, retries when the courier fails, and keeps a receipt for every letter.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 20 · 20.2 Design a Notification Service"
+    },
+    {
+      "id": "s018",
+      "layout": "bullets",
+      "title": "Why it's a design question",
+      "bullets": [
+        "Starts as one sendEmail() function",
+        "Then SMS, then 'not at 3 a.m.'",
+        "Then 'max 2 promos per hour'",
+        "Six months later: one method, fourteen ifs",
+        "Question: where should each addition have gone?"
+      ],
+      "steps": [
+        {
+          "say": "Every product grows one of these, and it always starts the same way: a single send email function.",
+          "reveal": 1
+        },
+        {
+          "say": "Then someone adds S-M-S, text messages. Then a user complains: don't wake me at three in the morning.",
+          "reveal": 2
+        },
+        {
+          "say": "Then marketing says, at most two promotions per hour per user.",
+          "reveal": 3
+        },
+        {
+          "say": "Six months later, one method has fourteen ifs.",
+          "reveal": 4
+        },
+        {
+          "say": "So the whole exercise is this: where should each of those additions have gone instead? Keep that question in mind for every pattern we add.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s019",
+      "layout": "bullets",
+      "title": "Clarify: our assumptions",
+      "bullets": [
+        "Channels: email, SMS, push; more later",
+        "User picks ordered channels per kind",
+        "Templates with {placeholders}",
+        "Quiet hours, may wrap midnight; urgent ignores",
+        "Max N per kind per user per hour",
+        "Retry, then fall back; record every outcome"
+      ],
+      "steps": [
+        {
+          "say": "Channels: email, S-M-S and push, with WhatsApp or Slack likely later.",
+          "reveal": 1
+        },
+        {
+          "say": "Each user picks channels per kind of notification, in order. For example, Asha wants delivery updates by S-M-S first, then email.",
+          "reveal": 2
+        },
+        {
+          "say": "The wording comes from templates with holes, like: Hi name, it arrives eta. We fill the holes per request.",
+          "reveal": 3
+        },
+        {
+          "say": "Users can set quiet hours, say ten at night to seven in the morning. That wraps past midnight. Urgent messages, like login codes, ignore them.",
+          "reveal": 4
+        },
+        {
+          "say": "A rate limit: at most N notifications of one kind per user per hour.",
+          "reveal": 5
+        },
+        {
+          "say": "On failure, retry a channel a bounded number of times, then fall back to the next channel. Every attempt is recorded as sent, failed or suppressed, with a reason.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s020",
+      "layout": "bullets",
+      "title": "Template Method: the retry loop, written once",
+      "bullets": [
+        "1. addressOf(user): the one step that varies",
+        "2. No address? Fail with 0 attempts",
+        "3. Try gateway.deliver(address, message)",
+        "4. On error: wait, double the backoff, retry",
+        "5. Out of attempts: report failure + last error",
+        "deliver() is final; subclasses can't break it"
+      ],
+      "steps": [
+        {
+          "say": "Template Method means you write the fixed steps of an algorithm once, in a parent class, and subclasses fill in one or two steps. Here the parent is the abstract NotificationChannel. Step one is the only step that varies: address of user. Email returns the email address, S-M-S the phone number, push the device token.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: if the user has no such address, say Ben has no phone, the channel returns a failure with zero attempts, and the service moves to the next channel.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: hand the message to the gateway, the outside provider. Say attempt one fails.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: wait, then double the wait. That's exponential backoff. With a starting backoff of, say, a hundred milliseconds, you wait a hundred, then two hundred, giving a struggling provider time to recover.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five: after the maximum attempts, say three, report failure with the last error.",
+          "reveal": 5
+        },
+        {
+          "say": "The deliver method is marked final, so no subclass can override it. New channels inherit reliability for free. Channels share the algorithm and differ in one step, which is exactly Template Method, not Strategy.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s021",
+      "layout": "diagram",
+      "title": "Channels, factory and gateways",
+      "mermaid": "flowchart TB\n  F[\"ChannelFactory\"] --> N[\"NotificationChannel: final deliver\"]\n  N --> E[\"EmailChannel\"]\n  N --> S[\"SmsChannel\"]\n  N --> P[\"PushChannel\"]\n  N --> G[\"Gateway interface\"]\n  G --> A1[\"SMTP adapter\"]\n  G --> A2[\"SMS gateway adapter\"]",
+      "caption": "Retry lives once in the parent; adapters wrap each provider",
+      "steps": [
+        {
+          "say": "Here's the channel side of the design. The three channel subclasses are tiny. All the behaviour that makes sending reliable lives in the abstract parent.",
+          "reveal": 0
+        },
+        {
+          "say": "ChannelFactory is a Simple Factory: one place that maps a channel type, like S-M-S, to the class to create. So your configuration can just list channel names.",
+          "reveal": 0
+        },
+        {
+          "say": "And Gateway is the target of the Adapter pattern. An adapter converts one A-P-I into the shape your code expects. Every real provider, an S-M-T-P mail server, an S-M-S gateway like Twilio, Firebase for push, has its own client library. One adapter per provider implements Gateway, and tests plug in a fake. To add WhatsApp: one channel subclass, one enum value, one adapter. Nothing else changes.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s022",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: retries, then fallback",
+      "table": {
+        "head": [
+          "Try",
+          "Channel",
+          "Result",
+          "Total attempts"
+        ],
+        "rows": [
+          [
+            "1",
+            "SMS",
+            "gateway error, back off",
+            "1"
+          ],
+          [
+            "2",
+            "SMS",
+            "gateway error, back off longer",
+            "2"
+          ],
+          [
+            "3",
+            "SMS",
+            "gateway error, give up",
+            "3"
+          ],
+          [
+            "4",
+            "Email",
+            "SENT to asha@mail.com",
+            "4"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's watch it happen. Asha's order A-seventeen ships. Her preference for order updates is S-M-S, then email. Attempt one over S-M-S fails. The channel backs off.",
+          "reveal": 1
+        },
+        {
+          "say": "Attempt two fails as well. The wait doubles.",
+          "reveal": 2
+        },
+        {
+          "say": "Attempt three fails. S-M-S is out of retries, so it reports failure to the service.",
+          "reveal": 3
+        },
+        {
+          "say": "The service falls back to Asha's next channel, email, and it succeeds first time. The log reads: sent, order shipped, channel email, attempts four. Three failed texts plus one email.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s023",
+      "layout": "bullets",
+      "title": "Strategy: one class per reason not to send",
+      "bullets": [
+        "SendRule.blocks(...) returns a reason or empty",
+        "QuietHoursRule: urgent bypasses it inside the rule",
+        "Wrap logic: 22 to 07 = after start OR before end",
+        "RateLimitRule: send times per user and kind",
+        "Counts only successful sends (onSent hook)"
+      ],
+      "steps": [
+        {
+          "say": "Now the second axis of change: reasons to hold a message back. Each one is a SendRule, a Strategy. Its blocks method returns the reason text, or empty to let the message through. Returning the reason means we can record why.",
+          "reveal": 1
+        },
+        {
+          "say": "QuietHoursRule. Notice that the urgent bypass lives inside the rule, not in the service. The service never needs to know which rules urgent messages ignore.",
+          "reveal": 2
+        },
+        {
+          "say": "The midnight wrap is handled in one place. If start is before end, like nine to five, it's a simple range. If it wraps, like ten at night to seven, the hour is quiet if it's after the start or before the end.",
+          "reveal": 3
+        },
+        {
+          "say": "RateLimitRule keeps a double-ended queue of send times per user and kind, and prunes old times on every check, so it doesn't leak memory.",
+          "reveal": 4
+        },
+        {
+          "say": "And it counts only successful sends, through an on-sent hook. A suppressed message never reached the user, so it shouldn't eat their hourly allowance. A new rule, like the user unsubscribed, is one new class plus one line of wiring.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s024",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: rules in action",
+      "table": {
+        "head": [
+          "Time / request",
+          "Rule",
+          "Outcome"
+        ],
+        "rows": [
+          [
+            "23:00, PROMO, normal",
+            "Quiet hours 22 to 07",
+            "SUPPRESSED: quiet hours"
+          ],
+          [
+            "23:00, OTP, urgent",
+            "Quiet hours bypassed",
+            "SENT via PUSH"
+          ],
+          [
+            "PROMO #1 and #2",
+            "Rate limit 2 per hour",
+            "SENT, SENT"
+          ],
+          [
+            "PROMO #3",
+            "Rate limit",
+            "SUPPRESSED: rate limit"
+          ],
+          [
+            "61 minutes later",
+            "Window has moved",
+            "SENT"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "It's eleven at night and Asha's quiet hours are ten to seven. A promotion arrives. Suppressed, reason: quiet hours.",
+          "reveal": 1
+        },
+        {
+          "say": "At the same moment, a login code, a one-time password, arrives marked urgent. The quiet hours rule lets it through, and it goes out over push.",
+          "reveal": 2
+        },
+        {
+          "say": "Next, the rate limit is two promotions per hour. The first two are sent by email.",
+          "reveal": 3
+        },
+        {
+          "say": "The third is suppressed, reason: rate limit two per sixty minutes.",
+          "reveal": 4
+        },
+        {
+          "say": "Sixty-one minutes later, the window has moved and a new promo goes through. Because the suppressed third one never counted, Asha's allowance is exactly right.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s025",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Quiet hours are 22:00 to 07:00. Is 06:00 quiet? Is 12:00?",
+      "bullets": [
+        "06:00 yes, 12:00 no",
+        "06:00 no, 12:00 no",
+        "06:00 yes, 12:00 yes"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Quiet hours run from ten at night to seven in the morning. Is six in the morning quiet? What about noon?",
+          "reveal": 0
+        },
+        {
+          "say": "Remember the wrap rule: quiet if after the start, or before the end.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s026",
+      "layout": "bullets",
+      "title": "Observer and the single exit",
+      "bullets": [
+        "DeliveryListener.onOutcome(record)",
+        "LoggingListener, MetricsListener, alerts...",
+        "Every path leaves through finish()",
+        "finish(): store record, then tell listeners",
+        "A throwing listener is caught"
+      ],
+      "steps": [
+        {
+          "say": "Answer: six in the morning is quiet, because it's before seven. Noon is not. Now the third axis: who wants to know the outcome. That's Observer, where objects sign up to be told when something happens. The interface is DeliveryListener, with one method, on outcome.",
+          "reveal": 1
+        },
+        {
+          "say": "A logging listener, a metrics listener, an alerting dashboard. The service announces outcomes and doesn't know who's listening. Without Observer, logging and metrics get hard-coded into the service, and it grows forever.",
+          "reveal": 2
+        },
+        {
+          "say": "Now a quietly powerful decision: the single exit. Every path out of send, suppressed, failed or sent, goes through one private method called finish.",
+          "reveal": 3
+        },
+        {
+          "say": "Finish stores the delivery record and notifies every listener. If there were a second exit that forgot to do this, you'd have invisible gaps in your audit trail.",
+          "reveal": 4
+        },
+        {
+          "say": "And a listener that throws an exception is caught, so a broken dashboard can never break delivery.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s027",
+      "layout": "diagram",
+      "title": "Sending one notification",
+      "mermaid": "flowchart LR\n  A[\"send(request)\"] --> B[\"Each SendRule: blocks?\"]\n  B -->|\"reason\"| X[\"finish: SUPPRESSED\"]\n  B -->|\"allowed\"| C[\"Render template once\"]\n  C --> D[\"Try channels in user order\"]\n  D -->|\"one succeeds\"| Y[\"onSent, finish: SENT\"]\n  D -->|\"all fail\"| Z[\"finish: FAILED\"]",
+      "caption": "Every outcome leaves through one finish() method",
+      "steps": [
+        {
+          "say": "Here's the whole send flow. First, ask every rule. If any returns a reason, finish with suppressed. If the user accepts no channel for this kind, that's suppressed too.",
+          "reveal": 0
+        },
+        {
+          "say": "If allowed, render the template exactly once, so every channel gets identical text and a wording change is one edit. If a placeholder has no value, say the login code is missing, that's caught and finished as failed, not thrown away.",
+          "reveal": 0
+        },
+        {
+          "say": "Then try channels in the user's order. The first success calls on sent, so the rate limit counts it, and finishes as sent. If all fail, finish as failed with the last error.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s028",
+      "layout": "bullets",
+      "title": "Concurrency and edge cases",
+      "bullets": [
+        "Check-then-act gap in the rate limit",
+        "Fix: reserve a slot atomically, or per-user queue",
+        "Sleeping retries block worker threads",
+        "Retry after timeout may deliver twice",
+        "Async: a durable queue in front of send()"
+      ],
+      "steps": [
+        {
+          "say": "Concurrency. Check-then-act is code that checks a condition and then acts on it, while another thread can change things in between. Two sends for Asha's promos can both pass blocks before either calls on sent, so the limit is exceeded.",
+          "reveal": 1
+        },
+        {
+          "say": "Fixes: reserve a slot atomically at check time and release it if the send fails, or run each user's sends strictly one after another through a per-user queue.",
+          "reveal": 2
+        },
+        {
+          "say": "Sleeping retries tie up worker threads, so real systems re-enqueue with a delay.",
+          "reveal": 3
+        },
+        {
+          "say": "Idempotency. An operation is idempotent when doing it twice has the same effect as once. A retry after a timeout might send twice, because the provider sent it but the reply was lost. Pass an idempotency key, a unique message id, so the provider can skip repeats.",
+          "reveal": 4
+        },
+        {
+          "say": "And the caller, like checkout, shouldn't wait for a slow S-M-S gateway. Our send async runs on a worker pool. In production, a durable queue like Kafka sits in front.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s029",
+      "layout": "bullets",
+      "title": "Notifications: in the interview",
+      "bullets": [
+        "Template Method: retry once in the parent",
+        "Strategy: SendRules return the reason",
+        "Observer: listeners; Factory: channels",
+        "Adapter: one per provider behind Gateway"
+      ],
+      "steps": [
+        {
+          "say": "Your thirty-second answer. Channels share a final deliver method with retry and backoff: Template Method. Each channel only supplies its address.",
+          "reveal": 1
+        },
+        {
+          "say": "Each do-not-send condition is a SendRule, a Strategy, returning a reason.",
+          "reveal": 2
+        },
+        {
+          "say": "Outcomes go to listeners, Observer, and a Simple Factory creates channels.",
+          "reveal": 3
+        },
+        {
+          "say": "Providers sit behind Gateway adapters. Render once, fall back in order, and leave through one finish method.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s030",
+      "layout": "section",
+      "kicker": "Part 3 of 4",
+      "title": "Design an In-Memory Cache",
+      "steps": [
+        {
+          "say": "Part three: an in-memory cache. A cache is a small, fast store that keeps recently used values close at hand, so you don't fetch them again from somewhere slow, like a database.",
+          "reveal": 0
+        },
+        {
+          "say": "Think of the books on your desk. The library has everything, but your desk holds the ones you're using. When the desk is full and you need a new book, one must go back to the shelf. Which one goes back is the eviction policy, and it's the rule most likely to change.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 20 · 20.3 Design an In-Memory Cache"
+    },
+    {
+      "id": "s031",
+      "layout": "bullets",
+      "title": "Clarify and require",
+      "bullets": [
+        "Capacity counted in entries",
+        "Default LRU; swap FIFO or LFU without edits",
+        "get and put in O(1)",
+        "Optional TTL per entry; expired read = miss",
+        "Stats, removal listeners, thread-safe",
+        "Every entry leaves through one code path"
+      ],
+      "steps": [
+        {
+          "say": "Our assumptions. Capacity is a number of entries, not bytes.",
+          "reveal": 1
+        },
+        {
+          "say": "Default eviction is L-R-U, least recently used: the entry whose last access is oldest. We must be able to swap in FIFO, first in first out, or L-F-U, least frequently used, without changing the cache class.",
+          "reveal": 2
+        },
+        {
+          "say": "Get and put must be O of one, constant time, meaning the time doesn't grow with the number of entries.",
+          "reveal": 3
+        },
+        {
+          "say": "An entry may carry a T-T-L, time to live. Once it has passed, a read is a miss and deletes the entry.",
+          "reveal": 4
+        },
+        {
+          "say": "We count hits, misses, evictions and expirations, let listeners hear about every removal and its cause, and make it thread-safe.",
+          "reveal": 5
+        },
+        {
+          "say": "And one design requirement worth repeating: every entry leaves through one code path, whatever the reason.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s032",
+      "layout": "table",
+      "kicker": "Core idea",
+      "title": "Two structures, each answering one question",
+      "table": {
+        "head": [
+          "Question",
+          "Structure",
+          "Cost"
+        ],
+        "rows": [
+          [
+            "Where is key k?",
+            "HashMap from key to Node",
+            "O(1)"
+          ],
+          [
+            "Who should leave next?",
+            "Doubly linked list by recency",
+            "O(1) at the ends"
+          ],
+          [
+            "Move this entry to the front",
+            "Node holds its own prev and next",
+            "O(1), no search"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's the core idea. Where is key k? A hash map answers that in constant time. It turns each key into a number that says which slot to look in.",
+          "reveal": 1
+        },
+        {
+          "say": "Who should leave next? A doubly linked list ordered by recency: newest at the front, oldest at the back. A map alone can't tell you the oldest entry. A list alone can't find a key without walking it.",
+          "reveal": 2
+        },
+        {
+          "say": "Move this entry to the front: the map hands us the node itself, and the node carries its own previous and next links, so we unlink it with a few pointer changes, no search. It must be doubly linked, because removing from the middle needs the predecessor. Together, everything is O of one.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s033",
+      "layout": "table",
+      "title": "Strategy: eviction policy",
+      "table": {
+        "head": [
+          "Event",
+          "LRU",
+          "FIFO",
+          "LFU"
+        ],
+        "rows": [
+          [
+            "onInsert",
+            "add to front",
+            "add to front",
+            "count 1, bucket 1"
+          ],
+          [
+            "onAccess",
+            "move to front",
+            "nothing",
+            "move to bucket f+1"
+          ],
+          [
+            "onRemove",
+            "unlink",
+            "unlink",
+            "unlink; drop empty bucket"
+          ],
+          [
+            "victim()",
+            "back of list",
+            "back of list",
+            "back of lowest bucket"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The eviction rule goes behind an interface called EvictionPolicy: three events and one question. The cache owns the map. The policy owns the order. Neither reaches into the other's structure. On insert, L-R-U and FIFO add to the front. L-F-U sets the count to one and puts the node in bucket one.",
+          "reveal": 1
+        },
+        {
+          "say": "On access is where they differ. L-R-U moves the node to the front. FIFO does nothing at all. L-F-U moves it from bucket f to bucket f plus one. That FIFO is just L-R-U with one empty method is good evidence the interface is well chosen.",
+          "reveal": 2
+        },
+        {
+          "say": "On remove, all of them unlink, and L-F-U drops a bucket that's emptied.",
+          "reveal": 3
+        },
+        {
+          "say": "And victim, who leaves? The back of the list for L-R-U and FIFO. For L-F-U, the back of the lowest-frequency bucket, so ties are broken by recency. The buckets themselves form a chain in increasing frequency, so all four operations stay O of one. A naive L-F-U that scans for the lowest count would be O of n.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s034",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Cap 3: put a,b,c; get b,b,b,c,a,a; put d. Who leaves?",
+      "bullets": [
+        "LRU: b, FIFO: a, LFU: c",
+        "LRU: c, FIFO: a, LFU: b",
+        "All three evict a"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. A cache of capacity three. Put a, b and c. Then read b three times, c once, and a twice. Now put d, so someone must go.",
+          "reveal": 0
+        },
+        {
+          "say": "Which key does each policy evict? Work out the recency order, the insertion order and the read counts.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s035",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: same reads, three different victims",
+      "table": {
+        "head": [
+          "Policy",
+          "Reasoning",
+          "Evicted"
+        ],
+        "rows": [
+          [
+            "LRU",
+            "last touches: b, then c, then a",
+            "b"
+          ],
+          [
+            "FIFO",
+            "inserted order: a, b, c",
+            "a"
+          ],
+          [
+            "LFU",
+            "counts: a 3, b 4, c 2",
+            "c"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Answer: L-R-U evicts b, FIFO evicts a, and L-F-U evicts c. Let's see why.",
+          "reveal": 0
+        },
+        {
+          "say": "L-R-U evicts b. The last time b was touched was before c and a were read, so b is the least recently used, even though it was read the most.",
+          "reveal": 1
+        },
+        {
+          "say": "FIFO evicts a, simply because a was inserted first. Reads don't matter at all.",
+          "reveal": 2
+        },
+        {
+          "say": "L-F-U evicts c. Counting the insert as one use, a has three, b has four, and c only two. Same access pattern, three different victims, and the cache class didn't change once. That's Strategy doing its job.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s036",
+      "layout": "diagram",
+      "title": "put on a full cache: one removal path",
+      "mermaid": "flowchart LR\n  A[\"put d\"] --> B[\"lock\"]\n  B --> C[\"Full? ask policy.victim\"]\n  C --> D[\"remove(node, EVICTED)\"]\n  D --> E[\"policy.onInsert d\"]\n  E --> F[\"unlock\"]\n  F --> G[\"Listeners: onRemoval\"]",
+      "caption": "Map, policy, stats updated in one place; listeners after unlock",
+      "steps": [
+        {
+          "say": "Here's put on a full cache. Lock. The key isn't present and the cache is full, so ask the policy for a victim. In our L-R-U run that's b.",
+          "reveal": 0
+        },
+        {
+          "say": "Now the important part. The victim leaves through remove, node, reason. It's the single exit for every entry: eviction, expiry, manual invalidate and clear all use it. It removes from the map, tells the policy, and bumps the right counter. Four copies of that cleanup code would mean one gets forgotten.",
+          "reveal": 0
+        },
+        {
+          "say": "Then insert d, unlock, and only then tell the listeners: b, value two, evicted. That's Observer, with the reason passed in, so one listener can handle every cause.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s037",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: TTL with an injected clock",
+      "table": {
+        "head": [
+          "Fake clock",
+          "Action",
+          "Result"
+        ],
+        "rows": [
+          [
+            "t = 0 s",
+            "put session:42 = alice, TTL 5 s",
+            "stored"
+          ],
+          [
+            "t = 0 s",
+            "get session:42",
+            "HIT: alice"
+          ],
+          [
+            "t = 6 s",
+            "get session:42",
+            "MISS, removed as EXPIRED"
+          ],
+          [
+            "t = 6 s",
+            "purgeExpired()",
+            "sweeper removes 1 more"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "T-T-L needs time, and real time makes tests slow. So the cache doesn't read the system clock itself. A clock is injected, handed in from outside, as a function that returns milliseconds. In tests we pass a manual clock. At time zero we put session forty-two, Alice, with a five-second T-T-L.",
+          "reveal": 1
+        },
+        {
+          "say": "Read it straight away: a hit.",
+          "reveal": 2
+        },
+        {
+          "say": "Now we move the fake clock to six seconds, instantly, no sleeping. Read again: a miss. In one place it counts as a miss, an expiration, and a removal through the single exit. Note it expires at its deadline, so even at exactly five seconds it's already a miss.",
+          "reveal": 3
+        },
+        {
+          "say": "That's lazy expiry: dead entries are only dropped when someone reads them. But session forty-three was never read, so it still takes a slot. So there's an optional sweeper, purge expired, that a background task can run. Here it reclaimed one more entry.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s038",
+      "layout": "bullets",
+      "title": "Locking, Builder and sharding",
+      "bullets": [
+        "One ReentrantLock: in LRU, even get writes",
+        "Read-write lock would not help",
+        "Listeners called after unlock: no deadlock",
+        "Builder: capacity 100, LRU, clock; validated once",
+        "ShardedCache: N caches picked by key hash"
+      ],
+      "steps": [
+        {
+          "say": "Thread safety. We use one ReentrantLock, Java's explicit lock object. Why not let readers share? Because in L-R-U even get writes: it moves a node to the front, several pointer writes.",
+          "reveal": 1
+        },
+        {
+          "say": "So a read-write lock, which lets many readers in together, wouldn't help. Two threads moving nodes at once would corrupt the list.",
+          "reveal": 2
+        },
+        {
+          "say": "Listeners are called after the lock is released. A slow listener can't block the cache, and a listener that calls back into the cache can't deadlock, where two threads wait forever for each other.",
+          "reveal": 3
+        },
+        {
+          "say": "Builder assembles an object with many optional settings step by step. Capacity defaults to a hundred, policy to L-R-U, plus a clock. Build validates once, so capacity zero is refused. No telescoping constructors.",
+          "reveal": 4
+        },
+        {
+          "say": "One lock serializes everything. So ShardedCache splits keys across, say, eight independent caches, chosen by key hash. Threads on different shards never wait for each other. The trade-off: eviction is per shard, so the global L-R-U order is only approximate.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s039",
+      "layout": "section",
+      "kicker": "Part 4 of 4",
+      "title": "LRU Cache from Scratch",
+      "steps": [
+        {
+          "say": "Part four. Very often the interviewer skips the pluggable design and asks exactly this: implement an L-R-U cache with O of one get and put. It's LeetCode one forty-six, from the popular interview practice site.",
+          "reveal": 0
+        },
+        {
+          "say": "The answer is the same two structures, written inline. Let's build it step by step.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 20.3 · LRU Cache from scratch"
+    },
+    {
+      "id": "s040",
+      "layout": "bullets",
+      "title": "The recipe, step by step",
+      "bullets": [
+        "1. HashMap from key to Node",
+        "2. Doubly linked list with head/tail sentinels",
+        "3. get: find node, unlink, add at front",
+        "4. put existing: update value, move to front",
+        "5. put new when full: drop tail.prev from list AND map"
+      ],
+      "steps": [
+        {
+          "say": "Step one: a hash map from key to node, for lookup.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: a doubly linked list with two sentinel nodes, head and tail. A sentinel is a dummy node that's never removed. Most recent sits right after head, least recent right before tail.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, get: look up the node. If it's missing, return null. If found, unlink it, add it at the front, and return the value.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, put on an existing key: update the value and move it to the front, because writing counts as using.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, put a new key when full: take tail dot prev, the least recently used. Unlink it from the list and remove it from the map. That's why each node stores its own key: so we know what to delete from the map. Then add the new node at the front and into the map.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s041",
+      "layout": "bullets",
+      "title": "Sentinels: always the same four writes",
+      "bullets": [
+        "addFront: n.prev = head",
+        "n.next = head.next",
+        "head.next.prev = n",
+        "head.next = n",
+        "unlink: n.prev.next = n.next; n.next.prev = n.prev"
+      ],
+      "steps": [
+        {
+          "say": "Why sentinels? Watch add front. Write one: the new node's previous points to head.",
+          "reveal": 1
+        },
+        {
+          "say": "Write two: its next points to whatever was first.",
+          "reveal": 2
+        },
+        {
+          "say": "Write three: that old first node's previous now points back to the new node.",
+          "reveal": 3
+        },
+        {
+          "say": "Write four: head's next points to the new node. Even when the list is empty, head dot next is the tail sentinel, never null. So it's always these same four writes.",
+          "reveal": 4
+        },
+        {
+          "say": "Unlink is two writes: my previous skips forward over me, my next skips back over me. No special case for the first node, the last node, or an empty list. Null checks everywhere are a classic source of bugs, and sentinels remove them.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s042",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: LeetCode 146, capacity 2",
+      "table": {
+        "head": [
+          "Operation",
+          "Result",
+          "Order, most to least recent"
+        ],
+        "rows": [
+          [
+            "put 1, put 2",
+            "",
+            "[2, 1]"
+          ],
+          [
+            "get 1",
+            "1",
+            "[1, 2]"
+          ],
+          [
+            "put 3",
+            "evicts 2",
+            "[3, 1]"
+          ],
+          [
+            "get 2",
+            "miss",
+            "[3, 1]"
+          ],
+          [
+            "put 4",
+            "evicts 1",
+            "[4, 3]"
+          ],
+          [
+            "get 1, get 3, get 4",
+            "miss, 3, 4",
+            "[4, 3]"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's trace the official sequence with capacity two. Put one, then put two. Two is now the most recent.",
+          "reveal": 1
+        },
+        {
+          "say": "Get one returns one, and moves it to the front. Now the order is one, then two.",
+          "reveal": 2
+        },
+        {
+          "say": "Put three. The cache is full, so evict tail dot prev, which is two. Order: three, one.",
+          "reveal": 3
+        },
+        {
+          "say": "Get two: a miss. It's gone.",
+          "reveal": 4
+        },
+        {
+          "say": "Put four. Full again. Least recent is one, so one is evicted. Order: four, three.",
+          "reveal": 5
+        },
+        {
+          "say": "Finally, get one misses, get three returns three, and get four returns four. That matches LeetCode's expected answers exactly.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s043",
+      "layout": "table",
+      "title": "Three ways to get an LRU in Java",
+      "table": {
+        "head": [
+          "Approach",
+          "Thread-safe?",
+          "When to use"
+        ],
+        "rows": [
+          [
+            "HashMap + own linked list",
+            "Only with a lock",
+            "Interviews, custom behaviour"
+          ],
+          [
+            "LinkedHashMap(accessOrder=true)",
+            "No, wrap it",
+            "Quick single-threaded caches"
+          ],
+          [
+            "Caffeine / Guava",
+            "Yes, highly concurrent",
+            "Production Java"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The hand-written version is O of one for both operations, and thread-safe only if you add a lock. Our version marks get and put synchronized. This is what's tested when they say from scratch.",
+          "reveal": 1
+        },
+        {
+          "say": "Java has a shortcut: LinkedHashMap with access order set to true keeps entries in access order, and overriding remove eldest entry evicts automatically when size exceeds capacity. Mention it, but write the manual version when asked.",
+          "reveal": 2
+        },
+        {
+          "say": "In production, use Caffeine or Guava. They expose exactly today's knobs: maximum size, expire after write, a removal listener with a cause, and recorded stats. Redis even picks its eviction policy, like all keys L-R-U or all keys L-F-U, by configuration. That's Strategy chosen by config.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s044",
+      "layout": "bullets",
+      "title": "Cache: in the interview",
+      "bullets": [
+        "Sketch map + list together, say what each lacks",
+        "Why doubly linked? Removal needs prev",
+        "Why does Node store the key? Evict from map",
+        "Stampede: one thread loads, others wait",
+        "Plan: LRU, then interface, TTL, locks, shards"
+      ],
+      "steps": [
+        {
+          "say": "Your opening move: sketch the map and the list together straight away, and say what each one lacks on its own.",
+          "reveal": 1
+        },
+        {
+          "say": "Follow-up: why doubly and not singly linked? Removing a node needs its predecessor, and with a prev pointer we have it in O of one.",
+          "reveal": 2
+        },
+        {
+          "say": "Follow-up: why does the node store the key? Because when we evict the tail, we must also delete it from the map.",
+          "reveal": 3
+        },
+        {
+          "say": "Follow-up: what's a cache stampede? Many threads miss the same key at once and all hit the database. The fix is a loading cache, where the first thread computes the value and the others wait for its result.",
+          "reveal": 4
+        },
+        {
+          "say": "And the plan: write L-R-U get and put, pull the rule behind an interface without being asked, then T-T-L, stats and listeners, then thread safety and sharding.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s045",
+      "layout": "recap",
+      "kicker": "Episode 25 recap",
+      "title": "Recap",
+      "bullets": [
+        "Components: one pattern absorbs one change",
+        "Splitwise: split Strategy, self-validating Expense",
+        "Ledger: one signed number per pair; greedy simplify",
+        "Notify: Template Method, rules, Observer, single exit",
+        "Cache: eviction Strategy, one removal, clock, shards",
+        "LRU: HashMap + doubly linked list + sentinels"
+      ],
+      "steps": [
+        {
+          "say": "Let's recap. Components are building blocks anchored on one or two patterns, and the winning answer to every what-if is one new class.",
+          "reveal": 1
+        },
+        {
+          "say": "Splitwise: a split Strategy for equal, exact and percent, spare cents handed out so nothing's lost, and an Expense that validates itself in a static factory and returns the reason.",
+          "reveal": 2
+        },
+        {
+          "say": "The ledger keeps one signed number per pair with a single adjust method, so debts cancel and settle-up is a reverse adjust. A facade orders steps. Greedy simplification gives at most n minus one payments. Ledger Co. shares the one-record shape.",
+          "reveal": 3
+        },
+        {
+          "say": "Notifications: Template Method puts retry with backoff in one final method, SendRules are Strategies returning reasons, listeners are Observers, a Simple Factory makes channels, adapters wrap providers, and every path leaves through finish.",
+          "reveal": 4
+        },
+        {
+          "say": "Cache: eviction as a Strategy, one removal method, listeners after unlock, an injected clock, lazy expiry plus a sweeper, one ReentrantLock, a Builder, and sharding to cut contention.",
+          "reveal": 5
+        },
+        {
+          "say": "L-R-U from scratch: a hash map plus a doubly linked list with sentinels, O of one get and put.",
+          "reveal": 6
+        },
+        {
+          "say": "Next time, episode twenty-six: Components, Uber, Logging, Pub-Sub and the Rate Limiter. Matching riders, a logger chain, a pub-sub log with offsets, and pluggable rate limiters. See you there.",
+          "reveal": 6
+        }
+      ]
+    }
+  ]
+}

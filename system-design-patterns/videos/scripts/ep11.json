@@ -1,0 +1,1942 @@
+{
+  "series": "System Design Workshop",
+  "episode": 11,
+  "title": "Growing Under Load: Scaling Patterns",
+  "subtitle": "Bigger boxes, more boxes, and keeping the database alive",
+  "scenes": [
+    {
+      "id": "s001",
+      "layout": "title",
+      "title": "Growing Under Load: Scaling Patterns",
+      "subtitle": "Bigger boxes, more boxes, and keeping the database alive",
+      "steps": [
+        {
+          "say": "Welcome to episode eleven of the System Design Workshop: growing under load. Today we scale everything that sits above the data.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll be able to answer the most common interview question of all: how would you scale this? You'll know vertical and horizontal scaling, load balancing, auto-scaling, connection pooling, and multi-region and cell-based designs, each with real numbers.",
+          "reveal": 0
+        },
+        {
+          "say": "Keep the Module six notes open beside the video. One online store runs through every lesson, and we grow it to a million requests per second.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s002",
+      "layout": "bullets",
+      "title": "Two facts that organize this episode",
+      "kicker": "Module introduction",
+      "bullets": [
+        "Statelessness: any server can serve any request",
+        "Cattle, not pets: identical, replaceable servers",
+        "Scaling one tier multiplies load on the next",
+        "Follow the bottleneck; measure first"
+      ],
+      "steps": [
+        {
+          "say": "Fact one. Extra servers help only if any server can handle any request. That property is called statelessness: a stateless server keeps nothing between requests. Much of scaling work is pulling state out of app servers.",
+          "reveal": 1
+        },
+        {
+          "say": "The result is often called cattle, not pets. Servers are numbered, identical and replaceable.",
+          "reveal": 2
+        },
+        {
+          "say": "Fact two. Scaling one tier multiplies load on the next. Double the app servers and you may double their database connections and queries.",
+          "reveal": 3
+        },
+        {
+          "say": "So capacity work follows the bottleneck: the one part currently limiting throughput, meaning work done per second. Widen it, and the limit moves somewhere else. Measure before you scale anything.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Module 6 Scaling · Two facts that organize the module"
+    },
+    {
+      "id": "s003",
+      "layout": "section",
+      "title": "Vertical Scaling",
+      "kicker": "Concept 1 of 19",
+      "steps": [
+        {
+          "say": "Concept one: vertical scaling, also called scaling up. Here's the hook. Your one server is at eighty percent CPU. Do you rebuild for a fleet, or just buy a bigger machine?",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Module 6 Scaling · Vertical Scaling"
+    },
+    {
+      "id": "s004",
+      "layout": "bullets",
+      "title": "Scaling up: a bigger machine, same design",
+      "kicker": "Concept 1 of 19",
+      "bullets": [
+        "More cores, RAM, disk; no architecture change",
+        "No new failure modes; transactions still work",
+        "About 64x room: 2 cores to 128+ cores",
+        "Stack Overflow: a handful of big machines"
+      ],
+      "steps": [
+        {
+          "say": "Vertical scaling means more CPU cores, more RAM and faster disks for the same machine. The architecture doesn't change.",
+          "reveal": 1
+        },
+        {
+          "say": "Its unique gift: no new ways to fail. No load balancer, no shared session store, no distributed coordination. Transactions and joins keep working.",
+          "reveal": 2
+        },
+        {
+          "say": "And there's more room than people think. Cloud machines run from about two cores and eight gigabytes of RAM up to a hundred and twenty-eight cores and terabytes of RAM. That's about sixty-four times the capacity from one setting.",
+          "reveal": 3
+        },
+        {
+          "say": "Stack Overflow famously ran on a handful of big machines.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s005",
+      "layout": "twocol",
+      "title": "Its two hard limits",
+      "kicker": "Concept 1 of 19",
+      "left": {
+        "heading": "1. A biggest machine",
+        "bullets": [
+          "Catalog ends; price climbs steeply",
+          "Lock contention, single threads waste cores"
+        ]
+      },
+      "right": {
+        "heading": "2. Still one machine",
+        "bullets": [
+          "No redundancy; bigger blast radius",
+          "Single point of failure; downtime to resize"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Limit one: there is a biggest machine. The catalog ends, and the price per unit of capacity climbs steeply near the top.",
+          "reveal": 1
+        },
+        {
+          "say": "Software often stops benefiting before that. A database stuck on lock contention, meaning queries waiting to update the same rows, gains almost nothing from core ninety-six. Single-threaded code can't use the extra cores at all.",
+          "reveal": 2
+        },
+        {
+          "say": "Limit two: it's still one machine. There's no redundancy. In fact, putting more work on one host raises the blast radius, the share of users one failure can hurt.",
+          "reveal": 3
+        },
+        {
+          "say": "It stays a single point of failure, or S-P-O-F. And resizing usually needs a maintenance window.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s006",
+      "layout": "bullets",
+      "title": "Example: the database at eighty percent CPU",
+      "kicker": "Example",
+      "bullets": [
+        "DB at 80% CPU, growing 5% a month",
+        "Scale up 1-2 sizes: 2-4x headroom, lasts years",
+        "Use the time: shard key, queries, a trigger",
+        "Outage at 30% CPU? Need more machines, not bigger"
+      ],
+      "steps": [
+        {
+          "say": "Imagine the store's primary database at eighty percent CPU, growing about five percent a month. Half the team wants to shard it now.",
+          "reveal": 1
+        },
+        {
+          "say": "Better first move: scale up one or two sizes. That's two to four times the headroom within a week, and at five percent a month it lasts years.",
+          "reveal": 2
+        },
+        {
+          "say": "Use that time to choose a shard key and fix queries that won't survive partitioning.",
+          "reveal": 3
+        },
+        {
+          "say": "Now flip it. A payments service runs at thirty percent CPU on one big machine, and its host died for forty minutes. A bigger machine is the wrong fix. Capacity was fine. There was only one machine.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s007",
+      "layout": "bullets",
+      "title": "Vertical scaling: when not, and what to say",
+      "kicker": "Concept 1 of 19",
+      "bullets": [
+        "Not for availability: one box keeps nothing",
+        "Not for spiky load: 80% idle most of the day",
+        "Interview: scale up to buy time, then go stateless",
+        "Recap: easy capacity; no redundancy or elasticity"
+      ],
+      "steps": [
+        {
+          "say": "Skip it when availability is the need. Two medium machines keep half their capacity after one fails. One large machine keeps none.",
+          "reveal": 1
+        },
+        {
+          "say": "Skip it for spiky load. If peak is five times the average, a peak-sized machine sits about eighty percent idle most of the day.",
+          "reveal": 2
+        },
+        {
+          "say": "In the interview, say this: I scale up to buy time, and I use that time to make the service stateless so scaling out is ready before I hit the ceiling.",
+          "reveal": 3
+        },
+        {
+          "say": "Recap: a bigger box gives easy capacity, but no availability and no elasticity.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s008",
+      "layout": "section",
+      "title": "Horizontal Scaling",
+      "kicker": "Concept 2 of 19",
+      "steps": [
+        {
+          "say": "Concept two: horizontal scaling, or scaling out. Many identical copies of the app server, and you add copies as load grows. Think of supermarket checkout lanes. More lanes help only because any cashier can serve any customer.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Module 6 Scaling · Horizontal Scaling"
+    },
+    {
+      "id": "s009",
+      "layout": "bullets",
+      "title": "Tuesday: the store adds a second server",
+      "kicker": "Concept 2 of 19",
+      "bullets": [
+        "Second server behind a simple splitter",
+        "Random logouts: session in A's memory",
+        "Images 404: saved to one server's disk",
+        "UI flips: each server's own flag cache"
+      ],
+      "steps": [
+        {
+          "say": "The store adds a second server behind a simple splitter. By the afternoon, three things break.",
+          "reveal": 1
+        },
+        {
+          "say": "Random logouts. Alice's session, meaning the record that she's logged in, lives in server A's memory. Her next request lands on server B, which has never heard of her.",
+          "reveal": 2
+        },
+        {
+          "say": "Images return not-found half the time. Photos were saved to the local disk of whichever server received the upload.",
+          "reveal": 3
+        },
+        {
+          "say": "The page flips back and forth. Each server caches feature flags and refreshes them on its own schedule. The code assumed exactly one machine.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s010",
+      "layout": "diagram",
+      "title": "Stateless servers sharing back-ends",
+      "kicker": "Concept 2 of 19",
+      "mermaid": "flowchart LR\n  U[\"Users\"] --> LB[\"Load balancer\"]\n  LB --> S1[\"Server 1\"]\n  LB --> S2[\"Server 2\"]\n  LB --> S3[\"Server N\"]\n  S1 --> R[(\"Sessions: Redis\")]\n  S2 --> O[(\"Files: object storage\")]\n  S3 --> D[(\"Shared cache and database\")]",
+      "caption": "Every server talks to every shared store",
+      "steps": [
+        {
+          "say": "The fix is the pattern. A load balancer fronts servers one through N, and every server uses the same shared back-ends.",
+          "reveal": 0
+        },
+        {
+          "say": "Sessions live in Redis, an in-memory store. Files live in object storage, such as S3. The cache and the database are shared too. No server holds anything the others lack.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s011",
+      "layout": "table",
+      "title": "Step 1: the statelessness checklist",
+      "kicker": "Concept 3 of 19",
+      "table": {
+        "head": [
+          "State in the server",
+          "Moves to",
+          "Why"
+        ],
+        "rows": [
+          [
+            "Sessions",
+            "Redis or signed token",
+            "Any server knows the user"
+          ],
+          [
+            "Uploaded files",
+            "Object storage (S3)",
+            "Every server reads every file"
+          ],
+          [
+            "In-process caches",
+            "Shared cache or short TTL",
+            "Servers stop disagreeing"
+          ],
+          [
+            "Scheduled jobs",
+            "Queue or distributed lock",
+            "Job runs once, not N times"
+          ],
+          [
+            "Counters, rate limits",
+            "Shared store",
+            "Not 1/N of reality"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Step one is the statelessness checklist: move every value an app server holds to a shared home. Item one, sessions. Put them in Redis, or in a signed token the browser carries. Now any server recognizes Alice.",
+          "reveal": 1
+        },
+        {
+          "say": "Item two, uploaded files. They go to object storage, never local disk, so every server can read every photo.",
+          "reveal": 2
+        },
+        {
+          "say": "Item three, in-process caches. Use a shared cache, or keep a local one with a short expiry time where brief disagreement is harmless. That fixes the flipping feature flags.",
+          "reveal": 3
+        },
+        {
+          "say": "Item four, scheduled jobs, like the nightly report. Put them on a job queue or behind a distributed lock, a lock every server honors. Otherwise ten servers send the report ten times.",
+          "reveal": 4
+        },
+        {
+          "say": "Item five, counters, rate limits and locks. A per-server counter sees only one N-th of reality. With five servers, a limit of a hundred requests a minute quietly becomes five hundred. Move them to a shared store.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Module 6 · Horizontal Scaling, the statelessness checklist"
+    },
+    {
+      "id": "s012",
+      "layout": "bullets",
+      "title": "Why sticky sessions aren't the answer",
+      "kicker": "Concept 3 of 19",
+      "bullets": [
+        "Sticky sessions: ok as a migration bridge",
+        "Dead server logs out its users; uneven load",
+        "Syncing sessions: an accidental database",
+        "Real fix: servers own no lasting state"
+      ],
+      "steps": [
+        {
+          "say": "The tempting shortcut is sticky sessions: a cookie keeps each user on one server. It's fine as a short migration bridge.",
+          "reveal": 1
+        },
+        {
+          "say": "But if server A dies, its pinned users are logged out. Heavy users overload one server. And it does nothing for images.",
+          "reveal": 2
+        },
+        {
+          "say": "Copying sessions between servers is worse: an accidental distributed database.",
+          "reveal": 3
+        },
+        {
+          "say": "Both fixes manage disagreement between stateful servers. The pattern removes the cause: app servers own no lasting state.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s013",
+      "layout": "bullets",
+      "title": "Example: sizing the store's fleet",
+      "kicker": "Example",
+      "bullets": [
+        "800 req/s each, 4,000 peak: 5 needed, run 6 (N+1)",
+        "Shared session fetch: about +1 ms per request",
+        "Server dies: 5 carry peak; idempotent retries",
+        "Rolling deploys; 10x traffic: about 50 servers",
+        "50 servers x 20 conns = 1,000: DB refuses"
+      ],
+      "steps": [
+        {
+          "say": "Step two, collect the payoffs, with numbers. One server handles eight hundred requests per second. Peak is four thousand. That's five servers, so run six. That's called N plus one: enough for peak, plus one spare.",
+          "reveal": 1
+        },
+        {
+          "say": "The cost of shared state: fetching the session from Redis adds about one millisecond per request.",
+          "reveal": 2
+        },
+        {
+          "say": "A server dies at peak. Health checks remove it in seconds, and the other five carry four thousand requests per second. In-flight requests fail once, and their retries land on healthy servers. That's safe because writes are idempotent, meaning repeating them changes nothing.",
+          "reveal": 3
+        },
+        {
+          "say": "Deploys become uneventful too: a rolling deploy swaps servers one at a time, with no downtime. And ten times the traffic means about fifty servers, same design.",
+          "reveal": 4
+        },
+        {
+          "say": "Step three, expect the multiplication. Fifty servers times twenty database connections is one thousand connections, and the database starts refusing clients. The bottleneck moved downstream. Hold that thought for connection pooling.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s014",
+      "layout": "table",
+      "title": "Horizontal versus vertical",
+      "kicker": "Concept 4 of 19",
+      "table": {
+        "head": [
+          "",
+          "Vertical",
+          "Horizontal"
+        ],
+        "rows": [
+          [
+            "Ceiling",
+            "Catalog runs out (~64x)",
+            "Moves downstream"
+          ],
+          [
+            "Cost curve",
+            "Steep at the top",
+            "Roughly linear"
+          ],
+          [
+            "Availability",
+            "None: one bigger SPOF",
+            "N+1: losing one is routine"
+          ],
+          [
+            "Elasticity",
+            "No",
+            "Yes"
+          ],
+          [
+            "Prerequisite",
+            "None",
+            "Statelessness, finished"
+          ],
+          [
+            "Interview",
+            "Buy time",
+            "List every local state"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's compare the two directions. Ceiling: vertical runs out at the end of the catalog. Horizontal has no ceiling in the app tier. The limit moves downstream.",
+          "reveal": 1
+        },
+        {
+          "say": "Cost curve: vertical gets sharply steeper at the top. Horizontal is roughly linear: ten times the traffic, ten times the servers.",
+          "reveal": 2
+        },
+        {
+          "say": "Availability: vertical gives none, just one bigger single point of failure. Horizontal gives N plus one, so losing a server is routine.",
+          "reveal": 3
+        },
+        {
+          "say": "Elasticity: you can't resize one machine every hour, but a fleet can grow and shrink.",
+          "reveal": 4
+        },
+        {
+          "say": "Prerequisite: vertical works on any code. Horizontal needs the statelessness overhaul, finished, not mostly finished.",
+          "reveal": 5
+        },
+        {
+          "say": "In the interview, after you say add servers, expect: what stops you doing that today? Answer by listing every kind of server-local state.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Module 6 Scaling · Horizontal vs. vertical"
+    },
+    {
+      "id": "s015",
+      "layout": "quiz",
+      "title": "Pause and think: six servers grow to thirty. What breaks?",
+      "kicker": "Pause and think",
+      "bullets": [
+        "A. The load balancer is too slow",
+        "B. Connections multiplied, and the cron runs on every server",
+        "C. Redis ran out of memory"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. The store goes from six to thirty servers. At peak, the database refuses connections, and customers get the nightly summary email several times. What went wrong?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s016",
+      "layout": "bullets",
+      "title": "Answer: two forgotten checklist items",
+      "kicker": "Answer",
+      "bullets": [
+        "Connections multiplied: add a pooler",
+        "Cron on every server: queue or lock, idempotent"
+      ],
+      "steps": [
+        {
+          "say": "The answer is B. Five times the servers multiplied the database connections past the limit. Add a pooler and shrink the per-server pools.",
+          "reveal": 1
+        },
+        {
+          "say": "And the email cron runs on every server. Move it to a single-consumer queue or behind a distributed lock, and make it idempotent on customer and date. Statelessness means finishing every checklist item.",
+          "reveal": 2
+        }
+      ]
+    },
+    {
+      "id": "s017",
+      "layout": "section",
+      "title": "Load Balancing",
+      "kicker": "Concept 5 of 19",
+      "steps": [
+        {
+          "say": "Concept five: load balancing. Everyone draws one. Interviewers check whether you know how it chooses, how it detects failure, how it handles deploys, and whether it can fail itself.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Module 6 Scaling · Load Balancing"
+    },
+    {
+      "id": "s018",
+      "layout": "bullets",
+      "title": "The 2:14 AM incident",
+      "kicker": "Concept 5 of 19",
+      "bullets": [
+        "Six servers, health-blind round-robin",
+        "2:14 AM: server 4 slows to 20 seconds",
+        "Still gets 1/6 of traffic for 11 minutes",
+        "Deploys kill hundreds of in-flight requests"
+      ],
+      "steps": [
+        {
+          "say": "Six stateless servers sit behind a round-robin splitter: request one to server one, request two to server two, and so on.",
+          "reveal": 1
+        },
+        {
+          "say": "At 2:14 AM a runaway log fills server four's disk. It doesn't crash. It slows to twenty seconds per request, then fails.",
+          "reveal": 2
+        },
+        {
+          "say": "The splitter is health-blind. It keeps sending server four one sixth of all traffic for eleven minutes, until an engineer pulls it by hand.",
+          "reveal": 3
+        },
+        {
+          "say": "Two weeks later, a deploy replaces server two and kills several hundred in-flight requests. The splitter can't stop new work while letting current work finish.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s019",
+      "layout": "table",
+      "title": "A load balancer mid-work",
+      "kicker": "Concept 5 of 19",
+      "caption": "Least-connections routing, drain before replace",
+      "steps": [
+        {
+          "say": "Here's a load balancer at work, health-checking every two seconds. Clients see one address. Servers one, three, five and six are serving, about forty in flight each.",
+          "reveal": 4
+        },
+        {
+          "say": "Server two is draining for a deploy, with six requests finishing. Server four was removed after three failed probes. The next request goes to server three, because it has the fewest in flight.",
+          "reveal": 6
+        }
+      ],
+      "table": {
+        "head": [
+          "Server",
+          "In flight",
+          "State"
+        ],
+        "rows": [
+          [
+            "Server 1",
+            "41",
+            "Serving"
+          ],
+          [
+            "Server 3",
+            "38",
+            "Serving: gets the next request"
+          ],
+          [
+            "Server 5",
+            "44",
+            "Serving"
+          ],
+          [
+            "Server 6",
+            "39",
+            "Serving"
+          ],
+          [
+            "Server 2",
+            "6 finishing",
+            "Draining for a deploy"
+          ],
+          [
+            "Server 4",
+            "0",
+            "Removed after 3 failed probes"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "s020",
+      "layout": "bullets",
+      "title": "The four jobs, applied to 2:14 AM",
+      "kicker": "Concept 5 of 19",
+      "bullets": [
+        "1. Health checks: 11 minutes becomes ~6 seconds",
+        "2. Algorithm: least-connections dodges GC pause",
+        "3. Draining: ~30 s each, zero deploy errors",
+        "4. One address; TLS; L7 reads HTTP, L4 IP+port",
+        "Adds well under 1 ms"
+      ],
+      "steps": [
+        {
+          "say": "Job one, health checks. Active checks call each server's health endpoint every couple of seconds. Passive checks watch real traffic for error jumps. Replay 2:14 AM: probes fail at zero, two and four seconds, and server four is out at about six seconds. Eleven minutes became six seconds, with no human.",
+          "reveal": 1
+        },
+        {
+          "say": "Job two, the algorithm. Least-connections sends the next request to the server with the fewest in flight. When server five freezes in a garbage-collection pause, its in-flight count climbs from forty to three hundred, so traffic flows elsewhere automatically.",
+          "reveal": 2
+        },
+        {
+          "say": "Job three, draining. Stop new requests to the leaving server, let current ones finish in about thirty seconds, and admit the replacement only once it passes health checks. Six servers replaced one at a time, zero deploy errors.",
+          "reveal": 3
+        },
+        {
+          "say": "Job four, one stable address while the fleet changes. The balancer often terminates T-L-S, the encryption layer. Layer seven balancers read HTTP paths and headers. Layer four balancers just route by IP address and port.",
+          "reveal": 4
+        },
+        {
+          "say": "The balancer adds well under a millisecond. Its value is replacing slow human detection.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s021",
+      "layout": "twocol",
+      "title": "Health checks can be wrong both ways",
+      "kicker": "Concept 5 of 19",
+      "left": {
+        "heading": "Wrong ways",
+        "bullets": [
+          "Shallow: keeps a server that can't work",
+          "Deep on shared Redis: whole fleet removed"
+        ]
+      },
+      "right": {
+        "heading": "Right way",
+        "bullets": [
+          "Only this server: process, port, local",
+          "Dependencies: breakers, degrade in-app"
+        ]
+      },
+      "steps": [
+        {
+          "say": "A shallow check, like is the process running, may keep a server that responds but can't reach its database.",
+          "reveal": 1
+        },
+        {
+          "say": "A deep check on a shared dependency is worse. Imagine the health endpoint pings Redis, and Redis blips at 3:07 AM. Every server fails at once, and the whole fleet is removed.",
+          "reveal": 2
+        },
+        {
+          "say": "The rule: a health check asks should this server get traffic. Test the process, the port and local resources.",
+          "reveal": 3
+        },
+        {
+          "say": "Handle shared-dependency failures inside the app, with circuit breakers and reduced responses, instead of dropping out of rotation.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s022",
+      "layout": "bullets",
+      "title": "Who balances the balancer?",
+      "kicker": "Concept 6 of 19",
+      "bullets": [
+        "On every request path: can't be a SPOF",
+        "Redundant pair + floating IP",
+        "Anycast: many balancers, one IP",
+        "Interview: pair or anycast; chain ends here"
+      ],
+      "steps": [
+        {
+          "say": "Concept six. The balancer is on every request's path, so it can't be a single point of failure.",
+          "reveal": 1
+        },
+        {
+          "say": "Option one: a redundant pair sharing a floating IP address. If the active one dies, the address moves to the survivor within seconds.",
+          "reveal": 2
+        },
+        {
+          "say": "Option two, at internet scale: anycast. Many balancers announce the same IP address, and the network sends each client to a nearby one.",
+          "reveal": 3
+        },
+        {
+          "say": "That ends the chain after one level. In the interview, say: a redundant pair on a floating address, or anycast at scale.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Module 6 · Load Balancing, Who balances the balancer?"
+    },
+    {
+      "id": "s023",
+      "layout": "table",
+      "title": "Round-robin versus least-connections",
+      "kicker": "Concept 7 of 19",
+      "table": {
+        "head": [
+          "",
+          "Round-robin",
+          "Least-connections"
+        ],
+        "rows": [
+          [
+            "Assumes",
+            "All alike",
+            "Nothing: it measures"
+          ],
+          [
+            "Slow server gets",
+            "Full equal share",
+            "Less and less"
+          ],
+          [
+            "Mixed request sizes",
+            "Uneven load",
+            "Self-corrects"
+          ],
+          [
+            "Long-lived streams",
+            "Bad",
+            "Right default"
+          ],
+          [
+            "Pick for",
+            "Uniform internal API",
+            "Public API, streaming"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept seven: choosing the algorithm. Round-robin assumes all requests and servers are alike. Least-connections assumes nothing. It measures.",
+          "reveal": 1
+        },
+        {
+          "say": "A slow server under round-robin gets its full equal share, which was the 2:14 AM failure. Under least-connections it gets less and less as its backlog grows.",
+          "reveal": 2
+        },
+        {
+          "say": "Mixed light and heavy requests: round-robin leaves some servers idle and others overloaded. Least-connections corrects itself.",
+          "reveal": 3
+        },
+        {
+          "say": "Long-lived connections, like server-sent event streams or sockets: round-robin balances connection starts, not load. Least-connections counts what's actually held.",
+          "reveal": 4
+        },
+        {
+          "say": "Example choices. A uniform internal API: round-robin is fine. A public API with wildly varying costs, or a streaming fleet: least-connections. One line: round-robin assumes traffic is uniform, least-connections measures it.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Module 6 · Round-robin vs. least-connections"
+    },
+    {
+      "id": "s024",
+      "layout": "section",
+      "title": "Auto-Scaling",
+      "kicker": "Concept 8 of 19",
+      "steps": [
+        {
+          "say": "Concept eight: auto-scaling. A fixed fleet is a design-time guess about something that changes every hour. So it's wrong both ways.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Module 6 Scaling · Auto-Scaling"
+    },
+    {
+      "id": "s025",
+      "layout": "bullets",
+      "title": "A fixed fleet, two incidents",
+      "kicker": "Concept 8 of 19",
+      "bullets": [
+        "8 fixed servers for a 4,000 req/s peak",
+        "4 AM: ~60% of spend pays for idle servers",
+        "TV spike: 900 to 12,000 in 20 minutes",
+        "Worst-case sizing triples the bill"
+      ],
+      "steps": [
+        {
+          "say": "The store runs eight servers, sized for a four thousand request evening peak.",
+          "reveal": 1
+        },
+        {
+          "say": "The 4 AM bill. Average traffic is about nine hundred requests per second, so five or six servers sit idle most hours. Roughly sixty percent of app spend pays for idle time.",
+          "reveal": 2
+        },
+        {
+          "say": "The day TV mentioned the store. Traffic leaps from nine hundred to twelve thousand requests per second in twenty minutes. All eight max out, and by the time an engineer boots more, the spike is mostly over.",
+          "reveal": 3
+        },
+        {
+          "say": "Sizing for the worst case triples the 4 AM bill. And humans are slow going up and absent going down.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s026",
+      "layout": "diagram",
+      "title": "The control loop",
+      "kicker": "Concept 8 of 19",
+      "mermaid": "flowchart LR\n  M[\"Measure each minute\"] --> C[\"Compare with 65% target\"]\n  C -->|\"over\"| A[\"Add several, fast\"]\n  C -->|\"under\"| R[\"Remove one, slowly\"]\n  A --> LB[\"Balancer admits\"]\n  R --> D[\"Balancer drains\"]",
+      "caption": "Then measure again: add fast, remove slowly",
+      "steps": [
+        {
+          "say": "Auto-scaling is a control loop, like a thermostat. Every minute or so, measure a load signal and compare it with a target, say sixty-five percent.",
+          "reveal": 0
+        },
+        {
+          "say": "Over target: add servers fast. Under target: remove them slowly, draining each first. Then measure again.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s027",
+      "layout": "bullets",
+      "title": "Designing the loop, step by step",
+      "kicker": "Concept 8 of 19",
+      "bullets": [
+        "1. Signal: CPU, requests/instance, latency, backlog",
+        "2. Target 60-70%, not 90%",
+        "3. Reaction lag: 3-7 minutes, headroom covers",
+        "4. Up fast, down slowly; hysteresis, cooldowns",
+        "5. Min N+1; max = what the DB survives",
+        "6. Combine scheduled, reactive, predictive"
+      ],
+      "steps": [
+        {
+          "say": "Step one, pick the signal. This is the real design decision. CPU works for compute-heavy services. But for IO-bound ones, which mostly wait on databases, hundreds of blocked threads hurt users at fifteen percent CPU, and a CPU scaler does nothing. Use requests per instance, or latency. For queue workers, use backlog age: if the oldest job has waited ninety seconds, you need more workers.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, target about sixty to seventy percent, not ninety. The spare slice absorbs climbing traffic while new servers boot.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, respect reaction lag. About a minute to notice, then booting and warming up. That's three to seven minutes with no new capacity. Headroom covers it.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, scale up fast, down slowly. Add several at once. Remove one at a time, after a cooldown. Cutting too eagerly causes flapping: the fleet bounces up and down, rebuilding caches and connections. The cure is hysteresis, meaning separate thresholds, like add at seventy percent and remove at forty.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, set a minimum and maximum. Minimum is N plus one. Maximum is what the database can survive, not a hopeful big number. Beyond the max, shed load at the edge.",
+          "reveal": 5
+        },
+        {
+          "say": "Step six, combine triggers: scheduled, reactive and predictive. We'll compare them next.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s028",
+      "layout": "table",
+      "title": "Example: the store's day, auto-scaled",
+      "kicker": "Example",
+      "table": {
+        "head": [
+          "Moment",
+          "Traffic",
+          "Servers"
+        ],
+        "rows": [
+          [
+            "Rule",
+            "520 req/s each at 65%",
+            "Min 3, max 20"
+          ],
+          [
+            "4 AM",
+            "900 req/s",
+            "3 (N+1 floor)"
+          ],
+          [
+            "6 PM, scheduled",
+            "4,000 req/s",
+            "8, zero lag"
+          ],
+          [
+            "TV spike",
+            "12,000 req/s",
+            "16 by minute 6, cap 20"
+          ],
+          [
+            "Average",
+            "",
+            "8 fixed to ~4.2"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's run it. Each server handles eight hundred requests per second, so at a sixty-five percent target it carries about five hundred and twenty. Minimum three, maximum twenty.",
+          "reveal": 1
+        },
+        {
+          "say": "At 4 AM, nine hundred requests per second. Nine hundred over five twenty is about two, raised to the N plus one floor: three servers.",
+          "reveal": 2
+        },
+        {
+          "say": "At 6 PM, a schedule puts eight servers in place before four thousand requests arrive. Zero lag.",
+          "reveal": 3
+        },
+        {
+          "say": "TV day, replayed. Headroom absorbs the first ninety seconds. The loop adds waves, reaching sixteen servers by minute six, capped at twenty because the database can't take more. Overflow is shed at the edge. About four bad minutes, zero human actions.",
+          "reveal": 4
+        },
+        {
+          "say": "The bill: the average fleet drops from eight to about four point two. Roughly half the compute spend.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s029",
+      "layout": "table",
+      "title": "Reactive versus scheduled versus predictive",
+      "kicker": "Concept 9 of 19",
+      "table": {
+        "head": [
+          "",
+          "Reactive",
+          "Scheduled",
+          "Predictive"
+        ],
+        "rows": [
+          [
+            "Trigger",
+            "Signal now",
+            "Calendar",
+            "Forecast"
+          ],
+          [
+            "Daily cycle",
+            "Late by lag",
+            "Perfect",
+            "Good"
+          ],
+          [
+            "TV spike",
+            "Yes, after lag",
+            "No",
+            "If like history"
+          ],
+          [
+            "Fails by",
+            "Wrong signal, flapping",
+            "Quiet drift",
+            "Wrong, confidently"
+          ],
+          [
+            "Use",
+            "Surprises",
+            "Known cycles",
+            "Slow boots, big fleets"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept nine: three kinds of trigger. Reactive scaling follows the signal right now. Scheduled follows the calendar. Predictive follows a model's forecast.",
+          "reveal": 1
+        },
+        {
+          "say": "On the known daily cycle, reactive is late by the lag every single day. Scheduled is perfect, with capacity before load. Predictive does it well.",
+          "reveal": 2
+        },
+        {
+          "say": "On the TV moment, reactive handles it, limited by lag and headroom. Scheduled can't, because it isn't on the calendar. Predictive only does if it resembles history.",
+          "reveal": 3
+        },
+        {
+          "say": "Each fails differently. Reactive: wrong signal, or flapping. Scheduled: a wrong guess that quietly drifts. Predictive: wrong with confidence.",
+          "reveal": 4
+        },
+        {
+          "say": "So stack them. Schedule the known, react to the actual, and add prediction when boot delay or fleet size justifies it.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Module 6 · Reactive vs. scheduled vs. predictive"
+    },
+    {
+      "id": "s030",
+      "layout": "quiz",
+      "title": "Pause and think: why did the fleet shrink?",
+      "kicker": "Pause and think",
+      "bullets": [
+        "A. The maximum is too low",
+        "B. Thresholds too close, and CPU is the wrong signal",
+        "C. The load balancer is draining too slowly"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. CPU target sixty-five percent, scale down at sixty, no cooldown. The fleet bounces between six and nine all evening. Then, during a database slowdown, it shrinks. Why both?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s031",
+      "layout": "bullets",
+      "title": "Answer: flapping plus the wrong signal",
+      "kicker": "Answer",
+      "bullets": [
+        "Widen thresholds, add cooldowns",
+        "IO-bound: use requests/instance or latency"
+      ],
+      "steps": [
+        {
+          "say": "The answer is B. Thresholds five points apart with no cooldown means noise keeps undoing the last action. Widen them, say up at seventy and down at forty, add cooldowns, and remove one at a time.",
+          "reveal": 1
+        },
+        {
+          "say": "During the database slowdown, threads were waiting, not burning CPU. So the signal read spare capacity. Switch to requests per instance or latency. In the interview, after you say it auto-scales, expect: on what signal?",
+          "reveal": 2
+        }
+      ]
+    },
+    {
+      "id": "s032",
+      "layout": "section",
+      "title": "Database Connection Pooling",
+      "kicker": "Concept 10 of 19",
+      "steps": [
+        {
+          "say": "Concept ten: database connection pooling. Remember the fifty servers that made one thousand connections? This is the fix.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Module 6 Scaling · Database Connection Pooling"
+    },
+    {
+      "id": "s033",
+      "layout": "number",
+      "title": "Opening a connection costs ten queries",
+      "kicker": "Concept 10 of 19",
+      "big": "Connect 20-50 ms  vs  query 5 ms",
+      "caption": "TCP + TLS + auth, plus a database process per connection",
+      "steps": [
+        {
+          "say": "Problem part one: setup cost. A new database connection needs a T-C-P handshake, T-L-S negotiation and authentication. That's about twenty to fifty milliseconds before the first query runs.",
+          "reveal": 0
+        },
+        {
+          "say": "Postgres also starts a process for each connection. Compare that with a five millisecond query. Opening the connection is ten times the work of using it.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s034",
+      "layout": "bullets",
+      "title": "Problem part two: multiplication",
+      "kicker": "Concept 10 of 19",
+      "bullets": [
+        "App pool: 10-20 conns per server, borrow and return",
+        "20 x 50 servers = 1,000 vs Postgres ~100",
+        "Each scale-up adds a connection burst",
+        "One tier multiplies load on the next"
+      ],
+      "steps": [
+        {
+          "say": "Frameworks fix part one with an app-side pool. Each server opens perhaps ten to twenty connections once, and queries borrow and return them. The handshake is paid once per connection's lifetime.",
+          "reveal": 1
+        },
+        {
+          "say": "But watch the fleet grow. A sensible pool of twenty, times fifty servers, is one thousand connections. Postgres's default limit is around one hundred.",
+          "reveal": 2
+        },
+        {
+          "say": "When the auto-scaler adds five servers in a spike, they immediately ask for another hundred connections. The app tier gains capacity while the unchanged database turns clients away.",
+          "reveal": 3
+        },
+        {
+          "say": "That's scaling one tier multiplies load on the next, in its most common form.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s035",
+      "layout": "diagram",
+      "title": "Two layers: local pools and a shared pooler",
+      "kicker": "Concept 10 of 19",
+      "mermaid": "flowchart TD\n  A[\"50 app servers, 20 conns each\"] -->|\"1,000 cheap client conns\"| P[\"PgBouncer pooler\"]\n  P -->|\"about 50 real conns\"| D[(\"Database: calm\")]",
+      "caption": "The pooler caps the total, however many servers the scaler adds",
+      "steps": [
+        {
+          "say": "The fix has two layers. Layer one: each server keeps its small local pool for reuse.",
+          "reveal": 0
+        },
+        {
+          "say": "Layer two: a shared proxy pooler, such as PgBouncer or the managed R-D-S Proxy, accepts a thousand cheap client connections and multiplexes them over about fifty real database connections. Multiplexing means many clients take turns on a few real connections, each borrowing one only while it's in a transaction.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s036",
+      "layout": "bullets",
+      "title": "Example: why so few connections are enough",
+      "kicker": "Example",
+      "bullets": [
+        "Little's law: busy = rate x duration",
+        "400/s x 5 ms = 2 busy connections",
+        "Pool of 200: more contention, less throughput",
+        "Size about cores x 2: tens, not thousands",
+        "Transaction mode can break session features"
+      ],
+      "steps": [
+        {
+          "say": "Here's the math, using Little's law: busy connections equal query rate times query duration.",
+          "reveal": 1
+        },
+        {
+          "say": "Four hundred queries a second, times five milliseconds, equals two. A thousand logical connections, and about two are doing anything at any instant.",
+          "reveal": 2
+        },
+        {
+          "say": "A teammate wants a pool of two hundred for safety. Bad idea. A database runs roughly one query per CPU core at a time. Extra connections add no processors. They wait, adding context switches and lock contention, so throughput can actually fall.",
+          "reveal": 3
+        },
+        {
+          "say": "HikariCP, a popular Java pool, suggests about cores times two. Tens, not thousands. If that feels too small, fix slow queries or add caching or replicas.",
+          "reveal": 4
+        },
+        {
+          "say": "One gotcha: transaction-mode pooling can break session variables and temporary tables.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s037",
+      "layout": "bullets",
+      "title": "Pool exhaustion: a new way to be down",
+      "kicker": "Concept 10 of 19",
+      "bullets": [
+        "Symptom: borrow timeouts, idle database",
+        "Cause: a leak; connection never returned",
+        "Guardrails: timeout, wait alerts, leak detection",
+        "Connections are not capacity"
+      ],
+      "steps": [
+        {
+          "say": "Pooling brings its own failure. Imagine after a deploy, p ninety-nine latency jumps, requests log pool borrow timeout, and the database is nearly idle.",
+          "reveal": 1
+        },
+        {
+          "say": "That's a connection leak. Some code path, maybe an early return or an exception, borrows a connection and never returns it. The queue moved from the database into the app.",
+          "reveal": 2
+        },
+        {
+          "say": "Guardrails: a short borrow timeout so you fail fast, alerts on pool utilization and wait time, and leak detection that logs who held a connection too long.",
+          "reveal": 3
+        },
+        {
+          "say": "In the interview, say: local pools plus a shared pooler, sized near the core count, and I alert on pool wait time. Recap: never raise the limit to five thousand. Connections are not capacity.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s038",
+      "layout": "section",
+      "title": "Multi-Region and Cell-Based Architecture",
+      "kicker": "Concept 11 of 19",
+      "steps": [
+        {
+          "say": "Concept eleven: multi-region architecture. Three availability zones survive a datacenter fire. But what about losing a whole region, or breaking everything yourself?",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Module 6 · Multi-Region and Cell-Based Architecture"
+    },
+    {
+      "id": "s039",
+      "layout": "bullets",
+      "title": "Three AZs, and still everyone goes down",
+      "kicker": "Concept 11 of 19",
+      "bullets": [
+        "Region = several AZs; store has 1 region, 3 AZs",
+        "Regional control plane fails: 4 hours down",
+        "Bad config push: 100% of checkout fails",
+        "Poison tenant: 20 million users slowed",
+        "Sydney: ~200 ms per write round trip"
+      ],
+      "steps": [
+        {
+          "say": "A region is a cloud location like US East, made of availability zones, or A-Zs: separate datacenters a few kilometres apart. The store runs in one region, three AZs, and hits three incidents in a year.",
+          "reveal": 1
+        },
+        {
+          "say": "The regional dependency. A provider problem in the region's shared control systems breaks all three AZs. Four hours down.",
+          "reveal": 2
+        },
+        {
+          "say": "The global config push. A malformed rate-limit rule reaches every server in ninety seconds, as designed. Checkout fails for one hundred percent of customers. The fault came from inside.",
+          "reveal": 3
+        },
+        {
+          "say": "The poison tenant. One business customer's export script saturates the shared order database, and twenty million others get slow pages for an hour.",
+          "reveal": 4
+        },
+        {
+          "say": "And Sydney customers wait about two hundred milliseconds per round trip on every write. Every fault's blast radius was the whole company.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s040",
+      "layout": "twocol",
+      "title": "Two ways to fail separately",
+      "kicker": "Concept 11 of 19",
+      "left": {
+        "heading": "Multi-region",
+        "bullets": [
+          "Ships in two oceans",
+          "Backups alone: a day to restore"
+        ]
+      },
+      "right": {
+        "heading": "Cells",
+        "bullets": [
+          "Watertight compartments",
+          "Hurt 5% before 100%"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Multi-region runs the system in two or more regions, so one can go away.",
+          "reveal": 1
+        },
+        {
+          "say": "Backing up to another region isn't enough alone. Restoring fifty terabytes onto an untested stack takes a day or more.",
+          "reveal": 2
+        },
+        {
+          "say": "Cell-based architecture splits each region into cells: complete, independent copies of the stack, each serving a fixed slice of customers.",
+          "reveal": 3
+        },
+        {
+          "say": "Testing config better isn't enough either. Some faults appear only under real traffic. What's missing is a way to hurt five percent of customers before one hundred percent.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s041",
+      "layout": "table",
+      "title": "Failure domains and what contains each",
+      "kicker": "Concept 12 of 19",
+      "table": {
+        "head": [
+          "Failure domain",
+          "Example",
+          "Contained by"
+        ],
+        "rows": [
+          [
+            "Process or host",
+            "Crash, full disk",
+            "N+1 behind a balancer"
+          ],
+          [
+            "Availability zone",
+            "Power in one building",
+            "Every tier across 3 AZs"
+          ],
+          [
+            "Region",
+            "Control plane fails",
+            "A second or third region"
+          ],
+          [
+            "Your own change",
+            "Bad config push",
+            "Cells, deployed in waves"
+          ],
+          [
+            "Noisy customer",
+            "Poison tenant",
+            "Cells or shuffle sharding"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept twelve: failure domains. A failure domain is the set of things that fail together. Level one, a process or host: a crash, a full disk, a GC pause. Horizontal scaling and load balancing contain it, with N plus one.",
+          "reveal": 1
+        },
+        {
+          "say": "Level two, an availability zone: power or cooling in one building. Spread every tier across three AZs.",
+          "reveal": 2
+        },
+        {
+          "say": "Level three, a region: the regional control plane or a big network event. The store's four-hour outage. You need a second, or third, region.",
+          "reveal": 3
+        },
+        {
+          "say": "Level four, your own change: a bad deploy or config, like the global push. Cells, deployed one at a time.",
+          "reveal": 4
+        },
+        {
+          "say": "Level five, one noisy customer, like the poison tenant. Again cells, or shuffle sharding, coming up. Regions answer what if a location goes away. Cells answer what if we, or one customer, break something.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Module 6 · Multi-Region, failure domains first"
+    },
+    {
+      "id": "s042",
+      "layout": "table",
+      "title": "Strategies by RPO and RTO",
+      "kicker": "Concept 13 of 19",
+      "table": {
+        "head": [
+          "Strategy",
+          "Second region runs",
+          "RPO",
+          "RTO"
+        ],
+        "rows": [
+          [
+            "Backup and restore",
+            "Only backups",
+            "Hours",
+            "Hours to a day"
+          ],
+          [
+            "Pilot light",
+            "Data, servers off",
+            "Seconds-minutes",
+            "Tens of minutes"
+          ],
+          [
+            "Warm standby",
+            "Small working copy",
+            "Seconds",
+            "Minutes"
+          ],
+          [
+            "Active-active",
+            "Full stack, live users",
+            "Seconds or zero",
+            "Near zero"
+          ],
+          [
+            "Rule",
+            "Choose per system",
+            "",
+            ""
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept thirteen: picking a multi-region strategy. Two numbers drive it. R-P-O, recovery point objective, is how much recent data you can lose. R-T-O, recovery time objective, is how long you can be down. Strategy one, backup and restore: only backups in the second region. RPO is hours, RTO is hours to a day, cost is lowest.",
+          "reveal": 1
+        },
+        {
+          "say": "Strategy two, pilot light: data replicates continuously, servers are off or minimal. RPO seconds to minutes. RTO tens of minutes, to start and scale servers.",
+          "reveal": 2
+        },
+        {
+          "say": "Strategy three, warm standby: a small working copy of everything, taking no users. RPO seconds, RTO minutes.",
+          "reveal": 3
+        },
+        {
+          "say": "Strategy four, active-active: the full stack serving users in every region all the time. RPO seconds, or zero for synchronously replicated data. RTO near zero. Highest cost.",
+          "reveal": 4
+        },
+        {
+          "say": "Choose per system, not per company. The store's checkout may need active-active, while internal reporting is fine with backup and restore.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Module 6 · Multi-Region, Step 1: strategy by RPO and RTO"
+    },
+    {
+      "id": "s043",
+      "layout": "bullets",
+      "title": "Data placement: three kinds of data",
+      "kicker": "Concept 14 of 19",
+      "bullets": [
+        "1. Home-region: orders, cart; async copy for DR",
+        "2. Read-mostly: catalog, flags; one writer",
+        "3. Truly global: usernames; consensus, 75-200 ms",
+        "Two writers per record: need a conflict rule"
+      ],
+      "steps": [
+        {
+          "say": "Concept fourteen: where each dataset lives. Servers copy easily between regions. Data doesn't. Kind one, home-region data. Each customer's orders, cart and profile live in one home region, the nearest one or where law requires. A Sydney shopper's cart lives in Asia-Pacific. Writes go there, and copy asynchronously elsewhere only for disaster recovery. One writer per record, so no conflicts. Most data should be this kind.",
+          "reveal": 1
+        },
+        {
+          "say": "Kind two, read-mostly shared data: the catalog, prices, feature flags. One region writes, and every region keeps a read-only copy that lags a second or so.",
+          "reveal": 2
+        },
+        {
+          "say": "Kind three, truly global, strongly consistent data: unique usernames, or the last unit of a limited item. Use one global home, or a consensus database like Spanner, and pay a cross-region round trip, seventy-five to two hundred milliseconds, per write. Keep this small.",
+          "reveal": 3
+        },
+        {
+          "say": "If two regions both accept writes to the same record, you need a conflict rule, like last write wins.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Module 6 · Multi-Region, Step 2: where each dataset lives"
+    },
+    {
+      "id": "s044",
+      "layout": "bullets",
+      "title": "Routing users to a region",
+      "kicker": "Concept 15 of 19",
+      "bullets": [
+        "GeoDNS: answer depends on user location",
+        "Anycast: one IP, nearest region",
+        "Failover ~ TTL 60 s + detect 30 s = ~90 s"
+      ],
+      "steps": [
+        {
+          "say": "Concept fifteen: getting users to their region. This happens above the regional load balancer.",
+          "reveal": 1
+        },
+        {
+          "say": "Option one, GeoDNS: the D-N-S answer depends on where the user is. Option two, anycast: one IP address, and the network picks the nearest region.",
+          "reveal": 2
+        },
+        {
+          "say": "Add a global health check that removes a failed region. DNS failover takes about the TTL plus detection. With a sixty second TTL and thirty seconds to detect, that's about ninety seconds. Anycast reroutes without waiting for caches.",
+          "reveal": 3
+        }
+      ],
+      "caption": "Book: Module 6 · Multi-Region, Step 3: route users to a region"
+    },
+    {
+      "id": "s045",
+      "layout": "diagram",
+      "title": "Two regions, cells inside each",
+      "kicker": "Concept 16 of 19",
+      "mermaid": "flowchart TD\n  U[\"Users\"] --> G[\"GeoDNS or anycast\"]\n  G --> R1[\"US East: cell router\"]\n  G --> R2[\"EU West: cell router\"]\n  R1 --> C1[\"Cell 1: app, cache, DB shard\"]\n  R1 --> C2[\"Cells 2 to 10\"]\n  R2 --> C4[\"Cell 11\"]\n  R2 --> C5[\"Cells 12 to 20\"]\n  C1 -.-> C4",
+      "caption": "Book: Module 6 · Multi-Region, Step 4: cells inside each region",
+      "steps": [
+        {
+          "say": "Here's the whole picture. Users hit GeoDNS or anycast, which picks their home region. In each region, a cell router sends each customer to their cell.",
+          "reveal": 0
+        },
+        {
+          "say": "Each cell is the full stack: app, cache and a database shard. Cells never call each other. The dotted lines are background replication: each cell to a disaster-recovery partner, and the catalog to both regions.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s046",
+      "layout": "bullets",
+      "title": "Cell-based architecture, rule by rule",
+      "kicker": "Concept 16 of 19",
+      "bullets": [
+        "1. Fixed size, tested once, grow by count",
+        "2. Partition key via mapping table, not mod N",
+        "3. Dumb, fail-static router",
+        "4. Deploy in waves: one cell first",
+        "5. No cross-cell calls"
+      ],
+      "steps": [
+        {
+          "say": "Concept sixteen: cells. Rule one, fixed size, grown by count. Pick a maximum, say one million customers or ten thousand requests per second, load-test it once, and grow by adding cells. Cattle, not pets, one level up.",
+          "reveal": 1
+        },
+        {
+          "say": "Rule two, the partition key. Every request carries a customer or tenant ID. The router looks it up in a mapping table, not hash mod N, so you can move the poison tenant without reshuffling everyone.",
+          "reveal": 2
+        },
+        {
+          "say": "Rule three, a router as dumb as possible. A cached lookup and a forward, no business logic. It's fail-static: if the mapping store is down, it keeps routing with the last known table.",
+          "reveal": 3
+        },
+        {
+          "say": "Rule four, deploy in waves. Code and config go to one canary cell first, then a few, then the rest, with bake time and automatic checks between waves.",
+          "reveal": 4
+        },
+        {
+          "say": "Rule five, no cross-cell calls on the request path. What must be global, like sign-in, is a separate, small, carefully built service.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s047",
+      "layout": "table",
+      "title": "Example: the store in regions and cells",
+      "kicker": "Example",
+      "table": {
+        "head": [
+          "Question",
+          "Answer"
+        ],
+        "rows": [
+          [
+            "Cells",
+            "200k / 10k = 20 cells; poison tenant hits 5%"
+          ],
+          [
+            "Config push",
+            "1 cell first: 5% for ~5 min"
+          ],
+          [
+            "Static stability",
+            "2 regions = 2.0x peak; 3 regions = 1.5x"
+          ],
+          [
+            "Sydney writes",
+            "~200 ms down to ~10 ms"
+          ],
+          [
+            "RPO / RTO",
+            "~1 s / a few minutes"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's put numbers on it. Twenty million customers, and about two hundred thousand requests per second reach the app tier at peak. Each cell is tested at ten thousand requests per second. That's twenty cells, ten per region. The poison tenant now slows one cell: five percent of customers.",
+          "reveal": 1
+        },
+        {
+          "say": "The config push, replayed. It hits one cell first, the error rate jumps within a minute, and the pipeline rolls back automatically. Five percent of customers for about five minutes.",
+          "reveal": 2
+        },
+        {
+          "say": "Static stability means surviving regions carry the load with capacity already running, because scaling APIs may be part of the outage. With two regions, each must handle full peak, so you pay two times peak. With three, any two carry peak, so each needs half: one and a half times. A third region is often cheaper than a second.",
+          "reveal": 3
+        },
+        {
+          "say": "Sydney gets an Asia-Pacific home region, and writes drop from about two hundred milliseconds to ten.",
+          "reveal": 4
+        },
+        {
+          "say": "Recovery targets: about one second of replication lag gives an RPO of about a second. Failover is detection, DNS TTL and promoting a replica: an RTO of a few minutes.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s048",
+      "layout": "bullets",
+      "title": "Shuffle sharding: cells for shared workers",
+      "kicker": "Concept 17 of 19",
+      "bullets": [
+        "Each customer: random combo of shared workers",
+        "8 workers, 2 each: 28 pairs",
+        "Full overlap with poison: 1 in 28 (~3.6%)",
+        "Route 53: 2,048 servers, 4 each, ~730 billion",
+        "Regions, cells, shuffle sharding"
+      ],
+      "steps": [
+        {
+          "say": "Concept seventeen: shuffle sharding. Sometimes a private cell per customer is too expensive. Instead, give each customer a small random combination of shared workers.",
+          "reveal": 1
+        },
+        {
+          "say": "Example: eight workers, two per customer. That's eight times seven over two: twenty-eight possible pairs.",
+          "reveal": 2
+        },
+        {
+          "say": "A poison customer takes down its own two workers. Another customer is fully cut off only if it drew exactly the same pair: one in twenty-eight, about three point six percent. A customer sharing just one worker still gets answers from the other, because clients retry.",
+          "reveal": 3
+        },
+        {
+          "say": "Amazon's Route 53 DNS does this at scale: two thousand and forty-eight virtual name servers, four per domain, about seven hundred and thirty billion combinations.",
+          "reveal": 4
+        },
+        {
+          "say": "In the interview, say: regions for location loss, cells for our own mistakes, shuffle sharding when cells per customer cost too much.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Module 6 · Multi-Region, Shuffle sharding"
+    },
+    {
+      "id": "s049",
+      "layout": "table",
+      "title": "Cloud building blocks",
+      "kicker": "Concept 18 of 19",
+      "table": {
+        "head": [
+          "Need",
+          "AWS",
+          "Azure",
+          "Google Cloud"
+        ],
+        "rows": [
+          [
+            "Virtual machines",
+            "EC2",
+            "Virtual Machines",
+            "Compute Engine"
+          ],
+          [
+            "Kubernetes / functions",
+            "EKS / Lambda",
+            "AKS / Functions",
+            "GKE / Cloud Run"
+          ],
+          [
+            "Object storage",
+            "S3",
+            "Blob Storage",
+            "Cloud Storage"
+          ],
+          [
+            "Relational DB",
+            "RDS, Aurora",
+            "Azure SQL",
+            "Cloud SQL, Spanner"
+          ],
+          [
+            "Key-value / DNS",
+            "DynamoDB / Route 53",
+            "Cosmos DB / Azure DNS",
+            "Firestore / Cloud DNS"
+          ],
+          [
+            "Queue / CDN",
+            "SQS / CloudFront",
+            "Service Bus / Front Door",
+            "Pub/Sub / Cloud CDN"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept eighteen: a quick map of the cloud building blocks, so you can name things in any provider. Virtual machines: EC2 on AWS, Virtual Machines on Azure, Compute Engine on Google Cloud.",
+          "reveal": 1
+        },
+        {
+          "say": "Managed Kubernetes: E-K-S, A-K-S and G-K-E. Serverless functions: Lambda, Azure Functions, and Cloud Run functions. A Lambda cold start, when no warm instance exists, costs a hundred milliseconds to several seconds.",
+          "reveal": 2
+        },
+        {
+          "say": "Object storage: S3, Blob Storage, Cloud Storage.",
+          "reveal": 3
+        },
+        {
+          "say": "Managed relational databases: RDS and Aurora, Azure SQL Database, Cloud SQL and Spanner.",
+          "reveal": 4
+        },
+        {
+          "say": "Key-value and document stores: DynamoDB, Cosmos DB, and Firestore or Bigtable. DNS: Route 53, Azure DNS, Cloud DNS.",
+          "reveal": 5
+        },
+        {
+          "say": "Queues: SQS, Service Bus, Pub Sub. CDN: CloudFront, Front Door, Cloud CDN. And cost levers, biggest first: delete idle resources, right-size, scale down at night, commit for a discount, use spot capacity for batch work, and watch cross-region transfer, which is billed.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Module 6 · Cloud building blocks (a short map)"
+    },
+    {
+      "id": "s050",
+      "layout": "section",
+      "title": "Capstone: 100 to 1,000,000 Requests per Second",
+      "kicker": "Concept 19 of 19",
+      "steps": [
+        {
+          "say": "Concept nineteen, the capstone. One service grows from one hundred to one million requests per second. At every stage we ask three questions: what limits throughput right now, what's the cheapest tool that moves it, and what should stay unchanged?",
+          "reveal": 0
+        },
+        {
+          "say": "The starting point: the store's public API on one modest four-core server, with sessions in memory, files on local disk, and a midnight cron job. One hundred requests per second, one database, and growth of three times a year.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Module 6 · Capstone, 100 to 1,000,000 req/s"
+    },
+    {
+      "id": "s051",
+      "layout": "bullets",
+      "title": "Stage 1: 100 to 1,000, the single point of failure",
+      "kicker": "Capstone stage 1",
+      "bullets": [
+        "70% CPU: scale up two sizes",
+        "Host dies: 40-minute outage",
+        "2+ servers, load balancer, checklist",
+        "Leave the database alone"
+      ],
+      "steps": [
+        {
+          "say": "Peaks push the server past seventy percent CPU. Moving up two instance sizes fixes it in an afternoon. That's vertical scaling, used correctly.",
+          "reveal": 1
+        },
+        {
+          "say": "Eight months later, near a thousand requests per second, the host dies at lunchtime. Forty minutes of total outage. Now the problem is that there's only one server.",
+          "reveal": 2
+        },
+        {
+          "say": "Decision: at least two servers behind a load balancer, plus the statelessness checklist. Sessions to Redis, files to object storage, the cron behind a distributed lock.",
+          "reveal": 3
+        },
+        {
+          "say": "Not scaled: the database. It's mostly idle. Strictly, N plus one would be three servers.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s052",
+      "layout": "bullets",
+      "title": "Stage 2: 1,000 to 10,000, the first downstream flood",
+      "kicker": "Capstone stage 2",
+      "bullets": [
+        "~10 servers: DB read latency doubles",
+        "13 servers (12 + 1), least-connections",
+        "Cache-aside 98%+ hits: 40x fewer reads",
+        "260 connections: watch the limit"
+      ],
+      "steps": [
+        {
+          "say": "Adding a third, then a fifth server is routine, because they're stateless. At about ten servers, database read latency doubles at peak. The bigger app tier multiplied queries about fivefold.",
+          "reveal": 1
+        },
+        {
+          "say": "Decision: thirteen servers, twelve for peak plus one spare, behind least-connections with rolling deploys and draining.",
+          "reveal": 2
+        },
+        {
+          "say": "Cache-aside reaches a hit ratio above ninety-eight percent on product reads, cutting database reads about forty times. Read replicas take the remaining misses. Reads that never reach the database beat a bigger database.",
+          "reveal": 3
+        },
+        {
+          "say": "Audit the pools: thirteen times twenty is two hundred and sixty connections, already near a common limit. Not yet: an auto-scaler. Traffic is predictable enough.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s053",
+      "layout": "bullets",
+      "title": "Stage 3: 10,000 to 100,000, the elastic fleet",
+      "kicker": "Capstone stage 3",
+      "bullets": [
+        "65 servers idle at night, swamped by campaigns",
+        "Auto-scale: requests/instance, schedule + 65%",
+        "Min 8, max 120 from DB capacity",
+        "2,400 clients to ~60 real connections",
+        "CDN: a third of requests never arrive"
+      ],
+      "steps": [
+        {
+          "say": "About sixty-five servers sized for peak sit below thirty percent utilization eighteen hours a day. Then a campaign brings three times normal peak in twenty minutes. Wrong both ways.",
+          "reveal": 1
+        },
+        {
+          "say": "Decision: auto-scaling with the homework done. Signal: requests per instance for the IO-bound API, backlog age for workers. Scheduled before the 6 PM ramp, plus a reactive sixty-five percent target.",
+          "reveal": 2
+        },
+        {
+          "say": "Minimum eight, maximum one hundred and twenty, with the max from measured database and cache capacity. A bulkhead, not a guess.",
+          "reveal": 3
+        },
+        {
+          "say": "The pooler: up to one hundred and twenty times twenty is two thousand four hundred clients. PgBouncer multiplexes them onto about sixty real connections.",
+          "reveal": 4
+        },
+        {
+          "say": "Avoided instead of scaled: images and JavaScript move to a C-D-N, a content delivery network, so about a third of requests never reach the app.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s054",
+      "layout": "table",
+      "title": "Stage 4: the honest anatomy of a million",
+      "kicker": "Capstone stage 4",
+      "caption": "Most traffic is absorbed before the app fleet",
+      "steps": [
+        {
+          "say": "At a million requests per second there's no single incident. Most requests never reach your servers. The CDN and edge caches serve static and cacheable content, and perhaps one hundred fifty to two hundred fifty thousand requests per second reach the app fleet.",
+          "reveal": 2
+        },
+        {
+          "say": "The app fleet is big and boring: two to three hundred stateless servers across three AZs, auto-scaled, drained, rolled.",
+          "reveal": 3
+        },
+        {
+          "say": "The hard tiers hold state: a sharded database, a cache cluster using consistent hashing, and a replicated session store. And the front door, with rate limiting and load shedding, gets a module of its own.",
+          "reveal": 6
+        }
+      ],
+      "table": {
+        "head": [
+          "Tier",
+          "At a million req/s"
+        ],
+        "rows": [
+          [
+            "CDN and edge cache",
+            "Absorb most requests"
+          ],
+          [
+            "App fleet",
+            "150K-250K req/s reach it"
+          ],
+          [
+            "App servers",
+            "200-300 stateless, 3 AZs, auto-scaled"
+          ],
+          [
+            "Cache cluster",
+            "Consistent hashing"
+          ],
+          [
+            "Session store",
+            "Replicated"
+          ],
+          [
+            "Database",
+            "Pooler, shards and replicas"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "s055",
+      "layout": "table",
+      "title": "Debrief: the bottleneck's journey",
+      "kicker": "Capstone debrief",
+      "table": {
+        "head": [
+          "Stage",
+          "Bottleneck",
+          "Move"
+        ],
+        "rows": [
+          [
+            "100 to 1K",
+            "One machine, then only one",
+            "Bigger box, then 2+ stateless"
+          ],
+          [
+            "1K to 10K",
+            "App, then DB reads",
+            "Fleet N+1, cache, replicas"
+          ],
+          [
+            "10K to 100K",
+            "Idle cost, spikes, connections",
+            "Auto-scale, pooler, CDN"
+          ],
+          [
+            "100K to 1M",
+            "Stateful tiers, front door",
+            "Shards, hashing, edge"
+          ],
+          [
+            "Rule",
+            "Cheapest pattern that's enough",
+            "Leave other tiers alone"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's the debrief. From one hundred to a thousand, the bottleneck was one machine's size, then the fact that there was only one. The move: a bigger box, then two-plus stateless servers behind a balancer.",
+          "reveal": 1
+        },
+        {
+          "say": "From a thousand to ten thousand: app capacity, then database reads. The move: fleet plus N plus one, then cache and replicas.",
+          "reveal": 2
+        },
+        {
+          "say": "From ten thousand to a hundred thousand: idle cost at 4 AM, surprises at 7 PM, connections all the time. The move: auto-scaling with a max, a pooler, and a CDN.",
+          "reveal": 3
+        },
+        {
+          "say": "From a hundred thousand to a million: the tiers that hold state, and the front door. Where the bottleneck always ends up: the data.",
+          "reveal": 4
+        },
+        {
+          "say": "Order matters. An auto-scaler at a thousand requests per second, or sharding at a hundred, adds cost without moving the limit. In the interview, say: follow the bottleneck, and name what you're leaving alone. Beyond a million, the next bottleneck is blast radius, which regions and cells cap.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s056",
+      "layout": "recap",
+      "title": "Recap",
+      "bullets": [
+        "Vertical: buy time; ceiling, no redundancy",
+        "Horizontal: stateless checklist, N+1, rolling",
+        "LB: health, least-conns, drain, one address",
+        "Auto-scale: signal, 65%, max; pool connections",
+        "Regions by RPO/RTO; cells cap blast radius",
+        "Follow the bottleneck. Next: Ep 12, Consistency"
+      ],
+      "steps": [
+        {
+          "say": "Let's recap. Vertical scaling buys time with no new failure modes, but has a ceiling and no redundancy.",
+          "reveal": 1
+        },
+        {
+          "say": "Horizontal scaling gives capacity by addition, N plus one and rolling deploys, once the statelessness checklist is finished.",
+          "reveal": 2
+        },
+        {
+          "say": "Load balancers do four jobs: health checks, least-connections, draining and one address, and they come in pairs or anycast.",
+          "reveal": 3
+        },
+        {
+          "say": "Auto-scaling is a control loop: the right signal, sixty-five percent target, up fast, down slowly, min N plus one, max from the database. Connection pooling keeps that growth from flooding the database.",
+          "reveal": 4
+        },
+        {
+          "say": "Regions survive location loss, chosen by RPO and RTO. Cells and shuffle sharding cap the blast radius of your own mistakes and noisy customers.",
+          "reveal": 5
+        },
+        {
+          "say": "And always: follow the bottleneck. Thanks for watching. Next up, Episode twelve: Keeping Data Consistent.",
+          "reveal": 6
+        }
+      ]
+    }
+  ]
+}

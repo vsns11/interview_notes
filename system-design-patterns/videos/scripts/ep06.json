@@ -1,0 +1,2074 @@
+{
+  "series": "System Design Workshop",
+  "episode": 6,
+  "title": "Putting It Together + Thinking in Patterns",
+  "subtitle": "One request end to end, one full design, and a method for any prompt",
+  "scenes": [
+    {
+      "layout": "title",
+      "title": "Putting It Together + Thinking in Patterns",
+      "subtitle": "One request end to end, one full design, and a method for any prompt",
+      "steps": [
+        {
+          "say": "Welcome to episode six of the System Design Workshop: putting it together, and thinking in patterns.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll be able to tell the full story of one click, from browser to database and back. You'll design a URL shortener with real numbers. And you'll have a repeatable method: five questions and four quick calculations you can point at any design prompt.",
+          "reveal": 0
+        },
+        {
+          "say": "Keep the notes open: Part six of the fundamentals, then Module one. Pause at every quiz.",
+          "reveal": 0
+        }
+      ],
+      "id": "s001"
+    },
+    {
+      "layout": "bullets",
+      "title": "Two halves, one goal",
+      "bullets": [
+        "Part A: a request's journey, hop by hop",
+        "Part A: design a URL shortener with numbers",
+        "Part A: the decision cheat sheet",
+        "Part B: what a pattern is, and what it costs",
+        "Part B: the five questions",
+        "Part B: back-of-envelope math"
+      ],
+      "steps": [
+        {
+          "say": "First, we follow one request through every box.",
+          "reveal": 1
+        },
+        {
+          "say": "Then we design a URL shortener, step by step.",
+          "reveal": 2
+        },
+        {
+          "say": "Then a cheat sheet of common choices.",
+          "reveal": 3
+        },
+        {
+          "say": "Part B starts the patterns course: what a pattern is.",
+          "reveal": 4
+        },
+        {
+          "say": "Then five fixed questions for any prompt.",
+          "reveal": 5
+        },
+        {
+          "say": "And four quick calculations for sizing.",
+          "reveal": 6
+        }
+      ],
+      "id": "s002"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 1",
+      "title": "A request's journey",
+      "steps": [
+        {
+          "say": "Concept one: a request's journey. You tap Like, and a tenth of a second later the heart turns red. In that tenth of a second your request may touch fifteen machines. Let's follow it.",
+          "reveal": 0
+        }
+      ],
+      "id": "s003",
+      "caption": "Book: Module 0 Fundamentals · A request's journey"
+    },
+    {
+      "layout": "bullets",
+      "title": "Why follow one request?",
+      "bullets": [
+        "Most common warm-up question in interviews",
+        "Shows where the time goes",
+        "Shows where things break"
+      ],
+      "steps": [
+        {
+          "say": "Why bother? First, it's the classic warm-up: what happens when you type a U-R-L and press Enter?",
+          "reveal": 1
+        },
+        {
+          "say": "Second, every hop adds latency, the time a step takes. Know the hops, and you know what to remove.",
+          "reveal": 2
+        },
+        {
+          "say": "Third, ask what if this hop is down, one hop at a time, and you find your single points of failure. Our running example: a user in London opens photos dot example dot com slash feed.",
+          "reveal": 3
+        }
+      ],
+      "id": "s004"
+    },
+    {
+      "layout": "diagram",
+      "title": "The map: one feed request",
+      "mermaid": "flowchart LR\n  B[\"Browser\"] --> R[\"DNS resolver\"]\n  B --> E[\"CDN edge\"]\n  E --> L[\"Load balancer\"]\n  L --> G[\"API gateway\"]\n  G --> A[\"App server\"]\n  A --> C[\"Cache\"]\n  A --> DB[\"Database\"]",
+      "caption": "Browser, DNS, edge, load balancer, gateway, app, cache, database",
+      "steps": [
+        {
+          "say": "Here's the map. The browser asks D-N-S where the site lives, then talks to a nearby C-D-N edge, a server close to the user.",
+          "reveal": 0
+        },
+        {
+          "say": "The edge forwards the personal feed request to a load balancer, which picks a healthy API gateway. The gateway checks who you are and passes the request to an app server.",
+          "reveal": 0
+        },
+        {
+          "say": "The app server checks the cache, and only on a miss asks the database. Then the answer flows back the same way. Now let's walk it step by step.",
+          "reveal": 0
+        }
+      ],
+      "id": "s005"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Walkthrough",
+      "title": "Steps 1 to 5: getting connected",
+      "bullets": [
+        "1. Browser checks its own cache (0 ms)",
+        "2. DNS turns the name into an IP (0 to 50 ms)",
+        "3. TCP handshake (about 1 round trip)",
+        "4. TLS handshake (about 1 more round trip)",
+        "5. Browser sends GET /feed with a cookie"
+      ],
+      "steps": [
+        {
+          "say": "Step one. The browser checks its own cache, the cheapest cache of all. For our London user, it may already remember the site's I-P address.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, D-N-S, the internet's phone book. A resolver answers from its cache, or asks the root, the dot-com server and the site's own server. Because the site uses a C-D-N, the answer is the I-P of a nearby London edge.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, T-C-P opens a connection with a three-way handshake: SYN, SYN-ACK, ACK. To a London edge that's five to ten milliseconds. To New York it'd be about seventy. That gap is why C-D-Ns exist.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, T-L-S sets up encryption. The edge shows a certificate proving it's the real site, and both sides agree on keys: one more round trip. H-T-T-P three merges both handshakes into one.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, the browser sends GET slash feed. GET means read only. A cookie carries your session token, because H-T-T-P remembers nothing between requests.",
+          "reveal": 5
+        }
+      ],
+      "id": "s006"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Walkthrough",
+      "title": "Steps 6 to 10: reaching the code",
+      "bullets": [
+        "6. CDN edge serves static files, forwards /feed",
+        "7. Load balancer picks a healthy server",
+        "8. API gateway: auth, rate limit, route",
+        "9. Stateless app server runs the logic",
+        "10. Check the cache first (about 0.5 ms)"
+      ],
+      "steps": [
+        {
+          "say": "Step six. The edge serves images, scripts and style sheets straight from London. But the feed is personal, so it's marked uncacheable and forwarded to the origin, our own servers.",
+          "reveal": 1
+        },
+        {
+          "say": "Step seven. A layer-seven load balancer sends the request only to servers passing health checks. It runs as a redundant pair, so it's not a single point of failure.",
+          "reveal": 2
+        },
+        {
+          "say": "Step eight. The API gateway authenticates you, so now we know you're user forty-two. It applies rate limiting, replying four-twenty-nine Too Many Requests if you exceed it, and routes slash feed to the feed service.",
+          "reveal": 3
+        },
+        {
+          "say": "Step nine. The feed service runs on many stateless app servers. Any server can handle any request, so we scale by adding servers.",
+          "reveal": 4
+        },
+        {
+          "say": "Step ten, cache-aside. Ask Redis for user forty-two's feed. A hit returns in well under a millisecond and skips the database entirely.",
+          "reveal": 5
+        }
+      ],
+      "id": "s007"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Walkthrough",
+      "title": "Steps 11 to 15: data and the way back",
+      "bullets": [
+        "11. On a miss, query a read replica (2 to 20 ms)",
+        "12. Fill the cache with a TTL (say 60 s)",
+        "13. Response travels back as JSON",
+        "14. Side effects go to a queue",
+        "15. Logs, metrics, traces watch it all"
+      ],
+      "steps": [
+        {
+          "say": "Step eleven. On a miss, read from a read replica, a copy of the database, using an index instead of scanning every row.",
+          "reveal": 1
+        },
+        {
+          "say": "Step twelve. Store the result in the cache with a T-T-L, a time to live, of say sixty seconds. So the user may see new posts up to a minute late. That's eventual consistency: fine for a feed, not for a bank balance.",
+          "reveal": 2
+        },
+        {
+          "say": "Step thirteen. The J-SON response goes back through gateway, load balancer and edge. The browser renders, then fetches photos from the C-D-N.",
+          "reveal": 3
+        },
+        {
+          "say": "Step fourteen. Now you tap Like. That's a write to the primary database, answered at once. Notifications and counters happen later, through a queue. Queues can deliver twice, so workers must be idempotent: no duplicate notifications.",
+          "reveal": 4
+        },
+        {
+          "say": "Step fifteen. Every hop writes logs, emits metrics, and passes a trace I-D so engineers can follow this exact request later.",
+          "reveal": 5
+        }
+      ],
+      "id": "s008"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Where the time goes",
+      "table": {
+        "head": [
+          "Step",
+          "Typical time",
+          "How to shrink it"
+        ],
+        "rows": [
+          [
+            "DNS lookup",
+            "0-50 ms",
+            "DNS caching, long TTL"
+          ],
+          [
+            "TCP + TLS",
+            "10-20 ms nearby",
+            "Nearby edge, HTTP/3, keep-alive"
+          ],
+          [
+            "Edge to origin",
+            "5-80 ms",
+            "Origin in user's region"
+          ],
+          [
+            "Gateway + app",
+            "5-20 ms",
+            "Fewer hops, parallel calls"
+          ],
+          [
+            "Cache / DB",
+            "0.5 ms / 5-20 ms",
+            "Higher hit ratio, indexes"
+          ],
+          [
+            "Browser render",
+            "50-200 ms",
+            "Smaller pages, fewer scripts"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "A rough first-visit budget. D-N-S: up to fifty milliseconds.",
+          "reveal": 1
+        },
+        {
+          "say": "Handshakes: ten to twenty milliseconds to a nearby edge.",
+          "reveal": 2
+        },
+        {
+          "say": "Edge to origin: five to eighty, depending on whether the origin sits in the user's region.",
+          "reveal": 3
+        },
+        {
+          "say": "Gateway and app logic: five to twenty. Cut hops and make calls in parallel.",
+          "reveal": 4
+        },
+        {
+          "say": "Cache hit: half a millisecond. Database: five to twenty. That's why hit ratio matters.",
+          "reveal": 5
+        },
+        {
+          "say": "And rendering in the browser often costs the most. The lesson: on a first visit, network round trips often cost more than server work.",
+          "reveal": 6
+        }
+      ],
+      "id": "s009"
+    },
+    {
+      "layout": "table",
+      "title": "What can go wrong at each hop",
+      "table": {
+        "head": [
+          "Hop",
+          "Failure",
+          "Usual protection"
+        ],
+        "rows": [
+          [
+            "DNS",
+            "Provider outage",
+            "Two DNS providers"
+          ],
+          [
+            "CDN",
+            "Edge outage, stale content",
+            "Multi-CDN, invalidation"
+          ],
+          [
+            "Load balancer",
+            "LB node dies",
+            "Redundant pair"
+          ],
+          [
+            "App server",
+            "Crash, bad deploy",
+            "Health checks, canary, rollback"
+          ],
+          [
+            "Cache / DB",
+            "Node or primary dies",
+            "Replicas, failover, backups"
+          ],
+          [
+            "Any call",
+            "Slow dependency",
+            "Timeout, circuit breaker"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Now walk the same path asking what breaks. D-N-S provider goes down: use two providers.",
+          "reveal": 1
+        },
+        {
+          "say": "An edge fails or serves stale content: multiple C-D-Ns and proper invalidation.",
+          "reveal": 2
+        },
+        {
+          "say": "A load balancer node dies: that's why it's always a pair, never one box.",
+          "reveal": 3
+        },
+        {
+          "say": "A bad deploy crashes app servers: health checks pull them out, canary deploys catch it early, and you roll back.",
+          "reveal": 4
+        },
+        {
+          "say": "The cache or database primary dies: replicas take over, and backups cover the worst case.",
+          "reveal": 5
+        },
+        {
+          "say": "And any slow dependency: put a timeout on the call, and a circuit breaker to stop calling it. A queue worker crashing mid-job is covered by at-least-once delivery, retries and a dead-letter queue. And never treat the cache as the source of truth.",
+          "reveal": 6
+        }
+      ],
+      "id": "s010"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "A user likes a photo: what can be async?",
+      "bullets": [
+        "A. Saving the like",
+        "B. Notifying the photo owner",
+        "C. Updating the like counter",
+        "D. Feeding recommendations"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. When a user taps Like, which of these four can happen after we've already answered? Pause the video now.",
+          "reveal": 0
+        }
+      ],
+      "id": "s011"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Answer",
+      "title": "Answer: async is anything the user needn't wait for",
+      "bullets": [
+        "Save the like: synchronous, to the primary",
+        "Notify, count, recommend: publish an event",
+        "Workers retry; keep them idempotent"
+      ],
+      "steps": [
+        {
+          "say": "Answer: B, C and D. Saving the like is the essential write, so it happens before we reply.",
+          "reveal": 1
+        },
+        {
+          "say": "Nobody waits for notifications, counters or recommendations. Publish one event and return.",
+          "reveal": 2
+        },
+        {
+          "say": "Idempotent workers do the rest with retries. Recap: each hop costs time and can break, so cache it, duplicate it, or take it off the critical path.",
+          "reveal": 3
+        }
+      ],
+      "id": "s012"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 2",
+      "title": "Worked example: a URL shortener",
+      "steps": [
+        {
+          "say": "Concept two: a full worked design. A URL shortener turns a long link into something like sho dot r-t slash a-Z-3-k-Q-9-b. Opening the short link redirects you to the long one.",
+          "reveal": 0
+        }
+      ],
+      "id": "s013",
+      "caption": "Book: Module 0 · Worked example: designing a URL shortener"
+    },
+    {
+      "layout": "twocol",
+      "title": "Step 1: requirements",
+      "left": {
+        "heading": "Functional",
+        "bullets": [
+          "Long URL in, short URL out",
+          "Short URL redirects to long URL",
+          "Optional: custom alias, expiry, click counts"
+        ]
+      },
+      "right": {
+        "heading": "Non-functional",
+        "bullets": [
+          "Redirects: 99.99% available",
+          "Redirects: p99 under 50 ms",
+          "Not guessable in order; never lose a link",
+          "Read-heavy: about 100 reads per write"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Step one, requirements. Functional requirements say what it does. First: give it a long U-R-L, get a short one.",
+          "reveal": 1
+        },
+        {
+          "say": "Second: opening the short one redirects you.",
+          "reveal": 2
+        },
+        {
+          "say": "Optional extras: a custom alias like slash my-party, links that expire, and click counts for the owner.",
+          "reveal": 3
+        },
+        {
+          "say": "Non-functional requirements say how well. Redirects need ninety-nine point nine nine percent availability, about fifty-two minutes of downtime a year, because if redirects fail, every link ever shared breaks.",
+          "reveal": 4
+        },
+        {
+          "say": "Redirects must be fast: p ninety-nine under fifty milliseconds at the server. That means ninety-nine out of a hundred requests finish within fifty.",
+          "reveal": 5
+        },
+        {
+          "say": "Codes shouldn't be guessable by counting, and a created link must never be lost.",
+          "reveal": 6
+        },
+        {
+          "say": "And it's read-heavy: assume a hundred redirects per link created.",
+          "reveal": 7
+        }
+      ],
+      "id": "s014"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Step 2: estimates",
+      "table": {
+        "head": [
+          "Quantity",
+          "Calculation",
+          "Result"
+        ],
+        "rows": [
+          [
+            "Writes / s",
+            "100 M per month / 2.6 M s",
+            "about 40 / s"
+          ],
+          [
+            "Reads / s",
+            "40 x 100",
+            "about 4,000 / s"
+          ],
+          [
+            "Peak reads",
+            "4,000 x 3",
+            "about 12,000 / s"
+          ],
+          [
+            "Links in 5 years",
+            "100 M x 12 x 5",
+            "6 billion"
+          ],
+          [
+            "Storage",
+            "6 B x 500 bytes",
+            "about 3 TB"
+          ],
+          [
+            "Read bandwidth",
+            "4,000 x 500 bytes",
+            "about 2 MB / s"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Step two, estimates. Assume a hundred million new links a month. A month is about two point six million seconds, so that's about forty writes a second.",
+          "reveal": 1
+        },
+        {
+          "say": "A hundred reads per write gives about four thousand redirects a second on average.",
+          "reveal": 2
+        },
+        {
+          "say": "Plan for peaks three times the average: about twelve thousand a second.",
+          "reveal": 3
+        },
+        {
+          "say": "Over five years, a hundred million times twelve times five is six billion links.",
+          "reveal": 4
+        },
+        {
+          "say": "At about five hundred bytes each, that's about three terabytes in total.",
+          "reveal": 5
+        },
+        {
+          "say": "And bandwidth is tiny: four thousand times five hundred bytes is about two megabytes a second. So writes are trivial, reads need a cache, and sharding can wait.",
+          "reveal": 6
+        }
+      ],
+      "id": "s015"
+    },
+    {
+      "layout": "number",
+      "kicker": "Example",
+      "title": "How long should the code be?",
+      "big": "62^7 = 3.5 trillion codes",
+      "caption": "Base62: a-z, A-Z, 0-9. We need 6 billion.",
+      "steps": [
+        {
+          "say": "How many characters do we need? Use base sixty-two: lowercase, uppercase and digits, sixty-two symbols per character.",
+          "reveal": 0
+        },
+        {
+          "say": "Six characters give sixty-two to the sixth, about fifty-seven billion codes. Seven give about three point five trillion. We need six billion, so seven characters gives over five hundred times headroom.",
+          "reveal": 0
+        },
+        {
+          "say": "Cache sizing, same style: about three hundred fifty million redirects a day across, say, fifty million distinct links. Cache the busiest fifth: ten million entries times five hundred bytes is about five gigabytes. That fits one cache node.",
+          "reveal": 0
+        }
+      ],
+      "id": "s016"
+    },
+    {
+      "layout": "bullets",
+      "title": "Step 3: the API",
+      "bullets": [
+        "POST /api/v1/links returns 201 and the code",
+        "GET /aZ3kQ9b returns 302 with Location",
+        "Idempotency-Key: a retried create returns same link",
+        "Rate limit creates: 100 per hour, else 429",
+        "404 for unknown code, 410 Gone if expired"
+      ],
+      "steps": [
+        {
+          "say": "Step three, the API. Two endpoints. To create: POST to slash api slash v-one slash links with the long U-R-L. You get two-oh-one Created and the short code.",
+          "reveal": 1
+        },
+        {
+          "say": "To use it: GET slash the code. The server replies three-oh-two with a Location header pointing at the long U-R-L.",
+          "reveal": 2
+        },
+        {
+          "say": "The create call carries an idempotency key, a unique request I-D. If the client times out and retries, it gets the same link back, not two links.",
+          "reveal": 3
+        },
+        {
+          "say": "Creation is rate limited per key or I-P, say a hundred an hour, replying four-twenty-nine over the limit.",
+          "reveal": 4
+        },
+        {
+          "say": "And errors: four-oh-four for an unknown code, four-ten Gone for an expired one.",
+          "reveal": 5
+        }
+      ],
+      "id": "s017"
+    },
+    {
+      "layout": "twocol",
+      "title": "301 or 302?",
+      "left": {
+        "heading": "301 Moved Permanently",
+        "bullets": [
+          "Browser remembers, skips us next time",
+          "Less load and cost",
+          "Repeat clicks uncounted, can't expire"
+        ]
+      },
+      "right": {
+        "heading": "302 Found (temporary)",
+        "bullets": [
+          "Browser asks us every time",
+          "More load",
+          "Accurate counts, links can expire"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Both are redirect codes, and the choice is a classic trade-off. With three-oh-one, the browser caches the redirect.",
+          "reveal": 1
+        },
+        {
+          "say": "So the second click never reaches us: less load, less cost.",
+          "reveal": 2
+        },
+        {
+          "say": "But we can't count that click, and we can't expire or change the link for that browser.",
+          "reveal": 3
+        },
+        {
+          "say": "With three-oh-two, the browser asks us every single time.",
+          "reveal": 4
+        },
+        {
+          "say": "That's more load.",
+          "reveal": 5
+        },
+        {
+          "say": "But every click is counted and links can expire. We choose three-oh-two because analytics and expiry matter. Say this trade-off out loud.",
+          "reveal": 6
+        }
+      ],
+      "id": "s018"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Step 4: data model",
+      "table": {
+        "head": [
+          "Column",
+          "Type",
+          "Notes"
+        ],
+        "rows": [
+          [
+            "code",
+            "varchar(16)",
+            "Primary key, e.g. aZ3kQ9b"
+          ],
+          [
+            "long_url",
+            "text",
+            "Up to about 2 KB"
+          ],
+          [
+            "owner_id",
+            "bigint",
+            "Null for anonymous"
+          ],
+          [
+            "created_at",
+            "timestamp",
+            ""
+          ],
+          [
+            "expires_at",
+            "timestamp",
+            "Null if never"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Step four, the data model. One table. The code is the primary key, which gives us an index for free, so a redirect is one index lookup.",
+          "reveal": 1
+        },
+        {
+          "say": "The long U-R-L, up to about two kilobytes.",
+          "reveal": 2
+        },
+        {
+          "say": "The owner, empty for anonymous links.",
+          "reveal": 3
+        },
+        {
+          "say": "When it was created.",
+          "reveal": 4
+        },
+        {
+          "say": "And when it expires, if ever. Notice what's missing: a click counter. Updating this row on every redirect would turn every read into a write. Clicks go to a separate pipeline.",
+          "reveal": 5
+        }
+      ],
+      "id": "s019"
+    },
+    {
+      "layout": "table",
+      "title": "Step 5: generating the short code",
+      "table": {
+        "head": [
+          "Approach",
+          "Pro",
+          "Con"
+        ],
+        "rows": [
+          [
+            "Hash the URL",
+            "Same URL, same code",
+            "Collisions: check and retry"
+          ],
+          [
+            "Random 7 chars",
+            "Simple, not guessable",
+            "Collision checks"
+          ],
+          [
+            "Counter + base62",
+            "No collisions",
+            "Bottleneck, guessable"
+          ],
+          [
+            "Key generation service",
+            "Fast, no collisions",
+            "One more service"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Step five, the heart of the problem. Option one: hash the long U-R-L and take seven characters. The same U-R-L always gets the same code, but two U-R-Ls can collide, so you must check and retry.",
+          "reveal": 1
+        },
+        {
+          "say": "Option two: seven random characters. Simple and unguessable, but you still check for collisions.",
+          "reveal": 2
+        },
+        {
+          "say": "Option three: a global counter, one, two, three, written in base sixty-two. No collisions ever, but one counter is a bottleneck, and codes are guessable in order.",
+          "reveal": 3
+        },
+        {
+          "say": "Option four: a key generation service that pre-makes unused codes and hands them out in batches. Fast, no collisions, but it's one more service to run.",
+          "reveal": 4
+        }
+      ],
+      "id": "s020"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Walkthrough",
+      "title": "Counter ranges + scrambling, step by step",
+      "bullets": [
+        "1. Coordinator hands each server a range",
+        "2. Server counts in memory, no network call",
+        "3. Scramble the number reversibly",
+        "4. Encode in base62: 7 characters"
+      ],
+      "steps": [
+        {
+          "say": "A strong beginner answer combines them. Step one: a small coordination store hands each app server a range. Server A gets one million to just under two million. Server B gets two million to just under three million.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: server A counts through its range in memory. Link number one million and five needs no network call. If A crashes, its leftover range is simply skipped; we have trillions to spare.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: scramble the number with a reversible mixing function, so link one million and five and one million and six get unrelated-looking codes. That meets not guessable in order.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: write the scrambled number in base sixty-two, giving a seven-character code. Custom aliases skip all this: insert the alias, and if it exists, reply four-oh-nine Conflict. The database's uniqueness check makes races safe.",
+          "reveal": 4
+        }
+      ],
+      "id": "s021"
+    },
+    {
+      "layout": "diagram",
+      "title": "Step 6: high-level design",
+      "mermaid": "flowchart LR\n  C[\"Client\"] --> CDN[\"CDN and DNS\"]\n  CDN --> LB[\"Load balancer\"]\n  LB --> W[\"Link service x N\"]\n  W --> R[\"Redis cache\"]\n  W --> DB[\"DB primary + replicas\"]\n  W --> Q[\"Click queue\"]\n  Q --> AN[\"Analytics workers\"]",
+      "caption": "Stateless service; cached reads, primary writes, queued clicks",
+      "steps": [
+        {
+          "say": "Step six, the high-level design. Clients reach us through D-N-S, the C-D-N and a load balancer, landing on any copy of a stateless link service.",
+          "reveal": 0
+        },
+        {
+          "say": "The link service talks to a Redis cache, a database with one primary and some replicas, and a click queue feeding analytics workers. Two paths run through this picture. Let's trace both.",
+          "reveal": 0
+        }
+      ],
+      "id": "s022"
+    },
+    {
+      "layout": "twocol",
+      "title": "Two paths through the design",
+      "left": {
+        "heading": "Redirect (99% of traffic)",
+        "bullets": [
+          "Look up code in Redis",
+          "Miss: read replica, cache 24 h",
+          "Publish click event, return 302"
+        ]
+      },
+      "right": {
+        "heading": "Create (1% of traffic)",
+        "bullets": [
+          "Gateway: auth + rate limit",
+          "Validate URL, next number, encode",
+          "Insert into primary, return 201"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Redirect path. GET slash a-Z-3-k-Q-9-b arrives at any link server, which looks up the code in Redis. Most of the time that's a hit in under a millisecond.",
+          "reveal": 1
+        },
+        {
+          "say": "On a miss, it reads a replica and caches the result for, say, twenty-four hours.",
+          "reveal": 2
+        },
+        {
+          "say": "It checks the expiry, publishes a small click event without waiting, and returns three-oh-two.",
+          "reveal": 3
+        },
+        {
+          "say": "Create path. The POST passes the gateway's authentication and rate limiter.",
+          "reveal": 4
+        },
+        {
+          "say": "The service checks the U-R-L is well-formed and not on a malware list, takes the next number from its range, scrambles and encodes it.",
+          "reveal": 5
+        },
+        {
+          "say": "Then it inserts into the primary and returns two-oh-one. No cache write: the first redirect fills the cache.",
+          "reveal": 6
+        }
+      ],
+      "id": "s023"
+    },
+    {
+      "layout": "bullets",
+      "title": "Step 7: deep dives",
+      "bullets": [
+        "Caching: 12,000 reads/s become about 1,200",
+        "Edge: CDN caches redirects for minutes",
+        "Sharding: hash of code, consistent hashing",
+        "Availability: redirects survive primary loss",
+        "Analytics: Kafka events, batched counts",
+        "Abuse: rate limits, malware lists, disable"
+      ],
+      "steps": [
+        {
+          "say": "Step seven, deep dives. Caching: at a ninety percent hit ratio, twelve thousand peak reads become about twelve hundred database reads a second. Two replicas handle that.",
+          "reveal": 1
+        },
+        {
+          "say": "For links without analytics, the C-D-N can cache the redirect itself, so most clicks never reach us.",
+          "reveal": 2
+        },
+        {
+          "say": "Database scaling: three terabytes fits a primary and replicas for now. Later, shard by a hash of the code. Every redirect knows its code, so it hits exactly one shard: the ideal shard key.",
+          "reveal": 3
+        },
+        {
+          "say": "Availability: two copies of every tier across zones. If the primary dies, redirects keep working from replicas and cache. Creation pauses for a minute. Graceful degradation.",
+          "reveal": 4
+        },
+        {
+          "say": "Analytics: a counter update per click would be twelve thousand writes a second. Instead, each click is a Kafka event. Workers batch them and update counts once a minute. Counts lag slightly.",
+          "reveal": 5
+        },
+        {
+          "say": "Abuse: rate-limit creation, check malware lists, and allow links to be disabled.",
+          "reveal": 6
+        }
+      ],
+      "id": "s024"
+    },
+    {
+      "layout": "twocol",
+      "title": "Trade-offs and mistakes",
+      "left": {
+        "heading": "Trade-offs we chose",
+        "bullets": [
+          "302: more load, real analytics",
+          "Counter ranges: no collision checks",
+          "Eventual click counts: cheap writes"
+        ]
+      },
+      "right": {
+        "heading": "Common mistakes",
+        "bullets": [
+          "Skipping estimates",
+          "MD5 prefix, ignoring collisions",
+          "Click counter on the redirect path"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Name your trade-offs. Three-oh-two over three-oh-one: more load, but accurate analytics and expiring links.",
+          "reveal": 1
+        },
+        {
+          "say": "Counter ranges over hashing: no collision checks, at the cost of a small coordination store.",
+          "reveal": 2
+        },
+        {
+          "say": "Eventual consistency for click counts: much cheaper writes, slightly stale numbers.",
+          "reveal": 3
+        },
+        {
+          "say": "And the mistakes. Skipping estimates leaves seven characters, cache size and sharding unjustified.",
+          "reveal": 4
+        },
+        {
+          "say": "Taking the first seven characters of an M-D-five hash and ignoring collisions. With billions of links, collisions are certain.",
+          "reveal": 5
+        },
+        {
+          "say": "Updating a counter on every redirect, making the cheapest operation expensive. And don't over-engineer: start simple, then show growth.",
+          "reveal": 6
+        }
+      ],
+      "id": "s025"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "One link goes viral. What do you do?",
+      "bullets": [
+        "A. Add more database shards",
+        "B. Cache it in Redis, in-process, and at the CDN",
+        "C. Switch to 301 for everyone",
+        "D. Rate-limit the redirects"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. One link goes viral. Millions of clicks a minute on a single key. What's your move? Pause now.",
+          "reveal": 0
+        }
+      ],
+      "id": "s026"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Answer",
+      "title": "Answer: a hot read-only key is a caching problem",
+      "bullets": [
+        "Redis for the hot key",
+        "Tiny in-process cache for the very hottest",
+        "CDN-cached redirect for a few minutes",
+        "Request coalescing on expiry"
+      ],
+      "steps": [
+        {
+          "say": "Answer: B. The link never changes, so it's a hot but read-only key, and caching solves it. Redis first.",
+          "reveal": 1
+        },
+        {
+          "say": "Add a tiny in-process cache on each app server for the very hottest keys, so they skip even the network hop.",
+          "reveal": 2
+        },
+        {
+          "say": "Let the C-D-N cache the redirect briefly.",
+          "reveal": 3
+        },
+        {
+          "say": "And use request coalescing so that when the entry expires, one request refills it instead of a stampede. Recap: estimate, API, data model, code generation, design, deep dives, trade-offs.",
+          "reveal": 4
+        }
+      ],
+      "id": "s027"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 3",
+      "title": "The decision cheat sheet",
+      "steps": [
+        {
+          "say": "Concept three: the decision cheat sheet. It maps if you need this to reach for that. It's a starting point, not a rule, and the column that earns marks is watch out for.",
+          "reveal": 0
+        }
+      ],
+      "id": "s028",
+      "caption": "Book: Module 0 Fundamentals · Decision cheat sheet"
+    },
+    {
+      "layout": "table",
+      "title": "Two questions route most decisions",
+      "caption": "Is someone waiting? Is it read-heavy?",
+      "steps": [
+        {
+          "say": "Two questions route most decisions. First: is someone waiting for the result? If no, like sending a welcome email, use a queue or event stream.",
+          "reveal": 1
+        },
+        {
+          "say": "If yes, make a synchronous call, with a timeout.",
+          "reveal": 2
+        },
+        {
+          "say": "Then: is it read-heavy? A product page read a thousand times per edit gets a cache plus read replicas.",
+          "reveal": 3
+        },
+        {
+          "say": "A write-heavy stream of sensor readings gets sharding or a log-structured store like Cassandra.",
+          "reveal": 4
+        }
+      ],
+      "id": "s029",
+      "table": {
+        "head": [
+          "Question",
+          "Answer",
+          "Reach for"
+        ],
+        "rows": [
+          [
+            "Is someone waiting?",
+            "No",
+            "Queue or event stream"
+          ],
+          [
+            "Is someone waiting?",
+            "Yes",
+            "Synchronous call with timeout"
+          ],
+          [
+            "Then: read-heavy?",
+            "Yes",
+            "Cache plus read replicas"
+          ],
+          [
+            "Then: read-heavy?",
+            "No, write-heavy",
+            "Sharding or LSM store"
+          ]
+        ]
+      }
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Cheat sheet: data and speed",
+      "table": {
+        "head": [
+          "If you need",
+          "Reach for",
+          "Watch out for"
+        ],
+        "rows": [
+          [
+            "Faster repeated reads",
+            "Cache-aside (Redis)",
+            "Stale data, stampedes"
+          ],
+          [
+            "Fast static files worldwide",
+            "CDN",
+            "Invalidation delay"
+          ],
+          [
+            "Strong consistency",
+            "Relational DB",
+            "Scaling writes"
+          ],
+          [
+            "Huge key lookups",
+            "Key-value store",
+            "Few query patterns"
+          ],
+          [
+            "More read capacity",
+            "Read replicas",
+            "Replication lag"
+          ],
+          [
+            "More write capacity",
+            "Sharding",
+            "Hot spots, cross-shard"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's a slice of the table. Faster repeated reads: a cache with cache-aside. Watch out for stale data and stampedes.",
+          "reveal": 1
+        },
+        {
+          "say": "Static files worldwide: a C-D-N. Watch for invalidation delay.",
+          "reveal": 2
+        },
+        {
+          "say": "Transactions and strong consistency: a relational database like Postgres. Watch out: writes are hard to scale beyond one primary.",
+          "reveal": 3
+        },
+        {
+          "say": "Simple lookups by key at huge scale, like our short codes: a key-value store. Watch out: few query patterns besides by key.",
+          "reveal": 4
+        },
+        {
+          "say": "More read capacity: read replicas, at the cost of replication lag. A user may not see their own write right away.",
+          "reveal": 5
+        },
+        {
+          "say": "More write capacity: sharding with a good shard key. Watch for hot spots and cross-shard queries.",
+          "reveal": 6
+        }
+      ],
+      "id": "s030"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Cheat sheet: async and failure",
+      "table": {
+        "head": [
+          "If you need",
+          "Reach for",
+          "Watch out for"
+        ],
+        "rows": [
+          [
+            "Slow work, no waiting",
+            "Queue + workers",
+            "Duplicates, need a DLQ"
+          ],
+          [
+            "Many services react",
+            "Pub/sub, Kafka",
+            "Ordering, schemas"
+          ],
+          [
+            "Safe payment retries",
+            "Idempotency key",
+            "Key storage, expiry"
+          ],
+          [
+            "Stop abusive clients",
+            "Rate limit, 429",
+            "Fair per-user limits"
+          ],
+          [
+            "Survive failing dependency",
+            "Timeout + breaker",
+            "Thresholds"
+          ],
+          [
+            "Retry transient errors",
+            "Backoff + jitter",
+            "Retry storms"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "More rows. Slow work nobody waits for: a queue and workers. Watch for duplicates, and add a dead-letter queue for messages that keep failing.",
+          "reveal": 1
+        },
+        {
+          "say": "Many services reacting to one event: pub-sub or Kafka. Watch ordering and schema changes.",
+          "reveal": 2
+        },
+        {
+          "say": "Safe retries of a payment: an idempotency key. Watch out: you must store keys and pick an expiry.",
+          "reveal": 3
+        },
+        {
+          "say": "Abusive clients: rate limiting with a token bucket, returning four-twenty-nine.",
+          "reveal": 4
+        },
+        {
+          "say": "A failing dependency dragging you down: timeouts plus a circuit breaker plus a fallback.",
+          "reveal": 5
+        },
+        {
+          "say": "Transient errors: retries with exponential backoff and jitter. Only retry idempotent calls. The habit: name both in one sentence. I'd add read replicas, accepting some replication lag.",
+          "reveal": 6
+        }
+      ],
+      "id": "s031"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 4",
+      "title": "Part B: Thinking in Patterns",
+      "steps": [
+        {
+          "say": "Part B. This starts the patterns course, and it sets up the method every later episode uses. One example runs through the course: an online store that starts on one database and grows to a hundred million users.",
+          "reveal": 0
+        }
+      ],
+      "id": "s032",
+      "caption": "Book: Module 1 Thinking in Patterns · Course Introduction"
+    },
+    {
+      "layout": "bullets",
+      "title": "Course introduction: key terms",
+      "bullets": [
+        "Pattern: reusable fix + the price you pay",
+        "Pattern versus technology",
+        "Client, server, database, HTTP request",
+        "Distributed system: many machines, some fail"
+      ],
+      "steps": [
+        {
+          "say": "Strong chess players don't memorize games. They learn tactics like forks and pins and spot them in new positions. Patterns are the forks and pins of system design, and this course covers more than sixty. A system design pattern is a reusable solution to a recurring problem, bundled with its cost.",
+          "reveal": 1
+        },
+        {
+          "say": "A technology is a product. A pattern is the idea it implements. Redis is a technology. Cache-aside is a pattern: look in the fast copy first, and go to the database only on a miss.",
+          "reveal": 2
+        },
+        {
+          "say": "Going in, you need four words. A client sends requests. A server answers them. A database stores data that survives restarts. An H-T-T-P request is the standard message between them.",
+          "reveal": 3
+        },
+        {
+          "say": "And a distributed system is many computers cooperating over a network that must keep working when some of them fail.",
+          "reveal": 4
+        }
+      ],
+      "id": "s033"
+    },
+    {
+      "layout": "table",
+      "title": "The twelve modules",
+      "table": {
+        "head": [
+          "Modules",
+          "What they cover"
+        ],
+        "rows": [
+          [
+            "1",
+            "Thinking in patterns, plus quick math"
+          ],
+          [
+            "2 to 6",
+            "One design question each: move, store, speed, fail, grow"
+          ],
+          [
+            "7 to 9",
+            "Consistency, the entry point, production ops"
+          ],
+          [
+            "10 to 12",
+            "Data systems, AI-era systems, four capstones"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "There are twelve modules. Module one, this one, lays the groundwork.",
+          "reveal": 1
+        },
+        {
+          "say": "Modules two to six each answer one design question. Two: moving data, like queues and pub-sub. Three: storing data, like replication and sharding. Four: serving fast, meaning caching. Five: surviving failure. Six: growing under load.",
+          "reveal": 2
+        },
+        {
+          "say": "Modules seven to nine sharpen those answers. Seven: keeping data consistent, with transactions, sagas and quorums. Eight: the entry point, with gateways, rate limits, C-D-Ns and proxies. Nine: deploying, monitoring and rolling back.",
+          "reveal": 3
+        },
+        {
+          "say": "Ten to twelve apply it all: batch and stream processing, the same patterns inside L-L-M and machine learning systems, and four full capstone designs.",
+          "reveal": 4
+        }
+      ],
+      "id": "s034"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Walkthrough",
+      "title": "How each lesson works: steps 1 to 6",
+      "bullets": [
+        "1. The incident",
+        "2. The obvious fixes, and why they fail",
+        "3. The pattern, step by step",
+        "4. Walkthrough with numbers",
+        "5. Trade-offs",
+        "6. When not to use it"
+      ],
+      "steps": [
+        {
+          "say": "Every pattern lesson follows the same eleven steps: problem first, then the fix, then its cost. Let's walk them using a cache lesson as the example. Step one, the incident: imagine the store's product page takes two seconds because every view runs the same database query.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, the obvious fixes: a bigger database server. It helps for a month, then the problem returns.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, the pattern: cache-aside, step by step. Check the cache, on a miss read the database, then store the copy.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, the numbers on the same incident: at a ninety-nine percent hit ratio, the database sees one percent of traffic.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, trade-offs: the copy can be stale.",
+          "reveal": 5
+        },
+        {
+          "say": "Step six, when not to use it: an account balance that must always be exact.",
+          "reveal": 6
+        }
+      ],
+      "id": "s035"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Walkthrough",
+      "title": "How each lesson works: steps 7 to 11",
+      "bullets": [
+        "7. Comparison with a look-alike pattern",
+        "8. Real-world examples",
+        "9. Interview angle: a 30-second answer",
+        "10. Self-check quiz",
+        "11. TL;DR card for the night before"
+      ],
+      "steps": [
+        {
+          "say": "Step seven, a direct comparison with the pattern it's most confused with. For cache-aside, that's write-through, where every write also updates the cache.",
+          "reveal": 1
+        },
+        {
+          "say": "Step eight, real-world examples from production systems.",
+          "reveal": 2
+        },
+        {
+          "say": "Step nine, the interview angle: a rehearsed thirty-second answer you can say out loud.",
+          "reveal": 3
+        },
+        {
+          "say": "Step ten, a self-check quiz.",
+          "reveal": 4
+        },
+        {
+          "say": "Step eleven, a T-L-D-R card, too long, didn't read. Together the cards form a review deck for the night before your interview. Each module also ends with a mini-capstone that uses its patterns together.",
+          "reveal": 5
+        }
+      ],
+      "id": "s036"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 5",
+      "title": "Thinking in patterns",
+      "steps": [
+        {
+          "say": "Concept five: thinking in patterns. Instead of recalling whole architectures, split the system into problems you already know, pick the standard fix for each, and state what each costs.",
+          "reveal": 0
+        }
+      ],
+      "id": "s037",
+      "caption": "Book: Module 1 · Thinking in Patterns"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Two candidates, one changed requirement",
+      "bullets": [
+        "SMS provider sends reports back: webhooks",
+        "Provider rate-limits you: message queue",
+        "A report may arrive twice: idempotency",
+        "Provider down an hour: circuit breaker"
+      ],
+      "steps": [
+        {
+          "say": "Two candidates design ride-sharing. One redraws Uber's diagram from memory. Then the interviewer says: driver alerts now go out as S-M-S through a third-party provider that rate-limits you. The memorized diagram has no answer. The second candidate splits the change into four known problems. One: work crosses into another company, and the provider sends delivery reports back as webhooks, H-T-T-P calls into your server.",
+          "reveal": 1
+        },
+        {
+          "say": "Two: the provider caps your requests per second, so messages go on a queue and are sent at a steady rate.",
+          "reveal": 2
+        },
+        {
+          "say": "Three: a report may arrive twice, so handling must be idempotent. Doing it twice leaves the same result as once.",
+          "reveal": 3
+        },
+        {
+          "say": "Four: the provider may be down for an hour, so a circuit breaker stops calling it, and the app alerts drivers in-app instead. Four patterns, each with its cost. Requirements change; diagrams don't.",
+          "reveal": 4
+        }
+      ],
+      "id": "s038"
+    },
+    {
+      "layout": "bullets",
+      "title": "What a pattern is: three parts",
+      "bullets": [
+        "1. A problem in general terms",
+        "2. A standard solution",
+        "3. A cost: part of the pattern"
+      ],
+      "steps": [
+        {
+          "say": "Every pattern has three parts. Let's use cache-aside. One: the problem, said generally. Not Instagram is slow, but the same unchanged answer is recomputed thousands of times. Any product can have that.",
+          "reveal": 1
+        },
+        {
+          "say": "Two: the standard solution. Keep a fast copy of the answer and serve it until the answer changes.",
+          "reveal": 2
+        },
+        {
+          "say": "Three: the cost. The copy can go stale, so something must refresh it. The cost isn't a detail for later; it's part of the pattern. And patterns predate software. Paper bank ledgers are event sourcing. Every system hits the same limits: networks break, machines are finite, copies drift.",
+          "reveal": 3
+        }
+      ],
+      "id": "s039"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Walkthrough",
+      "title": "Patterns combine into architectures",
+      "bullets": [
+        "1. Find the problems",
+        "2. Pick a pattern per problem, check interactions",
+        "3. Name every cost, decline when too small"
+      ],
+      "steps": [
+        {
+          "say": "An architecture is several patterns working together; Netflix is roughly fifteen. So design X becomes three steps. Take a news feed. Step one, find the problems: fan-out, where one post must reach many followers, and hot keys, where one celebrity draws a huge share of traffic.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, pick a pattern per problem, then check how they interact. Retries need idempotency, or a retried payment double-charges. Caches need an expiry rule. Shards need a shard key, the field that decides which machine stores each row.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, name every cost, and decline a pattern when the problem isn't big enough to justify it. For a feed with a thousand users, you don't need sharding at all.",
+          "reveal": 3
+        }
+      ],
+      "id": "s040"
+    },
+    {
+      "layout": "table",
+      "title": "Every pattern is a trade",
+      "table": {
+        "head": [
+          "Pattern",
+          "Gives",
+          "Costs"
+        ],
+        "rows": [
+          [
+            "Queue",
+            "Absorbs bursts",
+            "Waiting time, duplicates"
+          ],
+          [
+            "Cache",
+            "Fast reads",
+            "Out-of-date data"
+          ],
+          [
+            "Sharding",
+            "More write room",
+            "Hard cross-shard queries"
+          ],
+          [
+            "Circuit breaker",
+            "Fails fast",
+            "May trip too early"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The one habit to keep: no pattern makes everything better. A queue absorbs traffic bursts, but adds waiting time, and a message may arrive twice.",
+          "reveal": 1
+        },
+        {
+          "say": "A cache gives fast reads, but may serve out-of-date data.",
+          "reveal": 2
+        },
+        {
+          "say": "Sharding gives room for more writes, but queries across shards get hard.",
+          "reveal": 3
+        },
+        {
+          "say": "A circuit breaker fails fast instead of hanging, but may trip too early. So in an interview, don't say we'll use Kafka here. Say: a queue fits because nobody waits on this work; it can deliver twice, so the consumer dedupes. Problem, pattern, cost.",
+          "reveal": 4
+        }
+      ],
+      "id": "s041"
+    },
+    {
+      "layout": "bullets",
+      "title": "How interviews test patterns",
+      "bullets": [
+        "Spotting problems from symptoms",
+        "Pattern interactions",
+        "Defending choices: what does X cost?",
+        "Study: diagnose before reading the fix"
+      ],
+      "steps": [
+        {
+          "say": "Interviewers rarely ask for definitions. They test three things. First, spotting problems from symptoms. Every health check is green, yet checkout is starved because image resizing ate all the threads. Think bulkhead, separate resource pools per feature, before they say it.",
+          "reveal": 1
+        },
+        {
+          "say": "Second, interactions. Could a retry charge someone twice? What happens when your busiest cache key expires?",
+          "reveal": 2
+        },
+        {
+          "say": "Third, defending choices. Why not X everywhere really means what does X cost?",
+          "reveal": 3
+        },
+        {
+          "say": "To study: diagnose each incident before reading the fix, and pair every pattern with its cost. In the interview, say: I split the system into problems I know, choose one pattern per problem, check how they interact, and name each cost.",
+          "reveal": 4
+        }
+      ],
+      "id": "s042"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 6",
+      "title": "The five questions",
+      "steps": [
+        {
+          "say": "Concept six: the five questions. A checklist you point at any system, always in the same order. A pilot can fly; the pre-takeoff checklist makes sure nothing's forgotten under stress.",
+          "reveal": 0
+        }
+      ],
+      "id": "s043",
+      "caption": "Book: Module 1 · The Five Questions"
+    },
+    {
+      "layout": "diagram",
+      "title": "Five questions, in order",
+      "mermaid": "flowchart LR\n  Z[\"0. Numbers\"] --> M[\"1. Move: arrows\"]\n  M --> L[\"2. Live: databases\"]\n  L --> F[\"3. Fast: caches\"]\n  F --> X[\"4. Fail: failure budget\"]\n  X --> G[\"5. Grow: capacity plan\"]",
+      "caption": "Each question fills in one part of the diagram",
+      "steps": [
+        {
+          "say": "Step zero comes first: get the numbers. Users, requests per second, data size, read-to-write ratio, and the cost of an outage. A design for a hundred users won't suit a hundred million.",
+          "reveal": 0
+        },
+        {
+          "say": "Then five questions. Each fills in one part of the diagram. How does data move gives you the arrows. Where does it live gives the databases. How is it served fast gives the caches. What happens when it fails gives the failure budget. How does it grow gives the capacity plan. They map to modules two through six. Question four is the most skipped.",
+          "reveal": 0
+        }
+      ],
+      "id": "s044"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Walkthrough",
+      "title": "The five questions on the online store",
+      "bullets": [
+        "1. Move: request-response, queue, pub/sub",
+        "2. Live: replicas, sharding, event logs",
+        "3. Fast: cache-aside, staleness budgets",
+        "4. Fail: timeouts, retries, breakers",
+        "5. Grow: what breaks first at 10x?"
+      ],
+      "steps": [
+        {
+          "say": "Let's run them on the online store. Question one, how does data move: who talks to whom, and does the caller wait? Order confirmation must be immediate, so a direct call. Fulfillment can lag, so a queue. Five teams care about each order, so we publish it.",
+          "reveal": 1
+        },
+        {
+          "say": "Question two, where does data live: which store is the source of truth, how big, how fast it grows. Customers dispute charges, so we keep order events, not just current state.",
+          "reveal": 2
+        },
+        {
+          "say": "Question three, how is it served fast: give each data type a staleness budget. Descriptions can be an hour old. Prices a few seconds, if updates invalidate the cache. At checkout the price must be exact, so it reads the database.",
+          "reveal": 3
+        },
+        {
+          "say": "Question four, what happens when it fails, asked for every arrow. If the payment provider slows, we cut the call at twice its normal worst-case latency. Retries carry idempotency keys, so no double charge. If failures persist, the breaker opens: save the cart and email the customer.",
+          "reveal": 4
+        },
+        {
+          "say": "Question five, how does it grow: at ten times traffic, what breaks first? Replicas and caching handle reads, but the single primary caps writes. Next step: shard by customer I-D, planned before the primary hits its limit.",
+          "reveal": 5
+        }
+      ],
+      "id": "s045"
+    },
+    {
+      "layout": "diagram",
+      "title": "Walkthrough: URL shortener in three minutes",
+      "mermaid": "flowchart LR\n  U[\"Users\"] --> C[\"Cache 99% hits\"]\n  C --> R[\"Replicas\"]\n  R --> P[\"Primary 500 GB\"]\n  U --> W[\"Create 10/s\"]\n  W --> P\n  U --> Q[\"Click queue\"]\n  Q --> A[\"Analytics\"]",
+      "caption": "Redirects 1,000/s via cache; creates 10/s; analytics off-path",
+      "steps": [
+        {
+          "say": "Now run the five questions on our URL shortener, in about three minutes. Here's where we'll end up: redirects at a thousand a second hit a cache with a ninety-nine percent hit ratio, misses go to replicas behind a five-hundred-gigabyte primary, link creation at about ten a second goes to the primary, and click analytics flows through a queue, off the redirect path.",
+          "reveal": 0
+        }
+      ],
+      "id": "s046"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Move, live, fast, fail, grow",
+      "bullets": [
+        "Move: write path, redirect path, queued clicks",
+        "Live: tiny rows; shard by code later",
+        "Fast: cache-aside, long TTL, guard hot links",
+        "Fail: redirects read replicas; create can wait",
+        "Grow: key generation is the real risk"
+      ],
+      "steps": [
+        {
+          "say": "Move: one write path, long U-R-L in, code out, and one read-heavy redirect path, about a hundred reads per write. Both direct calls. Click analytics is work nobody waits on, so it's queued and never slows a redirect.",
+          "reveal": 1
+        },
+        {
+          "say": "Live: tiny rows, two U-R-Ls and a counter, but potentially billions. Primary plus replicas for now. At billions, shard by short code, since every lookup includes it.",
+          "reveal": 2
+        },
+        {
+          "say": "Fast: a code always maps to the same U-R-L, so cache-aside with a long T-T-L. A few links get most clicks, so protect them from stampedes.",
+          "reveal": 3
+        },
+        {
+          "say": "Fail: redirects need very high availability, so a cache miss reads a replica. Creation can answer try again shortly; its outage hurts less.",
+          "reveal": 4
+        },
+        {
+          "say": "Grow: replicas and cache absorb reads; writes are few. The real risk is key generation: random codes need collision checks, counters need coordination. Flag it as future work with both options.",
+          "reveal": 5
+        }
+      ],
+      "id": "s047"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Which of the five questions do candidates skip most?",
+      "bullets": [
+        "A. How does data move?",
+        "B. Where does data live?",
+        "C. What happens when it fails?",
+        "D. How does it grow?"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Of the five questions, which one gets skipped most, and draws the most follow-up questions from interviewers? Pause now.",
+          "reveal": 0
+        }
+      ],
+      "id": "s048"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Answer",
+      "title": "Answer: question four, failure",
+      "bullets": [
+        "Ask it for every arrow",
+        "Never answers? Fails once? Down 10 minutes?",
+        "Announce the five as your agenda"
+      ],
+      "steps": [
+        {
+          "say": "Answer: C, question four. Ask it for every arrow you drew in question one.",
+          "reveal": 1
+        },
+        {
+          "say": "What if the other side never answers, fails once, or is down for ten minutes? Could a retry double-charge? What does the user see?",
+          "reveal": 2
+        },
+        {
+          "say": "Tip: announce the questions as your agenda. First how data moves, then storage, caching, failures and growth. Recap: numbers first, then move, live, fast, fail, grow.",
+          "reveal": 3
+        }
+      ],
+      "id": "s049"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 7",
+      "title": "Back-of-envelope math",
+      "steps": [
+        {
+          "say": "Concept seven: back-of-envelope math. Fast, deliberately rough calculations that give the order of magnitude. One machine or ten? Does the data fit in memory? About five hours and two tanks of gas is enough to choose between driving and flying.",
+          "reveal": 0
+        }
+      ],
+      "id": "s050",
+      "caption": "Book: Module 1 · Back-of-Envelope Math"
+    },
+    {
+      "layout": "bullets",
+      "title": "Why engineers estimate",
+      "bullets": [
+        "A rough answer now beats a precise one next week",
+        "You can't answer the five questions without numbers",
+        "Round hard: a day is about 100,000 seconds",
+        "Round demand up, capacity down"
+      ],
+      "steps": [
+        {
+          "say": "Why estimate? A rough answer in thirty seconds shapes today's design. A precise one next week doesn't.",
+          "reveal": 1
+        },
+        {
+          "say": "You can't answer the five questions without numbers, and interviewers expect stated assumptions, rounded numbers, and visible steps.",
+          "reveal": 2
+        },
+        {
+          "say": "So round hard. A day's eighty-six thousand four hundred seconds becomes a hundred thousand. A month's two and a half million becomes three million. You want powers of ten, not decimals.",
+          "reveal": 3
+        },
+        {
+          "say": "When the direction matters, round demand up and capacity down, to leave headroom.",
+          "reveal": 4
+        }
+      ],
+      "id": "s051"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Numbers to memorize",
+      "table": {
+        "head": [
+          "Operation",
+          "Time"
+        ],
+        "rows": [
+          [
+            "Read from RAM",
+            "about 100 ns"
+          ],
+          [
+            "Read from fast SSD",
+            "about 100 us"
+          ],
+          [
+            "Same-datacenter call, e.g. cache",
+            "0.5 to 1 ms"
+          ],
+          [
+            "Simple database query",
+            "5 to 15 ms"
+          ],
+          [
+            "Cross-region round trip",
+            "about 100 ms"
+          ],
+          [
+            "Still feels instant",
+            "100 to 200 ms"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Latency numbers to memorize. Reading from R-A-M, fast working memory: about a hundred nanoseconds.",
+          "reveal": 1
+        },
+        {
+          "say": "A fast S-S-D, flash storage: about a hundred microseconds, a thousand times slower.",
+          "reveal": 2
+        },
+        {
+          "say": "A network call inside one datacenter, like a cache read: half a millisecond to one.",
+          "reveal": 3
+        },
+        {
+          "say": "A simple database query: five to fifteen milliseconds. So a cache hit is ten to fifteen times faster than the database. That's why caching helps.",
+          "reveal": 4
+        },
+        {
+          "say": "A round trip between regions: about a hundred milliseconds. A few of those in a row eat your whole budget.",
+          "reveal": 5
+        },
+        {
+          "say": "And anything under about a hundred to two hundred milliseconds still feels instant. A database row is about a kilobyte, so a million rows is a gigabyte.",
+          "reveal": 6
+        }
+      ],
+      "id": "s052"
+    },
+    {
+      "layout": "number",
+      "kicker": "Example",
+      "title": "Calculation 1: Little's law",
+      "big": "in flight = rate x duration",
+      "caption": "300 req/s x 2 s = 600 in flight",
+      "steps": [
+        {
+          "say": "Now the four calculations. One: rate times duration gives work in progress. That's Little's law, and it's the most-used calculation in the course.",
+          "reveal": 0
+        },
+        {
+          "say": "Example: the store gets three hundred requests a second, each taking two seconds. That's six hundred requests in flight, each holding a thread or a database connection. So a connection pool of two hundred is too small.",
+          "reveal": 0
+        },
+        {
+          "say": "Same formula, different question: a queue has five hundred fifty-two thousand messages, drained at four hundred a second. That's about fourteen hundred seconds, roughly twenty-three minutes to clear the backlog.",
+          "reveal": 0
+        }
+      ],
+      "id": "s053"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Calculation 2: availability drops along a chain",
+      "table": {
+        "head": [
+          "Availability",
+          "Down per year",
+          "Down per month"
+        ],
+        "rows": [
+          [
+            "99%",
+            "about 3.7 days",
+            "about 7 hours"
+          ],
+          [
+            "99.9%",
+            "about 9 hours",
+            "about 43 minutes"
+          ],
+          [
+            "99.99%",
+            "about 53 minutes",
+            "about 4 minutes"
+          ],
+          [
+            "99.999%",
+            "about 5 minutes",
+            "about 26 seconds"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Two: availability, the share of time a service answers correctly, drops along a chain. Ninety-nine percent means about three point seven days down a year.",
+          "reveal": 1
+        },
+        {
+          "say": "Ninety-nine point nine: about nine hours a year. Now, if a request needs five dependencies in a row, each at ninety-nine point nine, multiply them. You get about ninety-nine point five percent. Shortcut: add the failure rates. Five times point one percent is point five percent.",
+          "reveal": 2
+        },
+        {
+          "say": "Ninety-nine point nine nine: about fifty-three minutes a year.",
+          "reveal": 3
+        },
+        {
+          "say": "Ninety-nine point nine nine nine: about five minutes. Each extra nine costs roughly ten times the effort, and every required dependency can only pull the total down. So the practical fix is fewer required dependencies, not perfect ones.",
+          "reveal": 4
+        }
+      ],
+      "id": "s054"
+    },
+    {
+      "layout": "number",
+      "kicker": "Example",
+      "title": "Calculation 3: cache hit ratio",
+      "big": "DB load = (1 - h) x request rate",
+      "caption": "12,000 RPS: h = 99% gives 120 QPS; h = 90% gives 1,200 QPS",
+      "steps": [
+        {
+          "say": "Three: cache hit ratio, h, the share of requests the cache answers. Database load is one minus h, times the request rate.",
+          "reveal": 0
+        },
+        {
+          "say": "Example: twelve thousand requests a second, one-millisecond hits, fifteen-millisecond database reads. At ninety-nine percent, average latency is about one point one five milliseconds, and the database sees a hundred twenty queries a second.",
+          "reveal": 0
+        },
+        {
+          "say": "At ninety percent, average is about two and a half milliseconds, and the database sees twelve hundred: ten times the load. Ninety isn't nine percent worse. The miss rate went from one to ten percent. Judge caches by their misses. And when a hot entry expires, its hit ratio briefly drops to zero: a stampede.",
+          "reveal": 0
+        }
+      ],
+      "id": "s055"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Calculation 4: sizing",
+      "table": {
+        "head": [
+          "Quantity",
+          "Formula",
+          "Store example"
+        ],
+        "rows": [
+          [
+            "Per second",
+            "per day / 100,000",
+            "10 M orders/day = 100/s"
+          ],
+          [
+            "Peak",
+            "3 to 5 x average",
+            "300 to 500/s"
+          ],
+          [
+            "Storage",
+            "records x size x retention",
+            "10 M x 1 KB x 365 = 3.7 TB"
+          ],
+          [
+            "Bandwidth",
+            "rate x size",
+            "500/s x 1 KB = 0.5 MB/s"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Four: sizing. Per second is per day divided by a hundred thousand. Ten million orders a day is about a hundred a second.",
+          "reveal": 1
+        },
+        {
+          "say": "Plan for a peak of three to five times average: three to five hundred a second.",
+          "reveal": 2
+        },
+        {
+          "say": "Storage is records times size times retention. Ten million a day times one kilobyte times three sixty-five is about three point seven terabytes a year. That fits one ordinary database server, so this estimate saves you from sharding too early.",
+          "reveal": 3
+        },
+        {
+          "say": "Bandwidth is the same idea: rate times size. Five hundred orders a second at a kilobyte is half a megabyte a second, nothing. Servers and memory follow from these numbers plus Little's law.",
+          "reveal": 4
+        }
+      ],
+      "id": "s056"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Walkthrough",
+      "title": "Sizing the URL shortener in 60 seconds",
+      "bullets": [
+        "100 M redirects/day = 1,000/s, peak 4,000/s",
+        "500 M links x 1 KB = 500 GB: one database",
+        "Cache top 1%: 5 M rows = 5 GB",
+        "99% hits: about 10 queries/s reach the DB",
+        "4,000/s x 2 ms = 8 in flight"
+      ],
+      "steps": [
+        {
+          "say": "Let's size the URL shortener out loud, stating every assumption. A hundred million redirects a day, divided by a hundred thousand, is a thousand a second. Plan for about four thousand at peak.",
+          "reveal": 1
+        },
+        {
+          "say": "Each mapping is two U-R-Ls plus metadata, about a kilobyte. Five hundred million links is five hundred gigabytes. One database handles that today, so sharding waits.",
+          "reveal": 2
+        },
+        {
+          "say": "A few links get most traffic. Cache the top one percent: five million rows, about five gigabytes of memory.",
+          "reveal": 3
+        },
+        {
+          "say": "At a ninety-nine percent hit ratio, only about ten queries a second reach the database.",
+          "reveal": 4
+        },
+        {
+          "say": "And at peak, four thousand a second times two milliseconds is eight requests in flight. So: one strong database, one replica, a cache, and careful failure handling.",
+          "reveal": 5
+        }
+      ],
+      "id": "s057"
+    },
+    {
+      "layout": "twocol",
+      "title": "Estimation traps and habits",
+      "left": {
+        "heading": "Traps",
+        "bullets": [
+          "90% is not close to 99%: 10x misses",
+          "Each extra nine costs about 10x",
+          "Long chains only lower availability"
+        ]
+      },
+      "right": {
+        "heading": "Habits",
+        "bullets": [
+          "State assumptions before calculating",
+          "Round, multiply, check units",
+          "Let numbers remove components"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Traps. Ninety percent isn't close to ninety-nine: it's ten times the misses.",
+          "reveal": 1
+        },
+        {
+          "say": "Each extra nine costs about ten times the effort of the last.",
+          "reveal": 2
+        },
+        {
+          "say": "And long dependency chains only lower availability, so keep them short.",
+          "reveal": 3
+        },
+        {
+          "say": "Habits. State assumptions before calculating. An interviewer can correct a spoken assumption, not a silent one.",
+          "reveal": 4
+        },
+        {
+          "say": "Round, multiply, then check units. Rate times seconds is a count. Bytes times rows is storage.",
+          "reveal": 5
+        },
+        {
+          "say": "And let the numbers remove components. At this scale we don't need that yet shows cost awareness, backed by arithmetic.",
+          "reveal": 6
+        }
+      ],
+      "id": "s058"
+    },
+    {
+      "layout": "recap",
+      "kicker": "Episode 6 complete",
+      "title": "Episode 6 recap",
+      "bullets": [
+        "One click: DNS, TLS, CDN, LB, gateway, cache, DB",
+        "URL shortener: estimate, API, codes, cache, shard",
+        "Cheat sheet: reach for X, watch out for Y",
+        "Pattern = problem + solution + cost",
+        "Five questions: move, live, fast, fail, grow",
+        "Four calcs: Little, chains, hit ratio, sizing"
+      ],
+      "steps": [
+        {
+          "say": "Let's recap. One click goes through the browser cache, D-N-S, T-C-P and T-L-S, the C-D-N, a load balancer, a gateway, a stateless app server, a cache and a database, and side effects go to a queue.",
+          "reveal": 1
+        },
+        {
+          "say": "The URL shortener: seven-character codes from counter ranges, a cache for the reads, three-oh-two redirects, clicks through a queue.",
+          "reveal": 2
+        },
+        {
+          "say": "The cheat sheet: always name the tool and its watch-out together.",
+          "reveal": 3
+        },
+        {
+          "say": "A pattern is a problem, a standard solution, and a cost. Every pattern is a trade.",
+          "reveal": 4
+        },
+        {
+          "say": "Get the numbers, then ask how data moves, where it lives, how it's served fast, what happens when it fails, and how it grows.",
+          "reveal": 5
+        },
+        {
+          "say": "And four calculations: rate times duration, multiplied availabilities, hit ratio, and sizing. Next time, in episode seven: Moving Data, the communication patterns. See you there.",
+          "reveal": 6
+        }
+      ],
+      "id": "s059"
+    }
+  ]
+}

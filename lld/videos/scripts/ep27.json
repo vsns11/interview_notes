@@ -1,0 +1,1693 @@
+{
+  "series": "LLD Workshop",
+  "episode": 27,
+  "title": "Machine Coding: Method, Tasks, Wallet",
+  "subtitle": "How the round is scored, a skeleton you type from memory, then a task manager, a wallet and a calendar built end to end",
+  "scenes": [
+    {
+      "id": "s001",
+      "layout": "title",
+      "title": "Machine Coding: Method, Tasks, Wallet",
+      "subtitle": "How the round is scored, a skeleton you type from memory, then a task manager, a wallet and a calendar built end to end",
+      "steps": [
+        {
+          "say": "Welcome to the L-L-D Workshop, episode twenty-seven: Machine Coding, Method, Tasks and Wallet. L-L-D means low-level design, designing one program class by class.",
+          "reveal": 0
+        },
+        {
+          "say": "Today we start chapter twenty-one, the machine-coding round. That's the interview where you get a written problem, ninety minutes, and you must hand over code that actually runs.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll know how the round is scored, the five-step method under a clock, a project skeleton you can type from memory, a minute-by-minute plan, and what to say in the first two minutes. Then we'll solve three real problems: a task manager, a digital wallet, and Flipkart's event calendar. Keep the chapter twenty-one PDF open. Every number I quote comes from the book's program output.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s002",
+      "layout": "section",
+      "kicker": "Concept 1 of 8",
+      "title": "How the machine-coding round works",
+      "caption": "Book: Ch 21 · 21.0 How the machine-coding round works",
+      "steps": [
+        {
+          "say": "Imagine this. You sit down, someone hands you a two-page P-D-F, and says: build a digital wallet, you have ninety minutes, use your own I-D-E. An I-D-E is your editor plus compiler, like IntelliJ.",
+          "reveal": 0
+        },
+        {
+          "say": "At the end, the interviewer doesn't look at a diagram. They run your program and feed it their own inputs. Working code is the answer.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s003",
+      "layout": "bullets",
+      "kicker": "Concept 1 of 8",
+      "title": "What the round is, and isn't",
+      "bullets": [
+        "1 to 2 page statement, 90 to 120 minutes",
+        "Your own IDE, internet for syntax only",
+        "No database, no UI, no web framework",
+        "Data in memory: maps and lists",
+        "Driven by main, a command list, or tests",
+        "Not system design: never leaves one program"
+      ],
+      "steps": [
+        {
+          "say": "First, the statement is short, one or two pages, and you get ninety to a hundred and twenty minutes.",
+          "reveal": 1
+        },
+        {
+          "say": "You use your own I-D-E, and the internet only to look up syntax.",
+          "reveal": 2
+        },
+        {
+          "say": "There's no database, no user interface, and no web framework. Nobody wants to see Spring set up.",
+          "reveal": 3
+        },
+        {
+          "say": "So all data lives in memory, in maps and lists. A wallet is just a HashMap from wallet id to wallet object.",
+          "reveal": 4
+        },
+        {
+          "say": "The program is driven by a main method, a list of sample commands, a file, or unit tests.",
+          "reveal": 5
+        },
+        {
+          "say": "And this isn't the system design round. There are no servers, caches or queues. Your vocabulary is classes, fields, methods, and how they relate. It's especially common at Indian product companies like Flipkart, Swiggy, PhonePe, Navi and Razorpay.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s004",
+      "layout": "table",
+      "kicker": "Concept 1 of 8",
+      "title": "How it is judged: the rubric",
+      "table": {
+        "head": [
+          "#",
+          "Criterion",
+          "How to score well"
+        ],
+        "rows": [
+          [
+            "1",
+            "Working, demo-able code",
+            "Thin end-to-end path in hour one"
+          ],
+          [
+            "2",
+            "Functional completeness",
+            "Mandatory first, in order"
+          ],
+          [
+            "3",
+            "Clean models",
+            "Invariants live in the entity"
+          ],
+          [
+            "4",
+            "Separation of concerns",
+            "Driver, service, repository"
+          ],
+          [
+            "5",
+            "Extensibility",
+            "New rule = new class"
+          ],
+          [
+            "6",
+            "Edge cases",
+            "Print error, keep going"
+          ],
+          [
+            "7",
+            "Readability",
+            "Names from the statement"
+          ],
+          [
+            "8",
+            "Concurrency, when asked",
+            "Say where the lock is"
+          ],
+          [
+            "9",
+            "Tests (bonus)",
+            "Assert-style checks in main"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Interviewers score you with a rubric, a checklist. Wording varies by company, but it always has these nine rows. Let's walk them.",
+          "reveal": 0
+        },
+        {
+          "say": "One, working code. Does it compile, does the sample input print the sample output, does it survive their inputs? Never finish with code that doesn't compile.",
+          "reveal": 1
+        },
+        {
+          "say": "Two, completeness. Every mandatory requirement done, bonus only after. Tick them off in the statement's order.",
+          "reveal": 2
+        },
+        {
+          "say": "Three, clean models. Rules that must always hold, called invariants, live inside the entity. For example, a task itself refuses an illegal jump from to-do straight to done.",
+          "reveal": 3
+        },
+        {
+          "say": "Four, separation of concerns. Parsing, business rules and storage sit in different classes. No System dot out inside a service.",
+          "reveal": 4
+        },
+        {
+          "say": "Five, extensibility. If the statement says offers can be X or Y, adding a third offer should mean adding a class, not editing an if chain.",
+          "reveal": 5
+        },
+        {
+          "say": "Six, edge cases. Feed it an unknown id, a duplicate, a negative amount. The program prints a clear error and keeps going.",
+          "reveal": 6
+        },
+        {
+          "say": "Seven, readability. Name classes after the nouns in the statement and methods after the verbs.",
+          "reveal": 7
+        },
+        {
+          "say": "Eight, concurrency, when asked. For wallets and inventory, can two threads corrupt the balance? Say where the lock is and why.",
+          "reveal": 8
+        },
+        {
+          "say": "Nine, tests, a bonus. If there's no JUnit, a few assert-style checks in main are enough.",
+          "reveal": 9
+        }
+      ]
+    },
+    {
+      "id": "s005",
+      "layout": "section",
+      "kicker": "Concept 2 of 8",
+      "title": "The five-step method under the clock",
+      "caption": "Book: Ch 21 · The five-step method, and how the clock changes it",
+      "steps": [
+        {
+          "say": "You already know the whiteboard method: requirements, actors and use cases, classes, relationships, code. In the whiteboard round you spend a quarter of the time before naming a single class.",
+          "reveal": 0
+        },
+        {
+          "say": "Machine coding keeps the same five steps, but flips the proportions. Steps one to four shrink to about twenty minutes, and code fills the rest, because every mandatory feature must actually run.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s006",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: five steps on the task manager",
+      "table": {
+        "head": [
+          "Step",
+          "Applied to a task manager"
+        ],
+        "rows": [
+          [
+            "1 Requirements",
+            "Create, assign, status, search, remind"
+          ],
+          [
+            "2 Actors and use cases",
+            "Creator, assignee, scheduler"
+          ],
+          [
+            "3 Classes",
+            "Task, TaskStatus, TaskService"
+          ],
+          [
+            "4 Relationships",
+            "Service holds repository; task owns comments"
+          ],
+          [
+            "5 Code",
+            "Thin path first: create, then change status"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Step one, requirements. For a Jira-like task manager, I list: create a task, assign it, move its status, search, and send reminders. Mandatory versus bonus is marked here.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, actors and use cases. The creator creates and assigns, the assignee changes status, and a scheduler, a system actor, sends reminders.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, classes. Nouns become entities: Task, a TaskStatus enum, a Priority enum. Verbs become service methods on TaskService.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, relationships. The service holds a repository. A task owns its comments and history, so they live and die with it.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, code. Make one thin path run end to end first: create a task and change its status. Then widen. Detailing twelve classes equally leaves nothing to demo.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s007",
+      "layout": "twocol",
+      "kicker": "Concept 2 of 8",
+      "title": "The two classic failures",
+      "left": {
+        "heading": "Failure",
+        "bullets": [
+          "Time runs out, nothing runs",
+          "God class: one Manager does it all"
+        ]
+      },
+      "right": {
+        "heading": "Fix",
+        "bullets": [
+          "Thin end-to-end path, run every 15 min",
+          "One service per area plus repositories"
+        ]
+      },
+      "steps": [
+        {
+          "say": "The most common failure is running out of time with nothing that runs.",
+          "reveal": 1
+        },
+        {
+          "say": "The second is a god class: one Manager with fifteen maps and every method in it.",
+          "reveal": 2
+        },
+        {
+          "say": "The fix for the first: get a thin path working early and run the program at least every fifteen minutes.",
+          "reveal": 3
+        },
+        {
+          "say": "The fix for the second: the skeleton coming up next, with one service per area. The interviewer still grades scope, one job per class, the right relationships, and a trade-off said out loud. Not U-M-L notation.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s008",
+      "layout": "section",
+      "kicker": "Concept 3 of 8",
+      "title": "A reusable project skeleton",
+      "caption": "Book: Ch 21 · A reusable project skeleton",
+      "steps": [
+        {
+          "say": "Here's something you can type from memory in the first five minutes, and it's the same for every problem. Six packages. Let's walk them using the wallet as our example.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s009",
+      "layout": "table",
+      "kicker": "Concept 3 of 8",
+      "title": "Six packages, one job each",
+      "table": {
+        "head": [
+          "Package",
+          "Wallet example",
+          "Must NOT know"
+        ],
+        "rows": [
+          [
+            "model",
+            "Wallet, Transaction",
+            "services, console"
+          ],
+          [
+            "repository",
+            "WalletRepository + in-memory",
+            "services, console"
+          ],
+          [
+            "service",
+            "WalletService",
+            "concrete repos, console"
+          ],
+          [
+            "strategy",
+            "Offer, FirstTransferOffer",
+            "services"
+          ],
+          [
+            "exception",
+            "InsufficientFundsException",
+            "anything"
+          ],
+          [
+            "driver",
+            "Main, CommandProcessor",
+            "repository internals"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Model holds entities and values: Wallet and Transaction. They guard their own rules, so a wallet's debit refuses to go below zero. Models know nothing about services or the console.",
+          "reveal": 1
+        },
+        {
+          "say": "Repository holds storage contracts and an in-memory version. Swapping a HashMap for a real database later touches only this layer. That's dependency inversion: services depend on interfaces.",
+          "reveal": 2
+        },
+        {
+          "say": "Service holds business rules, one per area: WalletService. No printing, no parsing. It gets its repository handed in from outside. This is the part the interviewer reads most carefully.",
+          "reveal": 3
+        },
+        {
+          "say": "Strategy holds pluggable rules. Every 'it can be X or Y' in the statement becomes an interface plus small classes, like Offer and its cashback variants.",
+          "reveal": 4
+        },
+        {
+          "say": "Exception holds one class per failure kind, with a message a user could read, like insufficient funds in W2.",
+          "reveal": 5
+        },
+        {
+          "say": "Driver holds main and the command processor. It parses input, calls services, and prints. Parsing is replaceable, business logic isn't.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s010",
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Three building blocks you reuse",
+      "bullets": [
+        "Generic in-memory repository on ConcurrentHashMap",
+        "ID generator: AtomicInteger, \"T\" + next number",
+        "Command processor: map of name to handler"
+      ],
+      "steps": [
+        {
+          "say": "First, a generic in-memory repository: a ConcurrentHashMap, a map many threads can use at once, behind an interface with save, find by id, find all, and delete. Generic means one class works for any key and value type.",
+          "reveal": 1
+        },
+        {
+          "say": "Second, an id generator. An AtomicInteger, an integer threads can increment safely without a lock, per entity type. So tasks come out as T1, T2, T3, predictable and thread-safe. That matches statements that say 'auto-increment id starting with one'.",
+          "reveal": 2
+        },
+        {
+          "say": "Third, a command processor: a map from command name to handler, fed by a list of the statement's sample commands. Adding a command means adding one map entry. That's the Command pattern.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s011",
+      "layout": "section",
+      "kicker": "Concept 4 of 8",
+      "title": "The 90-minute time plan",
+      "caption": "Book: Ch 21 · The 90-minute time plan",
+      "steps": [
+        {
+          "say": "Now let's put a clock on it. Six blocks, ninety minutes. I'll walk each block with the task manager as the problem.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s012",
+      "layout": "table",
+      "kicker": "Concept 4 of 8",
+      "title": "Minute by minute",
+      "table": {
+        "head": [
+          "Minutes",
+          "Activity",
+          "Output"
+        ],
+        "rows": [
+          [
+            "0 to 10",
+            "Read twice, ask, mark mandatory",
+            "Numbered requirement list"
+          ],
+          [
+            "10 to 20",
+            "Nouns to entities, pick 1 to 2 patterns",
+            "Packages, enums, records"
+          ],
+          [
+            "20 to 60",
+            "Mandatory requirements in order",
+            "Sample input gives sample output"
+          ],
+          [
+            "60 to 75",
+            "Edge cases, custom exceptions",
+            "Errors printed, keeps going"
+          ],
+          [
+            "75 to 85",
+            "Bonus, thread-safety",
+            "Bonus commands work"
+          ],
+          [
+            "85 to 90",
+            "Clean up, final run",
+            "A demo and a story"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Minutes zero to ten. Read the statement twice and ask questions, like: can a task jump from to-do straight to done? Mark mandatory versus bonus. Paste the sample input into your driver's command list.",
+          "reveal": 1
+        },
+        {
+          "say": "Ten to twenty. Nouns become entities, verbs become methods. Pick the one or two patterns the statement begs for. 'Filter by priority, assignee or due date' begs for Specification. Type the enums and records.",
+          "reveal": 2
+        },
+        {
+          "say": "Twenty to sixty. Implement mandatory requirements in order, running the driver after each one. By minute sixty the sample input should print the sample output.",
+          "reveal": 3
+        },
+        {
+          "say": "Sixty to seventy-five. Edge cases: unknown task T ninety-nine, unknown user dave, a due date in the past. Throw custom exceptions, catch them in the driver, print, carry on.",
+          "reveal": 4
+        },
+        {
+          "say": "Seventy-five to eighty-five. Bonus features, but only if every mandatory one works. Add thread-safety where money or stock is involved.",
+          "reveal": 5
+        },
+        {
+          "say": "Eighty-five to ninety. Clean names, delete dead code, run everything one last time, and prepare a two-minute walkthrough.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s013",
+      "layout": "number",
+      "kicker": "Key number",
+      "title": "One rule to remember",
+      "big": "Run every 15 minutes",
+      "caption": "Compile error at minute 30: a 20-second fix. At minute 88: a disaster",
+      "steps": [
+        {
+          "say": "Here's the one rule to remember. A compile error found at minute thirty is a twenty-second fix. The exact same error found at minute eighty-eight is a disaster. So run the program at least every fifteen minutes.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s014",
+      "layout": "section",
+      "kicker": "Concept 5 of 8",
+      "title": "What to say in the first two minutes",
+      "caption": "Book: Ch 21 · What to say in the first two minutes",
+      "steps": [
+        {
+          "say": "Before you type a line, say four things out loud. They tell the interviewer you know how this round is scored. Let's say them for the wallet problem.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s015",
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Four opening lines, for the wallet",
+      "bullets": [
+        "In memory, behind a repository interface",
+        "Driven from main with the sample commands",
+        "Mandatory: A, B, C. Bonus: D, E",
+        "Ask: where must it be thread-safe?"
+      ],
+      "steps": [
+        {
+          "say": "One: I'll keep wallets in memory behind a repository interface, so a database can be added later without touching the service.",
+          "reveal": 1
+        },
+        {
+          "say": "Two: I'll drive it from main with the statement's sample commands, and print errors without crashing.",
+          "reveal": 2
+        },
+        {
+          "say": "Three: the mandatory list is create wallet, top up and transfer. The bonus is cashback offers. I'll do the mandatory three first.",
+          "reveal": 3
+        },
+        {
+          "say": "Four, ask: where does it need to be thread-safe? For wallets and inventory, the answer is always yes.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s016",
+      "layout": "table",
+      "kicker": "Concept 5 of 8",
+      "title": "Common mistakes, and the fix",
+      "table": {
+        "head": [
+          "Mistake",
+          "Do this instead"
+        ],
+        "rows": [
+          [
+            "20-minute perfect class diagram",
+            "Enums and records first"
+          ],
+          [
+            "System.out inside the service",
+            "Services return data; driver prints"
+          ],
+          [
+            "double for money",
+            "BigDecimal with fixed scale, or long paise"
+          ],
+          [
+            "Crash on first bad command",
+            "Catch in driver loop, print, continue"
+          ],
+          [
+            "Random without a seed",
+            "Seed it, or a Strategy"
+          ],
+          [
+            "LocalDate.now() hard-coded",
+            "Inject a java.time.Clock"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "A twenty-minute perfect diagram leaves no time for code. The diagram lives in your head and in your names.",
+          "reveal": 1
+        },
+        {
+          "say": "Printing inside a service means it can't be reused or tested. Services return data, the driver prints.",
+          "reveal": 2
+        },
+        {
+          "say": "Using double for money: zero point one plus zero point two isn't zero point three in a double. Interviewers test this. Use BigDecimal or whole paise in a long.",
+          "reveal": 3
+        },
+        {
+          "say": "Crashing on the first bad command fails 'handles errors gracefully'. Catch domain exceptions in the driver loop.",
+          "reveal": 4
+        },
+        {
+          "say": "Random without a seed means the output changes every run and you can't demo it. Seed it, or hide randomness behind a strategy.",
+          "reveal": 5
+        },
+        {
+          "say": "And calling LocalDate dot now makes your demo change every day. Inject a Clock, Java's replaceable source of the current time.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s017",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Minute 60, one mandatory feature missing. What now?",
+      "bullets": [
+        "A. Start the bonus, it scores more",
+        "B. Finish the mandatory one first",
+        "C. Polish the class diagram"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. It's minute sixty. One mandatory requirement is still missing, and the bonus looks fun. What do you do?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s018",
+      "layout": "section",
+      "kicker": "Concept 6 of 8",
+      "title": "Design a Task Management System",
+      "caption": "Book: Ch 21 · 21.1 Design a Task Management System",
+      "steps": [
+        {
+          "say": "The answer was B. Finish the mandatory one; the bonus only counts once every mandatory feature runs.",
+          "reveal": 0
+        },
+        {
+          "say": "Now our first full problem: the core of Jira, Asana or Trello. Users create tasks, assign them, move them through statuses, comment, search, and get reminders for tasks that are due.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s019",
+      "layout": "table",
+      "kicker": "Concept 6 of 8",
+      "title": "Clarify first",
+      "table": {
+        "head": [
+          "Question",
+          "Assumed answer"
+        ],
+        "rows": [
+          [
+            "Can any status go to any other?",
+            "No: only listed moves; CANCELLED is final"
+          ],
+          [
+            "One assignee or many?",
+            "One, may be empty"
+          ],
+          [
+            "Reminder in a console app?",
+            "A sweep a scheduler would call"
+          ],
+          [
+            "Past due dates allowed?",
+            "Not on creation"
+          ],
+          [
+            "How are notifications sent?",
+            "Listener interface; demo prints"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Statuses are to-do, in progress, blocked, done, and cancelled. Only listed moves are legal. To-do can't jump straight to done, cancelled is final, and done can be re-opened.",
+          "reveal": 1
+        },
+        {
+          "say": "One assignee, which may be empty. A list is an easy extension.",
+          "reveal": 2
+        },
+        {
+          "say": "A reminder in a console app is just a method a scheduler would call: notify owners of open tasks due within N days, or overdue.",
+          "reveal": 3
+        },
+        {
+          "say": "Due dates in the past are rejected when you create a task.",
+          "reveal": 4
+        },
+        {
+          "say": "Notifications go through a listener interface, and the demo just prints them.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s020",
+      "layout": "table",
+      "title": "Task status life cycle",
+      "caption": "Rules live in TaskStatus.allowedNext()",
+      "steps": [
+        {
+          "say": "Here's the state machine: a fixed set of states plus the allowed moves between them. To-do can go to in progress or cancelled.",
+          "reveal": 1
+        },
+        {
+          "say": "In progress can go to blocked, done, back to to-do, or cancelled.",
+          "reveal": 2
+        },
+        {
+          "say": "Blocked goes back to in progress, or to cancelled.",
+          "reveal": 3
+        },
+        {
+          "say": "Done can re-open to in progress.",
+          "reveal": 4
+        },
+        {
+          "say": "And cancelled is final. The rules live in one place: an enum method called allowed next. The Task just asks, can I move to this status? If not, it throws an invalid transition exception. We don't need the full State pattern with one class per status, because statuses carry no behaviour except which moves are legal.",
+          "reveal": 5
+        }
+      ],
+      "table": {
+        "head": [
+          "From",
+          "Allowed moves"
+        ],
+        "rows": [
+          [
+            "TODO",
+            "IN_PROGRESS, CANCELLED"
+          ],
+          [
+            "IN_PROGRESS",
+            "BLOCKED, DONE, TODO, CANCELLED"
+          ],
+          [
+            "BLOCKED",
+            "IN_PROGRESS, CANCELLED"
+          ],
+          [
+            "DONE",
+            "IN_PROGRESS (re-open)"
+          ],
+          [
+            "CANCELLED",
+            "none: final"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "s021",
+      "layout": "table",
+      "kicker": "Concept 6 of 8",
+      "title": "The design, piece by piece",
+      "table": {
+        "head": [
+          "Piece",
+          "Pattern",
+          "Why"
+        ],
+        "rows": [
+          [
+            "TaskStatus transition table",
+            "State (enum)",
+            "All rules in one place"
+          ],
+          [
+            "TaskFilter with and / or",
+            "Specification",
+            "Any filter combination"
+          ],
+          [
+            "TaskSort enum of comparators",
+            "Strategy",
+            "Sort order is data"
+          ],
+          [
+            "TaskEventListener list",
+            "Observer",
+            "Add Slack without edits"
+          ],
+          [
+            "TaskService only entry point",
+            "Facade",
+            "Driver sees one API"
+          ],
+          [
+            "Injected Clock",
+            "Dependency injection",
+            "Same output every run"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The status enum is the state machine we just saw.",
+          "reveal": 1
+        },
+        {
+          "say": "TaskFilter is the Specification pattern: each filter is a small yes-or-no test, and filters combine with and, or. For example, assigned to bob, and open. A new filter is one factory method; search never changes. The rejected alternative is a search method with ten nullable parameters.",
+          "reveal": 2
+        },
+        {
+          "say": "TaskSort is a Strategy: by due date, by priority descending, or by id. By id compares the number inside, so T2 sorts before T10.",
+          "reveal": 3
+        },
+        {
+          "say": "Listeners are the Observer pattern. Email, Slack or push can be added without touching the service.",
+          "reveal": 4
+        },
+        {
+          "say": "TaskService is a facade, the one front door the driver talks to.",
+          "reveal": 5
+        },
+        {
+          "say": "And an injected clock makes reminders deterministic. The demo's today is fixed, so output never changes.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s022",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: the demo run",
+      "table": {
+        "head": [
+          "Action",
+          "Result"
+        ],
+        "rows": [
+          [
+            "bob moves T1 to IN_PROGRESS, then DONE",
+            "alice notified both times"
+          ],
+          [
+            "Search: bob's open tasks",
+            "T3 Upgrade to Java 21, CRITICAL"
+          ],
+          [
+            "Reminders, due within 3 days",
+            "T4 and T3 reminded; 2 sent"
+          ],
+          [
+            "Move T2 from TODO to DONE",
+            "error: cannot move"
+          ],
+          [
+            "Assign cancelled T4",
+            "error: cannot assign"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's watch it run. Alice creates T1, fix login bug, and assigns it to bob. Bob moves T1 to in progress, then done. Alice, the creator, gets notified each time.",
+          "reveal": 1
+        },
+        {
+          "say": "Search for bob's open tasks sorted by priority: only T3, upgrade to Java twenty-one, critical. T1 is done, so the open filter drops it.",
+          "reveal": 2
+        },
+        {
+          "say": "Reminders for tasks due within three days: T4, due September twenty-eighth, and T3, due October first. T1 is due in that window too, but it's done, so no reminder. Two sent.",
+          "reveal": 3
+        },
+        {
+          "say": "Try moving T2 from to-do straight to done: error, task T2 cannot move from to-do to done. The program keeps going.",
+          "reveal": 4
+        },
+        {
+          "say": "And assigning the cancelled T4 is refused too. Unknown task T ninety-nine and unknown user dave also print clean errors.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s023",
+      "layout": "twocol",
+      "kicker": "Concept 6 of 8",
+      "title": "Concurrency in the task manager",
+      "left": {
+        "heading": "What we did",
+        "bullets": [
+          "synchronized on every Task mutator",
+          "ConcurrentHashMap for tasks and users",
+          "AtomicInteger ids, no duplicates"
+        ]
+      },
+      "right": {
+        "heading": "Honest limit",
+        "bullets": [
+          "Two text editors: last writer wins",
+          "Fix: optimistic version field"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Each method that changes a task is synchronized, meaning only one thread at a time may run it on that task. So a status change and a reassignment can't interleave. And two different tasks never block each other, because each has its own lock.",
+          "reveal": 1
+        },
+        {
+          "say": "Storage is a ConcurrentHashMap, and find all returns a copy, so a search is never disturbed by an insert.",
+          "reveal": 2
+        },
+        {
+          "say": "Ids come from an AtomicInteger, so no duplicates under concurrency.",
+          "reveal": 3
+        },
+        {
+          "say": "Now say the limit out loud. If two people edit the title at once, the last writer wins.",
+          "reveal": 4
+        },
+        {
+          "say": "The fix is optimistic locking: keep a version number, and reject an update whose version is stale. In the interview: draw the statuses first, then the filters, then run the demo.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s024",
+      "layout": "section",
+      "kicker": "Concept 7 of 8",
+      "title": "Design a Digital Wallet Service",
+      "caption": "Book: Ch 21 · 21.2 Design a Digital Wallet Service",
+      "steps": [
+        {
+          "say": "Second problem: a digital wallet, like Paytm, PhonePe, or a PayPal balance. Users create wallets, top up from a bank, transfer to each other, and see a statement. We'll also pay cashback.",
+          "reveal": 0
+        },
+        {
+          "say": "The interviewer watches three things: exact money arithmetic, no double-spending when two requests race, and no double-charging when a client retries. Let's take them one at a time.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s025",
+      "layout": "bullets",
+      "kicker": "Concept 7 of 8",
+      "title": "Clarify first",
+      "bullets": [
+        "Money: BigDecimal, scale 2; reject 3 decimals",
+        "Balance can never go negative",
+        "Retries carry an idempotency key",
+        "Offers don't stack: best one wins",
+        "Cashback comes from a funded PROMO wallet"
+      ],
+      "steps": [
+        {
+          "say": "Money is a BigDecimal with scale two, meaning two digits after the point, paise or cents. An input with more decimals is rejected, not silently rounded.",
+          "reveal": 1
+        },
+        {
+          "say": "A balance can never go negative.",
+          "reveal": 2
+        },
+        {
+          "say": "If a client retries after a timeout, the request carries an idempotency key, and a repeat moves no money.",
+          "reveal": 3
+        },
+        {
+          "say": "Two offers: ten percent on your first transfer, capped at fifty, and a flat twenty-five on transfers of a thousand or more. They don't stack; the best one wins.",
+          "reveal": 4
+        },
+        {
+          "say": "And cashback comes out of a promotions wallet that marketing tops up. Money is never created from nothing.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s026",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: BigDecimal scale rules",
+      "table": {
+        "head": [
+          "Input",
+          "What Money does"
+        ],
+        "rows": [
+          [
+            "0.1 + 0.2 as double",
+            "0.30000000000000004: wrong"
+          ],
+          [
+            "\"200\"",
+            "200.00 (scale set to 2)"
+          ],
+          [
+            "\"1.005\"",
+            "Rejected: at most 2 decimals"
+          ],
+          [
+            "\"1.50\"",
+            "Accepted: trailing zero stripped first"
+          ],
+          [
+            "\"-5\"",
+            "Rejected: must be positive"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Why not double? A double stores numbers in base two, where zero point one has no exact form. So zero point one plus zero point two comes out as zero point three with a tiny error at the end. For money, that's a bug.",
+          "reveal": 1
+        },
+        {
+          "say": "BigDecimal is exact. Our Money helper sets every amount to scale two, so two hundred becomes two hundred point zero zero.",
+          "reveal": 2
+        },
+        {
+          "say": "One point zero zero five has three decimals. We reject it, rather than silently rounding a customer's money.",
+          "reveal": 3
+        },
+        {
+          "say": "One point five zero is fine: we strip trailing zeros before checking, so it counts as one decimal.",
+          "reveal": 4
+        },
+        {
+          "say": "And minus five is rejected: amounts must be positive. Also, build BigDecimals from strings, never from a double, or the double's error sneaks in. Using whole paise in a long is also correct; say so.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s027",
+      "layout": "diagram",
+      "title": "Why lock order matters: the deadlock",
+      "mermaid": "flowchart LR\n    T1[\"Thread 1: W1 to W2\"] -->|\"holds\"| A[\"lock W1\"]\n    T1 -->|\"waits for\"| B[\"lock W2\"]\n    T2[\"Thread 2: W2 to W1\"] -->|\"holds\"| B\n    T2 -->|\"waits for\"| A",
+      "caption": "Each locks its own source first: both wait forever",
+      "steps": [
+        {
+          "say": "Each wallet has its own lock, so transfers between different wallets run in parallel. But a transfer touches two wallets. Imagine thread one sends W1 to W2 and locks W1 first. At the same moment, thread two sends W2 to W1 and locks W2 first.",
+          "reveal": 0
+        },
+        {
+          "say": "Now thread one waits for W2 and thread two waits for W1. Each holds what the other needs. That's a deadlock: both wait forever.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s028",
+      "layout": "bullets",
+      "kicker": "Concept 7 of 8",
+      "title": "Per-wallet locks in id order",
+      "bullets": [
+        "Rule: always lock the smaller id first",
+        "Both threads lock W1 first",
+        "One waits; the other finishes",
+        "Enforced in one helper: withBoth",
+        "PROMO sorts before W1"
+      ],
+      "steps": [
+        {
+          "say": "The fix is a global order: always lock the smaller id first.",
+          "reveal": 1
+        },
+        {
+          "say": "Replay it. Thread one, W1 to W2, locks W1 first. Thread two, W2 to W1, also locks W1 first, because W1 is smaller.",
+          "reveal": 2
+        },
+        {
+          "say": "So thread two simply waits until thread one finishes, then goes. A cycle is impossible.",
+          "reveal": 3
+        },
+        {
+          "say": "The rule lives in one helper, with both, which sorts the two wallets and locks them in order. Never more than two locks at once.",
+          "reveal": 4
+        },
+        {
+          "say": "Ordering is dictionary order on the id, so the string PROMO sorts before W1. Remember that for cashback. The rejected alternative, one global lock, is correct but makes every transfer in the system queue.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s029",
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Debit before credit, under both locks",
+      "bullets": [
+        "debit(200) on W1 throws if funds are short",
+        "If it throws, nothing has changed",
+        "Then credit(200) on W2",
+        "Record TRANSFER_OUT and TRANSFER_IN"
+      ],
+      "steps": [
+        {
+          "say": "Inside both locks, the order matters. First, debit two hundred from W1. Debit checks the balance and throws an insufficient funds exception before changing anything.",
+          "reveal": 1
+        },
+        {
+          "say": "So if it throws, both wallets are untouched. The transfer is atomic: both sides or neither.",
+          "reveal": 2
+        },
+        {
+          "say": "Only then do we credit two hundred to W2. Credit can't fail.",
+          "reveal": 3
+        },
+        {
+          "say": "Finally, we record a transfer-out line on W1's statement and a transfer-in line on W2's. If we credited first, a failed debit would need a compensating step to undo the credit.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s030",
+      "layout": "bullets",
+      "kicker": "Concept 7 of 8",
+      "title": "Idempotency via computeIfAbsent",
+      "bullets": [
+        "Client sends transfer, key req-3",
+        "processed.computeIfAbsent(\"req-3\", run transfer)",
+        "Timeout; client retries with req-3",
+        "Key present: stored result, no money moves",
+        "If transfer throws, nothing stored"
+      ],
+      "steps": [
+        {
+          "say": "Idempotent means running something twice has the same effect as once. Here's the story. The client sends transfer two hundred, W1 to W2, with key req three.",
+          "reveal": 1
+        },
+        {
+          "say": "The service calls compute if absent on a ConcurrentHashMap called processed. That runs the transfer only if the key is missing, and stores the result, as one atomic step.",
+          "reveal": 2
+        },
+        {
+          "say": "The network times out, so the client retries with the same key, req three.",
+          "reveal": 3
+        },
+        {
+          "say": "The key is already there, so the stored result comes back. In the demo, retry returns same result prints true, and no money moved. The rejected alternative, check contains key, then run, then put, has a race: two retries can both pass the check.",
+          "reveal": 4
+        },
+        {
+          "say": "And if the transfer throws, say for insufficient funds, nothing is stored. In the demo, a failed req five was retried later and succeeded. One caution: the function must be short and must never touch the same map.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s031",
+      "layout": "bullets",
+      "title": "Transfer, then cashback",
+      "steps": [
+        {
+          "say": "Here's the full flow. Step one, the transfer, locks W1 then W2, debits, credits, records, and unlocks.",
+          "reveal": 1
+        },
+        {
+          "say": "Then cashback is worked out, after those locks are released. The best offer is ten percent of two hundred, so twenty.",
+          "reveal": 2
+        },
+        {
+          "say": "That's an ordinary transfer from PROMO to W1, locking PROMO first because it sorts first.",
+          "reveal": 3
+        },
+        {
+          "say": "Why after? Only two wallets are ever locked at once, and ordinary transfers never queue on the busy PROMO lock. For a moment the transfer is visible without its cashback, which is fine for a reward.",
+          "reveal": 4
+        }
+      ],
+      "bullets": [
+        "Step 1: lock W1 then W2; debit, credit, record, unlock",
+        "Step 2: best offer on 200.00 is 20.00",
+        "Step 3: lock PROMO then W1; move 20.00, unlock",
+        "Why after: only two locks held at once"
+      ]
+    },
+    {
+      "id": "s032",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: cashback from the promo wallet",
+      "table": {
+        "head": [
+          "Transfer",
+          "Best offer",
+          "PROMO balance"
+        ],
+        "rows": [
+          [
+            "Budget top-up",
+            "none",
+            "100.00"
+          ],
+          [
+            "Alice 200.00, first",
+            "10%: 20.00",
+            "80.00"
+          ],
+          [
+            "Alice 1200.00",
+            "Flat: 25.00",
+            "55.00"
+          ],
+          [
+            "Bob 10.00, first",
+            "10%: 1.00",
+            "54.00"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Marketing funds PROMO with a hundred.",
+          "reveal": 1
+        },
+        {
+          "say": "Alice's first transfer is two hundred. Ten percent is twenty, under the cap of fifty. PROMO drops to eighty.",
+          "reveal": 2
+        },
+        {
+          "say": "Alice then sends twelve hundred. The first-transfer offer no longer applies, so the flat twenty-five wins. PROMO is at fifty-five.",
+          "reveal": 3
+        },
+        {
+          "say": "Bob sends ten, his first transfer, and earns one. PROMO ends at fifty-four. If the budget can't cover an offer, cashback is zero and the transfer still stands. That's double-entry: every credit has a matching debit.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s033",
+      "layout": "bullets",
+      "kicker": "Concept 7 of 8",
+      "title": "The Offer interface",
+      "bullets": [
+        "Offer: name(), cashbackFor(sender, amount, count)",
+        "FirstTransferOffer: 10% on count 1, max 50",
+        "BigTransferOffer: flat 25 if amount >= 1000",
+        "bestOffer: max of all, no stacking"
+      ],
+      "steps": [
+        {
+          "say": "Offers are a Strategy. The Offer interface has a name, and cashback for, which takes the sender, the amount, and how many transfers the sender has made.",
+          "reveal": 1
+        },
+        {
+          "say": "First transfer offer returns ten percent, capped at fifty, when the count is one, and zero otherwise.",
+          "reveal": 2
+        },
+        {
+          "say": "Big transfer offer returns a flat twenty-five when the amount is a thousand or more.",
+          "reveal": 3
+        },
+        {
+          "say": "Best offer asks every offer and takes the maximum. The no-stacking policy lives in that one method, and a new campaign is just a new class.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s034",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: Alice's statement",
+      "table": {
+        "head": [
+          "Line",
+          "Type",
+          "Amount",
+          "Balance"
+        ],
+        "rows": [
+          [
+            "TX2",
+            "TOP_UP",
+            "2000.00",
+            "2000.00"
+          ],
+          [
+            "TX4",
+            "TRANSFER_OUT",
+            "200.00",
+            "1800.00"
+          ],
+          [
+            "TX7",
+            "CASHBACK_IN",
+            "20.00",
+            "1820.00"
+          ],
+          [
+            "TX8",
+            "TRANSFER_OUT",
+            "1200.00",
+            "620.00"
+          ],
+          [
+            "TX11",
+            "CASHBACK_IN",
+            "25.00",
+            "645.00"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Each wallet keeps its own statement: immutable lines with type, amount, balance after, counterparty and reference. Alice tops up two thousand. A retried top-up with the same key added nothing.",
+          "reveal": 1
+        },
+        {
+          "say": "Transfer out two hundred: balance eighteen hundred.",
+          "reveal": 2
+        },
+        {
+          "say": "Cashback in, twenty, from PROMO: eighteen twenty.",
+          "reveal": 3
+        },
+        {
+          "say": "Transfer out twelve hundred: six twenty.",
+          "reveal": 4
+        },
+        {
+          "say": "Cashback in twenty-five: six forty-five. Keeping the statement in the wallet means reading history needs no global scan. Finally, the demo runs a thousand opposite transfers on eight threads. Total before, two thousand four hundred point five zero; total after, the same. Conserved equals true. No lost updates, no deadlock.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s035",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "W2 to W1 races W1 to W2: which lock comes first?",
+      "bullets": [
+        "A. Each takes its own source wallet",
+        "B. Both take W1",
+        "C. Both take PROMO"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Thread A sends W2 to W1 while thread B sends W1 to W2. Which lock does each take first?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s036",
+      "layout": "section",
+      "kicker": "Concept 8 of 8",
+      "title": "Design an Event Calendar (Flipkart)",
+      "caption": "Book: Ch 21 · 21.3 Design an Event Calendar (Flipkart)",
+      "steps": [
+        {
+          "say": "The answer was B. Both take W1 first, the smaller id, so one simply waits.",
+          "reveal": 0
+        },
+        {
+          "say": "Our third problem is a real Flipkart statement. Users have working hours. Users form teams, at most one team each. Events happen on one day, with users, teams, or both. A user can be in only one event at a time. And for a team, the creator says how many representatives, N, it must send. If any team can't supply N free members, the event isn't created.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s037",
+      "layout": "bullets",
+      "kicker": "Concept 8 of 8",
+      "title": "Requirements",
+      "bullets": [
+        "Create users with working hours; create teams",
+        "Create event: reject if anyone is unavailable",
+        "Events of a user between two date-times",
+        "Suggest free slots for users and teams",
+        "Bonus: update event time, recurring events"
+      ],
+      "steps": [
+        {
+          "say": "Create users with working hours, and teams from existing users.",
+          "reveal": 1
+        },
+        {
+          "say": "Create an event, rejecting it if any attendee is outside working hours, already busy, or a team lacks N free members.",
+          "reveal": 2
+        },
+        {
+          "say": "List a user's events between two date-times, both direct ones and ones where they represent their team.",
+          "reveal": 3
+        },
+        {
+          "say": "Suggest free slots for a set of users and teams on a day.",
+          "reveal": 4
+        },
+        {
+          "say": "Bonus: move an event atomically, and create recurring events, all or nothing.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s038",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: half-open intervals",
+      "table": {
+        "head": [
+          "Slot A",
+          "Slot B",
+          "Overlap?"
+        ],
+        "rows": [
+          [
+            "14:00 to 15:00",
+            "15:00 to 16:00",
+            "No: back to back"
+          ],
+          [
+            "14:00 to 15:00",
+            "14:30 to 15:30",
+            "Yes"
+          ],
+          [
+            "10:00 to 11:00",
+            "F works from 11:00",
+            "Outside hours"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "First question to ask: does a meeting ending at three clash with one starting at three? We say no. Slots are half-open: the start minute belongs to the slot, the end minute doesn't. So fourteen hundred to fifteen hundred and fifteen hundred to sixteen hundred don't overlap.",
+          "reveal": 1
+        },
+        {
+          "say": "The overlap test is one line: A's start is before B's end, and B's start is before A's end. Fourteen to fifteen versus fourteen thirty to fifteen thirty: fourteen is before fifteen thirty, and fourteen thirty is before fifteen. Overlap.",
+          "reveal": 2
+        },
+        {
+          "say": "And an event must sit inside every attendee's working hours. That's why the statement's Event5, ten to eleven, fails: user F starts at eleven.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s039",
+      "layout": "diagram",
+      "title": "Create an event: plan, then save",
+      "mermaid": "flowchart LR\n    A[\"Direct users free?\"] --> B[\"Pick N free per team\"]\n    B --> C[\"plan returns Event\"]\n    C --> D[\"save and index\"]\n    A -->|\"no\"| X[\"reject\"]\n    B -->|\"short\"| X",
+      "caption": "plan() has no side effects; save() is separate",
+      "steps": [
+        {
+          "say": "Creating an event has two halves. Plan checks every direct user is free, then asks the selector for N free members of each team, skipping anyone already attending directly. If anything fails, it throws. It returns an Event but changes nothing stored.",
+          "reveal": 0
+        },
+        {
+          "say": "Save then stores it and indexes it per attendee. Why split them? Because three features reuse plan. Create event: plan, then save. Recurring: plan every occurrence, save only if all succeed. Update time: plan the new time while ignoring the old booking, then swap. All or nothing, for free, with no rollback code.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s040",
+      "layout": "bullets",
+      "kicker": "Concept 8 of 8",
+      "title": "RepresentativeSelector strategy",
+      "bullets": [
+        "choose(team, n, isFree) returns members",
+        "Default: first N free members in team order",
+        "Event3: T2 sends B and D",
+        "Event4 needs one of T2: only F is left",
+        "Swap in LeastBusySelector for fairness"
+      ],
+      "steps": [
+        {
+          "say": "Which N members represent a team is a policy, so it's a Strategy. The interface has one method, choose, taking the team, N, and a test for whether a member is free.",
+          "reveal": 1
+        },
+        {
+          "say": "The default picks the first N free members in team order. Deterministic and easy to explain.",
+          "reveal": 2
+        },
+        {
+          "say": "Watch it in the demo. Team T2 is B, D, F. Event3 needs two from T2 at fifteen hundred, so B and D are blocked.",
+          "reveal": 3
+        },
+        {
+          "say": "Event4 at the same time needs one T2 member. B and D are busy, so F goes. That's why user B's event list shows Event3.",
+          "reveal": 4
+        },
+        {
+          "say": "For fairness, plug in a least-busy selector that sorts free members by how many events they have this week. No service changes.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s041",
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Per-user TreeMap index",
+      "bullets": [
+        "EventStore: user to TreeMap of date to events",
+        "Conflict check: one user's one day",
+        "Range query: subMap(from, to)",
+        "A, today 10:00 to tomorrow 17:00",
+        "Result: Event4, Event1"
+      ],
+      "steps": [
+        {
+          "say": "The event store keeps an index: for each user, a TreeMap from date to that day's events. A TreeMap keeps its keys sorted.",
+          "reveal": 1
+        },
+        {
+          "say": "So a conflict check reads only one user's events on one day, not every event in the system.",
+          "reveal": 2
+        },
+        {
+          "say": "And a range query is sub map, from date to date, which returns just that slice of the sorted map.",
+          "reveal": 3
+        },
+        {
+          "say": "Example: user A's events from today at ten to tomorrow at seventeen hundred.",
+          "reveal": 4
+        },
+        {
+          "say": "The answer is Event4 today and Event1 tomorrow. No full scan needed.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s042",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: the free-slot sweep, A + T1, N = 1",
+      "table": {
+        "head": [
+          "Piece",
+          "A free?",
+          "C or E free?",
+          "Good?"
+        ],
+        "rows": [
+          [
+            "10:00 to 11:00",
+            "yes",
+            "no, not working",
+            "no"
+          ],
+          [
+            "11:00 to 15:00",
+            "yes",
+            "yes",
+            "yes, merged"
+          ],
+          [
+            "15:00 to 16:00",
+            "no, Event4",
+            "no, Event3",
+            "no"
+          ],
+          [
+            "16:00 to 19:00",
+            "yes",
+            "yes",
+            "yes, merged"
+          ],
+          [
+            "19:00 to 19:30",
+            "no, off work",
+            "yes, E",
+            "no"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Now the clever part: free slots. Collect every interesting time that day: each person's working-hour start and end, and the start and end of each of their events. Sort them. Between two neighbouring cut points nothing changes, so you test each piece once. For A plus team T1, which is C and E, with one representative, the cuts are ten, eleven, eleven thirty, fifteen, sixteen, eighteen thirty, nineteen, and nineteen thirty.",
+          "reveal": 1
+        },
+        {
+          "say": "Ten to eleven: A is free, but neither C nor E has started work. No.",
+          "reveal": 2
+        },
+        {
+          "say": "Eleven to fifteen: A is free and at least one of C or E is free. Good, and eleven to eleven thirty plus eleven thirty to fifteen merge into one slot.",
+          "reveal": 3
+        },
+        {
+          "say": "Fifteen to sixteen: A is in Event4, and C and E are in Event3. No.",
+          "reveal": 4
+        },
+        {
+          "say": "Sixteen to nineteen is good, and from nineteen to nineteen thirty E is still free, but A is off work, so that piece fails. So the answer is eleven to fifteen and sixteen to nineteen. Exact, no minute-by-minute loop, works for any N. A fixed grid, say every fifteen or thirty minutes, is slower and can miss boundaries that don't land on it.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s043",
+      "layout": "twocol",
+      "kicker": "Concept 8 of 8",
+      "title": "Synchronized service, and the sample bug",
+      "left": {
+        "heading": "Concurrency",
+        "bullets": [
+          "Check-then-book must be atomic",
+          "Service methods are synchronized",
+          "Scale-up: per-user locks in order"
+        ]
+      },
+      "right": {
+        "heading": "Ask, don't assume",
+        "bullets": [
+          "Sample says free from 10AM",
+          "C and E start at 11:30 and 11:00",
+          "Say: I think it means 11AM"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Two concurrent creations could both check that C is free, then both book her. So the free check and the save must be one atomic step.",
+          "reveal": 1
+        },
+        {
+          "say": "The simple fix: make the service methods synchronized, one thread at a time. The store's lists aren't thread-safe on their own anyway.",
+          "reveal": 2
+        },
+        {
+          "say": "Per-user locks would be faster, but an event locks many users at once, so you'd need lock ordering, just like the wallet. Mention it as a scale-up.",
+          "reveal": 3
+        },
+        {
+          "say": "One more thing. The statement's sample answer says A and T1 are free from ten A-M.",
+          "reveal": 4
+        },
+        {
+          "say": "But C starts at eleven thirty and E at eleven, so by the statement's own rules the first slot starts at eleven.",
+          "reveal": 5
+        },
+        {
+          "say": "Point it out politely: I think the sample means eleven; shall I follow the rules? The statement literally says do not make assumptions, ask. That's being tested.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s044",
+      "layout": "recap",
+      "kicker": "Episode 27 recap",
+      "title": "Episode 27 recap",
+      "bullets": [
+        "Working code first; 9-row rubric",
+        "Skeleton: model, repo, service, strategy, exception, driver",
+        "90-minute plan; run every 15 minutes",
+        "Tasks: enum states, Specification, Observer",
+        "Wallet: BigDecimal, id-ordered locks, idempotency",
+        "Calendar: half-open, plan vs save, sweep"
+      ],
+      "steps": [
+        {
+          "say": "Let's recap. The machine-coding round: working code is the answer, scored on a nine-row rubric, and the five steps shrink to twenty minutes so code fills the rest.",
+          "reveal": 1
+        },
+        {
+          "say": "Six packages typed from memory: model, repository, service, strategy, exception, driver. Plus a generic repository, an atomic id generator, and a command map.",
+          "reveal": 2
+        },
+        {
+          "say": "The ninety-minute plan: mandatory in order, edge cases at sixty, bonus at seventy-five, run every fifteen minutes. Open with the four lines, and ask where it must be thread-safe.",
+          "reveal": 3
+        },
+        {
+          "say": "Task manager: status transitions in an enum, filters as Specifications, sorts as Strategies, Observer notifications, and a lock per task.",
+          "reveal": 4
+        },
+        {
+          "say": "Wallet: BigDecimal at scale two, lock both wallets smaller id first, debit before credit, compute if absent for idempotency, and cashback as a second transfer from a funded promo wallet.",
+          "reveal": 5
+        },
+        {
+          "say": "Calendar: half-open slots, a side-effect-free plan reused by create, recurring and update, a representative selector, a per-user TreeMap, a boundary sweep, and a synchronized service.",
+          "reveal": 6
+        },
+        {
+          "say": "Next time, episode twenty-eight: Machine Coding, Coding Blox to Unix find. We'll build a LeetCode-like platform, PropertyHunt, a loan ledger, inventory, and a Unix find command. See you there.",
+          "reveal": 6
+        }
+      ]
+    }
+  ]
+}

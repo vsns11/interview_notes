@@ -1,0 +1,1808 @@
+{
+ "series": "LLD Workshop",
+ "episode": 18,
+ "title": "Booking: Car Rental to Meeting Scheduler",
+ "subtitle": "Five booking problems, one skeleton: a calendar and an atomic claim",
+ "scenes": [
+  {
+   "id": "s001",
+   "layout": "title",
+   "title": "Booking: Car Rental to Meeting Scheduler",
+   "subtitle": "Five booking problems, one skeleton: a calendar and an atomic claim",
+   "steps": [
+    {
+     "say": "Welcome to the L-L-D Workshop, episode eighteen: Booking, from Car Rental to Meeting Scheduler. This is the second of our two booking episodes, and today we design five systems.",
+     "reveal": 0
+    },
+    {
+     "say": "A car rental company. A restaurant. An airline. A university's course registration. And a meeting-room scheduler. Underneath they are one problem: a limited resource, a calendar, and many people trying to claim it at once.",
+     "reveal": 0
+    },
+    {
+     "say": "By the end you'll be able to set up any booking problem in minutes. You'll find its calendar, write its one atomic claim, and put each rule on the object that owns the data. Keep the chapter sixteen PDF open. Every number I quote comes from its real program output.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s002",
+   "layout": "section",
+   "kicker": "Part 1 of 7 - The setup",
+   "title": "One skeleton under five problems",
+   "steps": [
+    {
+     "say": "Before we start, let's name the skeleton. Once you can see it, every new booking problem is the same three questions with different nouns.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s003",
+   "layout": "table",
+   "kicker": "Overview",
+   "title": "The shared skeleton",
+   "table": {
+    "head": [
+     "Problem",
+     "Booked thing",
+     "Calendar",
+     "Atomic claim"
+    ],
+    "rows": [
+     [
+      "Car rental",
+      "a vehicle",
+      "days",
+      "Vehicle.tryBook"
+     ],
+     [
+      "Restaurant",
+      "a table",
+      "hourly slots",
+      "Table.tryHold"
+     ],
+     [
+      "Airline",
+      "a seat on one flight date",
+      "the flight instance",
+      "FlightInstance.holdSeats"
+     ],
+     [
+      "Course registration",
+      "a seat in a section",
+      "the term",
+      "Section.enroll"
+     ],
+     [
+      "Meeting scheduler",
+      "a room",
+      "continuous time",
+      "Room.tryReserve"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Row one, car rental. You book a vehicle, the calendar is days, and one method, try book, checks and claims those days.",
+     "reveal": 1
+    },
+    {
+     "say": "Row two, the restaurant. You book a table, the calendar is hourly slots, and try hold claims them.",
+     "reveal": 2
+    },
+    {
+     "say": "Row three, the airline. You book a seat on one flight on one date. Hold seats claims all of a family's seats together.",
+     "reveal": 3
+    },
+    {
+     "say": "Row four, course registration. You take a seat in one section of a course, for the term. Section dot enroll is the only place a seat is taken.",
+     "reveal": 4
+    },
+    {
+     "say": "Row five, the meeting scheduler. You book a room for any time range, like ten fifteen to ten forty. Try reserve claims it. We'll fill in each row today.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s004",
+   "layout": "bullets",
+   "kicker": "Key terms",
+   "title": "Four words we'll use all episode",
+   "bullets": [
+    "Resource: anything in limited supply",
+    "Thread: one line of execution; servers run many",
+    "Race condition: result depends on who runs first",
+    "Atomic: nobody sees it half-done"
+   ],
+   "steps": [
+    {
+     "say": "A resource is anything in limited supply. A car, a table, a seat.",
+     "reveal": 1
+    },
+    {
+     "say": "A thread is one independent line of execution. A server runs many side by side. That's concurrency: several things in progress at once.",
+     "reveal": 2
+    },
+    {
+     "say": "A race condition is a bug where the result depends on which thread runs first. Imagine two people both ask, is seat ten C free? Both hear yes, both write taken. Both think they won.",
+     "reveal": 3
+    },
+    {
+     "say": "A step is atomic when no other thread can see it half-done or slip in between its parts. Every design today has exactly one atomic check-then-claim step. That's the method to code first in the interview.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s005",
+   "layout": "section",
+   "kicker": "Part 2 of 7 - Car rental",
+   "title": "Design a car rental system",
+   "steps": [
+    {
+     "say": "First up, car rental. A company rents cars, trucks, S-U-Vs, vans and motorcycles from many branches. You might pick up at the airport and drop off downtown. Let's follow one customer, Alice, all the way through.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s006",
+   "layout": "bullets",
+   "kicker": "Car rental - concept 1",
+   "title": "Availability comes from sold days, not a status",
+   "bullets": [
+    "Members ask about future dates",
+    "Status answers 'where is the car now'",
+    "Each vehicle keeps a set of booked days",
+    "Keep status too, for the physical location"
+   ],
+   "steps": [
+    {
+     "say": "Here's the key decision. Members ask about the future. Can I have the car from the tenth to the thirteenth?",
+     "reveal": 1
+    },
+    {
+     "say": "A status field like reserved or loaned only answers where the car is right now. A car out on loan today may be back by then. And a car sitting on the lot today may already be promised to someone next week.",
+     "reveal": 2
+    },
+    {
+     "say": "So each vehicle keeps a set of the days it has already sold. Availability means: none of my requested days are in that set. And a car can now hold many future reservations, not just one.",
+     "reveal": 3
+    },
+    {
+     "say": "We still keep a status field, because staff need to know where the car physically is: on the lot, loaned, in service, or lost. Two different questions, two different fields.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s007",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: Alice books the RAV4",
+   "table": {
+    "head": [
+     "Step",
+     "What happens"
+    ],
+    "rows": [
+     [
+      "Request",
+      "VH-001, 10 Oct to 13 Oct, half-open [start, end)"
+     ],
+     [
+      "Days",
+      "10, 11, 12 Oct = 3 rental days, due back 13 Oct"
+     ],
+     [
+      "tryBook",
+      "none booked, so add all 3 days in one lock"
+     ],
+     [
+      "Bob asks 12 to 14 Oct",
+      "12 Oct already sold, so refused"
+     ],
+     [
+      "Race",
+      "8 members race for VH-002: exactly 1 wins"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's watch it happen. Alice asks for VH-001, a Toyota RAV4, from the tenth to the thirteenth of October. The range is half-open: it includes the start and excludes the end.",
+     "reveal": 1
+    },
+    {
+     "say": "So that's the tenth, eleventh and twelfth. Three rental days, and the car is due back on the thirteenth.",
+     "reveal": 2
+    },
+    {
+     "say": "Try book checks that none of those three days is sold, then adds all three, inside one synchronized method. Synchronized means only one thread at a time can run it on that vehicle.",
+     "reveal": 3
+    },
+    {
+     "say": "Now Bob asks for the twelfth to the fourteenth. The twelfth is already in the set, so he's refused and picks another car.",
+     "reveal": 4
+    },
+    {
+     "say": "In the demo, eight members race for the other S-U-V, VH-002, on the same dates. Exactly one wins every run. Which one wins changes, but the count never does.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s008",
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "Can Alice book a car next month that's on loan today?",
+   "bullets": [
+    "A. No, its status is LOANED",
+    "B. Yes, if next month's days aren't in its booked set",
+    "C. Only after it's returned"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. The car is on loan right now. Alice wants it next month. Can she book it? I'll answer on the next slide.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s009",
+   "layout": "diagram",
+   "title": "Reserve: check and claim in one step",
+   "mermaid": "flowchart LR\n  M[\"Member: reserve\"] --> V[\"tryBook: all days free?\"]\n  V -->|\"no\"| X[\"pick another car\"]\n  V -->|\"yes\"| P[\"price it\"]\n  P --> R[\"Reservation + bill\"]\n  R --> N[\"notify\"]",
+   "caption": "The race is won or lost inside tryBook",
+   "steps": [
+    {
+     "say": "The answer is B. Availability is a question about dates, not status. If next month's days aren't in the booked set, she gets the car.",
+     "reveal": 0
+    },
+    {
+     "say": "Here's the reserve flow. The member calls the reservation service. The service calls try book on the vehicle. That single locked method checks all the days and marks them, so two members can never both see free.",
+     "reveal": 0
+    },
+    {
+     "say": "If any day is taken, the member gets nothing back and chooses another car. If all are free, the pricing strategy computes the base charge, a reservation is created with its bill, and the notifier sends a confirmation.",
+     "reveal": 0
+    },
+    {
+     "say": "One subtle point: search is advisory. It may say a car is free, then reserve fails because someone else won. That's correct. The app just says no longer available.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s010",
+   "layout": "bullets",
+   "kicker": "Car rental - concept 2",
+   "title": "Template Method for add-ons",
+   "bullets": [
+    "Add-ons: insurance, equipment, services",
+    "Base class fixes the billing steps once",
+    "Subclass says what it is: kind()",
+    "Hook priceFor(days): per day by default",
+    "Service overrides the hook: flat fee"
+   ],
+   "steps": [
+    {
+     "say": "Customers can add extras. Rental insurance, equipment like a child seat or ski rack, and services like roadside assistance or wifi. How do we bill them without a big switch statement?",
+     "reveal": 1
+    },
+    {
+     "say": "We use the Template Method pattern. A base class fixes the steps of an algorithm, and subclasses fill in some steps. Here the fixed method is to bill item. It's final, so no subclass can change it.",
+     "reveal": 2
+    },
+    {
+     "say": "Each subclass only says what it is. Insurance, Equipment, or Service. That becomes the label on the bill line.",
+     "reveal": 3
+    },
+    {
+     "say": "There's also a hook, a step that's meant to be replaced. The hook is price for days, and by default it's price times days. Insurance and equipment keep that.",
+     "reveal": 4
+    },
+    {
+     "say": "Service overrides the hook to charge a flat fee per rental. Adding a fourth kind of add-on is one new subclass. The reservation never changes. That's the Open Closed Principle: open to new classes, closed to editing what works.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s011",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: Alice's bill",
+   "table": {
+    "head": [
+     "Line",
+     "Type",
+     "Amount"
+    ],
+    "rows": [
+     [
+      "Base: RAV4 x 3 days",
+      "BASE_CHARGE",
+      "240.00"
+     ],
+     [
+      "Insurance: collision waiver",
+      "ADD_ON (per day)",
+      "45.00"
+     ],
+     [
+      "Equipment: child seat",
+      "ADD_ON (per day)",
+      "24.00"
+     ],
+     [
+      "Service: roadside assistance",
+      "ADD_ON (flat)",
+      "25.00"
+     ],
+     [
+      "Late fee: 2 days x 40.00",
+      "LATE_FEE",
+      "80.00"
+     ],
+     [
+      "TOTAL",
+      "",
+      "414.00"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Here's Alice's real bill. The base line is three days of the RAV4, 240.",
+     "reveal": 1
+    },
+    {
+     "say": "Collision insurance is priced per day: 45 for the three days.",
+     "reveal": 2
+    },
+    {
+     "say": "The child seat is equipment, also per day: 24.",
+     "reveal": 3
+    },
+    {
+     "say": "Roadside assistance is a service, so it's a flat 25, whatever the length.",
+     "reveal": 4
+    },
+    {
+     "say": "Alice was due back on the thirteenth but returned on the fifteenth. Two days late, at 40 a day from the late fee policy, adds an 80 line.",
+     "reveal": 5
+    },
+    {
+     "say": "Total, 414. Notice every charge is a line on one bill. The total can never be computed in two places and disagree. And settle is idempotent: Alice double-clicks pay, and she's charged once.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s012",
+   "layout": "bullets",
+   "kicker": "Car rental - concept 3",
+   "title": "Pricing: Strategy, wrapped by a Decorator",
+   "bullets": [
+    "Strategy: one interface, swappable rules",
+    "DailyRatePricing: rate x days",
+    "Decorator: wraps a strategy, adds behaviour",
+    "WeeklyDiscountPricing: 10 percent off 7+ days"
+   ],
+   "steps": [
+    {
+     "say": "Prices change. Seasons, promotions, length of rental. So pricing is a Strategy: one interface, with interchangeable implementations of a rule.",
+     "reveal": 1
+    },
+    {
+     "say": "The basic one is daily rate pricing: the vehicle type's rate, times the number of days.",
+     "reveal": 2
+    },
+    {
+     "say": "On top of that we use a Decorator. A decorator is an object that wraps another object of the same type and adds behaviour. It looks like a pricing strategy from the outside.",
+     "reveal": 3
+    },
+    {
+     "say": "Weekly discount pricing wraps any strategy. It asks the inner one for the price, then takes ten percent off if the rental is seven days or more. Want surge pricing too? Wrap again. No subclass per combination.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s013",
+   "layout": "number",
+   "title": "Example: a 7-day Civic",
+   "big": "7 x 50 = 350, minus 10% = 315.00",
+   "caption": "WeeklyDiscountPricing(DailyRatePricing)",
+   "steps": [
+    {
+     "say": "Let's run the numbers. Alice books a Honda Civic from the first to the eighth of November. That's seven days at 50 a day.",
+     "reveal": 0
+    },
+    {
+     "say": "The inner daily strategy says 350. The weekly decorator sees seven days, so it takes ten percent off. The base charge is 315. The reservation code had no idea a discount existed.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s014",
+   "layout": "diagram",
+   "title": "A reservation's lifecycle",
+   "mermaid": "flowchart LR\n  C[\"CONFIRMED\"] -->|\"pickUp\"| A[\"ACTIVE\"]\n  C -->|\"cancel: days released\"| X[\"CANCELLED\"]\n  A -->|\"returnVehicle: late fee if late\"| D[\"COMPLETED\"]",
+   "caption": "A state machine: only these moves are allowed",
+   "steps": [
+    {
+     "say": "A reservation is a state machine: a fixed set of states and the only moves allowed between them. It starts confirmed, with its days booked.",
+     "reveal": 0
+    },
+    {
+     "say": "Pick up moves it to active. Cancel is only allowed from confirmed, and it must give the days back to the car.",
+     "reveal": 0
+    },
+    {
+     "say": "Return vehicle moves active to completed. It computes days late from the due date, adds a late-fee line if needed, updates the odometer, releases the days and writes the vehicle log. Trying to add an add-on after completion is rejected.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s015",
+   "layout": "twocol",
+   "kicker": "Car rental - concepts 4 and 5",
+   "title": "Actors call rules; and the Singleton question",
+   "left": {
+    "heading": "Actors call the rules",
+    "bullets": [
+     "Member calls the service: search, reserve",
+     "Receptionist calls the reservation",
+     "No Receptionist.computeLateFee()"
+    ]
+   },
+   "right": {
+    "heading": "Singleton? Pass it in",
+    "bullets": [
+     "Course: CarRentalSystem.getInstance()",
+     "Global = hard to replace in tests",
+     "Build one, inject it: same 'one per app'"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Two more decisions. First, actors call the rules, they never compute them. A member calls the reservation service to search, reserve and cancel.",
+     "reveal": 1
+    },
+    {
+     "say": "A receptionist calls the reservation to hand over keys, take the car back, and take payment.",
+     "reveal": 2
+    },
+    {
+     "say": "If you write a method like receptionist dot compute late fee, the actor is doing the reservation's job. In our code, actors are plain data, and every rule lives in Reservation or ReservationService.",
+     "reveal": 3
+    },
+    {
+     "say": "Second, the Singleton question. A singleton is a class allowed only one global instance. The course makes the car rental system a singleton.",
+     "reveal": 4
+    },
+    {
+     "say": "The problem: a global is easy to reach but hard to replace in a test.",
+     "reveal": 5
+    },
+    {
+     "say": "So we build one instance at startup and pass it to whoever needs it. That's dependency injection. You still get one per app, with no global. Say that trade-off out loud in the interview.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s016",
+   "layout": "bullets",
+   "kicker": "Car rental - recap",
+   "title": "Car rental: in the interview",
+   "bullets": [
+    "Pitch: availability is dates, not status",
+    "Code: tryBook, Reservation, reserve",
+    "Late return can collide with next rental",
+    "Known gap: moving cars between branches"
+   ],
+   "steps": [
+    {
+     "say": "Your thirty-second pitch. Branches own inventories, inventories index vehicles. Availability is about dates, so each vehicle keeps its booked days, and try book checks and books them atomically. A reservation owns a bill. Add-ons use Template Method. Pricing and late fees are strategies.",
+     "reveal": 1
+    },
+    {
+     "say": "Spend the coding time on try book, the reservation's state machine with its bill and late fee, and the service's reserve method.",
+     "reveal": 2
+    },
+    {
+     "say": "Raise this yourself: Alice returns late, but Bob booked that car from the fourteenth. Real systems keep a buffer day, and reassign Bob to a car of the same type.",
+     "reveal": 3
+    },
+    {
+     "say": "And mention the known gap: a car returned downtown stays in the airport's inventory. One-way rentals need a transfer step. Recap: dates, not status, claimed atomically, billed as lines.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s017",
+   "layout": "section",
+   "kicker": "Part 3 of 7 - Restaurant",
+   "title": "Design a restaurant management system",
+   "steps": [
+    {
+     "say": "Second, a restaurant. Our running example is the Spice Route, downtown branch. Tables T1 with two seats, T2 and T3 with four, T4 with six. Two chefs, Chen and Maria, and a waiter, Wendy.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s018",
+   "layout": "bullets",
+   "kicker": "Restaurant - concept 1",
+   "title": "A table keeps status and time slots",
+   "bullets": [
+    "Status: what is the table doing now?",
+    "Held slots: is it free at 19:00 Friday?",
+    "A booking holds two hourly slots",
+    "tryHold checks and holds both, atomically"
+   ],
+   "steps": [
+    {
+     "say": "A table needs to answer two different questions. The first is about now. A couple walks in. Which tables are free this minute? That's the status field: free, reserved or occupied.",
+     "reveal": 1
+    },
+    {
+     "say": "The second is about the future. Is table T-two free at seven on Friday evening? That's a set of held time slots.",
+     "reveal": 2
+    },
+    {
+     "say": "A booking holds the table for two hourly slots. Book seven p.m., and you hold seven and eight.",
+     "reveal": 3
+    },
+    {
+     "say": "Try hold checks that neither slot is held, then holds both, in one synchronized method. Same skeleton as the car: calendar, then atomic claim.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s019",
+   "layout": "bullets",
+   "kicker": "Restaurant - concepts 2 and 3",
+   "title": "Search lives on the service; pick the best fit",
+   "bullets": [
+    "One table only knows about itself",
+    "ReservationService searches all tables",
+    "Best fit: smallest table that seats the party",
+    "tryHold fails? Try the next table"
+   ],
+   "steps": [
+    {
+     "say": "Where does search go? Not on Table. One table only knows about itself. The course notes an older version had a static search on Table that couldn't work.",
+     "reveal": 1
+    },
+    {
+     "say": "So the reservation service holds every table and answers, which tables are free at seven for four people?",
+     "reveal": 2
+    },
+    {
+     "say": "It sorts by best fit: the smallest table that seats the party. That keeps the six-seater free for a party of six. Picking the first free table would waste big tables on couples.",
+     "reveal": 3
+    },
+    {
+     "say": "Then reserve walks that list and calls try hold on each. If another receptionist grabbed a table since the search, try hold fails, and we just try the next one.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s020",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: Friday evening bookings",
+   "table": {
+    "head": [
+     "Request",
+     "Result"
+    ],
+    "rows": [
+     [
+      "Search 4 people at 19:00",
+      "[T2, T3, T4], smallest first"
+     ],
+     [
+      "Asha: 4 at 19:00",
+      "T2, holds 19:00 and 20:00"
+     ],
+     [
+      "Ben: 4 at 20:00",
+      "T2 held, so T3"
+     ],
+     [
+      "Party of 8 at 19:00",
+      "no single table fits"
+     ],
+     [
+      "Asha's party grows to 6",
+      "rejected: T2 seats 4"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Here's the demo. Ravi searches for four people at seven. He gets T-two, T-three, T-four, smallest first. T-one only seats two, so it's not there.",
+     "reveal": 1
+    },
+    {
+     "say": "Asha books for four at seven. She gets T-two, and it's held for seven and eight.",
+     "reveal": 2
+    },
+    {
+     "say": "Ben wants four at eight. T-two is still held for Asha's second hour, so Ben gets T-three. That's slot holding at work.",
+     "reveal": 3
+    },
+    {
+     "say": "A party of eight gets no single table fits. Joining tables is an extension.",
+     "reveal": 4
+    },
+    {
+     "say": "And when Asha's party grows to six, update people count refuses. Otherwise the booking would say six while the table seats four.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s021",
+   "layout": "diagram",
+   "title": "The order state machine",
+   "mermaid": "flowchart LR\n  R[\"RECEIVED\"] -->|\"chef starts\"| P[\"PREPARING\"]\n  R --> X[\"CANCELLED\"]\n  P -->|\"chef finishes\"| D[\"READY\"]\n  D -->|\"cashier settles\"| S[\"SERVED\"]",
+   "caption": "Order.moveTo allows only these moves",
+   "steps": [
+    {
+     "say": "Now the order. Wendy opens an order for the table and adds one meal per seat. Seat one, soup and a pizza. Seat two, pasta and two lemonades. One meal per seat tells the kitchen which plate goes to whom, and makes split bills trivial.",
+     "reveal": 0
+    },
+    {
+     "say": "The order is a strict state machine. Received, then preparing when the chef starts, then ready, then served when the cashier settles. You can only cancel from received.",
+     "reveal": 0
+    },
+    {
+     "say": "Illegal moves fail loudly. In the demo, Wendy tries to add an item after the chef started. Rejected: order O1 is already preparing. And the cashier checks the order is ready before taking money, so a guest is never charged for an order that can't move to served.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s022",
+   "layout": "bullets",
+   "kicker": "Restaurant - concept 4",
+   "title": "Observer: page the waiter when food is ready",
+   "bullets": [
+    "Order is the subject; listeners register",
+    "Waiter implements OrderListener",
+    "Change state inside the lock",
+    "Notify listeners after leaving it"
+   ],
+   "steps": [
+    {
+     "say": "How does Wendy find out the food is ready? The Observer pattern. Listeners register with a subject, and the subject tells them when it changes. The order is the subject.",
+     "reveal": 1
+    },
+    {
+     "say": "The waiter implements order listener. So could a kitchen display screen or a delivery app. The chef never needs to know who cares. In the demo, Wendy's pager shows: order O1 for table T-two is ready.",
+     "reveal": 2
+    },
+    {
+     "say": "Inside move to, the state change happens under the order's lock.",
+     "reveal": 3
+    },
+    {
+     "say": "But the listeners are called after leaving the lock. Calling unknown code while holding a lock invites deadlock, where two threads each hold a lock the other needs and both wait forever. Notify outside the lock.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s023",
+   "layout": "bullets",
+   "kicker": "Restaurant - concept 5",
+   "title": "Strategy twice: chef assignment and payment",
+   "bullets": [
+    "ChefAssignment: round-robin or least-loaded",
+    "O1 to Chen, O2 to Maria",
+    "Each chef cooks from a FIFO queue",
+    "Payment: card, cash, cheque"
+   ],
+   "steps": [
+    {
+     "say": "Strategy appears twice. First, who cooks? The course's kitchen rotates chefs, round-robin. Fair, but it ignores how busy each chef already is.",
+     "reveal": 1
+    },
+    {
+     "say": "In the demo, round-robin sends O1 to Chen and O2 to Maria. Swap in least loaded assignment, which picks the chef with the shortest queue, and it's one class. The kitchen doesn't change.",
+     "reveal": 2
+    },
+    {
+     "say": "Each chef cooks from a FIFO queue, first in, first out. Start next, cook, finish, and the order moves to ready.",
+     "reveal": 3
+    },
+    {
+     "say": "Second, payment. Card completes at once. Cash may be short and get declined, or return change. A cheque must clear at the bank, so it's pending. Different behaviour, different classes.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s024",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: the check for O1, split by seat",
+   "table": {
+    "head": [
+     "Seat",
+     "Items",
+     "Amount"
+    ],
+    "rows": [
+     [
+      "1",
+      "Tomato soup, Margherita pizza",
+      "18.50"
+     ],
+     [
+      "2",
+      "Pasta arrabbiata, 2 lemonades",
+      "20.50"
+     ],
+     [
+      "3",
+      "Garlic bread",
+      "4.00"
+     ],
+     [
+      "Check",
+      "subtotal 43.00 + 8% tax 3.44",
+      "46.44"
+     ],
+     [
+      "Pay cash",
+      "change due 13.56",
+      "COMPLETED"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Here's the check for order O1. Seat one: soup and pizza, 18.50.",
+     "reveal": 1
+    },
+    {
+     "say": "Seat two: pasta and two lemonades, 20.50.",
+     "reveal": 2
+    },
+    {
+     "say": "Seat three: garlic bread, 4.00.",
+     "reveal": 3
+    },
+    {
+     "say": "Subtotal 43, plus eight percent tax, 3.44, total 46.44. The check is computed from the order, never stored. Prices live only on the menu item, so nothing can disagree.",
+     "reveal": 4
+    },
+    {
+     "say": "They pay sixty in cash: change due 13.56, completed. The other table pays by cheque: pending. Then both tables go back to free. Recap: status plus slots, best fit, meal per seat, a state machine, an observer, and two strategies.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s025",
+   "layout": "section",
+   "kicker": "Part 4 of 7 - Airline",
+   "title": "Design an airline management system",
+   "steps": [
+    {
+     "say": "Third, an airline. Global Air flies GA212 from London to Tokyo, and GA100 from New York to London. Our customer is Priya, flying with her son.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s026",
+   "layout": "table",
+   "kicker": "Airline - concept 1",
+   "title": "Four ideas that carry the design",
+   "table": {
+    "head": [
+     "Idea",
+     "Class",
+     "Example"
+    ],
+    "rows": [
+     [
+      "The route",
+      "Flight",
+      "GA212 London to Tokyo, 14 h, base 500"
+     ],
+     [
+      "The route on one date",
+      "FlightInstance",
+      "GA212 on 8 Oct at 10:00"
+     ],
+     [
+      "The physical seat",
+      "Seat",
+      "12A, extra legroom, economy plus"
+     ],
+     [
+      "That seat on that date",
+      "FlightSeat",
+      "12A on GA212 8 Oct, booked by PNR147"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "One distinction makes this design work. Four seat-ish and flight-ish ideas. First, Flight is the route. GA212, London to Tokyo, fourteen hours, base fare 500. It has weekly schedules, Tuesdays and Thursdays at ten.",
+     "reveal": 1
+    },
+    {
+     "say": "Second, FlightInstance is that route flown on one date. GA212 on the eighth of October. The flight generates one instance per scheduled day.",
+     "reveal": 2
+    },
+    {
+     "say": "Third, Seat is the physical chair on the aircraft. 12A, extra legroom, economy plus. It knows nothing about bookings.",
+     "reveal": 3
+    },
+    {
+     "say": "Fourth, FlightSeat is that chair on that one instance. 12A is free on Tuesday and taken on Thursday. So the booked flag lives here, on FlightSeat. Put booked on Seat and one booking blocks the seat forever.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s027",
+   "layout": "bullets",
+   "kicker": "Airline - concept 2",
+   "title": "Hold seats all-or-nothing",
+   "bullets": [
+    "A family gets all seats or none",
+    "holdSeats: check every seat first",
+    "Then assign them all, one lock",
+    "Lock per instance: flights sell in parallel"
+   ],
+   "steps": [
+    {
+     "say": "Priya books for herself and her son. They must get both seats or neither. Half a family on a flight is a disaster.",
+     "reveal": 1
+    },
+    {
+     "say": "So hold seats first checks every requested seat. Does it exist? Is it free? Did two passengers ask for the same one? If any check fails, it returns an empty map and assigns nothing.",
+     "reveal": 2
+    },
+    {
+     "say": "Only then does it assign them all. The whole thing runs synchronized on the flight instance, so no other thread can slip in between the checks and the writes.",
+     "reveal": 3
+    },
+    {
+     "say": "The lock is per instance, not global. GA212 on the eighth and GA100 on the seventh sell in parallel. In the demo, twenty customers race for seat ten C. Exactly one wins.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s028",
+   "layout": "bullets",
+   "kicker": "Airline - concept 3",
+   "title": "An itinerary owns the connection rule",
+   "bullets": [
+    "Itinerary: legs of one trip; it's what is paid",
+    "Next leg departs where the last one landed",
+    "At least 45 minutes to connect",
+    "Example: GA100 lands LHR 03:00 8 Oct"
+   ],
+   "steps": [
+    {
+     "say": "Priya's trip has two legs. New York to London, then London to Tokyo. The itinerary groups those legs, and it's the itinerary that gets paid, not each leg.",
+     "reveal": 1
+    },
+    {
+     "say": "The itinerary owns the connection rule, because it holds the legs. Rule one: the next leg must leave from the airport where the last one landed.",
+     "reveal": 2
+    },
+    {
+     "say": "Rule two: at least forty-five minutes between landing and departure. The course named a missing connection check as a gap. This closes it.",
+     "reveal": 3
+    },
+    {
+     "say": "In the demo, GA100 lands in London at three a.m. on the eighth. GA212 on the eighth at ten works. But a GA212 on the sixth leaves before GA100 even lands. Rejected: connection too short.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s029",
+   "layout": "bullets",
+   "kicker": "Airline - concept 4",
+   "title": "Fares: Strategy plus Decorator",
+   "bullets": [
+    "ClassMultiplierFare: base x class multiplier",
+    "Economy 1.0, plus 1.3, preferred 1.5",
+    "Business 2.5, first 4.0",
+    "LastMinuteFare wraps any fare: +25% under 3 days"
+   ],
+   "steps": [
+    {
+     "say": "Pricing is the same pattern pair as the car. A strategy computes the fare: the flight's base fare times a seat-class multiplier.",
+     "reveal": 1
+    },
+    {
+     "say": "Economy is one point zero. Economy plus, one point three. Preferred economy, one point five.",
+     "reveal": 2
+    },
+    {
+     "say": "Business, two point five. First, four point zero.",
+     "reveal": 3
+    },
+    {
+     "say": "Then a decorator, last minute fare, wraps any fare and adds twenty-five percent if you book less than three days before departure. Fare rules change without touching booking code.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s030",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: two real fares",
+   "table": {
+    "head": [
+     "Booking",
+     "Calculation",
+     "Charged"
+    ],
+    "rows": [
+     [
+      "Priya, GA100, 2 economy",
+      "2 x 400 x 1.0",
+      "800.00"
+     ],
+     [
+      "Priya, GA212, 2 business",
+      "2 x 500 x 2.5",
+      "2500.00"
+     ],
+     [
+      "Priya's itinerary",
+      "paid once, second pay() is a no-op",
+      "3300.00"
+     ],
+     [
+      "Leo, 12A, booked 7 Oct for 8 Oct",
+      "500 x 1.3 = 650, +25%",
+      "812.50"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Priya's first leg: two economy seats on GA100, base 400. Two times 400 is 800.",
+     "reveal": 1
+    },
+    {
+     "say": "Second leg: two business seats on GA212, base 500. 500 times two point five is 1250 each, so 2500.",
+     "reveal": 2
+    },
+    {
+     "say": "The itinerary totals 3300, charged once. The demo calls pay twice, like a double click, and the second call charges nothing.",
+     "reveal": 3
+    },
+    {
+     "say": "Leo walks up to the front desk on the seventh for the flight on the eighth. Economy plus: 500 times one point three is 650. Booked less than three days out, so plus twenty-five percent: 812.50.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s031",
+   "layout": "diagram",
+   "title": "Facade, and cancelling a flight",
+   "mermaid": "flowchart TD\n  A[\"Admin: cancelFlight\"] --> B[\"lock instance, copy index\"]\n  B --> C[\"cancel each reservation\"]\n  C --> D[\"email refund\"]\n  B --> F[\"tell every crew member\"]",
+   "caption": "An index from instance to reservations reaches every passenger",
+   "steps": [
+    {
+     "say": "The Airline class is a Facade: one simple front object hiding many classes. Admin-only operations, like publish a flight or cancel a flight, take an Admin parameter, so only code holding an Admin object can even call them. The front desk's book for is the same call as book, made by a different actor.",
+     "reveal": 0
+    },
+    {
+     "say": "The course admits a gap here. Cancelling a flight told the crew but not the passengers, because there was no path from an instance to its reservations. We fix it with an index: instance to reservations.",
+     "reveal": 0
+    },
+    {
+     "say": "Cancel flight takes the instance lock, sets cancelled, and copies the index. Book uses the same lock to hold seats and add to the index. So every booking is either in the copy and gets refunded, or is refused because the flight is already cancelled. In the demo, Priya, the race winner and Leo are all emailed, and three crew are told to stand down.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s032",
+   "layout": "bullets",
+   "kicker": "Airline - recap",
+   "title": "Airline: in the interview",
+   "bullets": [
+    "Flight vs instance; Seat vs FlightSeat",
+    "holdSeats: all or nothing, per instance",
+    "Itinerary: legs, connection rule, payment",
+    "Real flows: short seat holds while paying"
+   ],
+   "steps": [
+    {
+     "say": "Pitch it in four ideas. Flight is the route. FlightInstance is one departure. Seat is the chair. FlightSeat is the chair on that departure, where the booking and fare live.",
+     "reveal": 1
+    },
+    {
+     "say": "Reservations map passengers to flight seats, held all-or-nothing under the instance's lock.",
+     "reveal": 2
+    },
+    {
+     "say": "An itinerary groups legs, checks connections and is what gets paid. Fares are a strategy with a last-minute decorator. And an index lets a cancelled flight reach every passenger.",
+     "reveal": 3
+    },
+    {
+     "say": "A strong extra: real airlines put a seat on a ten to fifteen minute hold while you pay, and a background sweeper frees expired holds. Recap: four ideas, one atomic hold, one index.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s033",
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "Why is Passenger not a subclass of an account?",
+   "bullets": [
+    "A. Passengers never pay",
+    "B. A passenger may never log in; customers book for others",
+    "C. To save memory"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. Priya's son is on the booking. Why isn't Passenger a kind of user account? Answer coming up.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s034",
+   "layout": "section",
+   "kicker": "Part 5 of 7 - Course registration",
+   "title": "Design a course registration system",
+   "steps": [
+    {
+     "say": "The answer was B. A passenger is a name on a ticket. Priya's son may never log in, so forcing an account on him is wrong.",
+     "reveal": 0
+    },
+    {
+     "say": "Fourth, course registration. It looks simple, but it's one of the harshest concurrency problems here. At nine a.m. on registration day, thousands of students click register for the same few sections within seconds.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s035",
+   "layout": "twocol",
+   "kicker": "Course registration - concepts 1 and 2",
+   "title": "Course vs Section: enroll in a Section",
+   "left": {
+    "heading": "Course: catalogue entry",
+    "bullets": [
+     "CS201 Data Structures, 4 credits",
+     "Prerequisites: course codes"
+    ]
+   },
+   "right": {
+    "heading": "Section: one offering",
+    "bullets": [
+     "CS201-A, Mon and Wed 10:00-11:30",
+     "Instructor, capacity 30, waitlist",
+     "The only place a seat is taken"
+    ]
+   },
+   "steps": [
+    {
+     "say": "A course is a catalogue entry. CS201, Data Structures, four credits.",
+     "reveal": 1
+    },
+    {
+     "say": "It also lists prerequisites, courses you must have completed first. Completed, not just in progress.",
+     "reveal": 2
+    },
+    {
+     "say": "A section is one offering of that course. CS201-A meets Monday and Wednesday, ten to eleven thirty. CS201-B meets Tuesday and Thursday afternoons.",
+     "reveal": 3
+    },
+    {
+     "say": "The section has the instructor, the capacity and the waitlist. Put capacity on the course and you can't have two sections. It's the same split as Flight versus FlightInstance.",
+     "reveal": 4
+    },
+    {
+     "say": "Students enroll in a section. And section dot enroll is the only place a seat is ever taken, under the section's own lock. Check size below capacity, then add, in one step.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s036",
+   "layout": "table",
+   "kicker": "Course registration - concept 3",
+   "title": "Rules as objects: each one fires",
+   "table": {
+    "head": [
+     "Rule",
+     "Example from the demo"
+    ],
+    "rows": [
+     [
+      "WindowRule",
+      "ben, year 3, on Nov 2: window closed (seniors only)"
+     ],
+     [
+      "PrerequisiteRule",
+      "ana, CS301-A: missing CS201, MATH201"
+     ],
+     [
+      "DuplicateCourseRule",
+      "ana, CS201-B: already in CS201-A"
+     ],
+     [
+      "CreditLimitRule",
+      "ben, MATH201-A: limit 4 exceeded (7)"
+     ],
+     [
+      "TimeConflictRule",
+      "ana, MATH201-A: clashes Mon/Wed 10:00"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Each rule is its own small object that returns a reason if the request breaks it. The registrar runs them in order and stops at the first failure, Chain of Responsibility style. Rule one, the window. Seniors open November second, juniors the third. Ben is a junior, so on the second he's rejected.",
+     "reveal": 1
+    },
+    {
+     "say": "Rule two, prerequisites. Ana wants CS301 but hasn't completed CS201 and MATH201. Rejected, with both codes listed.",
+     "reveal": 2
+    },
+    {
+     "say": "Rule three, one section per course. Ana is in CS201-A, so CS201-B is rejected.",
+     "reveal": 3
+    },
+    {
+     "say": "Rule four, credit limit. Ben's limit is four. Adding MATH201 would make seven. Rejected.",
+     "reveal": 4
+    },
+    {
+     "say": "Rule five, time conflict. MATH201-A meets Monday and Wednesday at ten, same as Ana's CS201-A. Rejected. A new rule, like majors only, is one new class plus one list entry.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s037",
+   "layout": "bullets",
+   "kicker": "Course registration - concept 4",
+   "title": "Per-student lock, and a fixed lock order",
+   "bullets": [
+    "Rules read the student's schedule",
+    "Two tabs: both pass without a student lock",
+    "Order: student lock, then section lock",
+    "Never hold two student locks at once"
+   ],
+   "steps": [
+    {
+     "say": "Here's the subtle part. The credit and time-conflict rules read the student's current schedule. So the schedule must not change while we check.",
+     "reveal": 1
+    },
+    {
+     "say": "Imagine Gus double-clicks register. Two threads, same request. Without a lock on Gus, both read his empty schedule, both pass, and he's enrolled twice. So the registrar locks the student's schedule around the rules and the enroll. In the demo: one enrolled, one rejected.",
+     "reveal": 2
+    },
+    {
+     "say": "Now we hold two locks: student, then section. Deadlock needs two threads taking the same two locks in opposite orders. So we always take student first, section second.",
+     "reveal": 3
+    },
+    {
+     "say": "And promotion, which we'll see next, takes the next student's lock only after releasing the dropper's. Two student locks are never held together. One big registrar lock would be correct, but every student would wait in one line.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s038",
+   "layout": "diagram",
+   "title": "Register: rules, then seat",
+   "mermaid": "flowchart TD\n  L[\"lock student\"] --> R[\"run rule chain\"]\n  R -->|\"fails\"| X[\"REJECTED + reason\"]\n  R -->|\"passes\"| E[\"Section.enroll\"]\n  E -->|\"seat free\"| OK[\"ENROLLED\"]\n  E -->|\"waitlist room\"| W[\"WAITLISTED at n\"]\n  E -->|\"both full\"| F[\"REJECTED\"]",
+   "caption": "Student lock first, section lock second",
+   "steps": [
+    {
+     "say": "Here's the register flow. Lock the student's schedule and run the rule chain. Any failure returns the reason.",
+     "reveal": 0
+    },
+    {
+     "say": "If every rule passes, ask the section to enroll, under the section's lock. Three outcomes. A seat is free: enrolled. Full, but the waitlist has room: waitlisted at position n. Both full: rejected.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s039",
+   "layout": "table",
+   "kicker": "Course registration - concept 5",
+   "title": "Example: bounded FIFO waitlist on CS201-A",
+   "table": {
+    "head": [
+     "Student",
+     "Result"
+    ],
+    "rows": [
+     [
+      "ana, ben",
+      "ENROLLED (capacity 2)"
+     ],
+     [
+      "dee",
+      "WAITLISTED at position 1"
+     ],
+     [
+      "eve",
+      "WAITLISTED at position 2"
+     ],
+     [
+      "fay",
+      "REJECTED: section and waitlist full"
+     ],
+     [
+      "50 first-years, CS101-A",
+      "30 enrolled, 10 waitlisted, 10 rejected"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "The waitlist is a FIFO queue, first come, first served. And it's bounded: it has a maximum size. CS201-A has two seats and two waitlist places. Ana and Ben take the seats.",
+     "reveal": 1
+    },
+    {
+     "say": "Dee arrives next. Waitlisted at position one.",
+     "reveal": 2
+    },
+    {
+     "say": "Eve, position two.",
+     "reveal": 3
+    },
+    {
+     "say": "Fay is rejected. The section and its waitlist are both full. A bound stops an endless queue of students who'll never get in.",
+     "reveal": 4
+    },
+    {
+     "say": "Now the nine a.m. rush. Fifty first-year threads hit CS101-A, with thirty seats and ten waitlist places. Every run: thirty enrolled, ten waitlisted, ten rejected. The counts are exact.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s040",
+   "layout": "diagram",
+   "title": "Drop, promote, re-check",
+   "mermaid": "flowchart TD\n  A[\"ana drops CS201-A\"] --> B[\"dee moved in from waitlist\"]\n  B --> C[\"unlock ana, lock dee\"]\n  C --> D[\"re-check dee: 3 rules\"]\n  D -->|\"pass\"| E[\"add, notify dee\"]\n  D -->|\"fail\"| F[\"skip dee, try next\"]",
+   "caption": "Promotion re-runs a subset of the same rules",
+   "steps": [
+    {
+     "say": "Ana drops CS201-A. Under her lock, the section removes her and moves the head of the waitlist, Dee, into the enrolled set.",
+     "reveal": 0
+    },
+    {
+     "say": "Then the registrar releases Ana's lock and takes Dee's. Never both at once.",
+     "reveal": 0
+    },
+    {
+     "say": "Why re-check? While waiting, Dee might have registered for a clashing section, or for CS201-B. Waitlist entries aren't in her schedule, so nothing stopped her. Promotion re-runs the duplicate, credit and time rules. A subset of the same rule objects.",
+     "reveal": 0
+    },
+    {
+     "say": "If she passes, she's added and notified. If not, she's dropped, told she was skipped, and the next student is tried. In the demo, Dee is promoted: roster Ben and Dee, waitlist Eve.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s041",
+   "layout": "bullets",
+   "kicker": "Course registration - recap",
+   "title": "Course registration: in the interview",
+   "bullets": [
+    "Sections, not courses",
+    "Rules are objects in a chain",
+    "Student lock, then section lock",
+    "Many servers: conditional UPDATE in the DB"
+   ],
+   "steps": [
+    {
+     "say": "Pitch: students register for sections. A section owns capacity and a bounded FIFO waitlist, and takes seats only inside its own lock.",
+     "reveal": 1
+    },
+    {
+     "say": "The registrar runs a chain of rule objects: window, prerequisites, duplicate, credits, time conflict.",
+     "reveal": 2
+    },
+    {
+     "say": "It holds the student's lock, then asks the section for a seat. Always student then section, so no deadlock. On drop, promote the head after a re-check.",
+     "reveal": 3
+    },
+    {
+     "say": "With several app servers, in-memory locks don't cover every request. Move the count into the database: update section set enrolled plus one, where enrolled is below capacity. Exactly capacity many updates succeed. Singleton? Same answer: build one registrar and pass it in.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s042",
+   "layout": "section",
+   "kicker": "Part 6 of 7 - Meeting scheduler",
+   "title": "Design a meeting scheduler",
+   "steps": [
+    {
+     "say": "Last, the meeting scheduler. Ana organizes a design review. The system finds a big enough room, invites people, and collects their answers. Our rooms: Huddle seats four, Oak and Maple seat eight, and Atrium seats twenty.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s043",
+   "layout": "twocol",
+   "kicker": "Meeting scheduler - the twists",
+   "title": "Two twists the others don't have",
+   "left": {
+    "heading": "Continuous time",
+    "bullets": [
+     "Car: days. Table: hours",
+     "Meeting: 10:15 to 10:40",
+     "Conflicts on any time range"
+    ]
+   },
+   "right": {
+    "heading": "People vs rooms",
+    "bullets": [
+     "Room in two meetings: impossible",
+     "Person in two meetings: just unwise",
+     "Real calendars allow it"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Twist one. A car is booked by the day. A table by the hour. But a meeting can run from ten fifteen to ten forty.",
+     "reveal": 1
+    },
+    {
+     "say": "So we can't use a set of slots. There's no fixed grid.",
+     "reveal": 2
+    },
+    {
+     "say": "Conflict detection has to work on any time range.",
+     "reveal": 3
+    },
+    {
+     "say": "Twist two. People are booked as well as rooms, but differently. Two meetings in one room at once is impossible.",
+     "reveal": 4
+    },
+    {
+     "say": "One person in two meetings at once is merely unwise.",
+     "reveal": 5
+    },
+    {
+     "say": "And real calendars allow it. Keep that difference in mind. It becomes hard versus soft conflicts.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s044",
+   "layout": "bullets",
+   "kicker": "Meeting scheduler - concept 1",
+   "title": "Half-open intervals",
+   "bullets": [
+    "[start, end): includes start, excludes end",
+    "10:00-11:00 and 11:00-12:00 don't overlap",
+    "Back-to-back is legal, no special case",
+    "Closed intervals: false conflicts"
+   ],
+   "steps": [
+    {
+     "say": "We store every booking as a half-open interval. It includes its start and excludes its end.",
+     "reveal": 1
+    },
+    {
+     "say": "So ten to eleven and eleven to twelve do not overlap. The first ends exactly as the second starts.",
+     "reveal": 2
+    },
+    {
+     "say": "Back-to-back meetings just work, with no special case.",
+     "reveal": 3
+    },
+    {
+     "say": "With closed intervals, that include both ends, every back-to-back booking is a false conflict, or needs a minus one minute hack.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s045",
+   "layout": "number",
+   "title": "The overlap test",
+   "big": "a.start < b.end  AND  b.start < a.end",
+   "caption": "Two half-open intervals overlap exactly when this holds",
+   "steps": [
+    {
+     "say": "Here's the whole overlap test. A overlaps B when A starts before B ends, and B starts before A ends.",
+     "reveal": 0
+    },
+    {
+     "say": "Try it. Ten to eleven, versus eleven to eleven thirty. Does eleven start before eleven ends? No. So no overlap. Ten to eleven versus ten thirty to eleven thirty: ten is before eleven thirty, and ten thirty is before eleven. Overlap.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s046",
+   "layout": "bullets",
+   "kicker": "Meeting scheduler - concept 2",
+   "title": "The room owns its calendar: a TreeMap",
+   "bullets": [
+    "Invariant is about one room, so the room enforces it",
+    "Calendar: TreeMap of bookings keyed by start",
+    "Bookings never overlap, so one can clash",
+    "lowerEntry(end): one lookup, O(log n)",
+    "Check and insert under the room's lock"
+   ],
+   "steps": [
+    {
+     "say": "Who owns the truth about which times are taken? The room. The rule, no two overlapping bookings, is about one room, so the room enforces it. Different rooms have different locks and never wait on each other.",
+     "reveal": 1
+    },
+    {
+     "say": "The room's calendar is a TreeMap, a map kept sorted by key, keyed by start time.",
+     "reveal": 2
+    },
+    {
+     "say": "Here's the clever part. Stored bookings never overlap each other. So only one existing booking can clash with a new one: the one with the latest start before the new end.",
+     "reveal": 3
+    },
+    {
+     "say": "Lower entry of end finds exactly that booking in one lookup, order log n. If it ends at or before the new start, every earlier booking does too. No scan.",
+     "reveal": 4
+    },
+    {
+     "say": "Try reserve does that lookup and the insert under the room's lock. Atomic check-then-claim, same as every other design today.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s047",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: lowerEntry in action",
+   "table": {
+    "head": [
+     "Request",
+     "lowerEntry(end)",
+     "Verdict"
+    ],
+    "rows": [
+     [
+      "Room holds",
+      "A 09:00-10:00, B 10:30-11:00",
+      ""
+     ],
+     [
+      "09:30-10:45",
+      "B (starts 10:30, before 10:45)",
+      "B ends 11:00 > 09:30: clash"
+     ],
+     [
+      "10:00-10:30",
+      "A (B starts at 10:30, not before)",
+      "A ends 10:00, not after: free"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's walk it. The room holds A, nine to ten, and B, ten thirty to eleven.",
+     "reveal": 1
+    },
+    {
+     "say": "Request one: nine thirty to ten forty-five. Lower entry of ten forty-five is B, because B starts at ten thirty. B ends at eleven, after nine thirty. Clash.",
+     "reveal": 2
+    },
+    {
+     "say": "Request two: ten to ten thirty. Lower entry of ten thirty is A, because B starts at ten thirty, not before it. A ends at ten, which is not after ten. Free. That's the half-open rule at work. Now, pause and think: why not just use a concurrent hash map with put if absent on the start time?",
+     "reveal": 3
+    }
+   ]
+  },
+  {
+   "id": "s048",
+   "layout": "bullets",
+   "kicker": "Meeting scheduler - concept 3",
+   "title": "Pick a room: rank, then try",
+   "bullets": [
+    "putIfAbsent fails: overlaps have different keys",
+    "Strategy ranks fitting rooms; default smallest fit",
+    "Ana, 5 people + video: Maple (8), not Atrium (20)",
+    "Try each room's atomic claim in order",
+    "Race: 20 organizers, 4 rooms, exactly 4 win"
+   ],
+   "steps": [
+    {
+     "say": "Answer: ten to eleven and ten thirty to eleven fifteen have different keys but still collide. Put if absent only catches equal keys. Ranges need a check and an insert under one lock.",
+     "reveal": 1
+    },
+    {
+     "say": "If the organizer doesn't name a room, a strategy ranks the rooms that fit: enough capacity, and the right equipment. The default is smallest fit. A three-person call shouldn't take the twenty-seat room. Least busy strategy spreads load instead. Swapping is one constructor argument.",
+     "reveal": 2
+    },
+    {
+     "say": "Ana books five people with video. Huddle is too small, and Oak has a projector but no video. Only Maple, with eight, and Atrium, with twenty, fit. Smallest fit picks Maple.",
+     "reveal": 3
+    },
+    {
+     "say": "But the ranking is a snapshot. It can be stale a microsecond later. So the scheduler doesn't trust it. It asks each room in order to claim the slot atomically, and moves on if the claim fails.",
+     "reveal": 4
+    },
+    {
+     "say": "In the demo, twenty organizers want any room at ten on Wednesday. Four rooms exist, so exactly four win, one per room, and sixteen are rejected. Ranking can be wrong without ever double-booking.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s049",
+   "layout": "twocol",
+   "kicker": "Meeting scheduler - concept 4",
+   "title": "Hard vs soft conflicts",
+   "left": {
+    "heading": "Hard: room taken",
+    "bullets": [
+     "Booking blocked",
+     "10:30-11:30 in Maple: FAIL, M1 holds it"
+    ]
+   },
+   "right": {
+    "heading": "Soft: person busy",
+    "bullets": [
+     "Booking allowed, with a warning",
+     "M5: eve and dee are busy in M1",
+     "Cy declined M1, so not busy"
+    ]
+   },
+   "steps": [
+    {
+     "say": "A hard conflict blocks the booking. The room is taken.",
+     "reveal": 1
+    },
+    {
+     "say": "In the demo, a request for Maple from ten thirty to eleven thirty overlaps Ana's design review, M1, and fails, and the message names the blocker: M1 holds it. Eleven to eleven thirty, back-to-back, succeeds.",
+     "reveal": 2
+    },
+    {
+     "say": "A soft conflict only warns. Someone invited is already busy.",
+     "reveal": 3
+    },
+    {
+     "say": "Dee books Hiring sync, M5, at ten thirty in Huddle. Eve and Dee are already in M1. The meeting is booked, with warnings for the organizer. The invitee decides by R-S-V-P.",
+     "reveal": 4
+    },
+    {
+     "say": "Then Dee books Coffee, M6, and invites Cy, who's also on M1. But Cy declined M1. A declined invitee isn't busy, so Cy isn't flagged. The warnings are advisory. Only the room calendar has to be exact.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s050",
+   "layout": "bullets",
+   "kicker": "Meeting scheduler - concept 5",
+   "title": "Reschedule and RSVP",
+   "bullets": [
+    "RSVP: pending, accepted, tentative, declined",
+    "Invitees can change their mind",
+    "Reschedule = atomic move inside the room",
+    "Every RSVP goes back to PENDING"
+   ],
+   "steps": [
+    {
+     "say": "An R-S-V-P is an invitee's answer: accepted, tentative or declined. It's pending until they reply. Each answer goes back to the organizer. In the demo: Ben accepted, Cy declined, Dee tentative, Eve still pending.",
+     "reveal": 1
+    },
+    {
+     "say": "Invitees can change their answer any time until the meeting is cancelled.",
+     "reveal": 2
+    },
+    {
+     "say": "Now Ana moves the review from ten to two p.m. Rescheduling is an atomic move inside the room. Under the room lock: remove the old slot, test the new one, insert it, or put the old one back if it's taken. The meeting is never left without a room.",
+     "reveal": 3
+    },
+    {
+     "say": "Then every R-S-V-P resets to pending. Yes to Monday at ten is not yes to Monday at two. Why not cancel and re-book? Another organizer could grab the slot in between, and invitees would get a cancel plus a new invite.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s051",
+   "layout": "diagram",
+   "title": "Reschedule or cancel",
+   "mermaid": "flowchart TD\n  A[\"lock the meeting\"] --> B[\"caller is organizer?\"]\n  B -->|\"no\"| X[\"reject\"]\n  B -->|\"cancel\"| C[\"CANCELLED, free slot\"]\n  B -->|\"reschedule\"| G[\"room.move, reset RSVPs\"]\n  C --> J[\"unlock, then notify\"]\n  G --> J",
+   "caption": "Meeting lock first, room lock second; notify last",
+   "steps": [
+    {
+     "say": "Both actions start by locking the meeting. Then, organizer rules: only the organizer may reschedule or cancel. In the demo, Ben tries to cancel Ana's meeting. Rejected: Ben is not the organizer.",
+     "reveal": 0
+    },
+    {
+     "say": "Cancel is idempotent. The first cancel marks it cancelled and releases the room slot. A double-clicked second cancel is a no-op and sends nothing. The freed two p.m. slot is bookable immediately, and Ben books his Retro there.",
+     "reveal": 0
+    },
+    {
+     "say": "Lock order: meeting, then room, never two rooms. Nothing takes them the other way, so no deadlock. And we notify after unlocking. Observers may be slow, like sending email. Holding the lock while they run would block other bookings.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s052",
+   "layout": "bullets",
+   "kicker": "Meeting scheduler - recap",
+   "title": "Meeting scheduler: in the interview",
+   "bullets": [
+    "Room owns a TreeMap of half-open intervals",
+    "Recurring series: all-or-nothing in one room",
+    "Many servers: database exclusion constraint",
+    "Follow-up: find a time everyone is free"
+   ],
+   "steps": [
+    {
+     "say": "Pitch: each room owns its calendar, a sorted map of half-open intervals. Booking is check-then-insert under the room's lock, with one lower entry lookup. A strategy ranks rooms, the scheduler tries them in order. Room clashes block, people clashes warn. Reschedule resets R-S-V-Ps. Notify after unlocking.",
+     "reveal": 1
+    },
+    {
+     "say": "Recurring meetings, like a weekly stand-up four times, are claimed all-or-nothing in one room. Every occurrence is checked, then every one inserted, under that room's lock. No half-booked series.",
+     "reveal": 2
+    },
+    {
+     "say": "With several servers, let the database enforce it. Postgres has an exclusion constraint that rejects any overlapping time range for the same room. Or lock the room's row while you check and insert.",
+     "reveal": 3
+    },
+    {
+     "say": "A favourite follow-up: find a time when everyone is free. Sort everyone's busy intervals, merge the overlapping ones, and walk the gaps for the first one long enough.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s053",
+   "layout": "section",
+   "kicker": "Part 7 of 7 - Wrap-up",
+   "title": "Chapter summary",
+   "steps": [
+    {
+     "say": "Let's put all five side by side and see the one lesson they share.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s054",
+   "layout": "table",
+   "kicker": "Summary",
+   "title": "Chapter summary",
+   "table": {
+    "head": [
+     "Problem",
+     "Key insight",
+     "Patterns"
+    ],
+    "rows": [
+     [
+      "Car rental",
+      "Availability is dates, not status",
+      "Template Method, Strategy + Decorator"
+     ],
+     [
+      "Restaurant",
+      "Meal per seat; status + slots",
+      "Observer, Strategy, state machine"
+     ],
+     [
+      "Airline",
+      "Flight vs instance, Seat vs FlightSeat",
+      "Strategy + Decorator, Facade"
+     ],
+     [
+      "Course registration",
+      "Course vs Section; rules as objects",
+      "Chain of rules, lock ordering"
+     ],
+     [
+      "Meeting scheduler",
+      "Room-owned half-open calendar",
+      "Strategy, Observer, lock order"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Car rental: availability is about dates. Try book claims the days. Template Method for add-ons, Strategy and Decorator for pricing.",
+     "reveal": 1
+    },
+    {
+     "say": "Restaurant: one meal per seat, and a table has both a status for now and slots for later. Observer pages the waiter, Strategy picks the chef and the payment.",
+     "reveal": 2
+    },
+    {
+     "say": "Airline: Flight is not FlightInstance, and Seat is not FlightSeat. Hold seats all-or-nothing. Fares are Strategy plus Decorator, behind a Facade.",
+     "reveal": 3
+    },
+    {
+     "say": "Course registration: Course is not Section. Rules are objects in a chain. Student lock, then section lock.",
+     "reveal": 4
+    },
+    {
+     "say": "Meeting scheduler: the room owns a calendar of half-open intervals. One lower entry lookup. Room clashes block, people clashes warn.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s055",
+   "layout": "recap",
+   "kicker": "Episode 18 recap",
+   "title": "Recap",
+   "bullets": [
+    "Find the calendar",
+    "One atomic check-then-claim, locked per resource",
+    "Rules live on the object that owns the data",
+    "Strategy, Decorator, Template Method; notify after unlock",
+    "Fixed lock order; at scale, push the claim into the DB"
+   ],
+   "steps": [
+    {
+     "say": "Here's the lesson all five share. First, find the calendar: days, slots, flight dates, terms, or continuous time.",
+     "reveal": 1
+    },
+    {
+     "say": "Second, find the one atomic check-then-claim, and lock it per resource, not globally, so different cars, tables, flights, sections and rooms proceed in parallel.",
+     "reveal": 2
+    },
+    {
+     "say": "Third, put each rule on the object that owns the data. The vehicle owns its days, the itinerary its connections, the room its calendar.",
+     "reveal": 3
+    },
+    {
+     "say": "Fourth, keep rules swappable with Strategy, Decorator, Template Method and rule objects. And always notify after you unlock.",
+     "reveal": 4
+    },
+    {
+     "say": "Fifth, take locks in a fixed order, and when you have many servers, push the claim into the database with a conditional update or a constraint.",
+     "reveal": 5
+    },
+    {
+     "say": "Next time, episode nineteen: Games. We'll design Blackjack, Chess and Tic-Tac-Toe, where the hard part is modelling rules, turns and game state cleanly. See you there.",
+     "reveal": 5
+    }
+   ]
+  }
+ ]
+}

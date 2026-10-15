@@ -1,0 +1,1551 @@
+{
+ "series": "System Design Workshop",
+ "episode": 27,
+ "title": "Case Studies: Photos, Microblog, Ad Clicks",
+ "subtitle": "Instagram-style photos, a ranked Twitter-style timeline, and money-grade click counting",
+ "scenes": [
+  {
+   "layout": "title",
+   "title": "Case Studies: Photos, Microblog, Ad Clicks",
+   "subtitle": "Instagram-style photos, a ranked Twitter-style timeline, and money-grade click counting",
+   "steps": [
+    {
+     "say": "Welcome to episode twenty-seven of the System Design Workshop: Case Studies on photos, microblogging, and ad clicks. Three famous interview prompts, each with its own hard part.",
+     "reveal": 0
+    },
+    {
+     "say": "By the end you'll be able to design an Instagram-style upload pipeline and feed, a ranked Twitter-style timeline with trends, explain how Twitter balances load inside every client, and count ad clicks so that each one bills exactly once.",
+     "reveal": 0
+    },
+    {
+     "say": "Keep the Module twenty notes open, Cases four, five and six. When I say pause, answer on paper first, then compare.",
+     "reveal": 0
+    }
+   ],
+   "id": "s001"
+  },
+  {
+   "layout": "table",
+   "title": "Three prompts, three hard parts",
+   "table": {
+    "head": [
+     "Case",
+     "Hard part",
+     "Key number"
+    ],
+    "rows": [
+     [
+      "Photo sharing",
+      "Media bytes, celebrity feeds, hot counters",
+      "~80 PB/year of media"
+     ],
+     [
+      "Microblogging",
+      "Skewed follow graph, ranked timeline",
+      "~200K timeline reads/s"
+     ],
+     [
+      "Ad clicks",
+      "Count each click once, despite chaos",
+      "1B clicks/day, money"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Here's the map. Case four, photo sharing. The hard part is three workloads in one app: huge media bytes, feeds where some authors have hundreds of millions of followers, and like counters that get hammered. Storage grows by about eighty petabytes a year.",
+     "reveal": 1
+    },
+    {
+     "say": "Case five, microblogging. The follow graph is wildly lopsided, and the home timeline is ranked by a model on every refresh, about two hundred thousand times a second at peak.",
+     "reveal": 2
+    },
+    {
+     "say": "Case six, ad clicks. The numbers are small, a billion clicks a day, but every click is money. So the hard part is correctness when events arrive late, twice, or not at all.",
+     "reveal": 3
+    }
+   ],
+   "id": "s002"
+  },
+  {
+   "layout": "section",
+   "kicker": "Case 4",
+   "title": "Case 4: Photo sharing",
+   "steps": [
+    {
+     "say": "Case four. An Instagram-like app. People upload photos with captions, follow each other, scroll a home feed, like and comment, and post stories that vanish after twenty-four hours. All on phones, over flaky mobile networks.",
+     "reveal": 0
+    },
+    {
+     "say": "Our running numbers: five hundred million daily users, a hundred million uploads a day. That's about 1,160 uploads a second, and around 3,500 at peak.",
+     "reveal": 0
+    }
+   ],
+   "id": "s003"
+  },
+  {
+   "layout": "number",
+   "title": "Why bytes must skip the app servers",
+   "big": "3,500 uploads/s x 1 MB = ~28 Gbps",
+   "caption": "Images out: ~580K fetches/s, ~460 Gbps, only a CDN carries that",
+   "steps": [
+    {
+     "say": "Do the math. The phone resizes to 1080 pixels wide first, so each upload is about one megabyte. At peak that's about twenty-eight gigabits a second coming in.",
+     "reveal": 0
+    },
+    {
+     "say": "Going out is worse. Feed opens times ten images per page is about 580 thousand image fetches a second, around 460 gigabits a second. Only a C-D-N, a content delivery network, carries that economically. So the rule is: media bytes never touch our app servers.",
+     "reveal": 0
+    }
+   ],
+   "id": "s004"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 1 of 14",
+   "title": "Upload in two phases",
+   "bullets": [
+    "1. POST /uploads: get a pre-signed URL (15 min)",
+    "2. PUT bytes straight to object storage",
+    "3. /complete or storage event: enqueue a job",
+    "4. Workers: validate, strip, resize, encode",
+    "5. POST /posts with an idempotency key"
+   ],
+   "steps": [
+    {
+     "say": "How does a photo get in? Step one. Priya's phone calls post uploads with the type, size and a S-H-A two fifty-six hash. The server makes a media row in state uploading, and hands back a pre-signed U-R-L: a temporary link, signed by the server, that lets the phone write one specific object to storage for about fifteen minutes.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two. The phone puts the one megabyte straight into object storage. If the train enters a tunnel, it just retries the put. A stolen link can write one small object, once, for minutes. That's all.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three. Storage emits an object created event, and the phone also calls complete. Whichever arrives first wins; both are idempotent, meaning doing it twice has the same effect as once. A job lands on the processing queue.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four. A worker processes it. More on that next.",
+     "reveal": 4
+    },
+    {
+     "say": "Step five. Once media is ready, the phone publishes the post with an idempotency key, so a retry never posts Priya's photo twice.",
+     "reveal": 5
+    }
+   ],
+   "id": "s005",
+   "caption": "Book: Module 20 · Case 4 · Deep dive 1 — upload pipeline"
+  },
+  {
+   "layout": "diagram",
+   "title": "The upload pipeline",
+   "mermaid": "flowchart LR\n  APP[\"Phone\"] -- \"1 get URL\" --> API[\"Upload API\"]\n  APP -- \"2 PUT bytes\" --> OBJ[(\"Object storage\")]\n  OBJ -- \"3 created event\" --> Q[\"Queue\"]\n  Q --> W[\"Image worker\"]\n  W -- \"4 variants\" --> OBJ\n  W -- \"ready\" --> DB[(\"Media and posts DB\")]\n  APP -- \"5 publish\" --> API",
+   "caption": "Bytes go phone to storage; the API only handles small JSON",
+   "steps": [
+    {
+     "say": "Here's the picture. Notice the API only ever sees small requests. The heavy arrow goes phone to object storage, and the queue decouples processing from the upload.",
+     "reveal": 0
+    }
+   ],
+   "id": "s006"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Example",
+   "title": "Example: what the worker does to one photo",
+   "bullets": [
+    "Check magic bytes, decode in a sandbox",
+    "Reject decompression bombs",
+    "Strip EXIF GPS unless location shared",
+    "1080, 640, 320, 150 px x JPEG + WebP",
+    "Blurhash + perceptual hash, moderation",
+    "Job ID = media_id, so redelivery is safe"
+   ],
+   "steps": [
+    {
+     "say": "Imagine Priya's photo arrives at the worker. First, never trust the client. Check the magic bytes, the leading bytes that reveal the real file type, and decode it fully with a hardened library in a sandbox.",
+     "reveal": 1
+    },
+    {
+     "say": "Reject decompression bombs: tiny files that expand into gigantic images and eat all memory.",
+     "reveal": 2
+    },
+    {
+     "say": "Strip metadata. Her photo's EXIF data contains G-P-S coordinates of her home. Remove them unless she chose to share a location.",
+     "reveal": 3
+    },
+    {
+     "say": "Make variants: four widths, each in JPEG for old devices and WebP or AVIF for smaller size. That adds about half a megabyte, so one and a half megabytes per photo, and about eighty petabytes a year with erasure coding. Storage cost dominates, not compute.",
+     "reveal": 4
+    },
+    {
+     "say": "Add a blurhash, a thirty-character code for a blurry placeholder, and a perceptual hash, a fingerprint that survives resizing, to match known abusive images. A classifier rejects clear violations.",
+     "reveal": 5
+    },
+    {
+     "say": "Finally, the job I-D is the media I-D. If the worker crashes and the queue redelivers, it rewrites identical keys. A poison image that crashes every time goes to the dead letter queue after a few tries. In the interview, say: bytes never touch the app tier. Recap: pre-signed upload, queue, idempotent workers.",
+     "reveal": 6
+    }
+   ],
+   "id": "s007"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 2 of 14",
+   "title": "Photo feed generation",
+   "steps": [
+    {
+     "say": "Concept two. Priya posts. How does that photo reach her followers' home feeds within seconds, when some authors have three hundred million followers?",
+     "reveal": 0
+    }
+   ],
+   "id": "s008",
+   "caption": "Book: Module 20 · Case 4 · Deep dive 2 — feed generation"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 2 of 14",
+   "title": "Feed generation, step by step",
+   "bullets": [
+    "Fan-out on write: push post ID to each feed",
+    "Celebrities above ~1M followers: pull at read",
+    "Skip followers inactive for 30 days",
+    "Rank: candidates, features, model, rules",
+    "Deletes and unfollows: filter at read time"
+   ],
+   "steps": [
+    {
+     "say": "Step one, fan-out on write. Priya has 800 followers. A worker pages through them and appends her post I-D to each follower's feed list, capped at about five hundred I-Ds. That's 800 small background writes, and every follower's feed read becomes one list read.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two, the celebrity problem. A star with three hundred million followers would mean three hundred million writes per post. So above a threshold, say one million followers, we don't fan out. At read time, the feed service merges in that celebrity's recent posts from a hot, heavily cached key. That's hybrid fan-out.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three, skip the inactive. No pushes to someone who hasn't opened the app in thirty days. When they return, we rebuild their feed by pull.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four, rank. Instagram switched from time order to predicted interest in 2016. Take a few hundred candidates, add features like relationship strength and post age, score with a model, then apply rules, like no two posts from one author in a row.",
+     "reveal": 4
+    },
+    {
+     "say": "Step five, deletes and unfollows. Don't edit millions of lists. Filter at read time, and the old entries age out.",
+     "reveal": 5
+    }
+   ],
+   "id": "s009"
+  },
+  {
+   "layout": "twocol",
+   "kicker": "Example",
+   "title": "Example: one feed open for Sam",
+   "left": {
+    "heading": "Sam's inputs",
+    "bullets": [
+     "Feed list: 500 pushed post IDs",
+     "Follows 3 celebrities: pull 3 hot keys",
+     "Own recent posts merged in"
+    ]
+   },
+   "right": {
+    "heading": "Sam's output",
+    "bullets": [
+     "Rank a few hundred candidates",
+     "Batch-fetch metadata from cache",
+     "CDN image URLs, cached forever"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's watch it happen. Sam opens the app. Read one: his feed list, 500 post I-Ds pushed by fan-out.",
+     "reveal": 1
+    },
+    {
+     "say": "Sam follows three celebrities, so we read three hot recent-posts keys and merge them. Three lookups, not three hundred million writes.",
+     "reveal": 2
+    },
+    {
+     "say": "His own recent posts are merged too, so he sees his post right after posting. That's read-your-writes, without waiting for fan-out.",
+     "reveal": 3
+    },
+    {
+     "say": "Rank the few hundred candidates and keep the top page.",
+     "reveal": 4
+    },
+    {
+     "say": "Batch-fetch metadata from cache in one round trip.",
+     "reveal": 5
+    },
+    {
+     "say": "Return C-D-N U-R-Ls that contain the content hash. Because the U-R-L changes when content changes, the C-D-N caches it forever, no invalidation. In the interview, say: hybrid push and pull with a celebrity cutoff. Recap: push for most, pull for stars, filter at read.",
+     "reveal": 6
+    }
+   ],
+   "id": "s010"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 3 of 14",
+   "title": "Like and comment counters",
+   "steps": [
+    {
+     "say": "Concept three. A celebrity post gets a million likes in its first hour. That's about 280 likes a second, all on one key. What breaks?",
+     "reveal": 0
+    }
+   ],
+   "id": "s011",
+   "caption": "Book: Module 20 · Case 4 · Deep dive 3 — likes and comment counters"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 3 of 14",
+   "title": "Truth table plus derived counter",
+   "bullets": [
+    "Truth: likes table, key (post_id, user_id)",
+    "Why not likes = likes + 1? Row-lock contention",
+    "Option A: N sharded sub-counters",
+    "Option B: aggregate in the stream, +k per window",
+    "Unlike: delete row, emit minus one",
+    "Hot metadata: cache a promise, one fetch"
+   ],
+   "steps": [
+    {
+     "say": "Split truth from display. The truth is a likes table whose key is post I-D plus user I-D. It answers did I like this exactly, and the key makes a double like a no-op.",
+     "reveal": 1
+    },
+    {
+     "say": "Why not just update the post row and add one? Because at 280 a second, every like locks the same row. Row-lock contention makes that shard the bottleneck.",
+     "reveal": 2
+    },
+    {
+     "say": "Option A: sharded counters. Keep N sub-counters, increment a random one, and sum them on read. N is one for normal posts and sixty-four for a celebrity post.",
+     "reveal": 3
+    },
+    {
+     "say": "Option B: aggregate in the stream. Like events partitioned by post I-D are summed over one to five second windows, and applied as one plus k write per post. 280 writes a second become one.",
+     "reveal": 4
+    },
+    {
+     "say": "Unlike deletes the row and emits minus one. A double unlike deletes nothing, so it emits nothing.",
+     "reveal": 5
+    },
+    {
+     "say": "And for the hot post's metadata, Instagram caches a promise, a placeholder for a value being computed, so a thousand concurrent misses wait on one fetch instead of stampeding the database.",
+     "reveal": 6
+    }
+   ],
+   "id": "s012"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: one second on a celebrity post",
+   "table": {
+    "head": [
+     "Approach",
+     "Writes to hot row",
+     "Result"
+    ],
+    "rows": [
+     [
+      "UPDATE likes = likes + 1",
+      "280/s on one row",
+      "Lock contention, slow shard"
+     ],
+     [
+      "64 sub-counters",
+      "~4/s per sub-counter",
+      "Sum 64 keys on read (cached)"
+     ],
+     [
+      "Stream, 1 s window",
+      "1 write of +280",
+      "Count lags ~1 s, exact"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Imagine one busy second. The naive update does 280 writes on one row, each waiting for a lock.",
+     "reveal": 1
+    },
+    {
+     "say": "With sixty-four sub-counters, each gets about four writes a second. Reading means summing sixty-four keys, which we cache.",
+     "reveal": 2
+    },
+    {
+     "say": "With stream aggregation, one write of plus 280 per second. The count lags about a second, but idempotent apply, remembering the last offset applied, keeps it exact across retries. In the interview, say: truth table plus an aggregated or sharded counter. Recap: never one hot row.",
+     "reveal": 3
+    }
+   ],
+   "id": "s013"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 4 of 14",
+   "title": "Stories and expiry",
+   "steps": [
+    {
+     "say": "Concept four. Stories disappear twenty-four hours after posting. Sounds easy: delete them at twenty-four hours. Pause and think. Why is a deletion job the wrong place to put correctness?",
+     "reveal": 0
+    }
+   ],
+   "id": "s014",
+   "caption": "Book: Module 20 · Case 4 · Deep dive 4 — stories and expiry"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 4 of 14",
+   "title": "Stories: correctness on the read path",
+   "bullets": [
+    "Rule: expires_at = created_at + 24h",
+    "Every query filters expires_at > now()",
+    "TTL rows and lifecycle rules only reclaim space",
+    "Tray: one circle per followee, unseen first",
+    "Seen state: last_seen_story_id per author",
+    "CDN: signed short-lived URLs"
+   ],
+   "steps": [
+    {
+     "say": "Here's the answer. Deletion is never on time. Set expires at to created at plus twenty-four hours.",
+     "reveal": 1
+    },
+    {
+     "say": "Every story query filters expires at greater than now. That filter is what makes a story disappear on time.",
+     "reveal": 2
+    },
+    {
+     "say": "Deletion only reclaims space. Cassandra-style T-T-Ls, time to live, remove data lazily during compaction, and S-three lifecycle rules run once a day, rounded to midnight U-T-C. Relying on them, stories would linger for hours.",
+     "reveal": 3
+    },
+    {
+     "say": "The tray is the row of circles at the top: one per followed account with a live story, unseen first. A cached latest story at value per author makes it one batched multi-get.",
+     "reveal": 4
+    },
+    {
+     "say": "Seen state is tiny: per viewer and author, just the last seen story I-D. Story I-Ds are time-ordered, so anything newer is unseen.",
+     "reveal": 5
+    },
+    {
+     "say": "Story media is red-hot for hours, then dead. Cache it with a T-T-L matching its remaining life, and use signed short-lived U-R-Ls, so a saved link stops working after expiry.",
+     "reveal": 6
+    }
+   ],
+   "id": "s015"
+  },
+  {
+   "layout": "twocol",
+   "kicker": "Example",
+   "title": "Example: Maya's story at 9:00 am",
+   "left": {
+    "heading": "Timeline",
+    "bullets": [
+     "9:00 am Mon: posted, expires 9:00 am Tue",
+     "8:59 am Tue: shows in the tray",
+     "9:01 am Tue: filter hides it"
+    ]
+   },
+   "right": {
+    "heading": "Behind the scenes",
+    "bullets": [
+     "Row TTL a little over 24h: compaction later",
+     "Media: lifecycle rule after a few days",
+     "Archive copy if Maya opted in"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Maya posts a story at nine Monday morning. Expires at is nine Tuesday morning.",
+     "reveal": 1
+    },
+    {
+     "say": "At 8:59 Tuesday, her friend Leo sees her circle in the tray.",
+     "reveal": 2
+    },
+    {
+     "say": "At 9:01, the read filter hides it. Instantly. Nothing had to be deleted.",
+     "reveal": 3
+    },
+    {
+     "say": "Behind the scenes, the row was written with a T-T-L a little over twenty-four hours, so compaction removes it whenever it gets there.",
+     "reveal": 4
+    },
+    {
+     "say": "The media file sits under a lifecycle rule that deletes it, or moves it to cheaper storage, after a few days. Its signed U-R-Ls have already expired, so nobody can fetch it.",
+     "reveal": 5
+    },
+    {
+     "say": "And if Maya turned on archiving, a private copy survives for her alone. In the interview, say: expiry is a read-time filter, cleanup is lazy. Recap: correctness never depends on deletion.",
+     "reveal": 6
+    }
+   ],
+   "id": "s016"
+  },
+  {
+   "layout": "section",
+   "kicker": "Case 5",
+   "title": "Case 5: Microblogging",
+   "steps": [
+    {
+     "say": "Case five. A Twitter-like service. Post short messages, follow people, read a ranked home timeline, see trends. Our numbers: three hundred million daily users, five hundred million tweets a day, about 5,800 a second.",
+     "reveal": 0
+    },
+    {
+     "say": "Twitter once hit 143,199 tweets in one second during a T-V broadcast in Japan, about twenty-five times normal. So we design for thirty thousand a second sustained and absorb short spikes in a queue.",
+     "reveal": 0
+    }
+   ],
+   "id": "s017"
+  },
+  {
+   "layout": "number",
+   "title": "The fan-out bill",
+   "big": "500M tweets x 200 followers = 100B inserts/day",
+   "caption": "~1.2M timeline inserts per second, celebrities excluded",
+   "steps": [
+    {
+     "say": "Here's the bill. With a median of 200 followers, once celebrities are excluded, that's a hundred billion timeline inserts a day, about 1.2 million a second. Routine for an in-memory store.",
+     "reveal": 0
+    },
+    {
+     "say": "But one account with a hundred million followers, tweeting ten times a day, would add a billion inserts by itself. The timeline cache holds the newest 800 entries per user, sixteen bytes each, about eleven and a half terabytes of RAM with three copies. Storage is easy. Fan-out and skew decide the design.",
+     "reveal": 0
+    }
+   ],
+   "id": "s018"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 5 of 14",
+   "title": "Hybrid fan-out and the celebrity threshold",
+   "bullets": [
+    "Push: one insert per follower, cheap reads",
+    "Pull: free writes, expensive reads",
+    "Push below threshold, pull above (~100K start)",
+    "Push only to followers active in 30 days",
+    "Pages of 5,000 followers; inserts idempotent"
+   ],
+   "steps": [
+    {
+     "say": "Concept five. Two ways to build a timeline. Push, or fan-out on write: one insert per follower, and reading is one fetch. Twitter reported about three and a half seconds to reach a million followers, and up to five minutes for an account with thirty-one million.",
+     "reveal": 1
+    },
+    {
+     "say": "Pull, or fan-out on read: posting is free, but every read gathers from every followee. At two hundred thousand reads a second, that's too much.",
+     "reveal": 2
+    },
+    {
+     "say": "So the rule: push below a threshold, start near a hundred thousand followers and tune by measurement, and pull above it. A reader follows only a handful of celebrities, so the merge is a few lookups against a small, very hot, widely replicated cache.",
+     "reveal": 3
+    },
+    {
+     "say": "Decide per follower too. Fanning out only to followers active in the last thirty days often more than halves the real work.",
+     "reveal": 4
+    },
+    {
+     "say": "Split big follower lists into pages of five thousand, each its own task. Inserting an I-D that's already there is a no-op, so a crashed worker can retry its page safely.",
+     "reveal": 5
+    }
+   ],
+   "id": "s019",
+   "caption": "Book: Module 20 · Case 5 · Deep dive 1 — hybrid fan-out"
+  },
+  {
+   "layout": "twocol",
+   "kicker": "Example",
+   "title": "Example: two authors tweet at once",
+   "left": {
+    "heading": "Dev, 2,000 followers",
+    "bullets": [
+     "1,200 active this month: one page",
+     "1,200 inserts, done in ~1 s",
+     "Readers: in their list already"
+    ]
+   },
+   "right": {
+    "heading": "Star, 80M followers",
+    "bullets": [
+     "Above threshold: zero fan-out",
+     "Tweet goes to celebrity cache",
+     "Readers merge it at read time"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Imagine Dev, with two thousand followers, of whom twelve hundred were active this month. That's one page.",
+     "reveal": 1
+    },
+    {
+     "say": "Twelve hundred inserts, done in about a second.",
+     "reveal": 2
+    },
+    {
+     "say": "When his followers open the app, the tweet is already in their list.",
+     "reveal": 3
+    },
+    {
+     "say": "At the same moment, a star with eighty million followers tweets. She's above the threshold, so there's zero fan-out.",
+     "reveal": 4
+    },
+    {
+     "say": "Her tweet goes only into the celebrity recent-tweets cache.",
+     "reveal": 5
+    },
+    {
+     "say": "Each follower's read merges it in. Now a pause and think: if Dev's tweet goes viral, does he become a pull author? No. Fan-out cost depends on follower count, not virality. Virality is a read and counter problem. In the interview, say: choose the threshold where p ninety-nine fan-out time exceeds the five second freshness goal.",
+     "reveal": 6
+    }
+   ],
+   "id": "s020"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 6 of 14",
+   "title": "Ranked timeline: generate, then score",
+   "steps": [
+    {
+     "say": "Concept six. The For You timeline is ranked. About fifteen hundred candidates per refresh times two hundred thousand refreshes a second is three hundred million scorings a second. You can't run a big model on everything. So you build a funnel.",
+     "reveal": 0
+    }
+   ],
+   "id": "s021",
+   "caption": "Book: Module 20 · Case 5 · Deep dive 2 — the ranked home timeline"
+  },
+  {
+   "layout": "diagram",
+   "title": "The home mixer",
+   "mermaid": "flowchart LR\n  R[\"Timeline request\"] --> CG[\"1 Candidates ~1500\"]\n  CG --> LR2[\"2 Light rank to ~300\"]\n  LR2 --> HR[\"3 Heavy rank 48M params\"]\n  HR --> F[\"4 Filters and mixing\"]\n  F --> P[\"Page of 40\"]",
+   "caption": "Each stage is cheaper per item than the next and shrinks the set",
+   "steps": [
+    {
+     "say": "Twitter's open-sourced service for this is called the home mixer. Candidates, light ranking, heavy ranking, filters, then a page. Let's walk each stage for one user, Ana.",
+     "reveal": 0
+    }
+   ],
+   "id": "s022"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Example",
+   "title": "Example: Ana refreshes For You",
+   "bullets": [
+    "1. Candidates: ~750 in-network, ~750 out",
+    "2. Light rank: cheap model keeps ~300",
+    "3. Heavy rank: predict like, reply, dwell...",
+    "4. Filters: diversity, blocks, ads",
+    "Budget: 50 + 50 + 80 + 40 = ~220 ms",
+    "Overload: cache, rescore new, go chronological"
+   ],
+   "steps": [
+    {
+     "say": "Stage one, candidate generation. For Ana, about half come from in-network: her precomputed list plus followed celebrities. The other half are out-of-network: tweets liked by people she engages with, and tweets near her interests in an embedding space. Twitter's SimClusters groups users into about 145 thousand interest communities.",
+     "reveal": 1
+    },
+    {
+     "say": "Stage two, light ranking. A cheap model, like logistic regression, trims fifteen hundred to a few hundred.",
+     "reveal": 2
+    },
+    {
+     "say": "Stage three, heavy ranking. A neural network of about forty-eight million parameters predicts the chance Ana likes, replies, retweets, lingers, or reports. The score is a weighted sum, and negative signals like show less carry strong negative weights.",
+     "reveal": 3
+    },
+    {
+     "say": "Stage four, heuristics and filters. At most two consecutive tweets from one author. Remove blocked, muted, deleted or unsafe tweets. Insert ads.",
+     "reveal": 4
+    },
+    {
+     "say": "The latency budget: fifty milliseconds to fetch candidates in parallel, fifty for features, eighty for heavy ranking, forty for filters and hydration. About 220 milliseconds, under the 400 goal.",
+     "reveal": 5
+    },
+    {
+     "say": "To control cost, cache her ranking a few minutes and score only new candidates next time. If ranking is down, a circuit breaker trips and she gets in-network tweets in time order. Worse, but working. In the interview, say: multi-stage funnel. Recap: retrieve wide, rank narrow.",
+     "reveal": 6
+    }
+   ],
+   "id": "s023"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 7 of 14",
+   "title": "Trending with decayed counts",
+   "steps": [
+    {
+     "say": "Concept seven. Pause and think. Is the trending topic just the most-mentioned word right now?",
+     "reveal": 0
+    }
+   ],
+   "id": "s024",
+   "caption": "Book: Module 20 · Case 5 · Deep dive 3 — trending topics"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 7 of 14",
+   "title": "Trending: unusual, right now",
+   "bullets": [
+    "Extract hashtags and phrases, count distinct authors",
+    "Count-Min Sketch + Space-Saving top 10K",
+    "Fast score: decays with 30-min half-life",
+    "Baseline: slow score, ~7-day half-life",
+    "trend = (fast - expected) / sqrt(expected + k)",
+    "Every minute per country: top 50, filtered"
+   ],
+   "steps": [
+    {
+     "say": "No. Most mentioned would always be everyday words. A trend is mentioned much more than usual, right now. Step one: a stream job extracts hashtags and phrases, tags the author's country, and counts distinct authors, so a spammer posting a thousand times counts once.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two, count cheaply. A Count-Min Sketch counts every term in fixed memory; it may over-count but never under-counts. A heavy-hitters structure called Space-Saving tracks the top ten thousand candidates.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three, decay. Each term keeps one number: multiply by two to the power of minus elapsed time over half-life, then add new mentions. With a thirty-minute half-life, a mention an hour old counts a quarter as much as one now.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four, a second, slow score with a seven-day half-life is the baseline: what's normal for this term.",
+     "reveal": 4
+    },
+    {
+     "say": "Step five, the trend score: fast minus expected, divided by the square root of expected plus a damping constant k.",
+     "reveal": 5
+    },
+    {
+     "say": "Step six, every minute, per country, take the top fifty, filter spam and coordinated bursts, and publish to a cache.",
+     "reveal": 6
+    }
+   ],
+   "id": "s025"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: #eclipse versus #monday",
+   "table": {
+    "head": [
+     "Term",
+     "Baseline/hr",
+     "Now/hr",
+     "Score (k=100)"
+    ],
+    "rows": [
+     [
+      "#eclipse",
+      "20",
+      "2,000",
+      "(2000-20)/sqrt(120) = ~181"
+     ],
+     [
+      "#monday",
+      "48,000",
+      "50,000",
+      "2000/sqrt(48100) = ~9"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's run it. Eclipse: normally twenty mentions an hour, now two thousand. Two thousand minus twenty is 1,980, divided by the square root of 120, about eleven. Score about 181.",
+     "reveal": 1
+    },
+    {
+     "say": "Monday: forty-eight thousand normally, fifty thousand now. More mentions, but only two thousand above normal, divided by about 219. Score about nine. The eclipse trends; Monday doesn't. In the interview, say: decayed counts against a baseline, with sketches. Recap: unusual beats popular.",
+     "reveal": 2
+    }
+   ],
+   "id": "s026"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 8 of 14",
+   "title": "Viral engagement counts",
+   "bullets": [
+    "100K likes/min on one tweet",
+    "Truth: likes(user_id, tweet_id)",
+    "Stream job sums per tweet every few seconds",
+    "One counter write per few seconds",
+    "Displayed count: eventually consistent"
+   ],
+   "steps": [
+    {
+     "say": "Concept eight, quickly, because it's Case four's counter again. A viral tweet takes a hundred thousand likes a minute on one key.",
+     "reveal": 1
+    },
+    {
+     "say": "Write each like to the truth table, sharded by user, which answers did I like this.",
+     "reveal": 2
+    },
+    {
+     "say": "A stream job sums likes per tweet over a few seconds.",
+     "reveal": 3
+    },
+    {
+     "say": "Then it writes one update to the engagement counts table. One write per few seconds instead of sixteen hundred a second.",
+     "reveal": 4
+    },
+    {
+     "say": "The number you see is eventually consistent, a few seconds behind. Remember: virality is a counter and read problem, never a fan-out problem. Recap: aggregate, then write.",
+     "reveal": 5
+    }
+   ],
+   "id": "s027",
+   "caption": "Book: Module 20 · Case 5 · Deep dive 4 — engagement counts"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 9 of 14",
+   "title": "Client-side load balancing at Twitter",
+   "steps": [
+    {
+     "say": "Concept nine. Every arrow in that architecture is many instances of one service calling many of another. Twitter routes these calls through Finagle, its open-source J-V-M R-P-C library, which puts a load balancer inside every client.",
+     "reveal": 0
+    },
+    {
+     "say": "That's client-side load balancing: each caller picks a server from the service-discovery list itself. No extra hop, no central bottleneck. But now thousands of independent balancers must spread load evenly. Twitter's answer evolved in three steps.",
+     "reveal": 0
+    }
+   ],
+   "id": "s028",
+   "caption": "Book: Module 20 · Case 5 · Client-side load balancing at Twitter"
+  },
+  {
+   "layout": "table",
+   "title": "Three steps to aperture",
+   "table": {
+    "head": [
+     "Step",
+     "How a client picks",
+     "Problem"
+    ],
+    "rows": [
+     [
+      "1. P2C, all servers",
+      "2 random servers, pick less loaded",
+      "Full mesh: 1,000 x 1,000 = 1M conns"
+     ],
+     [
+      "2. Random aperture",
+      "Random subset, P2C inside it",
+      "Banding: uneven overlap"
+     ],
+     [
+      "3. Deterministic aperture",
+      "Even slice of a shared ring",
+      "Needs own index and count"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Step one, P2C, the power of two choices. For each request, pick two servers at random and send to the one with fewer outstanding requests. That keeps load remarkably even. The catch: every client holds a connection to every server. A thousand clients times a thousand servers is a million connections, each carrying so few requests the load signal means little.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two, random aperture. Each client uses only a random subset of servers, called its aperture, and runs P2C inside it. Far fewer connections. But random subsets overlap unevenly, so some servers get far more clients than others.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three, deterministic aperture. Clients and servers sit on two rings, and each client takes an evenly spaced slice. Even load and few connections, with no coordinator. The price: each instance must know its own index and the total count.",
+     "reveal": 3
+    }
+   ],
+   "id": "s029"
+  },
+  {
+   "layout": "number",
+   "title": "Example: why random subsets are unfair",
+   "big": "1,000 clients x 10 picks / 500 servers = 20 avg",
+   "caption": "Std dev ~ sqrt(20) = ~4.5, so some servers get 30+, 50% above average",
+   "steps": [
+    {
+     "say": "Let's work it. A thousand clients each pick ten servers out of five hundred at random. That's ten thousand picks, so each server expects twenty clients.",
+     "reveal": 0
+    },
+    {
+     "say": "But the count follows a binomial distribution with a standard deviation of about four and a half. Among five hundred servers, several end up with thirty or more clients, fifty percent above average, and you must size the whole fleet for them. That's banding.",
+     "reveal": 0
+    }
+   ],
+   "id": "s030"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 9 of 14",
+   "title": "How deterministic aperture works",
+   "bullets": [
+    "1. Peer ring: client i of N sits at i/N",
+    "2. Destination ring: same shuffled server order",
+    "3. Slice from own coordinate, min 12 servers",
+    "4. Fractional edges: P2C on random points",
+    "Retry budget: ~20% of requests"
+   ],
+   "steps": [
+    {
+     "say": "Step one, the peer ring. Say there are four clients. Client number two knows it's two of four from the scheduler, so it sits at coordinate one half on a ring from zero to one.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two, the destination ring. Every client builds the same ring of servers, in the same pseudo-random shuffled order, so different services don't all pile onto the same first servers.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three, slices. Each client takes a slice starting at its coordinate, at least twelve servers wide per Finagle's docs. Because client coordinates are evenly spaced, the slices tile the ring evenly, and every server gets the same number of clients.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four, fractional edges. A slice rarely ends exactly on a server, so P2C picks two random points inside the slice, and a partly covered edge server automatically gets a proportionally smaller share.",
+     "reveal": 4
+    },
+    {
+     "say": "And the same client caps retries with a retry budget, by default about twenty percent of requests, so a struggling server isn't buried by a retry storm.",
+     "reveal": 5
+    }
+   ],
+   "id": "s031"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: what Twitter measured",
+   "table": {
+    "head": [
+     "Metric",
+     "Change"
+    ],
+    "rows": [
+     [
+      "Connections",
+      "~280K to ~25K (-91%)"
+     ],
+     [
+      "Request-rate spread across servers",
+      "-78%"
+     ],
+     [
+      "CPU",
+      "20-25% less"
+     ],
+     [
+      "Request failures",
+      "75% fewer"
+     ],
+     [
+      "p99.9 latency",
+      "~20% lower"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Twitter reported these results at SREcon Asia 2019, moving from random to deterministic aperture. Connections fell from about 280 thousand to 25 thousand.",
+     "reveal": 1
+    },
+    {
+     "say": "The spread of request rates across servers dropped seventy-eight percent.",
+     "reveal": 2
+    },
+    {
+     "say": "Twenty to twenty-five percent less C-P-U, and garbage collection time halved.",
+     "reveal": 3
+    },
+    {
+     "say": "Seventy-five percent fewer failed requests.",
+     "reveal": 4
+    },
+    {
+     "say": "And p ninety-nine point nine latency about twenty percent lower. Limits: redeploys briefly break the indexes, and clients with very unequal traffic still unbalance servers. Google calls the same idea deterministic subsetting. In the interview, say: P2C is fair but meshes, random subsets band, deterministic slices of a shuffled ring give both.",
+     "reveal": 5
+    }
+   ],
+   "id": "s032"
+  },
+  {
+   "layout": "section",
+   "kicker": "Case 6",
+   "title": "Case 6: Ad-click aggregation",
+   "steps": [
+    {
+     "say": "Case six. An ad platform records every click and turns the stream into counts per ad per minute. Advertisers see them within two minutes, the budget service stops campaigns that ran out of money, and every day we bill from them.",
+     "reveal": 0
+    },
+    {
+     "say": "Our numbers: a billion clicks a day, about 11,600 a second, and sixty thousand at peak. Only twelve megabytes a second into Kafka. Trivial throughput. The hard part is that one percent too high overcharges advertisers, and one percent too low loses revenue.",
+     "reveal": 0
+    }
+   ],
+   "id": "s033"
+  },
+  {
+   "layout": "diagram",
+   "title": "The click pipeline",
+   "mermaid": "flowchart LR\n  CS[\"Click server log then 302\"] --> K[\"Kafka by ad_id\"]\n  K --> SA[\"Stream aggregator\"]\n  SA --> OL[(\"OLAP store\")]\n  SA --> BUD[\"Budget service\"]\n  K --> LAKE[(\"Data lake raw\")]\n  LAKE --> REC[\"Nightly recount\"]\n  REC --> BILL[(\"Billing ledger\")]",
+   "caption": "Fast provisional stream path plus an exact batch referee",
+   "steps": [
+    {
+     "say": "Here's the shape. The click server writes to Kafka and redirects the user immediately. If Kafka is slow, it buffers to local disk and redirects anyway. The user never waits on analytics.",
+     "reveal": 0
+    },
+    {
+     "say": "A stream aggregator dedupes and counts per minute into an analytics store and the budget service. Separately, every raw click lands in the data lake, and a nightly recount from that raw log makes the numbers final for billing.",
+     "reveal": 0
+    }
+   ],
+   "id": "s034"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 10 of 14",
+   "title": "Exactly-once-ish counting",
+   "steps": [
+    {
+     "say": "Concept ten. No network hop is exactly-once. So how do we make each valid click count once in the final number? We assemble it from three parts.",
+     "reveal": 0
+    }
+   ],
+   "id": "s035",
+   "caption": "Book: Module 20 · Case 6 · Deep dive 1 — exactly-once-ish"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 10 of 14",
+   "title": "Three parts of counting once",
+   "bullets": [
+    "(a) No loss: acks=all, replication 3, disk buffer",
+    "Idempotent producer drops retried batches",
+    "(b) Dedupe by deterministic click_id, 24 h",
+    "(c) Checkpoint state together with offsets",
+    "Transactional sink for Kafka hops",
+    "Upsert absolutes, never send increments"
+   ],
+   "steps": [
+    {
+     "say": "Part a, no loss at the source. The click server writes with acks equals all, meaning acknowledged only when all in-sync replicas have it, replicated three times across zones, or into the disk buffer.",
+     "reveal": 1
+    },
+    {
+     "say": "Kafka's idempotent producer adds sequence numbers, so the broker drops a retried batch it already wrote.",
+     "reveal": 2
+    },
+    {
+     "say": "Part b, business dedupe. The click I-D is a hash of the impression I-D plus the ad. So a double-click or a browser retry produces the same I-D, and the aggregator keeps a twenty-four hour seen set, about twenty gigabytes across the cluster. No transport guarantee catches a double-click. This does.",
+     "reveal": 3
+    },
+    {
+     "say": "Part c, crash safety. Flink periodically checkpoints all its state, counts and seen I-Ds, together with the Kafka offsets it has read. After a crash it restores and re-reads from those offsets, which means outputs since the checkpoint are emitted again.",
+     "reveal": 4
+    },
+    {
+     "say": "To make that harmless, internal Kafka hops use a transactional sink, committed only when the checkpoint completes.",
+     "reveal": 5
+    },
+    {
+     "say": "And the final store gets upserts of absolute values, keyed by ad and window. This is the most common interview miss.",
+     "reveal": 6
+    }
+   ],
+   "id": "s036"
+  },
+  {
+   "layout": "twocol",
+   "kicker": "Example",
+   "title": "Example: the replay after a crash",
+   "left": {
+    "heading": "Send increments",
+    "bullets": [
+     "Window ad 42, 10:03: +517",
+     "Crash, replay: +517 again",
+     "Store shows 1,034: wrong"
+    ]
+   },
+   "right": {
+    "heading": "Upsert absolutes",
+    "bullets": [
+     "Window ad 42, 10:03 = 517",
+     "Crash, replay: = 517 again",
+     "Store shows 517: right"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Imagine the aggregator counts 517 clicks for ad forty-two in the 10:03 window, and sends plus 517.",
+     "reveal": 1
+    },
+    {
+     "say": "Then it crashes before the checkpoint, restores, and replays. It sends plus 517 again.",
+     "reveal": 2
+    },
+    {
+     "say": "The store now says 1,034. We just double-billed.",
+     "reveal": 3
+    },
+    {
+     "say": "Now the other way. It writes: ad forty-two, 10:03, equals 517.",
+     "reveal": 4
+    },
+    {
+     "say": "Crash, replay, it writes equals 517 again.",
+     "reveal": 5
+    },
+    {
+     "say": "The store still says 517. Replays are harmless. In the interview, say: effectively once, from no loss, business dedupe, and checkpoint plus idempotent sink. Recap: upsert absolutes.",
+     "reveal": 6
+    }
+   ],
+   "id": "s037"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 11 of 14",
+   "title": "Windows and watermarks",
+   "steps": [
+    {
+     "say": "Concept eleven. Clicks arrive out of order. A phone was offline, a region was slow. When is the 10:03 minute finished?",
+     "reveal": 0
+    }
+   ],
+   "id": "s038",
+   "caption": "Book: Module 20 · Case 6 · Deep dive 2 — windows and watermarks"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 11 of 14",
+   "title": "Event-time windows and watermarks",
+   "bullets": [
+    "Tumbling 1-minute windows, back to back",
+    "Event time, not processing time",
+    "Watermark = max event time seen - 60 s",
+    "Window fires when watermark passes its end",
+    "Idle partitions: mark idle after a timeout"
+   ],
+   "steps": [
+    {
+     "say": "A window groups the endless stream into finite buckets. Ours are tumbling one-minute windows: fixed, back to back, no overlap.",
+     "reveal": 1
+    },
+    {
+     "say": "Bucket by event time, when the click happened, not processing time, when we saw it. Otherwise a ten-minute outage followed by a burst looks like a drop and a spike, and clicks bill to the wrong minutes.",
+     "reveal": 2
+    },
+    {
+     "say": "A watermark is the claim: I've probably seen every event up to time T. Commonly, the largest event time seen, minus an allowed out-of-orderness, here sixty seconds.",
+     "reveal": 3
+    },
+    {
+     "say": "When the watermark passes 10:04, the 10:03 window fires and emits its count.",
+     "reveal": 4
+    },
+    {
+     "say": "One trap. The job's watermark is the minimum across partitions. A silent partition freezes it, and everything stalls. So mark partitions idle after a timeout.",
+     "reveal": 5
+    }
+   ],
+   "id": "s039"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: five clicks arrive",
+   "table": {
+    "head": [
+     "Arrives",
+     "Event time",
+     "Max seen",
+     "Watermark"
+    ],
+    "rows": [
+     [
+      "1st",
+      "10:03:10",
+      "10:03:10",
+      "10:02:10"
+     ],
+     [
+      "2nd",
+      "10:03:50",
+      "10:03:50",
+      "10:02:50"
+     ],
+     [
+      "3rd",
+      "10:04:20",
+      "10:04:20",
+      "10:03:20"
+     ],
+     [
+      "4th",
+      "10:03:40 (out of order)",
+      "10:04:20",
+      "10:03:20"
+     ],
+     [
+      "5th",
+      "10:05:05",
+      "10:05:05",
+      "10:04:05: fire 10:03"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's trace it. First click, event time 10:03:10. Watermark is sixty seconds behind, 10:02:10.",
+     "reveal": 1
+    },
+    {
+     "say": "Second, 10:03:50. Watermark 10:02:50.",
+     "reveal": 2
+    },
+    {
+     "say": "Third, 10:04:20, belonging to the next minute. Watermark moves to 10:03:20. The 10:03 window is still open.",
+     "reveal": 3
+    },
+    {
+     "say": "Fourth, 10:03:40, out of order. The max doesn't move. But its window is still open, so it's counted.",
+     "reveal": 4
+    },
+    {
+     "say": "Fifth, 10:05:05. Watermark jumps to 10:04:05, past the end of 10:03. The window fires with three clicks: 10:03:10, 10:03:50 and 10:03:40. A bigger bound is more complete but later; sixty seconds keeps dashboards inside two minutes. Recap: event time, watermark, fire.",
+     "reveal": 5
+    }
+   ],
+   "id": "s040"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 12 of 14",
+   "title": "Three tiers of late events",
+   "steps": [
+    {
+     "say": "Concept twelve. Pause and think. A click for 10:03 shows up at 10:09. The window already fired. Drop it?",
+     "reveal": 0
+    }
+   ],
+   "id": "s041",
+   "caption": "Book: Module 20 · Case 6 · Deep dive 3 — late events: three tiers"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 12 of 14",
+   "title": "Never silently drop a click",
+   "bullets": [
+    "Tier 1: within watermark bound, counted normally",
+    "Tier 2: within allowed lateness, re-fire window",
+    "Tier 3: beyond it, side output late_clicks",
+    "Hard cut-off: older than 3 days is invalid",
+    "Watch the late rate: a jump means trouble"
+   ],
+   "steps": [
+    {
+     "say": "Never. Dropped clicks are lost revenue. Tier one: up to sixty seconds late, inside the watermark bound. Counted normally, like our out-of-order click.",
+     "reveal": 1
+    },
+    {
+     "say": "Tier two: within allowed lateness, say ten minutes after firing. Flink keeps the window's state and re-fires with the new count. Our 10:09 click lands here. The absolute upsert changes the row from 517 to 518.",
+     "reveal": 2
+    },
+    {
+     "say": "Tier three: later than that. A click from a phone that was offline for an hour goes to a side output called late clicks, which feeds reconciliation.",
+     "reveal": 3
+    },
+    {
+     "say": "There's a hard cut-off. Event times older than about three days, or in the future beyond small clock skew, are invalid. The signed click U-R-L contains its time, so old links can't be replayed to inflate counts.",
+     "reveal": 4
+    },
+    {
+     "say": "And alert on the late rate. A sudden jump means a broken client or a stuck region. Recap: count, re-fire, or side-output.",
+     "reveal": 5
+    }
+   ],
+   "id": "s042"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 13 of 14",
+   "title": "Batch reconciliation",
+   "steps": [
+    {
+     "say": "Concept thirteen. The stream path can be slightly wrong. A bug, dedupe state lost in a bad deploy, a lateness tier exceeded. Billing needs a referee.",
+     "reveal": 0
+    }
+   ],
+   "id": "s043",
+   "caption": "Book: Module 20 · Case 6 · Deep dive 4 — reconciliation"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 13 of 14",
+   "title": "The nightly recount",
+   "bullets": [
+    "Read the day's raw files from the lake",
+    "Apply the same dedupe and invalid rules",
+    "Diff against OLAP rows; alert above ~0.1%",
+    "Overwrite with source=batch, version+1",
+    "Write billing ledger; flip day to final",
+    "Kappa option: replay the log through stream"
+   ],
+   "steps": [
+    {
+     "say": "Step one. Each night, and again three days later for very late events, a Spark-style batch job reads the day's raw click files from the data lake.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two. It applies the same dedupe and invalid-click rules, from a shared library, so stream and batch don't drift.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three. It diffs its exact counts against the stream's rows. Differences above a tiny threshold alert, because they reveal stream bugs.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four. Differing rows are overwritten with source batch and a bumped version.",
+     "reveal": 4
+    },
+    {
+     "say": "Step five. Daily totals go to the append-only billing ledger, and the A-P-I flips that day from provisional to final. Refunds are new ledger entries, never edits to history.",
+     "reveal": 5
+    },
+    {
+     "say": "The Kappa alternative replays the raw log through the same stream job. Fewer code paths, but you need long log retention. Either way: aggregates are disposable, the raw log is not.",
+     "reveal": 6
+    }
+   ],
+   "id": "s044"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: a bad deploy on Tuesday",
+   "table": {
+    "head": [
+     "When",
+     "Stream says (ad 42, day)",
+     "What happens"
+    ],
+    "rows": [
+     [
+      "Tue 14:00",
+      "Dedupe state lost",
+      "Double-clicks start counting twice"
+     ],
+     [
+      "Tue 23:59",
+      "10,250 clicks (provisional)",
+      "Dashboard slightly high"
+     ],
+     [
+      "Wed 02:00",
+      "Batch recount: 10,000",
+      "Diff 2.5%: alert, overwrite rows"
+     ],
+     [
+      "Wed 03:00",
+      "10,000 (final)",
+      "Ledger bills 10,000"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Imagine a deploy on Tuesday afternoon loses the dedupe state. Double-clicks start counting twice.",
+     "reveal": 1
+    },
+    {
+     "say": "By midnight the stream says ad forty-two had 10,250 clicks. The dashboard shows that, labelled provisional.",
+     "reveal": 2
+    },
+    {
+     "say": "At two a.m. the batch recount from raw files says 10,000. A two and a half percent difference fires an alert, and the rows are overwritten.",
+     "reveal": 3
+    },
+    {
+     "say": "By three a.m. the day is final and the ledger bills exactly 10,000. The advertiser was never overcharged. In the interview, say: a fast provisional stream plus a batch referee. Recap: the raw log is the truth.",
+     "reveal": 4
+    }
+   ],
+   "id": "s045"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 14 of 14",
+   "title": "Query store and hot ads",
+   "steps": [
+    {
+     "say": "Concept fourteen. Advertisers ask: clicks for my ad over the last six hours, or the top hundred ads in my campaign. About two thousand queries a second at peak, with a one second p ninety-nine.",
+     "reveal": 0
+    }
+   ],
+   "id": "s046",
+   "caption": "Book: Module 20 · Case 6 · Deep dive 5 — the query store and hot ads"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 14 of 14",
+   "title": "Serving queries and taming hot ads",
+   "bullets": [
+    "OLAP store, pre-aggregated per minute",
+    "Roll up: hourly after 7 days, daily after 90",
+    "Top-N: a top-100 heap per campaign in stream",
+    "Hot ad: salt 0-15, pre-sum, then combine",
+    "Dedupe before salting",
+    "Cache responses ~30 s per query"
+   ],
+   "steps": [
+    {
+     "say": "The store is an O-L-A-P database, built for fast scans and group-bys, like Pinot, Druid or ClickHouse. Rows are pre-summed per minute and columnar, and it supports primary-key upserts, which our idempotent sink needs. Google's Mesa does this at petabyte scale.",
+     "reveal": 1
+    },
+    {
+     "say": "Roll up old data: hourly after seven days, daily after ninety. About three hundred million minute rows a day, eighteen gigabytes, stays manageable.",
+     "reveal": 2
+    },
+    {
+     "say": "For top hundred ads per campaign, keep a top-hundred heap in a second stream aggregation, instead of sorting millions of rows at query time.",
+     "reveal": 3
+    },
+    {
+     "say": "Now hot ads. One viral ad takes ten percent of all clicks, and since Kafka partitions by ad I-D, one aggregator gets all of it. Fix it with two-stage aggregation: key by ad plus a salt from zero to fifteen, pre-sum each part, then add the sixteen partials.",
+     "reveal": 4
+    },
+    {
+     "say": "Dedupe by click I-D before salting, so a duplicate can't land in two salts and escape.",
+     "reveal": 5
+    },
+    {
+     "say": "Dashboards poll every thirty to sixty seconds, so cache each response about thirty seconds. A whole team watching one campaign costs one query.",
+     "reveal": 6
+    }
+   ],
+   "id": "s047"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: a Super Bowl ad",
+   "table": {
+    "head": [
+     "Stage",
+     "Load",
+     "Work"
+    ],
+    "rows": [
+     [
+      "Before salting",
+      "6,000 clicks/s on one worker",
+      "One overloaded aggregator"
+     ],
+     [
+      "Stage 1: 16 salts",
+      "~375 clicks/s per worker",
+      "16 partial minute counts"
+     ],
+     [
+      "Stage 2: combine",
+      "16 partials per minute",
+      "One absolute upsert per minute"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Imagine a Super Bowl ad at peak: six thousand clicks a second, all hashed to one worker, which falls behind.",
+     "reveal": 1
+    },
+    {
+     "say": "Salt it sixteen ways. Each worker now handles about 375 clicks a second and produces a partial count per minute.",
+     "reveal": 2
+    },
+    {
+     "say": "Stage two adds the sixteen partials and upserts one absolute value. Load spread, answer unchanged. In the interview, say: salted two-stage aggregation for hot keys. Recap: spread, then combine.",
+     "reveal": 3
+    }
+   ],
+   "id": "s048"
+  },
+  {
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "Budget service sees stale counts. What's safe?",
+   "bullets": [
+    "A. Keep serving ads until counts catch up",
+    "B. Pause campaigns near their limit",
+    "C. Drop late clicks to catch up faster"
+   ],
+   "steps": [
+    {
+     "say": "Final pause and think. The aggregator falls behind, and the budget service's counts are stale. Which choice is safe? A, keep serving. B, pause campaigns near their limit. C, drop late clicks to catch up.",
+     "reveal": 0
+    }
+   ],
+   "id": "s049"
+  },
+  {
+   "layout": "bullets",
+   "title": "Answer: fail in the safe direction",
+   "bullets": [
+    "B: pause near-limit campaigns, avoid overspend",
+    "Backpressure: Kafka absorbs the backlog",
+    "Scale by partition; watch consumer lag",
+    "Never drop clicks: reconciliation needs them"
+   ],
+   "steps": [
+    {
+     "say": "The answer is B. Pausing campaigns near their limit risks a little lost revenue, while serving blind risks overspending advertisers' money. Pick the safe direction.",
+     "reveal": 1
+    },
+    {
+     "say": "Meanwhile backpressure, a slow stage slowing upstream instead of dropping data, lets Kafka hold the backlog.",
+     "reveal": 2
+    },
+    {
+     "say": "Scale the aggregator by partition and watch consumer lag.",
+     "reveal": 3
+    },
+    {
+     "say": "And C is never right. Dropped clicks are money and audit gaps.",
+     "reveal": 4
+    }
+   ],
+   "id": "s050"
+  },
+  {
+   "layout": "recap",
+   "title": "Recap",
+   "bullets": [
+    "Photos: pre-signed upload, queue, idempotent workers, CDN",
+    "Feed: hybrid push/pull; likes: truth + aggregate; story filter",
+    "Microblog: funnel ranking; trends = decayed vs baseline",
+    "Finagle: deterministic aperture, even slices of a ring",
+    "Clicks: dedupe, watermarks, upsert absolutes, recount",
+    "Next: Episode 28, Case Studies: Developer and AI Platforms"
+   ],
+   "steps": [
+    {
+     "say": "Let's recap. Photos: bytes never touch the app tier. Pre-signed uploads, a queue, idempotent workers that validate and resize, and a C-D-N with immutable U-R-Ls.",
+     "reveal": 1
+    },
+    {
+     "say": "Feeds are hybrid push and pull with a celebrity cutoff. Likes are a truth table plus an aggregated or sharded counter. Stories expire through a read-time filter. Deletion only reclaims space.",
+     "reveal": 2
+    },
+    {
+     "say": "Microblogging: push to active followers below the threshold, pull above. Rank with a funnel: candidates, light rank, heavy rank, filters. Trends are decayed counts compared against a baseline.",
+     "reveal": 3
+    },
+    {
+     "say": "Finagle balances in every client. P2C is fair but meshes, random subsets band, and deterministic aperture gives each client an even slice of a shuffled ring.",
+     "reveal": 4
+    },
+    {
+     "say": "Ad clicks: deterministic click I-Ds, event-time windows with a watermark, three late tiers, absolute upserts, and a nightly recount as the referee for billing.",
+     "reveal": 5
+    },
+    {
+     "say": "Next time, episode twenty-eight, Case Studies: Developer and A-I Platforms. See you there.",
+     "reveal": 6
+    }
+   ],
+   "id": "s051"
+  }
+ ]
+}

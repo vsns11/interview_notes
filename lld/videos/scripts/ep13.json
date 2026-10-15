@@ -1,0 +1,2302 @@
+{
+  "series": "LLD Workshop",
+  "episode": 13,
+  "title": "Concurrency and Multithreading Concepts",
+  "subtitle": "Threads, races, locks, coordination, atomics, liveness and patterns in Java",
+  "scenes": [
+    {
+      "id": "s001",
+      "layout": "title",
+      "title": "Concurrency and Multithreading Concepts",
+      "steps": [
+        {
+          "say": "Welcome to the L-L-D Workshop, episode thirteen: Concurrency and Multithreading Concepts. In a low-level design interview you'll hear it: two users click Book on the same seat at the same moment. What happens?",
+          "reveal": 0
+        },
+        {
+          "say": "Today we build the whole toolbox from zero. Threads, races and the Java memory model. Then locks, coordination tools, atomics, the three liveness failures, five concurrency patterns, and finally parking, seat booking and inventory, done the interview way.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll be able to look at any design, point to the shared state, and pick the smallest tool that makes it safe. Keep the chapter twelve PDF open. Every program I mention is there with its real output.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s002",
+      "layout": "bullets",
+      "kicker": "Before we start",
+      "title": "Ten words we'll use all episode",
+      "bullets": [
+        "Thread: one sequence of instructions in a program",
+        "Shared state: data more than one thread can touch",
+        "Atomic: others see before or after, never halfway",
+        "Lock: a token only one thread can hold",
+        "Critical section: code that must not run in two threads at once",
+        "Safety: nothing bad happens. Liveness: progress happens"
+      ],
+      "steps": [
+        {
+          "say": "A thread is one independent sequence of instructions running inside your program.",
+          "reveal": 1
+        },
+        {
+          "say": "Shared state is any data, like a field or an object, that more than one thread can read or write.",
+          "reveal": 2
+        },
+        {
+          "say": "Atomic means one indivisible step. Other threads see the before or the after, never the halfway point.",
+          "reveal": 3
+        },
+        {
+          "say": "A lock, or mutex, is a token only one thread holds at a time. Everyone else waits for it.",
+          "reveal": 4
+        },
+        {
+          "say": "A critical section is code touching shared state that must never run in two threads at once.",
+          "reveal": 5
+        },
+        {
+          "say": "And two goals. Safety means nothing bad happens, like a double booking. Liveness means something good eventually happens, so the program keeps moving.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s003",
+      "layout": "section",
+      "kicker": "Part A",
+      "title": "Part A: Foundations",
+      "steps": [
+        {
+          "say": "Part A: the foundations. What concurrency is, what a thread is, how threads live and die, and how you create them in Java.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 12 · Part A — Foundations"
+    },
+    {
+      "id": "s004",
+      "layout": "twocol",
+      "kicker": "Concept 1 of 26 · Book 12.1",
+      "title": "Concurrency versus parallelism",
+      "left": {
+        "heading": "Concurrency",
+        "bullets": [
+          "Dealing with many things",
+          "Tasks overlap, may take turns",
+          "Works on one core",
+          "Helps I/O-bound work"
+        ]
+      },
+      "right": {
+        "heading": "Parallelism",
+        "bullets": [
+          "Doing many things at once",
+          "Same instant, different cores",
+          "Needs several cores",
+          "Helps CPU-bound work"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concurrency is about dealing with many things at once. Picture one chef switching between three simmering pots.",
+          "reveal": 1
+        },
+        {
+          "say": "The tasks' lifetimes overlap. The operating system scheduler gives each thread a short time slice, then context-switches to another.",
+          "reveal": 2
+        },
+        {
+          "say": "So it works even on a single core. The fast switching creates the illusion of all at once.",
+          "reveal": 3
+        },
+        {
+          "say": "It shines when work mostly waits, on disk or network. That's called I-O-bound.",
+          "reveal": 4
+        },
+        {
+          "say": "Parallelism is doing many things at once. Three chefs, one pot each.",
+          "reveal": 5
+        },
+        {
+          "say": "Tasks literally run at the same instant on different cores.",
+          "reveal": 6
+        },
+        {
+          "say": "So it needs more than one core.",
+          "reveal": 7
+        },
+        {
+          "say": "It shines for CPU-bound work, which mostly computes, like sorting a hundred million numbers.",
+          "reveal": 8
+        }
+      ],
+      "caption": "Book: Ch 12 · 12.1 Concurrency vs parallelism"
+    },
+    {
+      "id": "s005",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "A web server and a big sort",
+      "table": {
+        "head": [
+          "Scenario",
+          "Kind",
+          "Why"
+        ],
+        "rows": [
+          [
+            "10,000 tasks that each sleep 50 ms",
+            "Concurrency",
+            "Finishes in under a second"
+          ],
+          [
+            "Chat server, 50,000 idle sockets",
+            "Concurrency",
+            "Connections wait, not compute"
+          ],
+          [
+            "Sort 100 million numbers",
+            "Parallelism",
+            "Split across all cores"
+          ],
+          [
+            "10% sequential work, any cores",
+            "Amdahl's law",
+            "Speed-up capped at 10x"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Imagine ten thousand tasks that each sleep fifty milliseconds. One after another, that's five hundred seconds. With virtual threads overlapping the waits, the book's program finishes in well under a second. That's concurrency hiding waiting.",
+          "reveal": 1
+        },
+        {
+          "say": "A chat server with fifty thousand idle connections is the same story. They wait, they don't compute.",
+          "reveal": 2
+        },
+        {
+          "say": "Sorting a hundred million numbers is parallelism. Split the array and use every core.",
+          "reveal": 3
+        },
+        {
+          "say": "But parallel speed-up has a ceiling, called Amdahl's law. If ten percent of the work is sequential, even infinite cores give at most ten times faster. In the interview, say: concurrency is structure, parallelism is execution.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s006",
+      "layout": "table",
+      "kicker": "Concept 2 of 26 · Book 12.2",
+      "title": "Processes versus threads",
+      "table": {
+        "head": [
+          "",
+          "Process",
+          "Thread"
+        ],
+        "rows": [
+          [
+            "Memory",
+            "Private address space",
+            "Shares heap, own stack"
+          ],
+          [
+            "Creation cost",
+            "High",
+            "Lower; virtual threads tiny"
+          ],
+          [
+            "Talks via",
+            "Pipes, sockets (IPC)",
+            "Shared objects + locks"
+          ],
+          [
+            "Crash isolation",
+            "Strong",
+            "Weak: one error can kill all"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "A process is a running program with its own private memory. A thread is a path of execution inside a process.",
+          "reveal": 1
+        },
+        {
+          "say": "Threads share the process's heap, where objects live, but each thread has its own stack for local variables.",
+          "reveal": 2
+        },
+        {
+          "say": "Processes are expensive to create. Threads are cheaper, and Java twenty-one virtual threads are cheaper still.",
+          "reveal": 3
+        },
+        {
+          "say": "Processes talk through inter-process communication, I-P-C, like pipes and sockets. Threads just share objects, which is fast but needs synchronization.",
+          "reveal": 4
+        },
+        {
+          "say": "And isolation: a crashing process hurts only itself. A thread's out-of-memory error can bring down the whole process.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Ch 12 · 12.2 Processes vs threads"
+    },
+    {
+      "id": "s007",
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Chrome tabs and a local counter",
+      "bullets": [
+        "Chrome: one process per tab, a bad page can't kill the browser",
+        "PostgreSQL: process per connection. MySQL: thread per connection",
+        "Two threads, each with int x = 0 in a method: no race",
+        "Two threads incrementing one object's field: race"
+      ],
+      "steps": [
+        {
+          "say": "Google Chrome runs each tab as a separate process, so one crashing page doesn't take down the browser. Isolation wins.",
+          "reveal": 1
+        },
+        {
+          "say": "Databases differ too. PostgreSQL uses a process per connection, MySQL a thread per connection.",
+          "reveal": 2
+        },
+        {
+          "say": "Now a classic trap. Two threads each declare int x equals zero inside a method and increment it. Race? No. Locals live on each thread's own stack.",
+          "reveal": 3
+        },
+        {
+          "say": "But if both increment a field on the same shared object, that's a race unless you synchronize. Recap: share cheaply, synchronize carefully.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s008",
+      "layout": "diagram",
+      "kicker": "Concept 3 of 26 · Book 12.3",
+      "title": "The six thread states",
+      "mermaid": "flowchart LR\n  N[\"NEW\"] -->|\"start()\"| R[\"RUNNABLE\"]\n  R -->|\"monitor busy\"| B[\"BLOCKED\"]\n  B --> R\n  R -->|\"wait / join / park\"| W[\"WAITING\"]\n  W --> R\n  R -->|\"sleep(t)\"| T[\"TIMED_WAITING\"]\n  T --> R\n  R -->|\"run() ends\"| X[\"TERMINATED\"]",
+      "caption": "BLOCKED waits for a monitor. WAITING waits for a signal.",
+      "steps": [
+        {
+          "say": "Java threads have exactly six states. NEW: created, but start hasn't been called.",
+          "reveal": 0
+        },
+        {
+          "say": "RUNNABLE: running or ready to run. Java has no separate running state.",
+          "reveal": 0
+        },
+        {
+          "say": "BLOCKED: waiting to enter a synchronized block that another thread holds.",
+          "reveal": 0
+        },
+        {
+          "say": "WAITING: waiting with no time limit for another thread, through wait, join, or park. TIMED WAITING is the same with a timeout, like sleep.",
+          "reveal": 0
+        },
+        {
+          "say": "TERMINATED: run has returned or thrown. A thread can never be restarted.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s009",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Reading a thread dump",
+      "table": {
+        "head": [
+          "What the program did",
+          "State printed"
+        ],
+        "rows": [
+          [
+            "new Thread(), not started",
+            "NEW"
+          ],
+          [
+            "Inside Thread.sleep(10 seconds)",
+            "TIMED_WAITING"
+          ],
+          [
+            "Inside latch.await()",
+            "WAITING"
+          ],
+          [
+            "Entering synchronized held by main",
+            "BLOCKED"
+          ],
+          [
+            "Busy computing",
+            "RUNNABLE"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The book's program drives one thread into each state and prints it. Straight after new Thread: NEW.",
+          "reveal": 1
+        },
+        {
+          "say": "Inside a ten-second sleep: TIMED WAITING.",
+          "reveal": 2
+        },
+        {
+          "say": "Inside a latch await, with no timeout: WAITING.",
+          "reveal": 3
+        },
+        {
+          "say": "Trying to enter a synchronized block that main holds: BLOCKED.",
+          "reveal": 4
+        },
+        {
+          "say": "Busy computing: RUNNABLE. Now picture a production dump with two hundred Tomcat threads all BLOCKED on one logger. That's a coarse lock bottleneck. Two mistakes to avoid: calling run instead of start, which runs on the current thread, and silently swallowing InterruptedException.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s010",
+      "layout": "table",
+      "kicker": "Concept 4 of 26 · Book 12.4",
+      "title": "Five ways to start work",
+      "table": {
+        "head": [
+          "Way",
+          "Returns a value?",
+          "Use when"
+        ],
+        "rows": [
+          [
+            "extends Thread",
+            "No",
+            "Almost never"
+          ],
+          [
+            "Runnable",
+            "No",
+            "Fire-and-forget task"
+          ],
+          [
+            "Callable",
+            "Yes, via Future",
+            "Need a result or exception"
+          ],
+          [
+            "ExecutorService",
+            "Future",
+            "Default: reuse threads"
+          ],
+          [
+            "Virtual threads",
+            "Future",
+            "Many blocking I/O tasks"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Think of it this way. A Runnable is the job description, a Thread is the worker, an ExecutorService is the staffing agency, and a Future is the receipt you collect the result with.",
+          "reveal": 1
+        },
+        {
+          "say": "Extending Thread mixes the task with the worker. Almost never do it.",
+          "reveal": 2
+        },
+        {
+          "say": "A Runnable is a task with no result. Fire and forget.",
+          "reveal": 3
+        },
+        {
+          "say": "A Callable returns a value and may throw checked exceptions. You get the value through a Future.",
+          "reveal": 4
+        },
+        {
+          "say": "An ExecutorService is the default choice. Submit tasks, and it reuses a bounded set of threads.",
+          "reveal": 5
+        },
+        {
+          "say": "Virtual threads, final in Java twenty-one, are cheap JVM-managed threads. When one blocks on I-O, the JVM unmounts it and its carrier thread runs another.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 12 · 12.4 Creating threads"
+    },
+    {
+      "id": "s011",
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Summing 1 to 100 with a Callable",
+      "bullets": [
+        "pool = newFixedThreadPool(2)",
+        "future = pool.submit(() -> sum of 1..100)  returns at once",
+        "future.get() blocks, then prints 5050",
+        "finally: shutdown() and awaitTermination()",
+        "10,000 sleepers: one virtual thread each, no pooling"
+      ],
+      "steps": [
+        {
+          "say": "Let's walk the book's example. Step one: create a fixed pool of two threads.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: submit a Callable that sums one to a hundred. Submit returns immediately with a Future.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: future dot get blocks until the answer is ready, and prints five thousand and fifty. If the task threw, get rethrows it wrapped in an ExecutionException.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: shut the pool down in a finally block. Forget it, and non-daemon pool threads keep the JVM alive.",
+          "reveal": 4
+        },
+        {
+          "say": "For ten thousand blocking tasks, use a virtual-thread-per-task executor. Never pool virtual threads. If a downstream needs a limit, add a semaphore. In the interview, say: I never manage raw threads in business code.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s012",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Is count++ on a volatile int thread-safe?",
+      "bullets": [
+        "Yes, volatile makes it atomic",
+        "No, volatile gives visibility only",
+        "Only on one core"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. If I mark count as volatile, is count plus plus now safe across threads? Hold that thought. We'll answer it in Part B.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s013",
+      "layout": "section",
+      "kicker": "Part B",
+      "title": "Part B: What goes wrong",
+      "steps": [
+        {
+          "say": "Part B: what goes wrong. And the quiz answer: no. Volatile gives visibility, not atomicity. Let's see why.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 12 · Part B — What goes wrong"
+    },
+    {
+      "id": "s014",
+      "layout": "twocol",
+      "kicker": "Concept 5 of 26 · Book 12.5",
+      "title": "Race conditions: the two shapes",
+      "left": {
+        "heading": "Read-modify-write",
+        "bullets": [
+          "count++ is really three steps",
+          "read, add one, write back",
+          "Two threads read the same old value"
+        ]
+      },
+      "right": {
+        "heading": "Check-then-act",
+        "bullets": [
+          "if seat is free, book it",
+          "Condition can change in between",
+          "Both see free, both book"
+        ]
+      },
+      "steps": [
+        {
+          "say": "A race condition is a bug where the result depends on the unlucky timing of threads. A critical section is the code that must run in one thread at a time.",
+          "reveal": 1
+        },
+        {
+          "say": "Shape one, read-modify-write. Count plus plus looks like one step, but it's three.",
+          "reveal": 2
+        },
+        {
+          "say": "Read count into a temporary, add one, write it back.",
+          "reveal": 3
+        },
+        {
+          "say": "If two threads read the same old value, one update is simply lost.",
+          "reveal": 4
+        },
+        {
+          "say": "Shape two, check-then-act. If the seat is free, book it.",
+          "reveal": 5
+        },
+        {
+          "say": "The condition can become false between the check and the act.",
+          "reveal": 6
+        },
+        {
+          "say": "Two threads both see free, and both book. That's a double booking.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Ch 12 · 12.5 Race conditions & critical sections"
+    },
+    {
+      "id": "s015",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Four threads, a million increments",
+      "table": {
+        "head": [
+          "Counter",
+          "Result"
+        ],
+        "rows": [
+          [
+            "Unsafe count++",
+            "Lost 680,044 updates"
+          ],
+          [
+            "synchronized increment",
+            "1,000,000"
+          ],
+          [
+            "AtomicInteger incrementAndGet",
+            "1,000,000"
+          ],
+          [
+            "Seat via compareAndSet(0, me)",
+            "Exactly one owner"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's the book's experiment. Four threads each increment a counter two hundred fifty thousand times. Expected: one million.",
+          "reveal": 1
+        },
+        {
+          "say": "The unsafe counter lost six hundred eighty thousand updates in one run. A different number every run, and that unpredictability is the race.",
+          "reveal": 2
+        },
+        {
+          "say": "Fix one: a synchronized method. Exactly one million.",
+          "reveal": 3
+        },
+        {
+          "say": "Fix two: an AtomicInteger, lock-free. Also exactly one million.",
+          "reveal": 4
+        },
+        {
+          "say": "And the seat: two threads try compare-and-set from zero to their id. Only one can win. The recipe: find shared mutable state, state its invariant, mark the critical section, and make it atomic, reads included.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s016",
+      "layout": "bullets",
+      "kicker": "Concept 6 of 26 · Book 12.6",
+      "title": "Java memory model: can thread B see it?",
+      "bullets": [
+        "Visibility: B may read a stale cached value",
+        "Reordering: compiler and CPU may reorder writes",
+        "Happens-before: X's effects are visible to Y",
+        "volatile: one field, visible and ordered",
+        "volatile is not atomic: count++ still races"
+      ],
+      "steps": [
+        {
+          "say": "The Java Memory Model, J-M-M, defines when one thread's write is guaranteed to be seen by another thread's read.",
+          "reveal": 1
+        },
+        {
+          "say": "Visibility first. Each core has caches, so thread B may keep reading an old value forever.",
+          "reveal": 2
+        },
+        {
+          "say": "Second, reordering. Compilers and CPUs may reorder instructions, as long as a single thread can't tell. Other threads can.",
+          "reveal": 3
+        },
+        {
+          "say": "The fix is a happens-before edge. If X happens-before Y, X's effects are visible to Y.",
+          "reveal": 4
+        },
+        {
+          "say": "Volatile is a field modifier that makes reads and writes of that one field visible and ordered.",
+          "reveal": 5
+        },
+        {
+          "say": "But it's not atomic. That's our quiz answer. Count plus plus on a volatile still loses updates.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 12 · 12.6 Java Memory Model basics"
+    },
+    {
+      "id": "s017",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Happens-before rules to quote",
+      "table": {
+        "head": [
+          "Rule",
+          "Meaning"
+        ],
+        "rows": [
+          [
+            "Monitor lock",
+            "Unlock happens-before later lock, same monitor"
+          ],
+          [
+            "Volatile",
+            "Write happens-before later read of that field"
+          ],
+          [
+            "Start and join",
+            "start() before thread runs; thread before join()"
+          ],
+          [
+            "Concurrent utilities",
+            "Queue put before take; countDown before await"
+          ],
+          [
+            "Transitivity",
+            "A before B, B before C, so A before C"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here are the rules worth quoting. Unlocking a monitor happens-before any later lock of the same monitor.",
+          "reveal": 1
+        },
+        {
+          "say": "A volatile write happens-before every later read of that field.",
+          "reveal": 2
+        },
+        {
+          "say": "Thread start happens-before everything the thread does. And everything a thread does happens-before another thread returns from join.",
+          "reveal": 3
+        },
+        {
+          "say": "Concurrent utilities give edges too. Putting into a blocking queue happens-before taking it out.",
+          "reveal": 4
+        },
+        {
+          "say": "And they chain. Now the example: a worker loops while running. Without volatile, the JIT may read running once and loop forever. With volatile, main's write of false is seen, and the book prints: volatile flag stopped worker, true. That's also why double-checked locking needs a volatile field.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s018",
+      "layout": "section",
+      "kicker": "Part C",
+      "title": "Part C: Locks",
+      "steps": [
+        {
+          "say": "Part C: locks. We'll climb from synchronized, to ReentrantLock, try-lock, read-write locks, and then decide how big each lock should be.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 12 · Part C — Locks"
+    },
+    {
+      "id": "s019",
+      "layout": "bullets",
+      "kicker": "Concept 7 of 26 · Book 12.7",
+      "title": "Mutex and synchronized",
+      "bullets": [
+        "Mutex: at most one holder at a time",
+        "Every Java object has a monitor (intrinsic lock)",
+        "Busy monitor: the thread goes BLOCKED",
+        "Released on exit, even by exception",
+        "Reentrant: holder can re-enter its own lock"
+      ],
+      "steps": [
+        {
+          "say": "A mutex, short for mutual-exclusion lock, can be held by at most one thread.",
+          "reveal": 1
+        },
+        {
+          "say": "In Java every object has a built-in mutex, called its monitor or intrinsic lock. The synchronized keyword takes it.",
+          "reveal": 2
+        },
+        {
+          "say": "If the monitor is free, you take it. If not, you go to the BLOCKED state until it's free.",
+          "reveal": 3
+        },
+        {
+          "say": "Leaving the block releases it automatically, even if an exception is thrown.",
+          "reveal": 4
+        },
+        {
+          "say": "And it's reentrant: the holder can enter synchronized code on the same object again without blocking itself.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 12 · 12.7 Mutex (mutual exclusion) and synchronized"
+    },
+    {
+      "id": "s020",
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "A shared cart, locked the right way",
+      "bullets": [
+        "private final Object lock = new Object()",
+        "add(item): synchronized (lock) { items.add(item) }",
+        "Don't lock 'this', strings or boxed Integers",
+        "Never do slow I/O while holding the lock"
+      ],
+      "steps": [
+        {
+          "say": "Imagine a shopping cart shared by threads. Step one: create a private final lock object, so no outside code can grab your lock.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: wrap add in synchronized on that lock. Keep the section tiny.",
+          "reveal": 2
+        },
+        {
+          "say": "Avoid locking on this, on string literals, or on boxed integers. Those may be shared across the whole JVM and cause mysterious deadlocks.",
+          "reveal": 3
+        },
+        {
+          "say": "And never call a slow service while holding it. What synchronized can't do: no timeout, no try-lock, no fairness. For those, we need the next tool.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s021",
+      "layout": "bullets",
+      "kicker": "Concept 8 of 26 · Book 12.8",
+      "title": "ReentrantLock: synchronized plus extras",
+      "bullets": [
+        "lock() then try { ... } finally { unlock() }",
+        "Hold count: lock twice, must unlock twice",
+        "tryLock() and tryLock(timeout)",
+        "lockInterruptibly() and optional fairness",
+        "Many Condition objects per lock"
+      ],
+      "steps": [
+        {
+          "say": "ReentrantLock is an explicit mutex with the same meaning as synchronized, plus extras. The pattern: call lock just before try, and unlock in finally. Always.",
+          "reveal": 1
+        },
+        {
+          "say": "Reentrant means the owner can take it again. A hold count goes up each time, and you must unlock as many times.",
+          "reveal": 2
+        },
+        {
+          "say": "Extra one: tryLock, now or with a timeout.",
+          "reveal": 3
+        },
+        {
+          "say": "Extra two: interruptible waiting and an optional fair mode, where the longest waiter goes next.",
+          "reveal": 4
+        },
+        {
+          "say": "Extra three: several Condition queues on one lock. We'll use those soon.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 12 · 12.8 ReentrantLock and reentrancy"
+    },
+    {
+      "id": "s022",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Withdraw calls canWithdraw",
+      "table": {
+        "head": [
+          "Step",
+          "Hold count"
+        ],
+        "rows": [
+          [
+            "withdraw(30) calls lock()",
+            "1"
+          ],
+          [
+            "It calls canWithdraw(), which calls lock()",
+            "2, no self-deadlock"
+          ],
+          [
+            "canWithdraw unlocks in finally",
+            "1"
+          ],
+          [
+            "withdraw unlocks in finally",
+            "0, lock is free"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Example: a bank account with balance one hundred. Withdraw thirty takes the lock. Hold count one.",
+          "reveal": 1
+        },
+        {
+          "say": "Inside, it calls canWithdraw, which also locks. Same thread, so the count goes to two. A non-reentrant lock would wait for itself forever.",
+          "reveal": 2
+        },
+        {
+          "say": "canWithdraw returns and unlocks. Back to one.",
+          "reveal": 3
+        },
+        {
+          "say": "Withdraw unlocks. Zero, the lock is free, and the balance is seventy, exactly as the book prints. Quick check: lock three times, unlock twice. Free? No, the count is still one.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s023",
+      "layout": "bullets",
+      "kicker": "Concept 9 of 26 · Book 12.9",
+      "title": "Try-lock and timed locking",
+      "bullets": [
+        "tryLock(): take it only if free right now",
+        "tryLock(100 ms): wait a bounded time",
+        "false: fail fast, report busy, or retry later",
+        "Several locks: on failure, release all, back off",
+        "Never unlock after a false"
+      ],
+      "steps": [
+        {
+          "say": "Plain lock waits forever. Try-lock lets a thread give up. Untimed tryLock takes the lock only if it's free right now.",
+          "reveal": 1
+        },
+        {
+          "say": "The timed version waits up to a limit, say a hundred milliseconds.",
+          "reveal": 2
+        },
+        {
+          "say": "If it returns false, you fall back. Return an error, say busy, or retry later.",
+          "reveal": 3
+        },
+        {
+          "say": "If you need several locks and one fails, release everything you hold, wait a random short time, and retry. That breaks deadlock, as we'll see.",
+          "reveal": 4
+        },
+        {
+          "say": "And never call unlock after tryLock returned false. You don't hold it.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 12 · 12.9 Try-lock & timed locking"
+    },
+    {
+      "id": "s024",
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Example: the busy printer",
+      "bullets": [
+        "main holds the printer lock",
+        "worker: printer.tryLock(100, MILLISECONDS)",
+        "100 ms pass, it returns false",
+        "worker prints 'busy, doing something else'"
+      ],
+      "steps": [
+        {
+          "say": "The book's example: a shared printer. Step one, main grabs the printer lock and holds it.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, a worker asks for it with a hundred-millisecond timeout.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, the time passes and tryLock returns false.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, the worker prints: printer busy for a hundred milliseconds, doing something else instead. No hung thread. Ticketing works the same way: if someone else's checkout holds the seat, you're told at once.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s025",
+      "layout": "bullets",
+      "kicker": "Concept 10 of 26 · Book 12.10",
+      "title": "Read-write locks and StampedLock",
+      "bullets": [
+        "Read lock: many readers together",
+        "Write lock: one writer, no readers",
+        "Downgrade write to read: allowed",
+        "Upgrade read to write: self-deadlock",
+        "StampedLock: optimistic read, then validate"
+      ],
+      "steps": [
+        {
+          "say": "With a plain mutex, readers block each other, even though reading changes nothing. A read-write lock is a pair of locks.",
+          "reveal": 1
+        },
+        {
+          "say": "The read lock is shared. Many readers can hold it at once.",
+          "reveal": 2
+        },
+        {
+          "say": "The write lock is exclusive. One writer, and no readers.",
+          "reveal": 3
+        },
+        {
+          "say": "In ReentrantReadWriteLock, a writer may downgrade, taking the read lock before releasing the write lock.",
+          "reveal": 4
+        },
+        {
+          "say": "But a reader may not upgrade. It would wait for all readers to leave, including itself. Self-deadlock.",
+          "reveal": 5
+        },
+        {
+          "say": "StampedLock adds optimistic reads. Grab a stamp with no locking, copy the fields to locals, then validate. If a writer slipped in, retry with a real read lock. It's not reentrant.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 12 · 12.10 Read-write locks: ReadWriteLock and StampedLock"
+    },
+    {
+      "id": "s026",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "A config store read 1,000 times a second",
+      "table": {
+        "head": [
+          "Event",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "3 readers call get()",
+            "All hold the read lock at once"
+          ],
+          [
+            "Admin calls put()",
+            "Waits until readers leave"
+          ],
+          [
+            "Writer holds the write lock",
+            "New readers wait"
+          ],
+          [
+            "Point x=3, y=4 optimistic read",
+            "validate true, distance 5.0"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Imagine a config store read a thousand times a second and changed once an hour. Three readers call get together, and the book proves all three held the read lock at the same time.",
+          "reveal": 1
+        },
+        {
+          "say": "An admin calls put. It waits until there are no readers.",
+          "reveal": 2
+        },
+        {
+          "say": "While it writes, new readers wait. Writes are rare, so that's cheap.",
+          "reveal": 3
+        },
+        {
+          "say": "And StampedLock: a point at three, four. The optimistic read validates, and the distance is five. If writes are frequent, or sections tiny, a plain mutex can actually be faster.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s027",
+      "layout": "twocol",
+      "kicker": "Concept 11 of 26 · Book 12.11",
+      "title": "Coarse-grained versus fine-grained",
+      "left": {
+        "heading": "Coarse",
+        "bullets": [
+          "One lock for the whole lot",
+          "Simple, low deadlock risk",
+          "One thread at a time"
+        ]
+      },
+      "right": {
+        "heading": "Fine",
+        "bullets": [
+          "A lock per floor, seat, or stripe",
+          "Parallel on different parts",
+          "Needs a global lock order"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Coarse-grained locking means one lock protects a lot of state.",
+          "reveal": 1
+        },
+        {
+          "say": "It's simple, and with one lock there's little deadlock risk.",
+          "reveal": 2
+        },
+        {
+          "say": "But only one thread works at a time.",
+          "reveal": 3
+        },
+        {
+          "say": "Fine-grained locking means many locks, each guarding a small piece: per floor, per seat, or per stripe of a hash map.",
+          "reveal": 4
+        },
+        {
+          "say": "Threads touching different parts run in parallel.",
+          "reveal": 5
+        },
+        {
+          "say": "The cost: more complexity, and you must always take multiple locks in one global order.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Ch 12 · 12.11 Coarse-grained vs fine-grained locking"
+    },
+    {
+      "id": "s028",
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Parking lot: from one lock to many",
+      "bullets": [
+        "1. Start coarse: synchronized park(). Measure",
+        "2. Contention at 8 gates? Split by floor",
+        "3. Big maps: striping, item i uses lock hash(i) % N",
+        "4. Multi-seat booking: lock seats in sorted order",
+        "5. Keep slow work outside every lock"
+      ],
+      "steps": [
+        {
+          "say": "Let's walk the recipe on a parking lot with eight entry gates. Step one: start coarse, one synchronized park method. Correct. Measure it.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: profiling shows all eight gates queuing. Split the lock per floor, since floors don't share invariants.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: for big maps, use lock striping. N locks, and item i uses lock hash of i mod N.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: when one operation needs several fine locks, like seats A1 and A2, always lock in sorted order.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five: do slow work like I-O outside the lock. In the interview, say: correct first, then fine-grained only where contention is measured.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s029",
+      "layout": "section",
+      "kicker": "Part D",
+      "title": "Part D: Coordination",
+      "steps": [
+        {
+          "say": "Part D: coordination. Tools that make threads wait for each other: semaphores, condition variables, latches and barriers.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 12 · Part D — Coordination"
+    },
+    {
+      "id": "s030",
+      "layout": "bullets",
+      "kicker": "Concept 12 of 26 · Book 12.12",
+      "title": "Semaphores: a box of permits",
+      "bullets": [
+        "new Semaphore(n): n permits",
+        "acquire(): take one, or wait if none",
+        "release(): give one back, wake a waiter",
+        "Use 1: cap concurrency at N",
+        "Use 2: zero permits as a signal",
+        "No owner: any thread may release"
+      ],
+      "steps": [
+        {
+          "say": "A semaphore holds a number of permits. Create it with n.",
+          "reveal": 1
+        },
+        {
+          "say": "Acquire takes a permit, or waits if none are left.",
+          "reveal": 2
+        },
+        {
+          "say": "Release gives one back and wakes a waiter. Always release in finally, after a successful acquire.",
+          "reveal": 3
+        },
+        {
+          "say": "First use: cap concurrency. At most N threads use a resource.",
+          "reveal": 4
+        },
+        {
+          "say": "Second use: start with zero permits, and acquire becomes wait until someone signals.",
+          "reveal": 5
+        },
+        {
+          "say": "Unlike a lock, it has no owner. Any thread can release, so a bug can create extra permits.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Ch 12 · 12.12 Semaphores"
+    },
+    {
+      "id": "s031",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "10 queries, 3 database connections",
+      "table": {
+        "head": [
+          "Moment",
+          "Permits left",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "Queries 1 to 3 acquire",
+            "0",
+            "They run"
+          ],
+          [
+            "Queries 4 to 10 acquire",
+            "0",
+            "They wait"
+          ],
+          [
+            "Query 1 releases in finally",
+            "1",
+            "Query 4 starts"
+          ],
+          [
+            "All done",
+            "3",
+            "Peak in use: never above 3"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Example: ten queries on ten threads, but only three database connections. Queries one to three acquire and run.",
+          "reveal": 1
+        },
+        {
+          "say": "Queries four to ten find zero permits and wait.",
+          "reveal": 2
+        },
+        {
+          "say": "Thirty milliseconds later query one releases in finally, and query four starts.",
+          "reveal": 3
+        },
+        {
+          "say": "The book prints: ten queries done, never more than three at once. That's the bulkhead pattern, and with virtual threads it's the recommended way to protect a slow downstream.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s032",
+      "layout": "bullets",
+      "kicker": "Concept 13 of 26 · Book 12.13",
+      "title": "The condition-variable loop",
+      "steps": [
+        {
+          "say": "A condition variable lets a thread sleep until some condition on shared state becomes true. Built-in: wait and notifyAll inside synchronized. Explicit: a Condition from a ReentrantLock, with await and signal.",
+          "reveal": 1
+        },
+        {
+          "say": "Memorize the loop. Take the lock. While the condition is false, wait. Waiting releases the lock and sleeps, and on waking it re-takes the lock and checks again.",
+          "reveal": 4
+        },
+        {
+          "say": "Why while and not if? Spurious wakeups are allowed, another thread may grab the state first, and with notifyAll several wake but only one can win.",
+          "reveal": 5
+        },
+        {
+          "say": "Once true, act, then notify anyone waiting for what you changed. With one monitor, prefer notifyAll. Plain notify can wake the wrong kind of thread, and everyone sleeps forever.",
+          "reveal": 6
+        }
+      ],
+      "bullets": [
+        "Sleep until a condition on shared state is true",
+        "Take the lock; while condition is false: wait",
+        "wait() releases the lock and sleeps",
+        "Woken: re-take the lock, check again",
+        "Why while, never if: spurious wakeups, rivals",
+        "Then act, and notifyAll() or signal()"
+      ]
+    },
+    {
+      "id": "s033",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "A one-slot mailbox",
+      "table": {
+        "head": [
+          "Call",
+          "Slot",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "take() first",
+            "empty",
+            "while empty: wait"
+          ],
+          [
+            "put(m1)",
+            "m1",
+            "notifyAll wakes taker"
+          ],
+          [
+            "put(m2)",
+            "m1",
+            "while full: wait"
+          ],
+          [
+            "take() returns m1",
+            "empty",
+            "notifyAll wakes putter"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Example: a mailbox with one slot. The taker arrives first. The slot is empty, so it waits.",
+          "reveal": 1
+        },
+        {
+          "say": "The putter puts m1 and calls notifyAll. The taker wakes.",
+          "reveal": 2
+        },
+        {
+          "say": "The putter tries m2, but the slot's full, so it waits.",
+          "reveal": 3
+        },
+        {
+          "say": "The taker takes m1, empties the slot, and notifies. The putter wakes. The book prints m1, m2, m3 in order. With ReentrantLock you'd use two Conditions, not full and not empty, exactly what ArrayBlockingQueue does inside.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s034",
+      "layout": "twocol",
+      "kicker": "Concept 14 of 26 · Book 12.14",
+      "title": "CountDownLatch versus CyclicBarrier",
+      "left": {
+        "heading": "CountDownLatch(n)",
+        "bullets": [
+          "One-time gate",
+          "Anyone calls countDown()",
+          "Opens at zero, never resets"
+        ]
+      },
+      "right": {
+        "heading": "CyclicBarrier(n)",
+        "bullets": [
+          "Reusable meeting point",
+          "n threads call await()",
+          "Resets each phase, runs an action"
+        ]
+      },
+      "steps": [
+        {
+          "say": "A CountDownLatch is a one-time gate.",
+          "reveal": 1
+        },
+        {
+          "say": "Any thread can count down, and waiting threads block in await.",
+          "reveal": 2
+        },
+        {
+          "say": "When the count hits zero the gate opens for good. It can't be reset.",
+          "reveal": 3
+        },
+        {
+          "say": "A CyclicBarrier is a reusable meeting point.",
+          "reveal": 4
+        },
+        {
+          "say": "The n threads themselves call await and wait for each other.",
+          "reveal": 5
+        },
+        {
+          "say": "When the last arrives, an optional action runs once, everyone's released, and it resets for the next phase.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Ch 12 · 12.14 CountDownLatch and CyclicBarrier"
+    },
+    {
+      "id": "s035",
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Start-up gate and phased workers",
+      "bullets": [
+        "Latch(3): db, cache, search each countDown()",
+        "main: await(2 seconds) returns true, count 0",
+        "Barrier(3): 3 workers finish phase 1, then meet",
+        "Last arrival prints 'phase 1 complete', resets",
+        "Put countDown() in finally, use timeouts"
+      ],
+      "steps": [
+        {
+          "say": "Example one: an app must not accept traffic until three services are up. A latch of three. Database, cache and search each count down after warming up.",
+          "reveal": 1
+        },
+        {
+          "say": "Main awaits with a two-second timeout. It returns true, count zero.",
+          "reveal": 2
+        },
+        {
+          "say": "Example two: three workers run a simulation in phases. A barrier of three. Each finishes phase one and awaits.",
+          "reveal": 3
+        },
+        {
+          "say": "The last to arrive runs the action, phase one complete, and the barrier resets for phase two.",
+          "reveal": 4
+        },
+        {
+          "say": "Watch out: if a worker throws before counting down, main waits forever. Count down in finally. Remember: latch waits for N events, barrier waits for N threads.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s036",
+      "layout": "section",
+      "kicker": "Part E",
+      "title": "Part E: Lock-free",
+      "steps": [
+        {
+          "say": "Part E: lock-free tools. Compare-and-swap, atomics, and the concurrent collections built on them.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 12 · Part E — Lock-free"
+    },
+    {
+      "id": "s037",
+      "layout": "bullets",
+      "kicker": "Concept 15 of 26 · Book 12.15",
+      "title": "The compare-and-swap retry loop",
+      "steps": [
+        {
+          "say": "Compare-and-swap, or CAS, is a single CPU instruction. If the value is still what I expected, replace it and report success. Otherwise change nothing and report failure.",
+          "reveal": 1
+        },
+        {
+          "say": "The retry loop: read the current value, compute the new value, then compare-and-set. If it fails, another thread got there first, so read again and retry.",
+          "reveal": 4
+        },
+        {
+          "say": "Java wraps it in AtomicInteger, AtomicLong, AtomicReference and friends. No thread ever blocks another, so there's no deadlock.",
+          "reveal": 5
+        },
+        {
+          "say": "For very hot counters, LongAdder spreads updates over several cells and sums them on read. Much faster under contention.",
+          "reveal": 6
+        }
+      ],
+      "bullets": [
+        "CAS: if value still equals expected, replace it",
+        "Read current, compute next",
+        "compareAndSet(current, next)",
+        "false: someone changed it, so retry",
+        "AtomicInteger, AtomicLong, AtomicReference",
+        "Very hot counters: LongAdder"
+      ]
+    },
+    {
+      "id": "s038",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Two threads, counter at 5",
+      "table": {
+        "head": [
+          "Step",
+          "Thread A",
+          "Thread B"
+        ],
+        "rows": [
+          [
+            "1. Read",
+            "sees 5",
+            "sees 5"
+          ],
+          [
+            "2. CAS(5, 6)",
+            "succeeds, now 6",
+            "fails: value is 6"
+          ],
+          [
+            "3. Retry",
+            "done",
+            "reads 6, CAS(6, 7) succeeds"
+          ],
+          [
+            "ABA: A to B to A",
+            "plain CAS succeeds",
+            "AtomicStampedReference fails"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's trace it. A counter at five. Threads A and B both read five.",
+          "reveal": 1
+        },
+        {
+          "say": "A's compare-and-set from five to six succeeds. B's fails, because the value's now six.",
+          "reveal": 2
+        },
+        {
+          "say": "B retries: reads six, sets seven. Nothing lost.",
+          "reveal": 3
+        },
+        {
+          "say": "One trap, the A-B-A problem. A value goes A, then B, then back to A. A plain CAS can't tell. The fix is a version stamp, with AtomicStampedReference. The book shows plain CAS true, stamped CAS false. And CAS covers one variable. For two, use a lock, or put both in one immutable object and CAS the reference.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s039",
+      "layout": "table",
+      "kicker": "Concept 16 of 26 · Book 12.16",
+      "title": "Concurrent collections by need",
+      "table": {
+        "head": [
+          "Need",
+          "Use"
+        ],
+        "rows": [
+          [
+            "Shared map",
+            "ConcurrentHashMap"
+          ],
+          [
+            "Sorted map",
+            "ConcurrentSkipListMap"
+          ],
+          [
+            "Read-mostly list",
+            "CopyOnWriteArrayList"
+          ],
+          [
+            "Non-blocking queue",
+            "ConcurrentLinkedQueue"
+          ],
+          [
+            "Hand-off between threads",
+            "Bounded BlockingQueue"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Wrapping a HashMap in one lock makes every access wait in line. Concurrent collections let threads work on different parts at once. For a shared map: ConcurrentHashMap. Reads take no lock, writes lock one bin, and no nulls are allowed.",
+          "reveal": 1
+        },
+        {
+          "say": "Sorted: ConcurrentSkipListMap.",
+          "reveal": 2
+        },
+        {
+          "say": "A list read far more than written, like listeners: CopyOnWriteArrayList. Every write copies the array, and iteration uses a snapshot.",
+          "reveal": 3
+        },
+        {
+          "say": "A non-blocking queue: ConcurrentLinkedQueue. Poll returns null when empty.",
+          "reveal": 4
+        },
+        {
+          "say": "To hand work between threads: a bounded BlockingQueue. Put waits when full, take waits when empty.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 12 · 12.16 Concurrent collections"
+    },
+    {
+      "id": "s040",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Replace check-then-act with one call",
+      "table": {
+        "head": [
+          "Racy",
+          "Atomic"
+        ],
+        "rows": [
+          [
+            "if absent, put(k, v)",
+            "putIfAbsent(k, v)"
+          ],
+          [
+            "put(k, get(k) + 1)",
+            "merge(k, 1, Integer::sum)"
+          ],
+          [
+            "if null, create and put",
+            "computeIfAbsent(k, ...)"
+          ],
+          [
+            "seat A1 for bob",
+            "first returns null, second 'bob'"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The key move: replace check-then-act with one atomic method. If absent then put becomes putIfAbsent.",
+          "reveal": 1
+        },
+        {
+          "say": "Get, add one, put becomes merge. Four threads counting words get exact totals: apple twelve thousand.",
+          "reveal": 2
+        },
+        {
+          "say": "Lazy creation becomes computeIfAbsent. The function runs exactly once if the key is absent.",
+          "reveal": 3
+        },
+        {
+          "say": "Seats: putIfAbsent A1 for bob returns null, you won. The second caller gets bob back, already taken. But remember: single calls are atomic, sequences of calls are not.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s041",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Alice locks A then B, Bob B then A. What happens?",
+      "bullets": [
+        "Both finish, just slower",
+        "They can wait on each other forever",
+        "Java detects it and recovers"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Alice's thread locks account A then B. Bob's locks B then A, at the same moment. What can happen? Answer coming up in Part F.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s042",
+      "layout": "section",
+      "kicker": "Part F",
+      "title": "Part F: Liveness failures",
+      "steps": [
+        {
+          "say": "Part F: liveness failures. The answer: they can wait on each other forever. That's deadlock, and Java won't rescue you.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 12 · Part F — Liveness failures"
+    },
+    {
+      "id": "s043",
+      "layout": "table",
+      "kicker": "Concept 17 of 26 · Book 12.17",
+      "title": "Deadlock: the four Coffman conditions",
+      "table": {
+        "head": [
+          "Condition",
+          "Break it with"
+        ],
+        "rows": [
+          [
+            "Mutual exclusion",
+            "Lock-free or immutable data"
+          ],
+          [
+            "Hold and wait",
+            "tryLock, release all on failure"
+          ],
+          [
+            "No preemption",
+            "Timeouts, lock leases"
+          ],
+          [
+            "Circular wait",
+            "Global lock ordering"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "A deadlock is when threads each wait forever for something another one holds. It needs all four Coffman conditions at once. Break any one, and it's impossible.",
+          "reveal": 1
+        },
+        {
+          "say": "One, mutual exclusion: only one thread can hold the resource. Break it with lock-free or immutable data.",
+          "reveal": 2
+        },
+        {
+          "say": "Two, hold and wait: you hold one lock while waiting for another. Break it with tryLock, releasing everything on failure.",
+          "reveal": 3
+        },
+        {
+          "say": "Three, no preemption: nobody can take a lock away. Break it with timeouts or leases that expire.",
+          "reveal": 4
+        },
+        {
+          "say": "Four, circular wait: a cycle of waiting. Break it with a global lock order, like always locking the lower id first.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Ch 12 · 12.17 Deadlock"
+    },
+    {
+      "id": "s044",
+      "layout": "diagram",
+      "kicker": "Example",
+      "title": "Alice and Bob's transfers",
+      "mermaid": "flowchart LR\n  X[\"thread-X holds lock A\"] -->|\"waits for lock B\"| Y[\"thread-Y holds lock B\"]\n  Y -->|\"waits for lock A\"| X",
+      "caption": "Fix: always lock the smaller account id first.",
+      "steps": [
+        {
+          "say": "Here's our quiz. Thread X holds lock A and waits for B. Thread Y holds B and waits for A. A cycle. The book's program detects it: deadlock between thread X and thread Y, both BLOCKED.",
+          "reveal": 0
+        },
+        {
+          "say": "Fix one, lock ordering. Every transfer locks the smaller account id first, whatever the direction. Now both threads queue for A, so no cycle. Fifty thousand transfers each way finish, and total money stays two thousand.",
+          "reveal": 0
+        },
+        {
+          "say": "Fix two, tryLock with random back-off, which breaks hold and wait. In production, find deadlocks with a thread dump from jstack. And never call a listener while holding your own lock.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s045",
+      "layout": "bullets",
+      "kicker": "Concept 18 of 26 · Book 12.18",
+      "title": "Livelock: busy but going nowhere",
+      "bullets": [
+        "Threads run and react, but make no progress",
+        "T1: take A, try B, fail, release A",
+        "T2: take B, try A, fail, release B",
+        "Both retry at once, forever",
+        "Fix: random or exponential back-off"
+      ],
+      "steps": [
+        {
+          "say": "A livelock is when threads aren't blocked. They keep running and reacting to each other, but nothing gets done. Like two people in a corridor stepping aside the same way, again and again.",
+          "reveal": 1
+        },
+        {
+          "say": "It often comes from deadlock avoidance. Thread one takes A, tries B, fails, releases A.",
+          "reveal": 2
+        },
+        {
+          "say": "Thread two does the mirror image with B.",
+          "reveal": 3
+        },
+        {
+          "say": "If both retry immediately on the same rhythm, they collide forever. Their state is RUNNABLE, not BLOCKED.",
+          "reveal": 4
+        },
+        {
+          "say": "The fix is to break the symmetry: a random back-off, an exponential back-off with jitter, or a tie-breaker like the older transaction wins. Ethernet has done exactly this for decades.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 12 · 12.18 Livelock"
+    },
+    {
+      "id": "s046",
+      "layout": "bullets",
+      "kicker": "Concept 19 of 26 · Book 12.19",
+      "title": "Starvation and fairness",
+      "bullets": [
+        "Some thread never gets a turn, others progress",
+        "Example: writer behind endless readers",
+        "Fix: fair locks, longest waiter next",
+        "Fix: short sections, separate pools",
+        "Cost: fairness lowers throughput"
+      ],
+      "steps": [
+        {
+          "say": "Starvation is when one thread waits indefinitely because others keep winning, even though the system as a whole progresses.",
+          "reveal": 1
+        },
+        {
+          "say": "Example: a config cache with a constant stream of readers. In non-fair mode the writer may never get the write lock.",
+          "reveal": 2
+        },
+        {
+          "say": "Fix one: a fair lock, where the longest waiter goes next. New ReentrantReadWriteLock with true, or a fair semaphore.",
+          "reveal": 3
+        },
+        {
+          "say": "Fix two: keep critical sections short, and give slow work its own pool.",
+          "reveal": 4
+        },
+        {
+          "say": "Fairness costs throughput, so use it only where starvation is real. Recap the trio: deadlock, nobody progresses. Livelock, everybody runs but nobody progresses. Starvation, some progress while one never does.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 12 · 12.19 Starvation (and fairness)"
+    },
+    {
+      "id": "s047",
+      "layout": "section",
+      "kicker": "Part G",
+      "title": "Part G: Concurrency patterns",
+      "steps": [
+        {
+          "say": "Part G: five patterns built from those tools. Signaling, thread pool, producer-consumer, reader-writer, and immutability with confinement.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 12 · Part G — Concurrency patterns"
+    },
+    {
+      "id": "s048",
+      "layout": "table",
+      "kicker": "Concept 20 of 26 · Book 12.20",
+      "title": "Signaling: B must run after A",
+      "table": {
+        "head": [
+          "Tool",
+          "Reusable",
+          "Carries a value",
+          "Good for"
+        ],
+        "rows": [
+          [
+            "Semaphore(0)",
+            "Yes",
+            "No",
+            "Repeated hand-offs"
+          ],
+          [
+            "CountDownLatch(1)",
+            "No",
+            "No",
+            "One-time ready or go"
+          ],
+          [
+            "CompletableFuture",
+            "No",
+            "Yes",
+            "Here is the result"
+          ],
+          [
+            "Condition variable",
+            "Yes",
+            "Via state",
+            "Complex conditions"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Signaling means one thread tells another that an event happened, like a relay baton. A semaphore with zero permits is reusable: each release is one signal.",
+          "reveal": 1
+        },
+        {
+          "say": "A latch of one is a one-time ready, go.",
+          "reveal": 2
+        },
+        {
+          "say": "A CompletableFuture carries a value: here's the result.",
+          "reveal": 3
+        },
+        {
+          "say": "A condition variable handles complex conditions. Example from the book: thread B, send email, starts first but acquires a zero-permit semaphore and waits. Thread A charges payment, then releases. Payment always prints first. The danger is a bare notify fired before anyone waits. That signal is lost. Semaphores and latches remember.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Ch 12 · 12.20 Signaling pattern"
+    },
+    {
+      "id": "s049",
+      "layout": "diagram",
+      "kicker": "Concept 21 of 26 · Book 12.21",
+      "title": "Thread pool: workers, queue, rejection",
+      "mermaid": "flowchart LR\n  C[\"Clients submit tasks\"] --> Q[\"Bounded task queue\"]\n  Q --> W1[\"worker-1\"]\n  Q --> W2[\"worker-2\"]\n  Q --> W3[\"worker-3\"]\n  Q -->|\"queue full\"| R[\"Rejection policy\"]",
+      "caption": "Bound the threads, bound the queue, choose a policy.",
+      "steps": [
+        {
+          "say": "A thread pool is a fixed set of worker threads taking tasks from a shared queue, reusing threads instead of creating one per task.",
+          "reveal": 0
+        },
+        {
+          "say": "Each worker loops: take a task, run it. To stop, the book's hand-made pool sends one poison pill per worker, a marker task that means stop now.",
+          "reveal": 0
+        },
+        {
+          "say": "Size it by workload. CPU-bound: about the number of cores. I-O-bound: cores times one plus wait over compute.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s050",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Pool: core 2, max 4, queue 100",
+      "table": {
+        "head": [
+          "Tasks in flight",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "Tasks 1 and 2",
+            "New core threads"
+          ],
+          [
+            "Tasks 3 to 102",
+            "Wait in the queue"
+          ],
+          [
+            "Tasks 103 and 104",
+            "Extra threads, up to max 4"
+          ],
+          [
+            "Task 105",
+            "CallerRunsPolicy: submitter runs it"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Walk through a real config: core two, max four, a bounded queue of a hundred. Tasks one and two each get a new core thread.",
+          "reveal": 1
+        },
+        {
+          "say": "Tasks three to a hundred and two wait in the queue. Notice: no extra threads yet.",
+          "reveal": 2
+        },
+        {
+          "say": "Only when the queue is full do tasks a hundred and three and four get extra threads, up to the max of four.",
+          "reveal": 3
+        },
+        {
+          "say": "Task a hundred and five is rejected, and CallerRunsPolicy makes the submitter run it, which slows the producer. That's back-pressure. Avoid newFixedThreadPool for untrusted load: its queue is unbounded.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s051",
+      "layout": "diagram",
+      "kicker": "Concept 22 of 26 · Book 12.22",
+      "title": "Producer-consumer with a bounded queue",
+      "mermaid": "flowchart LR\n  P[\"Producer\"] -->|\"put: waits if full\"| Q[\"BlockingQueue capacity 10\"]\n  Q -->|\"take: waits if empty\"| C1[\"Consumer 1\"]\n  Q -->|\"take\"| C2[\"Consumer 2\"]",
+      "caption": "Back-pressure for free. One poison pill per consumer.",
+      "steps": [
+        {
+          "say": "Producers put work items into a shared buffer. Consumers take them out. The buffer decouples their speeds.",
+          "reveal": 0
+        },
+        {
+          "say": "Use a bounded BlockingQueue. Put waits when full, so a slow consumer pushes back instead of memory exploding. Take waits when empty, so nobody busy-polls.",
+          "reveal": 0
+        },
+        {
+          "say": "The book's example: one producer puts one to a thousand into a queue of ten. Two consumers add them up. Then the producer puts two poison pills, one per consumer. The sum is exactly five hundred thousand five hundred.",
+          "reveal": 0
+        },
+        {
+          "say": "Send only one pill, and the second consumer hangs forever. Kafka is this same pattern across machines.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s052",
+      "layout": "twocol",
+      "kicker": "Concept 23 of 26 · Book 12.23",
+      "title": "Reader-writer: two ways",
+      "left": {
+        "heading": "Read-write lock",
+        "bullets": [
+          "Readers share the read lock",
+          "Writer updates in place",
+          "Readers see latest data"
+        ]
+      },
+      "right": {
+        "heading": "Copy-on-write snapshot",
+        "bullets": [
+          "Immutable map in a volatile field",
+          "Writer copies, then swaps",
+          "Readers never block"
+        ]
+      },
+      "steps": [
+        {
+          "say": "The reader-writer pattern: many readers at once, but a writer needs exclusive access. Way one, a read-write lock.",
+          "reveal": 1
+        },
+        {
+          "say": "Readers share the read lock.",
+          "reveal": 2
+        },
+        {
+          "say": "The writer takes the write lock and updates in place, so readers always see the latest data. Good for bigger data with more frequent writes.",
+          "reveal": 3
+        },
+        {
+          "say": "Way two, a copy-on-write snapshot. Keep an immutable map in a volatile field.",
+          "reveal": 4
+        },
+        {
+          "say": "A writer copies the map, adds the change, and swaps the reference. Example: a feature-flag service. Reload adds dark mode on, builds a new map, and publishes it with one volatile write.",
+          "reveal": 5
+        },
+        {
+          "say": "Readers just read the field, with no lock at all. They may see a snapshot a moment old, but always a complete one, because the volatile write happens-before their read.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Ch 12 · 12.23 Reader-writer pattern"
+    },
+    {
+      "id": "s053",
+      "layout": "twocol",
+      "kicker": "Concept 24 of 26 · Book 12.24",
+      "title": "No shared mutable state, no races",
+      "left": {
+        "heading": "Immutability",
+        "bullets": [
+          "Final class or record",
+          "All fields private final",
+          "Defensive copy inputs",
+          "withItem() returns new object"
+        ]
+      },
+      "right": {
+        "heading": "Thread confinement",
+        "bullets": [
+          "Local variables",
+          "ThreadLocal, remove() in pools"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Races need state that's both shared and mutable. Remove either word, and races are impossible. Immutability removes mutable. Step one: make the class final, or a record.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: all fields private and final.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: defensive-copy mutable inputs. The book's Order record copies its items list, so a caller adding hacked later can't change it.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: no setters. Modifiers return new objects. Order one stays pen, while withItem book returns order two with pen and book.",
+          "reveal": 4
+        },
+        {
+          "say": "Confinement removes shared. Locals live on one thread's stack.",
+          "reveal": 5
+        },
+        {
+          "say": "ThreadLocal gives each thread its own copy, like a string builder per thread, printing hello T1 and hello T2. Call remove in pooled threads, or values leak into the next task.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Ch 12 · 12.24 Immutability & thread confinement"
+    },
+    {
+      "id": "s054",
+      "layout": "section",
+      "kicker": "Part H",
+      "title": "Part H: Concurrency in LLD interviews",
+      "steps": [
+        {
+          "say": "Part H: where it all pays off. Parking, seat booking, and inventory, the way interviewers test them.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 12 · Part H — Concurrency in LLD interviews"
+    },
+    {
+      "id": "s055",
+      "layout": "bullets",
+      "kicker": "Concept 25 of 26 · Book 12.25",
+      "title": "The six-step recipe",
+      "bullets": [
+        "1. Name the shared mutable state",
+        "2. State the invariant",
+        "3. Find the critical operation",
+        "4. Pick the smallest atomic tool",
+        "5. Choose granularity",
+        "6. Handle time: holds, expiry, idempotent retries"
+      ],
+      "steps": [
+        {
+          "say": "Here's the recipe, applied to movie seat booking. Step one, name the shared mutable state: the map from seat to owner.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, state the invariant: a seat has at most one booking.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, find the critical operation: check the seats are free, then book them. Check-then-act.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, pick the smallest tool that makes it atomic. For several seats all-or-nothing: one lock per seat, taken in sorted order.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, granularity: per show or per seat, never one global lock across all shows.",
+          "reveal": 5
+        },
+        {
+          "say": "Step six, handle time. Hold seats ten minutes during payment, with an expiry, and make retries idempotent, meaning repeating has the same effect as doing it once.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Ch 12 · 12.25 How concurrency shows up in LLD interviews"
+    },
+    {
+      "id": "s056",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Three races, three smallest tools",
+      "table": {
+        "head": [
+          "Case",
+          "Tool",
+          "Result in the book"
+        ],
+        "rows": [
+          [
+            "Parking: 100 cars, 10 spots",
+            "Free-spot queue, poll()",
+            "10 parked, 10 distinct"
+          ],
+          [
+            "Seat A2: 50 users",
+            "Per-seat locks",
+            "1 booking"
+          ],
+          [
+            "Alice {A3,A4} vs Bob {A4,A3}",
+            "Locks in sorted order",
+            "1 winner, no deadlock"
+          ],
+          [
+            "Stock: 200 buyers, 50 items",
+            "AtomicInteger CAS loop",
+            "50 sold, 0 left"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Now the book's program. Parking: a hundred cars race for ten spots. Free spots sit in a lock-free queue per type, and poll is one atomic remove. Ten parked, ten distinct spots.",
+          "reveal": 1
+        },
+        {
+          "say": "Seat A2: fifty users want it. Per-seat locks. Exactly one booking.",
+          "reveal": 2
+        },
+        {
+          "say": "Alice books A3 and A4, Bob books A4 and A3, opposite order. Both lock in sorted order, so exactly one wins and nobody deadlocks.",
+          "reveal": 3
+        },
+        {
+          "say": "Inventory: two hundred buyers, fifty in stock. A CAS loop decrements only if enough is left. Fifty sold, zero left, never oversold. On ten servers, JVM locks don't cross machines, so say: a conditional database update, a unique constraint, or a distributed lock with a lease.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s057",
+      "layout": "table",
+      "kicker": "Concept 26 of 26 · Book 12.26",
+      "title": "Choosing the right tool",
+      "table": {
+        "head": [
+          "I need to",
+          "Use"
+        ],
+        "rows": [
+          [
+            "Count shared hits",
+            "AtomicInteger, LongAdder if hot"
+          ],
+          [
+            "Make a multi-step update atomic",
+            "synchronized or ReentrantLock"
+          ],
+          [
+            "Cap access to N",
+            "Semaphore(N)"
+          ],
+          [
+            "Wait for N events once",
+            "CountDownLatch"
+          ],
+          [
+            "Hand work between threads",
+            "Bounded BlockingQueue"
+          ],
+          [
+            "Avoid locking entirely",
+            "Immutability, confinement"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Finally, the cheat sheet. Counting? An atomic integer, or LongAdder if it's very hot.",
+          "reveal": 1
+        },
+        {
+          "say": "A multi-step update? Synchronized or ReentrantLock. Need to give up if busy? tryLock with a timeout.",
+          "reveal": 2
+        },
+        {
+          "say": "Limit concurrent access to N? A semaphore.",
+          "reveal": 3
+        },
+        {
+          "say": "Wait for N events once? A latch. N threads meeting each phase? A barrier.",
+          "reveal": 4
+        },
+        {
+          "say": "Hand work between threads? A bounded blocking queue. Shared map? ConcurrentHashMap with its atomic methods.",
+          "reveal": 5
+        },
+        {
+          "say": "And the best tool of all: avoid synchronization with immutability and confinement.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Ch 12 · 12.26 Choosing the right tool (cheat sheet)"
+    },
+    {
+      "id": "s058",
+      "layout": "quiz",
+      "kicker": "Pause and think · Book 12.27",
+      "title": "Self-check: how do many gates claim spots with no lock?",
+      "bullets": [
+        "synchronized park()",
+        "Poll a concurrent queue of free spots",
+        "volatile spot counter"
+      ],
+      "steps": [
+        {
+          "say": "Self-check time. Pause after each question. What are the six thread states? Why is volatile not enough for count plus plus? What are the four Coffman conditions? And this one: how do many gates claim parking spots without a lock?",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 12 · 12.27 Chapter self-check"
+    },
+    {
+      "id": "s059",
+      "layout": "bullets",
+      "kicker": "Answers",
+      "title": "Self-check answers",
+      "bullets": [
+        "NEW, RUNNABLE, BLOCKED, WAITING, TIMED_WAITING, TERMINATED",
+        "volatile: visibility, not read-modify-write atomicity",
+        "Mutual exclusion, hold and wait, no preemption, circular wait",
+        "Poll a concurrent queue: one atomic remove per spot"
+      ],
+      "steps": [
+        {
+          "say": "The six states: new, runnable, blocked, waiting, timed waiting, terminated.",
+          "reveal": 1
+        },
+        {
+          "say": "Volatile gives visibility, not atomicity of read-modify-write.",
+          "reveal": 2
+        },
+        {
+          "say": "Mutual exclusion, hold and wait, no preemption, circular wait.",
+          "reveal": 3
+        },
+        {
+          "say": "And parking: keep free spots in a concurrent queue and poll. Each spot can be removed by only one thread.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s060",
+      "layout": "recap",
+      "kicker": "Recap · Book 12.28",
+      "title": "Chapter TL;DR",
+      "bullets": [
+        "Races come from shared mutable state",
+        "Visibility needs happens-before edges",
+        "Toolbox: locks, semaphores, latches, atomics",
+        "Lock ordering, jitter, fairness for liveness",
+        "Five patterns: signal, pool, queue, RW, immutable",
+        "Interviews: make check plus claim one atomic step"
+      ],
+      "steps": [
+        {
+          "say": "Races come from shared mutable state. Make critical sections atomic, or remove the sharing or the mutability.",
+          "reveal": 1
+        },
+        {
+          "say": "Visibility needs happens-before edges: locks, volatile, start and join, concurrent utilities.",
+          "reveal": 2
+        },
+        {
+          "say": "The toolbox climbs from synchronized, to ReentrantLock, read-write locks, semaphores, latches and barriers, atomics, and concurrent collections.",
+          "reveal": 3
+        },
+        {
+          "say": "For liveness: lock ordering or tryLock with back-off against deadlock, jitter against livelock, fairness against starvation.",
+          "reveal": 4
+        },
+        {
+          "say": "Five patterns: signaling, thread pool, producer-consumer, reader-writer, and immutability with confinement.",
+          "reveal": 5
+        },
+        {
+          "say": "And in interviews: find the contended resource, make check plus claim one atomic step, lock fine-grained and in order, and say what changes with many servers.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Ch 12 · 12.28 Chapter TL;DR"
+    },
+    {
+      "id": "s061",
+      "layout": "recap",
+      "title": "Up next",
+      "bullets": [
+        "Re-do the chapter 12 self-check",
+        "Next: Episode 14, Classic Concurrency Problems"
+      ],
+      "steps": [
+        {
+          "say": "That's episode thirteen. Redo the chapter twelve self-check in the PDF, and run the race demo yourself.",
+          "reveal": 1
+        },
+        {
+          "say": "Next up, episode fourteen: Classic Concurrency Problems, where we build blocking queues, dining philosophers and more with these tools. See you there.",
+          "reveal": 2
+        }
+      ]
+    }
+  ]
+}

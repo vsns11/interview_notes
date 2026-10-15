@@ -1,0 +1,2131 @@
+{
+ "series": "System Design Workshop",
+ "episode": 30,
+ "title": "Commerce Platforms and Postmortems",
+ "subtitle": "Six product designs, then seven real outages read as design lessons",
+ "scenes": [
+  {
+   "layout": "title",
+   "title": "Commerce Platforms and Postmortems",
+   "subtitle": "Six product designs, then seven real outages read as design lessons",
+   "steps": [
+    {
+     "say": "Welcome to episode thirty of the System Design Workshop: Commerce Platforms and Postmortems.",
+     "reveal": 0
+    },
+    {
+     "say": "In part one you'll design six products, from a TikTok-style feed to a Twilio-style messaging A-P-I. In part two you'll read seven famous outages and name the pattern that would have contained each.",
+     "reveal": 0
+    },
+    {
+     "say": "Keep Modules twenty-five and twenty-six open; each concept's first slide names the section.",
+     "reveal": 0
+    }
+   ],
+   "id": "s001"
+  },
+  {
+   "layout": "twocol",
+   "title": "Today's map",
+   "left": {
+    "heading": "Part 1: six designs",
+    "bullets": [
+     "Short-video feed",
+     "Food delivery",
+     "E-commerce peak day",
+     "Online education",
+     "Spotify Wrapped",
+     "Twilio-style API"
+    ]
+   },
+   "right": {
+    "heading": "Part 2: seven outages",
+    "bullets": [
+     "How to read a postmortem",
+     "Facebook, AWS x3, GitLab",
+     "Cloudflare, CrowdStrike",
+     "Patterns across all of them"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Part one reuses blocks you know, so we focus on what's new.",
+     "reveal": 1
+    },
+    {
+     "say": "Part two starts from real breaks and works back to the pattern.",
+     "reveal": 10
+    }
+   ],
+   "id": "s002"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 1 of 15",
+   "title": "TikTok-style short-video feed",
+   "caption": "Book: Module 25 · Case 1 — TikTok-Style Short-Video Feed",
+   "steps": [
+    {
+     "say": "Concept one. Imagine building TikTok's For You feed. Every swipe, roughly every fifteen seconds, is a fresh recommendation, and there's no follow list to fall back on. Our running example: Priya, who opens the app at 7 PM.",
+     "reveal": 0
+    }
+   ],
+   "id": "s003"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "The numbers that size the feed",
+   "table": {
+    "head": [
+     "Quantity",
+     "Result"
+    ],
+    "rows": [
+     [
+      "600M users x 100 videos",
+      "60B views/day, ~1.4M/s peak"
+     ],
+     [
+      "Feed calls, 10 videos each",
+      "~140K requests/s peak"
+     ],
+     [
+      "1,000 candidates per call",
+      "~140M model scores/s"
+     ],
+     [
+      "5 events per view",
+      "~3.5M events/s"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Six hundred million daily users watch about a hundred videos each. That's sixty billion views a day, about one point four million a second at peak.",
+     "reveal": 1
+    },
+    {
+     "say": "The app fetches ten videos per call, so about a hundred forty thousand feed requests a second.",
+     "reveal": 2
+    },
+    {
+     "say": "Each call scores about a thousand candidates. That's a hundred forty million model scores a second, and that's what sizes the machine-learning fleet.",
+     "reveal": 3
+    },
+    {
+     "say": "Every view sends about five events: impression, play, progress, finish or skip, like. Three and a half million events a second, and they must change the model within minutes. Ranking compute and that event stream are the new problems.",
+     "reveal": 4
+    }
+   ],
+   "id": "s004"
+  },
+  {
+   "layout": "diagram",
+   "title": "The recommendation funnel",
+   "mermaid": "flowchart LR\n  A[\"Billions of videos\"] --> R[\"Retrieval: two-tower ANN\"]\n  R -- \"about 1,000\" --> K[\"Ranking: multi-task model\"]\n  K --> X[\"Re-rank: diversity rules\"]\n  X -- \"10 videos\" --> P[\"Priya's feed\"]",
+   "caption": "Cheap filters first, expensive model on the few",
+   "steps": [
+    {
+     "say": "Step one, retrieval. A two-tower model turns Priya into a list of numbers, called an embedding, and every video into one too. Close means likely to enjoy. An approximate nearest-neighbour search pulls about a thousand videos from billions, plus an explore slice of brand-new videos.",
+     "reveal": 0
+    },
+    {
+     "say": "Step two, ranking. One model predicts several things at once: will she finish it, rewatch, share, follow, or skip. Watch time alone rewards clickbait, so shares, follows and not-interested taps go into the score too.",
+     "reveal": 0
+    },
+    {
+     "say": "Step three, re-ranking down to ten. Drop anything she's already seen, using a Bloom filter. Never two in a row from the same creator or sound. Keep one exploration slot.",
+     "reveal": 0
+    }
+   ],
+   "id": "s005"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Example",
+   "title": "The minute-level feedback loop",
+   "bullets": [
+    "7 PM: Priya skips three cooking videos",
+    "Seconds: stream jobs update real-time features",
+    "Minutes: online training on joined events",
+    "Push only touched embeddings every few minutes",
+    "Join waits for late likes, then emits a negative"
+   ],
+   "steps": [
+    {
+     "say": "Priya skips three cooking videos at 7 PM. A nightly model would keep showing her cooking all evening.",
+     "reveal": 1
+    },
+    {
+     "say": "Loop one, seconds. Stream jobs read the event log and update short-window features, like topics she skipped in the last ten minutes. Her very next feed request sees them, even with the same model.",
+     "reveal": 2
+    },
+    {
+     "say": "Loop two, minutes. ByteDance's Monolith system trains continuously: it joins what users did with the features logged when the video was served.",
+     "reveal": 3
+    },
+    {
+     "say": "The trick that makes it affordable: only the embeddings touched since the last sync get pushed to serving, every few minutes.",
+     "reveal": 4
+    },
+    {
+     "say": "One detail: a like can arrive minutes after the impression. So the joiner holds each impression by its rec token for a window, emits a positive when an action arrives, and a negative when the window closes empty.",
+     "reveal": 5
+    }
+   ],
+   "id": "s006"
+  },
+  {
+   "layout": "table",
+   "title": "Instant start: work moved before the swipe",
+   "table": {
+    "head": [
+     "Technique",
+     "Effect"
+    ],
+    "rows": [
+     [
+      "Preload next 2-3 videos, pre-decode frame",
+      "Swipe shows a frame in memory"
+     ],
+     [
+      "1-2 s segments, not 10 s",
+      "Tiny first download"
+     ],
+     [
+      "One warm HTTP/2 or HTTP/3 connection",
+      "No handshake per video"
+     ],
+     [
+      "Preload less on cellular; cancel fast swipes",
+      "Caps 10-20% wasted egress"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "The goal is first frame within two hundred milliseconds at p ninety-five. So the app preloads the first second or two of the next two or three videos, and pre-decodes the next one's first frame.",
+     "reveal": 1
+    },
+    {
+     "say": "Segments are one to two seconds instead of the usual ten, so the first download is small.",
+     "reveal": 2
+    },
+    {
+     "say": "One connection to the edge stays warm, so no new handshake per video.",
+     "reveal": 3
+    },
+    {
+     "say": "The price is wasted bytes. Preload less on cellular or low battery, and cancel when Priya swipes fast.",
+     "reveal": 4
+    }
+   ],
+   "id": "s007"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Example",
+   "title": "Cold start by staged exposure",
+   "bullets": [
+    "Explore slot: a few hundred targeted views",
+    "Compare to similar videos, not raw likes",
+    "Beat the cohort: move to a pool 10x larger",
+    "Second moderation check before huge pools",
+    "New users: interest picker plus regional popular"
+   ],
+   "steps": [
+    {
+     "say": "Imagine a home baker with zero followers posts a bread video. Stage one: the explore slot shows it to a few hundred people whose interests match its content embedding.",
+     "reveal": 1
+    },
+    {
+     "say": "Stage two: compare its finish, rewatch, share and early-skip rates with similar videos, same length and topic, not with raw like counts.",
+     "reveal": 2
+    },
+    {
+     "say": "Stage three: if it beats that cohort, promote it to a pool ten times larger, then again. Follower count isn't a direct factor.",
+     "reveal": 3
+    },
+    {
+     "say": "Before very large pools, a second moderation check runs, so a harmful video's reach is limited early.",
+     "reveal": 4
+    },
+    {
+     "say": "New users get the reverse problem. They pick interests, see regional favourites, and after a few dozen swipes, real-time features take over.",
+     "reveal": 5
+    }
+   ],
+   "id": "s008"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 2 of 15",
+   "title": "Food delivery",
+   "caption": "Book: Module 25 · Case 2 — Food Delivery (Uber Eats / DoorDash style)",
+   "steps": [
+    {
+     "say": "Concept two, food delivery like Uber Eats or DoorDash. Three parties: eater, restaurant, courier. Running example: Ravi orders biryani at 7:30 PM, and our goal is for the courier to arrive just as the food is ready.",
+     "reveal": 0
+    }
+   ],
+   "id": "s009"
+  },
+  {
+   "layout": "number",
+   "title": "Volume is modest",
+   "big": "125 orders/s x 2,400 s = 300K in flight",
+   "caption": "Little's law: arrival rate x time in system",
+   "steps": [
+    {
+     "say": "Three million orders a day with thirty percent in a two-hour dinner peak gives about a hundred twenty-five orders a second. Each order lives about forty minutes, twenty-four hundred seconds. Little's law says about three hundred thousand orders are active at once.",
+     "reveal": 0
+    },
+    {
+     "say": "Couriers send G-P-S every five seconds: sixty thousand writes a second, worthless after seconds, so they live in memory. The hard part isn't volume. It's prediction and coordination.",
+     "reveal": 0
+    }
+   ],
+   "id": "s010"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Dispatch at the food-ready time",
+   "table": {
+    "head": [
+     "Piece",
+     "For Ravi's biryani"
+    ],
+    "rows": [
+     [
+      "Prep-time model",
+      "Busy kitchen: ready predicted 7:52"
+     ],
+     [
+      "Ground truth",
+      "Ready taps are late: noisy labels"
+     ],
+     [
+      "Travel time",
+      "Best courier is 8 minutes away"
+     ],
+     [
+      "Dispatch moment",
+      "Ready minus travel minus buffer: 7:42"
+     ],
+     [
+      "Order release",
+      "Fast kitchen? Hold order until courier near"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Dispatch at order time and the courier waits at the counter. Uber's prep model uses gradient-boosted trees on a store's weekly average, its last ten minutes, which catch a slammed kitchen, and the order's size and time. For Ravi it predicts ready at 7:52.",
+     "reveal": 1
+    },
+    {
+     "say": "Labels are noisy, because staff tap ready late, so it also learns from courier departures.",
+     "reveal": 2
+    },
+    {
+     "say": "Travel time comes from routing plus a learned correction. The best courier is eight minutes away.",
+     "reveal": 3
+    },
+    {
+     "say": "Dispatch when predicted-ready minus now is at most travel time plus a buffer. With a two-minute buffer, dispatch at 7:42. The buffer grows with uncertainty, because cold food costs more than a waiting courier.",
+     "reveal": 4
+    },
+    {
+     "say": "For very fast kitchens, flip it: hold the order from the kitchen until a courier is close.",
+     "reveal": 5
+    }
+   ],
+   "id": "s011"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Example",
+   "title": "Batching orders into routes",
+   "bullets": [
+    "1. Window: every 10-30 s per zone",
+    "2. Candidates: insert orders into routes",
+    "3. Score: minutes, lateness, waiting, food age",
+    "4. Solve: each order and courier used once",
+    "5. Offer: atomic claim with a time limit"
+   ],
+   "steps": [
+    {
+     "say": "The unit of assignment is a route: an ordered list of pickups and drop-offs. Step one: every ten to thirty seconds per zone, collect ready-soon orders, like Ravi's and one from next door, plus idle or nearly-done couriers.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two: try inserting each order, or the pair, into each courier's route at every legal position. Pickup before drop-off, and promises kept.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three: score each option by courier minutes, lateness against the quote, courier waiting, and food time in the bag.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four: pick options so each order and courier is used at most once. DoorDash solves this as a mixed-integer program. Here, one courier takes both biryanis.",
+     "reveal": 4
+    },
+    {
+     "say": "Step five: send the offer as an atomic claim with a time limit. If declined, the order goes back into the next window.",
+     "reveal": 5
+    }
+   ],
+   "id": "s012"
+  },
+  {
+   "layout": "diagram",
+   "title": "The order state machine",
+   "mermaid": "flowchart LR\n  P[\"PLACED\"] --> A[\"ACCEPTED\"]\n  P --> X[\"CANCELLED, void auth\"]\n  A --> C[\"COURIER_ASSIGNED\"]\n  C -- \"courier drops\" --> A\n  C --> U[\"PICKED_UP: pivot\"]\n  U --> D[\"DELIVERED\"]",
+   "caption": "One owner, conditional moves, pickup is the pivot",
+   "steps": [
+    {
+     "say": "One order service owns this machine. It applies an event only if it's legal from the current state and version, so a duplicate or late event can't move Ravi's order backwards.",
+     "reveal": 0
+    },
+    {
+     "say": "It's a saga with the pivot at pickup. Before pickup everything can be undone: void the card authorization, release the courier. After pickup, recovery only goes forward: redeliver, or refund a missing item.",
+     "reveal": 0
+    },
+    {
+     "say": "Authorize the card at checkout and capture at delivery, so a cancellation is a cheap void, not a refund.",
+     "reveal": 0
+    },
+    {
+     "say": "And timers are durable, in a workflow engine. No accept in three minutes: an automated call to the restaurant. Seven minutes: cancel and void.",
+     "reveal": 0
+    }
+   ],
+   "id": "s013"
+  },
+  {
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "Why not one two-phase commit across all three?",
+   "bullets": [
+    "A. It's too slow",
+    "B. Restaurants and card networks can't join it",
+    "C. It loses orders"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. Why use a saga with timers instead of a two-phase commit, or two-P-C?",
+     "reveal": 0
+    },
+    {
+     "say": "Answer: B. A restaurant tablet and a card network can't take part in your transaction protocol. So you use local steps with compensations, plus durable timers for the silent restaurant, which is a normal case, not an edge case.",
+     "reveal": 0
+    }
+   ],
+   "id": "s014"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 3 of 15",
+   "title": "E-commerce peak-day readiness",
+   "caption": "Book: Module 25 · Case 3 — E-Commerce Platform and Peak-Day Readiness",
+   "steps": [
+    {
+     "say": "Concept three. Build an online store, then the favourite follow-up: Prime Day is in four months, at ten times normal traffic, with spikes at every deal launch. How do you get ready? Running example: a headphones lightning deal at noon.",
+     "reveal": 0
+    }
+   ],
+   "id": "s015"
+  },
+  {
+   "layout": "number",
+   "title": "Plan for the spike, not the average",
+   "big": "~500K page views/s, ~15M backend req/s",
+   "caption": "Peak day: 10x daily volume, plus ~5x at deal launches",
+   "steps": [
+    {
+     "say": "Normally, two billion page views a day, about thirty backend calls each, so about one and a half million backend requests a second. Peak day is ten times that, plus five-times spikes at deal launches: plan for half a million page views and about three thousand orders a second.",
+     "reveal": 0
+    },
+    {
+     "say": "Reads are the volume problem. Writes are only thousands a second, but valuable and contended.",
+     "reveal": 0
+    }
+   ],
+   "id": "s016"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Critical-path availability",
+   "table": {
+    "head": [
+     "Mechanism",
+     "On the headphones page"
+    ],
+    "rows": [
+     [
+      "Critical vs optional",
+      "Price, buy box, stock: critical. Reviews: optional"
+     ],
+     [
+      "Deadlines",
+      "Critical 300 ms + one hedged retry; optional 150 ms"
+     ],
+     [
+      "Bulkheads",
+      "Own connection pool per dependency"
+     ],
+     [
+      "Circuit breakers",
+      "Recommender failing? Render without it"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Wait for all thirty calls and the page is as slow as the slowest and as fragile as the weakest. So tag each widget. Title, images, price, buy box, stock badge and delivery promise are critical. Reviews, recommendations and ads are optional.",
+     "reveal": 1
+    },
+    {
+     "say": "Critical calls get three hundred milliseconds and one hedged retry, a duplicate request to another replica. Optional calls get a hundred fifty, then the page renders without them and fills in later.",
+     "reveal": 2
+    },
+    {
+     "say": "Each dependency gets its own connection pool, so a slow recommender can't eat pricing's threads.",
+     "reveal": 3
+    },
+    {
+     "say": "Optional dependencies sit behind circuit breakers. Now page availability depends on four or five services, not thirty.",
+     "reveal": 4
+    }
+   ],
+   "id": "s017"
+  },
+  {
+   "layout": "twocol",
+   "title": "Cart and overselling",
+   "left": {
+    "heading": "Always-writable cart",
+    "bullets": [
+     "Any replica accepts add-to-cart",
+     "Conflicts merge: union of items",
+     "A cart is not a reservation"
+    ]
+   },
+   "right": {
+    "heading": "Overselling budget",
+    "bullets": [
+     "Ordinary items: tiny risk accepted",
+     "Reserve: WHERE on_hand - reserved >= q",
+     "Limited deals: budget zero"
+    ]
+   },
+   "steps": [
+    {
+     "say": "From Amazon's Dynamo paper: any reachable replica accepts add to cart.",
+     "reveal": 1
+    },
+    {
+     "say": "If two versions conflict, merge them as a union. A deleted item might reappear, which is harmless. A lost add is a lost sale.",
+     "reveal": 2
+    },
+    {
+     "say": "And a cart isn't a reservation, or idle carts would lock up deal stock.",
+     "reveal": 3
+    },
+    {
+     "say": "Overselling: for ordinary items, accept a tiny risk. Stock counts are already imperfect, and an apology is cheap.",
+     "reveal": 4
+    },
+    {
+     "say": "Reserve at checkout with a conditional update: only if on-hand minus reserved covers the quantity, else try the next warehouse.",
+     "reveal": 5
+    },
+    {
+     "say": "But for limited deals the budget is zero.",
+     "reveal": 6
+    }
+   ],
+   "id": "s018"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Example",
+   "title": "The lightning deal: hot stock",
+   "bullets": [
+    "Pre-split 10,000 units into 50 buckets of 200",
+    "Claim: decrement a random non-empty bucket",
+    "Claim token valid ~15 min, then normal checkout",
+    "Waiting room admits at the measured claim rate",
+    "\"73% claimed\" is display; the decrement decides"
+   ],
+   "steps": [
+    {
+     "say": "Noon: ten thousand headphones, and hundreds of thousands of buyers in seconds, all hitting one row. So pre-split the stock into fifty buckets of two hundred units.",
+     "reveal": 1
+    },
+    {
+     "say": "A claim decrements a random non-empty bucket, only where remaining is above zero. Contention per row drops fifty times.",
+     "reveal": 2
+    },
+    {
+     "say": "A successful claim issues a token valid about fifteen minutes, consumed by normal checkout. Expired tokens return the unit. Winning is tiny and contended; paying is slow but uncontended.",
+     "reveal": 3
+    },
+    {
+     "say": "For the biggest launches, a waiting room at the edge admits buyers at the rate the claim service can handle.",
+     "reveal": 4
+    },
+    {
+     "say": "And the percent-claimed bar comes from a lagging stream. Only the decrement decides who wins.",
+     "reveal": 5
+    }
+   ],
+   "id": "s019"
+  },
+  {
+   "layout": "table",
+   "title": "Peak-day readiness: four months",
+   "table": {
+    "head": [
+     "When",
+     "Activity and exit criterion"
+    ],
+    "rows": [
+     [
+      "T-16 wk",
+      "Forecast per service via call graph, x1.5-2"
+     ],
+     [
+      "T-14 wk",
+      "Map critical journeys and third-party quotas"
+     ],
+     [
+      "T-12 to 4",
+      "Production load tests until something breaks"
+     ],
+     [
+      "T-10 to 2",
+      "Fault injection, game days: lose a zone"
+     ],
+     [
+      "T-6 wk",
+      "Pre-provision for peak with one zone lost"
+     ],
+     [
+      "T-4 wk",
+      "Degradation switches, tested in production"
+     ],
+     [
+      "T-2 wk",
+      "Change freeze; dashboards on journey success"
+     ],
+     [
+      "Day 0 / T+1",
+      "Pre-agreed triggers; review forecast vs actual"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Answer with a timeline that has exit criteria. Sixteen weeks out: turn the business forecast into per-service peak requests through the call graph, with fifty to a hundred percent margin. Every owner signs a target.",
+     "reveal": 1
+    },
+    {
+     "say": "Fourteen weeks: map critical journeys, browse, cart, checkout, payment, and their third-party quotas.",
+     "reveal": 2
+    },
+    {
+     "say": "Twelve to four weeks: load-test in production with tagged synthetic shoppers, ramping until something breaks.",
+     "reveal": 3
+    },
+    {
+     "say": "Ten to two weeks: inject faults under load. Kill instances, fail a zone. A-W-S ran over forty-four thousand experiments for Prime Day 2026.",
+     "reveal": 4
+    },
+    {
+     "say": "Six weeks: pre-provision for peak with one zone lost. That's static stability: nothing new must launch during a failure.",
+     "reveal": 5
+    },
+    {
+     "say": "Four weeks: degradation switches as feature flags. Recommendations off, static homepage. Each tested.",
+     "reveal": 6
+    },
+    {
+     "say": "Two weeks: change freeze on critical journeys, and dashboards on checkouts per minute, not C-P-U.",
+     "reveal": 7
+    },
+    {
+     "say": "Day zero: pre-agreed triggers, like checkout p ninety-nine over two seconds for three minutes, flip switches one and two. Priority load shedding drops bots first, checkout last.",
+     "reveal": 8
+    }
+   ],
+   "id": "s020"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 4 of 15",
+   "title": "Online education platform",
+   "caption": "Book: Module 25 · Case 4 — Online Education Platform",
+   "steps": [
+    {
+     "say": "Concept four, a Coursera or Udemy style platform. Running example: Maya, taking a data-science course with a quiz and a coding assignment due Sunday at 23:59.",
+     "reveal": 0
+    }
+   ],
+   "id": "s021"
+  },
+  {
+   "layout": "number",
+   "title": "The real design load",
+   "big": "1.5M players / 30 s = 50K writes/s",
+   "caption": "Plus a weekly 10x grading spike",
+   "steps": [
+    {
+     "say": "Video comes from a C-D-N. The real load: one and a half million concurrent players each sending a progress heartbeat every thirty seconds. That's fifty thousand tiny writes a second.",
+     "reveal": 0
+    },
+    {
+     "say": "And code grading averages about seven hundred v-C-P-Us, but jumps ten times, to seven thousand, in the hour before Sunday's deadline.",
+     "reveal": 0
+    }
+   ],
+   "id": "s022"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Progress that never goes backwards",
+   "table": {
+    "head": [
+     "Field",
+     "Merge rule",
+     "Why"
+    ],
+    "rows": [
+     [
+      "max_position_s",
+      "max(old, new)",
+      "Furthest point reached"
+     ],
+     [
+      "watched_bitmap",
+      "old OR new",
+      "Never loses a watched slice"
+     ],
+     [
+      "completed_at",
+      "first non-null wins",
+      "Completion can't be undone"
+     ],
+     [
+      "resume_pos",
+      "latest client_seq",
+      "Follow the latest device"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Maya watches on her laptop, then her phone. If heartbeats overwrite, a delayed retry from the laptop could move her backwards. So each field merges. Furthest position: take the max. Laptop says 9 minutes, phone says 12, keep 12.",
+     "reveal": 1
+    },
+    {
+     "say": "The watched bitmap has one bit per ten-second slice. Merge with OR, so offline weeks merge cleanly. Complete means eighty percent of bits set, computed on the server, so skipping to the end doesn't count.",
+     "reveal": 2
+    },
+    {
+     "say": "Completion time: first non-null wins, so it can't be undone.",
+     "reveal": 3
+    },
+    {
+     "say": "Resume position follows the highest client sequence number. These merges don't care about order or repeats, the C-R-D-T property, so retries and multi-region writes are harmless.",
+     "reveal": 4
+    }
+   ],
+   "id": "s023"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Example",
+   "title": "Assessments you can trust",
+   "bullets": [
+    "Answer keys never reach the browser",
+    "Pools and seeds: each paper differs, replayable",
+    "Server clock: expires_at plus ~30 s grace",
+    "Idempotent submit: a double-click costs nothing",
+    "Regrades append ledger rows, never overwrite",
+    "Peer review: median of 3-4 reviewers"
+   ],
+   "steps": [
+    {
+     "say": "Maya starts her quiz. One: answer keys stay on the server. Shipped to the browser, they leak within hours.",
+     "reveal": 1
+    },
+    {
+     "say": "Two: her attempt draws ten questions from a pool of forty, shuffled by a stored seed. A regrade reproduces exactly what she saw.",
+     "reveal": 2
+    },
+    {
+     "say": "Three: the server sets the expiry at start. Submits after it, plus about thirty seconds of network grace, are rejected. The client timer is display only.",
+     "reveal": 3
+    },
+    {
+     "say": "Four: she double-clicks submit. An idempotency key means it doesn't burn a second attempt.",
+     "reveal": 4
+    },
+    {
+     "say": "Five: a wrong key is fixed with a new item version and a regrade that appends ledger rows, so history stays for disputes.",
+     "reveal": 5
+    },
+    {
+     "say": "Six: essays go to three or four peers, and the median wins, robust to one harsh reviewer.",
+     "reveal": 6
+    }
+   ],
+   "id": "s024"
+  },
+  {
+   "layout": "twocol",
+   "title": "Sunday-night spike and certificates",
+   "left": {
+    "heading": "The deadline spike",
+    "bullets": [
+     "Pre-scale graders from the deadline calendar",
+     "Deadline applies to upload time",
+     "Per-course lanes; crash 3x goes to DLQ"
+    ]
+   },
+   "right": {
+    "heading": "Certificates",
+    "bullets": [
+     "Signed Open Badges 3.0 credential",
+     "Idempotent on learner, course, version",
+     "Revocation checked on verify"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Deadlines are known weeks ahead, so graders are pre-scaled from the calendar, with queue-depth autoscaling on top.",
+     "reveal": 1
+    },
+    {
+     "say": "Maya uploads at 23:58. The grader is busy until 00:20. She's on time, because the deadline applies to upload, not grading.",
+     "reveal": 2
+    },
+    {
+     "say": "Each course gets its own lane, so one slow grader can't starve others. A submission that crashes graders three times goes to a dead-letter queue.",
+     "reveal": 3
+    },
+    {
+     "say": "When she passes, she gets a certificate: a signed credential in the open Badges format, which an employer can verify without calling us.",
+     "reveal": 4
+    },
+    {
+     "say": "Issuance is keyed on learner, course and version, so retries don't create duplicates.",
+     "reveal": 5
+    },
+    {
+     "say": "And revocation is checked on every verification.",
+     "reveal": 6
+    }
+   ],
+   "id": "s025"
+  },
+  {
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "Two devices report progress. What breaks with overwrite?",
+   "bullets": [
+    "A. Nothing",
+    "B. A late retry moves her backwards",
+    "C. The CDN fails"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. What goes wrong if each heartbeat just overwrites her position?",
+     "reveal": 0
+    },
+    {
+     "say": "Answer: B. A delayed laptop retry saying minute nine could overwrite the phone's minute twelve. Monotonic merges, max, OR, first-wins, make order and duplicates irrelevant.",
+     "reveal": 0
+    }
+   ],
+   "id": "s026"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 5 of 15",
+   "title": "Spotify Wrapped batch pipeline",
+   "caption": "Book: Module 25 · Case 5 — Spotify Wrapped",
+   "steps": [
+    {
+     "say": "Concept five. Once a year, every listener gets a personalised story: top artists, top songs, minutes listened. One giant batch, an immovable launch date, and tens of millions of people arriving in hours. Over two hundred million engaged in the first day of Wrapped 2025.",
+     "reveal": 0
+    }
+   ],
+   "id": "s027"
+  },
+  {
+   "layout": "diagram",
+   "title": "Batch, then serve",
+   "mermaid": "flowchart LR\n  E[\"Listening events, 330 TB\"] --> G[\"Yearly per-user aggregates\"]\n  G --> S1[\"Story job: top artists\"]\n  G --> S2[\"Story job: minutes\"]\n  S1 --> BT[\"Row per user, family per story\"]\n  S2 --> BT\n  BT --> C[\"Campaign service, read-only\"]",
+   "caption": "Aggregate once; one re-runnable job per story",
+   "steps": [
+    {
+     "say": "About three point three trillion play events, three hundred thirty terabytes, are grouped by user once. That grouping, the shuffle, is the expensive part, so the aggregates are saved and reused.",
+     "reveal": 0
+    },
+    {
+     "say": "Then one job per story. If a rule changes late, you rerun just that job.",
+     "reveal": 0
+    },
+    {
+     "say": "Output is one row per user, with one column family per story, in Bigtable. So launch-day serving is a single key lookup.",
+     "reveal": 0
+    }
+   ],
+   "id": "s028"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Example",
+   "title": "A safe once-a-year batch",
+   "bullets": [
+    "Each job overwrites only its own column family",
+    "Outputs tagged by run ID; serving flips a pointer",
+    "Test on a fixed sub-sample; read the store directly",
+    "Gate: compare distributions with last year",
+    "Listening cut-off leaves time for one rerun"
+   ],
+   "steps": [
+    {
+     "say": "Imagine the minutes-listened story has a bug. First, each job writes only its own family, so a rerun is idempotent.",
+     "reveal": 1
+    },
+    {
+     "say": "Second, outputs are tagged by run ID, and serving points at a run. Switching is a pointer flip, and a partial run is never pointed at.",
+     "reveal": 2
+    },
+    {
+     "say": "Third, test on a fixed sub-sample.",
+     "reveal": 3
+    },
+    {
+     "say": "Fourth, before flipping, compare with last year. If median minutes suddenly halves, release is blocked. That's how our bug is caught.",
+     "reveal": 4
+    },
+    {
+     "say": "Fifth, the listening cut-off sits well before launch, leaving time for that emergency rerun.",
+     "reveal": 5
+    }
+   ],
+   "id": "s029"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Launch as a planned stampede",
+   "table": {
+    "head": [
+     "Lever",
+     "What it does"
+    ],
+    "rows": [
+     [
+      "Pre-scale to forecast",
+      "60M users x 10 calls / 4 h = ~42K/s; plan 100K"
+     ],
+     [
+      "Load-test the real path",
+      "All dependencies, all regions"
+     ],
+     [
+      "Regional waves behind a flag",
+      "Several smaller spikes, instant off"
+     ],
+     [
+      "Share images",
+      "Pre-render early wave, render-and-cache tail"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Sixty million users times ten calls over four hours is about forty-two thousand requests a second; with peaks, plan a hundred thousand. Autoscaling takes minutes, launch takes seconds, so pre-scale.",
+     "reveal": 1
+    },
+    {
+     "say": "Load-test the real path with every dependency. In 2019, tests three days out forced the forecast up.",
+     "reveal": 2
+    },
+    {
+     "say": "Launch in regional waves behind a feature flag, turning one global spike into several, with an off switch.",
+     "reveal": 3
+    },
+    {
+     "say": "Share images: in 2019 Spotify pre-rendered about five hundred thirty-five million cards in a forty-two hour batch, finished two hours before launch, plus a live renderer. Default: pre-render for the early wave, render and cache the long tail.",
+     "reveal": 4
+    }
+   ],
+   "id": "s030"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 6 of 15",
+   "title": "Twilio-style communications API",
+   "caption": "Book: Module 25 · Case 6 — A Twilio-Style Communications API Platform",
+   "steps": [
+    {
+     "say": "Concept six. One A-P-I call sends an S-M-S through hundreds of carriers, and the platform calls the customer back with webhooks. It's a giant buffer between two systems it doesn't control. Running example: a pharmacy sends a million refill reminders.",
+     "reveal": 0
+    }
+   ],
+   "id": "s031"
+  },
+  {
+   "layout": "number",
+   "title": "Carriers set the pace",
+   "big": "1M SMS / (10 numbers x 3/s) = ~9.3 hours",
+   "caption": "Messages queued over 10 h fail: queue age must be visible",
+   "steps": [
+    {
+     "say": "U-S toll-free numbers send about three segments a second each. The pharmacy uses ten numbers: thirty a second. A million messages take about nine point three hours to drain.",
+     "reveal": 0
+    },
+    {
+     "say": "Twilio fails messages queued over ten hours. So the A-P-I is easy: accept, write a durable log, return queued. The hard part is millions of slow, independently rate-limited queues.",
+     "reveal": 0
+    }
+   ],
+   "id": "s032"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Example",
+   "title": "Millions of tiny queues",
+   "bullets": [
+    "Shared FIFO: one campaign blocks everyone",
+    "Broker topic per sender: brokers can't hold millions",
+    "Logical queues, each with a token bucket",
+    "Round-robin queues with tokens, under account cap",
+    "Past validity: fail explicitly, don't arrive late"
+   ],
+   "steps": [
+    {
+     "say": "With one shared first-in-first-out queue, the pharmacy's nine-hour campaign would block a bank's login codes behind it. That's head-of-line blocking.",
+     "reveal": 1
+    },
+    {
+     "say": "One broker topic per sender fails too; brokers don't handle millions of topics.",
+     "reveal": 2
+    },
+    {
+     "say": "So queues are logical: rows or in-memory structures on the scheduler shard that owns that account, each with a token bucket at the sender's rate.",
+     "reveal": 3
+    },
+    {
+     "say": "The scheduler round-robins across queues that have tokens, under an account-level ceiling. The bank's codes go out in a second.",
+     "reveal": 4
+    },
+    {
+     "say": "And a message past its validity period fails explicitly instead of arriving hours late.",
+     "reveal": 5
+    }
+   ],
+   "id": "s033"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Example",
+   "title": "Webhooks that isolate bad endpoints",
+   "bullets": [
+    "A queue per endpoint: a bulkhead",
+    "Short timeouts: 5 s connect, 15 s total",
+    "Backoff with jitter; jobs expire after hours",
+    "Archive expired jobs for replay",
+    "Receivers dedupe on an idempotency token"
+   ],
+   "steps": [
+    {
+     "say": "If the pharmacy's callback server is slow, nobody else should notice. So each endpoint gets its own isolated delivery.",
+     "reveal": 1
+    },
+    {
+     "say": "Timeouts are short: five seconds to connect, fifteen in total.",
+     "reveal": 2
+    },
+    {
+     "say": "Retries back off with jitter, and jobs expire. Segment's Centrifuge system expired them after four hours. One partner's outage absorbed eighty-five million events, drained in thirty minutes afterwards, with no effect on others.",
+     "reveal": 3
+    },
+    {
+     "say": "Expired jobs are archived, so they can be replayed.",
+     "reveal": 4
+    },
+    {
+     "say": "And since delivery is at least once, the receiver dedupes on a token Twilio sends with each retry.",
+     "reveal": 5
+    }
+   ],
+   "id": "s034"
+  },
+  {
+   "layout": "twocol",
+   "title": "Billing on complete data; cells",
+   "left": {
+    "heading": "July 2013 billing incident",
+    "bullets": [
+     "Redis replicas resync at once, primary overloads",
+     "Restarted wrong: empty, balances read zero",
+     "Cards auto-recharged again and again"
+    ]
+   },
+   "right": {
+    "heading": "The fix and the layout",
+    "bullets": [
+     "Ledger is truth, cache is a hint",
+     "Money actions fail safe when data is missing",
+     "Edge locations; accounts split into cells"
+    ]
+   },
+   "steps": [
+    {
+     "say": "In 2013, Twilio kept balances in Redis. A network blip made every replica resync at once, overloading the primary.",
+     "reveal": 1
+    },
+    {
+     "say": "It was restarted with the wrong config, and came back empty and read-only. Every balance read as zero.",
+     "reveal": 2
+    },
+    {
+     "say": "So customer cards auto-recharged over and over; one point four percent of customers were affected, while calls and texts kept working.",
+     "reveal": 3
+    },
+    {
+     "say": "The rule: an append-only ledger is the truth; a cached balance is only a hint.",
+     "reveal": 4
+    },
+    {
+     "say": "Never charge or suspend when balance data is missing.",
+     "reveal": 5
+    },
+    {
+     "say": "Last, regions and cells. Customers pick an edge location for their traffic, and accounts are partitioned into cells, independent full stacks, so a bad deploy or noisy tenant hurts one cell.",
+     "reveal": 6
+    }
+   ],
+   "id": "s035"
+  },
+  {
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "One webhook server is down 3 hours. What happens?",
+   "bullets": [
+    "A. All webhooks slow down",
+    "B. Its jobs back off and archive; nobody else notices",
+    "C. Messages stop sending"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. One customer's webhook server is down for three hours. What happens to everyone else?",
+     "reveal": 0
+    },
+    {
+     "say": "Answer: B. Its jobs back off in their own lane and archive for replay. Messages keep sending, and every other customer's callbacks stay fast. That's the bulkhead.",
+     "reveal": 0
+    }
+   ],
+   "id": "s036"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 7 of 15",
+   "title": "How to read a postmortem",
+   "caption": "Book: Module 26 · How to read a postmortem",
+   "steps": [
+    {
+     "say": "Concept seven, and part two. A postmortem is the written record of an incident, an unplanned event that hurts users: what broke, why, and what you'll change. Teams agree in advance which incidents need one, like data loss.",
+     "reveal": 0
+    }
+   ],
+   "id": "s037"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Anatomy of a postmortem",
+   "table": {
+    "head": [
+     "Section",
+     "What a designer looks for"
+    ],
+    "rows": [
+     [
+      "Summary and impact",
+      "Blast radius: how far one failure reached"
+     ],
+     [
+      "Timeline",
+      "Gaps: detect, diagnose, recover"
+     ],
+     [
+      "Trigger",
+      "Usually a routine change"
+     ],
+     [
+      "Root cause",
+      "Usually latent: there for months"
+     ],
+     [
+      "Contributing factors",
+      "Where design lessons live"
+     ],
+     [
+      "Action items",
+      "Prevent, detect faster, recover faster"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Example: GitLab, 2017. Summary and impact: site down eighteen hours, six hours of database changes lost. That's the blast radius.",
+     "reveal": 1
+    },
+    {
+     "say": "Timeline: look for three gaps: trigger to detection, detection to diagnosis, diagnosis to recovery. At GitLab, recovery was the long one.",
+     "reveal": 2
+    },
+    {
+     "say": "Trigger: the event that started it. Here, a delete command run on the wrong server.",
+     "reveal": 3
+    },
+    {
+     "say": "Root cause: the weakness that let the trigger do harm. Here, backups that had silently never worked. Usually latent, waiting for months.",
+     "reveal": 4
+    },
+    {
+     "say": "Contributing factors: what made it worse. No one owned testing backups.",
+     "reveal": 5
+    },
+    {
+     "say": "Action items, each with an owner, sorted into prevent, detect faster, and recover faster.",
+     "reveal": 6
+    }
+   ],
+   "id": "s038"
+  },
+  {
+   "layout": "bullets",
+   "title": "Five terms in every story",
+   "bullets": [
+    "Trigger vs root cause",
+    "Latent fault: a defect that hasn't fired yet",
+    "Control plane vs data plane; static stability",
+    "MTTD and MTTR: mean time to detect, recover",
+    "Shared fate: the repair tool needs what broke"
+   ],
+   "steps": [
+    {
+     "say": "One: trigger versus root cause. Fix only the trigger, like don't add capacity, and the flaw waits for the next one.",
+     "reveal": 1
+    },
+    {
+     "say": "Two: a fault is a defect; a failure is when users see it. A latent fault exists but hasn't fired.",
+     "reveal": 2
+    },
+    {
+     "say": "Three: the control plane creates and changes things, like launching servers or updating D-N-S. The data plane serves requests. A statically stable system keeps the data plane running on its last known state when the control plane fails.",
+     "reveal": 3
+    },
+    {
+     "say": "Four: M-T-T-D and M-T-T-R, mean time to detect and to recover.",
+     "reveal": 4
+    },
+    {
+     "say": "Five: shared fate. A status page hosted on the platform it reports on goes down with it.",
+     "reveal": 5
+    }
+   ],
+   "id": "s039"
+  },
+  {
+   "layout": "diagram",
+   "title": "Blameless: fix the system, not the person",
+   "mermaid": "flowchart LR\n  A[\"Trigger: routine change\"] --> B[\"Latent fault fires\"]\n  B --> C[\"Spreads: blast radius\"]\n  C --> D[\"Detected: MTTD\"]\n  D --> E[\"Recovered: MTTR\"]\n  E --> F[\"Postmortem, action items\"]\n  F -- \"removes latent faults\" --> B",
+   "caption": "Ask: what changed, why it spread, why slow to detect and recover",
+   "steps": [
+    {
+     "say": "A blameless postmortem assumes good faith and asks what in the system made the mistake easy. Punishment teaches people to hide near-misses.",
+     "reveal": 0
+    },
+    {
+     "say": "Read every postmortem with five questions: What changed? Why did it spread? Why was detection slow? Why was recovery slow? Which pattern contains it?",
+     "reveal": 0
+    },
+    {
+     "say": "In the interview, if asked what to do about the engineer who ran the command, say: nothing punitive. Ask why one command could do that much damage, why no guard rail stopped it, and why recovery was slow, and make an action item for each.",
+     "reveal": 0
+    }
+   ],
+   "id": "s040"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 8 of 15",
+   "title": "2021: Facebook BGP and DNS outage",
+   "caption": "Book: Module 26 · 2021 — Facebook BGP and DNS outage",
+   "steps": [
+    {
+     "say": "Concept eight. On 4 October 2021, Facebook, Instagram, WhatsApp and Messenger disappeared from the internet for about six hours. Two terms: B-G-P is how networks announce which addresses they can reach. D-N-S name servers hold a domain's official answers.",
+     "reveal": 0
+    }
+   ],
+   "id": "s041"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Timeline, from outside (UTC)",
+   "table": {
+    "head": [
+     "Time",
+     "Event"
+    ],
+    "rows": [
+     [
+      "~15:40",
+      "Burst of BGP updates from Facebook"
+     ],
+     [
+      "15:50",
+      "facebook.com stops resolving worldwide"
+     ],
+     [
+      "During",
+      "Resolvers see ~30x queries; engineers drive to sites"
+     ],
+     [
+      "21:20-21:28",
+      "Names resolve; services return gradually"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "At about 15:40, a burst of B-G-P updates from Facebook's normally quiet network.",
+     "reveal": 1
+    },
+    {
+     "say": "At 15:50, facebook dot com stops resolving. Facebook has stopped announcing routes to its own D-N-S servers.",
+     "reveal": 2
+    },
+    {
+     "say": "Retrying clients push public resolvers to about thirty times normal load. Internal tools are down, so engineers go to the data centres in person.",
+     "reveal": 3
+    },
+    {
+     "say": "Around 21:20, names resolve again and services return, slowly.",
+     "reveal": 4
+    }
+   ],
+   "id": "s042"
+  },
+  {
+   "layout": "diagram",
+   "title": "Why every DNS site vanished",
+   "mermaid": "flowchart LR\n  M[\"Maintenance command\"] -- \"audit tool bug\" --> BB[\"Backbone down\"]\n  BB --> H[\"Each DNS site: cannot reach data centres\"]\n  H --> W[\"Each withdraws its BGP routes\"]\n  W --> G[\"Name servers running but unreachable\"]",
+   "caption": "A local health rule with no global floor",
+   "steps": [
+    {
+     "say": "Trigger: during routine maintenance, a command meant to assess backbone capacity took down every backbone link. An audit tool meant to block it had a bug.",
+     "reveal": 0
+    },
+    {
+     "say": "Root cause: each D-N-S site withdraws its own routes when it can't reach the data centres, a sensible local rule. With the backbone down, every site judged itself unhealthy at once. The name servers were running, but nobody could reach them.",
+     "reveal": 0
+    },
+    {
+     "say": "Recovery was slow because tools and out-of-band access shared fate with the network. And power had to ramp back gradually, which storm drills had practised.",
+     "reveal": 0
+    },
+    {
+     "say": "Patterns: stage network changes by failure domain, never let health checks remove all capacity, ramp back with backoff, and keep a repair path that doesn't share fate.",
+     "reveal": 0
+    }
+   ],
+   "id": "s043"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 9 of 15",
+   "title": "2020: AWS Kinesis outage",
+   "caption": "Book: Module 26 · 2020 — AWS Kinesis outage (us-east-1)",
+   "steps": [
+    {
+     "say": "Concept nine. On 25 November 2020, Kinesis Data Streams in us-east-1 failed for most of a day. Its back-end was split into cells, but its front-end was one fleet of many thousands of servers, and each server kept one O-S thread for every other server.",
+     "reveal": 0
+    }
+   ],
+   "id": "s044"
+  },
+  {
+   "layout": "number",
+   "title": "How adding servers broke everything",
+   "big": "N servers x (N - 1) threads each",
+   "caption": "Every addition moves every server closer to the OS thread limit",
+   "steps": [
+    {
+     "say": "Say the fleet has five thousand servers. Each holds about five thousand peer threads. Add a few hundred servers, and every server gains a few hundred threads, all at once.",
+     "reveal": 0
+    },
+    {
+     "say": "At 2:44 AM a small capacity addition did exactly that. No alarm watched thread headroom. Every server crossed the O-S thread limit, shard maps failed to build, and requests couldn't be routed.",
+     "reveal": 0
+    },
+    {
+     "say": "Recovery was slow because rebuilding a shard map competes with serving for C-P-U; restart too fast and servers look unhealthy. They came back a few hundred per hour, fully recovered at 10:23 PM, seventeen hours after the first alarm.",
+     "reveal": 0
+    }
+   ],
+   "id": "s045"
+  },
+  {
+   "layout": "bullets",
+   "title": "Hidden dependencies and the fix",
+   "bullets": [
+    "Cognito blocked on a full Kinesis buffer",
+    "CloudWatch lost metrics; autoscaling delayed",
+    "Status page tool depended on Cognito",
+    "Fix: bounded cells for the front-end too",
+    "Alarm on usage as a percent of a limit"
+   ],
+   "steps": [
+    {
+     "say": "The damage spread through hidden dependencies. Cognito, A-W-S sign-in, sent analytics through a buffer to Kinesis, and a latent bug made it block when that buffer filled.",
+     "reveal": 1
+    },
+    {
+     "say": "CloudWatch lost metrics, so alarms went to insufficient data, and metric-driven autoscaling was delayed until evening.",
+     "reveal": 2
+    },
+    {
+     "say": "Even the status-page tool depended on Cognito.",
+     "reveal": 3
+    },
+    {
+     "say": "The fix: cellularise the front-end so each server tracks only a bounded, tested set of peers, bootstrap from an authoritative store, and give big internal tenants like CloudWatch their own partition.",
+     "reveal": 4
+    },
+    {
+     "say": "And alarm on usage as a percentage of a limit, not just on errors. In the interview: adding servers breaks a system when per-server cost grows with fleet size.",
+     "reveal": 5
+    }
+   ],
+   "id": "s046"
+  },
+  {
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "Analytics blocked sign-in. Which pattern?",
+   "bullets": [
+    "A. Sharding",
+    "B. Graceful degradation with timeouts",
+    "C. Caching"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. Analytics was a side path, yet it blocked user sign-in. Which pattern would have contained that?",
+     "reveal": 0
+    },
+    {
+     "say": "Answer: B. A non-critical side path should time out and drop data, degrading gracefully, never block the critical path. Cognito now tolerates Kinesis errors without exhausting its buffers.",
+     "reveal": 0
+    }
+   ],
+   "id": "s047"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 10 of 15",
+   "title": "2021: AWS us-east-1 network congestion",
+   "caption": "Book: Module 26 · 2021 — AWS us-east-1 internal network congestion",
+   "steps": [
+    {
+     "say": "Concept ten. On 7 December 2021, congestion inside A-W-S impaired the us-east-1 control plane for about seven hours. A-W-S runs a main network for customers, and a separate internal network for monitoring, internal D-N-S and parts of the E-C-2 control plane.",
+     "reveal": 0
+    }
+   ],
+   "id": "s048"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "A retry storm, step by step (PST)",
+   "table": {
+    "head": [
+     "Time",
+     "Event"
+    ],
+    "rows": [
+     [
+      "7:30 AM",
+      "Automated scaling: internal clients surge"
+     ],
+     [
+      "7:30-7:33",
+      "EC2 and Route 53 APIs error; support down"
+     ],
+     [
+      "9:28 AM",
+      "Internal DNS moved off congested paths"
+     ],
+     [
+      "2:22 PM",
+      "Network devices fully recovered"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "At 7:30 AM, routine automated scaling of a service triggered a connection surge from many internal clients, overwhelming the devices between the two networks.",
+     "reveal": 1
+    },
+    {
+     "say": "Root cause: the clients' back-off should have slowed retries, but a latent bug stopped it engaging. Delays caused retries, retries kept the devices congested. A self-sustaining retry storm. E-C-2 A-P-Is failed, and support case creation was down until afternoon.",
+     "reveal": 2
+    },
+    {
+     "say": "Monitoring was knocked out, so operators worked from logs, and deploy tools ran on the same congested network. At 9:28 they moved internal D-N-S off the congested paths.",
+     "reveal": 3
+    },
+    {
+     "say": "They isolated the biggest traffic sources and paused heavy services. Devices recovered at 2:22 PM, the long tails by evening.",
+     "reveal": 4
+    }
+   ],
+   "id": "s049"
+  },
+  {
+   "layout": "twocol",
+   "title": "What held, and what contains it",
+   "left": {
+    "heading": "What held: static stability",
+    "bullets": [
+     "Running EC2 instances kept running",
+     "Existing DNS answers, load balancers held"
+    ]
+   },
+   "right": {
+    "heading": "Containing patterns",
+    "bullets": [
+     "Backoff with jitter, tested, retry budget",
+     "Load shedding at shared chokepoints",
+     "Tools that don't share fate"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Here's the good news. The data plane was statically stable. Running instances, existing load balancers and Lambda invocations kept working.",
+     "reveal": 1
+    },
+    {
+     "say": "What failed was the control plane: launches, provisioning and logins.",
+     "reveal": 2
+    },
+    {
+     "say": "To contain it: backoff with jitter, tested under real congestion, plus a retry budget.",
+     "reveal": 3
+    },
+    {
+     "say": "Admission control and load shedding at shared chokepoints.",
+     "reveal": 4
+    },
+    {
+     "say": "And monitoring, deploy and status tools that don't share fate with the network they watch. In the interview: congestion lasted hours because back-off failed, and only shedding load from outside broke the storm.",
+     "reveal": 5
+    }
+   ],
+   "id": "s050"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 11 of 15",
+   "title": "2025: AWS us-east-1 DynamoDB DNS outage",
+   "caption": "Book: Module 26 · 2025 — AWS us-east-1 DynamoDB DNS outage",
+   "steps": [
+    {
+     "say": "Concept eleven. On 19 October 2025, the D-N-S record for DynamoDB's us-east-1 endpoint was left empty, so every client lost the ability to find it. Impact lasted about fourteen and a half hours. Two parts matter: a Planner produces numbered D-N-S plans, and three independent Enactors apply them and clean up old ones.",
+     "reveal": 0
+    }
+   ],
+   "id": "s051"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Example",
+   "title": "The race: time-of-check to time-of-use",
+   "bullets": [
+    "1. Enactor A is badly delayed on an old plan",
+    "2. Enactor B applies the newest plan, starts cleanup",
+    "3. A writes its stale plan over the new one",
+    "4. Cleanup deletes that old plan: record empty"
+   ],
+   "steps": [
+    {
+     "say": "Walk through it with plan numbers. Enactor A starts applying plan one hundred, and checks: is my plan newer than what's live? Yes. Then it stalls.",
+     "reveal": 1
+    },
+    {
+     "say": "Enactor B applies plan one hundred ten, the newest, then starts cleanup, which deletes plans much older than the one it just applied.",
+     "reveal": 2
+    },
+    {
+     "say": "Enactor A wakes up and writes plan one hundred over one hundred ten. That's a time-of-check to time-of-use bug: acting on a fact that changed.",
+     "reveal": 3
+    },
+    {
+     "say": "Cleanup now deletes plan one hundred as obsolete, but it's the live one. Every I-P for the endpoint vanishes, in a state that blocks automatic repair. Engineers fixed it by hand by 2:25 AM.",
+     "reveal": 4
+    }
+   ],
+   "id": "s052"
+  },
+  {
+   "layout": "table",
+   "title": "Recovery was its own outage (PDT)",
+   "table": {
+    "head": [
+     "Time",
+     "Event"
+    ],
+    "rows": [
+     [
+      "2:40 AM",
+      "DNS caches expire; DynamoDB reachable"
+     ],
+     [
+      "2:25-5:28 AM",
+      "DWFM lease storm: re-leasing every server"
+     ],
+     [
+      "5:30 AM-2:09 PM",
+      "NLB health checks flap; failover removes capacity"
+     ],
+     [
+      "1:50 PM",
+      "EC2 launches normal"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "By 2:40 AM customers could reach DynamoDB again. But E-C-2 launches kept failing until the afternoon. Why?",
+     "reveal": 1
+    },
+    {
+     "say": "E-C-2's server manager, D-W-F-M, holds a lease on each physical server, renewed through DynamoDB. The leases had expired, so it tried to re-lease the whole fleet at once. Work timed out and was re-queued faster than it finished.",
+     "reveal": 2
+    },
+    {
+     "say": "Then new instances came up before their network config had spread, so load-balancer health checks flipped back and forth, and automatic failover removed healthy capacity.",
+     "reveal": 3
+    },
+    {
+     "say": "Patterns: conditional writes with a version checked at commit time; never publish an empty plan; queue-size throttling so recovery can't collapse; and rate limits on automated failover.",
+     "reveal": 4
+    }
+   ],
+   "id": "s053"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 12 of 15",
+   "title": "2017: GitLab.com database deletion",
+   "caption": "Book: Module 26 · 2017 — GitLab.com database deletion",
+   "steps": [
+    {
+     "say": "Concept twelve. On 31 January 2017, a GitLab engineer rebuilding a broken replica wiped the primary database's data directory instead. The site was down about eighteen hours, and about six hours of database changes were lost.",
+     "reveal": 0
+    }
+   ],
+   "id": "s054"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Five recovery mechanisms, none worked",
+   "table": {
+    "head": [
+     "Mechanism",
+     "Why it failed"
+    ],
+    "rows": [
+     [
+      "Daily pg_dump to S3",
+      "Version mismatch; bucket was empty"
+     ],
+     [
+      "Failure emails",
+      "Rejected by mail checks: nobody knew"
+     ],
+     [
+      "Azure disk snapshots",
+      "Not enabled for database servers"
+     ],
+     [
+      "LVM snapshots",
+      "For staging; a manual one saved 6 hours"
+     ],
+     [
+      "Replication",
+      "Copies a deletion as faithfully as a write"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "At about 23:30 U-T-C, after hours fighting replication lag, the engineer ran the delete on the wrong host. About three hundred gigabytes were gone in a second or two. The trigger is one sentence. The story is recovery.",
+     "reveal": 1
+    },
+    {
+     "say": "One: the daily database dump used an old tool version against a newer PostgreSQL, failed, and the S3 bucket was empty.",
+     "reveal": 2
+    },
+    {
+     "say": "Two: failure emails were rejected by the receiving server's authentication checks, so nobody knew.",
+     "reveal": 3
+    },
+    {
+     "say": "Three: cloud disk snapshots were on for file servers, not database servers.",
+     "reveal": 4
+    },
+    {
+     "say": "Four: a snapshot taken by hand at 17:20 for staging saved six hours of data. Five: replication copied the deletion. The restore took eighteen hours over disks throttled to about sixty megabits a second.",
+     "reveal": 5
+    }
+   ],
+   "id": "s055"
+  },
+  {
+   "layout": "bullets",
+   "title": "Patterns: a backup isn't a backup until restored",
+   "bullets": [
+    "Continuous WAL archiving, point-in-time recovery",
+    "Restore drills with stated RPO and RTO",
+    "Alert on absence of a successful backup",
+    "Automated replica rebuilds; distinct hostnames"
+   ],
+   "steps": [
+    {
+     "say": "First, archive the write-ahead log continuously, so you can recover to any minute, not a six-hour-old snapshot.",
+     "reveal": 1
+    },
+    {
+     "say": "Second, run restore drills with a stated R-P-O, how much data you may lose, and R-T-O, how long recovery may take.",
+     "reveal": 2
+    },
+    {
+     "say": "Third, alert when a successful backup is missing, not when a failure email arrives. Emails can silently vanish.",
+     "reveal": 3
+    },
+    {
+     "say": "Fourth, automate replica rebuilds, with distinct primary and replica prompts. The best single action item: automated restore tests with an owner.",
+     "reveal": 4
+    }
+   ],
+   "id": "s056"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 13 of 15",
+   "title": "2019: Cloudflare WAF regex outage",
+   "caption": "Book: Module 26 · 2019 — Cloudflare WAF regex outage",
+   "steps": [
+    {
+     "say": "Concept thirteen. On 2 July 2019, one new rule in Cloudflare's web application firewall, the W-A-F, pushed C-P-U to nearly one hundred percent on every H-T-T-P server worldwide. About eighty percent of traffic was lost for twenty-seven minutes.",
+     "reveal": 0
+    }
+   ],
+   "id": "s057"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Twenty-seven minutes (UTC)",
+   "table": {
+    "head": [
+     "Time",
+     "Event"
+    ],
+    "rows": [
+     [
+      "13:42",
+      "Rule deployed globally in seconds"
+     ],
+     [
+      "~13:45",
+      "CPU exhaustion and traffic-drop alerts"
+     ],
+     [
+      "14:07",
+      "Global kill switch disables the WAF"
+     ],
+     [
+      "14:52",
+      "Fix verified in one city; WAF re-enabled"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "At 13:42, a new cross-site-scripting rule, already reviewed and tested, went global in seconds through Cloudflare's config store.",
+     "reveal": 1
+    },
+    {
+     "say": "Within minutes, C-P-U was exhausted everywhere. The rule was meant to run in simulate mode, log but don't block. But a simulated rule still executes, so it still burns C-P-U.",
+     "reveal": 2
+    },
+    {
+     "say": "At 14:07 a global terminate, a kill switch, disabled the W-A-F everywhere, and traffic was back two minutes later.",
+     "reveal": 3
+    },
+    {
+     "say": "At 14:52, after verifying a fix in one city, they re-enabled it.",
+     "reveal": 4
+    }
+   ],
+   "id": "s058"
+  },
+  {
+   "layout": "bullets",
+   "title": "Why one regex took every core",
+   "bullets": [
+    "Pattern .*(?:.*=.*): two greedy wildcards",
+    "Backtracking tries every split on failure",
+    "20 chars with no '=': 4,067 steps to fail",
+    "CPU guard removed weeks earlier by accident",
+    "Fix: linear-time regex, staged rule rollout"
+   ],
+   "steps": [
+    {
+     "say": "Root cause: the rule contained dot-star, then a group with dot-star, equals, dot-star. Two greedy wildcards before an equals sign.",
+     "reveal": 1
+    },
+    {
+     "say": "The engine backtracks: when a match fails, it tries every other way to split the input between the wildcards.",
+     "reveal": 2
+    },
+    {
+     "say": "Cloudflare's example: twenty characters with no equals sign take four thousand sixty-seven steps just to say no match. Longer inputs grow faster than linearly.",
+     "reveal": 3
+    },
+    {
+     "say": "A guard against excessive regex C-P-U had been removed by accident in a refactor weeks earlier, and tests didn't measure C-P-U.",
+     "reveal": 4
+    },
+    {
+     "say": "Patterns: treat rules as code with staged rollout, keep the kill switch, use a linear-time engine like R-E-two, and give each request a work budget.",
+     "reveal": 5
+    }
+   ],
+   "id": "s059"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 14 of 15",
+   "title": "2024: CrowdStrike Channel File 291",
+   "caption": "Book: Module 26 · 2024 — CrowdStrike Channel File 291",
+   "steps": [
+    {
+     "say": "Concept fourteen. On 19 July 2024, a content update for CrowdStrike's Falcon sensor crashed about eight and a half million Windows machines with a blue screen. Under one percent of Windows machines, but many ran critical services like airlines and hospitals.",
+     "reveal": 0
+    }
+   ],
+   "id": "s060"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Example",
+   "title": "21 fields defined, 20 supplied",
+   "bullets": [
+    "Sensor runs a kernel driver: a fault crashes Windows",
+    "Template Type defined with 21 input fields",
+    "Sensor code supplied only 20",
+    "Every earlier instance used a wildcard for field 21",
+    "19 July instance used a real value: out-of-bounds read"
+   ],
+   "steps": [
+    {
+     "say": "The sensor includes a Windows kernel driver, so a fault takes down the whole machine. Detection rules arrive as data in numbered channel files.",
+     "reveal": 1
+    },
+    {
+     "say": "In February, a new detection template was defined with twenty-one input fields.",
+     "reveal": 2
+    },
+    {
+     "say": "But the sensor code that called the interpreter supplied only twenty.",
+     "reveal": 3
+    },
+    {
+     "say": "Every rule shipped since, and every test, used a wildcard for field twenty-one, so it was never read.",
+     "reveal": 4
+    },
+    {
+     "say": "On 19 July at 04:09 U-T-C, a new rule used a real value there. The interpreter read past the end of the twenty-entry array, an out-of-bounds read, and the kernel crashed.",
+     "reveal": 5
+    }
+   ],
+   "id": "s061"
+  },
+  {
+   "layout": "twocol",
+   "title": "Why 78 minutes became days",
+   "left": {
+    "heading": "Why recovery was slow",
+    "bullets": [
+     "Reverted at 05:27 UTC",
+     "Crash at boot, before the fix downloads",
+     "Manual repair; BitLocker recovery keys"
+    ]
+   },
+   "right": {
+    "heading": "Containing patterns",
+    "bullets": [
+     "Staged rings with canaries and bake time",
+     "Bounds checks; fall back to last good",
+     "Customer-controlled update rings"
+    ]
+   },
+   "steps": [
+    {
+     "say": "The content was reverted at 05:27, seventy-eight minutes later.",
+     "reveal": 1
+    },
+    {
+     "say": "But many machines crashed at every boot, before they could download the revert.",
+     "reveal": 2
+    },
+    {
+     "say": "Each needed hands-on repair: boot to safe mode, delete the file, often after typing a BitLocker recovery key. Rollback only works if the broken system can still receive it.",
+     "reveal": 3
+    },
+    {
+     "say": "Patterns: config is code and needs staged rings. Even a one percent first ring would have shown crashes within minutes.",
+     "reveal": 4
+    },
+    {
+     "say": "Defensive parsing: check bounds, reject bad content, keep the last good content. And a boot agent that crashes repeatedly should disable its own latest content.",
+     "reveal": 5
+    },
+    {
+     "say": "And let customers choose update rings, a test fleet first, as a bulkhead against vendor pushes.",
+     "reveal": 6
+    }
+   ],
+   "id": "s062"
+  },
+  {
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "Which outages began with a normal code deploy?",
+   "bullets": [
+    "A. All seven",
+    "B. Cloudflare and CrowdStrike",
+    "C. None of them"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. Of our seven outages, which began with an ordinary code deploy?",
+     "reveal": 0
+    },
+    {
+     "say": "Answer: C, none. A command, a capacity addition, automated scaling, a delayed D-N-S writer, a manual delete, a W-A-F rule, a content file. That's lesson one of the next concept.",
+     "reveal": 0
+    }
+   ],
+   "id": "s063"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 15 of 15",
+   "title": "Patterns across all the outages",
+   "caption": "Book: Module 26 · Patterns across all the outages",
+   "steps": [
+    {
+     "say": "Concept fifteen. Put all seven side by side, and six lessons keep appearing.",
+     "reveal": 0
+    }
+   ],
+   "id": "s064"
+  },
+  {
+   "layout": "table",
+   "title": "Seven outages at a glance",
+   "table": {
+    "head": [
+     "Incident",
+     "Trigger",
+     "Latent root cause"
+    ],
+    "rows": [
+     [
+      "Facebook 2021",
+      "Backbone command",
+      "DNS sites withdraw when unhealthy"
+     ],
+     [
+      "Kinesis 2020",
+      "Capacity addition",
+      "One thread per peer"
+     ],
+     [
+      "AWS Dec 2021",
+      "Automated scaling",
+      "Back-off bug: retry storm"
+     ],
+     [
+      "AWS Oct 2025",
+      "Delayed DNS Enactor",
+      "Check-then-act race"
+     ],
+     [
+      "GitLab 2017",
+      "Command on wrong host",
+      "Untested backups"
+     ],
+     [
+      "Cloudflare 2019",
+      "WAF rule deploy",
+      "Backtracking regex, guard removed"
+     ],
+     [
+      "CrowdStrike 2024",
+      "Content update",
+      "21 fields, 20 supplied"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Facebook: a backbone command, and D-N-S sites that all withdrew together.",
+     "reveal": 1
+    },
+    {
+     "say": "Kinesis: a capacity addition, and one thread per peer.",
+     "reveal": 2
+    },
+    {
+     "say": "December 2021: automated scaling, and a back-off bug.",
+     "reveal": 3
+    },
+    {
+     "say": "October 2025: a delayed writer, and a check-then-act race.",
+     "reveal": 4
+    },
+    {
+     "say": "GitLab: a command on the wrong host, and backups never tested.",
+     "reveal": 5
+    },
+    {
+     "say": "Cloudflare: a rule deploy, and a backtracking regex with its guard removed.",
+     "reveal": 6
+    },
+    {
+     "say": "CrowdStrike: a content update, and a field count mismatch. Notice: every trigger is routine. Every root cause was latent for months.",
+     "reveal": 7
+    }
+   ],
+   "id": "s065"
+  },
+  {
+   "layout": "bullets",
+   "title": "Six lessons that recur",
+   "bullets": [
+    "1. Configuration changes are deploys",
+    "2. Blast radius is a design choice",
+    "3. Safety checks are code and can fail",
+    "4. Recovery is a load event",
+    "5. Repair paths must not share fate",
+    "6. Test the recovery, not just the system"
+   ],
+   "steps": [
+    {
+     "say": "One: configuration changes are deploys. They need canaries, rings and kill switches.",
+     "reveal": 1
+    },
+    {
+     "say": "Two: blast radius is a design choice: cells and bulkheads decide how far a fault spreads.",
+     "reveal": 2
+    },
+    {
+     "say": "Three: safety checks are code and can fail. Layer defences, and make the consumer safe too.",
+     "reveal": 3
+    },
+    {
+     "say": "Four: recovery is a load event. Retry storms, lease storms, cache rebuilds, power ramps. Use backoff, throttling and gradual ramps.",
+     "reveal": 4
+    },
+    {
+     "say": "Five: repair paths must not share fate with what they repair.",
+     "reveal": 5
+    },
+    {
+     "say": "Six: test the recovery. GitLab's backups, Kinesis's cold start, and the E-C-2 lease recovery turned short faults into long outages.",
+     "reveal": 6
+    }
+   ],
+   "id": "s066"
+  },
+  {
+   "layout": "recap",
+   "title": "Recap",
+   "bullets": [
+    "Short video: funnel, minute loop, preload, staged exposure",
+    "Food: ready-time dispatch, routes, saga with durable timers",
+    "Shop: critical path, merged cart, deal buckets, 16-week plan",
+    "Education: monotonic progress; Wrapped: re-runnable story jobs",
+    "Twilio: tiny queues, isolated webhooks; postmortems: blameless",
+    "Outages: config is a deploy, recovery is load. Next: Episode 31"
+   ],
+   "steps": [
+    {
+     "say": "Let's recap. Short video: a three-stage funnel, minute-level updates, preloaded swipes, and staged exposure.",
+     "reveal": 1
+    },
+    {
+     "say": "Food delivery: dispatch to the predicted ready time, batch orders into routes per zone, and run each order as a saga with durable timers.",
+     "reveal": 2
+    },
+    {
+     "say": "E-commerce: a critical path, an always-writable cart, deal buckets with claim tokens, and a sixteen-week readiness plan.",
+     "reveal": 3
+    },
+    {
+     "say": "Education: progress merges monotonically, grading stays on the server, and the deadline stamps upload time.",
+     "reveal": 4
+    },
+    {
+     "say": "Wrapped: re-runnable story jobs, a pointer flip, and regional waves.",
+     "reveal": 4
+    },
+    {
+     "say": "Twilio: tiny token-bucket queues, isolated webhooks, fail-safe billing. Postmortems: separate the trigger from the latent root cause, stay blameless, and ask the five questions.",
+     "reveal": 5
+    },
+    {
+     "say": "And from seven outages: config changes are deploys, recovery is a load event, and a backup only counts once it's restored.",
+     "reveal": 6
+    },
+    {
+     "say": "Next time, episode thirty-one: Interview Method and Preparation.",
+     "reveal": 6
+    }
+   ],
+   "id": "s067"
+  }
+ ]
+}

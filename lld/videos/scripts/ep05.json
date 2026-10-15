@@ -1,0 +1,2046 @@
+{
+  "series": "LLD Workshop",
+  "episode": 5,
+  "title": "More Design Principles, GRASP and DDD",
+  "subtitle": "DRY to Design by Contract, the nine GRASP guidelines, and DDD essentials",
+  "scenes": [
+    {
+      "id": "s001",
+      "layout": "title",
+      "title": "More Design Principles, GRASP and DDD",
+      "subtitle": "DRY to Design by Contract, the nine GRASP guidelines, and DDD essentials",
+      "steps": [
+        {
+          "say": "Welcome to episode five of the L-L-D Workshop, the low-level design series. SOLID gave you five rules. Today you get the rest of the everyday toolkit.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll be able to name and fix duplicated rules, train wrecks, fragile subclasses and surprising methods. You'll place every responsibility in a checkout with GRASP, and model an order the domain-driven way.",
+          "reveal": 0
+        },
+        {
+          "say": "Keep the chapter five notes open. Each concept matches a section there, in order, and every example has a runnable Java program. Pause before each output and predict it.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s002",
+      "layout": "bullets",
+      "kicker": "Before we start",
+      "title": "Five words we'll use all episode",
+      "bullets": [
+        "Coupling: how much one class knows about another",
+        "Cohesion: how well a class's insides belong together",
+        "Encapsulation: data private, changed only via methods",
+        "Invariant: a fact that must always be true",
+        "Responsibility: something a class knows or does"
+      ],
+      "steps": [
+        {
+          "say": "Coupling is how much one class depends on another. High coupling means a change in one forces a change in the other.",
+          "reveal": 1
+        },
+        {
+          "say": "Cohesion is how closely the things inside one class belong together. High cohesion means one focused job.",
+          "reveal": 2
+        },
+        {
+          "say": "Encapsulation means an object's data is private, and other code changes it only through the object's methods.",
+          "reveal": 3
+        },
+        {
+          "say": "An invariant is a fact that must always hold, like: a balance is never negative.",
+          "reveal": 4
+        },
+        {
+          "say": "And a responsibility is something a class knows, its data, or does, its behaviour. Hold onto these five.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s003",
+      "layout": "section",
+      "kicker": "Concept 1 of 18",
+      "title": "DRY: one rule, one home",
+      "steps": [
+        {
+          "say": "DRY stands for don't repeat yourself. Every piece of knowledge, a business rule, a formula, a validation, should have one authoritative home.",
+          "reveal": 0
+        },
+        {
+          "say": "Notice the word knowledge. DRY is about rules, not about lines that happen to look alike. Think of one master price list, not a hand-copied list in every shop.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 5 · 1. DRY — Don't Repeat Yourself"
+    },
+    {
+      "id": "s004",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: two copies of 'valid email' drifted",
+      "table": {
+        "head": [
+          "Step",
+          "Signup and profile services"
+        ],
+        "rows": [
+          [
+            "1. Spot the repeated rule",
+            "Email check in both; 18% tax in both"
+          ],
+          [
+            "2. Must copies change together?",
+            "Yes: one rule, two answers today"
+          ],
+          [
+            "3. Give it one home",
+            "EmailAddress record; TaxPolicy class"
+          ],
+          [
+            "4. Rule of Three for code",
+            "Once ok, twice tolerate, third extract"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Step one, spot the repeated rule. Our signup service checks an email just contains an at sign. The profile service uses a stricter pattern. Both hard-code eighteen percent tax.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, ask: if this rule changes, must every copy change? Yes. And they've already drifted. Bob at localhost passes signup but fails profile. Same rule, two answers.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, give it one home. An Email Address record validates in its constructor, so an invalid email can't even exist. A Tax Policy class holds the rate. A hundred rupees becomes one eighteen, from one line.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, for plain code duplication use the rule of three: write it once, tolerate a second copy, extract on the third.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s005",
+      "layout": "bullets",
+      "kicker": "Concept 1 of 18",
+      "title": "DRY: when not to, and the interview line",
+      "bullets": [
+        "Look-alikes by coincidence: leave them apart",
+        "Across microservices: some duplication is cheaper",
+        "Tests: a little repetition keeps them readable",
+        "Say: knowledge, not text; Rule of Three"
+      ],
+      "steps": [
+        {
+          "say": "When not to. Max username thirty characters and max tag thirty characters look the same but are different rules. Merging them creates false coupling.",
+          "reveal": 1
+        },
+        {
+          "say": "Across microservices, a shared domain library ties their releases together. Some duplication is the lesser evil.",
+          "reveal": 2
+        },
+        {
+          "say": "In tests, a little repetition keeps each test readable on its own.",
+          "reveal": 3
+        },
+        {
+          "say": "In the interview, say: DRY means each piece of knowledge has one home. I extract when copies must change together, and use the rule of three so I don't abstract too early. Recap: one rule, one home.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s006",
+      "layout": "section",
+      "kicker": "Concept 2 of 18",
+      "title": "KISS: the plainest design that works",
+      "steps": [
+        {
+          "say": "KISS: keep it simple, stupid. The phrase comes from the US Navy around 1960 and Lockheed's Kelly Johnson, who wanted jets a mechanic could fix in the field with basic tools.",
+          "reveal": 0
+        },
+        {
+          "say": "Simple means easy to understand and change. Not the fewest lines. The enemy is accidental complexity: complexity your solution adds that the problem never had.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 5 · 2. KISS — Keep It Simple, Stupid"
+    },
+    {
+      "id": "s007",
+      "layout": "twocol",
+      "kicker": "Example",
+      "title": "Example: three tiers, three discounts",
+      "left": {
+        "heading": "Before: a rule engine",
+        "bullets": [
+          "Rules with priority, predicate, function",
+          "Sorted list, first match wins",
+          "Forgotten priority: silent wrong answer"
+        ]
+      },
+      "right": {
+        "heading": "After: a switch expression",
+        "bullets": [
+          "GOLD 0.80, SILVER 0.90, REGULAR 1.0",
+          "No default: compiler checks every tier",
+          "Same output: 80, 90, 100"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Requirement in one sentence: gold customers get twenty percent off, silver ten, regular nothing. The before version builds a home-made rule engine. Each rule has a priority, a predicate, and a function.",
+          "reveal": 1
+        },
+        {
+          "say": "The rules sit in a sorted list and the first match wins.",
+          "reveal": 2
+        },
+        {
+          "say": "Forget a priority and the behaviour silently changes. That's three moving parts for three fixed numbers.",
+          "reveal": 3
+        },
+        {
+          "say": "The after version is one switch expression over a tier enum. Gold times point eight, silver times point nine, regular unchanged.",
+          "reveal": 4
+        },
+        {
+          "say": "With no default branch, adding a platinum tier fails to compile until you handle it.",
+          "reveal": 5
+        },
+        {
+          "say": "Same results: eighty, ninety, a hundred rupees on a hundred. Could a new teammate read it in two minutes? Yes.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s008",
+      "layout": "bullets",
+      "kicker": "Concept 2 of 18",
+      "title": "KISS: the limits",
+      "bullets": [
+        "Not an excuse to skip real needs",
+        "Payments still need idempotency and retries",
+        "Simple is not short: five nested lambdas",
+        "Say: start plain, add patterns when asked"
+      ],
+      "steps": [
+        {
+          "say": "KISS is no excuse to ignore real complexity.",
+          "reveal": 1
+        },
+        {
+          "say": "A payment system needs idempotency, meaning a repeated request has the same effect as one, so nobody's charged twice. Leaving that out is incomplete, not simple.",
+          "reveal": 2
+        },
+        {
+          "say": "And simple isn't short. A one-line stream with five nested lambdas can be harder to read than a loop.",
+          "reveal": 3
+        },
+        {
+          "say": "In the interview: I start with a straightforward model and add a pattern only when a requirement demands variation, and I say why. Recap: solve the real problem the plainest way.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s009",
+      "layout": "section",
+      "kicker": "Concept 3 of 18",
+      "title": "YAGNI: you aren't gonna need it",
+      "steps": [
+        {
+          "say": "YAGNI: don't build a capability until you actually need it. It comes from Extreme Programming in the late nineties. The opposite habit, hooks and options just in case, is a smell called speculative generality.",
+          "reveal": 0
+        },
+        {
+          "say": "KISS is about how you build. YAGNI is about what you build.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 5 · 3. YAGNI — You Aren't Gonna Need It"
+    },
+    {
+      "id": "s010",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: 'export orders as CSV'",
+      "table": {
+        "head": [
+          "Version",
+          "What it does"
+        ],
+        "rows": [
+          [
+            "Before: universal exporter",
+            "5 formats, encoding, compress flag"
+          ],
+          [
+            "Reality",
+            "Only CSV works; 4 throw 'not implemented'"
+          ],
+          [
+            "After: toCsv(orders)",
+            "One method, header + one row per order"
+          ],
+          [
+            "Why it hurts",
+            "Built, tested, read, and probably wrong"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The requirement is: export orders as C-S-V, comma separated values. The before version builds a universal exporter: five formats, an encoding parameter, a compress flag.",
+          "reveal": 1
+        },
+        {
+          "say": "Reality: only C-S-V works. P-D-F, X-M-L, Excel and YAML throw not implemented. Every caller passes three meaningless arguments, and nobody can tell which formats work.",
+          "reveal": 2
+        },
+        {
+          "say": "The after version is one method. Header line, then one row per order: o1, Asha, two fifty.",
+          "reveal": 3
+        },
+        {
+          "say": "Early features cost four times. Building them, maintaining them, the complexity around them, and being wrong, because the real requirement usually differs from the guess.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s011",
+      "layout": "bullets",
+      "kicker": "Concept 3 of 18",
+      "title": "YAGNI: when to design ahead anyway",
+      "bullets": [
+        "Hard to reverse: public APIs, schemas, security",
+        "Stated targets are requirements, not guesses",
+        "Needs clean code and tests to stay safe",
+        "Say: extension point only if hinted"
+      ],
+      "steps": [
+        {
+          "say": "Design ahead for decisions that are hard to reverse: public A-P-I formats, database schemas holding huge data, security.",
+          "reveal": 1
+        },
+        {
+          "say": "A stated target like ten thousand requests a second is a requirement, not speculation.",
+          "reveal": 2
+        },
+        {
+          "say": "YAGNI is only safe with clean, tested code, so adding the feature later is cheap.",
+          "reveal": 3
+        },
+        {
+          "say": "In the interview: I add a Payment Strategy interface only if the interviewer hinted at several payment types. Otherwise I mention it out loud. Recap: build for today, keep tomorrow cheap.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s012",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Two limits are both 30 chars. Share one constant?",
+      "bullets": [
+        "A. Yes, DRY demands it",
+        "B. Only if they're the same rule that changes together",
+        "C. No, constants are always YAGNI"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. A username limit and a tag limit, both thirty. Do you merge them into one constant? Answer coming up.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s013",
+      "layout": "section",
+      "kicker": "Concept 4 of 18",
+      "title": "Law of Demeter: talk only to friends",
+      "steps": [
+        {
+          "say": "Answer: B. Same text isn't the same knowledge. Now, the Law of Demeter, also called the principle of least knowledge.",
+          "reveal": 0
+        },
+        {
+          "say": "A method should only talk to its immediate friends: itself, its parameters, objects it creates, and its own fields. Not strangers reached through them. A chain like a dot get b dot get c dot do it is called a train wreck.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 5 · 4. Law of Demeter"
+    },
+    {
+      "id": "s014",
+      "layout": "diagram",
+      "kicker": "Concept 4 of 18",
+      "title": "The paperboy asks; he doesn't reach in",
+      "mermaid": "flowchart LR\n    P[\"Paperboy\"] -->|\"pay(due)\"| C[\"Customer\"]\n    C -->|\"take(amount)\"| W[\"Wallet (private)\"]\n    P -.->|\"before: getWallet().getBalance()\"| W",
+      "caption": "Paperboy knows only Customer.pay; Wallet stays hidden",
+      "steps": [
+        {
+          "say": "Here's the running example. A paperboy collects four rupees. Before: he calls customer get wallet, get balance, then set balance on the wallet. He knows the customer has a wallet, and that the wallet has a balance.",
+          "reveal": 0
+        },
+        {
+          "say": "The day the customer pays by U-P-I instead, the paperboy breaks.",
+          "reveal": 0
+        },
+        {
+          "say": "After: the paperboy calls customer dot pay four. The customer decides how, and the wallet stays a private detail. Output's the same: collected four from Meera, Kabir cannot pay.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s015",
+      "layout": "bullets",
+      "kicker": "Concept 4 of 18",
+      "title": "Demeter: fixing it, and what's not a violation",
+      "bullets": [
+        "1. Spot a chain through others' internals",
+        "2. Ask what the caller really wants",
+        "3. Add an intent method on the first object",
+        "Not violations: streams, builders, DTOs",
+        "Too many pass-throughs: Middle Man smell"
+      ],
+      "steps": [
+        {
+          "say": "Step one: spot a chain that navigates through other objects' insides.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: ask what the caller really wants. Get paid, not get the wallet.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: add a method on the first object that does that job, like customer dot pay.",
+          "reveal": 3
+        },
+        {
+          "say": "Fluent chains, like stream dot filter dot count, aren't violations. Each call returns the same kind of thing. Neither is reading a city off a plain data record.",
+          "reveal": 4
+        },
+        {
+          "say": "And don't add dozens of pass-through methods. That's the Middle Man smell. Move behaviour instead. Interview line: replace a get b get c with a method that says what you want.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s016",
+      "layout": "section",
+      "kicker": "Concept 5 of 18",
+      "title": "Tell, Don't Ask",
+      "steps": [
+        {
+          "say": "Tell, don't ask: instead of asking an object for its data and deciding for it, tell it what you want and let it decide. You tell a taxi driver: take me to the airport. You don't ask for the steering angle every second.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 5 · 5. Tell, Don't Ask"
+    },
+    {
+      "id": "s017",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: the frozen account",
+      "table": {
+        "head": [
+          "Caller",
+          "Before: ask then act",
+          "After: tell"
+        ],
+        "rows": [
+          [
+            "ATM",
+            "checks frozen and balance",
+            "account.withdraw(300)"
+          ],
+          [
+            "Mobile app",
+            "forgot the frozen check",
+            "account.withdraw(300)"
+          ],
+          [
+            "Result",
+            "frozen account: 1000 to 700",
+            "rejected: account is frozen"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Running example: a bank account with a thousand rupees, and it's frozen. Before, the A-T-M reads is frozen and the balance, then sets a new balance itself. It remembered the rule.",
+          "reveal": 1
+        },
+        {
+          "say": "The mobile app copies the logic and forgets the frozen check.",
+          "reveal": 2
+        },
+        {
+          "say": "Result: the frozen account drops from a thousand to seven hundred. Rule bypassed. After, both call account dot withdraw three hundred. The account checks positive amount, not frozen, enough funds, all in one place. Now the result: rejected, account is frozen.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s018",
+      "layout": "bullets",
+      "kicker": "Concept 5 of 18",
+      "title": "Tell, Don't Ask: the fine print",
+      "bullets": [
+        "Fights the Anemic Domain Model",
+        "Getters for display are fine",
+        "Don't push emails and SQL into the entity",
+        "LoD: who you talk to. TDA: what you ask"
+      ],
+      "steps": [
+        {
+          "say": "This fights the Anemic Domain Model: objects that are just data bags while every rule lives outside them.",
+          "reveal": 1
+        },
+        {
+          "say": "Getters aren't banned. Asking for a balance to show it is fine. The rule is: don't decide outside.",
+          "reveal": 2
+        },
+        {
+          "say": "But don't push everything in. An account that sends emails and runs SQL breaks single responsibility.",
+          "reveal": 3
+        },
+        {
+          "say": "In the interview: Demeter is about who you talk to, tell don't ask is about what you ask for. Both move behaviour to the data. And a single withdraw call can be made atomic, where ask then set is a race. Recap: tell the owner what you want.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s019",
+      "layout": "section",
+      "kicker": "Concept 6 of 18",
+      "title": "Composition over Inheritance",
+      "steps": [
+        {
+          "say": "Inheritance, is-a, reuses code by subclassing. Composition, has-a, holds a reference to another object and forwards calls to it. The Gang of Four book says: favour composition.",
+          "reveal": 0
+        },
+        {
+          "say": "Why? Inheritance is the tightest coupling there is. It's fixed at compile time, combining features multiplies classes, and there's the fragile base class problem. Let's see that one happen.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 5 · 6. Composition over Inheritance"
+    },
+    {
+      "id": "s020",
+      "layout": "diagram",
+      "kicker": "Concept 6 of 18",
+      "title": "Before: is-a. After: has-a",
+      "mermaid": "flowchart LR\n    S[\"Set (interface)\"]\n    H[\"HashSet\"] -->|\"implements\"| S\n    CH[\"CountingHashSet\"] -->|\"extends: BEFORE\"| H\n    CS[\"CountingSet\"] -->|\"implements\"| S\n    CS -->|\"wraps any Set: AFTER\"| S",
+      "caption": "Count how many elements were ever added",
+      "steps": [
+        {
+          "say": "Goal: count how many elements were ever added to a set. Before: Counting Hash Set extends Hash Set. It overrides add to bump a counter, and add all to add the collection's size.",
+          "reveal": 0
+        },
+        {
+          "say": "Add three items with add all. The counter says six. Why? The inherited add all calls our overridden add for each element. Counted twice. We depended on a detail of the parent's insides.",
+          "reveal": 0
+        },
+        {
+          "say": "After: Counting Set holds any Set and forwards calls. Three items, counter says three. And you can wrap a tree set chosen at runtime.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s021",
+      "layout": "bullets",
+      "kicker": "Concept 6 of 18",
+      "title": "Composition: trade-offs and when inheritance is fine",
+      "bullets": [
+        "Swap at runtime, combine like decorators",
+        "Cost: forwarding boilerplate, needs an interface",
+        "Inheritance OK: true is-a, designed for extension",
+        "JDK regrets: Stack extends Vector"
+      ],
+      "steps": [
+        {
+          "say": "Composition lets you swap behaviour at runtime and stack wrappers freely, the decorator idea.",
+          "reveal": 1
+        },
+        {
+          "say": "The cost: forwarding methods, and you need an interface to get polymorphism.",
+          "reveal": 2
+        },
+        {
+          "say": "Inheritance is fine for a true is-a where the parent was designed for extension, like abstract list, where you implement get and size.",
+          "reveal": 3
+        },
+        {
+          "say": "Even the J-D-K regrets some: Stack extends Vector, so you can insert into the middle of a stack. Interview line: I compose and delegate, and keep inheritance for substitutable subtypes. Recap: has-a beats is-a for reuse.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s022",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Which is NOT a Law of Demeter violation?",
+      "bullets": [
+        "A. order.getCustomer().getAddress().getCity() in a service",
+        "B. names.stream().filter(...).count()",
+        "C. var w = c.getWallet(); w.getBalance()"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Three snippets. Which one is fine?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s023",
+      "layout": "section",
+      "kicker": "Concept 7 of 18",
+      "title": "Program to an Interface, Not an Implementation",
+      "steps": [
+        {
+          "say": "Answer: B. A stream chain returns the same kind of thing each step. And C still violates, splitting a chain into temps doesn't help.",
+          "reveal": 0
+        },
+        {
+          "say": "Now: declare fields, parameters and return types using the most general supertype that offers what you need. Interface here means supertype, not just the Java keyword.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 5 · 7. Program to an Interface"
+    },
+    {
+      "id": "s024",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: the greeting service",
+      "table": {
+        "head": [
+          "Step",
+          "Before",
+          "After"
+        ],
+        "rows": [
+          [
+            "1. Name the role",
+            "MySqlUserStore",
+            "UserRepository.findById"
+          ],
+          [
+            "2. Type by role",
+            "ArrayList<String> names",
+            "Collection<String> names"
+          ],
+          [
+            "3. new only at the edge",
+            "new inside the service",
+            "injected via constructor"
+          ],
+          [
+            "4. Run it",
+            "needs a MySQL server",
+            "Hello, Asha / Hello, stranger"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Step one, name the role. The greeting service creates a My S-Q-L user store itself. The role is really: find a user by id. That's a User Repository interface.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, type by the role. Count long names takes an ArrayList, so a tree set won't compile. Take any collection instead.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, create concrete objects only at the edge: main, a factory, or a container. Then pass them in. That's dependency injection.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, run it. The before can't even run on a laptop without a database. The after uses an in-memory repository: hello Asha, hello stranger.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s025",
+      "layout": "bullets",
+      "kicker": "Concept 7 of 18",
+      "title": "Interfaces: when not to",
+      "bullets": [
+        "Value types: String, LocalDate, records",
+        "One implementation, no test need: ceremony",
+        "Need specific behaviour: LinkedHashMap for LRU",
+        "Say: roles + injection = DIP in practice"
+      ],
+      "steps": [
+        {
+          "say": "Not for value types like String, dates or records.",
+          "reveal": 1
+        },
+        {
+          "say": "Not Foo Service plus Foo Service Impl everywhere. Add the interface when a second implementation or a test fake appears.",
+          "reveal": 2
+        },
+        {
+          "say": "If you need implementation-specific behaviour, like a linked hash map's access order for a least-recently-used cache, declare that type.",
+          "reveal": 3
+        },
+        {
+          "say": "In the interview: I type dependencies by roles and inject implementations from outside. It's the practical form of dependency inversion. Recap: depend on roles, choose the concrete class once.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s026",
+      "layout": "section",
+      "kicker": "Concept 8 of 18",
+      "title": "Encapsulate What Varies",
+      "steps": [
+        {
+          "say": "Find the parts that change, or differ between cases, and separate them from what stays the same, behind their own abstraction. Head First calls it the first design principle.",
+          "reveal": 0
+        },
+        {
+          "say": "Think camera: the body stays, you swap lenses, and the lens mount is the stable interface.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 5 · 8. Encapsulate What Varies"
+    },
+    {
+      "id": "s027",
+      "layout": "diagram",
+      "kicker": "Concept 8 of 18",
+      "title": "Shipping cost: the varying part is pluggable",
+      "mermaid": "flowchart LR\n    O[\"Order (stable)\"] -->|\"delegates\"| SP[\"ShippingPolicy (interface)\"]\n    SP --> B[\"BlueDart: 50 + 20/kg\"]\n    SP --> D[\"Delhivery: 40 + 25/kg\"]\n    SP --> I[\"IndiaPost: 30 + 10/kg\"]\n    SP --> PR[\"Promo: 0\"]",
+      "caption": "New carrier = new policy, zero edits to Order",
+      "steps": [
+        {
+          "say": "Step one, ask what changed recently. For our shop, it's shipping prices. Before, the order class had an if else chain on a carrier string. Every new carrier edits Order.",
+          "reveal": 0
+        },
+        {
+          "say": "Step two, extract it behind an interface. Shipping Policy has one method: cost for a weight.",
+          "reveal": 0
+        },
+        {
+          "say": "Step three, Order holds a policy and delegates. For two kilos: Blue Dart, fifty plus twenty a kilo, ninety rupees. Delhivery, forty plus twenty five, also ninety. India Post, fifty. And a brand-new promo policy at zero needs no edit to Order at all.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s028",
+      "layout": "bullets",
+      "kicker": "Concept 8 of 18",
+      "title": "Encapsulate what varies: limits",
+      "bullets": [
+        "Two fixed branches that never change: inline",
+        "Wrong axis: extracting the stable part",
+        "Keep no switch on type in client code",
+        "Behind Strategy, State, Factory, Observer"
+      ],
+      "steps": [
+        {
+          "say": "When not to: two fixed branches that never change are fine inline. Extract when the third arrives.",
+          "reveal": 1
+        },
+        {
+          "say": "A common mistake is guessing the wrong axis, extracting something stable while the volatile part stays put.",
+          "reveal": 2
+        },
+        {
+          "say": "Another is just moving the switch into client code.",
+          "reveal": 3
+        },
+        {
+          "say": "This principle is behind almost every pattern: Strategy, State, Factory, Observer. Interview line: I hide what's likely to change behind an interface so core classes stay closed. Recap: separate what changes from what stays.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s029",
+      "layout": "section",
+      "kicker": "Concept 9 of 18",
+      "title": "Strive for Loosely Coupled Designs",
+      "steps": [
+        {
+          "say": "Interacting objects should know as little as possible about each other, ideally just one small interface. Let's see a tightly coupled order service and loosen it.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 5 · 9. Strive for Loosely Coupled Designs"
+    },
+    {
+      "id": "s030",
+      "layout": "diagram",
+      "kicker": "Concept 9 of 18",
+      "title": "Order placed: publish, don't call everyone",
+      "mermaid": "flowchart LR\n    OS[\"OrderService\"] -->|\"onOrderPlaced(o)\"| L[\"OrderListener (interface)\"]\n    L --> I[\"Reserve inventory\"]\n    L --> E[\"Email receipt\"]\n    L --> A[\"Track analytics\"]\n    L --> LP[\"NEW: loyalty points\"]",
+      "caption": "Adding a feature = subscribing a listener",
+      "steps": [
+        {
+          "say": "Before, the order service creates an email sender, an inventory and an analytics object itself, and calls each one. Adding loyalty points means editing the order service.",
+          "reveal": 0
+        },
+        {
+          "say": "After, it only knows one tiny interface: Order Listener, with on order placed. It loops over subscribers and doesn't know who listens.",
+          "reveal": 0
+        },
+        {
+          "say": "Now place order o-2 with three items. Reserve three items, email Ravi, track the order, and a new listener adds thirty loyalty points. Zero edits to the service.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s031",
+      "layout": "bullets",
+      "kicker": "Concept 9 of 18",
+      "title": "Loose coupling: four techniques and a warning",
+      "bullets": [
+        "1. Depend on interfaces, inject them",
+        "2. Events when the sender shouldn't know receivers",
+        "3. Narrow interfaces, one method ideal",
+        "4. Pass immutable values, not shared objects",
+        "Warning: flow is harder to trace"
+      ],
+      "steps": [
+        {
+          "say": "One: depend on interfaces and inject dependencies.",
+          "reveal": 1
+        },
+        {
+          "say": "Two: use events when the sender shouldn't know who receives, publish and subscribe.",
+          "reveal": 2
+        },
+        {
+          "say": "Three: keep interfaces narrow. One method is ideal for a listener.",
+          "reveal": 3
+        },
+        {
+          "say": "Four: pass immutable values, not shared mutable objects.",
+          "reveal": 4
+        },
+        {
+          "say": "The warning: event flow is harder to trace. For a money transfer, debit then credit, use explicit orchestration, not fire-and-forget events. Recap: share only small interfaces.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s032",
+      "layout": "section",
+      "kicker": "Concept 10 of 18",
+      "title": "The Hollywood Principle: we'll call you",
+      "steps": [
+        {
+          "say": "Don't call us, we'll call you. The high-level part owns the flow and calls your low-level hooks at the right moments. That reversal is Inversion of Control, or I-O-C.",
+          "reveal": 0
+        },
+        {
+          "say": "The quick test: you call a library. A framework calls you.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 5 · 10. The Hollywood Principle (IoC)"
+    },
+    {
+      "id": "s033",
+      "layout": "table",
+      "kicker": "Concept 10 of 18",
+      "title": "Template Method: the framework owns the flow",
+      "caption": "Subclasses fill in split and parse, nothing else",
+      "steps": [
+        {
+          "say": "Running example: data importers. Before, every importer copied the whole flow: open the connection, loop, parse, save. And one forgot to close the connection.",
+          "reveal": 0
+        },
+        {
+          "say": "After, a base Importer has a final run method. It opens, calls your split and parse hooks for each record, saves good ones, skips bad ones like oops, and closes in a finally block.",
+          "reveal": 5
+        },
+        {
+          "say": "A C-S-V importer and a key-value importer only fill in two hooks. They can't reorder or skip steps, because run is final.",
+          "reveal": 5
+        }
+      ],
+      "table": {
+        "head": [
+          "Step inside Importer.run() (final)",
+          "Who owns it"
+        ],
+        "rows": [
+          [
+            "1. Open the connection",
+            "Framework (base class)"
+          ],
+          [
+            "2. split(raw) into records",
+            "Your hook"
+          ],
+          [
+            "3. parse(record)",
+            "Your hook"
+          ],
+          [
+            "4. Save good records, skip bad ones",
+            "Framework"
+          ],
+          [
+            "5. Close the connection in finally",
+            "Framework"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "s034",
+      "layout": "bullets",
+      "kicker": "Concept 10 of 18",
+      "title": "Four ways to invert control",
+      "bullets": [
+        "1. Template Method: final skeleton, hooks",
+        "2. Callbacks and listeners",
+        "3. Dependency Injection",
+        "4. Lifecycle: start in order, stop in reverse"
+      ],
+      "steps": [
+        {
+          "say": "One, Template Method, the importer we just saw.",
+          "reveal": 1
+        },
+        {
+          "say": "Two, callbacks: you register a function and the system calls it. J-Unit calls your test methods.",
+          "reveal": 2
+        },
+        {
+          "say": "Three, dependency injection: a container gives you your dependencies, you never look them up. I-O-C is the general idea, D-I is one form.",
+          "reveal": 3
+        },
+        {
+          "say": "Four, lifecycle. Our tiny container starts database, cache, web, then stops web, cache, database, in reverse, like Spring. The cost is some magic: harder to debug who calls what. Recap: the framework owns the flow, you plug in.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s035",
+      "layout": "section",
+      "kicker": "Concept 11 of 18",
+      "title": "Separation of Concerns",
+      "steps": [
+        {
+          "say": "A concern is one aspect of what a program does: input, business rules, storage, presentation. Separation of concerns means each part deals with one, so it can be changed and tested alone. Dijkstra coined it in 1974.",
+          "reveal": 0
+        },
+        {
+          "say": "It's single responsibility at every scale: functions, classes, layers, services.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 5 · 11. Separation of Concerns (SoC)"
+    },
+    {
+      "id": "s036",
+      "layout": "table",
+      "kicker": "Concept 11 of 18",
+      "title": "Example: grading a result, one concern per box",
+      "caption": "Data flows one way: parse, rules, store, present",
+      "steps": [
+        {
+          "say": "Before, one handle method split the raw string, checked marks, picked the grade, wrote to the database and built H-T-M-L. You couldn't test the grading rule without parsing strings.",
+          "reveal": 0
+        },
+        {
+          "say": "After: a parser turns name equals Asha, marks eighty seven into a typed request. The grading service applies rules only. Eighty seven is a B. A repository stores it. An H-T-M-L view renders: Asha got B.",
+          "reveal": 4
+        },
+        {
+          "say": "Swap the view for J-S-O-N and nothing else changes. Cross-cutting concerns like logging and transactions get their own mechanism: filters, decorators or proxies. Recap: one concern per home, typed handoffs.",
+          "reveal": 4
+        }
+      ],
+      "table": {
+        "head": [
+          "Concern",
+          "Class",
+          "In our example"
+        ],
+        "rows": [
+          [
+            "Input",
+            "RequestParser",
+            "name=Asha, marks=87 to ResultRequest"
+          ],
+          [
+            "Business rules",
+            "GradingService",
+            "87 is a B"
+          ],
+          [
+            "Storage",
+            "ResultRepository",
+            "saves the graded result"
+          ],
+          [
+            "Presentation",
+            "HtmlView",
+            "renders: Asha got B"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "s037",
+      "layout": "section",
+      "kicker": "Concept 12 of 18",
+      "title": "Principle of Least Astonishment",
+      "steps": [
+        {
+          "say": "A component should behave the way a reasonable reader expects from its name and context. If a behaviour would surprise them, change the behaviour or change the name.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 5 · 12. Principle of Least Astonishment"
+    },
+    {
+      "id": "s038",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: innocent names, surprising behaviour",
+      "table": {
+        "head": [
+          "Method",
+          "Before",
+          "After"
+        ],
+        "rows": [
+          [
+            "Money.add(tip)",
+            "mutates this: price became 110",
+            "plus returns a new Money"
+          ],
+          [
+            "findUser(ghost)",
+            "silently creates a user",
+            "Optional.empty"
+          ],
+          [
+            "need creation?",
+            "hidden in find",
+            "getOrCreateUser, named"
+          ],
+          [
+            "JDK gotcha",
+            "BigDecimal 2.0 equals 2.00: false",
+            "use compareTo: 0"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Running example one: price is a hundred rupees, and with tip equals price dot add ten. Before, add mutated this. Price is now a hundred and ten too. Surprise. After, plus returns a new Money and price stays a hundred.",
+          "reveal": 1
+        },
+        {
+          "say": "Example two: find user ghost. Before, find silently created a user. After, it returns an empty Optional.",
+          "reveal": 2
+        },
+        {
+          "say": "If you really want creation, name it: get or create user.",
+          "reveal": 3
+        },
+        {
+          "say": "And a real Java surprise: big decimal two point zero equals two point zero zero is false, because equals compares scale. Use compare to. Recap: do what the name promises, nothing more, and make absence visible with Optional.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s039",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "getTotal() writes an audit row each call. Problem?",
+      "bullets": [
+        "A. Nothing, logging is harmless",
+        "B. Least Astonishment: a query with a hidden side effect",
+        "C. It violates YAGNI"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Answer next.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s040",
+      "layout": "section",
+      "kicker": "Concept 13 of 18",
+      "title": "Fail Fast",
+      "steps": [
+        {
+          "say": "Answer: B. Queries shouldn't change state. Now, fail fast: detect an invalid state or input immediately, where it arises, and stop with a clear error. Like a smoke alarm that beeps at the first smoke.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 5 · 13. Fail Fast"
+    },
+    {
+      "id": "s041",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: a retry config",
+      "table": {
+        "head": [
+          "Step",
+          "Applied to RetryConfig"
+        ],
+        "rows": [
+          [
+            "1. Validate at the boundary",
+            "constructor checks every field"
+          ],
+          [
+            "2. Guard clauses, clear message",
+            "maxAttempts must be >= 1, was 0"
+          ],
+          [
+            "3. Make bad objects impossible",
+            "record + compact constructor"
+          ],
+          [
+            "4. Never swallow exceptions",
+            "no empty catch blocks"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Before, a retry config accepted a null endpoint. Nothing complained. Hours later a null pointer exception fired deep in business code, far from the real mistake.",
+          "reveal": 1
+        },
+        {
+          "say": "Step one, validate at the boundary: constructors, public method entry, startup config. Step two, guard clauses with a helpful message. Max attempts zero gives: must be at least one, was zero.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, make invalid objects impossible to construct. The record's compact constructor checks, so a bad config never exists.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, never swallow exceptions with an empty catch.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s042",
+      "layout": "bullets",
+      "kicker": "Concept 13 of 18",
+      "title": "Fail fast: iterators, assert, and system edges",
+      "bullets": [
+        "ArrayList iterator: ConcurrentModificationException",
+        "Fix: list.removeIf(...)",
+        "assert is off by default: not a public guard",
+        "Fail fast inside, be resilient at the edge"
+      ],
+      "steps": [
+        {
+          "say": "The J-D-K does it too. Remove from an array list while looping over it and the iterator throws concurrent modification exception. Best effort only, never rely on it.",
+          "reveal": 1
+        },
+        {
+          "say": "The safe way: remove if.",
+          "reveal": 2
+        },
+        {
+          "say": "Don't use assert for public argument checks. Java assertions are disabled by default.",
+          "reveal": 3
+        },
+        {
+          "say": "And fail fast inside a component, but be resilient at the edge. A batch job can skip and log one bad record rather than abort a million. Circuit breakers fail fast on a sick downstream service. Recap: check early, throw clearly, never swallow.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s043",
+      "layout": "section",
+      "kicker": "Concept 14 of 18",
+      "title": "Immutability",
+      "steps": [
+        {
+          "say": "An immutable object can't change after construction. To change it, you create a new one. String, Local Date and Big Decimal work this way.",
+          "reveal": 0
+        },
+        {
+          "say": "Why bother? Mutable shared objects cause aliasing bugs, half-valid objects, thread races, and objects that vanish from a hash set when a hashed field changes. Immutable ones are thread-safe without locks.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 5 · 14. Immutability"
+    },
+    {
+      "id": "s044",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: a trip itinerary, Bloch's five rules",
+      "table": {
+        "head": [
+          "Rule",
+          "Itinerary record"
+        ],
+        "rows": [
+          [
+            "1. No setters",
+            "withStart returns a new Itinerary"
+          ],
+          [
+            "2. Can't be extended",
+            "records are final"
+          ],
+          [
+            "3. All fields final",
+            "record components are final"
+          ],
+          [
+            "4. All fields private",
+            "record fields are private"
+          ],
+          [
+            "5. Copy mutable in and out",
+            "List.copyOf(cities)"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Before: an itinerary with a final cities list and a set start method. Outsiders cleared the list through the getter, and the shared trip became October first with no cities. Final only stops the reference changing.",
+          "reveal": 1
+        },
+        {
+          "say": "Rule one, no setters. With start returns a new itinerary.",
+          "reveal": 2
+        },
+        {
+          "say": "Rule two, it can't be extended. Records are final.",
+          "reveal": 3
+        },
+        {
+          "say": "Rules three and four, all fields final and private. Records give you both.",
+          "reveal": 4
+        },
+        {
+          "say": "Rule five, the one people miss: copy mutable inputs. List copy of cities in the constructor. Now t1 is Delhi, Agra. Plus city Jaipur gives t2, and t1 stays intact. Records are only shallowly immutable without that copy.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s045",
+      "layout": "bullets",
+      "kicker": "Concept 14 of 18",
+      "title": "Immutability: when not to",
+      "bullets": [
+        "Hot loops: use a local StringBuilder",
+        "Entities: mutable but encapsulated",
+        "unmodifiableList is a view, copyOf a copy"
+      ],
+      "steps": [
+        {
+          "say": "In a hot loop, build with a local mutable builder and expose the immutable result.",
+          "reveal": 1
+        },
+        {
+          "say": "Entities whose identity persists, like a bank account, stay mutable but encapsulated. Their values, Money and Address, are immutable.",
+          "reveal": 2
+        },
+        {
+          "say": "And unmodifiable list is a live read-only view, while list copy of is an independent copy. Recap: no setters, final everything, copy in and out.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s046",
+      "layout": "section",
+      "kicker": "Concept 15 of 18",
+      "title": "Design by Contract",
+      "steps": [
+        {
+          "say": "Design by Contract, from Bertrand Meyer's Eiffel language, treats a method as a contract between the caller and the method. Think courier: you pack and pay, they deliver in two days, and nobody opens the parcel on the way.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 5 · 15. Design by Contract (DbC)"
+    },
+    {
+      "id": "s047",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: a bounded stack, capacity 2",
+      "table": {
+        "head": [
+          "Part",
+          "Who promises",
+          "Stack contract"
+        ],
+        "rows": [
+          [
+            "Precondition",
+            "Caller",
+            "push needs !isFull(); pop needs !isEmpty()"
+          ],
+          [
+            "Postcondition",
+            "Method",
+            "after push: size + 1, peek() == x"
+          ],
+          [
+            "Class invariant",
+            "Always",
+            "0 <= size <= capacity"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "A precondition is what must be true before the call, the caller's duty. Push needs the stack not full. Pop needs it not empty. We give callers is full and is empty to check.",
+          "reveal": 1
+        },
+        {
+          "say": "A postcondition is what the method guarantees after. After push x, size grew by one and the top is x.",
+          "reveal": 2
+        },
+        {
+          "say": "A class invariant is always true between calls: size between zero and capacity. Before, push silently dropped a third item, and pop returned minus one. Is that data or an error? After, a third push throws: precondition failed, push requires not full.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s048",
+      "layout": "bullets",
+      "kicker": "Concept 15 of 18",
+      "title": "Contracts and subtypes",
+      "bullets": [
+        "Check preconditions with exceptions",
+        "Postconditions and invariants: tests, assert",
+        "Subclass: weaken pre, strengthen post",
+        "Say: defensive checks everything; DbC assigns"
+      ],
+      "steps": [
+        {
+          "say": "Check preconditions at entry with clear exceptions: illegal argument or illegal state.",
+          "reveal": 1
+        },
+        {
+          "say": "Check postconditions and invariants in development and tests, so production loops stay fast.",
+          "reveal": 2
+        },
+        {
+          "say": "With inheritance, a subclass may accept more and promise more, never the reverse. A savings account that rejects withdrawals the base allowed breaks Liskov.",
+          "reveal": 3
+        },
+        {
+          "say": "In the interview: defensive programming checks everything everywhere. Design by contract assigns each check to one party. Recap: state who promises what.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s049",
+      "layout": "section",
+      "kicker": "Concept 16 of 18",
+      "title": "GRASP: which class should do this?",
+      "steps": [
+        {
+          "say": "GRASP is Craig Larman's nine guidelines for the most common design question: which class should be responsible for this? It's a vocabulary for justifying placements, not code templates.",
+          "reveal": 0
+        },
+        {
+          "say": "Our running example for all nine: a shop checkout. Tea at a hundred and twenty rupees times two, plus a cup at eighty. Three hundred and twenty before tax.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 5 · 16. GRASP"
+    },
+    {
+      "id": "s050",
+      "layout": "twocol",
+      "kicker": "Concept 16 of 18",
+      "title": "The before: a god screen class",
+      "left": {
+        "heading": "CheckoutScreen does",
+        "bullets": [
+          "new LineItem() in the UI",
+          "loops Sale > LineItem > Product",
+          "tax: if region is IN, 18%",
+          "builds INSERT SQL"
+        ]
+      },
+      "right": {
+        "heading": "Problems",
+        "bullets": [
+          "UI coupled to domain internals",
+          "Vendor and tax rules inline",
+          "Can't test without a screen"
+        ]
+      },
+      "steps": [
+        {
+          "say": "The before is one checkout screen that does everything. On scan, it creates line items itself.",
+          "reveal": 1
+        },
+        {
+          "say": "On pay, it reaches through sale, line item and product to total things up.",
+          "reveal": 2
+        },
+        {
+          "say": "It hard-codes tax: India eighteen percent, otherwise seven.",
+          "reveal": 3
+        },
+        {
+          "say": "And it builds the S-Q-L insert string.",
+          "reveal": 4
+        },
+        {
+          "say": "So the U-I is coupled to domain internals,",
+          "reveal": 5
+        },
+        {
+          "say": "tax rules sit inline,",
+          "reveal": 6
+        },
+        {
+          "say": "and nothing can be tested without a screen. Let's fix it one guideline at a time. Grand total stays three seventy seven sixty.",
+          "reveal": 7
+        }
+      ]
+    },
+    {
+      "id": "s051",
+      "layout": "diagram",
+      "kicker": "Concept 16 of 18",
+      "title": "After: all nine in one checkout",
+      "mermaid": "flowchart LR\n    UI[\"UI\"] --> CC[\"CheckoutController\"]\n    CC --> S[\"Sale\"]\n    S --> LI[\"LineItem\"]\n    CC --> TC[\"TaxCalculator (interface)\"]\n    TC --> G[\"IndiaGst\"]\n    TC --> AD[\"LegacyTaxAdapter\"]\n    CC --> R[\"SaleRepository\"]",
+      "caption": "scan: Controller to Sale.addItem. pay: total, tax, save",
+      "steps": [
+        {
+          "say": "Here's the after. The U-I calls the checkout controller. Scan goes to sale dot add item, which creates the line item.",
+          "reveal": 0
+        },
+        {
+          "say": "Pay asks the sale for its total, asks a tax calculator for tax, and saves through a sale repository.",
+          "reveal": 0
+        },
+        {
+          "say": "India G-S-T gives three seventy seven sixty. A flat U-S seven percent gives three forty two forty. A legacy vendor engine through an adapter, twenty percent, gives three eighty four. Now let's name each choice.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s052",
+      "layout": "bullets",
+      "kicker": "GRASP 1 of 9",
+      "title": "Information Expert",
+      "bullets": [
+        "Give the job to the class with the data",
+        "LineItem.subtotal(): price x qty",
+        "Sale.total(): sums its line items",
+        "Not when it drags in SQL or UI"
+      ],
+      "steps": [
+        {
+          "say": "Information Expert: give a responsibility to the class that has the information.",
+          "reveal": 1
+        },
+        {
+          "say": "Line item knows price and quantity, so it computes its subtotal. Tea, a hundred and twenty times two, two forty.",
+          "reveal": 2
+        },
+        {
+          "say": "Sale knows its line items, so it computes the total, three twenty. Partial experts cooperate.",
+          "reveal": 3
+        },
+        {
+          "say": "Not when it would drag persistence or U-I into a domain object. Interview line: total lives on Order because it owns the lines. Recap: the one with the data does the work.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Ch 5 · 16.1 Information Expert"
+    },
+    {
+      "id": "s053",
+      "layout": "bullets",
+      "kicker": "GRASP 2 of 9",
+      "title": "Creator",
+      "bullets": [
+        "B creates A if B contains A",
+        "or records, closely uses, has init data",
+        "Sale.addItem(product, qty) does new LineItem",
+        "Complex creation: Factory or Builder"
+      ],
+      "steps": [
+        {
+          "say": "Creator: class B should create A if B contains or aggregates A. That's the strongest reason.",
+          "reveal": 1
+        },
+        {
+          "say": "Otherwise if B records A, closely uses it, or has its initialising data.",
+          "reveal": 2
+        },
+        {
+          "say": "Sale contains line items, so sale dot add item creates them. The screen no longer calls new line item.",
+          "reveal": 3
+        },
+        {
+          "say": "When creation is complex or must pick a subclass, use a factory or builder. Recap: the container creates.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Ch 5 · 16.2 Creator"
+    },
+    {
+      "id": "s054",
+      "layout": "bullets",
+      "kicker": "GRASP 3 of 9",
+      "title": "Controller",
+      "bullets": [
+        "First non-UI object to get a system event",
+        "Facade: Register. Use case: CheckoutController",
+        "Thin: coordinates, delegates",
+        "Bloated? Split by use case"
+      ],
+      "steps": [
+        {
+          "say": "Controller: the first object beyond the U-I that receives a system event, like scan item or pay.",
+          "reveal": 1
+        },
+        {
+          "say": "Two kinds. A facade controller for the whole system, like Register. Or a use-case controller, like Checkout Controller.",
+          "reveal": 2
+        },
+        {
+          "say": "It coordinates and delegates. It doesn't compute tax. So the same logic works from a web page, an app or a test.",
+          "reveal": 3
+        },
+        {
+          "say": "If it grows fat with pricing and S-Q-L, split it into use-case controllers. Recap: thin coordinator, delegates.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Ch 5 · 16.3 Controller"
+    },
+    {
+      "id": "s055",
+      "layout": "bullets",
+      "kicker": "GRASP 4 and 5 of 9",
+      "title": "Low Coupling and High Cohesion: the judges",
+      "bullets": [
+        "Evaluative: compare alternatives",
+        "Low Coupling: controller knows only interfaces",
+        "Stable deps (String, List) are harmless",
+        "High Cohesion: Sale does sale maths only",
+        "Smell: Utils, Manager, do-everything screen"
+      ],
+      "steps": [
+        {
+          "say": "These two are different. They don't place work, they judge choices. You compare options with them.",
+          "reveal": 1
+        },
+        {
+          "say": "Low coupling: prefer fewer dependencies. Our controller knows only Tax Calculator and Sale Repository, not a vendor or a database.",
+          "reveal": 2
+        },
+        {
+          "say": "Coupling to stable things like String or List is harmless. Decouple from unstable or external ones.",
+          "reveal": 3
+        },
+        {
+          "say": "High cohesion: keep each class focused. Sale does sale maths. Tax is in the calculator. Storage is in the repository.",
+          "reveal": 4
+        },
+        {
+          "say": "The smell is a Utils or Manager class with unrelated methods. And the two improve together. Recap: few stable dependencies, focused classes.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 5 · 16.4 Low Coupling, 16.5 High Cohesion"
+    },
+    {
+      "id": "s056",
+      "layout": "bullets",
+      "kicker": "GRASP 6 of 9",
+      "title": "Polymorphism",
+      "bullets": [
+        "Behaviour varies by type: no if/switch",
+        "taxFor(sale) per variant",
+        "IndiaGst 18%, FlatUsSalesTax 7%",
+        "Easy: new type. Hard: new operation"
+      ],
+      "steps": [
+        {
+          "say": "Polymorphism: when behaviour varies by type, give each type its own implementation instead of branching.",
+          "reveal": 1
+        },
+        {
+          "say": "Tax varies by region, so Tax Calculator declares tax for sale.",
+          "reveal": 2
+        },
+        {
+          "say": "India G-S-T returns eighteen percent of three twenty, fifty seven sixty. Flat U-S sales tax returns seven percent. The controller doesn't know which one it has.",
+          "reveal": 3
+        },
+        {
+          "say": "Adding a type is easy. Adding an operation touches every class. Recap: let each type implement it.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Ch 5 · 16.6 Polymorphism"
+    },
+    {
+      "id": "s057",
+      "layout": "bullets",
+      "kicker": "GRASP 7 of 9",
+      "title": "Pure Fabrication",
+      "bullets": [
+        "Invented class, not a domain concept",
+        "Expert says Sale saves itself: no",
+        "SaleRepository keeps SQL out of Sale",
+        "Overuse: anemic domain"
+      ],
+      "steps": [
+        {
+          "say": "Pure Fabrication: a class that isn't a business concept, invented to keep cohesion high and coupling low.",
+          "reveal": 1
+        },
+        {
+          "say": "Expert would say Sale has the data to save itself. But S-Q-L inside Sale mixes concerns.",
+          "reveal": 2
+        },
+        {
+          "say": "So we invent Sale Repository. Shops don't have repositories, but our code needs one. Same for an I-D generator or a notification sender.",
+          "reveal": 3
+        },
+        {
+          "say": "Overuse it and all rules drift into services, an anemic domain. Recap: invent a helper when no domain class is a clean home.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Ch 5 · 16.7 Pure Fabrication"
+    },
+    {
+      "id": "s058",
+      "layout": "bullets",
+      "kicker": "GRASP 8 and 9 of 9",
+      "title": "Indirection and Protected Variations",
+      "bullets": [
+        "Indirection: a middleman between two sides",
+        "LegacyTaxAdapter wraps the vendor engine",
+        "Converts rupees to cents and back",
+        "Protected Variations: stable interface on change",
+        "Indirection is the mechanism, PV the goal"
+      ],
+      "steps": [
+        {
+          "say": "Indirection: put an intermediate object between two things so they aren't directly coupled.",
+          "reveal": 1
+        },
+        {
+          "say": "The vendor's legacy tax engine takes cents and returns a double. Our Legacy Tax Adapter sits between it and the controller.",
+          "reveal": 2
+        },
+        {
+          "say": "It converts three twenty rupees to thirty two thousand cents, calls the engine, rounds, and converts back. Sixty four rupees. Vendor types never leak past it.",
+          "reveal": 3
+        },
+        {
+          "say": "Protected Variations: find points of predicted change, here tax rules and vendors, and wrap them in a stable interface. Tax Calculator is that interface.",
+          "reveal": 4
+        },
+        {
+          "say": "Indirection is the mechanism. Protected variations is the goal. Protect predicted variation only, or it's speculative generality. Recap: wrap the unstable behind something stable.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 5 · 16.8 Indirection, 16.9 Protected Variations"
+    },
+    {
+      "id": "s059",
+      "layout": "table",
+      "kicker": "Concept 16 of 18",
+      "title": "GRASP in the interview",
+      "table": {
+        "head": [
+          "Question",
+          "Answer"
+        ],
+        "rows": [
+          [
+            "One-line summary",
+            "Expert + Creator place, Controller receives"
+          ],
+          [
+            "Which two are evaluative?",
+            "Low Coupling, High Cohesion"
+          ],
+          [
+            "GRASP vs GoF?",
+            "Strategy = Polymorphism + PV; Adapter = Indirection"
+          ],
+          [
+            "Why doesn't Sale save itself?",
+            "Cohesion: use a Pure Fabrication"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "In the interview, the thirty-second answer: Expert and Creator place most behaviour. A thin controller takes system events. Polymorphism and protected variations handle what varies. Indirection and pure fabrication keep technical stuff out of the domain.",
+          "reveal": 1
+        },
+        {
+          "say": "And I judge every choice by low coupling and high cohesion, the two evaluative ones.",
+          "reveal": 2
+        },
+        {
+          "say": "Asked about Gang of Four patterns? GRASP is more basic. Strategy is polymorphism plus protected variations. Adapter is indirection. Repository is pure fabrication.",
+          "reveal": 3
+        },
+        {
+          "say": "And why doesn't Sale save itself? It would hurt cohesion and tie the domain to storage. Recap: work where the data is, controllers thin, helpers when needed.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Ch 5 · GRASP in the interview (whole set)"
+    },
+    {
+      "id": "s060",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "SmsSender interface + Twilio adapter: which GRASP?",
+      "bullets": [
+        "A. Creator",
+        "B. Indirection, serving Protected Variations",
+        "C. Information Expert"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Which guideline justifies the S-M-S adapter?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s061",
+      "layout": "section",
+      "kicker": "Concept 17 of 18",
+      "title": "Domain-Driven Design essentials",
+      "steps": [
+        {
+          "say": "Answer: B. The adapter is indirection, protecting you from a vendor change. Now, Domain-Driven Design, from Eric Evans in 2003. Code that mirrors the business. The domain is the subject area, like lending or grocery retail.",
+          "reveal": 0
+        },
+        {
+          "say": "GRASP decides who does what. D-D-D decides which classes exist and where their borders are, starting from the business, not the database.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 5 · 17. Domain-Driven Design (DDD) Essentials"
+    },
+    {
+      "id": "s062",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: the six building blocks, one shop",
+      "table": {
+        "head": [
+          "Term",
+          "In our order example"
+        ],
+        "rows": [
+          [
+            "Ubiquitous language",
+            "order.place(), not setStatus(2)"
+          ],
+          [
+            "Entity",
+            "Order 1001: same id while lines change"
+          ],
+          [
+            "Value object",
+            "Money(paise): equal by value, immutable"
+          ],
+          [
+            "Aggregate",
+            "Order root guards: max 10 per SKU"
+          ],
+          [
+            "Repository",
+            "OrderRepository, one per root"
+          ],
+          [
+            "Bounded context",
+            "Sales Order vs Shipping Consignment"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Ubiquitous language: the vocabulary experts and developers share, in code too. The business says place an order, so the method is place, not set status two.",
+          "reveal": 1
+        },
+        {
+          "say": "An entity is defined by identity. Order one thousand and one is the same order after you add items. Two orders with id one thousand and one are equal.",
+          "reveal": 2
+        },
+        {
+          "say": "A value object is defined by its values only, and it's immutable. Money holds paise in a long. Two Money of a hundred are equal. And no zero point one plus zero point two equals zero point three, zero, zero, zero, four nonsense like the double version printed.",
+          "reveal": 3
+        },
+        {
+          "say": "An aggregate is a cluster changed as one unit, with one root as the only door. The Order root refuses an eleventh unit of tea: at most ten per S-K-U. After it's placed, it refuses new items. Before, an anemic model let someone add a minus five line after shipping.",
+          "reveal": 4
+        },
+        {
+          "say": "A repository loads and saves whole aggregates, one per root. Order Repository, never Order Line Repository.",
+          "reveal": 5
+        },
+        {
+          "say": "A bounded context is a border inside which one model holds. In Sales it's an order with prices. In Shipping it's a consignment with weights.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s063",
+      "layout": "diagram",
+      "kicker": "Concept 17 of 18",
+      "title": "Two contexts, one event, a translator",
+      "mermaid": "flowchart LR\n    O[\"Order (aggregate root)\"] --> L[\"OrderLine\"]\n    O --> M[\"Money, Sku (values)\"]\n    R[\"OrderRepository\"] -.->|\"load / save\"| O\n    O -->|\"OrderPlaced event\"| ACL[\"ShippingTranslator (ACL)\"]\n    ACL --> C[\"Consignment\"]",
+      "caption": "Shipping never sees Sales' Order",
+      "steps": [
+        {
+          "say": "Placing the order raises an Order Placed event, a domain event, named in the past tense. It's published after the save, reliably through an outbox table in the same transaction.",
+          "reveal": 0
+        },
+        {
+          "say": "Shipping doesn't read Sales' tables. A Shipping Translator, an anti-corruption layer, turns the event into Shipping's own words. Nine hundred and twenty grams, one parcel, reference S-O one thousand and one.",
+          "reveal": 0
+        },
+        {
+          "say": "Cancel the order and the translator stops the consignment.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s064",
+      "layout": "bullets",
+      "kicker": "Concept 17 of 18",
+      "title": "Aggregate rules and when to skip DDD",
+      "bullets": [
+        "Guard true invariants inside the boundary",
+        "Keep aggregates small",
+        "Reference others by id: CustomerId",
+        "One aggregate per transaction, events for rest",
+        "Skip for CRUD admin panels; keep value objects"
+      ],
+      "steps": [
+        {
+          "say": "Vaughn Vernon's aggregate rules. One: protect true invariants, what must be consistent immediately, inside the boundary.",
+          "reveal": 1
+        },
+        {
+          "say": "Two: keep aggregates small. A customer containing all orders and payments locks everything on every change.",
+          "reveal": 2
+        },
+        {
+          "say": "Three: reference other aggregates by id. Order holds a Customer Id, not a Customer.",
+          "reveal": 3
+        },
+        {
+          "say": "Four: change one aggregate per transaction. Others catch up through events, eventual consistency.",
+          "reveal": 4
+        },
+        {
+          "say": "Skip full D-D-D for a forms-over-tables admin panel. But value objects and business naming are cheap everywhere. Interview line: bounded contexts with their own language, small aggregates whose root guards invariants, events between them. Recap: speak the business's language in code.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s065",
+      "layout": "diagram",
+      "kicker": "Concept 18 of 18",
+      "title": "How the principles fit together",
+      "mermaid": "flowchart LR\n    V[\"Encapsulate what varies\"] --> PI[\"Program to interface\"]\n    PI --> LC[\"Loose coupling\"]\n    LC --> HW[\"Hollywood / IoC\"]\n    TDA[\"Tell, Don't Ask\"] --> IE[\"Information Expert\"]\n    IMM[\"Immutability\"] --> VO[\"DDD value objects\"]",
+      "caption": "Book: Ch 5 · Chapter summary — how the principles fit together",
+      "steps": [
+        {
+          "say": "Let's connect it all. Encapsulate what varies leads to programming to interfaces, which gives loose coupling, which lets a framework call you.",
+          "reveal": 0
+        },
+        {
+          "say": "Tell, don't ask is the same idea as Information Expert, and it's why D-D-D aggregates guard their own invariants. Immutability is what makes value objects safe. Fail fast is how you enforce a contract.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s066",
+      "layout": "bullets",
+      "kicker": "Concept 18 of 18",
+      "title": "Tensions to name in the interview",
+      "bullets": [
+        "DRY vs loose coupling",
+        "YAGNI vs encapsulate what varies",
+        "Demeter vs cohesion: Middle Man",
+        "Expert vs Separation of Concerns",
+        "DRY vs bounded contexts"
+      ],
+      "steps": [
+        {
+          "say": "And the principles pull against each other. Say so out loud. DRY versus loose coupling: sharing code couples its users.",
+          "reveal": 1
+        },
+        {
+          "say": "YAGNI versus encapsulate what varies: only abstract variation that's real or clearly predicted.",
+          "reveal": 2
+        },
+        {
+          "say": "Demeter versus cohesion: too many delegate methods make a Middle Man. Move behaviour instead.",
+          "reveal": 3
+        },
+        {
+          "say": "Expert versus separation of concerns: domain objects compute, fabrications persist.",
+          "reveal": 4
+        },
+        {
+          "say": "DRY versus bounded contexts: share only events and ids across contexts.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s067",
+      "layout": "table",
+      "kicker": "Self-check",
+      "title": "Chapter self-check: answer before I do",
+      "table": {
+        "head": [
+          "Question",
+          "Answer"
+        ],
+        "rows": [
+          [
+            "order.getCustomer().getAddress().getCity()?",
+            "Demeter + Tell Don't Ask"
+          ],
+          [
+            "A find method that inserts a row?",
+            "Least Astonishment"
+          ],
+          [
+            "HashSet subclass double counts?",
+            "Composition over inheritance"
+          ],
+          [
+            "Record holding a list, truly immutable?",
+            "List.copyOf in the constructor"
+          ],
+          [
+            "Money value object, Order entity: why?",
+            "Replaced by value vs kept by identity"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Self-check. Pause and answer each. A service walking order, customer, address, city, then deciding shipping? Demeter and tell don't ask. Ask order for its shipping zone.",
+          "reveal": 1
+        },
+        {
+          "say": "A find method that inserts a row? Least astonishment.",
+          "reveal": 2
+        },
+        {
+          "say": "A hash set subclass that double counts on add all? Composition over inheritance, the fragile base class.",
+          "reveal": 3
+        },
+        {
+          "say": "What makes a record holding a list truly immutable? List copy of in the compact constructor.",
+          "reveal": 4
+        },
+        {
+          "say": "Why is Money a value object and Order an entity? Money is defined by amount and currency and gets replaced. An order keeps its identity while its lines change.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 5 · Chapter self-check"
+    },
+    {
+      "id": "s068",
+      "layout": "recap",
+      "kicker": "Episode 5 complete",
+      "title": "Episode 5 recap",
+      "bullets": [
+        "DRY, KISS, YAGNI: one home, plain, just enough",
+        "Tell Don't Ask + Demeter: behaviour with data",
+        "Composition, interfaces, vary, IoC: small seams",
+        "SoC, POLA, fail fast, immutable, contracts",
+        "GRASP places work; DDD draws the boundaries",
+        "Next: Episode 6, Clean Code"
+      ],
+      "steps": [
+        {
+          "say": "Here's the chapter in a few lines. One home per rule, the simplest design for today, and nothing built just in case. That's DRY, KISS and YAGNI.",
+          "reveal": 1
+        },
+        {
+          "say": "Behaviour lives with its data, and you talk only to friends. Tell, don't ask, and the Law of Demeter.",
+          "reveal": 2
+        },
+        {
+          "say": "Compose, depend on small interfaces, hide what varies, and let the framework call you.",
+          "reveal": 3
+        },
+        {
+          "say": "Separate concerns, surprise nobody, fail early, keep values immutable, and state your contracts.",
+          "reveal": 4
+        },
+        {
+          "say": "GRASP decides who does what. D-D-D decides which classes exist and where the borders are.",
+          "reveal": 5
+        },
+        {
+          "say": "Next episode, episode six: Clean Code. Names, functions, comments and the habits that keep code readable. See you there.",
+          "reveal": 6
+        }
+      ]
+    }
+  ]
+}

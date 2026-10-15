@@ -1,0 +1,1518 @@
+{
+ "series": "LLD Workshop",
+ "episode": 22,
+ "title": "Platforms: LinkedIn and Facebook",
+ "subtitle": "Two social networks: one two-sided accept, one privacy rule, pluggable feeds",
+ "scenes": [
+  {
+   "id": "s001",
+   "layout": "title",
+   "title": "Platforms: LinkedIn and Facebook",
+   "subtitle": "Two social networks: one two-sided accept, one privacy rule, pluggable feeds",
+   "steps": [
+    {
+     "say": "Welcome to the L-L-D Workshop, episode twenty-two: Platforms, part two. L-L-D means low-level design, the class-by-class design of one system. Today we design LinkedIn and Facebook.",
+     "reveal": 0
+    },
+    {
+     "say": "Last time we built Stack Overflow and Cricinfo. Today's two systems are social networks. People link up, write posts, like things and read a feed. They look simple. But each one hides a trap that interviewers love to probe.",
+     "reveal": 0
+    },
+    {
+     "say": "By the end you'll be able to design both from scratch. You'll model a connection request as an object with states, put the two-sided accept in a service, rank a feed with a swappable strategy, and write Facebook's privacy rule exactly once. Keep the chapter eighteen PDF open. The names and numbers I use come straight from its program output.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s002",
+   "layout": "section",
+   "kicker": "Part 1 of 3",
+   "title": "Design LinkedIn",
+   "steps": [
+    {
+     "say": "Let's start with LinkedIn. It's a network for people's working lives. You link up with colleagues, list your skills and jobs, and read a feed of updates.",
+     "reveal": 0
+    },
+    {
+     "say": "Here's the hook. When Meera accepts Asha's connection request, two members change at once. Which object should make that change? Hold that question. It's the heart of this design.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s003",
+   "layout": "table",
+   "title": "Clarify the rules first",
+   "table": {
+    "head": [
+     "Question",
+     "Our answer"
+    ],
+    "rows": [
+     [
+      "Connection mutual?",
+      "Yes: invite, then accept or reject"
+     ],
+     [
+      "Follow?",
+      "One-sided, no approval needed"
+     ],
+     [
+      "Degrees shown?",
+      "1st, 2nd, 3rd; beyond is out of network"
+     ],
+     [
+      "Who can message?",
+      "Only your connections (InMail is out of scope)"
+     ],
+     [
+      "Who can endorse?",
+      "1st-degree connections, once per skill"
+     ],
+     [
+      "Feed?",
+      "Posts from connections and follows, ranked"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "As always, start with questions. First: is a connection mutual? Yes. Asha sends an invitation, and Meera accepts or rejects it.",
+     "reveal": 1
+    },
+    {
+     "say": "Second: following is different. It's one-sided. Karan can follow Asha without asking. No approval.",
+     "reveal": 2
+    },
+    {
+     "say": "Third: degrees. Your direct connections are first degree. Their connections are second degree. One more hop is third. Anything farther is out of network.",
+     "reveal": 3
+    },
+    {
+     "say": "Fourth: who can message whom? Only your connections. Messaging strangers needs LinkedIn's paid InMail, and we leave that out.",
+     "reveal": 4
+    },
+    {
+     "say": "Fifth: endorsements. Only a first-degree connection can endorse your skill, and only once per skill.",
+     "reveal": 5
+    },
+    {
+     "say": "Sixth: the feed. The course leaves it out, but we add a simple one: posts from connections and people you follow, ranked.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s004",
+   "layout": "bullets",
+   "title": "Twelve requirements, four groups",
+   "bullets": [
+    "Profile: jobs, schooling, skills, stats",
+    "Network: connect, follow, recommend",
+    "Content: posts, comments, likes, shares, messages",
+    "Pages: companies, jobs, groups",
+    "Search: members, companies, jobs",
+    "Non-functional: symmetry, fast reads, privacy"
+   ],
+   "steps": [
+    {
+     "say": "The course lists twelve requirements. Let's group them so you can hold them in your head. Group one, the profile: Asha lists her jobs, her schooling, her skills and her accomplishments. She also sees stats: profile views, connection count, and search appearances.",
+     "reveal": 1
+    },
+    {
+     "say": "Group two, the network: Asha connects with Meera, follows Karan, and asks Meera to write her a recommendation.",
+     "reveal": 2
+    },
+    {
+     "say": "Group three, content: Meera posts a job opening. Asha comments on it. People like or share both the post and the comment. And members send each other messages.",
+     "reveal": 3
+    },
+    {
+     "say": "Group four, pages: Meera creates a company page for Acme Cloud, adds a job posting, and members join groups.",
+     "reveal": 4
+    },
+    {
+     "say": "Group five, search: anyone searches members or companies by name, and jobs by title.",
+     "reveal": 5
+    },
+    {
+     "say": "And the non-functional ones. Symmetry: a connection must appear on both members, never just one. Fast reads, because feeds and search happen far more than writes. Privacy, so blocked members disappear. And extensibility, so new notification channels plug in without edits.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s005",
+   "layout": "bullets",
+   "title": "The course builds it in six stages",
+   "bullets": [
+    "Stage 1: the profile and its parts",
+    "Stage 2: posts, comments, messages",
+    "Stage 3: invitations and notifications",
+    "Stage 4: companies, jobs, groups",
+    "Stage 5: actors, plus ConnectionService",
+    "Stage 6: search index"
+   ],
+   "steps": [
+    {
+     "say": "The course grows the class diagram in six stages. Let's walk each one with Asha as our running member. Stage one, the profile. Asha's profile owns small classes: experience, education, skill, accomplishment, recommendation and profile stats. Delete the profile and its parts go too. That's composition.",
+     "reveal": 1
+    },
+    {
+     "say": "Stage two, content. Asha writes a post, Meera comments, and both can be liked. Messages sit outside that family, because nobody likes a message.",
+     "reveal": 2
+    },
+    {
+     "say": "Stage three, invitations and notifications. Asha's request to Meera is its own object with a status. Notifications are one class with a type field.",
+     "reveal": 3
+    },
+    {
+     "say": "Stage four, pages. Acme Cloud's company page owns its job postings. A group remembers its creator, who can never leave.",
+     "reveal": 4
+    },
+    {
+     "say": "Stage five, the actors. Nearly every requirement becomes a method on Member. Except one: accepting an invitation. That goes into a new class, the connection service. We'll see why in a minute.",
+     "reveal": 5
+    },
+    {
+     "say": "Stage six, search. An index from words to members, companies and jobs. The course shows a real bug here, and we'll fix it.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s006",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Profile parts doing real work",
+   "table": {
+    "head": [
+     "Part",
+     "What it does for Asha"
+    ],
+    "rows": [
+     [
+      "Skill \"Java\"",
+      "Keeps a set of endorsers: Meera once, never twice"
+     ],
+     [
+      "Recommendation",
+      "Born empty on request; only Meera may write it"
+     ],
+     [
+      "ProfileStats",
+      "Views and search hits pushed in by whoever sees them"
+     ],
+     [
+      "Connection count",
+      "Not stored: it's the size of her connection set"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Why small classes and not a line of text? Because other code uses them. Take the Java skill. It keeps the set of members who endorsed it. Meera endorses Java. She tries again, and the program says: rejected, Meera already endorsed Java.",
+     "reveal": 1
+    },
+    {
+     "say": "The recommendation is the clever one. Requirement four is about asking for a recommendation. So when Asha asks Meera, the object is born empty, with status requested. If Karan tries to write it, it's rejected: only Meera can write this. When Meera writes it, it moves to written.",
+     "reveal": 2
+    },
+    {
+     "say": "Profile stats. A profile can't count its own views. It never sees them happen. So whoever witnesses the event bumps the counter: the code that shows a profile records a view, the code that returns search results records a search appearance. In the demo, Asha ends with two views and one search appearance.",
+     "reveal": 3
+    },
+    {
+     "say": "And the connection count isn't stored at all. It's the size of the connection set. A stored copy could drift. A size can't. Remember this rule: derive, don't store.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s007",
+   "layout": "twocol",
+   "title": "Posts and comments share one parent",
+   "left": {
+    "heading": "SocialContent base",
+    "bullets": [
+     "Author, text, time",
+     "Likes = set of member ids",
+     "Post adds comments and shares",
+     "Comment gets likes too"
+    ]
+   },
+   "right": {
+    "heading": "Message is separate",
+    "bullets": [
+     "Sent to people, not published",
+     "Nobody likes a message",
+     "Just sender, recipients, text"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Requirement seven hides a detail: comments get likes as well. If you put likes only on Post, half the requirement has no home. So Post and Comment both extend one parent, called SocialContent.",
+     "reveal": 1
+    },
+    {
+     "say": "The parent holds the likes. And here's the key choice: likes are stored as the ids of the members who liked, not as a number.",
+     "reveal": 2
+    },
+    {
+     "say": "Why a set? Watch. Karan likes Asha's tip. The set holds Karan. He clicks like again. Adding Karan to a set that already has him changes nothing, so the program prints: double like accepted, false. And Karan can take his like back by removing his id. A plain counter can do neither.",
+     "reveal": 3
+    },
+    {
+     "say": "Post adds its own comments, plus a link to the original when it's a share.",
+     "reveal": 4
+    },
+    {
+     "say": "Now the message. It's delivered to people, not published to a network.",
+     "reveal": 5
+    },
+    {
+     "say": "Nobody likes a message, so it doesn't belong in the family.",
+     "reveal": 6
+    },
+    {
+     "say": "It's a tiny record: who sent it, to whom, and the text. In the interview, say this: comments are liked too, so likes live in a shared base class, as a set of ids.",
+     "reveal": 7
+    }
+   ]
+  },
+  {
+   "id": "s008",
+   "layout": "section",
+   "kicker": "LinkedIn concept: State",
+   "title": "The connection request has states",
+   "steps": [
+    {
+     "say": "Now our first big pattern. A connection request isn't a yes-or-no flag. It starts pending, and later it's accepted, rejected or canceled. Its state changes as time passes.",
+     "reveal": 0
+    },
+    {
+     "say": "That's the idea behind the State pattern. An object's allowed actions depend on which state it's in, and only certain moves between states are legal.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s009",
+   "layout": "diagram",
+   "title": "Invitation states",
+   "mermaid": "stateDiagram-v2\n    [*] --> PENDING : invite\n    PENDING --> ACCEPTED : receiver accepts\n    PENDING --> REJECTED : receiver rejects\n    PENDING --> CANCELED : sender withdraws\n    ACCEPTED --> [*]\n    REJECTED --> [*]\n    CANCELED --> [*]",
+   "caption": "Only PENDING can move; every other state is final",
+   "steps": [
+    {
+     "say": "Here's the diagram. An invite creates the object in pending.",
+     "reveal": 0
+    },
+    {
+     "say": "From pending, three moves are legal. The receiver accepts, and it goes to accepted. The receiver rejects, and it goes to rejected. Or the sender withdraws it, and it goes to canceled.",
+     "reveal": 0
+    },
+    {
+     "say": "Those three are final. Nothing moves out of them. In code it's one line on the status enum: you can move only if you're pending, and the next state isn't pending.",
+     "reveal": 0
+    },
+    {
+     "say": "Why an object and not a boolean on Member? Because a flag can't say no afterwards. The object can still record, a month later, that Meera rejected Karan.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s010",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Walk the states with real requests",
+   "table": {
+    "head": [
+     "Action",
+     "Result"
+    ],
+    "rows": [
+     [
+      "Asha invites Meera",
+      "New invitation, PENDING; Meera notified"
+     ],
+     [
+      "Meera accepts",
+      "ACCEPTED; both connection sets updated"
+     ],
+     [
+      "Meera accepts again",
+      "Rejected: invitation is already ACCEPTED"
+     ],
+     [
+      "Asha invites Ravi; Ravi invites Asha",
+      "Rejected: one is already pending"
+     ],
+     [
+      "Karan tries to accept Ravi's invite",
+      "Rejected: only Ravi can accept"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's run it. Step one: Asha invites Meera, with the note, we met at the Java meetup. The service checks: not herself, not already connected, nothing pending either way. It creates the invitation in pending and emails Meera.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two: Meera accepts. The invitation moves to accepted. Asha gets Meera in her set, and Meera gets Asha in hers.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three: Meera clicks accept again. Only pending can move, so it's rejected: invitation is already accepted. No double connection.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four: Asha invites Ravi Sharma, note, same surname. Then Ravi tries to invite Asha back. Rejected: a request between them is already pending. The check looks in both directions.",
+     "reveal": 4
+    },
+    {
+     "say": "Step five: someone else tries to accept the invite meant for Ravi. Rejected: only Ravi can accept. The state machine plus a few guards stop every illegal move.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s011",
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "Meera accepts Asha's invite. Who should update both members?",
+   "bullets": [
+    "A: Asha's Member object",
+    "B: Meera's Member object",
+    "C: Each member updates its own half",
+    "D: A separate ConnectionService"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. Accepting changes two members. Which object should own that change? A, Asha's member object. B, Meera's. C, each side updates its own half. Or D, a separate service. Pause the video and pick one.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s012",
+   "layout": "diagram",
+   "title": "Accepting changes two members",
+   "mermaid": "sequenceDiagram\n    participant A as Asha\n    participant CS as ConnectionService\n    participant I as Invitation\n    participant M as Meera\n    A->>CS: invite(Asha, Meera, note)\n    CS->>I: new (PENDING)\n    M->>CS: accept(invitation, Meera)\n    CS->>CS: lock the graph\n    CS->>I: moveTo(ACCEPTED)\n    CS->>A: addConnection(Meera)\n    CS->>M: addConnection(Asha)",
+   "caption": "One guardian for symmetry: both sides change under one lock",
+   "steps": [
+    {
+     "say": "The answer is D. If Asha's object did it, Meera's list would be changed by a different object. If each side did half, a bug would one day update only one half, and you'd get a one-way link: Asha lists Meera, Meera doesn't list Asha.",
+     "reveal": 0
+    },
+    {
+     "say": "So the operation goes into a small connection service. Follow the arrows. Asha calls invite. The service creates the invitation in pending. Meera calls accept. The service takes one lock, moves the invitation to accepted, adds Meera to Asha, and adds Asha to Meera. Both or neither.",
+     "reveal": 0
+    },
+    {
+     "say": "The member's add-connection method is package-private. Only the service can call it. So the service is the single guardian of symmetry.",
+     "reveal": 0
+    },
+    {
+     "say": "Following is different. It's one-sided and needs no agreement. So it's just a set on the follower. No service. In the interview, say this out loud: accepting changes two objects, so it belongs to neither. Following is one-sided, so it's just a set.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s013",
+   "layout": "diagram",
+   "title": "Degree of connection by B-F-S",
+   "mermaid": "flowchart LR\n    Asha -- \"1st\" --> Meera\n    Meera -- \"2nd for Asha\" --> Karan\n    Karan -- \"3rd for Asha\" --> Zoya\n    Ravi[\"Ravi (only a pending invite)\"]",
+   "caption": "Explore 1 hop, then 2, then 3; stop at depth 3",
+   "steps": [
+    {
+     "say": "Next, the degree badge. We find it with breadth-first search, B-F-S for short. You explore all one-hop neighbours, then all two-hop, and so on. You stop at depth three.",
+     "reveal": 0
+    },
+    {
+     "say": "Let's run it from Asha. Hop one: her connection set holds Meera, so Meera is first degree. Hop two: Meera's set holds Karan, so Karan is second degree for Asha. Hop three: Karan's set holds Zoya, so Zoya is third degree.",
+     "reveal": 0
+    },
+    {
+     "say": "And Ravi? He only has a pending invitation, so there's no edge to him. The search runs out at depth three and returns empty: out of network. That's exactly what the program prints.",
+     "reveal": 0
+    },
+    {
+     "say": "A seen set stops you visiting anyone twice, so cycles in the graph are harmless.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s014",
+   "layout": "bullets",
+   "title": "People you may know",
+   "bullets": [
+    "Walk friends of friends: 2nd-degree members",
+    "Count mutual connections for each one",
+    "Skip yourself, connections, pending invites",
+    "Sort by mutual count, then name"
+   ],
+   "steps": [
+    {
+     "say": "The same graph powers people you may know. Step one: walk your connections' connections. For Asha, that's Meera's connections, which gives Karan.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two: count mutual connections. Karan is reached through one of Asha's connections, Meera, so he has one mutual. If three of Asha's connections knew him, he'd score three.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three: skip yourself, existing connections, and anyone with a pending invite. That's why Ravi doesn't show up.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four: sort by mutual count, then by name, so equal scores don't reshuffle on every page load. The demo prints: people Asha may know, Karan Mehta. At scale you'd compute this offline in a batch job and store the list.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s015",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Search index: the second Sharma bug",
+   "table": {
+    "head": [
+     "Version",
+     "Index entry for \"sharma\""
+    ],
+    "rows": [
+     [
+      "Course's old code, 1st Sharma",
+      "sharma -> Asha (one object)"
+     ],
+     [
+      "Old code, 2nd Sharma",
+      "tries to add to Asha object: broken"
+     ],
+     [
+      "Fixed: value is a set",
+      "sharma -> {Asha, Ravi}"
+     ],
+     [
+      "Zoya Khan renamed Zoya Ali",
+      "remove khan, add ali"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Now search. It's an inverted index: a map from each lowercase word to the things that contain it. Here's the bug the course shows. An older version stored one member object the first time it saw a name. Asha Sharma arrives, and sharma points to Asha. Fine.",
+     "reveal": 1
+    },
+    {
+     "say": "Then Ravi Sharma arrives. The code tries to add him to Asha's object. Broken. The first Sharma works, the second doesn't.",
+     "reveal": 2
+    },
+    {
+     "say": "The cure is a rule: an index value is always a collection, even when it holds one item. Now sharma points to a set of Asha and Ravi. Searching sharma returns both.",
+     "reveal": 3
+    },
+    {
+     "say": "The course admits a second weak spot: the index goes stale when someone renames. Our fix: the rename method on the facade removes the old words, renames, then adds the new words. Zoya Khan becomes Zoya Ali. Searching khan finds nobody. Searching ali finds Zoya. The rule: whatever changes the data tells the index.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s016",
+   "layout": "section",
+   "kicker": "LinkedIn concept: Strategy",
+   "title": "Feed ranking as a Strategy",
+   "steps": [
+    {
+     "say": "Now the feed, and our second pattern: Strategy. A strategy is an interface with swappable implementations, so you can change the algorithm without touching the code that uses it.",
+     "reveal": 0
+    },
+    {
+     "say": "LinkedIn lets you sort the feed by latest or by top. That's two ranking strategies behind one interface, called FeedRanker.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s017",
+   "layout": "diagram",
+   "title": "Pull feed with a pluggable ranker",
+   "mermaid": "flowchart TD\n    P[\"Gather posts: connections + follows\"] --> B[\"Drop blocked authors\"]\n    B --> R{\"FeedRanker\"}\n    R -- \"latest\" --> C[\"ChronologicalRanker\"]\n    R -- \"top\" --> E[\"EngagementRanker\"]",
+   "caption": "Pull model: gathered when opened, then cut to the top N posts",
+   "steps": [
+    {
+     "say": "Here's the flow. Our feed service is a pull model, also called fan-out on read. Nothing is built ahead of time. When Asha opens the feed, the service gathers her sources: her connections plus the members she follows.",
+     "reveal": 0
+    },
+    {
+     "say": "It collects their posts, drops anyone blocked, and then asks the ranker for an ordering.",
+     "reveal": 0
+    },
+    {
+     "say": "The chronological ranker sorts newest first. The engagement ranker computes a score. Either way, the service cuts the list to the top N. The service never knows which ranker it has. That's the strategy at work.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s018",
+   "layout": "number",
+   "title": "Engagement score",
+   "big": "(1 + likes + 2*comments + 3*shares) x affinity / (1 + age/20)",
+   "caption": "affinity = 1.5 for a connection, 1.0 for a follow",
+   "steps": [
+    {
+     "say": "Here's the engagement formula. Engagement is likes, plus two times comments, plus three times shares. Comments and shares count more because they take more effort.",
+     "reveal": 0
+    },
+    {
+     "say": "Add one, then multiply by affinity. A post from a direct connection gets one point five. A post from someone you only follow gets one point oh.",
+     "reveal": 0
+    },
+    {
+     "say": "Then divide by one plus age over twenty. Age is measured in clock ticks. So older posts slowly fade.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s019",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Rank three posts for Asha",
+   "table": {
+    "head": [
+     "Post",
+     "Score",
+     "Latest",
+     "Top"
+    ],
+    "rows": [
+     [
+      "A: connection, 4 likes, 1 comment, 1 share, age 10",
+      "10 x 1.5 / 1.5 = 10",
+      "2nd",
+      "2nd"
+     ],
+     [
+      "B: follow, 2 likes, age 0",
+      "3 x 1.0 / 1 = 3",
+      "1st",
+      "3rd"
+     ],
+     [
+      "C: connection, 20 likes, 5 comments, age 60",
+      "31 x 1.5 / 4 = 11.6",
+      "3rd",
+      "1st"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's rank three posts for Asha. Post A is from a connection: four likes, one comment, one share, ten ticks old. Engagement is four plus two plus three, nine. Plus one is ten. Times one point five is fifteen. Divide by one plus ten over twenty, one point five. Score: ten.",
+     "reveal": 1
+    },
+    {
+     "say": "Post B is from someone she follows: two likes, brand new. Two plus one is three, times one, divided by one. Score: three.",
+     "reveal": 2
+    },
+    {
+     "say": "Post C is from a connection: twenty likes, five comments, sixty ticks old. Engagement is twenty plus ten, thirty. Plus one is thirty-one, times one point five is forty-six point five. Divide by one plus three, four. Score: about eleven point six. So latest shows B, A, C. Top shows C, A, B. Same posts, same service, different strategy.",
+     "reveal": 3
+    }
+   ]
+  },
+  {
+   "id": "s020",
+   "layout": "twocol",
+   "title": "Pull versus push at scale",
+   "left": {
+    "heading": "Pull (fan-out on read)",
+    "bullets": [
+     "Gather posts when feed opens",
+     "Cheap writes",
+     "Slow reads: scans every source"
+    ]
+   },
+   "right": {
+    "heading": "Push (fan-out on write)",
+    "bullets": [
+     "Copy post id into each feed",
+     "Fast reads",
+     "Costly for huge followings"
+    ]
+   },
+   "steps": [
+    {
+     "say": "The interviewer will ask: build the feed for nine hundred million members. Know both models. Pull, our design, gathers posts when the feed opens.",
+     "reveal": 1
+    },
+    {
+     "say": "Writes are cheap: posting just saves the post.",
+     "reveal": 2
+    },
+    {
+     "say": "But reads are slow, because each open scans every connection's posts.",
+     "reveal": 3
+    },
+    {
+     "say": "Push, or fan-out on write, copies the new post's id into every connection's precomputed feed list the moment it's written.",
+     "reveal": 4
+    },
+    {
+     "say": "Reads become fast: just read your list.",
+     "reveal": 5
+    },
+    {
+     "say": "But one member with a million followers means a million writes per post. So large networks use a hybrid: push for ordinary members, pull for very popular accounts, merged at read time.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s021",
+   "layout": "bullets",
+   "title": "Messaging and notifications",
+   "bullets": [
+    "Message only your connections",
+    "Deliver to every recipient's inbox",
+    "One Notification class with a type field",
+    "Channels are a Strategy: in-app, email"
+   ],
+   "steps": [
+    {
+     "say": "Now messaging. The rule: you can message only your connections. Asha sends Meera, coffee on Friday? That works. Asha tries to message Karan, who isn't her connection. Rejected: Karan Mehta is not a connection, that would need InMail.",
+     "reveal": 1
+    },
+    {
+     "say": "A message goes to every recipient's inbox, and each one is notified.",
+     "reveal": 2
+    },
+    {
+     "say": "Notifications. Requirement nine lists three events: new message, new invitation, new comment. But delivering them is identical. So the kind is a field, not three subclasses. The general rule: subclass when behaviour differs, use a field when only data differs. Meera ends the demo with four notifications: an invitation, a recommendation request, a new comment and a new message.",
+     "reveal": 3
+    },
+    {
+     "say": "How it's delivered is a strategy. A notification channel interface has in-app and email versions. Add a push channel tomorrow without editing anything. That's the extensibility requirement met.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s022",
+   "layout": "bullets",
+   "title": "LinkedIn in thirty seconds",
+   "bullets": [
+    "Profile made of small parts",
+    "SocialContent: likes as a set of ids",
+    "Invitation is an object with State",
+    "ConnectionService: two-sided accept, one lock",
+    "Index word -> set; degrees by BFS to depth 3",
+    "Pull feed + FeedRanker Strategy; a Facade"
+   ],
+   "steps": [
+    {
+     "say": "Let's pack LinkedIn into a thirty-second answer. Members own profiles made of small parts.",
+     "reveal": 1
+    },
+    {
+     "say": "Posts and comments share a base class because both are liked, with likes as a set.",
+     "reveal": 2
+    },
+    {
+     "say": "A connection request is an object with states.",
+     "reveal": 3
+    },
+    {
+     "say": "Accepting changes both members, so it lives in a connection service that updates both sides under one lock. Following is one-sided, just a set.",
+     "reveal": 4
+    },
+    {
+     "say": "Search is an inverted index mapping each word to a set. Degrees come from a B-F-S to depth three.",
+     "reveal": 5
+    },
+    {
+     "say": "The feed is a pull model with a pluggable ranking strategy, and I'd move to a push-pull hybrid at scale. A LinkedIn facade wires it all and checks the account status before every action. One recap line: State for invitations, Strategy for feeds, a service for the two-sided accept.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s023",
+   "layout": "section",
+   "kicker": "Part 2 of 3",
+   "title": "Design Facebook",
+   "steps": [
+    {
+     "say": "Now Facebook. Structurally it's LinkedIn's cousin: profiles, friends, posts, likes, messages. So what's new? Privacy. Who may see each post.",
+     "reveal": 0
+    },
+    {
+     "say": "Here's the hook. Alice posts, planning a surprise party for Erin, to her close friends. Erin is Alice's friend. Can Erin find that post by searching the word party? If your design says yes, you've just ruined the surprise.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s024",
+   "layout": "table",
+   "title": "Clarify the rules first",
+   "table": {
+    "head": [
+     "Question",
+     "Our answer"
+    ],
+    "rows": [
+     [
+      "Friend versus follow?",
+      "Friendship mutual; follow one-sided"
+     ],
+     [
+      "Who sees a post?",
+      "Audience: Public, Friends, Custom list, Only me"
+     ],
+     [
+      "Privacy list?",
+      "Named subset of your friends, e.g. Close friends"
+     ],
+     [
+      "Pages?",
+      "Followed; one 1 to 5 recommendation per member"
+     ],
+     [
+      "Groups?",
+      "Public join at once; private needs owner OK"
+     ],
+     [
+      "Extended?",
+      "Suggest friends of friends"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Clarify first. Friendship is mutual: request and accept. Following is one-sided, just like LinkedIn.",
+     "reveal": 1
+    },
+    {
+     "say": "Who sees a post? The author picks an audience: public, friends, a custom privacy list, or only me.",
+     "reveal": 2
+    },
+    {
+     "say": "A privacy list is a named subset of the author's friends. Alice makes one called close friends, holding Bob and Carol. A post linked to it is visible only to those friends.",
+     "reveal": 3
+    },
+    {
+     "say": "Pages: members follow them and add recommendations, a rating from one to five plus text.",
+     "reveal": 4
+    },
+    {
+     "say": "Groups: a public group you join at once. A private group needs the owner's approval, and its posts are visible only to members.",
+     "reveal": 5
+    },
+    {
+     "say": "And the extended requirement: write a function that suggests people you may know.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s025",
+   "layout": "bullets",
+   "title": "The four audiences, one by one",
+   "bullets": [
+    "Public: anyone can see it",
+    "Friends: only the author's friends",
+    "Custom(list): a friend AND on the list",
+    "Only me: nobody but the author"
+   ],
+   "steps": [
+    {
+     "say": "In code, the audience is a sealed interface with four records. Sealed means the compiler knows every possible kind. Let's walk each with Alice. Public: Alice posts, new portfolio is live. Anyone, even stranger Frank, can see it.",
+     "reveal": 1
+    },
+    {
+     "say": "Friends: Alice posts, moving to Pune next month. Her friends Bob and Erin see it. Frank doesn't.",
+     "reveal": 2
+    },
+    {
+     "say": "Custom: Alice posts the party plan to her close friends list. A viewer must be her friend and on the list. Bob qualifies. Erin is a friend but not on the list, so she can't see it.",
+     "reveal": 3
+    },
+    {
+     "say": "Only me: a private note. Nobody but Alice. And because the type is sealed, if someone adds a fifth audience, every switch that decides visibility fails to compile until it's handled. No audience can slip through unchecked.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s026",
+   "layout": "section",
+   "kicker": "Facebook concept: Specification",
+   "title": "One privacy rule: canSee",
+   "steps": [
+    {
+     "say": "Here's the strongest idea in the whole chapter. The visibility service has one method: can see, taking a viewer and a post. It's a Specification-like rule object. A Specification is one object that answers one yes-or-no business question.",
+     "reveal": 0
+    },
+    {
+     "say": "Why do we need it? The post knows its own privacy list. But only the friend service knows who's friends with whom. Neither can answer alone. So one rule asks both. And every read path calls it: feed, search, comment, like and share.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s027",
+   "layout": "bullets",
+   "title": "canSee(viewer, post): four checks in order",
+   "steps": [
+    {
+     "say": "Let's walk the checks in order. Check one: is the author active? If Frank is blocked, every one of his posts is hidden.",
+     "reveal": 1
+    },
+    {
+     "say": "Check two: is the viewer the author? Alice always sees her own posts.",
+     "reveal": 2
+    },
+    {
+     "say": "Check three: was it posted in a group? Then the group decides. It's visible if the group is public or the viewer is a member. Otherwise hidden.",
+     "reveal": 3
+    },
+    {
+     "say": "Check four: the audience. Public is visible. Friends asks the friend service, are these two friends? Custom asks both halves: friends, and on the list, which the post answers itself. Only me is hidden. Any failed check means hidden.",
+     "reveal": 6
+    }
+   ],
+   "bullets": [
+    "1. Author inactive or blocked: hidden",
+    "2. Viewer is the author: visible",
+    "3. In a group: visible if public group or member",
+    "4a. Public: visible to anyone",
+    "4b. Friends: ask FriendService if they are friends",
+    "4c. Custom: friend AND on the list; Only me: hidden"
+   ]
+  },
+  {
+   "id": "s028",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Four viewers, three of Alice's posts",
+   "table": {
+    "head": [
+     "Viewer",
+     "Public",
+     "Friends",
+     "Close friends"
+    ],
+    "rows": [
+     [
+      "Alice (author)",
+      "yes",
+      "yes",
+      "yes"
+     ],
+     [
+      "Bob (friend, on list)",
+      "yes",
+      "yes",
+      "yes"
+     ],
+     [
+      "Erin (friend, not on list)",
+      "yes",
+      "yes",
+      "no"
+     ],
+     [
+      "Frank (not a friend)",
+      "yes",
+      "no",
+      "no"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "This is the course's key scenario, straight from the program output. Alice is the author, so she sees all three posts.",
+     "reveal": 1
+    },
+    {
+     "say": "Bob is a friend and on the close friends list. He sees all three.",
+     "reveal": 2
+    },
+    {
+     "say": "Erin is a friend but not on the list. She sees the public and friends posts, but not close friends. The party stays a surprise.",
+     "reveal": 3
+    },
+    {
+     "say": "Frank isn't Alice's friend. Only the public post. Two rules, both applied, neither written twice.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s029",
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "Why does searchPosts take the viewer as a parameter?",
+   "bullets": [
+    "A: To sort results by the viewer's friends",
+    "B: Privacy still applies inside search",
+    "C: To record a search appearance"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. Facebook's post search method takes two arguments: the word, and the viewer. Why the viewer? A, to sort results by friends. B, because privacy still applies inside search. Or C, to record a search appearance. Pause and pick.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s030",
+   "layout": "bullets",
+   "title": "Every read path calls canSee",
+   "bullets": [
+    "Search: 'party' as Bob finds it, as Erin finds nothing",
+    "Comment: Erin cannot comment on the close-friends post",
+    "Like and share: must see the original first",
+    "Feed: candidates filtered by canSee",
+    "Private group posts: hidden from non-members"
+   ],
+   "steps": [
+    {
+     "say": "The answer is B. A keyword search that skips privacy lets anyone read posts never shared with them. Watch. Bob searches party and finds Alice's party post. Erin searches party and gets an empty list.",
+     "reveal": 1
+    },
+    {
+     "say": "Comments are a side door too. Erin tries to comment on the close-friends post. Rejected: Erin Shah cannot see that post.",
+     "reveal": 2
+    },
+    {
+     "say": "Likes and shares check the same rule. You can't like or share what you can't see. And in production, a share of a friends-only post shouldn't widen its audience beyond the original's.",
+     "reveal": 3
+    },
+    {
+     "say": "The feed gathers candidates and filters every one through can see.",
+     "reveal": 4
+    },
+    {
+     "say": "And groups. Frank posts, chess tournament on Sunday, in the private Chess Club. Alice isn't a member, so searching chess as Alice finds nothing. Dave, a member, finds it. In the interview, say this: a private post leaks through any read path that forgets privacy. That's why can see is one method used by all of them.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s031",
+   "layout": "twocol",
+   "title": "Friendship: one guardian, no counters",
+   "left": {
+    "heading": "FriendService owns the graph",
+    "bullets": [
+     "Accept updates both sides, one lock",
+     "pendingBetween checks both ways",
+     "DB: one row keyed (min id, max id)"
+    ]
+   },
+   "right": {
+    "heading": "Derive, don't store",
+    "bullets": [
+     "Likes = set of ids, not a count",
+     "Follower count = set size",
+     "Rating = average of stored reviews"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Friendship works like LinkedIn's connections. Accepting changes two members, so the friend service owns the friend graph and updates both sides under one lock. The course found an old invitation that only remembered who was invited, not who invited. It could never be accepted properly. Our friend request records both ends.",
+     "reveal": 1
+    },
+    {
+     "say": "The pending-between check looks both ways. Alice invites Grace, and Grace can't send one back while it's pending.",
+     "reveal": 2
+    },
+    {
+     "say": "In a database, store a friendship as one row keyed by the smaller id, then the larger id. Alice is three, Bob is seven: the row is three, seven. Symmetry becomes automatic.",
+     "reveal": 3
+    },
+    {
+     "say": "On the right, the course's other bug fixes. An old Post took its like count in the constructor, so a brand-new post could start with a thousand likes. Store who liked, not how many.",
+     "reveal": 4
+    },
+    {
+     "say": "An old Group took a member count and also stored the members, so the two could disagree from day one. Keep the collection and count it when asked.",
+     "reveal": 5
+    },
+    {
+     "say": "Pages too. Joe's Pizza has one follower and two recommendations, rated five and four. Average rating: four point five, computed from the stored recommendations. One recommendation per member: Alice's second one is rejected.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s032",
+   "layout": "bullets",
+   "title": "Friend suggestions",
+   "steps": [
+    {
+     "say": "Now the extended requirement: suggest friends. The suggestion service reads the friend graph. For each of my friends, look at each of their friends.",
+     "reveal": 1
+    },
+    {
+     "say": "Skip three kinds of people: yourself, existing friends, and anyone with a request pending in either direction. That last one is the one candidates forget. Suggesting someone you invited yesterday is a visible bug.",
+     "reveal": 2
+    },
+    {
+     "say": "Otherwise add one to that person's mutual count. Then sort by mutual count, highest first, and break ties by id, so equal scores don't swap places between page loads.",
+     "reveal": 4
+    },
+    {
+     "say": "Notice it arrived as two new classes, the suggestion service and a suggestion record, with no edits to existing ones. That's the open-closed principle.",
+     "reveal": 5
+    }
+   ],
+   "bullets": [
+    "For each friend F, look at each friend C of F",
+    "Skip C if me, already a friend, or pending either way",
+    "Otherwise add 1 to C's mutual count",
+    "Sort: mutual count high to low, ties by id; top N",
+    "Two new classes; nothing existing was edited"
+   ]
+  },
+  {
+   "id": "s033",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Suggestions for Alice",
+   "table": {
+    "head": [
+     "Moment",
+     "Suggestions"
+    ],
+    "rows": [
+     [
+      "Alice friends: Bob, Carol, Erin",
+      "Dave via Bob and Carol; Grace via Erin"
+     ],
+     [
+      "Before inviting Grace",
+      "Dave (2 mutual), Grace (1 mutual)"
+     ],
+     [
+      "Alice invites Grace",
+      "Dave (2 mutual) only"
+     ],
+     [
+      "Grace invites Alice back",
+      "Rejected: request already pending"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's run it. Alice's friends are Bob, Carol and Erin. Bob and Carol are both friends with Dave. Erin is friends with Grace.",
+     "reveal": 1
+    },
+    {
+     "say": "So before any invites, Dave has two mutual friends and Grace has one. Dave comes first.",
+     "reveal": 2
+    },
+    {
+     "say": "Now Alice invites Grace. Grace has a pending request, so she drops out. Only Dave remains.",
+     "reveal": 3
+    },
+    {
+     "say": "And Grace can't send a request back while one is pending. Exactly what the output shows.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s034",
+   "layout": "number",
+   "title": "Facebook's ranked feed",
+   "big": "(1 + likes + 2*comments) x (2.0 if friends) / (1 + age/10)",
+   "caption": "Same FeedRanker interface: RecentFirst or EngagementRanker",
+   "steps": [
+    {
+     "say": "The news feed is a pull model again, with one more set of sources. It gathers posts from friends, followed members, followed pages and joined groups. It drops duplicates and the viewer's own posts, then filters by can see, ranks, and cuts to size.",
+     "reveal": 0
+    },
+    {
+     "say": "Ranking is a Strategy, just like LinkedIn. Recent first, or this engagement score: one plus likes plus two times comments, doubled if the author is a friend, divided by one plus age over ten.",
+     "reveal": 0
+    },
+    {
+     "say": "Quick example. A friend's post with three likes and one comment, ten ticks old: one plus three plus two is six, times two is twelve, divided by two is six. A followed stranger's brand-new post with ten likes: eleven, times one, divided by one is eleven. The fresh post wins, until it ages.",
+     "reveal": 0
+    },
+    {
+     "say": "Facebook's early ranking, EdgeRank, used the same three ideas: affinity, weight, and time decay. Swap in better signals behind the same interface.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s035",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Who gets which feed",
+   "table": {
+    "head": [
+     "Viewer",
+     "Feed shows"
+    ],
+    "rows": [
+     [
+      "Alice (recent)",
+      "Joe's Pizza page post, Erin's share"
+     ],
+     [
+      "Bob (ranked)",
+      "Alice's party, Pune, portfolio posts"
+     ],
+     [
+      "Frank (recent)",
+      "Only Alice's public portfolio post"
+     ],
+     [
+      "Dave after Frank blocked",
+      "Frank's chess post disappears"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Here are real feeds from the program. Alice's recent feed includes the pizza page she follows and Erin's share.",
+     "reveal": 1
+    },
+    {
+     "say": "Bob's ranked feed puts Alice's most engaged, most recent posts first, including the close-friends party post, because Bob is on the list.",
+     "reveal": 2
+    },
+    {
+     "say": "Frank only follows Alice, and he's not her friend, so can see leaves just the public portfolio post.",
+     "reveal": 3
+    },
+    {
+     "say": "Then the admin blocks Frank. Can see returns false for inactive authors, so his chess post vanishes from Dave's feed. Because visibility is computed at read time, any privacy change takes effect immediately.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s036",
+   "layout": "bullets",
+   "title": "Notification routing and the Facade",
+   "bullets": [
+    "Map: type -> list of channels",
+    "Friend request -> push AND email",
+    "Comment, message -> push only",
+    "Facebook facade: one entry point"
+   ],
+   "steps": [
+    {
+     "say": "Notifications use a Strategy plus a configuration map. Each notification type maps to its own list of channels.",
+     "reveal": 1
+    },
+    {
+     "say": "A friend request goes by push and by email. Bob gets both when Alice sends him one.",
+     "reveal": 2
+    },
+    {
+     "say": "A comment or a message goes by push only. No if-else on type inside domain methods. Just change the map.",
+     "reveal": 3
+    },
+    {
+     "say": "Finally the Facade. A facade is one simple front door to many services. The Facebook class wires the friend service, the visibility service, search, the feed and suggestions. It checks the account status on every write, and it checks that you only use your own privacy lists, and that every person on a list is a friend. Alice tries to add Frank to a list: rejected, Frank Lee is not a friend of Alice Rao. The UI talks to one class, not to every service.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s037",
+   "layout": "bullets",
+   "title": "Facebook in thirty seconds",
+   "bullets": [
+    "SocialContent: likes as a set, comments liked too",
+    "Sealed Audience: Public, Friends, Custom, Only me",
+    "VisibilityService.canSee asks post AND friend graph",
+    "Feed, search, comment, like, share all call it",
+    "FriendService owns graph; follow is a set",
+    "Feed: gather, filter, rank; suggestions stable"
+   ],
+   "steps": [
+    {
+     "say": "Pack it into thirty seconds. Posts and comments share a likes set.",
+     "reveal": 1
+    },
+    {
+     "say": "A post has an audience: public, friends, a custom privacy list, or only me.",
+     "reveal": 2
+    },
+    {
+     "say": "The post can check its own list, but only the friend service knows friendships, so one can-see method asks both.",
+     "reveal": 3
+    },
+    {
+     "say": "And every read path, feed, search, comment, like and share, calls it.",
+     "reveal": 4
+    },
+    {
+     "say": "The friend service owns the graph because accepting changes two members. Following is one-sided.",
+     "reveal": 5
+    },
+    {
+     "say": "The feed gathers from friends, follows, pages and groups, filters by can see, and ranks with a strategy. Suggestions are friends of friends by mutual count, excluding pending requests either way, with a stable tie-break. Recap line: one privacy rule, written once, called everywhere.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s038",
+   "layout": "section",
+   "kicker": "Part 3 of 3",
+   "title": "Four platforms side by side",
+   "steps": [
+    {
+     "say": "Let's step back. Across episodes twenty-one and twenty-two we designed four platforms: Stack Overflow, Cricinfo, LinkedIn and Facebook. Lining them up shows which ideas repeat.",
+     "reveal": 0
+    },
+    {
+     "say": "Two rows the table leaves off are worth saying out loud. Core content: questions, answers and comments in Stack Overflow; balls, overs, innings and matches in Cricinfo; posts, comments and messages in LinkedIn; and Facebook adds page posts and group posts. Roles: reputation privileges plus moderator and admin in Stack Overflow, an admin scorer and a commentator in Cricinfo, member and admin in LinkedIn, and member and admin plus audiences in Facebook.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s039",
+   "layout": "table",
+   "title": "The four designs side by side",
+   "table": {
+    "head": [
+     "Aspect",
+     "Stack Overflow",
+     "Cricinfo",
+     "LinkedIn",
+     "Facebook"
+    ],
+    "rows": [
+     [
+      "User relation",
+      "None: votes, reputation",
+      "Teams, officials",
+      "Connect + follow",
+      "Friend + follow"
+     ],
+     [
+      "Two-sided op",
+      "none",
+      "none",
+      "ConnectionService",
+      "FriendService"
+     ],
+     [
+      "Derive, don't store",
+      "Score from votes",
+      "Stats from balls",
+      "Connection count",
+      "Followers, ratings"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Row one, relationships between users. Stack Overflow has none, just votes and reputation. Cricinfo has teams and officials. LinkedIn has connections plus follows. Facebook has friendships plus follows.",
+     "reveal": 1
+    },
+    {
+     "say": "Row two, the two-sided operation. Only the social networks have one, and both put it in a service: the connection service and the friend service.",
+     "reveal": 2
+    },
+    {
+     "say": "Row three, derive, don't store. Stack Overflow computes a score from votes. Cricinfo computes every stat from balls. LinkedIn derives the connection count. Facebook derives follower counts and ratings.",
+     "reveal": 3
+    }
+   ]
+  },
+  {
+   "id": "s039b",
+   "layout": "table",
+   "title": "The four designs side by side, continued",
+   "table": {
+    "head": [
+     "Aspect",
+     "Stack Overflow",
+     "Cricinfo",
+     "LinkedIn",
+     "Facebook"
+    ],
+    "rows": [
+     [
+      "Strategy",
+      "Reputation, channels",
+      "Target calc (ext.)",
+      "Feed ranker, channels",
+      "Feed ranker, channels"
+     ],
+     [
+      "Observer",
+      "Badge listeners",
+      "Live match feed",
+      "Notifications",
+      "Notifications"
+     ],
+     [
+      "Search",
+      "Words and tags",
+      "Stat queries",
+      "Members, companies, jobs",
+      "Privacy-aware posts"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Row four, Strategy. Reputation policy and notification channels in Stack Overflow. A target calculator as an extension in Cricinfo. Feed rankers and channels in both social networks.",
+     "reveal": 1
+    },
+    {
+     "say": "Row five, Observer, where listeners react to events. Badges in Stack Overflow, the live feed in Cricinfo, notifications in LinkedIn and Facebook. Cricinfo alone also used Template Method, for its stat queries.",
+     "reveal": 2
+    },
+    {
+     "say": "Row six, search. Words and tags, stat queries, members and companies and jobs, and finally Facebook's privacy-aware post search.",
+     "reveal": 3
+    }
+   ]
+  },
+  {
+   "id": "s040",
+   "layout": "bullets",
+   "title": "Common mistakes across all four",
+   "bullets": [
+    "Counters instead of sets: duplicates slip in",
+    "Stored counts beside their collections: drift",
+    "Two-sided operations on one entity",
+    "Privacy checked on one read path, not another",
+    "Index value is one object, not a list",
+    "Nouns modelled, rules forgotten"
+   ],
+   "steps": [
+    {
+     "say": "Six mistakes show up again and again. One: counters instead of sets for votes, likes and endorsements. A counter can't stop Karan liking twice.",
+     "reveal": 1
+    },
+    {
+     "say": "Two: a stored count next to the collection it summarises. Facebook's old group took a member count in its constructor and also stored the members. It could say ten while holding three. They drift.",
+     "reveal": 2
+    },
+    {
+     "say": "Three: a two-sided operation on one entity, like member dot accept. You get a one-way link.",
+     "reveal": 3
+    },
+    {
+     "say": "Four: privacy checked in the feed but not in search. Erin finds the party post.",
+     "reveal": 4
+    },
+    {
+     "say": "Five: a search index value that's a single object. The second Sharma breaks it.",
+     "reveal": 5
+    },
+    {
+     "say": "Six: modelling the nouns but not the rules. Six balls versus six legal balls in cricket. Run outs. Byes.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s041",
+   "layout": "bullets",
+   "title": "Chapter TL;DR",
+   "bullets": [
+    "Shared content base class; likes as sets of ids",
+    "Derive every number you can",
+    "Two-object changes go in a service",
+    "Observer to notify, Strategy channels and feeds",
+    "Inverted index: word -> list",
+    "Write each privacy rule once; call it everywhere"
+   ],
+   "steps": [
+    {
+     "say": "Here's the whole chapter in six lines. Platforms are rich domain models. Share behaviour in a content base class, and keep votes and likes as sets of ids.",
+     "reveal": 1
+    },
+    {
+     "say": "Derive every number you can.",
+     "reveal": 2
+    },
+    {
+     "say": "Put operations that change two objects in a service.",
+     "reveal": 3
+    },
+    {
+     "say": "Notify through Observer with Strategy channels, and rank feeds with a Strategy.",
+     "reveal": 4
+    },
+    {
+     "say": "Keep search in an inverted index that maps words to lists.",
+     "reveal": 5
+    },
+    {
+     "say": "And write each permission or privacy rule exactly once, then call it from every read path.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s042",
+   "layout": "recap",
+   "kicker": "Episode 22 recap",
+   "title": "Recap",
+   "bullets": [
+    "Invitation State: PENDING to ACCEPTED/REJECTED/CANCELED",
+    "ConnectionService: both sides, one lock; follow = set",
+    "BFS degrees; index word -> set; rename updates it",
+    "Pull feed + FeedRanker Strategy; hybrid at scale",
+    "Facebook: sealed Audience + one canSee everywhere",
+    "Suggestions: mutual count, skip pending, stable sort"
+   ],
+   "steps": [
+    {
+     "say": "Let's recap. LinkedIn: the connection request is an object with states. Only pending can move, to accepted, rejected or canceled.",
+     "reveal": 1
+    },
+    {
+     "say": "Accepting changes two members, so a connection service does it under one lock. Following is just a set.",
+     "reveal": 2
+    },
+    {
+     "say": "Degrees come from a B-F-S to depth three. Search maps each word to a set, and rename tells the index.",
+     "reveal": 3
+    },
+    {
+     "say": "Feeds are pulled at read time and ranked by a swappable FeedRanker strategy. At scale, a push-pull hybrid.",
+     "reveal": 4
+    },
+    {
+     "say": "Facebook: a sealed audience, and one can-see rule that asks both the post and the friend graph, called by feed, search, comments, likes and shares.",
+     "reveal": 5
+    },
+    {
+     "say": "Suggestions: friends of friends by mutual count, skipping pending requests both ways, with a stable tie-break.",
+     "reveal": 6
+    },
+    {
+     "say": "Next time, episode twenty-three: Commerce, Amazon and Stock Brokerage. We'll design an online shop with carts, orders and payments, and a brokerage that places and matches stock orders. See you there.",
+     "reveal": 6
+    }
+   ]
+  }
+ ]
+}

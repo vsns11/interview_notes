@@ -1,0 +1,1459 @@
+{
+ "series": "LLD Workshop",
+ "episode": 26,
+ "title": "Components: Uber, Logging, Pub-Sub, Limiter",
+ "subtitle": "Ride sharing, a logging framework, a Kafka-style broker and a rate limiter: the rule that changes goes behind an interface",
+ "scenes": [
+  {
+   "id": "s001",
+   "layout": "title",
+   "title": "Components: Uber, Logging, Pub-Sub, Limiter",
+   "subtitle": "Ride sharing, a logging framework, a Kafka-style broker and a rate limiter: the rule that changes goes behind an interface",
+   "steps": [
+    {
+     "say": "Welcome to the L-L-D Workshop, episode twenty-six: Components, Uber, Logging, Pub-Sub and Limiter. L-L-D means low-level design, the class-by-class design of one program.",
+     "reveal": 0
+    },
+    {
+     "say": "Last time we built Splitwise, a notification service and a cache. Today we finish chapter twenty with four more components: a ride sharing service like Uber, with its carpool cousin, a logging framework, a publish-subscribe broker, and a rate limiter.",
+     "reveal": 0
+    },
+    {
+     "say": "By the end you'll be able to design all four in an interview. You'll rank drivers and claim one atomically, wrap a fare in surge pricing, route a log line up a hierarchy, deliver messages at least once with a dead-letter topic, and combine rate limits without charging for a denied request. Keep the chapter twenty PDF open. Most numbers I use come straight from its program output.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s002",
+   "layout": "bullets",
+   "title": "One idea behind all four designs",
+   "bullets": [
+    "Find the rule most likely to change",
+    "Put that rule behind an interface",
+    "The service class only orders the steps",
+    "New feature = new class + one wiring line"
+   ],
+   "steps": [
+    {
+     "say": "Before we start, one idea ties today together. Step one: find the rule most likely to change. For Uber that's how we pick a driver and how we price a trip.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two: put that rule behind an interface, so each version of the rule is its own small class.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three: the service class only knows the order of the steps. It never knows which rule it holds.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four, the payoff: when the interviewer says now add surge pricing, your answer is one new class and one line where objects get wired together. Watch for this in all four designs.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s003",
+   "layout": "section",
+   "kicker": "Part 1: Uber",
+   "title": "Design a ride sharing service",
+   "steps": [
+    {
+     "say": "Part one, ride sharing. Picture an old taxi dispatcher with a radio. A call comes in, the dispatcher looks at the map, and radios the nearest free cab. If that driver says no, the next one. At the end, the meter shows the fare.",
+     "reveal": 0
+    },
+    {
+     "say": "That picture holds the whole question. Two decisions matter: which driver is asked, that's matching, and what the trip costs, that's pricing. Everything else is bookkeeping. A good design lets either rule change with no edits anywhere else.",
+     "reveal": 0
+    }
+   ],
+   "caption": "Book: Ch 20 · 20.4 Design a Ride Sharing Service (Uber)"
+  },
+  {
+   "id": "s004",
+   "layout": "table",
+   "kicker": "Uber",
+   "title": "Clarify first: the assumptions",
+   "table": {
+    "head": [
+     "Question",
+     "Assumed answer"
+    ],
+    "rows": [
+     [
+      "Vehicle types?",
+      "Economy, premium, van"
+     ],
+     [
+      "Offer to whom?",
+      "One driver at a time, nearest first"
+     ],
+     [
+      "Trip states?",
+      "Requested, accepted, started, ended, canceled"
+     ],
+     [
+      "Fare?",
+      "Base + per km + per minute, with a minimum"
+     ],
+     [
+      "Surge?",
+      "A multiplier on the same fare"
+     ],
+     [
+      "Map?",
+      "A grid; Manhattan distance in whole km"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's clarify like a real interview. Vehicle types: economy, premium and van. The rider asks for one type.",
+     "reveal": 1
+    },
+    {
+     "say": "Who gets the request? One driver at a time, nearest first. A decline goes to the next driver. Nobody left means the request is canceled.",
+     "reveal": 2
+    },
+    {
+     "say": "Trip states: requested, accepted, started, ended, and canceled. Cancel is only allowed from requested or accepted. Illegal actions do nothing.",
+     "reveal": 3
+    },
+    {
+     "say": "Fare: a base amount, plus a rate per kilometre, plus a rate per minute, never below a minimum.",
+     "reveal": 4
+    },
+    {
+     "say": "Surge: when the city is busy, a multiplier scales that same fare.",
+     "reveal": 5
+    },
+    {
+     "say": "The map is a grid. Distance is Manhattan distance, meaning you walk along streets, across then up, so distances stay whole numbers. A real system asks a routing engine. Pool rides and live tracking are out of scope.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s005",
+   "layout": "table",
+   "kicker": "Uber",
+   "title": "The core classes",
+   "table": {
+    "head": [
+     "Class",
+     "Job"
+    ],
+    "rows": [
+     [
+      "Account, Rider, Driver",
+      "Name, phone, rating total + count"
+     ],
+     [
+      "Driver",
+      "Vehicle, location, atomic busy flag"
+     ],
+     [
+      "Trip + TripStatus",
+      "Ranked candidates + cursor; state table"
+     ],
+     [
+      "PricingStrategy",
+      "Fare for type, km, minutes"
+     ],
+     [
+      "MatchingStrategy",
+      "Ranks free drivers"
+     ],
+     [
+      "RideSharingService",
+      "Facade: orders the steps"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Now the classes. Account is the abstract parent of Rider and Driver. It stores the rating as a running total and a count. Only the average is ever shown, so adding a rating is order one, whether the driver has ten trips or ten thousand.",
+     "reveal": 1
+    },
+    {
+     "say": "Driver adds a vehicle, a location, an online flag, and an atomic busy flag. Hold on to that busy flag; it stops double booking.",
+     "reveal": 2
+    },
+    {
+     "say": "Trip holds the rider, pickup, drop, and a ranked list of candidate drivers with a cursor, which is just a marker for the current position in that list. TripStatus is the state machine.",
+     "reveal": 3
+    },
+    {
+     "say": "PricingStrategy is the first Strategy: give it a vehicle type, kilometres and minutes, and it returns a fare.",
+     "reveal": 4
+    },
+    {
+     "say": "MatchingStrategy is the second: it ranks drivers. We have a nearest-driver matcher and a best-rated matcher.",
+     "reveal": 5
+    },
+    {
+     "say": "RideSharingService is a facade, one front door. It owns accounts and trips, holds one pricing rule and one matching rule, and only knows the order of steps. Payment and trip listeners round it out.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s006",
+   "layout": "bullets",
+   "kicker": "Uber: matching",
+   "title": "Matching Strategy returns a ranked list",
+   "bullets": [
+    "Filter: online, not busy, right car, in range",
+    "Sort: nearest first, ties broken by driver id",
+    "Store the list on the trip, cursor at 0",
+    "Decline: move the cursor to the next driver",
+    "List empty: cancel the request"
+   ],
+   "steps": [
+    {
+     "say": "Here's matching, walked through with a real request. Rider R1 asks for an economy car. Step one, filter: keep drivers who are online, not on a trip, driving economy, and within range. Say that leaves D1 and D2.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two, sort nearest first. D1 is closer, so the list is D1, then D2. Ties are broken by driver id, so the same input always gives the same ranking, and your tests never flake.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three, store that list on the trip, with the cursor pointing at D1. The system offers the trip to D1.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four, D1 declines. We don't search the city again. We just move the cursor to D2 and offer it there. The trip also remembers who refused.",
+     "reveal": 4
+    },
+    {
+     "say": "Step five: if the cursor runs off the end, nobody's left, so the request is canceled. In the demo a van request finds zero candidates and is canceled immediately. Why a list and not one driver? Returning one driver means every decline repeats the full search.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s007",
+   "layout": "diagram",
+   "kicker": "Uber: trip states",
+   "title": "Trip lifecycle: a state machine",
+   "mermaid": "stateDiagram-v2\n    [*] --> REQUESTED : rider requests\n    REQUESTED --> REQUESTED : decline, offer next\n    REQUESTED --> ACCEPTED : driver accepts\n    REQUESTED --> CANCELED : rider cancels or nobody left\n    ACCEPTED --> STARTED : driver starts\n    ACCEPTED --> CANCELED : rider cancels\n    STARTED --> ENDED : driver ends, fare computed\n",
+   "caption": "One table of legal moves; illegal moves return false",
+   "steps": [
+    {
+     "say": "A state machine is a fixed set of states plus the only moves allowed between them. Follow the trip. It starts as REQUESTED. A decline keeps it REQUESTED and offers the next driver.",
+     "reveal": 0
+    },
+    {
+     "say": "An accept moves it to ACCEPTED. From there the driver starts it, so it's STARTED, and ending it computes the fare and makes it ENDED.",
+     "reveal": 0
+    },
+    {
+     "say": "Cancel is only possible from REQUESTED or ACCEPTED. Once STARTED, the only way out is ENDED. In code, TripStatus holds a small table: for each state, the set of legal next states. Every Trip method checks that table and returns false on an illegal move, changing nothing.",
+     "reveal": 0
+    },
+    {
+     "say": "In the demo, calling start twice prints start refused in state STARTED, and cancelling a started trip prints cancel refused. Why not the full State pattern, one class per state? It pays off when each state has lots of behaviour. Here a transition table is enough.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s008",
+   "layout": "number",
+   "kicker": "Uber: pricing",
+   "title": "Pricing Strategy: a worked fare",
+   "big": "2.50 + 7 x 1.20 + 12 x 0.25 = 13.90",
+   "caption": "Economy: base 2.50, 1.20 per km, 0.25 per minute, minimum 5.00",
+   "steps": [
+    {
+     "say": "Now pricing. StandardPricing keeps a rate card per vehicle type. Economy is a base of two fifty, one twenty per kilometre, and twenty-five cents per minute, with a five dollar minimum.",
+     "reveal": 0
+    },
+    {
+     "say": "Trip one in the demo is seven kilometres and twelve minutes. Two fifty, plus seven times one twenty, that's eight forty, plus twelve times zero twenty-five, that's three. Total: thirteen ninety. That's exactly what the program prints.",
+     "reveal": 0
+    },
+    {
+     "say": "Money is a BigDecimal, Java's exact decimal type, rounded half up to two places, so two point three four five becomes two point three five. Never a double, because a double can't hold zero point one exactly.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s009",
+   "layout": "twocol",
+   "kicker": "Uber: pricing",
+   "title": "Surge is a Decorator, not a flag",
+   "left": {
+    "heading": "Decorator",
+    "bullets": [
+     "SurgePricing implements PricingStrategy",
+     "Holds an inner PricingStrategy",
+     "fare = inner.fare x multiplier"
+    ]
+   },
+   "right": {
+    "heading": "Worked example",
+    "bullets": [
+     "1 km, 3 min: 4.45, below minimum",
+     "Minimum gives 5.00",
+     "Surge x1.5 gives 7.50"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Here's the part that separates strong answers. Surge is a Decorator. SurgePricing is itself a PricingStrategy.",
+     "reveal": 1
+    },
+    {
+     "say": "But it also holds an inner PricingStrategy. That has-a of its own type is what makes it a decorator and not just another strategy.",
+     "reveal": 2
+    },
+    {
+     "say": "Its fare method asks the inner rule, then multiplies the answer. Switching surge off means removing the wrapper, not editing an if statement.",
+     "reveal": 3
+    },
+    {
+     "say": "Worked example, trip two in the demo: one kilometre, three minutes. Two fifty plus one twenty plus seventy-five cents is four forty-five.",
+     "reveal": 4
+    },
+    {
+     "say": "That's below the five dollar minimum, so the standard rule says five.",
+     "reveal": 5
+    },
+    {
+     "say": "Then the surge wrapper multiplies by one point five, giving seven fifty. And decorators stack: a promo discount around an airport fee around surge around the standard rule. Strategy replaces a rule; Decorator wraps it and stays in the call path.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s010",
+   "layout": "bullets",
+   "kicker": "Uber: concurrency",
+   "title": "Atomic driver claim",
+   "bullets": [
+    "Two trips race for driver D2",
+    "Check then set busy: both can win",
+    "tryClaim: compareAndSet(false, true)",
+    "Exactly one wins; loser treats it as decline",
+    "Demo: 40 riders, 10 drivers, 10 trips"
+   ],
+   "steps": [
+    {
+     "say": "Now concurrency. Imagine two riders' trips both have D2 at the top of their list, and D2 taps accept on both at the same moment.",
+     "reveal": 1
+    },
+    {
+     "say": "The naive code checks is D2 available, then sets busy. Both threads can pass the check before either sets the flag. That's a check-then-act race, a bug where the result depends on which thread runs first. D2 ends up on two trips.",
+     "reveal": 2
+    },
+    {
+     "say": "The fix is tryClaim. The busy flag is an AtomicBoolean, and we call compare-and-set false to true. In one indivisible step it says: set it to true only if it's still false.",
+     "reveal": 3
+    },
+    {
+     "say": "Exactly one thread wins. The loser treats the failed claim as a decline and offers its trip to its next candidate. And if the rider cancelled in between, accept fails and the driver is released.",
+     "reveal": 4
+    },
+    {
+     "say": "The demo proves it: forty riders, ten drivers, everyone accepts at once, and exactly ten trips are accepted. Never more.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s011",
+   "layout": "bullets",
+   "kicker": "Uber: end trip",
+   "title": "Ending a trip, in a fixed order",
+   "bullets": [
+    "Price: one call, however many wrappers",
+    "Store the fare on the trip (state check)",
+    "Charge the rider's payment method",
+    "Move the driver to the drop point",
+    "Release the driver, then tell observers"
+   ],
+   "steps": [
+    {
+     "say": "Ending a trip is a fixed order of steps, and the order matters. Step one, price it. For trip one, seven kilometres and twelve minutes gives thirteen ninety. One call, no matter how many decorators are wrapped around the rule.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two, store the fare on the trip. This is where the state check happens: if the trip isn't STARTED, end is refused.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three, charge the rider through their payment method, another strategy: cash or wallet. In the demo the wallet is debited thirteen ninety and has thirty-six ten left.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four, move the driver to the drop point, five comma three. This is the step people forget. Skip it, and the next match uses where the driver was this morning.",
+     "reveal": 4
+    },
+    {
+     "say": "Step five, only then release the driver, so no matcher ever sees a free driver at the old position. Finally, publish a trip-ended event. That's the Observer pattern: rider and driver apps, push notifications and analytics listen, and the service doesn't know any of them.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s012",
+   "layout": "diagram",
+   "kicker": "Uber",
+   "title": "Request to payment, end to end",
+   "mermaid": "flowchart LR\n    A[\"Rider requests\"] --> B[\"Matcher ranks D1, D2\"]\n    B --> C[\"Offer D1: declines\"]\n    C --> D[\"Offer D2: tryClaim wins\"]\n    D --> E[\"Start, then end 12 min\"]\n    E --> F[\"Pricing: 13.90\"]\n    F --> G[\"Charge wallet, move driver\"]\n    G --> H[\"Observers notified\"]\n",
+   "caption": "Each box is one class doing one job",
+   "steps": [
+    {
+     "say": "Here's the whole flow from the demo. Rider R1 requests economy. The matcher ranks D1 and D2. D1 declines, so the cursor moves. D2 accepts and wins the atomic claim.",
+     "reveal": 0
+    },
+    {
+     "say": "D2 starts and ends the trip after twelve minutes. Pricing returns thirteen ninety. The wallet is charged, the driver moves to the drop point and is released, and observers hear about it. Then rider and driver rate each other, once each, only on an ended trip.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s013",
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "Can a rider cancel a STARTED trip?",
+   "bullets": [
+    "A. Yes, any time before payment",
+    "B. Yes, but they pay the minimum fare",
+    "C. No, STARTED can only move to ENDED"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. A rider is mid-trip and taps cancel. Is that allowed? Pick A, B or C. I'll answer on the next slide.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s014",
+   "layout": "bullets",
+   "kicker": "Uber recap",
+   "title": "In the interview: Uber",
+   "bullets": [
+    "Answer: C. STARTED moves only to ENDED",
+    "Name matching and pricing in minute one",
+    "Strategy x3 + Decorator + state machine",
+    "Ranked list + cursor; atomic claim",
+    "Real world: Uber H3 hexagon grid"
+   ],
+   "steps": [
+    {
+     "say": "The answer is C. STARTED can only move to ENDED. The cancel call returns false and the trip is unchanged.",
+     "reveal": 1
+    },
+    {
+     "say": "In the interview, name the two rules, matching and pricing, in your first minutes and say both go behind interfaces. That one sentence pre-answers most follow-ups.",
+     "reveal": 2
+    },
+    {
+     "say": "Then say: three strategies, for matching, pricing and payment, a decorator for surge, and a state machine for the trip.",
+     "reveal": 3
+    },
+    {
+     "say": "A decline moves a cursor along the stored ranked list, and drivers are claimed with compare-and-set, so one driver never gets two trips.",
+     "reveal": 4
+    },
+    {
+     "say": "For finding nearby drivers in a real city, mention a geospatial index. Uber open-sourced H3, a grid of hexagon cells: keep a map from cell to drivers, and search the pickup cell and its neighbours instead of the whole city.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s015",
+   "layout": "section",
+   "kicker": "Part 1b: machine coding",
+   "title": "The carpool variant: offer and select",
+   "steps": [
+    {
+     "say": "A different ride sharing problem shows up in machine-coding rounds, the kind run at Flipkart. Here there's no dispatcher. Users offer spare seats in their own car on a route, and other users select a ride using a selection strategy.",
+     "reveal": 0
+    }
+   ],
+   "caption": "Book: 20.4 · Machine-coding variant: carpool"
+  },
+  {
+   "id": "s016",
+   "layout": "bullets",
+   "kicker": "Carpool",
+   "title": "Carpool, step by step",
+   "bullets": [
+    "offer_ride: fails if vehicle already active",
+    "select_ride: filter route, seats, not own",
+    "Strategy: Most Vacant or Preferred Vehicle",
+    "Ride.book is synchronized: seats never negative",
+    "Stats count only ENDED rides"
+   ],
+   "steps": [
+    {
+     "say": "Let's walk the sample. Step one, offer ride. Shipra offers her Activa scooter from Bangalore to Mysore with one seat, and her Polo with two seats. If the same vehicle already has an active offer, the call fails. That's the key rule.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two, select ride. A rider asks for Bangalore to Mysore, one seat. The service filters active rides on that route with enough seats, and never your own offer.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three, the strategy picks. Most Vacant chooses the ride with the most free seats, so it picks the Polo, ride two c. Preferred Vehicle, say Activa, picks the first ride with that model, ride two b.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four, booking. Ride dot book is synchronized: it checks the status and free seats, then subtracts, in one step, so two users can't take the last seat.",
+     "reveal": 4
+    },
+    {
+     "say": "Step five, stats. Rides taken and offered per user count only ended rides. In the sample, Shipra ends with zero taken and two offered. The contrast with Uber: there the system chooses; here the rider chooses.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s017",
+   "layout": "section",
+   "kicker": "Part 2: Logging",
+   "title": "Design a logging framework",
+   "steps": [
+    {
+     "say": "Part two, a logging framework. Your code writes messages like payment nine nine one authorised, each with a level, meaning how serious it is, and the framework sends them to destinations, like the console or a file, in a chosen format.",
+     "reveal": 0
+    },
+    {
+     "say": "Think of a company mail room. Every department drops notes in, each with an urgency stamp, and the mail room decides which notes get copied to which inboxes and in what envelope. You're designing a small Log4j or Logback.",
+     "reveal": 0
+    }
+   ],
+   "caption": "Book: Ch 20 · 20.5 Design a Logging Framework"
+  },
+  {
+   "id": "s018",
+   "layout": "bullets",
+   "kicker": "Logging",
+   "title": "Requirements, with our running example",
+   "bullets": [
+    "Levels: TRACE < DEBUG < INFO < WARN < ERROR < FATAL",
+    "Named loggers: app, app.payment, under root",
+    "Level inherited from nearest ancestor",
+    "Appenders: destination + own threshold",
+    "Events propagate up unless additivity off",
+    "Disabled calls are almost free"
+   ],
+   "steps": [
+    {
+     "say": "Requirements. Levels go TRACE, DEBUG, INFO, WARN, ERROR, FATAL, plus OFF. A logger set to WARN drops TRACE, DEBUG and INFO.",
+     "reveal": 1
+    },
+    {
+     "say": "Loggers are named with dots and form a hierarchy. Our running example: app dot payment, whose parent is app, whose parent is root.",
+     "reveal": 2
+    },
+    {
+     "say": "If a logger sets no level, it inherits from the nearest ancestor that does. Quick check: app dot payment has none, app is WARN, root is INFO. The answer is WARN, the nearest one.",
+     "reveal": 3
+    },
+    {
+     "say": "An appender is a destination: console, file, or an in-memory list for tests. Each appender has its own minimum level, called its threshold, and a formatter.",
+     "reveal": 4
+    },
+    {
+     "say": "An event goes to its own logger's appenders, then up to its parents' appenders, unless a logger turns additivity off. Additivity is the switch that says keep passing it up.",
+     "reveal": 5
+    },
+    {
+     "say": "And a disabled call must cost almost nothing, because there may be millions of debug calls in hot code.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s019",
+   "layout": "diagram",
+   "kicker": "Logging",
+   "title": "Chain of Responsibility up the hierarchy",
+   "mermaid": "flowchart LR\n    A[\"payment.info\"] --> B{\"INFO enabled?\"}\n    B -- no --> X[\"return\"]\n    B -- yes --> C[\"build record\"]\n    C --> D[\"own appenders\"]\n    D --> E{\"additive?\"}\n    E -- yes --> F[\"app, root\"]\n    E -- no --> Z[\"done\"]\n",
+   "caption": "Level checked once at the calling logger; appenders filter by their own threshold",
+   "steps": [
+    {
+     "say": "Chain of Responsibility means a request is passed along a chain of handlers, and each one may handle it and pass it on. Here the chain is the logger hierarchy.",
+     "reveal": 0
+    },
+    {
+     "say": "Follow a call to payment dot info. First, one comparison: is INFO enabled for app dot payment? If not, return immediately. That's why disabled logging is nearly free.",
+     "reveal": 0
+    },
+    {
+     "say": "If yes, build one immutable log record: time, level, logger name, thread, message, error. Hand it to app dot payment's appenders. If additive, walk up to app, then root, giving the same record to each of their appenders.",
+     "reveal": 0
+    },
+    {
+     "say": "One subtle rule copied from Log4j and Logback: the level is checked once, at the logger you called. Parents' levels aren't rechecked. Only each appender's threshold filters. So in the demo, a DEBUG event from app dot payment, set to DEBUG, still reaches the root console, even though root is at INFO.",
+     "reveal": 0
+    },
+    {
+     "say": "Some write-ups instead chain level handlers, error handler to warn handler to info handler, each printing its own level. It works for a toy. If an interviewer expects that by-level version, explain it, then say why real frameworks chain the logger hierarchy: that's what operators actually configure.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s020",
+   "layout": "table",
+   "kicker": "Logging",
+   "title": "The patterns, one by one",
+   "table": {
+    "head": [
+     "Pattern",
+     "Where",
+     "Example"
+    ],
+    "rows": [
+     [
+      "Singleton",
+      "LogManager",
+      "One registry per process"
+     ],
+     [
+      "Static factory",
+      "getLogger(name)",
+      "Same name, same object"
+     ],
+     [
+      "Strategy",
+      "Formatter",
+      "Pattern text or JSON"
+     ],
+     [
+      "Template Method",
+      "AbstractAppender",
+      "Check, format, then write"
+     ],
+     [
+      "Decorator",
+      "AsyncAppender",
+      "Any sink becomes async"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Now the patterns, one at a time. Singleton: LogManager is the one registry of loggers per process. It uses the holder idiom: a nested class holds the instance, and the J-V-M, the Java Virtual Machine, creates it once, lazily, with no locking.",
+     "reveal": 1
+    },
+    {
+     "say": "Static factory method: LogManager dot getLogger, given a name. It hides creation, creates parents first, and caches. Demo step one: asking twice for the same name returns the same instance, true. Users never call new Logger, which would break the hierarchy.",
+     "reveal": 2
+    },
+    {
+     "say": "Strategy: the Formatter turns a record into text. The pattern formatter prints the date, level, thread, logger and message on one line. The JSON formatter prints key-value pairs for the audit sink. So any destination works with any format, and you avoid a class explosion like JsonFileAppender, PatternFileAppender and so on.",
+     "reveal": 3
+    },
+    {
+     "say": "Template Method: AbstractAppender's append method is final. It checks the appender's threshold, formats, then calls one abstract step, write the line. Console, file and memory appenders only implement write. In the demo, a file appender with threshold WARN gets disk ninety-one percent full, but not the info line.",
+     "reveal": 4
+    },
+    {
+     "say": "Decorator: AsyncAppender wraps any appender. Your thread only puts the record on a bounded queue, never waiting for the disk. One background thread takes records and passes them to the wrapped appender. Close puts a poison record on the queue and waits until the queue drains. Demo: four threads times a thousand events, four thousand written, zero dropped. If the queue fills, it drops and counts, never blocks.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s021",
+   "layout": "twocol",
+   "kicker": "Logging",
+   "title": "Lazy messages with a Supplier",
+   "left": {
+    "heading": "Eager (bug)",
+    "bullets": [
+     "debug(\"cart \" + cart.dump())",
+     "dump() runs even when DEBUG is off",
+     "Millions of wasted strings"
+    ]
+   },
+   "right": {
+    "heading": "Lazy (fix)",
+    "bullets": [
+     "debug(() -> \"cart \" + cart.dump())",
+     "Level checked first, one comparison",
+     "String built only if enabled"
+    ]
+   },
+   "steps": [
+    {
+     "say": "One more trick. Imagine a debug line that prints a whole shopping cart.",
+     "reveal": 1
+    },
+    {
+     "say": "Written the normal way, Java builds the string before calling debug, so the dump runs even when DEBUG is off.",
+     "reveal": 2
+    },
+    {
+     "say": "In a hot loop that's millions of wasted strings. A real performance bug.",
+     "reveal": 3
+    },
+    {
+     "say": "The fix is a Supplier, a small function that builds the string only when called. You pass a lambda instead of a string.",
+     "reveal": 4
+    },
+    {
+     "say": "The debug method checks the level first: one comparison.",
+     "reveal": 5
+    },
+    {
+     "say": "Only if DEBUG is enabled does it call the supplier. In the demo, the line card token equals tok forty-two, built lazily, appears only after we raise app dot payment to DEBUG.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s022",
+   "layout": "bullets",
+   "kicker": "Logging recap",
+   "title": "In the interview: logging",
+   "bullets": [
+    "Hierarchy + inherited level + one cheap check",
+    "Chain of Responsibility, stopped by additivity",
+    "Singleton manager, static factory getLogger",
+    "Formatter Strategy, Template Method appender",
+    "Async Decorator; never crash the app"
+   ],
+   "steps": [
+    {
+     "say": "In the interview, say it in five beats. Loggers form a dot hierarchy with inherited levels, and one cheap level check comes first.",
+     "reveal": 1
+    },
+    {
+     "say": "One immutable record travels up the chain of loggers, Chain of Responsibility, until additivity stops it.",
+     "reveal": 2
+    },
+    {
+     "say": "A singleton LogManager hands out loggers through a static factory, one instance per name.",
+     "reveal": 3
+    },
+    {
+     "say": "Formatters are a Strategy, and the appender base is a Template Method.",
+     "reveal": 4
+    },
+    {
+     "say": "Async is a Decorator with a bounded queue. And appender failures are caught, because logging must never crash the app. Bonus point: Log4Shell in December twenty twenty-one came from Log4j interpreting lookups inside logged strings. Treat messages as plain data.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s023",
+   "layout": "section",
+   "kicker": "Part 3: Pub-Sub",
+   "title": "Design a pub-sub system",
+   "steps": [
+    {
+     "say": "Part three, publish-subscribe, or pub-sub. A publisher sends a message to a named topic, like orders, and every subscriber of that topic gets it. Neither side knows the other.",
+     "reveal": 0
+    },
+    {
+     "say": "Think of a newspaper. It prints once, every subscriber gets a copy, and new readers can sign up any time. It's the Observer pattern turned into infrastructure: a broker sits in the middle and decouples them. We'll build a small, in-process, Kafka-style broker.",
+     "reveal": 0
+    }
+   ],
+   "caption": "Book: Ch 20 · 20.6 Design a Pub-Sub System"
+  },
+  {
+   "id": "s024",
+   "layout": "bullets",
+   "kicker": "Pub-Sub",
+   "title": "Append-only log with offsets",
+   "bullets": [
+    "Topic = a list that only grows",
+    "Publish appends; returns the offset",
+    "Messages are never removed on read",
+    "Each subscription stores its next offset",
+    "Late joiners and replay come free"
+   ],
+   "steps": [
+    {
+     "say": "The key idea first. A topic is an append-only log: a list that only grows.",
+     "reveal": 1
+    },
+    {
+     "say": "Running example: an orders topic. Publish order one, it lands at offset zero. Order two at offset one. An offset is just a message's position in the log. Appending happens under a lock, so concurrent publishers get unique, gap-free offsets. In the demo, four threads publish two hundred fifty messages each, a thousand in total, and every offset arrives strictly in order.",
+     "reveal": 2
+    },
+    {
+     "say": "Consuming never removes anything. That's Kafka's model. Classic queues like RabbitMQ delete a message once it's acknowledged.",
+     "reveal": 3
+    },
+    {
+     "say": "Instead, each subscription only remembers how far it has read: its committed offset, the next one to read.",
+     "reveal": 4
+    },
+    {
+     "say": "That gives three things almost for free. A late subscriber can start from EARLIEST, offset zero, or LATEST, only new messages. Anyone can replay by seeking back. And every subscriber progresses independently.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s025",
+   "layout": "bullets",
+   "kicker": "Pub-Sub",
+   "title": "One dispatcher thread per subscription",
+   "bullets": [
+    "Each subscription gets its own thread",
+    "It waits on a Condition: no busy-waiting",
+    "Slow analytics only delays itself",
+    "One deliverer per subscription keeps order",
+    "Virtual threads make this cheap"
+   ],
+   "steps": [
+    {
+     "say": "Who delivers? Each subscription gets its own dispatcher thread, the loop that hands out messages. Our orders topic has three subscribers: email, analytics and inventory. That's three dispatchers.",
+     "reveal": 1
+    },
+    {
+     "say": "When a dispatcher has caught up, it waits on a Condition, an object a thread can sleep on until another thread signals it. Publish signals all waiters. No busy-waiting, no spinning in a loop burning C-P-U. The wait has a fifty millisecond timeout, so the loop can notice close or seek, and it sits in a while loop to guard against spurious wake-ups.",
+     "reveal": 2
+    },
+    {
+     "say": "Why one thread each? In the demo, analytics is slow. It still gets every message, and email and inventory aren't delayed at all. One shared thread would make the slowest subscriber block everyone.",
+     "reveal": 3
+    },
+    {
+     "say": "And order is kept, because only one thread ever delivers for a given subscription. A thread pool per message would lose that order.",
+     "reveal": 4
+    },
+    {
+     "say": "Java twenty-one's virtual threads, very cheap threads managed by the J-V-M, make a thread per subscription affordable.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s026",
+   "layout": "diagram",
+   "kicker": "Pub-Sub",
+   "title": "Dispatcher loop: ack after processing",
+   "mermaid": "flowchart TD\n    A[\"offset = committed\"] --> B[\"wait for message at offset\"]\n    B --> C[\"call subscriber\"]\n    C --> D{\"threw?\"}\n    D -- no --> E[\"commit offset + 1\"]\n    D -- yes --> F{\"attempts left?\"}\n    F -- yes --> G[\"back off, retry\"] --> C\n    F -- no --> H[\"append to dead-letter topic\"] --> E\n",
+   "caption": "Commit only after success: at-least-once, in order",
+   "steps": [
+    {
+     "say": "Here's one dispatcher's loop. Read the committed offset. Wait for the message at that offset. Call the subscriber.",
+     "reveal": 0
+    },
+    {
+     "say": "If it returns normally, commit offset plus one. That's the acknowledgement, and it comes after processing. If the program crashes mid-processing, the offset was never committed, so the message is delivered again.",
+     "reveal": 0
+    },
+    {
+     "say": "If the subscriber throws, that's a negative acknowledgement. Back off a little and retry. Our limit is three attempts.",
+     "reveal": 0
+    },
+    {
+     "say": "After the last attempt, the message goes to a dead-letter topic, a side topic for messages that couldn't be processed, and we commit and move on. Commit uses compare-and-set, so if someone called seek during delivery, the seek wins.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s027",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Worked example: the orders topic",
+   "table": {
+    "head": [
+     "Subscriber",
+     "Received",
+     "What happened"
+    ],
+    "rows": [
+     [
+      "email",
+      "0, 1, 2, 3",
+      "All fine"
+     ],
+     [
+      "analytics",
+      "0, 1, 2, 3",
+      "Slow, but nobody waited"
+     ],
+     [
+      "inventory",
+      "0, 1, 3",
+      "1 retried; 2 dead-lettered"
+     ],
+     [
+      "live (LATEST)",
+      "4, then 3, 4",
+      "seek(3): order 4 twice"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's watch it happen. Four messages: order one, order two, BAD-JSON at offset two, and order three. Email gets all four, in order.",
+     "reveal": 1
+    },
+    {
+     "say": "Analytics gets all four too, slowly, without slowing anyone else.",
+     "reveal": 2
+    },
+    {
+     "say": "Inventory hits a temporary failure on offset one, retries, and succeeds. Offset two, BAD-JSON, fails three times, so it goes to the dead-letter topic with cannot parse. That's a poison message, one that always fails. Inventory still gets offset three. Without a dead-letter topic, it would be stuck forever.",
+     "reveal": 3
+    },
+    {
+     "say": "Later we publish order four. A live subscriber that started from LATEST sees only order four. Then we seek it back to offset three, so it sees order three, and order four a second time. That duplicate is exactly what at-least-once means.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s028",
+   "layout": "table",
+   "kicker": "Pub-Sub",
+   "title": "Delivery guarantees",
+   "table": {
+    "head": [
+     "Guarantee",
+     "How",
+     "Risk"
+    ],
+    "rows": [
+     [
+      "At-most-once",
+      "Commit, then process",
+      "Crash loses the message"
+     ],
+     [
+      "At-least-once (ours)",
+      "Process, then commit",
+      "Duplicates: be idempotent"
+     ],
+     [
+      "Exactly-once",
+      "At-least-once + dedupe",
+      "Complex"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Three delivery guarantees, each with our order example. At-most-once: commit the offset first, then process. If the inventory service crashes after committing order two, order two is lost. Delivered once or not at all.",
+     "reveal": 1
+    },
+    {
+     "say": "At-least-once, ours: process, then commit. A crash before commit means order two is delivered again. So subscribers must be idempotent, meaning doing it twice has the same effect as once. For example, remember processed order ids and skip repeats.",
+     "reveal": 2
+    },
+    {
+     "say": "Exactly-once: at-least-once plus deduplication, or a transaction that commits the output and the offset together. Kafka offers it within its own transactions. In an interview, the practical answer is at-least-once with idempotent consumers.",
+     "reveal": 3
+    }
+   ]
+  },
+  {
+   "id": "s029",
+   "layout": "bullets",
+   "kicker": "Pub-Sub recap",
+   "title": "In the interview: pub-sub",
+   "bullets": [
+    "Topic = append-only log; publish returns offset",
+    "Per-subscription offset + dispatcher thread",
+    "Ack after processing: at-least-once, in order",
+    "Retry with backoff, then dead-letter",
+    "Scale: partitions by key, consumer groups"
+   ],
+   "steps": [
+    {
+     "say": "Your thirty-second answer. Each topic is an append-only log, and publish returns an offset.",
+     "reveal": 1
+    },
+    {
+     "say": "Each subscription keeps a committed offset and its own dispatcher thread, which waits on a condition for new data.",
+     "reveal": 2
+    },
+    {
+     "say": "It commits only after the subscriber succeeds: at-least-once and in order.",
+     "reveal": 3
+    },
+    {
+     "say": "Failures retry with backoff, then go to a dead-letter topic.",
+     "reveal": 4
+    },
+    {
+     "say": "To scale, split a topic into partitions by hashing the key, so one customer's orders stay in order, and let a consumer group's members each own some partitions. That's exactly how Kafka works.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s030",
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "For at-least-once, when do you commit the offset?",
+   "bullets": [
+    "A. Before calling the subscriber",
+    "B. After the subscriber returns normally",
+    "C. When the message is published"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think, before we start the last design. To get at-least-once delivery, when should the dispatcher commit the offset? A, B or C?",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s031",
+   "layout": "section",
+   "kicker": "Part 4: Rate Limiter",
+   "title": "Design a rate limiter",
+   "steps": [
+    {
+     "say": "The answer was B: commit after the subscriber returns. Committing first would be at-most-once.",
+     "reveal": 0
+    },
+    {
+     "say": "Part four, the rate limiter. It decides whether a request is allowed right now, so one client can't overwhelm a service. Think of a turnstile that lets through at most ten people a minute per ticket type. Over the limit, you get H-T-T-P status four twenty-nine, Too Many Requests, with a Retry-After header saying come back in so many seconds.",
+     "reveal": 0
+    },
+    {
+     "say": "Chapter thirteen built the thread-safe token bucket. Today is the object design around it: pluggable algorithms, rules per A-P-I and per user tier, a factory, combined limits, and a decision object.",
+     "reveal": 0
+    }
+   ],
+   "caption": "Book: Ch 20 · 20.7 Design a Rate Limiter"
+  },
+  {
+   "id": "s032",
+   "layout": "bullets",
+   "kicker": "Rate limiter",
+   "title": "Requirements",
+   "bullets": [
+    "check(userId, api) returns a Decision",
+    "Decision: allowed, remaining, retryAfter",
+    "Rules per API and tier, plus a default",
+    "One limiter per (user, api)",
+    "Several rules at once: all must allow"
+   ],
+   "steps": [
+    {
+     "say": "Requirements. The gateway, the front door every request passes through, calls check with a user id and an A-P-I path, like ann and slash search.",
+     "reveal": 1
+    },
+    {
+     "say": "It gets back a Decision: allowed or not, how many remain, and when to retry. That maps straight onto H-T-T-P headers, unlike a plain boolean.",
+     "reveal": 2
+    },
+    {
+     "say": "Rules are configured per A-P-I and per tier. A tier is a plan level, like FREE or PREMIUM. Anything unconfigured uses a default rule.",
+     "reveal": 3
+    },
+    {
+     "say": "Each pair of user and A-P-I gets its own limiter, created on first use.",
+     "reveal": 4
+    },
+    {
+     "say": "And several rules can apply at once. For slash login: two per ten seconds and three per minute. All must allow.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s033",
+   "layout": "bullets",
+   "kicker": "Rate limiter",
+   "title": "Algorithm Strategy: the four (plus leaky)",
+   "bullets": [
+    "Token bucket: burst to capacity, steady refill",
+    "Leaky bucket: queue drained at fixed rate",
+    "Fixed window: count per window start",
+    "Sliding log: one timestamp per request",
+    "Sliding counter: previous x overlap + current"
+   ],
+   "steps": [
+    {
+     "say": "The Limiter interface is a Strategy, one class per algorithm. Let's walk each with numbers. Token bucket: ann on the FREE tier has a bucket of three tokens refilling one per second. At time zero she fires five searches. Three pass with two, one and zero remaining. Four and five get four twenty-nine, retry after a thousand milliseconds. One second later, exactly one more passes. Refill is lazy: each call adds elapsed time times rate, so there's no background thread.",
+     "reveal": 1
+    },
+    {
+     "say": "Leaky bucket: requests join a bounded queue, and a worker drains it at a constant rate, say ten a second. A burst of fifty becomes a smooth trickle. That's traffic shaping, good for protecting a fragile downstream service. NGINX's limit req uses it. We don't implement it, but name it.",
+     "reveal": 2
+    },
+    {
+     "say": "Fixed window: count requests in the current window, which starts at now minus now mod W, and reset when the window changes. Simplest. But with five per ten seconds, five calls at nine point nine seconds and five at ten point one all pass. Ten requests in zero point two seconds: up to double the limit at the edge.",
+     "reveal": 3
+    },
+    {
+     "say": "Sliding window log: keep one timestamp per allowed request, drop those older than now minus W, allow if fewer than N remain. Exact, it allows only five of those ten, but memory grows with N per key.",
+     "reveal": 4
+    },
+    {
+     "say": "Sliding window counter: keep just two counters. Estimate equals the previous window's count times the fraction still overlapping, plus the current count. Say the previous window had four, we're thirty percent into the current one, which has two. Four times zero point seven is two point eight, plus two is four point eight. Limit five? Adding one would make five point eight, so denied. Approximate, order-one memory, and it also held the boundary burst to five. Cloudflare uses this.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s034",
+   "layout": "table",
+   "kicker": "Rate limiter",
+   "title": "Simple Factory, Composite, Facade",
+   "table": {
+    "head": [
+     "Pattern",
+     "Class",
+     "Job"
+    ],
+    "rows": [
+     [
+      "Simple Factory",
+      "LimiterFactory",
+      "Rules in, Limiter out"
+     ],
+     [
+      "Composite",
+      "CompositeLimiter",
+      "Limiter made of limiters"
+     ],
+     [
+      "Facade",
+      "RateLimiterService",
+      "Gateway asks one question"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Three more patterns. Simple Factory: LimiterFactory dot create takes rules and returns a Limiter. One rule gives its algorithm, like a token bucket of three at one per second. Several rules give a composite. The service never names a concrete class.",
+     "reveal": 1
+    },
+    {
+     "say": "Composite: CompositeLimiter is itself a Limiter, made of child limiters. Two per ten seconds and three per minute look like one limiter to the caller. Allowed only if every child allows.",
+     "reveal": 2
+    },
+    {
+     "say": "Facade: RateLimiterService is the one front door. It resolves the user's tier and the A-P-I's rules and holds the limiters. The gateway just asks: may ann call slash search?",
+     "reveal": 3
+    }
+   ]
+  },
+  {
+   "id": "s035",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Composite: probe all, then commit all",
+   "table": {
+    "head": [
+     "Time",
+     "3 per minute",
+     "2 per 10 s",
+     "Result"
+    ],
+    "rows": [
+     [
+      "+0s",
+      "ok",
+      "ok",
+      "200, both charged"
+     ],
+     [
+      "+1s",
+      "ok",
+      "ok",
+      "200, both charged"
+     ],
+     [
+      "+2s",
+      "ok (probe only)",
+      "deny",
+      "429, nothing charged"
+     ],
+     [
+      "+11s",
+      "ok",
+      "ok",
+      "200: minute slot was kept"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Here's the trap. The naive composite calls each child's try-acquire in turn. Watch demo step three, with three per minute listed first. At zero seconds, both rules allow and both are charged.",
+     "reveal": 1
+    },
+    {
+     "say": "At one second, same again. The minute rule has used two of three, the ten-second rule two of two.",
+     "reveal": 2
+    },
+    {
+     "say": "At two seconds the ten-second rule denies. The naive version already charged the minute rule its third slot, for a request that never ran. Our version splits Limiter into probe, would one more pass, consuming nothing, and commit. It probes every child, returns the first denial, and charges nothing.",
+     "reveal": 3
+    },
+    {
+     "say": "So at eleven seconds the ten-second window has room, and the minute rule still has its third slot. Allowed. The naive version would have refused for about forty-nine seconds. Probe and commit run under the limiter's lock, so check-and-take is atomic: sixty-four threads times ten calls on a bucket of fifty allows exactly fifty.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s036",
+   "layout": "twocol",
+   "kicker": "Rate limiter",
+   "title": "Per-key limiter via computeIfAbsent",
+   "left": {
+    "heading": "Bug: get then put",
+    "bullets": [
+     "Two first requests from ann race",
+     "Both see no limiter, both create one",
+     "One limiter's counts are lost"
+    ]
+   },
+   "right": {
+    "heading": "Fix: computeIfAbsent",
+    "bullets": [
+     "ConcurrentHashMap builds it once",
+     "Tier and rules resolved once per key",
+     "Evict idle limiters to bound memory"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Last piece: one limiter per key. The naive way is get, and if missing, put. Imagine ann's first two requests arrive at the same moment.",
+     "reveal": 1
+    },
+    {
+     "say": "Both threads see no limiter and both create one.",
+     "reveal": 2
+    },
+    {
+     "say": "One overwrites the other, and its counts vanish. Ann briefly gets double her limit.",
+     "reveal": 3
+    },
+    {
+     "say": "The fix: a ConcurrentHashMap and computeIfAbsent. The map runs the creation function exactly once per key, even under a race.",
+     "reveal": 4
+    },
+    {
+     "say": "Inside it we look up the tier, FREE by default, pick the rules, and call the factory. So bob gets his own fresh bucket, and a PREMIUM user gets ten.",
+     "reveal": 5
+    },
+    {
+     "say": "Memory: millions of users means millions of limiters. Evict ones idle for at least the longest window. By then a fresh limiter behaves exactly like the old one. For many gateway servers, move the state to Redis with an atomic Lua script.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s037",
+   "layout": "bullets",
+   "kicker": "Rate limiter recap",
+   "title": "In the interview: rate limiter",
+   "bullets": [
+    "Limiter Strategy; token bucket by default",
+    "Factory from rules; Composite for AND rules",
+    "Facade service; computeIfAbsent per key",
+    "Decision maps to 429 + Retry-After",
+    "Fixed window: up to 2N at the boundary"
+   ],
+   "steps": [
+    {
+     "say": "In the interview. A Limiter interface with swappable algorithms: token bucket by default, sliding window when exactness matters.",
+     "reveal": 1
+    },
+    {
+     "say": "A factory builds limiters from rules, and a composite combines rules like ten a second and a thousand a day, probing all before committing any.",
+     "reveal": 2
+    },
+    {
+     "say": "The facade service keeps one limiter per user and A-P-I via computeIfAbsent.",
+     "reveal": 3
+    },
+    {
+     "say": "It returns a decision with remaining and retry-after for the four twenty-nine response. GitHub's A-P-I sends exactly these as X-RateLimit headers.",
+     "reveal": 4
+    },
+    {
+     "say": "And volunteer the honest limit: a fixed window can let through up to twice the limit across a boundary.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s038",
+   "layout": "table",
+   "kicker": "Summary",
+   "title": "Chapter 20 summary",
+   "table": {
+    "head": [
+     "Component",
+     "Anchor patterns"
+    ],
+    "rows": [
+     [
+      "Splitwise, cache",
+      "Strategy (+ Observer)"
+     ],
+     [
+      "Notifications",
+      "Template Method + Strategy + Observer"
+     ],
+     [
+      "Ride sharing",
+      "Strategy + Decorator + state machine"
+     ],
+     [
+      "Logging",
+      "Chain of Resp. + Singleton + Decorator"
+     ],
+     [
+      "Pub-sub",
+      "Observer via a broker"
+     ],
+     [
+      "Rate limiter",
+      "Strategy + Factory + Composite"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's zoom out over the whole chapter. Splitwise and the cache from last episode: Strategy, for split rules and eviction, with Observer for cache events.",
+     "reveal": 1
+    },
+    {
+     "say": "Notifications: Template Method for the send flow, Strategy for channels, Observer for listeners.",
+     "reveal": 2
+    },
+    {
+     "say": "Ride sharing: ranked list for declines, surge wraps pricing, atomic driver claim.",
+     "reveal": 3
+    },
+    {
+     "say": "Logging: a hierarchy with inherited levels, propagate up until additivity stops, async is a wrapper.",
+     "reveal": 4
+    },
+    {
+     "say": "Pub-sub: append-only log plus per-subscription offsets, ack after processing, dead letters.",
+     "reveal": 5
+    },
+    {
+     "say": "Rate limiter: one limiter per key, swappable algorithms, four twenty-nine with Retry-After. The common thread: the part most likely to change sits behind an interface, and the service only orders the steps.",
+     "reveal": 6
+    }
+   ],
+   "caption": "Book: Ch 20 · 20.8 Chapter summary"
+  },
+  {
+   "id": "s039",
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "Strategy versus Decorator, in one line each?",
+   "bullets": [
+    "A. Strategy wraps; Decorator replaces",
+    "B. Strategy replaces a rule; Decorator wraps one",
+    "C. They are the same pattern"
+   ],
+   "steps": [
+    {
+     "say": "Chapter self-check. Pause and answer: what's the difference between Strategy and Decorator? A, B or C?",
+     "reveal": 0
+    }
+   ],
+   "caption": "Book: Ch 20 · 20.9 Chapter self-check"
+  },
+  {
+   "id": "s040",
+   "layout": "bullets",
+   "kicker": "Self-check",
+   "title": "Chapter self-check answers",
+   "bullets": [
+    "B: Strategy replaces; Decorator wraps",
+    "Strategy and Observer: in over half the designs",
+    "Template Method: fixed steps, subclass fills one",
+    "At-least-once needs idempotent consumers",
+    "CAS: driver claim, offset commit",
+    "computeIfAbsent: one limiter per key"
+   ],
+   "steps": [
+    {
+     "say": "B. Strategy replaces a rule; Decorator wraps one and adds to its result, like surge around standard pricing.",
+     "reveal": 1
+    },
+    {
+     "say": "Next: which two patterns appear in more than half of this chapter's designs? Strategy and Observer. Strategy for every swappable rule, from split rules to matching to formatters, and Observer whenever someone must be told that something happened.",
+     "reveal": 2
+    },
+    {
+     "say": "Next question: Strategy versus Template Method? Strategy swaps the whole algorithm by composition, like formatters. Template Method fixes the algorithm and lets a subclass fill one step, by inheritance, like the appender's write.",
+     "reveal": 3
+    },
+    {
+     "say": "What does at-least-once require from consumers? Idempotency, so a duplicate order four does no harm.",
+     "reveal": 4
+    },
+    {
+     "say": "Name places we used compare-and-set for correctness. The driver claim, with an AtomicBoolean, and the subscription's offset commit, with an AtomicLong.",
+     "reveal": 5
+    },
+    {
+     "say": "And computeIfAbsent created exactly one limiter per key. Always pick the smallest correct tool: one lock, one compare-and-set, or one computeIfAbsent.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s041",
+   "layout": "recap",
+   "kicker": "Episode 26 recap",
+   "title": "Episode 26 recap",
+   "bullets": [
+    "Rule most likely to change goes behind an interface",
+    "Uber: 3 Strategies, surge Decorator, CAS claim",
+    "Logging: CoR + Singleton + Template + Decorator",
+    "Pub-sub: log + offsets, ack after, dead letters",
+    "Limiter: Strategy, Factory, Composite, Facade",
+    "BigDecimal, injected clock, honest limits"
+   ],
+   "steps": [
+    {
+     "say": "Let's recap with the chapter's T-L-D-R, the one-minute summary. Components are small, so interviews probe the rule most likely to change. Put it behind an interface.",
+     "reveal": 1
+    },
+    {
+     "say": "Uber: three strategies for matching, pricing and payment, surge as a decorator, a trip state machine, a ranked list with a cursor, and an atomic driver claim. Carpool: offer seats, select with Most Vacant or Preferred Vehicle.",
+     "reveal": 2
+    },
+    {
+     "say": "Logging: Chain of Responsibility up the hierarchy until additivity stops it, a singleton manager, formatter strategy, template method appender, async decorator, and lazy suppliers.",
+     "reveal": 3
+    },
+    {
+     "say": "Pub-sub: an append-only log with per-subscription offsets, one dispatcher each, ack after processing for at-least-once, and dead letters. Consumers must be idempotent.",
+     "reveal": 4
+    },
+    {
+     "say": "Rate limiter: algorithm strategy, simple factory, composite that probes then commits, a facade, and computeIfAbsent per key. Fixed windows burst at the edge.",
+     "reveal": 5
+    },
+    {
+     "say": "Money in BigDecimal, time from an injected clock, and always volunteer the honest limits.",
+     "reveal": 6
+    },
+    {
+     "say": "Next time, episode twenty-seven: Machine Coding, Method, Tasks and Wallet. We'll learn how to attack a ninety-minute machine-coding round, then build a task manager and a wallet end to end. See you there.",
+     "reveal": 6
+    }
+   ],
+   "caption": "Book: Ch 20 · 20.10 Chapter TL;DR"
+  }
+ ]
+}

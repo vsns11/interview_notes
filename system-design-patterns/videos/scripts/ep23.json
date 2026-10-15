@@ -1,0 +1,1785 @@
+{
+  "series": "System Design Workshop",
+  "episode": 23,
+  "title": "Case Studies: Infrastructure",
+  "subtitle": "Object storage, metrics, job scheduling, counters and collaborative editing",
+  "scenes": [
+    {
+      "layout": "title",
+      "title": "Case Studies: Infrastructure",
+      "subtitle": "Object storage, metrics, job scheduling, counters and collaborative editing",
+      "steps": [
+        {
+          "say": "Welcome to episode twenty-three of the System Design Workshop: Case Studies, Infrastructure. Today we design the systems other systems stand on: a blob store, a monitoring system, a job scheduler, a like counter, and a shared document editor.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll be able to explain, with real numbers, why erasure coding halves the disk bill, why cardinality is the monitoring budget, how to run a job effectively once, and how two people can type in the same spot safely.",
+          "reveal": 0
+        },
+        {
+          "say": "Keep the Module sixteen notes open beside the video. When I say pause, try the question on paper first, then compare.",
+          "reveal": 0
+        }
+      ],
+      "id": "s001"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 1 of 24",
+      "title": "Five designs, five hard ideas",
+      "table": {
+        "head": [
+          "Design",
+          "The hard idea",
+          "Number to remember"
+        ],
+        "rows": [
+          [
+            "Object storage",
+            "Durability per dollar",
+            "RS(8,4) = 1.5x disk"
+          ],
+          [
+            "Metrics and alerting",
+            "Cheap ingest, trusted alerts",
+            "~1.4 bytes per sample"
+          ],
+          [
+            "Job scheduler",
+            "On time, once, on crashing machines",
+            "Leases + idempotency"
+          ],
+          [
+            "Distributed counter",
+            "One hot row",
+            "50K likes/s on one post"
+          ],
+          [
+            "Collaborative editor",
+            "Same spot, same moment",
+            "OT or CRDT"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Earlier case studies were the shops. Today is the utilities behind them. First, object storage, like Amazon S3: keeping petabytes safe without paying for three full copies.",
+          "reveal": 1
+        },
+        {
+          "say": "Second, metrics and alerting: ten million tiny samples a second, stored for about one point four bytes each, plus alerts that wake people only when users are hurting.",
+          "reveal": 2
+        },
+        {
+          "say": "Third, a job scheduler: fire each due job on time, never lose it, and don't run it twice, even when machines crash mid-job.",
+          "reveal": 3
+        },
+        {
+          "say": "Fourth, a counter: one viral post getting fifty thousand likes a second, all aimed at a single database row.",
+          "reveal": 4
+        },
+        {
+          "say": "Fifth, a collaborative editor: Alice and Bob type at the same position at the same moment, and both edits must survive.",
+          "reveal": 5
+        }
+      ],
+      "id": "s002",
+      "caption": "Book: Module 16 · Module Introduction · The five designs"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 2 of 24",
+      "title": "Four words we'll use all episode",
+      "bullets": [
+        "Durability: is the data still there later?",
+        "Availability: can I reach it right now?",
+        "Erasure coding: k pieces + m parity, any k rebuild",
+        "Cardinality: number of distinct values",
+        "Convergence: same updates in, same value out"
+      ],
+      "steps": [
+        {
+          "say": "Durability is the probability your data still exists later. It's not availability.",
+          "reveal": 1
+        },
+        {
+          "say": "Availability is whether you can reach the data right now. A store can be down for an hour and still lose nothing. Unavailable, but perfectly durable.",
+          "reveal": 2
+        },
+        {
+          "say": "Erasure coding, or E-C, splits data into k pieces and computes m extra parity pieces, so any k of the k plus m pieces rebuild the original. We write it R-S k comma m, for the common Reed-Solomon code.",
+          "reveal": 3
+        },
+        {
+          "say": "Cardinality is how many distinct values something can take. In monitoring, it's distinct time series. In counting, it's distinct users.",
+          "reveal": 4
+        },
+        {
+          "say": "Convergence means once every replica has seen the same set of updates, they all hold the same value, whatever order those updates arrived in.",
+          "reveal": 5
+        }
+      ],
+      "id": "s003",
+      "caption": "Book: Module 16 · Module Introduction · Four terms"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: the four terms in everyday terms",
+      "table": {
+        "head": [
+          "Term",
+          "Imagine"
+        ],
+        "rows": [
+          [
+            "Durability",
+            "Your photo survives three disk deaths this year"
+          ],
+          [
+            "Erasure coding",
+            "Book in 8 parts + 4 spares; any 8 rebuild it"
+          ],
+          [
+            "Cardinality",
+            "status label: 5 values; user_id: 100 million"
+          ],
+          [
+            "Convergence",
+            "Three regions all end at 6,068 likes"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Durability: you upload a holiday photo, and during the year three disks holding parts of it die. Durability is the promise that it's still there in ten years.",
+          "reveal": 1
+        },
+        {
+          "say": "Erasure coding: cut a book into eight parts and write four clever spare parts. Lose any four of the twelve, and you can still rebuild the whole book.",
+          "reveal": 2
+        },
+        {
+          "say": "Cardinality: a status label with five values is tiny. A user I-D label with a hundred million values is a disaster, as we'll see.",
+          "reveal": 3
+        },
+        {
+          "say": "Convergence: three regions count likes separately, sync in any order, and all end up showing six thousand and sixty-eight.",
+          "reveal": 4
+        }
+      ],
+      "id": "s004"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 3 of 24",
+      "title": "Design 1: S3-like object storage",
+      "steps": [
+        {
+          "say": "Customers store files, called objects, under a name, called a key, inside a container, called a bucket, and read them back years later. Think Amazon S3.",
+          "reveal": 0
+        },
+        {
+          "say": "It's really two problems glued together. Data: keep petabytes safe on disks that fail daily. Metadata: an index of tens of billions of keys that answers, does this key exist, and where are its bytes, with strong consistency.",
+          "reveal": 0
+        }
+      ],
+      "id": "s005",
+      "caption": "Book: Module 16 · Design 1 — S3-like Object Storage"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 3 of 24",
+      "title": "Requirements and numbers",
+      "bullets": [
+        "Eleven nines durability, four nines availability",
+        "Strong read-after-write: PUT then GET sees it",
+        "100 PB, 50 billion objects, avg ~2 MB",
+        "20K PUT/s, 200K GET/s at peak",
+        "Metadata: 50B x 500 bytes = ~25 TB",
+        "Egress: 200K x 2 MB = ~400 GB/s"
+      ],
+      "steps": [
+        {
+          "say": "The target is ninety-nine point nine nine nine nine nine nine nine nine nine percent durability, called eleven nines, per object per year.",
+          "reveal": 1
+        },
+        {
+          "say": "Consistency is strong read-after-write: after a successful PUT, every GET and every LIST sees the new object.",
+          "reveal": 2
+        },
+        {
+          "say": "Assume a hundred petabytes in fifty billion objects. About two megabytes on average, but most objects are small and most bytes sit in a few big ones.",
+          "reveal": 3
+        },
+        {
+          "say": "Peak traffic is twenty thousand PUTs and two hundred thousand GETs a second. Reads win ten to one.",
+          "reveal": 4
+        },
+        {
+          "say": "Metadata is about five hundred bytes per object: key, size, checksum, timestamps, chunk locations. Times fifty billion is about twenty-five terabytes. Too big for one machine, so it's sharded.",
+          "reveal": 5
+        },
+        {
+          "say": "Egress is about four hundred gigabytes a second. Fine over thousands of data nodes.",
+          "reveal": 6
+        }
+      ],
+      "id": "s006"
+    },
+    {
+      "layout": "number",
+      "kicker": "Concept 3 of 24",
+      "title": "The number that shapes the design",
+      "big": "3x: 15,000 disks | RS(8,4): 7,500 disks",
+      "caption": "Erasure coding halves the hardware bill",
+      "steps": [
+        {
+          "say": "Here's the number that shapes everything. With three full copies, a hundred petabytes becomes three hundred petabytes of raw disk. With twenty-terabyte disks, that's fifteen thousand disks.",
+          "reveal": 0
+        },
+        {
+          "say": "With R-S eight comma four, eight data pieces plus four parity, the overhead is one and a half times. That's a hundred and fifty petabytes, or seven thousand five hundred disks. Erasure coding halves the hardware bill, and storage is the product, so this decides the design.",
+          "reveal": 0
+        }
+      ],
+      "id": "s007"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 4 of 24",
+      "title": "Architecture: frontends, metadata, data nodes",
+      "mermaid": "flowchart LR\n  C[\"Client\"] --> FE[\"API frontends, stateless\"]\n  FE --> META[\"Metadata: range-sharded, consensus\"]\n  FE --> PL[\"Placement service\"]\n  FE --> DN[\"Data nodes in 3 AZs\"]\n  REP[\"Repair and scrubber\"] --> DN\n  GC[\"Garbage collector\"] --> META\n  GC --> DN",
+      "caption": "Book: Module 16 · Design 1 · 3. The architecture, annotated",
+      "steps": [
+        {
+          "say": "Clients talk to stateless A-P-I frontends, with a C-D-N in front for hot public objects.",
+          "reveal": 0
+        },
+        {
+          "say": "Frontends ask the placement service where to put bytes, write immutable chunks onto data nodes spread over three availability zones, and record the result in the metadata service.",
+          "reveal": 0
+        },
+        {
+          "say": "The metadata service is range-sharded and replicated by consensus. It holds the truth: key, then version, then chunk locations.",
+          "reveal": 0
+        },
+        {
+          "say": "In the background, a repair and scrubber process checks and rebuilds data, and a garbage collector removes bytes nobody points to any more.",
+          "reveal": 0
+        }
+      ],
+      "id": "s008"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Walk-through: PUT of a 64 MB video",
+      "bullets": [
+        "1. Frontend: authenticate, rate limit, stream",
+        "2. Placement: 12 nodes, distinct racks, 3 AZs",
+        "3. Encode RS(8,4): 8 x 8 MB data + 4 parity",
+        "4. Commit the metadata row: the commit point",
+        "5. Return 200 with the ETag",
+        "GET: 1 lookup, read any 8 of 12"
+      ],
+      "steps": [
+        {
+          "say": "Let's follow Maya uploading a sixty-four megabyte video. Step one, the frontend authenticates her, applies her bucket's rate limit, and streams the body through.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, it asks placement for twelve data nodes in different racks, four in each of three availability zones.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, it erasure-codes the chunk: eight data fragments of eight megabytes, plus four parity fragments. It writes all twelve in parallel and waits until they're durable.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, and only now, it commits the metadata row: Maya's bucket, her key, a new version I-D, pointing to the chunk. This single write is the commit point. Before it, the object doesn't exist. After it, everyone sees it.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, it returns two hundred with the E-tag, a checksum of the content.",
+          "reveal": 5
+        },
+        {
+          "say": "A GET does one metadata lookup and reads any eight of the twelve fragments, preferring the eight data fragments, which need no decoding.",
+          "reveal": 6
+        }
+      ],
+      "id": "s009"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 5 of 24",
+      "title": "Replication versus erasure coding",
+      "table": {
+        "head": [
+          "Scheme",
+          "Disk per byte",
+          "Can lose",
+          "Loss chance"
+        ],
+        "rows": [
+          [
+            "3x replication",
+            "3.0x",
+            "2",
+            "1 in a billion"
+          ],
+          [
+            "RS(6,3)",
+            "1.5x",
+            "3",
+            "1.25e-10"
+          ],
+          [
+            "RS(8,4)",
+            "1.5x",
+            "4",
+            "7.9e-13"
+          ],
+          [
+            "RS(10,4)",
+            "1.4x",
+            "4",
+            "2.0e-12"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Assume each disk has a one in a thousand chance of failing before repair. Three copies cost three times the disk, survive two losses, and lose data about once in a billion repair windows.",
+          "reveal": 1
+        },
+        {
+          "say": "R-S six comma three costs only one and a half times, survives three losses, and is already about eight times safer.",
+          "reveal": 2
+        },
+        {
+          "say": "R-S eight comma four, still one and a half times, survives four losses. Its loss chance is under one in a trillion. Cheaper and more durable at the same time.",
+          "reveal": 3
+        },
+        {
+          "say": "R-S ten comma four goes down to one point four times. That's the layout Facebook used in its f4 warm store.",
+          "reveal": 4
+        }
+      ],
+      "id": "s010",
+      "caption": "Book: Module 16 · Design 1 · Deep dive 1 (replication vs EC)"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 5 of 24",
+      "title": "What erasure coding costs you",
+      "bullets": [
+        "Repair is expensive: rebuild 8 MB, read 64 MB",
+        "Small objects waste space",
+        "Degraded reads need decoding CPU",
+        "Answer: replicate hot, convert sealed volumes",
+        "Durability really means repair speed",
+        "Spread fragments across failure domains"
+      ],
+      "steps": [
+        {
+          "say": "So why not erasure-code everything? Three prices. First, repair. Rebuilding one eight-megabyte fragment means reading eight fragments, sixty-four megabytes, across the network. Replication just copies one.",
+          "reveal": 1
+        },
+        {
+          "say": "Second, small objects. A four-kilobyte object cut into eight pieces of five hundred and twelve bytes is mostly overhead.",
+          "reveal": 2
+        },
+        {
+          "say": "Third, reading a stripe with missing pieces needs decoding, which costs C-P-U.",
+          "reveal": 3
+        },
+        {
+          "say": "The practical answer: write hot data replicated, then, once a storage volume is full and won't change, convert it to erasure coding in the background.",
+          "reveal": 4
+        },
+        {
+          "say": "And the loss numbers only hold if repair is fast. Eleven nines is really a statement about how quickly you detect and repair, so repair bandwidth is a first-class capacity item.",
+          "reveal": 5
+        },
+        {
+          "say": "Finally, put each fragment in a different failure domain: different disk, host, rack, and zone. Then one rack losing power removes at most one fragment of any stripe.",
+          "reveal": 6
+        }
+      ],
+      "id": "s011"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 6 of 24",
+      "title": "Metadata: the commit point",
+      "bullets": [
+        "Bytes first, metadata row last",
+        "Crash before commit: orphans, GC deletes",
+        "Crash after commit: a complete object",
+        "Each shard is a Raft or Paxos group",
+        "Overwrite = new version, flip 'latest'",
+        "Hot prefix? Split the range shard"
+      ],
+      "steps": [
+        {
+          "say": "The ordering rule is simple: bytes first, then the metadata row.",
+          "reveal": 1
+        },
+        {
+          "say": "Imagine the frontend crashes after writing fragments but before the commit. Those fragments are orphans. Nobody points to them, and the garbage collector deletes them later.",
+          "reveal": 2
+        },
+        {
+          "say": "If it crashes right after the commit, the object is complete and visible. There's no in-between state anyone can see.",
+          "reveal": 3
+        },
+        {
+          "say": "The commit must be linearizable, meaning every reader sees the latest committed version. So each metadata shard is a small consensus group, using Raft or Paxos.",
+          "reveal": 4
+        },
+        {
+          "say": "Overwrites never modify in place. They create a new version and flip the latest pointer. So someone halfway through downloading the old version still gets consistent bytes.",
+          "reveal": 5
+        },
+        {
+          "say": "Range sharding keeps LIST fast, but a hot prefix like logs slash today's date lands on one shard. The service splits a shard when its request rate crosses a threshold.",
+          "reveal": 6
+        }
+      ],
+      "id": "s012",
+      "caption": "Book: Module 16 · Design 1 · Deep dive 2 (commit point)"
+    },
+    {
+      "layout": "twocol",
+      "kicker": "Concept 7 of 24",
+      "title": "Small objects, large objects, deletes",
+      "left": {
+        "heading": "Small: pack into volumes",
+        "bullets": [
+          "File per object dies at billions",
+          "Append to 100 GB volume files",
+          "In-memory index: id to offset"
+        ]
+      },
+      "right": {
+        "heading": "Large and deletes",
+        "bullets": [
+          "Multipart: parts retried alone",
+          "Delete writes a tombstone",
+          "Compaction reclaims the bytes"
+        ]
+      },
+      "steps": [
+        {
+          "say": "A file per object collapses at billions of files. Each file needs an inode, the file system's per-file record, plus several disk seeks.",
+          "reveal": 1
+        },
+        {
+          "say": "Instead, append small objects into big volume files, say a hundred gigabytes each.",
+          "reveal": 2
+        },
+        {
+          "say": "Keep an in-memory index from object I-D to offset. That's Facebook's Haystack design: about one disk seek per photo read.",
+          "reveal": 3
+        },
+        {
+          "say": "Large objects go the other way. Multipart upload turns one fragile five-terabyte stream into thousands of parts, each retried on its own.",
+          "reveal": 4
+        },
+        {
+          "say": "A delete just writes a tombstone, a delete marker, in metadata.",
+          "reveal": 5
+        },
+        {
+          "say": "Later, compaction copies a mostly-dead volume's live objects into a new volume and drops the old one, just like L-S-M tree compaction.",
+          "reveal": 6
+        }
+      ],
+      "id": "s013",
+      "caption": "Book: Module 16 · Design 1 · Deep dive 3 (small, large, deletes)"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 7 of 24",
+      "title": "Failure walk: disks, bit rot, a whole zone",
+      "bullets": [
+        "A disk dies daily: still any 8 of 12",
+        "Bit rot: checksums + scrubber every ~2 weeks",
+        "Whole AZ down: lose 4 of 12, still readable",
+        "Metadata leader lost: re-elect in seconds",
+        "Client retries a PUT: harmless, old copy GCed"
+      ],
+      "steps": [
+        {
+          "say": "With seventy-five hundred disks, one dies about every day. Each affected stripe loses one fragment, reads still work from any eight, and repair rebuilds it elsewhere, rate-limited so it can't starve customer reads.",
+          "reveal": 1
+        },
+        {
+          "say": "Bit rot is stored bits silently flipping over time. Every fragment has a checksum. A scrubber re-reads everything on a cycle, say every two weeks, and repairs mismatches. A GET that hits a bad checksum just reads another fragment.",
+          "reveal": 2
+        },
+        {
+          "say": "If a whole availability zone goes down, four of twelve fragments are gone. That's exactly R-S eight comma four's tolerance, so reads still succeed.",
+          "reveal": 3
+        },
+        {
+          "say": "If a metadata shard loses its leader, the group elects a new one in seconds. Only that key range blips, and clients retry with backoff.",
+          "reveal": 4
+        },
+        {
+          "say": "If a client retries a PUT after a timeout, it may create two versions. The later one wins, and the earlier becomes an orphan for garbage collection. That's why a full-content PUT is naturally idempotent.",
+          "reveal": 5
+        }
+      ],
+      "id": "s014"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Why is RS(8,4) both cheaper and safer than 3 copies?",
+      "bullets": [
+        "A. It stores less data",
+        "B. 1.5x disk, yet survives 4 losses instead of 2",
+        "C. It never needs repair",
+        "D. It compresses the bytes"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Why is R-S eight comma four both cheaper and more durable than three copies? And what does it cost you instead? Answer after the break.",
+          "reveal": 0
+        }
+      ],
+      "id": "s015"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 8 of 24",
+      "title": "Design 2: metrics monitoring and alerting",
+      "steps": [
+        {
+          "say": "The answer was B. One and a half times the disk, yet it survives four losses instead of two. You pay for it in repair bandwidth and decoding C-P-U.",
+          "reveal": 0
+        },
+        {
+          "say": "Now our second design: a system like Prometheus, Datadog, or Google's Monarch. Every server reports numbers like C-P-U, request rate, errors, and latency. Engineers look at dashboards, and get paged when something's wrong.",
+          "reveal": 0
+        }
+      ],
+      "id": "s016",
+      "caption": "Book: Module 16 · Design 2 — Metrics Monitoring & Alerting"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 8 of 24",
+      "title": "Requirements and numbers",
+      "bullets": [
+        "Counters, gauges, histograms, with labels",
+        "Never slow the app; queryable in ~30 s",
+        "100K hosts x 1,000 series = 100M series",
+        "Every 10 s: 10M samples a second",
+        "Raw 16 B: 13.8 TB/day; compressed: ~1.2 TB/day",
+        "Real limit: 100M x 4 KB = 400 GB of RAM"
+      ],
+      "steps": [
+        {
+          "say": "Counters only go up, like requests served. Gauges go up and down, like memory used. Histograms bucket latencies. Each series is a metric name plus labels, like requests total with service equals cart and status equals five hundred.",
+          "reveal": 1
+        },
+        {
+          "say": "Ingestion must never block the app being measured, and new data should be queryable within about thirty seconds.",
+          "reveal": 2
+        },
+        {
+          "say": "Assume a hundred thousand hosts, each with a thousand series. That's a hundred million active series.",
+          "reveal": 3
+        },
+        {
+          "say": "Each one reports every ten seconds, so ten million samples a second.",
+          "reveal": 4
+        },
+        {
+          "say": "A raw sample is a timestamp plus a value, sixteen bytes. That's almost fourteen terabytes a day. Facebook's Gorilla compression gets it to about one point four bytes per sample, so about one point two terabytes a day.",
+          "reveal": 5
+        },
+        {
+          "say": "But the true limit is not bytes. Each active series needs an index entry and an in-memory buffer of a few kilobytes. A hundred million series times four kilobytes is about four hundred gigabytes of RAM.",
+          "reveal": 6
+        }
+      ],
+      "id": "s017"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 9 of 24",
+      "title": "Series, chunks and blocks",
+      "bullets": [
+        "Series ID = hash of sorted labels",
+        "Inverted index: label=value to series IDs",
+        "Chunk: ~120 samples, 20 minutes, compressed",
+        "Timestamps: delta-of-delta, usually 1 bit",
+        "Values: XOR with the previous value",
+        "Block: every 2 h, immutable, on object storage"
+      ],
+      "steps": [
+        {
+          "say": "A series I-D is a hash of its sorted label set.",
+          "reveal": 1
+        },
+        {
+          "say": "An inverted index maps each label value to the series that have it. Service equals cart maps to series seventeen, ninety-three, and so on. A query intersects these lists, exactly like a search engine.",
+          "reveal": 2
+        },
+        {
+          "say": "Samples are grouped per series into chunks of about a hundred and twenty samples, twenty minutes at ten seconds each, compressed together.",
+          "reveal": 3
+        },
+        {
+          "say": "Here's the trick for timestamps. Imagine samples at ten, twenty, thirty, forty seconds. The differences are ten, ten, ten. The difference between differences is zero, zero, zero. Store zero in one bit. That's delta of delta.",
+          "reveal": 4
+        },
+        {
+          "say": "For values, X-O-R each value with the previous one. A C-P-U gauge going from forty-two point one to forty-two point three shares most of its bits, so only a few bits remain to store.",
+          "reveal": 5
+        },
+        {
+          "say": "Every two hours, the in-memory head becomes an immutable block of chunks plus index, written to object storage, our design one. Old blocks are downsampled to five-minute summaries, about seven times cheaper.",
+          "reveal": 6
+        }
+      ],
+      "id": "s018",
+      "caption": "Book: Module 16 · Design 2 · 3. Architecture (data model)"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 10 of 24",
+      "title": "Metrics pipeline",
+      "mermaid": "flowchart LR\n  S[\"Services and agents\"] --> SC[\"Scrapers or collectors\"]\n  SC --> Q[\"Ingest queue by series hash\"]\n  Q --> I[\"Ingesters: memory + WAL\"]\n  I --> OBJ[\"Object storage: 2h blocks\"]\n  QF[\"Query frontend\"] --> I\n  RE[\"Rule evaluators x2\"] --> QF\n  RE --> AM[\"Alert manager\"]",
+      "caption": "Book: Module 16 · Design 2 · 3. The architecture, annotated",
+      "steps": [
+        {
+          "say": "Step one, scrapers or collectors gather and batch samples. The app itself only increments an in-process counter, which takes nanoseconds.",
+          "reveal": 0
+        },
+        {
+          "say": "Step two, an ingest queue absorbs bursts. It's partitioned by series hash, so each series always reaches the same ingester.",
+          "reveal": 0
+        },
+        {
+          "say": "Step three, ingesters append to an in-memory chunk and a write-ahead log, replicated to two or three ingesters, and flush blocks every two hours.",
+          "reveal": 0
+        },
+        {
+          "say": "Step four, the query frontend splits a thirty-day query into daily pieces, answers recent ones from ingesters and old ones from blocks, and caches finished days.",
+          "reveal": 0
+        },
+        {
+          "say": "Step five, two redundant rule evaluators run alert expressions. The alert manager dedupes their copies, groups related alerts, applies silences, and routes pages to the right team.",
+          "reveal": 0
+        }
+      ],
+      "id": "s019"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 11 of 24",
+      "title": "Cardinality is the budget",
+      "bullets": [
+        "Cost scales with distinct series, not writes",
+        "Add user_id: series x millions",
+        "Defense: per-tenant series limits at ingest",
+        "Defense: top-cardinality report per metric",
+        "Put per-user detail in logs and traces",
+        "Histograms: 20 buckets x every combination"
+      ],
+      "steps": [
+        {
+          "say": "Cost scales with the number of distinct series, not how often they're written.",
+          "reveal": 1
+        },
+        {
+          "say": "Imagine a developer adds a user I-D label to the request counter. With ten million users, one series becomes ten million series. The ingest tier runs out of memory in minutes.",
+          "reveal": 2
+        },
+        {
+          "say": "Defense one: per-tenant series limits at ingest. New series over the limit are rejected, and the rejections are counted as their own metric. That's a bulkhead: one team's bad deploy can't hurt everyone else.",
+          "reveal": 3
+        },
+        {
+          "say": "Defense two: a top-cardinality report, so you can see which metric is blowing up.",
+          "reveal": 4
+        },
+        {
+          "say": "Defense three: per-user detail belongs in logs or traces, not in labels.",
+          "reveal": 5
+        },
+        {
+          "say": "And watch histograms: twenty buckets times every label combination means twenty series for each one. In the interview, say: cardinality is the budget, so I police unbounded labels.",
+          "reveal": 6
+        }
+      ],
+      "id": "s020",
+      "caption": "Book: Module 16 · Design 2 · Deep dive 1 (cardinality)"
+    },
+    {
+      "layout": "twocol",
+      "kicker": "Concept 12 of 24",
+      "title": "Pull versus push",
+      "left": {
+        "heading": "Pull: monitor scrapes",
+        "bullets": [
+          "Monitor controls the load",
+          "Silent target is a signal: up == 0",
+          "Needs discovery; hard for short jobs"
+        ]
+      },
+      "right": {
+        "heading": "Push: agents send",
+        "bullets": [
+          "Works for batch, serverless, firewalls",
+          "Bad client can flood you",
+          "Needs rate limits, backpressure"
+        ]
+      },
+      "steps": [
+        {
+          "say": "With pull, the monitor scrapes each target's metrics page every ten seconds. Prometheus works this way. The monitor controls its own load.",
+          "reveal": 1
+        },
+        {
+          "say": "A target that stops answering is itself a signal: up equals zero.",
+          "reveal": 2
+        },
+        {
+          "say": "But pull needs service discovery, and it struggles with a job that runs for five seconds and exits before anyone scrapes it.",
+          "reveal": 3
+        },
+        {
+          "say": "With push, agents send their samples. That works for batch jobs, serverless functions, and targets behind firewalls.",
+          "reveal": 4
+        },
+        {
+          "say": "But a misbehaving client can flood you.",
+          "reveal": 5
+        },
+        {
+          "say": "So receivers need rate limiting and backpressure. Big systems do both: pull inside the data center, and push through a gateway for everything else.",
+          "reveal": 6
+        }
+      ],
+      "id": "s021",
+      "caption": "Book: Module 16 · Design 2 · Deep dive 2 (pull vs push)"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 13 of 24",
+      "title": "Alerts people trust",
+      "bullets": [
+        "Page on symptoms, not causes",
+        "SLO burn rate: 14.4x over 1 h and 5 min",
+        "for: 5m, so one bad scrape doesn't page",
+        "Group 40 failing pods into one page",
+        "Inhibit: region down hides per-service alerts",
+        "Dead-man's switch: alert on absence"
+      ],
+      "steps": [
+        {
+          "say": "Page on symptoms users feel, like error rate and latency, not causes like C-P-U at ninety percent.",
+          "reveal": 1
+        },
+        {
+          "say": "Best is an S-L-O burn-rate alert. With a ninety-nine point nine percent success S-L-O, the allowed failures are your error budget. Page if you burn it fourteen point four times too fast, two percent of the month's budget in one hour, checked over a one-hour and a five-minute window. Big outages page fast, blips stay silent.",
+          "reveal": 2
+        },
+        {
+          "say": "Add a for five minutes clause, so one bad scrape doesn't page.",
+          "reveal": 3
+        },
+        {
+          "say": "Grouping: forty failing cart pods produce one page, not forty.",
+          "reveal": 4
+        },
+        {
+          "say": "Inhibition: if a whole region is down, suppress the per-service alerts under it. And put a runbook link on every page.",
+          "reveal": 5
+        },
+        {
+          "say": "Finally, alert on absence. An always-firing watchdog alert must reach an external service every minute. If it stops arriving, that service pages you, because your monitoring itself is down.",
+          "reveal": 6
+        }
+      ],
+      "id": "s022",
+      "caption": "Book: Module 16 · Design 2 · Deep dive 3 (alerts people trust)"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 14 of 24",
+      "title": "Watching from the outside",
+      "table": {
+        "head": [
+          "Signal",
+          "Catches",
+          "Misses"
+        ],
+        "rows": [
+          [
+            "Real-user monitoring (RUM)",
+            "One country, browser, release, ISP",
+            "Users who can't load at all"
+          ],
+          [
+            "Network Error Logging (NEL)",
+            "DNS, TLS, timeouts before a response",
+            "Browsers that never visited"
+          ],
+          [
+            "Synthetic probers",
+            "Outages with no traffic, cert expiry",
+            "Paths you didn't script"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Everything so far measures from inside, so it misses an expired certificate or a broken checkout script while dashboards stay green. Real-user monitoring, or RUM, is a small script in the page that records each user's load times, failed requests, and errors. It sees problems only some users hit, but not users whose page never loads.",
+          "reveal": 1
+        },
+        {
+          "say": "Network Error Logging, N-E-L, is a response header telling the browser to report failed requests later, like D-N-S or T-L-S errors. It catches failures before any response exists.",
+          "reveal": 2
+        },
+        {
+          "say": "Synthetic probers are robot users that run a real journey, like log in and add to cart, every minute from many regions. They catch outages at four A-M with no traffic. Use all three: probers say whether paths work, RUM and N-E-L say who is affected.",
+          "reveal": 3
+        }
+      ],
+      "id": "s023",
+      "caption": "Book: Module 16 · Design 2 · Monitoring client-side errors"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Example: a checkout bug in release 5.2",
+      "bullets": [
+        "Page batches events; sendBeacon on page hide",
+        "Sample: 100% of errors, 5% of successes",
+        "Collector on a separate domain, DNS, region",
+        "Defend it: schema checks, size caps, rate limits",
+        "Into normal series: errors by page, country, release",
+        "Alert: JS errors 2x vs release 5.1"
+      ],
+      "steps": [
+        {
+          "say": "Imagine release five point two breaks the checkout button on one browser, while server errors stay flat. Step one, the page buffers events and sends one compressed batch every few seconds, plus a final one with send beacon when the page hides.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, sample. Keep every error, but only five percent of successful page views, storing the rate so counts can be scaled back up.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, send to an independent collector on a different domain, D-N-S provider, and region. A collector behind your own C-D-N goes down in exactly the outage you need reported.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, defend it. It's a public write endpoint, so validate schemas, cap payload size, and rate-limit per I-P.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, turn events into ordinary low-cardinality series: errors by page, country, and release. Never user I-D.",
+          "reveal": 5
+        },
+        {
+          "say": "Step six, alert. Release five point two shows twice the JavaScript errors of five point one at the same time of day. That's a rollback signal, even though every server dashboard is green.",
+          "reveal": 6
+        }
+      ],
+      "id": "s024"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 15 of 24",
+      "title": "Design 3: distributed job scheduler",
+      "steps": [
+        {
+          "say": "Third design: a company-wide service for background work. Send this email in ten minutes. Generate every invoice on the first of the month at two A-M. Retry this failed webhook. It's distributed cron plus a task queue.",
+          "reveal": 0
+        },
+        {
+          "say": "Three promises fight each other: on time, never lost, and not run twice, on machines that crash mid-job with clocks that disagree. Plus priority: a password-reset email must not wait behind a million newsletters.",
+          "reveal": 0
+        }
+      ],
+      "id": "s025",
+      "caption": "Book: Module 16 · Design 3 — Distributed Job Scheduler"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 15 of 24",
+      "title": "Requirements and numbers",
+      "bullets": [
+        "Run now, at time T, or on a cron schedule",
+        "Start within ~2 s of due, at p99",
+        "100M runs/day = ~1,160/s; peak ~20K/s on the hour",
+        "1 KB per job: 100 GB/day, 3 TB hot",
+        "Little's law: 1,160/s x 2 s = ~2,300 busy slots"
+      ],
+      "steps": [
+        {
+          "say": "A job can run now, at a given time, or on a cron schedule, with a priority, retries, and a timeout.",
+          "reveal": 1
+        },
+        {
+          "say": "It should start within about two seconds of its due time at p ninety-nine.",
+          "reveal": 2
+        },
+        {
+          "say": "Assume a hundred million runs a day. That's about eleven hundred and sixty a second on average. But cron jobs cluster at midnight and on the hour, so the first seconds of each hour peak near twenty thousand a second.",
+          "reveal": 3
+        },
+        {
+          "say": "At about a kilobyte per job record, that's a hundred gigabytes a day, or three terabytes for thirty hot days.",
+          "reveal": 4
+        },
+        {
+          "say": "By Little's law, eleven hundred and sixty a second times two seconds is about twenty-three hundred busy worker slots, before peaks.",
+          "reveal": 5
+        }
+      ],
+      "id": "s026"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 15 of 24",
+      "title": "Scheduler architecture",
+      "mermaid": "flowchart LR\n  API[\"Job API\"] --> DB[\"Job store: 1024 partitions, index on next_run_at\"]\n  CO[\"Coordinator: partition leases\"] --> S[\"Schedulers\"]\n  S --> DB\n  S --> Q[\"Queues: high, normal, low\"]\n  Q --> W[\"Workers: lease, heartbeat, complete\"]\n  W --> DLQ[\"Dead letter queue\"]\n  R[\"Lease reaper\"] --> DB",
+      "caption": "The job store is the truth; queues hold only ready work",
+      "steps": [
+        {
+          "say": "Step one, the A-P-I writes the job row with its first next-run time, computed in the job's own timezone.",
+          "reveal": 0
+        },
+        {
+          "say": "Step two, a consensus-backed coordinator leases sets of the thousand and twenty-four partitions to schedulers. If a scheduler dies, its lease expires and a survivor takes over.",
+          "reveal": 0
+        },
+        {
+          "say": "Step three, each scheduler loops every half second, claims due rows, marks them queued, and pushes them to the queue for their priority. For a recurring job, it inserts the next run row in the same transaction, so a crash can't skip or double a run.",
+          "reveal": 0
+        },
+        {
+          "say": "Step four, workers pull, run under a timeout, heartbeat, and report. Failures retry with backoff, and after the max attempts go to the dead letter queue.",
+          "reveal": 0
+        },
+        {
+          "say": "Step five, a lease reaper finds running jobs whose lease expired, meaning a dead worker, and puts them back to scheduled.",
+          "reveal": 0
+        }
+      ],
+      "id": "s027"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 16 of 24",
+      "title": "Finding due jobs without a thundering herd",
+      "bullets": [
+        "(a) Index scan on next_run_at + SKIP LOCKED",
+        "(b) Redis sorted set by due time: fast cache",
+        "(c) Timing wheel for millions of short timers",
+        "The store stays the truth",
+        "Smear the hour: opt-in jitter window",
+        "Preload next minute with not_before"
+      ],
+      "steps": [
+        {
+          "say": "A thundering herd is many processes rushing at the same thing at once. Option a: each scheduler scans its partition's index for rows due in the next second, with select for update skip locked. Pollers skip rows another one holds, so they share safely.",
+          "reveal": 1
+        },
+        {
+          "say": "Option b: a Redis sorted set per partition, scored by due time. Very fast, but it must be rebuilt from the store after a failure.",
+          "reveal": 2
+        },
+        {
+          "say": "Option c: a timing wheel, a circular array of time buckets. Great for millions of short in-memory timers.",
+          "reveal": 3
+        },
+        {
+          "say": "Options b and c are accelerators. The database remains the truth.",
+          "reveal": 4
+        },
+        {
+          "say": "Now the top-of-the-hour spike. Imagine fifty thousand invoice jobs all set for two A-M. Owners opt into a jitter window, say any time from two to two-ten, which spreads them over six hundred seconds.",
+          "reveal": 5
+        },
+        {
+          "say": "And jobs due in the next minute are preloaded into queues a few seconds early, with a not-before time that workers respect.",
+          "reveal": 6
+        }
+      ],
+      "id": "s028",
+      "caption": "Book: Module 16 · Design 3 · Deep dive 1 (finding due jobs)"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 17 of 24",
+      "title": "Exactly once = at-least-once + idempotency",
+      "bullets": [
+        "A worker can finish, then die before acking",
+        "Scheduler can't tell dead from slow",
+        "Handler uses job ID + run ID as idempotency key",
+        "Each lease gets a rising fencing token",
+        "Store rejects older tokens: zombies can't win"
+      ],
+      "steps": [
+        {
+          "say": "Here's the uncomfortable truth. A worker can finish the job and then die before reporting success.",
+          "reveal": 1
+        },
+        {
+          "say": "The scheduler can't tell a dead worker from a slow one, so the reaper must run the job again. No scheduler can prevent that.",
+          "reveal": 2
+        },
+        {
+          "say": "So we make repeats harmless. Every attempt carries a stable job I-D and run I-D, and the handler uses them as an idempotency key on side effects. For example: insert the invoice only if this run I-D doesn't exist yet.",
+          "reveal": 3
+        },
+        {
+          "say": "Next, each lease carries a fencing token, a number that only goes up.",
+          "reveal": 4
+        },
+        {
+          "say": "The store rejects heartbeats and completions with an older token. So a zombie worker, one presumed dead but still running, can't overwrite a newer attempt. The same token protects partition handovers between schedulers.",
+          "reveal": 5
+        }
+      ],
+      "id": "s029",
+      "caption": "Book: Module 16 · Design 3 · Deep dive 2 (exactly once)"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: invoice run 77, worker dies after charging",
+      "table": {
+        "head": [
+          "Time",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "02:00:01",
+            "Worker A leases run 77, token 41"
+          ],
+          [
+            "02:00:03",
+            "A creates invoice for run 77, then dies"
+          ],
+          [
+            "02:00:33",
+            "Lease expires; reaper reschedules run 77"
+          ],
+          [
+            "02:00:34",
+            "Worker B leases run 77, token 42"
+          ],
+          [
+            "02:00:35",
+            "Invoice for run 77 exists: skip, complete"
+          ],
+          [
+            "02:00:40",
+            "Zombie A reports with token 41: rejected"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's walk the invoice job for a customer called Ravi. At two A-M and one second, worker A leases run seventy-seven with fencing token forty-one.",
+          "reveal": 1
+        },
+        {
+          "say": "Two seconds later, A creates Ravi's invoice, then its machine dies before it acks.",
+          "reveal": 2
+        },
+        {
+          "say": "Thirty seconds later, the lease expires and the reaper puts run seventy-seven back to scheduled.",
+          "reveal": 3
+        },
+        {
+          "say": "Worker B leases it with token forty-two.",
+          "reveal": 4
+        },
+        {
+          "say": "B tries to insert the invoice, but one for run seventy-seven already exists. So it skips the side effect and reports complete. Ravi is invoiced once.",
+          "reveal": 5
+        },
+        {
+          "say": "And if machine A was only paused and wakes up, its report with token forty-one is rejected. Effectively once means at-least-once, plus idempotency, plus fencing.",
+          "reveal": 6
+        }
+      ],
+      "id": "s030"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 18 of 24",
+      "title": "Priority and fairness",
+      "bullets": [
+        "One priority queue starves low priority",
+        "Weighted pulls: 6 high, 3 normal, 1 low",
+        "Aging: priority rises with wait time",
+        "Per-tenant quotas cap backfills",
+        "Bulkhead: own pool for password resets"
+      ],
+      "steps": [
+        {
+          "say": "A single queue sorted by priority causes starvation. Under steady high-priority load, low-priority jobs never run.",
+          "reveal": 1
+        },
+        {
+          "say": "Fix one: separate queues per priority, with weighted pulls. When all are non-empty, a worker takes six high, three normal, and one low. Low still gets ten percent.",
+          "reveal": 2
+        },
+        {
+          "say": "Fix two: aging. A job's effective priority rises the longer it waits.",
+          "reveal": 3
+        },
+        {
+          "say": "Fix three: per-tenant quotas, so one team's million-job backfill can't fill the high queue.",
+          "reveal": 4
+        },
+        {
+          "say": "And isolate critical work in its own pool, a bulkhead. Password-reset emails get workers that the monthly report backlog can never occupy. In the interview, say: weighted queues, aging, and quotas, or low priority starves.",
+          "reveal": 5
+        }
+      ],
+      "id": "s031",
+      "caption": "Book: Module 16 · Design 3 · Deep dive 3 (priority, fairness)"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Worker charges, dies before ack: why no double charge?",
+      "bullets": [
+        "A. The scheduler never retries",
+        "B. Idempotency key on run ID + fencing token",
+        "C. Clocks are synchronized",
+        "D. The queue deletes the job first"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Walk through what happens, and why the customer isn't charged twice. Answer next.",
+          "reveal": 0
+        }
+      ],
+      "id": "s032"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 19 of 24",
+      "title": "Design 4: distributed counter",
+      "steps": [
+        {
+          "say": "The answer was B. The job is retried, but the handler's idempotency key on the run I-D skips the second charge, and the fencing token rejects the zombie.",
+          "reveal": 0
+        },
+        {
+          "say": "Fourth design: like and view counts on every post. Update posts set likes equals likes plus one works fine, until one viral post takes fifty thousand increments a second on a single row. Every update takes the same row lock, and a locked row tops out at a few thousand updates a second. We fail by about ten times.",
+          "reveal": 0
+        }
+      ],
+      "id": "s033",
+      "caption": "Book: Module 16 · Design 4 — Distributed Counter"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 19 of 24",
+      "title": "Counter architecture: facts first, counts derived",
+      "mermaid": "flowchart LR\n  API[\"Like API\"] --> LT[\"Likes table: truth\"]\n  LT --> ST[\"CDC stream by post_id\"]\n  ST --> AG[\"Aggregator: 1 s sums\"]\n  AG --> CS[\"Counter store + cache\"]\n  REC[\"Nightly reconciler\"] --> CS",
+      "caption": "500M users, 115K likes/s average, 400K/s peak, 500K count reads/s",
+      "steps": [
+        {
+          "say": "With five hundred million daily users at twenty likes each, that's about a hundred and fifteen thousand likes a second on average.",
+          "reveal": 0
+        },
+        {
+          "say": "Step one, a like inserts a row, post I-D plus user I-D, into the likes table. That's the primary key, so a double tap is a harmless no-op. The insert emits a plus one through change data capture, so there's no risky dual write.",
+          "reveal": 0
+        },
+        {
+          "say": "Step two, the stream is partitioned by post I-D, so one aggregator sums each post's events in one-second windows.",
+          "reveal": 0
+        },
+        {
+          "say": "Step three, the counter store holds totals, and a cache serves the five hundred thousand count reads a second.",
+          "reveal": 0
+        },
+        {
+          "say": "Step four, a reconciler recounts from the likes table and fixes any drift. The likes are the truth. The count is always recomputable.",
+          "reveal": 0
+        }
+      ],
+      "id": "s034"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 20 of 24",
+      "title": "The hot row: batch, then shard",
+      "bullets": [
+        "Batching: 50K events/s become 1 update/s",
+        "Sharding: N sub-counters, pick one at random",
+        "N = 20 x 2,500/s per row = 50K/s",
+        "Read = sum of N; cache the sum",
+        "Grow N only for hot posts",
+        "Redis INCR for display, DB for truth"
+      ],
+      "steps": [
+        {
+          "say": "Two independent tools. First, batching. The aggregator adds up a viral post's fifty thousand likes in memory and writes one plus fifty thousand per second. Fifty thousand row updates become one.",
+          "reveal": 1
+        },
+        {
+          "say": "Second, sharded counters, for when writes must be synchronous. Split one logical counter into N sub-counters. Each increment picks one at random.",
+          "reveal": 2
+        },
+        {
+          "say": "Worked number: if each row handles about twenty-five hundred updates a second, twenty sub-counters handle fifty thousand.",
+          "reveal": 3
+        },
+        {
+          "say": "The price: a read must sum all twenty rows, so cache the sum.",
+          "reveal": 4
+        },
+        {
+          "say": "And only hot posts need many shards. Choose N dynamically from the observed write rate, so a post with three likes stays one row.",
+          "reveal": 5
+        },
+        {
+          "say": "Many systems use a Redis increment, about a hundred thousand operations a second per shard, for the display count, and keep the database as the truth.",
+          "reveal": 6
+        }
+      ],
+      "id": "s035",
+      "caption": "Book: Module 16 · Design 4 · Deep dive 1 (hot row)"
+    },
+    {
+      "layout": "twocol",
+      "kicker": "Concept 21 of 24",
+      "title": "Exact versus approximate counts",
+      "left": {
+        "heading": "Likes: exact",
+        "bullets": [
+          "Stored set of (post, user)",
+          "Count = size of the set",
+          "Primary key stops doubles"
+        ]
+      },
+      "right": {
+        "heading": "Views: approximate",
+        "bullets": [
+          "HyperLogLog: 12 KB, 0.81% error",
+          "Count after N seconds watched",
+          "Dedupe per device per window"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Likes are exact, because we store the set of who liked what.",
+          "reveal": 1
+        },
+        {
+          "say": "The count is just the size of that set.",
+          "reveal": 2
+        },
+        {
+          "say": "And the primary key on post plus user means a user can't like twice.",
+          "reveal": 3
+        },
+        {
+          "say": "Views are approximate by design. Storing every viewer of every video costs too much. For unique viewers, use HyperLogLog, a sketch that estimates distinct items in fixed memory. Redis uses twelve kilobytes per counter at about point eight percent error, whether it counted a thousand or a billion.",
+          "reveal": 4
+        },
+        {
+          "say": "For total views, count a view only after some seconds of watch time.",
+          "reveal": 5
+        },
+        {
+          "say": "And count at most once per user or device per video per window, using a short-lived dedupe key, plus bot filtering.",
+          "reveal": 6
+        }
+      ],
+      "id": "s036",
+      "caption": "Book: Module 16 · Design 4 · Deep dive 2 (exact vs approximate)"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 22 of 24",
+      "title": "Counting across regions: CRDT counters",
+      "bullets": [
+        "Naive: add the other region's total",
+        "G-Counter: one slot per region",
+        "Each region increments only its own slot",
+        "Merge = element-wise max; value = sum",
+        "PN-Counter: two G-Counters, for unlike",
+        "Uniqueness still from the like record"
+      ],
+      "steps": [
+        {
+          "say": "Now regions accept likes locally and sync asynchronously. The naive approach adds the other region's total, and double-counts every time a message repeats.",
+          "reveal": 1
+        },
+        {
+          "say": "A G-Counter, a grow-only C-R-D-T, keeps one slot per region. C-R-D-T means conflict-free replicated data type.",
+          "reveal": 2
+        },
+        {
+          "say": "Each region only increments its own slot.",
+          "reveal": 3
+        },
+        {
+          "say": "To merge, take the maximum of each slot. The value is the sum of slots. Max gives the same answer in any order, grouped any way, applied any number of times. So replicas converge.",
+          "reveal": 4
+        },
+        {
+          "say": "A P-N counter is two G-Counters, one for increments and one for decrements, so unlikes work.",
+          "reveal": 5
+        },
+        {
+          "say": "But it converges counts. It doesn't stop a user liking in two regions at once. Uniqueness still comes from the per-user like record, owned by one home region.",
+          "reveal": 6
+        }
+      ],
+      "id": "s037",
+      "caption": "Book: Module 16 · Design 4 · Deep dive 3 (CRDT counters)"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: three regions converge on 6,068",
+      "table": {
+        "head": [
+          "Step",
+          "US view",
+          "EU view",
+          "AP view"
+        ],
+        "rows": [
+          [
+            "Before sync (own slot)",
+            "us 2,042",
+            "eu 2,042",
+            "ap 1,984"
+          ],
+          [
+            "US gets EU's state, merge by max",
+            "us 2,042, eu 2,042",
+            "",
+            ""
+          ],
+          [
+            "EU's message arrives again",
+            "no change: max is same",
+            "",
+            ""
+          ],
+          [
+            "After full sync, sum of slots",
+            "6,068",
+            "6,068",
+            "6,068"
+          ],
+          [
+            "Naive 'add their total'",
+            "12,136: double",
+            "",
+            ""
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "This is the book's demo. Before syncing, U-S has counted two thousand and forty-two likes in its slot, E-U two thousand and forty-two, and Asia-Pacific nineteen eighty-four. The true total is six thousand and sixty-eight.",
+          "reveal": 1
+        },
+        {
+          "say": "U-S receives E-U's state and takes the max per slot. Now U-S knows both slots.",
+          "reveal": 2
+        },
+        {
+          "say": "The network delivers E-U's message a second time. Max of two thousand and forty-two and two thousand and forty-two is unchanged. Duplicates are harmless.",
+          "reveal": 3
+        },
+        {
+          "say": "After everyone syncs, every region sums the three slots and shows six thousand and sixty-eight.",
+          "reveal": 4
+        },
+        {
+          "say": "The naive approach of adding the other regions' totals reported twelve thousand one hundred and thirty-six. Double. That's why G-Counters merge by max, not by adding.",
+          "reveal": 5
+        }
+      ],
+      "id": "s038"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 23 of 24",
+      "title": "Design 5: collaborative document editor",
+      "steps": [
+        {
+          "say": "Last design: several people edit one document at once and see each other's typing almost immediately, like Google Docs.",
+          "reveal": 0
+        },
+        {
+          "say": "Each keystroke applies locally first, because a server round trip per key would feel broken. So copies briefly differ. We need convergence, everyone ends with the same text, and intention preservation, every edit lands where its author meant.",
+          "reveal": 0
+        }
+      ],
+      "id": "s039",
+      "caption": "Book: Module 16 · Design 5 — Collaborative Document Editor"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 23 of 24",
+      "title": "Editor architecture: one owner per document",
+      "mermaid": "flowchart LR\n  A[\"Alice: local replica\"] --> GW[\"WebSocket gateways\"]\n  B[\"Bob: local replica\"] --> GW\n  GW --> CS[\"Collab server: owns this doc\"]\n  CS --> LOG[\"Op log: append-only\"]\n  CS --> SNAP[\"Snapshots in object storage\"]\n  CS --> PR[\"Presence pub/sub\"]\n  PR --> GW",
+      "caption": "2M editors, ~1-2M messages/s, ~40 gateways at 50K sockets each",
+      "steps": [
+        {
+          "say": "At peak, two million people are editing, sending about one to two million messages a second over long-lived WebSockets. At fifty thousand sockets per gateway, that's about forty gateways.",
+          "reveal": 0
+        },
+        {
+          "say": "Step one, opening a document loads the latest snapshot plus later operations, and the client remembers its revision.",
+          "reveal": 0
+        },
+        {
+          "say": "Step two, consistent hashing on the document I-D routes every editor of a document to the same collaboration server, which holds it in memory. One owner makes ordering simple.",
+          "reveal": 0
+        },
+        {
+          "say": "Step three, the server gives each incoming batch the next revision number, transforms or merges it, appends it to the op log, and only then acks and broadcasts.",
+          "reveal": 0
+        },
+        {
+          "say": "Step four, presence and cursors go over lossy pub-sub. A dropped cursor update is fixed by the next one, so it never touches the durable log.",
+          "reveal": 0
+        }
+      ],
+      "id": "s040"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 23 of 24",
+      "title": "Operational Transformation (OT)",
+      "bullets": [
+        "Doc 'cat'. Alice: insert 's' at 3",
+        "Bob, same moment: delete position 0",
+        "Naive: Bob inserts at 3 into 'at': past the end",
+        "Transform: insert(3) vs delete(0) = insert(2)",
+        "Both reach 'ats'",
+        "Needs a central server to define the order"
+      ],
+      "steps": [
+        {
+          "say": "Here's the conflict, step by step. The document says cat. Alice inserts s at position three, making cats.",
+          "reveal": 1
+        },
+        {
+          "say": "At the same moment, Bob deletes position zero, making at.",
+          "reveal": 2
+        },
+        {
+          "say": "Now Bob receives Alice's op unchanged: insert s at three. But his text, at, only has two letters. Position three is past the end.",
+          "reveal": 3
+        },
+        {
+          "say": "Operational Transformation, O-T, rewrites each incoming op against concurrent ops already applied. Bob's delete shifted everything left by one, so insert at three becomes insert at two.",
+          "reveal": 4
+        },
+        {
+          "say": "Now both reach ats. Converged, and Alice's intent is kept.",
+          "reveal": 5
+        },
+        {
+          "say": "Google Docs descends from the Jupiter system, where a central server defines one order and clients only transform their pending ops against it. The cost: a correct transform for every pair of op types, and long offline periods are painful.",
+          "reveal": 6
+        }
+      ],
+      "id": "s041"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 23 of 24",
+      "title": "CRDTs for text",
+      "bullets": [
+        "Every character gets a permanent unique ID",
+        "ID = (Lamport counter, replica)",
+        "Insert 's' after character (3, alice)",
+        "Delete = tombstone, kept but hidden",
+        "Ties ordered by ID: same result everywhere",
+        "Cost: metadata, tombstone GC"
+      ],
+      "steps": [
+        {
+          "say": "A C-R-D-T takes a different route. Instead of shifting positions, every character gets a permanent unique I-D.",
+          "reveal": 1
+        },
+        {
+          "say": "The I-D is a Lamport counter, a per-replica number bumped on every event, plus the replica name.",
+          "reveal": 2
+        },
+        {
+          "say": "So Alice's op isn't insert at position three. It's insert s after the character with I-D three comma alice, the t. Bob's delete doesn't move that t, so the op still lands in the right place.",
+          "reveal": 3
+        },
+        {
+          "say": "A delete leaves a tombstone, hidden but kept, so inserts anchored to it still find their spot.",
+          "reveal": 4
+        },
+        {
+          "say": "If two people insert after the same character, the tie is broken by I-D, so every replica gets the same order, in any arrival order. Convergence by construction, with no server ordering.",
+          "reveal": 5
+        },
+        {
+          "say": "The costs: per-character metadata can be several times the text size unless compressed, tombstones can only be cleaned once every replica has seen the delete, and some intentions still need care.",
+          "reveal": 6
+        }
+      ],
+      "id": "s042"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 23 of 24",
+      "title": "Persistence, history, undo and presence",
+      "bullets": [
+        "Op log is the truth: rev N = snapshot + ops",
+        "Snapshot every ~1,000 ops bounds load time",
+        "Compact old keystrokes into one entry",
+        "Undo is selective: only my last edit",
+        "Ack after durable append; client keeps unacked",
+        "Owner change: lease + fencing token"
+      ],
+      "steps": [
+        {
+          "say": "The op log is event sourcing. Revision N equals the snapshot at revision S, plus ops S plus one through N.",
+          "reveal": 1
+        },
+        {
+          "say": "A snapshot every thousand ops or so keeps load time short. History is just render at revision N.",
+          "reveal": 2
+        },
+        {
+          "say": "After a retention period, three hundred keystrokes can be compacted into one edited paragraph entry.",
+          "reveal": 3
+        },
+        {
+          "say": "Undo is selective. Control Z undoes my last edit, not Bob's later one. The client makes the inverse of its own op and transforms it, or applies it by I-D, against everything since.",
+          "reveal": 4
+        },
+        {
+          "say": "Durability rule: ack only after the op is in the replicated log, and the client keeps unacked ops in the browser's database. A crash on either side loses nothing. Resent ops are deduped by client and sequence number.",
+          "reveal": 5
+        },
+        {
+          "say": "If the owner server dies, another loads snapshot plus log tail. Ownership is a lease with a fencing token checked on every append, so two owners can't fork the order.",
+          "reveal": 6
+        }
+      ],
+      "id": "s043"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 23 of 24",
+      "title": "OT versus CRDT",
+      "table": {
+        "head": [
+          "",
+          "OT",
+          "CRDT"
+        ],
+        "rows": [
+          [
+            "Core idea",
+            "Rewrite positions",
+            "Unique IDs; ops commute"
+          ],
+          [
+            "Central server?",
+            "In practice, yes",
+            "No; peer-to-peer works"
+          ],
+          [
+            "Metadata",
+            "Low",
+            "Higher: IDs, tombstones"
+          ],
+          [
+            "Offline for days",
+            "Painful",
+            "Natural"
+          ],
+          [
+            "Hard part",
+            "Transform for every op pair",
+            "Tombstone GC, size"
+          ],
+          [
+            "Used by",
+            "Google Docs, Etherpad",
+            "Yjs, Automerge; ideas in Figma"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Side by side. O-T rewrites positions of concurrent ops. C-R-D-Ts give every element a unique I-D so ops commute, meaning any order gives the same result.",
+          "reveal": 1
+        },
+        {
+          "say": "O-T in practice needs a central server to set the order. C-R-D-Ts work peer-to-peer.",
+          "reveal": 2
+        },
+        {
+          "say": "O-T metadata is small. C-R-D-Ts carry I-Ds and tombstones.",
+          "reveal": 3
+        },
+        {
+          "say": "Offline for days is painful for O-T, with long transform chains, and natural for C-R-D-Ts.",
+          "reveal": 4
+        },
+        {
+          "say": "The hard part of O-T is a correct transform for every pair of op types. For C-R-D-Ts, it's tombstone cleanup and metadata size.",
+          "reveal": 5
+        },
+        {
+          "say": "In the interview, say why, not just which: for a server-centric, always-online product with rich formatting, O-T is proven and lean. For offline-first or peer-to-peer, choose a C-R-D-T.",
+          "reveal": 6
+        }
+      ],
+      "id": "s044"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "How does a CRDT avoid OT's position shift?",
+      "bullets": [
+        "A. It locks the paragraph",
+        "B. Inserts anchor to character IDs, not positions",
+        "C. The later edit wins",
+        "D. It rejects Bob's delete"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. How does a C-R-D-T avoid the position shift that O-T has to fix? Answer next.",
+          "reveal": 0
+        }
+      ],
+      "id": "s045"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 24 of 24",
+      "title": "Pattern review across the five",
+      "table": {
+        "head": [
+          "Pattern",
+          "Where it shows up"
+        ],
+        "rows": [
+          [
+            "Sharding",
+            "Metadata, series, job partitions, posts, docs"
+          ],
+          [
+            "Write-ahead log / commit point",
+            "Metadata row, ingester WAL, op log"
+          ],
+          [
+            "Idempotency + fencing",
+            "PUT retries, run IDs, (post,user), (client,seq)"
+          ],
+          [
+            "Bulkhead",
+            "Repair bandwidth, tenants, critical job pool"
+          ],
+          [
+            "CRDTs / convergence",
+            "Multi-region counters, text editing"
+          ],
+          [
+            "Hot keys",
+            "Prefix, cardinality, 00:00, viral post, all-hands doc"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The answer was B. Inserts anchor to the I-D of the character before them, not to a position number, so Bob's delete can't shift them. Zooming out, sharding appears in all five: metadata ranges, series hashes, job partitions, posts, and documents.",
+          "reveal": 1
+        },
+        {
+          "say": "A write-ahead log or commit point protects every write: the metadata row, the ingester's log, and the editor's op log.",
+          "reveal": 2
+        },
+        {
+          "say": "At-least-once plus idempotency is the honest guarantee everywhere, and fencing tokens stop zombies.",
+          "reveal": 3
+        },
+        {
+          "say": "Bulkheads isolate repair bandwidth, noisy tenants, and critical jobs.",
+          "reveal": 4
+        },
+        {
+          "say": "Convergence without coordination, with C-R-D-Ts, when replicas accept writes independently. A single owner is simpler when they don't need to.",
+          "reveal": 5
+        },
+        {
+          "say": "And hot keys hide in time and popularity: a popular prefix, a cardinality blow-up, midnight cron, a viral post, an all-hands doc. Each design names its hot key and its escape.",
+          "reveal": 6
+        }
+      ],
+      "id": "s046",
+      "caption": "Book: Module 16 · Pattern Review (Module 16)"
+    },
+    {
+      "layout": "recap",
+      "title": "Recap",
+      "bullets": [
+        "Object storage: consistent metadata + erasure-coded chunks",
+        "Metrics: compressed TSDB; cardinality is the budget",
+        "Scheduler: leased partitions; at-least-once + idempotency",
+        "Counter: likes are a set; batch, shard, HLL, CRDTs",
+        "Editor: local-first; OT with a server or CRDT IDs",
+        "Next: Episode 24, Case Studies: Money and Reservations"
+      ],
+      "steps": [
+        {
+          "say": "Let's recap. Object storage: a strongly consistent, range-sharded metadata index pointing at immutable, erasure-coded chunks across failure domains. Durability is placement plus fast repair.",
+          "reveal": 1
+        },
+        {
+          "say": "Metrics: a compressed time-series store where cardinality is the budget, alerts that page on user-facing symptoms with burn rates, watched from outside.",
+          "reveal": 2
+        },
+        {
+          "say": "Job scheduler: a time-indexed job table with partitions leased to schedulers, priority queues with weights and aging, and effectively once equals at-least-once plus idempotency plus fencing.",
+          "reveal": 3
+        },
+        {
+          "say": "Counter: likes are a set and counts are derived. Batch in a stream, shard hot counters, use HyperLogLog for unique views, and C-R-D-T counters across regions.",
+          "reveal": 4
+        },
+        {
+          "say": "Editor: apply edits locally, then converge with O-T under one server's order, or with C-R-D-T unique I-Ds and tombstones, on top of an op log with snapshots.",
+          "reveal": 5
+        },
+        {
+          "say": "Next time, episode twenty-four, Case Studies: Money and Reservations. See you there.",
+          "reveal": 6
+        }
+      ],
+      "id": "s047"
+    }
+  ]
+}

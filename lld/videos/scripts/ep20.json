@@ -1,0 +1,1573 @@
+{
+ "series": "LLD Workshop",
+ "episode": 20,
+ "title": "Games: Snake & Ladder, 2048, Jigsaw",
+ "subtitle": "Three rule engines: one jump type, one merge function, one placement check",
+ "scenes": [
+  {
+   "id": "s001",
+   "layout": "title",
+   "title": "Games: Snake & Ladder, 2048, Jigsaw",
+   "subtitle": "Three rule engines: one jump type, one merge function, one placement check",
+   "steps": [
+    {
+     "say": "Welcome to the L-L-D Workshop, episode twenty: Games, part two. Today we design Snake and Ladder, twenty forty-eight, and a Jigsaw puzzle.",
+     "reveal": 0
+    },
+    {
+     "say": "Last time we did Blackjack, Chess and Tic-Tac-Toe. Today's three games have no clever opponent. They're all rules. So the whole interview is about one question: where does each rule live, and can you test it?",
+     "reveal": 0
+    },
+    {
+     "say": "By the end you'll be able to design all three from scratch. You'll model snakes and ladders as one type, write twenty forty-eight's merge as one tiny function, and put every jigsaw rule in a single check. Keep the chapter seventeen PDF open. The numbers I quote come from its real program output.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s002",
+   "layout": "section",
+   "kicker": "Part 1 of 4",
+   "title": "Snake and Ladder",
+   "steps": [
+    {
+     "say": "Let's start with Snake and Ladder. Here's the hook. The players make zero decisions. They roll, they move. So what is there to design?",
+     "reveal": 0
+    },
+    {
+     "say": "Three things: a clean rules engine, turn management, and randomness you can test. Let's build each one.",
+     "reveal": 0
+    }
+   ],
+   "caption": "Book: Ch 17 Games · Design Snake and Ladder"
+  },
+  {
+   "id": "s003",
+   "layout": "table",
+   "title": "Clarify the rules first",
+   "table": {
+    "head": [
+     "Question",
+     "Our answer"
+    ],
+    "rows": [
+     [
+      "Board?",
+      "Configurable, default 100 squares; validate it"
+     ],
+     [
+      "Dice?",
+      "Configurable count and faces; default one six-sided"
+     ],
+     [
+      "Overshoot the end?",
+      "Exact finish, or bounce back"
+     ],
+     [
+      "Rolled a six?",
+      "Optional: roll again; 3 sixes voids the turn"
+     ],
+     [
+      "Game over?",
+      "First to finish, or play on to rank everyone"
+     ],
+     [
+      "Many games?",
+      "Yes, independent sessions at once"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Always start with questions, because house rules vary a lot. First, the board. We'll say a hundred squares by default, with a given list of snakes and ladders, and we validate it.",
+     "reveal": 1
+    },
+    {
+     "say": "Second, dice. Configurable: how many dice and how many faces. Default is one six-sided die.",
+     "reveal": 2
+    },
+    {
+     "say": "Third, what if you overshoot square one hundred? Two common rules. Exact finish means you stay put. Bounce back means you go to one hundred and back by the extra.",
+     "reveal": 3
+    },
+    {
+     "say": "Fourth, a popular house rule: roll a six and you roll again. But three sixes in a row cancels your whole turn.",
+     "reveal": 4
+    },
+    {
+     "say": "Fifth, when does it end? Either the first player to finish wins, or you keep playing to rank everyone.",
+     "reveal": 5
+    },
+    {
+     "say": "And sixth, many independent games run at once, for example lots of groups online. Notice that four of these answers are 'it depends'. That's a big hint: those will become strategies.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s004",
+   "layout": "bullets",
+   "kicker": "Snake and Ladder",
+   "title": "Concept 1: one Jump type",
+   "bullets": [
+    "Snake: land on head, slide down to tail",
+    "Ladder: land on foot, climb to top",
+    "Same behaviour: land on start, move to end",
+    "Jump(start, end); isSnake() is end < start",
+    "Board keeps a map: start square to Jump"
+   ],
+   "steps": [
+    {
+     "say": "Concept one. Pause on this: do you need a Snake class and a Ladder class? A snake means land on its head and slide down to its tail.",
+     "reveal": 1
+    },
+    {
+     "say": "A ladder means land on its foot and climb to its top.",
+     "reveal": 2
+    },
+    {
+     "say": "Look closely. Both are exactly the same behaviour: land on the start square, move to the end square. Only the direction differs, and direction is just data.",
+     "reveal": 3
+    },
+    {
+     "say": "So we write one record called Jump, with a start and an end. Is it a snake? That's simply end less than start. No duplicated code.",
+     "reveal": 4
+    },
+    {
+     "say": "The board stores a map from start square to jump. Each move is one lookup, constant time. You'd only split into two classes if they truly behaved differently.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s005",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: our board's jumps",
+   "table": {
+    "head": [
+     "Jump",
+     "start",
+     "end",
+     "isSnake()"
+    ],
+    "rows": [
+     [
+      "Ladder",
+      "4",
+      "14",
+      "false"
+     ],
+     [
+      "Ladder",
+      "28",
+      "84",
+      "false"
+     ],
+     [
+      "Ladder",
+      "80",
+      "99",
+      "false"
+     ],
+     [
+      "Snake",
+      "17",
+      "7",
+      "true"
+     ],
+     [
+      "Snake",
+      "93",
+      "73",
+      "true"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Here's our running example board, with real jumps from the demo program. Jump four to fourteen: start four, end fourteen, end is bigger, so it's a ladder.",
+     "reveal": 1
+    },
+    {
+     "say": "Twenty-eight to eighty-four. A huge ladder. Land on twenty-eight and you leap fifty-six squares.",
+     "reveal": 2
+    },
+    {
+     "say": "Eighty to ninety-nine. Nearly to the finish.",
+     "reveal": 3
+    },
+    {
+     "say": "Seventeen to seven. End is smaller, so is snake returns true. You fall ten squares.",
+     "reveal": 4
+    },
+    {
+     "say": "And ninety-three to seventy-three. Same record, same code, different numbers.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s006",
+   "layout": "bullets",
+   "kicker": "Snake and Ladder",
+   "title": "Validate the board once, up front",
+   "bullets": [
+    "1. A jump can't start and end on the same square",
+    "2. No jump starts on square 1 or the last square",
+    "3. No two jumps share a start square",
+    "4. A jump can't end on another jump's start"
+   ],
+   "steps": [
+    {
+     "say": "Now, a bad board should fail when you build it, not halfway through a game. So the Board constructor runs four checks. Rule one: a jump can't start and end on the same square. Jump five to five is meaningless, so it's rejected.",
+     "reveal": 1
+    },
+    {
+     "say": "Rule two: no jump can start on square one or on the last square. Imagine a snake from one hundred to five. Nobody could ever win. The demo rejects exactly that: jump one hundred to five, refused.",
+     "reveal": 2
+    },
+    {
+     "say": "Rule three: no two jumps share a start square. If a ladder and a snake both start at forty, which one wins? We don't allow the question. The map's put if absent catches it.",
+     "reveal": 3
+    },
+    {
+     "say": "Rule four is the clever one: a jump may not end on another jump's start. The demo tries ten to thirty when thirty already starts a jump, and it's refused. That forbids chains, and so it forbids infinite loops, like snake A to ladder B and back to snake A, forever.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s007",
+   "layout": "table",
+   "kicker": "Snake and Ladder",
+   "title": "Concept 2: rules as Strategy",
+   "table": {
+    "head": [
+     "Strategy",
+     "Options",
+     "Why swap it?"
+    ],
+    "rows": [
+     [
+      "Dice",
+      "RandomDice(seeded), LoadedDice",
+      "Real play vs scripted tests"
+     ],
+     [
+      "OverflowRule",
+      "exactFinish(), bounceBack()",
+      "Overshoot house rules"
+     ],
+     [
+      "WinStrategy",
+      "firstToFinish(), rankAll()",
+      "Classic vs rank everyone"
+     ],
+     [
+      "Rules record",
+      "overflow + win + six rule",
+      "One object = one variant"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Concept two: every 'it depends' answer becomes a Strategy. A strategy is an interface with swappable implementations, so you change behaviour without editing the game loop. First, Dice. It has roll and max roll. Random dice uses a seeded random generator, so the same seed gives the same game. Loaded dice replays a fixed list of rolls for tests.",
+     "reveal": 1
+    },
+    {
+     "say": "Second, the overflow rule. It's a functional interface, meaning it has exactly one method, so a short lambda can implement it. Exact finish and bounce back are each one line.",
+     "reveal": 2
+    },
+    {
+     "say": "Third, the win strategy: is the game over, given how many players have finished? First to finish says yes at one. Rank all says yes when only one player is left.",
+     "reveal": 3
+    },
+    {
+     "say": "Finally, a Rules record bundles a whole variant: the overflow rule, the win strategy, whether a six rolls again, and how many bonus rolls void a turn. Classic is one object. Kids mode or tournament mode is another. No giant constructor, no if statements in the loop.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s008",
+   "layout": "twocol",
+   "kicker": "Example",
+   "title": "Example: token on 97, rolls a 5",
+   "left": {
+    "heading": "exactFinish()",
+    "bullets": [
+     "97 + 5 = 102, past 100",
+     "Needs an exact roll: stays on 97"
+    ]
+   },
+   "right": {
+    "heading": "bounceBack()",
+    "bullets": [
+     "97 + 5 = 102: two too many",
+     "Goes to 100, back 2: lands on 98",
+     "Then the jump lookup still runs"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's see the overflow rule happen. A token is on ninety-seven of a hundred and rolls a five. Ninety-seven plus five is a hundred and two. That's past the end.",
+     "reveal": 1
+    },
+    {
+     "say": "With exact finish, the player needs an exact roll, so they stay on ninety-seven. The demo prints exactly that.",
+     "reveal": 2
+    },
+    {
+     "say": "With bounce back, the token is two squares too far.",
+     "reveal": 3
+    },
+    {
+     "say": "So it goes up to one hundred and back two, landing on ninety-eight.",
+     "reveal": 4
+    },
+    {
+     "say": "And here's a subtle point. The rule's output goes through the same jump lookup. On our board, bouncing onto a snake's head would still slide you down. One code path, no special cases.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s009",
+   "layout": "bullets",
+   "title": "Concept 3: the player queue and one turn",
+   "steps": [
+    {
+     "say": "Concept three: turns. The game holds a queue of players. Each turn, you poll the next player from the front of the queue.",
+     "reveal": 1
+    },
+    {
+     "say": "Roll the dice. Ask the overflow rule for the target square. Then look up the board's map: does a jump start here? If yes, move to its end. If no, stay on the target.",
+     "reveal": 2
+    },
+    {
+     "say": "Now, did they reach the last square? If not, offer them to the back of the queue. If they did, add them to the finished list and don't re-queue them. That's the whole trick. No index arithmetic that has to skip finished players.",
+     "reveal": 3
+    },
+    {
+     "say": "Then ask the win strategy: is the game over? If not, take the next player. And the play method takes a max turns guard, so a misconfigured rule set can never hang a server thread forever.",
+     "reveal": 4
+    }
+   ],
+   "bullets": [
+    "1. Poll the next player from the front of the queue",
+    "2. Roll; OverflowRule gives target; apply any Jump",
+    "3. Last square? Finished list. Else back of queue",
+    "4. Ask WinStrategy; play(maxTurns) guards loops"
+   ],
+   "kicker": "Snake and Ladder"
+  },
+  {
+   "id": "s010",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: loaded dice force every rule",
+   "table": {
+    "head": [
+     "Turn",
+     "Roll",
+     "What happens"
+    ],
+    "rows": [
+     [
+      "Ann @0",
+      "4",
+      "lands on 4, ladder to 14"
+     ],
+     [
+      "Bob @0",
+      "6, then 3",
+      "6, bonus roll, 9: ladder to 31"
+     ],
+     [
+      "Ann @14",
+      "3",
+      "lands on 17, snake to 7"
+     ],
+     [
+      "Bob @31",
+      "6, 6, 6",
+      "37, 43, third six: turn void, back to 31"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's walk through a real turn sequence. Loaded dice let us force every rule in four turns. Ann starts at zero, off the board, and rolls a four. Square four is a ladder foot, so she climbs to fourteen.",
+     "reveal": 1
+    },
+    {
+     "say": "Bob rolls a six. That's the max roll and the bonus rule is on, so he rolls again: a three. Six plus three is nine, the ladder from nine to thirty-one.",
+     "reveal": 2
+    },
+    {
+     "say": "Ann, at fourteen, rolls a three. Seventeen is a snake's head, so she slides to seven.",
+     "reveal": 3
+    },
+    {
+     "say": "Bob, at thirty-one, rolls six, to thirty-seven. Bonus roll, six again, to forty-three. Bonus, and a third six. Three sixes in a row voids the turn, and he goes back to thirty-one, where the turn started. Even if he'd climbed a ladder mid-turn, it's undone. And how do you test that? Loaded dice six, six, six, and assert the position didn't change.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s011",
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "Cid is on 79 and rolls a 1. Where does he end up?",
+   "bullets": [
+    "A. 80",
+    "B. 99",
+    "C. 100"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. In the seeded game with seed twenty twenty-four, Cid sits on seventy-nine and rolls a one. Remember our ladders. Where does he end up?",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s012",
+   "layout": "bullets",
+   "kicker": "Snake and Ladder",
+   "title": "Concept 4: events, not println, so Observer",
+   "bullets": [
+    "Answer: B. 80 is a ladder foot, so he climbs to 99",
+    "Engine never prints; it emits events",
+    "Today: a Consumer<String> event log",
+    "Full design: GameListener (Observer)",
+    "onMove, onSnake, onLadder, onWin"
+   ],
+   "steps": [
+    {
+     "say": "The answer is B. Seventy-nine plus one is eighty, and eighty is the foot of the ladder to ninety-nine. Next turn he rolls a one, reaches a hundred, and wins the game.",
+     "reveal": 1
+    },
+    {
+     "say": "Concept four. How did we print that story? Not with print statements inside the engine. The engine should never decide where output goes.",
+     "reveal": 2
+    },
+    {
+     "say": "In the book's code, the game takes a consumer of strings, a built-in function type that takes a value and returns nothing. The caller decides: console, a UI, or nothing at all in tests.",
+     "reveal": 3
+    },
+    {
+     "say": "A full design uses the Observer pattern. Observer means listeners register with the game, and the game notifies all of them when something happens.",
+     "reveal": 4
+    },
+    {
+     "say": "So you'd have a game listener with on move, on snake, on ladder and on win. A spectator screen, a sound effect, and a replay log can all subscribe, and the engine doesn't know or care about any of them.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s013",
+   "layout": "bullets",
+   "kicker": "Snake and Ladder",
+   "title": "Many sessions, and the edge cases",
+   "bullets": [
+    "Each Game owns players, queue, its own Random",
+    "Only the read-only Board is shared",
+    "Demo: 8 games on 8 threads, same winners",
+    "Rolling after the game ends: exception",
+    "Bonus roll that reaches 100 stops at once"
+   ],
+   "steps": [
+    {
+     "say": "Now concurrency. Each game owns its players, its queue, and its own seeded random. Why its own? Sharing one random across threads is thread-safe but makes threads fight over it, and it breaks reproducibility.",
+     "reveal": 1
+    },
+    {
+     "say": "The only shared thing is the board, and it's read-only after construction, so sharing it is safe.",
+     "reveal": 2
+    },
+    {
+     "say": "The demo proves it. Eight games with seeds one to eight run on eight threads at once. Then it checks each winner against the same seed run alone. Same answers. That proves sessions share no mutable state.",
+     "reveal": 3
+    },
+    {
+     "say": "A few edge cases. Rolling after the game ends throws an illegal state exception.",
+     "reveal": 4
+    },
+    {
+     "say": "And a bonus roll that reaches one hundred stops immediately. No more rolling after you've won.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s014",
+   "layout": "bullets",
+   "kicker": "Snake and Ladder",
+   "title": "In the interview: Snake and Ladder",
+   "bullets": [
+    "Board = size + map of start to Jump, validated",
+    "Dice is a strategy: seeded or loaded",
+    "Rules: overflow, win strategy, six rule",
+    "Queue of players; re-queue unless finished",
+    "Extension: CellEffect for skip, teleport"
+   ],
+   "steps": [
+    {
+     "say": "Here's your thirty-second answer. The board holds the size and a map from square to jump, snake or ladder, same behaviour, just direction. It's validated on construction.",
+     "reveal": 1
+    },
+    {
+     "say": "Dice is a strategy: seeded random for play, loaded for tests.",
+     "reveal": 2
+    },
+    {
+     "say": "Rules bundles the pluggable policies: overflow, exact or bounce, the win strategy, and the bonus six rule.",
+     "reveal": 3
+    },
+    {
+     "say": "The game keeps a queue of players. Each turn rolls, applies the overflow rule, then any jump, and re-queues the player unless they finished.",
+     "reveal": 4
+    },
+    {
+     "say": "And a likely follow-up: add special cells, like skip a turn or teleport. Generalise Jump into a cell effect interface with an apply method. Snakes and ladders become two of its implementations.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s015",
+   "layout": "section",
+   "kicker": "Part 2 of 4",
+   "title": "2048",
+   "steps": [
+    {
+     "say": "Part two: twenty forty-eight. A four by four grid. You swipe left, right, up or down, every tile slides that way, and two equal tiles that collide merge into one tile with double the value. The merged value is added to your score.",
+     "reveal": 0
+    },
+    {
+     "say": "After any move that changes the board, a new tile appears. Make a twenty forty-eight tile and you win. When no move can change the board, it's game over.",
+     "reveal": 0
+    }
+   ],
+   "caption": "Book: Ch 17 Games · Design 2048"
+  },
+  {
+   "id": "s016",
+   "layout": "bullets",
+   "kicker": "2048",
+   "title": "The rules that trip people up",
+   "bullets": [
+    "Each tile merges at most once per move",
+    "Merges start at the wall you move toward",
+    "A move that changes nothing is not a turn",
+    "New tile: 2 with 90% chance, else a 4",
+    "Start with two 2s; keys 0 1 2 3 = L R U D"
+   ],
+   "steps": [
+    {
+     "say": "Before code, nail the tricky rules. Rule one: each tile merges at most once per move. Two twos make a four, and that new four can't merge again this move.",
+     "reveal": 1
+    },
+    {
+     "say": "Rule two: merges start at the wall you're moving toward. If three equal tiles line up, the pair nearest that wall merges.",
+     "reveal": 2
+    },
+    {
+     "say": "Rule three: a move that changes nothing isn't a turn. No new tile, no score. So a stuck key press is harmless.",
+     "reveal": 3
+    },
+    {
+     "say": "Rule four: the new tile is a two with ninety percent probability, otherwise a four, in a random empty cell.",
+     "reveal": 4
+    },
+    {
+     "say": "And from the machine-coding version: start with two tiles numbered two, and read moves as zero for left, one for right, two for up, three for down.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s017",
+   "layout": "bullets",
+   "kicker": "2048",
+   "title": "Concept 5: LineMerger, a pure function",
+   "bullets": [
+    "1. Walk from the wall outward, skip zeros",
+    "2. Next equals pending: write double, clear it",
+    "3. Different: write pending, new one is pending",
+    "4. At the end, write pending; rest are zeros"
+   ],
+   "steps": [
+    {
+     "say": "Concept five, the heart of the game. Line merger is a pure function: its output depends only on its input, and it changes nothing else. It slides and merges one line toward index zero. Let's walk it with the line two, two, two, two, moving left. Step one: walk from the wall outward, skipping zeros. We keep one pending tile, a tile waiting for a merge partner. First two: nothing pending, so two becomes pending.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two: the next tile is a two and it equals pending. Write four into the output, add four points, and clear pending. Because pending is cleared, that four can never merge again this move. Third tile, two: nothing pending, so it becomes pending. Fourth tile, two: equal. Write another four, plus four points.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three is for different values. Take eight, four, two, two. Eight is pending. Four differs, so write eight and make four pending. Two differs, write four, two becomes pending. Then two equals two: write four.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four: at the end, write any leftover pending tile, and the rest of the line stays zero. So two, two, two, two becomes four, four, zero, zero, for eight points. Not a single eight. Two merges.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s018",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: merge results moving left",
+   "table": {
+    "head": [
+     "Input line",
+     "Output",
+     "Points",
+     "Why"
+    ],
+    "rows": [
+     [
+      "2 2 2 2",
+      "4 4 0 0",
+      "+8",
+      "two merges, not one 8"
+     ],
+     [
+      "2 2 2 0",
+      "4 2 0 0",
+      "+4",
+      "pair nearest the wall merges"
+     ],
+     [
+      "2 2 4 0",
+      "4 4 0 0",
+      "+4",
+      "new 4 can't merge again"
+     ],
+     [
+      "4 0 4 8",
+      "8 8 0 0",
+      "+8",
+      "zeros skipped, then merge"
+     ],
+     [
+      "2 4 8 16",
+      "2 4 8 16",
+      "+0",
+      "nothing changes"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "These are the demo's real unit tests. Write these first in the interview. Two, two, two, two gives four, four, plus eight.",
+     "reveal": 1
+    },
+    {
+     "say": "Two, two, two, zero gives four, two. Of three equal tiles, the pair nearest the wall merges, and the third one just slides.",
+     "reveal": 2
+    },
+    {
+     "say": "Two, two, four, zero gives four, four. The two twos make a new four, but it was created this move, so it doesn't merge with the old four.",
+     "reveal": 3
+    },
+    {
+     "say": "Four, zero, four, eight. The zero is skipped, so the two fours meet and make eight, then the original eight slides next to it. Eight, eight, plus eight points.",
+     "reveal": 4
+    },
+    {
+     "say": "And two, four, eight, sixteen: nothing equal, nothing moves, zero points. That's the case that tells the game 'no turn'.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s019",
+   "layout": "table",
+   "kicker": "2048",
+   "title": "One function, four directions",
+   "table": {
+    "head": [
+     "Direction",
+     "Line i is",
+     "Position j = 0 is"
+    ],
+    "rows": [
+     [
+      "LEFT",
+      "row i",
+      "column 0"
+     ],
+     [
+      "RIGHT",
+      "row i",
+      "column N-1"
+     ],
+     [
+      "UP",
+      "column i",
+      "row 0"
+     ],
+     [
+      "DOWN",
+      "column i",
+      "row N-1"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Now, the bug farm in most solutions is four copies of nested loops: move left, move right, move up, move down. Instead, the board maps each direction to lines. Position j counts from the wall. For left, line i is row i, and j zero is column zero.",
+     "reveal": 1
+    },
+    {
+     "say": "For right, line i is still row i, but j zero is the last column, so we read the row backwards.",
+     "reveal": 2
+    },
+    {
+     "say": "For up, line i is column i, and j zero is row zero, the top.",
+     "reveal": 3
+    },
+    {
+     "say": "For down, line i is column i, read from the bottom row. So the board reads each line in wall order, calls line merger, and writes it back. The tricky rule is written once and tested once. That's DRY, don't repeat yourself.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s020",
+   "layout": "bullets",
+   "title": "A move, end to end",
+   "steps": [
+    {
+     "say": "Here's a whole move. The player says move left. The game calls board slide. For each of the N lines, the board calls line merger and gets back the new line and its points.",
+     "reveal": 1
+    },
+    {
+     "say": "While writing back, the board compares every cell. If nothing changed, slide returns minus one, and the game returns false. No score, no spawn, move count unchanged. The demo tries move left on a board whose tiles already sit against the left wall. Changed board: false. Move count: still zero.",
+     "reveal": 2
+    },
+    {
+     "say": "If something changed, the game adds the points to the score, counts the move, asks the tile spawner for a new tile, and updates the status.",
+     "reveal": 3
+    }
+   ],
+   "bullets": [
+    "1. Game.move(LEFT): Board.slide runs LineMerger per line",
+    "2. Nothing changed: slide gives -1, move returns false",
+    "3. Changed: add points, count move, spawn, update status"
+   ],
+   "kicker": "2048"
+  },
+  {
+   "id": "s021",
+   "layout": "bullets",
+   "kicker": "2048",
+   "title": "Concept 6: spawn logic as a Strategy",
+   "bullets": [
+    "TileSpawner interface: spawn(board)",
+    "RandomTileSpawner: seeded, 2 at 90%, 4 at 10%",
+    "spawnStart: always a 2 (start with two 2s)",
+    "Only after a real change",
+    "A changed board always has an empty cell"
+   ],
+   "steps": [
+    {
+     "say": "Concept six: spawning. Tile spawner is an interface with spawn and spawn start. It's a Strategy, so you can swap it.",
+     "reveal": 1
+    },
+    {
+     "say": "The random tile spawner takes an injected, seeded random. Ninety percent of the time it places a two, ten percent a four, in a uniformly random empty cell. Same seed, same game, every time. That's how you test it. You could also plug in an evil spawner that picks the worst cell, to test hard cases.",
+     "reveal": 2
+    },
+    {
+     "say": "Spawn start always places a two, because the problem says the game starts with two twos.",
+     "reveal": 3
+    },
+    {
+     "say": "And we only spawn after a real change. Spawning on a no-op would punish harmless key presses and break the game's balance.",
+     "reveal": 4
+    },
+    {
+     "say": "Pause and think: could a move ever leave no empty cell to spawn into? No. Tiles only slide into gaps or merge, and every merge frees a cell. So a changed board always has room. The spawner still checks and throws, just in case.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s022m",
+   "layout": "bullets",
+   "kicker": "2048",
+   "title": "Concept 7: choosing the move is a Strategy too",
+   "bullets": [
+    "Game.move(Direction) doesn't care who chose it",
+    "Human: key code to Direction.fromKey",
+    "Bot: corner priority LEFT, DOWN, RIGHT, UP",
+    "AI: expectimax, max over moves, avg over spawns",
+    "Same Game, same Board, no edits"
+   ],
+   "steps": [
+    {
+     "say": "Concept seven. One more pluggable piece. Game dot move takes a direction, and it doesn't care who picked it. So choosing the move is its own strategy, outside the game.",
+     "reveal": 1
+    },
+    {
+     "say": "A human player types a key code. Direction dot from key turns zero into left, one into right, two into up, three into down.",
+     "reveal": 2
+    },
+    {
+     "say": "The demo's bot is a corner strategy: try left first, then down, then right, then up, and take the first move that actually changes the board. That keeps big tiles in the bottom-left corner. It's the player behind the seed forty-two game.",
+     "reveal": 3
+    },
+    {
+     "say": "A follow-up might be: add an AI player. The well-known approach is expectimax search. You take the max over your own moves and the average over the random spawns. It plugs in exactly like the corner strategy.",
+     "reveal": 4
+    },
+    {
+     "say": "Notice the game and board never change. Human, simple bot or AI, they all just hand a direction to game dot move.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s022",
+   "layout": "twocol",
+   "kicker": "Example",
+   "title": "Example: seed 42, and game over",
+   "left": {
+    "heading": "Seeded game, target 128",
+    "bullets": [
+     "Starts with two 2s",
+     "Hits 128 after 85 moves: WON",
+     "Keeps going: LOST after 232 moves"
+    ]
+   },
+   "right": {
+    "heading": "Game-over check",
+    "bullets": [
+     "Any empty cell? A move exists",
+     "Else any equal right or below neighbour?",
+     "Checkerboard, full: LOST"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's see the whole thing run. The demo plays seed forty-two with a corner strategy: prefer left, then down, then right, then up. Target is one twenty-eight. It starts with two twos.",
+     "reveal": 1
+    },
+    {
+     "say": "After eighty-five moves it makes a one twenty-eight tile, score eight hundred fifty-two. Status becomes won, but only once.",
+     "reveal": 2
+    },
+    {
+     "say": "Then it keeps playing, like the real game, until the board locks after two hundred thirty-two moves, with a max tile of two fifty-six and score two thousand five hundred eighty-four.",
+     "reveal": 3
+    },
+    {
+     "say": "How do we detect that lock? First, is any cell empty? Then a move exists.",
+     "reveal": 4
+    },
+    {
+     "say": "Otherwise, are any two neighbours equal? You only compare each cell to its right and lower neighbour. The other two directions are covered by the neighbour's own check. That's order N squared.",
+     "reveal": 5
+    },
+    {
+     "say": "The demo builds a full checkerboard with no equal neighbours using board dot of, a factory for preset boards. Result: lost. Change the last row to end four, four, and it's playing again. Presets let you test game over without playing to it.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s023",
+   "layout": "diagram",
+   "title": "Game status as a state machine",
+   "mermaid": "stateDiagram-v2\n  [*] --> PLAYING\n  PLAYING --> WON : target first reached\n  WON --> PLAYING : next move\n  PLAYING --> LOST : no move left\n  WON --> LOST : no move left",
+   "caption": "WON is set once; the player may keep going",
+   "steps": [
+    {
+     "say": "Here are the states. You start playing. The first time the target tile appears, you go to won. On the next move you're back to playing, so the player can keep going past twenty forty-eight.",
+     "reveal": 0
+    },
+    {
+     "say": "From playing or won, if no move is left, you go to lost, and any further move throws an illegal state exception.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s024",
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "Moving left: what is [4, 4, 8, 8], and how many points?",
+   "bullets": [
+    "A. [16, 8, 0, 0], 16 points",
+    "B. [8, 16, 0, 0], 24 points",
+    "C. [32, 0, 0, 0], 32 points"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. Run line merger in your head on four, four, eight, eight, moving left.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s025",
+   "layout": "bullets",
+   "kicker": "2048",
+   "title": "In the interview: 2048",
+   "bullets": [
+    "Answer: B. [8, 16, 0, 0] for 8 + 16 = 24",
+    "One pure LineMerger, reused for 4 directions",
+    "TileSpawner strategy, seeded for tests",
+    "WON once at target; LOST: full, no equal pair",
+    "Undo? Memento of board and score"
+   ],
+   "steps": [
+    {
+     "say": "The answer is B. Four and four merge to eight. Eight and eight merge to sixteen. Eight plus sixteen is twenty-four points. Not thirty-two, because the new eight can't merge again.",
+     "reveal": 1
+    },
+    {
+     "say": "Your thirty-second answer. The core is one pure function that slides and merges a single line toward index zero. The board maps each direction to lines, so it's reused four times.",
+     "reveal": 2
+    },
+    {
+     "say": "After a move that changes the board, a seeded tile spawner adds a two or a four.",
+     "reveal": 3
+    },
+    {
+     "say": "The game is won when the target appears, and lost when there's no empty cell and no equal neighbours.",
+     "reveal": 4
+    },
+    {
+     "say": "Likely follow-up: add undo. Use Memento: save a copy of the board and score before each successful move, and undo pops it. The spawned tile disappears too.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s026",
+   "layout": "section",
+   "kicker": "Part 3 of 4",
+   "title": "Jigsaw Puzzle",
+   "steps": [
+    {
+     "say": "Part three, the richest one: a jigsaw puzzle. A picture cut into pieces. The interviewer is testing two things. Do you put the matching rule in exactly one place? And is the search algorithm behind a swappable interface?",
+     "reveal": 0
+    }
+   ],
+   "caption": "Book: Ch 17 Games · Design a Jigsaw Puzzle"
+  },
+  {
+   "id": "s027",
+   "layout": "bullets",
+   "kicker": "Jigsaw",
+   "title": "Pieces, sides and how they fit",
+   "bullets": [
+    "Every piece has 4 sides",
+    "FLAT: straight, only on the outer frame",
+    "TAB: a knob that sticks out",
+    "BLANK: a hole a tab slots into",
+    "Fit: TAB meets BLANK with the same shape code",
+    "Corner = 2 flat, border = 1, interior = 0"
+   ],
+   "steps": [
+    {
+     "say": "Let's define the pieces. Each piece is roughly square with four sides, and each side is one of three types.",
+     "reveal": 1
+    },
+    {
+     "say": "Flat. A straight side. It can only lie on the outer frame of the picture.",
+     "reveal": 2
+    },
+    {
+     "say": "Tab. A knob that sticks out.",
+     "reveal": 3
+    },
+    {
+     "say": "Blank. A hole that a tab slots into.",
+     "reveal": 4
+    },
+    {
+     "say": "Two sides interlock when one is a tab, the other a blank, and they have the same cut profile. We model that profile as an integer shape code. So tab three fits blank three. Tab three doesn't fit tab three, and it doesn't fit blank four. And flat never fits anything.",
+     "reveal": 5
+    },
+    {
+     "say": "Count the flat sides to classify a piece. Two flat sides is a corner. One is a border piece. None is interior. Pieces can be turned in quarter turns, but never flipped, because the back has no picture.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s028",
+   "layout": "number",
+   "title": "Rotation in one formula",
+   "big": "sides[(d - r) mod 4]",
+   "caption": "Sides stored clockwise: TOP, RIGHT, BOTTOM, LEFT",
+   "steps": [
+    {
+     "say": "Sides are stored clockwise: top, right, bottom, left, at rotation zero. Turning once clockwise moves what was on top to the right. So after r quarter turns, the side now facing direction d is the one stored at d minus r, mod four.",
+     "reveal": 0
+    },
+    {
+     "say": "Example. The corner piece flat, tab one, blank two, flat. Turn it once. What faces top? Top is index zero, zero minus one is minus one, mod four is three: the left side, flat. What faces right? One minus one, zero: flat. So both flats now face top and right. The demo prints exactly that.",
+     "reveal": 0
+    },
+    {
+     "say": "A Java detail: use floor mod, not the percent operator. Percent keeps the sign, so minus one percent four is minus one. Floor mod gives three.",
+     "reveal": 0
+    },
+    {
+     "say": "And notice: rotation is not a field of the piece. How a piece is turned is a fact about where it lies, so it lives in the board's placement. The piece stays immutable, and a solver can try four rotations with nothing to undo.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s029",
+   "layout": "bullets",
+   "kicker": "Jigsaw",
+   "title": "Concept 8: every placement rule in Board.check",
+   "bullets": [
+    "1. Off the board? Cell taken? Piece used?",
+    "2a. Neighbour outside: side must be FLAT",
+    "2b. Neighbour inside: side must NOT be FLAT",
+    "2c. Neighbour placed: sides must interlock",
+    "3. Otherwise OK, in O(1): 4 sides, 4 neighbours"
+   ],
+   "steps": [
+    {
+     "say": "Concept eight, the key design point. Every placement rule lives in one method, board check. The player uses it, and every solver uses it. So they can never disagree. Step one, the cheap checks: is the cell off the board? Is it already taken? Is this piece already used somewhere else?",
+     "reveal": 1
+    },
+    {
+     "say": "Step two loops over the four directions and takes the side that faces each one, after rotation. Case a: the neighbour cell is outside the picture. Then this side must be flat, or you get edge must be flat.",
+     "reveal": 2
+    },
+    {
+     "say": "Case b: the neighbour cell is inside. Then this side must not be flat, or you get flat faces inside.",
+     "reveal": 3
+    },
+    {
+     "say": "Case c: if a piece is already placed there, the two touching sides must interlock, or you get sides do not fit.",
+     "reveal": 4
+    },
+    {
+     "say": "Step three: otherwise it's okay. Four sides, four neighbours, constant time. And look what we get for free. A corner piece can only go in a corner cell, and only in the one rotation that turns both flats outward. No separate corner rule.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s030",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: PlaceResult reasons on a 3 x 4 puzzle",
+   "table": {
+    "head": [
+     "Move",
+     "Result"
+    ],
+    "rows": [
+     [
+      "interior piece 12 at corner (0,0)",
+      "EDGE_MUST_BE_FLAT"
+     ],
+     [
+      "corner piece 3 at (0,0), wrong turn",
+      "FLAT_FACES_INSIDE"
+     ],
+     [
+      "corner piece 3 at (0,0), right turn",
+      "OK"
+     ],
+     [
+      "piece 1 at (0,0) too",
+      "CELL_OCCUPIED"
+     ],
+     [
+      "piece 3 again, at (2,3)",
+      "ALREADY_PLACED"
+     ],
+     [
+      "piece 1 at (5,5)",
+      "OUT_OF_BOUNDS"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Here's a player hitting every reason on a real three by four puzzle. Placement returns a place result enum, not a boolean and not an exception. Why? A wrong guess is normal play, not an error, and the UI can say exactly what went wrong. First, interior piece twelve at the top-left corner. Its top side is a tab facing out of the picture: edge must be flat.",
+     "reveal": 1
+    },
+    {
+     "say": "Corner piece three at the corner, wrong rotation. A flat side now faces into the picture: flat faces inside.",
+     "reveal": 2
+    },
+    {
+     "say": "Same piece, turned once. Both flats face out. Okay.",
+     "reveal": 3
+    },
+    {
+     "say": "Piece one into that same cell: cell occupied.",
+     "reveal": 4
+    },
+    {
+     "say": "Piece three again, somewhere else: already placed.",
+     "reveal": 5
+    },
+    {
+     "say": "And piece one at row five, column five, on a three by four board: out of bounds. Every one of those came from the same check method. The demo then places two more pieces, and progress is three of twelve.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s031",
+   "layout": "twocol",
+   "kicker": "Jigsaw",
+   "title": "Concept 9: edges as values",
+   "left": {
+    "heading": "Side is an immutable record",
+    "bullets": [
+     "Side(type, shape): equal fields = equal",
+     "So a Side can be a hash map key",
+     "partner(): the one side that fits"
+    ]
+   },
+   "right": {
+    "heading": "The side index",
+    "bullets": [
+     "Map: Side to (piece, side position)",
+     "Left neighbour shows T7: need B7",
+     "Rotation = (d - i) mod 4"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Concept nine: model edges as values. Side is a record, a type plus a shape code, and records compare by their fields. So two tab seven sides are equal.",
+     "reveal": 1
+    },
+    {
+     "say": "That means a side can be a key in a hash map. If sides were mutable objects compared by identity, you couldn't do that.",
+     "reveal": 2
+    },
+    {
+     "say": "Side also has a partner method: the one side that fits this one. The partner of tab seven is blank seven.",
+     "reveal": 3
+    },
+    {
+     "say": "Now build an index: a map from each side to the pieces that have it, and at which position.",
+     "reveal": 4
+    },
+    {
+     "say": "Here's how it's used. You're filling a cell, and the left neighbour shows tab seven on its right. This cell needs blank seven on its left. Look up blank seven in the map: constant time, and with unique shapes, exactly one piece.",
+     "reveal": 5
+    },
+    {
+     "say": "And the rotation falls out directly. If the needed side sits at index i of the piece and must face direction d, rotation is d minus i, mod four. Left is direction three. If blank seven is stored at index one, rotation is two.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s032",
+   "layout": "table",
+   "kicker": "Jigsaw",
+   "title": "Concept 10: matching Strategy, two solvers",
+   "table": {
+    "head": [
+     "Solver",
+     "How it picks the next piece"
+    ],
+    "rows": [
+     [
+      "SolverStrategy",
+      "interface: name(), solve(puzzle, board)"
+     ],
+     [
+      "BruteForceSolver",
+      "row by row; every unused piece x 4 turns"
+     ],
+     [
+      "EdgeFirstSolver",
+      "frame first, then inside; side index"
+     ],
+     [
+      "Both",
+      "propose only; board.place still checks"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Concept ten: solving is a Strategy. Solver strategy is one interface with a name and a solve method that takes the puzzle and the board. It keeps any pieces the player already placed.",
+     "reveal": 1
+    },
+    {
+     "say": "Brute force is the baseline. Visit cells row by row, and at each empty cell try every unused piece in all four rotations. Backtrack on dead ends. Backtracking means: make a choice, carry on, and at a dead end, undo the most recent choice and try the next option.",
+     "reveal": 2
+    },
+    {
+     "say": "Edge first is the human method. Do the frame first, clockwise from the top-left corner, then fill the inside row by row. Because of that order, every next cell already has a placed neighbour, so the side index gives you the candidates.",
+     "reveal": 3
+    },
+    {
+     "say": "And the key line: solvers only propose. Board place still runs the full check. A candidate that fits the left neighbour but not the top one is refused there. Want a picture-matching solver later? Write a new strategy. Board doesn't change. That's open closed.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s033",
+   "layout": "bullets",
+   "title": "The edge-first solve",
+   "steps": [
+    {
+     "say": "Let's walk the edge-first flow. Validate the box first. Sort pieces into corners, borders and interiors. Index every non-flat side.",
+     "reveal": 1
+    },
+    {
+     "say": "Put a corner piece in the top-left cell. Walk the frame clockwise with border and corner pieces. Then fill the inside, row by row, with interior pieces.",
+     "reveal": 2
+    },
+    {
+     "say": "At each cell, if there's a fitting candidate, place it and move on. If not, backtrack: remove the last piece and try its next candidate. When every cell is filled, verify and mark solved.",
+     "reveal": 3
+    }
+   ],
+   "bullets": [
+    "1. Validate, sort pieces, index every non-flat side",
+    "2. Corner top-left, walk frame, then inside row by row",
+    "3. Fits: place, move on. Else backtrack within budget"
+   ],
+   "kicker": "Jigsaw"
+  },
+  {
+   "id": "s034",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: same puzzles, two strategies",
+   "table": {
+    "head": [
+     "Puzzle",
+     "BruteForce attempts",
+     "EdgeFirst attempts"
+    ],
+    "rows": [
+     [
+      "4 x 4, unique shapes",
+      "209",
+      "16"
+     ],
+     [
+      "6 x 6, unique shapes",
+      "1,171",
+      "38"
+     ],
+     [
+      "10 x 10, unique shapes",
+      "11,060",
+      "101"
+     ],
+     [
+      "6 x 6, look-alike pieces",
+      "2,099,470",
+      "501,976"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Now the numbers. Same seeded puzzles, both strategies. Four by four, sixteen pieces, unique shapes. Brute force needs two hundred nine attempts. Edge first needs sixteen. One attempt per piece.",
+     "reveal": 1
+    },
+    {
+     "say": "Six by six, thirty-six pieces. One thousand one hundred seventy-one, versus thirty-eight.",
+     "reveal": 2
+    },
+    {
+     "say": "Ten by ten, a hundred pieces. Eleven thousand sixty, versus one hundred one. Brute force grows with the square of the piece count. Edge first is about n attempts, zero backtracks, because with unique shapes the right choice is always the only choice.",
+     "reveal": 3
+    },
+    {
+     "say": "But with look-alike pieces, a wrong piece can fit locally and the mistake only shows up later. Now both must search. Brute force makes about two point one million attempts, edge first about half a million. Four times fewer attempts, though edge first backtracks more, because a wrong frame piece is only exposed when the frame closes.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s035",
+   "layout": "bullets",
+   "kicker": "Jigsaw",
+   "title": "Concept 11: validate before play",
+   "bullets": [
+    "1. Right piece count: rows x cols",
+    "2. Exactly 4 corners",
+    "3. Border count = 2(rows-2) + 2(cols-2)",
+    "4. Per shape code: tabs = blanks",
+    "Necessary, not sufficient"
+   ],
+   "steps": [
+    {
+     "say": "Concept eleven: validate the box before play. Why? A box with a missing piece would make a solver search forever. A validator spots it in linear time. Check one: the piece count must equal rows times columns. Our three by four needs twelve. Lose piece twelve, and it reports expected twelve, found eleven.",
+     "reveal": 1
+    },
+    {
+     "say": "Check two: exactly four corners.",
+     "reveal": 2
+    },
+    {
+     "say": "Check three: the border count must be two times rows minus two, plus two times columns minus two. Pause and think: how many border pieces does a five by seven puzzle have? Two times three, plus two times five. Sixteen.",
+     "reveal": 3
+    },
+    {
+     "say": "Check four: for each shape code, the number of tabs must equal the number of blanks. The demo mis-cuts one side, and gets shape eight: two tabs but zero blanks. The game constructor runs this validator and refuses the box.",
+     "reveal": 4
+    },
+    {
+     "say": "But these checks are necessary, not sufficient. Failing proves the box is unsolvable. Passing doesn't prove it's solvable. Example: a two by two box where the only tab one and the only blank one are on the same piece. Counts balance, but a piece can't interlock with itself.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s036",
+   "layout": "bullets",
+   "kicker": "Jigsaw",
+   "title": "Concept 12: the attempt budget, and co-op",
+   "bullets": [
+    "Look-alike search can explode",
+    "Solver stops at maxAttempts: solved=false",
+    "Every trial placement undone on failure",
+    "JigsawGame methods are synchronized",
+    "Second player: CELL_OCCUPIED, ALREADY_PLACED"
+   ],
+   "steps": [
+    {
+     "say": "Concept twelve: the attempt budget. With look-alike pieces, matching only by shape is N-P-complete in general. That means no known fast algorithm guarantees a solution. We just saw two million attempts on thirty-six pieces.",
+     "reveal": 1
+    },
+    {
+     "say": "So every solver carries a max attempts budget. When it's spent, the solver gives up and returns solved equals false. A bounded solver always returns, even on hostile user-supplied data.",
+     "reveal": 2
+    },
+    {
+     "say": "And failure is clean: every trial placement is removed, so the board is left exactly as it was before the call.",
+     "reveal": 3
+    },
+    {
+     "say": "Last, co-op play. Jigsaw game's public methods are synchronized, so only one thread at a time runs them on a given game. One lock per game, so different games don't block each other.",
+     "reveal": 4
+    },
+    {
+     "say": "If two players race for the same cell, the second gets cell occupied. Same piece, already placed. The demo runs four threads on one six by six puzzle: thirty-six pieces, thirty-six moves, solved.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s037",
+   "layout": "bullets",
+   "kicker": "Jigsaw",
+   "title": "In the interview: Jigsaw",
+   "bullets": [
+    "Side = FLAT/TAB/BLANK + shape code",
+    "Piece immutable; rotation in Placement",
+    "Board.check holds every rule; returns reason",
+    "SolverStrategy: brute force or edge-first",
+    "Validator up front; budget; synchronized game"
+   ],
+   "steps": [
+    {
+     "say": "Your thirty-second answer. A side is flat, tab or blank plus a shape code, and a tab fits a blank with the same code.",
+     "reveal": 1
+    },
+    {
+     "say": "A piece is immutable, with four sides stored clockwise. Rotation lives in the board's placement, and the facing side is sides at d minus r, mod four.",
+     "reveal": 2
+    },
+    {
+     "say": "Board check holds every rule: flats out, no flat in, every placed neighbour interlocks. It returns a reason, and both players and solvers use it.",
+     "reveal": 3
+    },
+    {
+     "say": "Solving is a Strategy: brute-force backtracking, or edge first with a hash index from side to pieces, about one attempt per piece with unique shapes.",
+     "reveal": 4
+    },
+    {
+     "say": "A validator rejects broken boxes up front, solvers have a budget, and the game is synchronized for co-op.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s038",
+   "layout": "section",
+   "kicker": "Part 4 of 4",
+   "title": "Chapter summary",
+   "steps": [
+    {
+     "say": "Let's zoom out across all six games from the last two episodes. Same question every time: where's the rule, what's pluggable, and how do you test the randomness?",
+     "reveal": 0
+    }
+   ],
+   "caption": "Book: Ch 17 Games · Chapter summary"
+  },
+  {
+   "id": "s039",
+   "layout": "table",
+   "kicker": "Chapter summary",
+   "title": "Six games, one shape",
+   "table": {
+    "head": [
+     "Game",
+     "Core rule object",
+     "Strategy",
+     "Signature technique"
+    ],
+    "rows": [
+     [
+      "Blackjack",
+      "Hand scoring",
+      "PlayerStrategy, DealerPolicy",
+      "Soft and hard totals"
+     ],
+     [
+      "Chess",
+      "Rules: legal-move filter",
+      "a bot move strategy",
+      "Checkmate; undo"
+     ],
+     [
+      "Tic-Tac-Toe",
+      "Board counters",
+      "MoveStrategy",
+      "O(1) win counters"
+     ],
+     [
+      "Snake & Ladder",
+      "Board + Rules record",
+      "Dice, Overflow, Win",
+      "Validated config; queue"
+     ],
+     [
+      "2048",
+      "LineMerger",
+      "TileSpawner",
+      "One merge, four directions"
+     ],
+     [
+      "Jigsaw",
+      "Board.check",
+      "SolverStrategy",
+      "Side index; edge-first"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Row one, Blackjack, from last episode. The core rule is hand scoring, with soft and hard totals. Strategies for the player and the dealer, and a seeded shoe for tests.",
+     "reveal": 1
+    },
+    {
+     "say": "Chess. A rules object filters moves down to the legal ones. Checkmate means in check with no legal move, and undo uses Command plus Memento.",
+     "reveal": 2
+    },
+    {
+     "say": "Tic-Tac-Toe. The board keeps row, column and diagonal counters, so detecting a win is constant time.",
+     "reveal": 3
+    },
+    {
+     "say": "Snake and Ladder. The board plus a rules record. Dice, overflow and win are strategies. Validated config, queue-based turns.",
+     "reveal": 4
+    },
+    {
+     "say": "Twenty forty-eight. One line merger, reused for four directions, with a seeded tile spawner.",
+     "reveal": 5
+    },
+    {
+     "say": "Jigsaw. One placement check, a solver strategy, and edge-first solving with a side index.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s040",
+   "layout": "bullets",
+   "kicker": "Chapter summary",
+   "title": "The three habits interviewers look for",
+   "bullets": [
+    "1. Put every rule in exactly one place",
+    "2. Inject randomness: seeded or scripted",
+    "3. Model game states explicitly",
+    "Patterns: Strategy everywhere, Observer, Memento"
+   ],
+   "steps": [
+    {
+     "say": "And here are the three habits. Habit one: put every rule in exactly one place, and be able to say where. Today that was the board constructor for snake config, line merger for merging, and board check for placement.",
+     "reveal": 1
+    },
+    {
+     "say": "Habit two: inject randomness, seeded or scripted, so the design is testable. Loaded dice, seed forty-two for the spawner, a seeded puzzle generator.",
+     "reveal": 2
+    },
+    {
+     "say": "Habit three: model the game's states explicitly, and reject actions that are invalid in the current state. Rolling after the end throws. Moving after lost throws. Placing in a taken cell returns a reason.",
+     "reveal": 3
+    },
+    {
+     "say": "The patterns you used: Strategy everywhere, Factory methods like board dot of, Command and Memento for undo, State enums, and Observer for UIs and spectators.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s041",
+   "layout": "recap",
+   "kicker": "Episode 20 recap",
+   "title": "Recap",
+   "bullets": [
+    "Snake & Ladder: one Jump, validated board",
+    "Strategies for dice, overflow, win; player queue",
+    "2048: pure LineMerger; spawn only on change",
+    "Jigsaw: Board.check, side index, solver budget",
+    "Rules in one place, seeded randomness, states"
+   ],
+   "steps": [
+    {
+     "say": "Let's recap. Snake and Ladder: one jump type, because snakes and ladders behave the same. Validate the board once, with no chains, so no loops.",
+     "reveal": 1
+    },
+    {
+     "say": "Dice, overflow and win rules are strategies, bundled in a rules record. A queue runs turns, and events go to listeners, not print statements.",
+     "reveal": 2
+    },
+    {
+     "say": "Twenty forty-eight: one pure line merger, merge once per move, from the wall. Map four directions onto lines. Spawn a two or a four only after a real change.",
+     "reveal": 3
+    },
+    {
+     "say": "Jigsaw: sides are values, so they can key an index. Board check holds every rule and returns a reason. Solving is a strategy with a budget.",
+     "reveal": 4
+    },
+    {
+     "say": "And across all of them: rules in one place, injected randomness, explicit states.",
+     "reveal": 5
+    },
+    {
+     "say": "Next time, episode twenty-one: Platforms, Stack Overflow and Cricinfo. We'll design a Q and A site with votes and reputation, and a live cricket scoreboard. See you there.",
+     "reveal": 5
+    }
+   ]
+  }
+ ]
+}

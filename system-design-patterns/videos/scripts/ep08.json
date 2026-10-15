@@ -1,0 +1,1779 @@
+{
+  "series": "System Design Workshop",
+  "episode": 8,
+  "title": "Storing Data: Replication and Logs",
+  "subtitle": "Copies for reads, splits for writes, and a log underneath everything",
+  "scenes": [
+    {
+      "layout": "title",
+      "title": "Storing Data: Replication and Logs",
+      "subtitle": "Copies for reads, splits for writes, and a log underneath everything",
+      "steps": [
+        {
+          "say": "Welcome to episode eight of the System Design Workshop: Storing Data, replication and logs.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll be able to scale a database the way real companies do: replicas for reads, shards for writes, consistent hashing for growth, a write-ahead log for durability, and event sourcing and C-Q-R-S for history and shape.",
+          "reveal": 0
+        },
+        {
+          "say": "Keep the module three notes PDF open beside the video. Pause on any table and try to answer before I do.",
+          "reveal": 0
+        }
+      ],
+      "id": "s001"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Module introduction",
+      "title": "Why the database is the hard box",
+      "bullets": [
+        "App servers are stateless: add ten, lose three",
+        "The database holds the facts: orders, payments",
+        "Two independent copies of truth drift apart",
+        "Usually the first part to hit its limit"
+      ],
+      "steps": [
+        {
+          "say": "Here's the starting point. Your app servers are stateless, which means they remember nothing between requests. You can add ten or lose three and nobody notices.",
+          "reveal": 1
+        },
+        {
+          "say": "The database is different. It holds the facts: payments, ownership, the record of what happened.",
+          "reveal": 2
+        },
+        {
+          "say": "And you can't just run a second independent database beside it. Think of a company ledger. If each clerk writes in whichever of two ledgers is nearer, they soon disagree.",
+          "reveal": 3
+        },
+        {
+          "say": "So as a product grows, the database is usually the first thing to hit its limit, and the most dangerous thing to change.",
+          "reveal": 4
+        }
+      ],
+      "id": "s002",
+      "caption": "Book: Module 3 Storing Data · Module Introduction"
+    },
+    {
+      "layout": "twocol",
+      "kicker": "Module introduction",
+      "title": "Two facts that organize everything",
+      "left": {
+        "heading": "Reads vs writes",
+        "bullets": [
+          "Scale reads by copying",
+          "Scale writes by dividing"
+        ]
+      },
+      "right": {
+        "heading": "The append-only log",
+        "bullets": [
+          "A file you only add to",
+          "Under WAL, events and CQRS"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Fact one: reads and writes scale differently. To scale reads, you copy the data onto several machines and point each reader at one.",
+          "reveal": 1
+        },
+        {
+          "say": "Copying does nothing for writes, because every copy has to apply every write. To scale writes, you divide: each machine owns one piece. Copy for reads, split for writes.",
+          "reveal": 2
+        },
+        {
+          "say": "Fact two: an append-only log sits underneath everything. That's a file you only add to, never edit.",
+          "reveal": 3
+        },
+        {
+          "say": "The write-ahead log uses it for crash recovery. Event sourcing makes it your data model. C-Q-R-S builds read views from it. Our running example for the whole episode is one online store, growing from one database to 100 million users.",
+          "reveal": 4
+        }
+      ],
+      "id": "s003"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 1 of 7",
+      "title": "Primary-Replica",
+      "steps": [
+        {
+          "say": "Concept one: primary-replica replication. Here's the question. Your database is overloaded. What's the first thing you ask? Hold that thought.",
+          "reveal": 0
+        }
+      ],
+      "id": "s004",
+      "caption": "Book: Module 3 Storing Data · Primary-Replica"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Primary-Replica",
+      "title": "The store's read problem",
+      "bullets": [
+        "8,000 reads/s + 300 writes/s",
+        "One machine handles 5,000 queries/s",
+        "Product pages take 4 seconds",
+        "96% reads, and it's the only copy"
+      ],
+      "steps": [
+        {
+          "say": "Our store runs on one Postgres machine. Traffic is 8,000 reads a second, product pages, search, order history, plus 300 writes a second, orders and carts.",
+          "reveal": 1
+        },
+        {
+          "say": "The machine can handle about 5,000 queries a second in total. So it's way over.",
+          "reveal": 2
+        },
+        {
+          "say": "Product pages take four seconds, and checkout slows because reads and writes fight for the same CPU and disk.",
+          "reveal": 3
+        },
+        {
+          "say": "Ninety-six percent of traffic is reads. That split is the problem. And there's a hidden second problem: this machine is the only copy. A single point of failure. A crash at 4 PM loses the whole day's orders.",
+          "reveal": 4
+        }
+      ],
+      "id": "s005"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Primary-Replica",
+      "title": "How primary-replica works",
+      "mermaid": "flowchart LR\n  APP[\"App servers\"] -->|\"all writes\"| P[\"Primary\"]\n  P -->|\"change log\"| R1[\"Replica 1\"]\n  P -->|\"change log\"| R2[\"Replica 2\"]\n  APP -->|\"reads\"| R1\n  APP -->|\"reads\"| R2",
+      "caption": "One writer, many readers, connected by a stream of changes",
+      "steps": [
+        {
+          "say": "Here's the fix. One machine, the primary, takes every write. It streams its changes to replicas. Each replica holds a live copy and answers reads.",
+          "reveal": 0
+        },
+        {
+          "say": "Think of a teacher writing on the main whiteboard, while assistants copy every change onto their own boards. Students read the nearest board.",
+          "reveal": 0
+        }
+      ],
+      "id": "s006"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Primary-Replica",
+      "title": "Primary-replica, step by step",
+      "bullets": [
+        "1. Every write goes to the primary",
+        "2. Primary logs each change, ships it",
+        "3. Replicas replay in the same order",
+        "4. Reads spread across replicas",
+        "5. Replication lag is expected",
+        "6. Failover, with fencing"
+      ],
+      "steps": [
+        {
+          "say": "Step one: every write goes to the primary. Why? If two machines accepted writes, the same order row could change two ways and the copies would disagree. One writer rules that out by design.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: the primary writes each change to an ordered log and ships that log to the replicas. For our store, order 7f3a being paid becomes one log entry that goes to both replicas.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: each replica replays those changes in exactly the same order, so its copy matches the primary.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: reads are spread across the replicas. Our 8,000 reads a second split into about 4,000 per replica, which fits.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five: replication lag. A replica gets changes a little late, usually 10 to 50 milliseconds. During a bulk import it hit 8 seconds. Lag is a number you monitor, not a constant.",
+          "reveal": 5
+        },
+        {
+          "say": "Step six: failover, which means switching to a backup. Missing heartbeats, small regular I'm-alive messages, reveal the primary is dead. First you fence the old primary, forcibly blocking its writes, then you promote the most up-to-date replica. Without fencing, the old primary can come back and keep accepting writes. That's split brain: two primaries drifting apart.",
+          "reveal": 6
+        }
+      ],
+      "id": "s007"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: the store after two replicas",
+      "table": {
+        "head": [
+          "Measure",
+          "Before",
+          "After"
+        ],
+        "rows": [
+          [
+            "Reads per machine",
+            "8,000/s on one",
+            "about 4,000/s each"
+          ],
+          [
+            "Primary load",
+            "8,300 queries/s",
+            "a few hundred"
+          ],
+          [
+            "Product page",
+            "4 seconds",
+            "80 ms"
+          ],
+          [
+            "Failover drill",
+            "restore a backup: hours",
+            "15 s detect + 30 s promote"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's see it happen. Each replica now serves about 4,000 reads a second, within capacity.",
+          "reveal": 1
+        },
+        {
+          "say": "The primary drops from 8,300 queries a second to a few hundred: the writes plus the few reads that must be fresh.",
+          "reveal": 2
+        },
+        {
+          "say": "Product pages go from four seconds to 80 milliseconds.",
+          "reveal": 3
+        },
+        {
+          "say": "And at the 2 AM failover drill, detection takes about 15 seconds of missed heartbeats and promotion about 30. For those 45 seconds checkout fails, but reads keep working. Compare that with a half-day restore.",
+          "reveal": 4
+        }
+      ],
+      "id": "s008"
+    },
+    {
+      "layout": "table",
+      "kicker": "Primary-Replica",
+      "title": "Async versus sync replication",
+      "table": {
+        "head": [
+          "",
+          "Asynchronous",
+          "Synchronous"
+        ],
+        "rows": [
+          [
+            "Says saved",
+            "right away",
+            "after a replica confirms"
+          ],
+          [
+            "Write latency",
+            "fast",
+            "plus a network round trip"
+          ],
+          [
+            "Primary dies",
+            "may lose last ~200 ms",
+            "no confirmed write lost"
+          ],
+          [
+            "Replica slows",
+            "nobody notices",
+            "writes stall"
+          ],
+          [
+            "Fits",
+            "feeds, catalogs, profiles",
+            "money, inventory"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Every replicated setup must answer one question: when does the primary tell the client saved? Asynchronous says it right away and ships the change afterwards. Synchronous waits until a replica confirms.",
+          "reveal": 1
+        },
+        {
+          "say": "So async writes are fast. Sync writes pay at least one network round trip.",
+          "reveal": 2
+        },
+        {
+          "say": "The cost of async: if the primary dies, the last couple hundred milliseconds of confirmed writes can be lost. Sync loses nothing confirmed.",
+          "reveal": 3
+        },
+        {
+          "say": "The cost of sync: if a replica gets slow, writes stall, because that replica is now on the critical path.",
+          "reveal": 4
+        },
+        {
+          "say": "So async is the usual default, for things like a social feed. For moving money, pick sync, or semi-sync, which waits for exactly one replica. Strong answers pick a mode per table.",
+          "reveal": 5
+        }
+      ],
+      "id": "s009"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Primary-Replica",
+      "title": "Replication lag: read-your-writes",
+      "bullets": [
+        "User saves a new address on the primary",
+        "Reloads, read hits a lagging replica",
+        "Old address is back: edit seems lost",
+        "Fix 1: read from primary ~10 s after a write",
+        "Fix 2: read only from caught-up replicas",
+        "Fix 3: show the change optimistically"
+      ],
+      "steps": [
+        {
+          "say": "Lag has one famous symptom: the read-your-writes problem. Imagine a customer updates their shipping address. The write goes to the primary.",
+          "reveal": 1
+        },
+        {
+          "say": "They hit refresh. That read goes to a replica that's two seconds behind.",
+          "reveal": 2
+        },
+        {
+          "say": "The old address is back. A minute later it's fine. They file a bug report.",
+          "reveal": 3
+        },
+        {
+          "say": "Fix one, the cheapest: for about 10 seconds after a user writes, send that user's reads to the primary.",
+          "reveal": 4
+        },
+        {
+          "say": "Fix two: remember the log position of their write, and read only from replicas that have passed it.",
+          "reveal": 5
+        },
+        {
+          "say": "Fix three, for cosmetic cases: show the change in the user interface right away while storage catches up. The wrong fix is sending every read to the primary.",
+          "reveal": 6
+        }
+      ],
+      "id": "s010"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Primary-Replica",
+      "title": "Primary-replica: costs and the interview",
+      "bullets": [
+        "Gain: read capacity, survival, backups",
+        "Pay: zero extra write capacity",
+        "Pay: untested failover is no failover",
+        "Skip: write-heavy or small with backups",
+        "Interview: ask reads or writes first"
+      ],
+      "steps": [
+        {
+          "say": "You gain read capacity that grows with machines, failover in under a minute, and a safe place to run backups and analytics.",
+          "reveal": 1
+        },
+        {
+          "say": "You pay with zero write scaling. Every replica applies every write. Adding replicas for a write overload only makes the primary busier. That's the classic mistake.",
+          "reveal": 2
+        },
+        {
+          "say": "And a failover plan you've never practiced doesn't exist.",
+          "reveal": 3
+        },
+        {
+          "say": "Skip it when writes are the bottleneck, or when one machine plus tested backups is enough.",
+          "reveal": 4
+        },
+        {
+          "say": "In the interview, when they say the database is overloaded, ask: reads or writes? That's the answer to my opening question. Recap: one writer streams its log to many readers. Copies scale reads, never writes.",
+          "reveal": 5
+        }
+      ],
+      "id": "s011"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 2 of 7",
+      "title": "Sharding",
+      "steps": [
+        {
+          "say": "Concept two: sharding. Eighteen months later, the primary is struggling in a way replicas can't fix.",
+          "reveal": 0
+        }
+      ],
+      "id": "s012",
+      "caption": "Book: Module 3 Storing Data · Sharding"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Sharding",
+      "title": "The store's write problem",
+      "bullets": [
+        "Writes grow from 300 to 2,500/s",
+        "Primary and every replica overloaded",
+        "Orders table is 4 TB, indexes miss memory",
+        "Already on the biggest machine"
+      ],
+      "steps": [
+        {
+          "say": "Writes have grown from 300 to 2,500 a second.",
+          "reveal": 1
+        },
+        {
+          "say": "Every replica applies every write, so the primary and every replica are overloaded, and lag stretches to minutes. A fourth replica makes it worse.",
+          "reveal": 2
+        },
+        {
+          "say": "The orders table is 4 terabytes. Its indexes, the sorted lookup structures, no longer fit in memory, so lookups hit disk. Backups run all night.",
+          "reveal": 3
+        },
+        {
+          "say": "And you're already renting the biggest machine. Too much for one machine, however many copies. Copies won't help. You have to divide.",
+          "reveal": 4
+        }
+      ],
+      "id": "s013"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Sharding",
+      "title": "How sharding works",
+      "mermaid": "flowchart LR\n  REQ[\"Request for customer 8412\"] --> RT[\"Router: hash(customer_id) % 4\"]\n  RT --> S1[\"Shard 1\"]\n  RT --> S2[\"Shard 2\"]\n  RT --> S3[\"Shard 3\"]\n  RT --> S4[\"Shard 4\"]",
+      "caption": "Each shard fully owns its slice of customers and their orders",
+      "steps": [
+        {
+          "say": "Sharding splits the rows of one table across many machines, called shards. A rule on one field, the shard key, decides where each row goes.",
+          "reveal": 0
+        },
+        {
+          "say": "Picture a phone book too big for one volume. You split it A to F, G to M, and so on. Everyone knows the rule, and four printers update four volumes at once.",
+          "reveal": 0
+        }
+      ],
+      "id": "s014"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Sharding",
+      "title": "Three decisions, applied to the store",
+      "bullets": [
+        "1. Shard key: customer_id",
+        "2. Routing rule: hash(key) % 4",
+        "3. Who routes: app, proxy or database"
+      ],
+      "steps": [
+        {
+          "say": "Decision one, the shard key, the most important decision in this whole module. A good key appears in almost every query, spreads load evenly, and keeps related rows together. For our store, customer I-D wins all three: my-orders queries include it, millions of customers spread well, and a customer's orders, cart and addresses land on one shard, so checkout never crosses machines.",
+          "reveal": 1
+        },
+        {
+          "say": "Decision two, the routing rule. We hash the customer I-D, turning it into an evenly spread number, and take the remainder after dividing by four. Customer 8412 might hash to a number with remainder 2, so shard 2 owns them.",
+          "reveal": 2
+        },
+        {
+          "say": "Decision three, who routes: the application, a proxy in the middle, or a database that does it for you, like Vitess or MongoDB. Any works, as long as every caller uses the identical rule.",
+          "reveal": 3
+        }
+      ],
+      "id": "s015"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: four shards by customer_id",
+      "table": {
+        "head": [
+          "Measure",
+          "One machine",
+          "Four shards"
+        ],
+        "rows": [
+          [
+            "Writes",
+            "2,500/s",
+            "about 625/s per shard"
+          ],
+          [
+            "Data",
+            "4 TB",
+            "1 TB per shard"
+          ],
+          [
+            "Customer 8412's orders",
+            "one query",
+            "one shard, just as fast"
+          ],
+          [
+            "Top sellers today",
+            "one query",
+            "ask all 4, merge"
+          ],
+          [
+            "Databases to run",
+            "3",
+            "4 x 3 = 12"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's do the numbers. 2,500 writes a second divided by four is about 625 per shard, with headroom.",
+          "reveal": 1
+        },
+        {
+          "say": "4 terabytes becomes 1 terabyte per shard. Indexes fit in memory again, and backups take hours, not all night.",
+          "reveal": 2
+        },
+        {
+          "say": "Customer 8412's orders: hash, one shard, as fast as before.",
+          "reveal": 3
+        },
+        {
+          "say": "But top sellers today has to ask every shard and merge the answers. That's called scatter-gather. Cross-shard joins and transactions become your problem, handled by the saga pattern later.",
+          "reveal": 4
+        },
+        {
+          "say": "And each shard is still its own primary with two replicas. Sharding doesn't replace replication, it multiplies it: twelve databases, twelve failovers to practice.",
+          "reveal": 5
+        }
+      ],
+      "id": "s016"
+    },
+    {
+      "layout": "table",
+      "kicker": "Sharding",
+      "title": "Hash versus range sharding",
+      "table": {
+        "head": [
+          "",
+          "Hash sharding",
+          "Range sharding"
+        ],
+        "rows": [
+          [
+            "Routes by",
+            "hash(key) % N",
+            "A-F, G-M or Jan, Feb"
+          ],
+          [
+            "Load spread",
+            "excellent, automatic",
+            "only as good as your ranges"
+          ],
+          [
+            "Range queries",
+            "spread over every shard",
+            "excellent, neighbors together"
+          ],
+          [
+            "Resharding",
+            "painful with modulo",
+            "split a busy range in place"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "There are two main routing rules. Hash sharding runs the key through a hash. Range sharding gives each shard a range, like A to F, or January.",
+          "reveal": 1
+        },
+        {
+          "say": "Hash spreads load evenly and automatically. Range is only as good as the ranges you pick. Shard orders by date, and 100 percent of today's writes hit one shard.",
+          "reveal": 2
+        },
+        {
+          "say": "But range wins for range queries. All of March's orders sit together, while with hashing they're scattered everywhere.",
+          "reveal": 3
+        },
+        {
+          "say": "Rule of thumb: hash by default for transactional work like our store. Range when access really is by range, like time series or leaderboards.",
+          "reveal": 4
+        }
+      ],
+      "id": "s017"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Sharding",
+      "title": "Shard keys and hot shards",
+      "bullets": [
+        "Hashing spreads keys, not load",
+        "Influencer with 40M followers goes live",
+        "Shard 5 overloads, others idle at 15%",
+        "Fix 1: cache the hot entity's reads",
+        "Fix 2: dedicated shard for giant keys",
+        "Fix 3: split that key by a second key"
+      ],
+      "steps": [
+        {
+          "say": "Here's the trap. Hashing spreads keys evenly, not load.",
+          "reveal": 1
+        },
+        {
+          "say": "Imagine we've grown to eight shards by user I-D, and an influencer with 40 million followers starts a live shopping event.",
+          "reveal": 2
+        },
+        {
+          "say": "Their whole storefront hashes to one shard. Shard 5 melts while the others sit at 15 percent. That's a hot shard, and more shards won't help.",
+          "reveal": 3
+        },
+        {
+          "say": "Fix one: cache their storefront reads. Every viewer sees nearly the same page, so this may be enough alone.",
+          "reveal": 4
+        },
+        {
+          "say": "Fix two: give the few extreme keys their own dedicated shards.",
+          "reveal": 5
+        },
+        {
+          "say": "Fix three: split that one entity's data further, say their follower list by follower I-D. And another classic mistake: an auto-incrementing I-D with range routing sends every new row to the newest shard.",
+          "reveal": 6
+        }
+      ],
+      "id": "s018"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Sharding",
+      "title": "Sharding: when not, and the interview",
+      "bullets": [
+        "Last resort: bigger box, replicas, archiving first",
+        "Gain: write capacity and data size",
+        "Pay: scatter-gather, hot keys, resharding",
+        "Interview: name the key, with reasons"
+      ],
+      "steps": [
+        {
+          "say": "Sharding is a last resort. Try a bigger machine, replicas for reads, archiving old data, or splitting tables onto separate machines first.",
+          "reveal": 1
+        },
+        {
+          "say": "What you gain is the thing replication never gives: write capacity and data size that grow with machines.",
+          "reveal": 2
+        },
+        {
+          "say": "What you pay: scatter-gather queries, hot keys, and resharding pain.",
+          "reveal": 3
+        },
+        {
+          "say": "In the interview, name your shard key and give the three reasons. Then expect three follow-ups: the celebrity, the cross-shard transaction, and changing the shard count. Recap: split rows by a well-chosen key. Copies for reads, splits for writes.",
+          "reveal": 4
+        }
+      ],
+      "id": "s019"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Going from 4 shards to 5 with hash % N. How much data moves?",
+      "bullets": [
+        "A. About 20 percent",
+        "B. About 50 percent",
+        "C. About 80 percent"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Our routing is hash of customer I-D, modulo four. We add a fifth shard, so it becomes modulo five. Roughly how much data lands on the wrong machine? Answer on the next slide.",
+          "reveal": 0
+        }
+      ],
+      "id": "s020"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 3 of 7",
+      "title": "Consistent Hashing",
+      "steps": [
+        {
+          "say": "Concept three: consistent hashing. And the answer to the quiz is C, about 80 percent. Let's see why, and how to fix it.",
+          "reveal": 0
+        }
+      ],
+      "id": "s021",
+      "caption": "Book: Module 3 Storing Data · Consistent Hashing"
+    },
+    {
+      "layout": "number",
+      "kicker": "Consistent Hashing",
+      "title": "Why modulo hurts",
+      "big": "4 to 5 shards: 80% of rows move",
+      "caption": "A key stays only if hash % 4 equals hash % 5, one time in five",
+      "steps": [
+        {
+          "say": "A key stays put only if its remainder dividing by four equals its remainder dividing by five. That's true for only one hash in five, 20 percent.",
+          "reveal": 0
+        },
+        {
+          "say": "So one extra shard leaves 80 percent of the data on the wrong machine. That's about 3.2 of our 4 terabytes moving, while 2,500 writes a second keep arriving. And again at shard six. The problem is that N is built into every key's address.",
+          "reveal": 0
+        },
+        {
+          "say": "Only ever doubling, four to eight, still moves half, and makes you buy 100 percent more capacity when you needed 25.",
+          "reveal": 0
+        }
+      ],
+      "id": "s022"
+    },
+    {
+      "layout": "table",
+      "kicker": "Consistent Hashing",
+      "title": "The hash ring",
+      "caption": "Each key goes to the first server clockwise; only one arc moves",
+      "steps": [
+        {
+          "say": "Picture houses on a circular road, each covered by the next fire station clockwise. A new station only takes over the houses between it and the previous station.",
+          "reveal": 0
+        },
+        {
+          "say": "That's consistent hashing. The servers, A to D, sit around a circle, and each key belongs to the first server clockwise. When we add E between B and C, only part of C's slice moves to E.",
+          "reveal": 5
+        }
+      ],
+      "id": "s023",
+      "table": {
+        "head": [
+          "Arc of the ring",
+          "Owner before E",
+          "Owner after E"
+        ],
+        "rows": [
+          [
+            "A to B",
+            "B",
+            "B"
+          ],
+          [
+            "B to E's new point",
+            "C",
+            "E (moves)"
+          ],
+          [
+            "E's point to C",
+            "C",
+            "C"
+          ],
+          [
+            "C to D",
+            "D",
+            "D"
+          ],
+          [
+            "D back to A",
+            "A",
+            "A"
+          ]
+        ]
+      }
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Consistent Hashing",
+      "title": "Consistent hashing, step by step",
+      "bullets": [
+        "1. The hash space is a circle",
+        "2. Hash servers and keys onto it",
+        "3. Key goes to first server clockwise",
+        "4. Adding a server moves one slice",
+        "5. Removing one: neighbor takes it all",
+        "6. Virtual nodes fix unevenness"
+      ],
+      "steps": [
+        {
+          "say": "Step one: the hash space is a circle, from zero up to a big maximum, wrapping back to zero.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: hash every server name, and every key, onto that circle.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: each key belongs to the first server clockwise. Customer 8412 lands just before server C, so C owns it. A sorted list of server positions finds it in microseconds.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: add server E between B and C. Only keys in E's new slice change owner, all of them formerly C's. With N servers, adding one moves about one over N plus one. That's 20 percent for four to five, and about 2 percent for 50 to 51.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five: removing a server is the reverse. The next server clockwise takes its whole slice and its whole load. With few servers placed randomly, slices are also very uneven.",
+          "reveal": 5
+        },
+        {
+          "say": "Step six: virtual nodes fix both. Each server appears at 100 to 200 points on the ring. Now each owns many small, scattered slices, which evens out, and a stronger machine can get more points.",
+          "reveal": 6
+        }
+      ],
+      "id": "s024"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: the store's fifth shard",
+      "table": {
+        "head": [
+          "Event",
+          "Modulo",
+          "Ring + 150 vnodes"
+        ],
+        "rows": [
+          [
+            "Add shard 5 to 4 TB",
+            "3.2 TB moves",
+            "about 0.8 TB moves"
+          ],
+          [
+            "Shard 3 dies",
+            "n/a",
+            "each survivor +25%"
+          ],
+          [
+            "50-node cache, add 1",
+            "98% of keys remap",
+            "about 2% remap"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's replay the resize. With modulo, 3.2 terabytes move. With the ring, about 0.8 terabytes, 20 percent, copied in the background over days while the old owners keep serving until handoff.",
+          "reveal": 1
+        },
+        {
+          "say": "Now a failure. Without virtual nodes, shard 3 dying dumps all its load on shard 4, which may fall too. That's a cascade. With 150 virtual nodes each, its slices spread over all survivors, roughly 25 percent more load each.",
+          "reveal": 2
+        },
+        {
+          "say": "And caches. In a 50-node cache cluster, modulo remaps 98 percent of keys whenever one node is added. Nearly every lookup misses and hits the database at once: a miss storm. The ring remaps about 2 percent. One warning: the ring fixes servers joining and leaving, not hot keys. The celebrity still hashes to one server.",
+          "reveal": 3
+        }
+      ],
+      "id": "s025"
+    },
+    {
+      "layout": "table",
+      "kicker": "Consistent Hashing",
+      "title": "The ring versus the directory",
+      "table": {
+        "head": [
+          "",
+          "Ring",
+          "Directory"
+        ],
+        "rows": [
+          [
+            "Data moved",
+            "about 1/N, automatic",
+            "whatever you decide"
+          ],
+          [
+            "Placement control",
+            "none, hash decides",
+            "full: pin, split, move"
+          ],
+          [
+            "Extra infrastructure",
+            "none, just math",
+            "metadata service, must stay up"
+          ],
+          [
+            "Hybrid",
+            "Redis Cluster: 16,384 slots",
+            "slot-to-server map"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The rival is a directory: a small service that maps ranges of keys to servers. With the ring, resizing moves about one over N automatically. With a directory, you move whatever you choose.",
+          "reveal": 1
+        },
+        {
+          "say": "The ring gives you no placement control. A directory lets you pin a giant tenant to its own shard.",
+          "reveal": 2
+        },
+        {
+          "say": "But the ring needs no extra infrastructure, it's just math in the client. A directory is one more service that must never go down.",
+          "reveal": 3
+        },
+        {
+          "say": "The modern answer is the hybrid. Redis Cluster hashes keys into 16,384 fixed slots, then keeps a tiny directory from slots to servers. Even spread from hashing, and moving a slot is a one-row change. In the interview, derive the 80 percent, say virtual nodes, and say it fixes churn, not hot keys.",
+          "reveal": 4
+        }
+      ],
+      "id": "s026"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 4 of 7",
+      "title": "Write-Ahead Log",
+      "steps": [
+        {
+          "say": "Concept four: the write-ahead log, or W-A-L. Volume is solved. Now a question of trust: how does a database survive a power cut without losing writes it already confirmed?",
+          "reveal": 0
+        }
+      ],
+      "id": "s027",
+      "caption": "Book: Module 3 Storing Data · Write-Ahead Log"
+    },
+    {
+      "layout": "twocol",
+      "kicker": "Write-Ahead Log",
+      "title": "3:07 AM: the rack loses power",
+      "left": {
+        "heading": "Bad morning A: corruption",
+        "bullets": [
+          "One UPDATE = row + 2 indexes",
+          "Power dies after the first write"
+        ]
+      },
+      "right": {
+        "heading": "Bad morning B: lost writes",
+        "bullets": [
+          "40 orders were told saved",
+          "They were only in memory"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Tuesday, 3:07 AM. Power fails on the rack holding shard 2. It reboots 90 seconds later into one of two bad mornings. Morning A: corruption. Changing one order's status isn't one disk write. It touches the row and two indexes, three places on disk.",
+          "reveal": 1
+        },
+        {
+          "say": "Power died after the first, so an index points at a row that says something else. The database rightly refuses to start.",
+          "reveal": 2
+        },
+        {
+          "say": "Morning B: lost writes. It starts, but 40 orders that customers were told were saved never happened.",
+          "reveal": 3
+        },
+        {
+          "say": "They were confirmed from memory, before reaching disk. A disk can even tear a 4 kilobyte page mid-write. So how can any database keep its promise?",
+          "reveal": 4
+        }
+      ],
+      "id": "s028"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Write-Ahead Log",
+      "title": "How the write-ahead log works",
+      "mermaid": "flowchart LR\n  L[\"1. Append + fsync log\"] --> A[\"2. Reply: saved\"]\n  A --> T[\"3. Apply to tables later\"]",
+      "caption": "First write down what you're about to do, in one safe place. Then do it.",
+      "steps": [
+        {
+          "say": "The answer: first write down what you're about to do, in one safe place, then do it. Like a cook who pins up every order ticket before cooking. After a power cut, the tickets show what was promised.",
+          "reveal": 0
+        }
+      ],
+      "id": "s029"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Write-Ahead Log",
+      "title": "The write-ahead log, step by step",
+      "bullets": [
+        "1. Append one record for the whole change",
+        "2. fsync the log",
+        "3. Then acknowledge the client",
+        "4. Apply to tables later, in background",
+        "5. After a crash, replay the log",
+        "6. Checkpoints keep replay short"
+      ],
+      "steps": [
+        {
+          "say": "Step one: append one record describing the whole change, order 7f3a is paid, row plus both indexes, to the end of the log. About 100 bytes. Appending to one file is the easiest job a disk does. The record carries a checksum, a small number that exposes damage.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: fsync. Operating systems normally buffer writes in memory. Fsync is the system call that means don't return until this is physically on disk.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: only now tell the client saved. This is the one rule everything depends on: never acknowledge before the log record is fsynced.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: update the actual tables and indexes later, in background batches, off the path the client waits on.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five: after a crash, replay the log on restart. Both bad mornings disappear. If the last record was torn in half, it fails its checksum and is dropped. That's safe, because its fsync never finished, so its client never heard saved.",
+          "reveal": 5
+        },
+        {
+          "say": "Step six: checkpoints. Every so often the database flushes pending changes to the data files and writes a marker: everything before this is applied. Recovery only replays what comes after.",
+          "reveal": 6
+        }
+      ],
+      "id": "s030"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: fsync, group commit and the crash drill",
+      "table": {
+        "head": [
+          "What",
+          "Number"
+        ],
+        "rows": [
+          [
+            "Append + fsync one order",
+            "about 1 ms"
+          ],
+          [
+            "Group commit",
+            "50 writes, 1 fsync"
+          ],
+          [
+            "Log since last checkpoint (30 s)",
+            "75,000 records"
+          ],
+          [
+            "Replay time",
+            "seconds; all 40 orders survive"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Now the numbers. Appending an order's record and fsyncing it takes about one millisecond. Updating the row and two indexes in place would take several times longer and still not be atomic. With a log, the fast path is the safe path.",
+          "reveal": 1
+        },
+        {
+          "say": "Group commit: if 50 writes arrive in the same millisecond, the database appends all 50 and fsyncs once. Fifty durable commits for one flush. That's how ordinary disks sustain thousands of durable writes a second.",
+          "reveal": 2
+        },
+        {
+          "say": "The crash drill: the last checkpoint was 30 seconds ago, so the log holds about 75,000 records.",
+          "reveal": 3
+        },
+        {
+          "say": "They replay in seconds. All 40 orders survive. The torn tail record is dropped, its client retries with an idempotency key, a unique request I-D, and it's applied exactly once.",
+          "reveal": 4
+        }
+      ],
+      "id": "s031"
+    },
+    {
+      "layout": "table",
+      "kicker": "Write-Ahead Log",
+      "title": "The log versus the snapshot",
+      "table": {
+        "head": [
+          "",
+          "Snapshot (Redis RDB)",
+          "Log (Redis AOF)"
+        ],
+        "rows": [
+          [
+            "Cost per write",
+            "nothing",
+            "one append"
+          ],
+          [
+            "Crash loses",
+            "minutes since snapshot",
+            "about zero to seconds"
+          ],
+          [
+            "Recovery",
+            "fast: load one file",
+            "slower: replay everything"
+          ],
+          [
+            "Disk",
+            "small",
+            "keeps growing"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Redis makes the choice visible: periodic snapshots, or an append-only log. A snapshot costs nothing per write. The log costs one append.",
+          "reveal": 1
+        },
+        {
+          "say": "But a crash loses everything since the last snapshot, maybe minutes. The log loses at most the last moment not yet fsynced.",
+          "reveal": 2
+        },
+        {
+          "say": "Snapshots recover fast. Replaying a long log is slow.",
+          "reveal": 3
+        },
+        {
+          "say": "And the log keeps growing. Each is strong where the other is weak, so real systems use both: a snapshot, plus the log since. That's a checkpoint. Postgres does it as a base backup plus archived W-A-L. If asked snapshot or log, say both.",
+          "reveal": 4
+        }
+      ],
+      "id": "s032"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Write-Ahead Log",
+      "title": "WAL: the bonus jobs and the knob",
+      "bullets": [
+        "Replication = shipping this log",
+        "Point-in-time recovery: backup + old logs",
+        "Pay: every write lands twice",
+        "Knob: checkpoint every 15 s or 2 h?",
+        "Benchmark trap: durability turned off"
+      ],
+      "steps": [
+        {
+          "say": "Here's the connection. The stream of changes the primary ships to replicas is this log. A replica is a machine doing continuous crash recovery from another machine's log.",
+          "reveal": 1
+        },
+        {
+          "say": "Keep old logs plus regular snapshots, and you can restore to any chosen moment. That's point-in-time recovery.",
+          "reveal": 2
+        },
+        {
+          "say": "The cost: everything is written twice, log then data files, and each commit is no faster than an fsync.",
+          "reveal": 3
+        },
+        {
+          "say": "The knob: checkpoint every 15 seconds and you flush constantly but restart in seconds. Every two hours, and a restart might replay for tens of minutes. Choose from your recovery-time target.",
+          "reveal": 4
+        },
+        {
+          "say": "And beware a new engine that's eleven times faster than Postgres. Check its config. It probably says saved before it's on disk. Recap: append, fsync, acknowledge, apply later.",
+          "reveal": 5
+        }
+      ],
+      "id": "s033"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "What is the right order of the four WAL steps?",
+      "bullets": [
+        "A. Append, apply, fsync, acknowledge",
+        "B. Append, fsync, acknowledge, apply",
+        "C. Apply, append, acknowledge, fsync"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Put these four in the right order: apply to tables, fsync, acknowledge the client, append to the log. Answer in a moment.",
+          "reveal": 0
+        }
+      ],
+      "id": "s034"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 5 of 7",
+      "title": "Event Sourcing",
+      "steps": [
+        {
+          "say": "The answer was B: append, fsync, acknowledge, then apply later. Concept five: event sourcing. The database keeps a perfect log for itself. What if your application kept one too?",
+          "reveal": 0
+        }
+      ],
+      "id": "s035",
+      "caption": "Book: Module 3 Storing Data · Event Sourcing"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Event Sourcing",
+      "title": "A week the database can't answer",
+      "bullets": [
+        "Monday: was order 7f3a ever cancelled?",
+        "Wednesday: which of 90,000 orders had the bug?",
+        "Friday: how often are cart items removed?",
+        "Root cause: UPDATE destroys history"
+      ],
+      "steps": [
+        {
+          "say": "Monday, a dispute. A customer says they cancelled order 7f3a before it shipped. Support sees status equals shipped. Was it ever cancelled? Each update overwrote the last value.",
+          "reveal": 1
+        },
+        {
+          "say": "Wednesday, a bug. A pricing bug two weeks ago corrupted some totals. Finance asks which of about 90,000 orders were hit. The wrong totals were overwritten by the fix.",
+          "reveal": 2
+        },
+        {
+          "say": "Friday, product asks how often customers add then remove an item. Removals were never stored.",
+          "reveal": 3
+        },
+        {
+          "say": "One root cause: the table keeps only the present, and update destroys the past. An audit table bolted on the side half works, until some code path forgets to write it.",
+          "reveal": 4
+        }
+      ],
+      "id": "s036"
+    },
+    {
+      "layout": "table",
+      "kicker": "Event Sourcing",
+      "title": "Order 7f3a as an event stream",
+      "caption": "The log doesn't record the truth; it is the truth",
+      "steps": [
+        {
+          "say": "Event sourcing stores what happened, not current state. Each change is appended as an immutable event, one that's never changed, with business meaning. Current state is what you get by replaying the events.",
+          "reveal": 3
+        },
+        {
+          "say": "Your bank works this way. Your balance is the running total of transactions, and mistakes get correcting entries, never erasures.",
+          "reveal": 6
+        }
+      ],
+      "id": "s037",
+      "table": {
+        "head": [
+          "#",
+          "Event",
+          "Detail"
+        ],
+        "rows": [
+          [
+            "1",
+            "OrderPlaced",
+            "item A, $49, 13:41"
+          ],
+          [
+            "2",
+            "ItemAdded",
+            "item B, $89"
+          ],
+          [
+            "3",
+            "ItemRemoved",
+            "item A"
+          ],
+          [
+            "4",
+            "CheckedOut",
+            "13:51"
+          ],
+          [
+            "5",
+            "OrderCancelled",
+            "14:02"
+          ],
+          [
+            "6",
+            "ShipmentDispatched",
+            "14:07, by UPS"
+          ]
+        ]
+      }
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Event Sourcing",
+      "title": "Event sourcing, step by step",
+      "bullets": [
+        "1. Event store: one stream per entity",
+        "2. Current state = replay",
+        "3. Snapshots shorten long replays",
+        "4. Projections answer queries",
+        "5. Mistakes: corrected, never erased"
+      ],
+      "steps": [
+        {
+          "say": "Step one: the event store. One append-only stream per entity. Order 7f3a's stream holds its six events in order. Appending is the only write.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: current state is replay. Start from nothing: placed with item A for 49 dollars, add item B for 89, remove item A, check out at 40 dollars, cancelled at 14:02, dispatched at 14:07. Replay says shipped, but cancelled. The conflict the old table overwrote is now in the open.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: snapshots. A bank account with 2 million events doesn't replay them all. Every N events you store the computed state, and replay only the tail. The checkpoint idea again.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: projections. All orders over 100 dollars this month can't be asked of a log. So you keep ordinary read tables, like current orders or daily revenue, updated from the stream. They're derived, disposable and rebuildable.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five: the pricing fix is a new event, order total corrected, with a reason. Error and correction stay visible forever.",
+          "reveal": 5
+        }
+      ],
+      "id": "s038"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: the week, answered from events",
+      "table": {
+        "head": [
+          "Question",
+          "Answer from the event store"
+        ],
+        "rows": [
+          [
+            "Monday dispute",
+            "Cancelled 14:02, shipped 14:07: refund"
+          ],
+          [
+            "Wednesday bug",
+            "Scan CheckedOut events, exact list"
+          ],
+          [
+            "Friday product",
+            "Count ItemRemoved after ItemAdded"
+          ],
+          [
+            "The bill",
+            "~4 KB per order vs 400 bytes; rebuilds take hours"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Monday: the stream shows cancelled at 14:02, then dispatched at 14:07. The customer is right, the refund goes out in minutes. And we've found a race condition: the shipping job never checks for cancellations.",
+          "reveal": 1
+        },
+        {
+          "say": "Wednesday: scan two weeks of checked-out events for totals matching the buggy formula. An exact list, then append correction events. Finance gets a spreadsheet and a full record.",
+          "reveal": 2
+        },
+        {
+          "say": "Friday: count item-removed events after item-added events. Never tracked on purpose, answered after the fact. History answers questions you haven't asked yet.",
+          "reveal": 3
+        },
+        {
+          "say": "The bill: about 12 events of 300 bytes, 4 kilobytes, versus one 400-byte row. Ten to fifteen times the storage. And rebuilding a projection over 100 million orders takes hours, so you keep projections updated continuously.",
+          "reveal": 4
+        }
+      ],
+      "id": "s039"
+    },
+    {
+      "layout": "table",
+      "kicker": "Event Sourcing",
+      "title": "Event sourcing versus change data capture",
+      "table": {
+        "head": [
+          "",
+          "Event sourcing",
+          "CDC"
+        ],
+        "rows": [
+          [
+            "Source of truth",
+            "the event log",
+            "your current tables"
+          ],
+          [
+            "Captures",
+            "intent: OrderCancelled",
+            "row diffs: status changed"
+          ],
+          [
+            "Adoption cost",
+            "rebuild the write path",
+            "add a connector"
+          ],
+          [
+            "Answers why?",
+            "yes",
+            "partly"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "There's a cheaper option for history: change data capture, or C-D-C. It reads the database's own write-ahead log and publishes every row change as an event. With event sourcing, the log is the truth. With C-D-C, your normal tables stay the truth.",
+          "reveal": 1
+        },
+        {
+          "say": "Event sourcing captures intent: the customer cancelled. C-D-C captures row diffs: status went from active to cancelled.",
+          "reveal": 2
+        },
+        {
+          "say": "Event sourcing means rebuilding your write path. C-D-C means adding a connector, and the app doesn't change.",
+          "reveal": 3
+        },
+        {
+          "say": "So the routing rule: C-D-C when you need history, event sourcing when the events are the product. Money, orders, inventory, audits. Default answer: no. Profiles and settings stay plain tables. Deletion laws? Crypto-shredding: encrypt each person's data with their own key, then destroy the key.",
+          "reveal": 4
+        }
+      ],
+      "id": "s040"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 6 of 7",
+      "title": "CQRS",
+      "steps": [
+        {
+          "say": "Concept six: C-Q-R-S, command query responsibility segregation. Event sourcing left us a problem: the log is terrible at which orders are over 100 dollars. And the rest of the store has a related one.",
+          "reveal": 0
+        }
+      ],
+      "id": "s041",
+      "caption": "Book: Module 3 Storing Data · CQRS"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "CQRS",
+      "title": "One model, four teams",
+      "bullets": [
+        "Checkout: normalized, validated writes",
+        "Orders page: 6-table join, 300 ms",
+        "Support: full-text search",
+        "14 indexes: 15 writes per insert",
+        "Write latency 5 ms to 40 ms"
+      ],
+      "steps": [
+        {
+          "say": "One orders database serves four teams. Checkout wants a normalized schema, each fact stored once, with strict validation.",
+          "reveal": 1
+        },
+        {
+          "say": "The orders page joins six tables for one screen, taking 300 milliseconds.",
+          "reveal": 2
+        },
+        {
+          "say": "Support wants text search by customer name, which the database does badly. Analytics wants daily totals.",
+          "reveal": 3
+        },
+        {
+          "say": "Each read problem was fixed with another index. Now there are 14, so every new order does 15 writes.",
+          "reveal": 4
+        },
+        {
+          "say": "Write latency crept from 5 to 40 milliseconds. Replicas fixed reads that differed in volume. These differ in shape, and more copies of the same shape can't fix shape.",
+          "reveal": 5
+        }
+      ],
+      "id": "s042"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "CQRS",
+      "title": "How CQRS works",
+      "mermaid": "flowchart LR\n  CMD[\"Commands: place, cancel\"] --> W[\"Write model: 3 indexes\"]\n  W --> CS[\"Change stream: events or CDC\"]\n  CS --> OL[\"orders_list table\"]\n  CS --> ES[\"Search index\"]\n  CS --> WH[\"Analytics warehouse\"]\n  QRY[\"Queries\"] --> OL",
+      "caption": "One write model, many read models shaped per question",
+      "steps": [
+        {
+          "say": "C-Q-R-S splits one model in two. Commands, the writes, go to a lean write model built for correctness. Queries go to read models, each shaped for its question. A change stream from the write side keeps them current.",
+          "reveal": 0
+        },
+        {
+          "say": "Like a bank where one desk takes deposits and a separate system prints statements. Each is fast because it has one job.",
+          "reveal": 0
+        }
+      ],
+      "id": "s043"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "CQRS",
+      "title": "CQRS, step by step",
+      "bullets": [
+        "1. Commands and queries take separate routes",
+        "2. Read models are projections",
+        "3. Sync from the log, never dual writes",
+        "4. It's a spectrum: level 1, 2, 3"
+      ],
+      "steps": [
+        {
+          "say": "Step one: commands go to the write model, validated and committed. Queries go to the right-shaped read model and never touch the write model.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: read models are projections, the same disposable, rebuildable tables from event sourcing. For our store, a flat orders-list table with everything the orders page shows.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: the universal mistake is the dual write. App code writes Postgres, then calls the search engine. If it crashes in between, the two disagree forever, silently. Instead, feed every read model from one stream: domain events, or C-D-C on the write-ahead log. Make updates idempotent, so applying an event twice equals applying it once.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: it's a spectrum. Level one: same database, separate query code. Level two: separate reshaped tables. Level three: separate systems, like Elasticsearch and a data warehouse. Go only as far as your measured conflict forces. And C-Q-R-S doesn't require event sourcing.",
+          "reveal": 4
+        }
+      ],
+      "id": "s044"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: the store after CQRS",
+      "table": {
+        "head": [
+          "Measure",
+          "Before",
+          "After"
+        ],
+        "rows": [
+          [
+            "Write-side indexes",
+            "14",
+            "3"
+          ],
+          [
+            "Insert latency",
+            "40 ms",
+            "8 ms"
+          ],
+          [
+            "Orders page",
+            "300 ms join",
+            "8 ms single table"
+          ],
+          [
+            "Support search",
+            "slow SQL",
+            "~40 ms full text"
+          ],
+          [
+            "Read model lag",
+            "none",
+            "~200 ms"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The write model drops 11 of its 14 indexes, keeping the 3 it needs.",
+          "reveal": 1
+        },
+        {
+          "say": "Insert latency falls from 40 milliseconds to 8.",
+          "reveal": 2
+        },
+        {
+          "say": "The orders page reads the flat orders-list projection. The 300 millisecond join becomes an 8 millisecond single-table read. The join happens once, at write time.",
+          "reveal": 3
+        },
+        {
+          "say": "Support searches Elasticsearch in about 40 milliseconds, fed from the same stream.",
+          "reveal": 4
+        },
+        {
+          "say": "The cost: read models trail by about 200 milliseconds. A just-placed order isn't on the orders page yet. Read-your-writes, for the third time, with the same fixes: route that read to the write side briefly, or show the order optimistically.",
+          "reveal": 5
+        }
+      ],
+      "id": "s045"
+    },
+    {
+      "layout": "table",
+      "kicker": "CQRS",
+      "title": "CQRS versus read replicas",
+      "table": {
+        "head": [
+          "",
+          "Read replicas",
+          "CQRS read models"
+        ],
+        "rows": [
+          [
+            "Solves",
+            "how many reads",
+            "what shape reads need"
+          ],
+          [
+            "The copy",
+            "same schema",
+            "shaped per query"
+          ],
+          [
+            "300 ms join becomes",
+            "still 300 ms",
+            "8 ms"
+          ],
+          [
+            "Cost",
+            "one checkbox",
+            "a pipeline and lag"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "So when do you pick which? Replicas solve how many reads. C-Q-R-S solves what shape reads need.",
+          "reveal": 1
+        },
+        {
+          "say": "A replica is the same schema, byte for byte. A read model is flattened, indexed and pre-summed for one question.",
+          "reveal": 2
+        },
+        {
+          "say": "So the six-way join is still 300 milliseconds on a replica, but 8 on a read model.",
+          "reveal": 3
+        },
+        {
+          "say": "Replicas are one checkbox. C-Q-R-S is a pipeline to run. The diagnostic: would more copies of the same shape help? Then replicas. Real systems often do both. Recap: lean writes, shaped reads, fed from one log, never dual writes.",
+          "reveal": 4
+        }
+      ],
+      "id": "s046"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 7 of 7",
+      "title": "Capstone: 100 Million Users",
+      "steps": [
+        {
+          "say": "Concept seven, the capstone. One database, from 50,000 users to 100 million, one limit at a time. At each stage, try to name the pattern before I do.",
+          "reveal": 0
+        }
+      ],
+      "id": "s047",
+      "caption": "Book: Module 3 · Capstone - Scaling a Database to 100 Million Users"
+    },
+    {
+      "layout": "table",
+      "kicker": "Capstone",
+      "title": "Stages 1 to 3: the volume limits",
+      "table": {
+        "head": [
+          "Stage",
+          "Incident",
+          "Decision"
+        ],
+        "rows": [
+          [
+            "1. Reads, 500K users",
+            "8,000 reads/s on a 5,000 q/s box",
+            "Primary + 2 replicas, rehearsed failover"
+          ],
+          [
+            "2. Writes, 5M users",
+            "2,500 writes/s, 4 TB",
+            "4 shards on customer_id, hash routing"
+          ],
+          [
+            "3. Growth, 20M users",
+            "4 to 5 shards moves 80%",
+            "Ring, ~150 vnodes, moves 1/5"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Stage one, read capacity at 500,000 users. 8,000 reads a second against a 5,000 query machine, and it's the only copy. Primary-replica: two replicas at 4,000 reads each, failover practiced with fencing, and fresh-data reads like a just-edited address go to the primary.",
+          "reveal": 1
+        },
+        {
+          "say": "Stage two, write capacity at 5 million users. 2,500 writes a second and a 4 terabyte table. Sharding on customer I-D, hash routing, four shards of three databases each. Top-products becomes scatter-gather, and a viral influencer's hot key gets a cache.",
+          "reveal": 2
+        },
+        {
+          "say": "Stage three, changing the shard count at 20 million. Modulo would move 80 percent of rows. Consistent hashing with about 150 virtual nodes per shard moves one fifth. And as a bonus, it fixes the cache layer's nightly miss storms nobody had linked to modulo.",
+          "reveal": 3
+        }
+      ],
+      "id": "s048"
+    },
+    {
+      "layout": "table",
+      "kicker": "Capstone",
+      "title": "Stages 4 to 6: trust, history, shape",
+      "table": {
+        "head": [
+          "Stage",
+          "Incident",
+          "Decision"
+        ],
+        "rows": [
+          [
+            "4. Crash and corruption",
+            "Power cut; bad deploy for 2 hours",
+            "WAL: fsync before ack; PITR to 13:59"
+          ],
+          [
+            "5. History, 60M users",
+            "UPDATE destroyed the dispute evidence",
+            "Event sourcing for orders, payments"
+          ],
+          [
+            "6. Shape, 100M users",
+            "300 ms join, 14 indexes",
+            "CQRS fed by events and CDC"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Stage four, crash and corruption. The 40 orders survive the power cut because each record was fsynced before saved. Then a bad deploy writes corrupt totals for two hours, and replicas faithfully copy them. Point-in-time recovery: restore the base backup, replay archived logs to 13:59, a minute before the deploy, then re-apply the legitimate orders. Replicas copy mistakes. Only history helps.",
+          "reveal": 1
+        },
+        {
+          "say": "Stage five, history destroyed by update, at 60 million users. Event sourcing, but only for the ledger-shaped domains, orders and payments. Profiles, sessions and the catalog stay plain tables.",
+          "reveal": 2
+        },
+        {
+          "say": "Stage six, one model doing two jobs, at 100 million. C-Q-R-S: three write-side indexes, a flat orders list, a search index and a warehouse, all fed by one change stream. Dual writes refused, because lag is visible and self-healing, while loss is silent and permanent.",
+          "reveal": 3
+        }
+      ],
+      "id": "s049"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Capstone",
+      "title": "The final architecture",
+      "bullets": [
+        "Consistent-hash ring on customer_id",
+        "Each shard: primary + 2 replicas",
+        "WAL: durability, replication, PITR",
+        "Change streams feed every read model",
+        "Limits: reads, writes, growth, trust, history, shape"
+      ],
+      "steps": [
+        {
+          "say": "Put it together. App servers route through a consistent-hash ring keyed on customer I-D.",
+          "reveal": 1
+        },
+        {
+          "say": "Each shard is a primary with two replicas.",
+          "reveal": 2
+        },
+        {
+          "say": "Their write-ahead log provides durability, replication and a point-in-time archive.",
+          "reveal": 3
+        },
+        {
+          "say": "And it feeds the change streams that fill every read model. The log does four jobs: durability, replication, recovery, and feeding the reads.",
+          "reveal": 4
+        },
+        {
+          "say": "So in the interview, scale in the order the limits show up: reads, writes, growth, trust, history, shape. Each pattern answers a measured limit, never fashion.",
+          "reveal": 5
+        }
+      ],
+      "id": "s050"
+    },
+    {
+      "layout": "recap",
+      "kicker": "Episode 8 complete",
+      "title": "Episode 8 recap",
+      "bullets": [
+        "Primary-replica: copies scale reads, not writes",
+        "Sharding: split by a key with three reasons",
+        "Consistent hashing: resize moves about 1/N",
+        "WAL: append, fsync, acknowledge, apply",
+        "Event sourcing for ledgers; CQRS for shape",
+        "Read-your-writes: route fresh reads to the writer"
+      ],
+      "steps": [
+        {
+          "say": "Let's recap. Primary-replica: one writer streams its log to readers. Copies scale reads, never writes, and failover needs fencing and practice.",
+          "reveal": 1
+        },
+        {
+          "say": "Sharding: split rows by a key that's in every query, spreads evenly, and keeps related rows together. Watch for hot keys.",
+          "reveal": 2
+        },
+        {
+          "say": "Consistent hashing: a ring with virtual nodes, so adding a server moves about one over N, not 80 percent.",
+          "reveal": 3
+        },
+        {
+          "say": "The write-ahead log: append, fsync, acknowledge, apply later. It also gives you replication and point-in-time recovery.",
+          "reveal": 4
+        },
+        {
+          "say": "Event sourcing only for ledgers, C-D-C for plain history, and C-Q-R-S when read and write shapes diverge, fed from one log, never dual writes.",
+          "reveal": 5
+        },
+        {
+          "say": "And read-your-writes showed up three times, with the same fixes. Copies for reads, splits for writes, and a log underneath everything. Next time, in episode nine: Serving Data Fast, caching patterns. See you there.",
+          "reveal": 6
+        }
+      ],
+      "id": "s051"
+    }
+  ]
+}

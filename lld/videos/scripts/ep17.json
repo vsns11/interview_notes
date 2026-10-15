@@ -1,0 +1,1759 @@
+{
+  "series": "LLD Workshop",
+  "episode": 17,
+  "title": "Booking: Library, Movies, Concerts, Hotel",
+  "subtitle": "Holds, double-booking and consistency in four classic designs",
+  "scenes": [
+    {
+      "id": "s001",
+      "layout": "title",
+      "title": "Booking: Library, Movies, Concerts, Hotel",
+      "subtitle": "Holds, double-booking and consistency in four classic designs",
+      "steps": [
+        {
+          "say": "Welcome to the L-L-D Workshop, episode seventeen: Booking, Library, Movies, Concerts, Hotel. This is the first of two episodes on booking systems.",
+          "reveal": 0
+        },
+        {
+          "say": "A booking system sells or lends a limited thing to many people who all want it at once. A book copy. A cinema seat. A concert place. A hotel night. Today we design all four.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll be able to name the real unit of inventory, hold it while someone pays, stop double-booking, and recover when payment fails. Keep the chapter fifteen PDF open; every demo I quote is there.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s002",
+      "layout": "section",
+      "kicker": "Part 1 of 6 - The setup",
+      "title": "Why booking problems are interview favourites",
+      "steps": [
+        {
+          "say": "A booking problem looks like simple CRUD. Create, read, update, delete. Then two people want the same seat at the same moment, and five hard questions appear.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 15 · Why booking problems are interview favourites"
+    },
+    {
+      "id": "s003",
+      "layout": "table",
+      "kicker": "Concept 1 of 5",
+      "title": "Five questions hiding in every booking problem",
+      "table": {
+        "head": [
+          "Theme",
+          "The real question"
+        ],
+        "rows": [
+          [
+            "Inventory",
+            "What exactly is sold: a title or a copy?"
+          ],
+          [
+            "Holds",
+            "How do we keep it while they pay, not forever?"
+          ],
+          [
+            "Double-booking",
+            "What stops two threads both succeeding?"
+          ],
+          [
+            "Payments",
+            "Paid, but the hold was lost meanwhile?"
+          ],
+          [
+            "Cancellations",
+            "Who gets it next, how much comes back?"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Theme one, inventory. What exactly is the thing? Take a cinema. Is it seat B3, or seat B3 for the six p.m. show? Get this wrong and the rest of the design collapses.",
+          "reveal": 1
+        },
+        {
+          "say": "Theme two, holds. You pick two seats, then spend three minutes typing card details. Something must keep those seats for you, but only for a while, or an abandoned checkout blocks them forever.",
+          "reveal": 2
+        },
+        {
+          "say": "Theme three, double-booking. Ten people tap the same seat in the same millisecond. Exactly one must win. We'll see four different tools for that today.",
+          "reveal": 3
+        },
+        {
+          "say": "Theme four, payments. The bank takes your money, but your hold expired during the charge and someone else took the seat. Now what?",
+          "reveal": 4
+        },
+        {
+          "say": "Theme five, cancellations. A copy comes back, a ticket is cancelled. Who gets it next? A waitlist. And how much money returns? A refund policy.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s004",
+      "layout": "bullets",
+      "kicker": "Vocabulary",
+      "title": "Three words you'll hear all episode",
+      "bullets": [
+        "Race condition: both read free, both take it",
+        "Check-then-act: safe only if one atomic step",
+        "Hold: a temporary claim with an expiry time"
+      ],
+      "steps": [
+        {
+          "say": "A race condition is when two threads, independent lines of work in a program, both read it's free, and both act. Asha and Ravi both see seat A5 free, and both get a ticket.",
+          "reveal": 1
+        },
+        {
+          "say": "Check-then-act is the pattern if free, then take it. It's only safe when the check and the take happen as one indivisible step. We call that atomic. Nobody can sneak in between.",
+          "reveal": 2
+        },
+        {
+          "say": "A hold, also called a soft lock or reservation, is a claim with an expiry. You get seat A5 for five minutes. Pay in time, it's yours. Walk away, it goes back on sale by itself.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s005",
+      "layout": "bullets",
+      "kicker": "Key terms",
+      "title": "The concurrency toolbox",
+      "bullets": [
+        "Lock and monitor: one thread at a time",
+        "Compare-and-set: change only if unchanged",
+        "Contention: many threads, one item",
+        "Reaper: a job that sweeps expired holds",
+        "Compensation: undo after the fact, a refund"
+      ],
+      "steps": [
+        {
+          "say": "A lock lets only one thread at a time run a piece of code. In Java, the synchronized keyword uses the built-in lock every object carries, called its monitor.",
+          "reveal": 1
+        },
+        {
+          "say": "Compare-and-set, or C-A-S, is one atomic step: change this value to new, but only if it still equals what I read. Code built on C-A-S instead of locks is called lock-free, because no thread ever waits.",
+          "reveal": 2
+        },
+        {
+          "say": "Contention means many threads competing for the same thing at once. A stadium on sale day sees a million fans.",
+          "reveal": 3
+        },
+        {
+          "say": "A reaper is a background job that sweeps away expired holds, every few seconds.",
+          "reveal": 4
+        },
+        {
+          "say": "And compensation undoes an earlier step after it happened. For money, that's a refund.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s006",
+      "layout": "table",
+      "kicker": "What you'll learn",
+      "title": "Four problems, one idea each",
+      "table": {
+        "head": [
+          "Problem",
+          "The idea that carries it"
+        ],
+        "rows": [
+          [
+            "Library",
+            "A title is not a copy"
+          ],
+          [
+            "Movie tickets",
+            "Book a ShowSeat: hold, pay, commit"
+          ],
+          [
+            "Concert tickets",
+            "Extreme contention: CAS, queue, limits"
+          ],
+          [
+            "Hotel",
+            "A status field is not availability"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's the map. Library: a title, the book Dune, is not a copy, the physical Dune on rack seven.",
+          "reveal": 1
+        },
+        {
+          "say": "Movies: you book a seat for one show, not a physical seat. Hold it with an expiry, pay, then commit.",
+          "reveal": 2
+        },
+        {
+          "say": "Concerts: same nouns as movies, but a million fans at once. So we go lock-free, add a fair queue, and limit tickets per person.",
+          "reveal": 3
+        },
+        {
+          "say": "Hotel: a room is sold night by night, so each room remembers which nights are already sold.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s007",
+      "layout": "section",
+      "kicker": "Part 2 of 6 - Library",
+      "title": "Library Management System",
+      "steps": [
+        {
+          "say": "Let's start with the gentlest one. A library management system tracks every book, every physical copy, who borrowed what and when it's due, reservations, and fines.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 15 · 15.1 Design a Library Management System"
+    },
+    {
+      "id": "s008",
+      "layout": "bullets",
+      "kicker": "Concept 2 of 5 - Library",
+      "title": "Clarify scope first",
+      "bullets": [
+        "A title can have many copies, each with a barcode",
+        "Max 5 books per member, max 10 days per loan",
+        "Late return: a fine per day",
+        "Reserve a book that's out; notify when it's back",
+        "Out of scope: e-books, inter-library loans"
+      ],
+      "steps": [
+        {
+          "say": "Clarify scope first. Can a title have several copies? Yes. Our library has six copies of The Hobbit and one copy of Dune. Each copy has its own barcode and rack number.",
+          "reveal": 1
+        },
+        {
+          "say": "Limits. A member holds at most five books at a time, and keeps each for at most ten days.",
+          "reveal": 2
+        },
+        {
+          "say": "Return late and you pay a fine per day. We'll use fifty cents a day. We calculate and record fines. Collecting the money is out of scope.",
+          "reveal": 3
+        },
+        {
+          "say": "If every copy of Dune is out, you can reserve it, and the system tells you when a copy comes back.",
+          "reveal": 4
+        },
+        {
+          "say": "And we name what's out of scope: e-books and inter-library loans.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s009",
+      "layout": "twocol",
+      "kicker": "Book versus BookItem",
+      "title": "The split that carries the design",
+      "left": {
+        "heading": "Book (the title)",
+        "bullets": [
+          "ISBN, title, subject, authors",
+          "One per title, immutable",
+          "Search works on titles"
+        ]
+      },
+      "right": {
+        "heading": "BookItem (a copy)",
+        "bullets": [
+          "Barcode, rack, price, status",
+          "Many per title",
+          "Members borrow copies"
+        ]
+      },
+      "steps": [
+        {
+          "say": "The one idea for the library: a Book is a title. Dune, its I-S-B-N, its subject, its authors. I-S-B-N is the international standard book number printed on every published book.",
+          "reveal": 1
+        },
+        {
+          "say": "There is exactly one Book per title, and it's immutable, meaning it never changes after it's created.",
+          "reveal": 2
+        },
+        {
+          "say": "When you search for Tolkien, you're searching titles. You want to see The Hobbit once, not six times.",
+          "reveal": 3
+        },
+        {
+          "say": "A BookItem is one physical copy. Copy B-DUNE-1 has a barcode, sits on rack seven, costs twenty dollars, and has a status: available, reserved, loaned, or lost.",
+          "reveal": 4
+        },
+        {
+          "say": "The Hobbit has six BookItems. Each one can be on a different shelf or in a different member's bag.",
+          "reveal": 5
+        },
+        {
+          "say": "Members borrow copies, not titles. With one Book class and a copies counter, you can't say which copy is late or who has it.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s010",
+      "layout": "twocol",
+      "kicker": "Composition",
+      "title": "Composition beats inheritance here",
+      "left": {
+        "heading": "Course: BookItem extends Book",
+        "bullets": [
+          "Each copy duplicates every title field",
+          "Change a subject: edit every copy"
+        ]
+      },
+      "right": {
+        "heading": "Ours: BookItem has a Book",
+        "bullets": [
+          "Six copies share one title object",
+          "A title has no barcode, so not is-a"
+        ]
+      },
+      "steps": [
+        {
+          "say": "The original course draws BookItem inheriting from Book: a copy carries the title's details and adds its own. It works for a small model.",
+          "reveal": 1
+        },
+        {
+          "say": "But with inheritance, each of the six Hobbit copies stores its own title, subject and authors. Fix a typo in the subject and you edit six objects.",
+          "reveal": 2
+        },
+        {
+          "say": "We use composition instead. Composition means one object has another as a part. Each BookItem holds a reference to one shared Book. Six copies, one title object.",
+          "reveal": 3
+        },
+        {
+          "say": "There's a deeper reason. The Liskov substitution principle says a subclass must work wherever its parent is expected. A title has no barcode and no status, so a copy is not really a kind of title.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s011",
+      "layout": "diagram",
+      "title": "Library classes",
+      "mermaid": "flowchart LR\n  L[\"Library facade\"] --> C[\"Catalog\"]\n  L --> S[\"LendingService\"]\n  C --> I[\"BookItem\"]\n  I --> B[\"Book\"]\n  S --> F[\"FinePolicy\"]\n  S --> N[\"Notifier\"]\n  S --> BL[\"BookLending\"]",
+      "caption": "Rules in the service, state on the copy, history in BookLending",
+      "steps": [
+        {
+          "say": "Here's the whiteboard picture. The Library owns a Catalog and a LendingService.",
+          "reveal": 0
+        },
+        {
+          "say": "The Catalog knows every copy, and each copy points at its title. People are an abstract Account with two kinds, Member and Librarian. An account owns its library card, so closing the account destroys the card. That's composition again.",
+          "reveal": 0
+        },
+        {
+          "say": "The LendingService holds the rules. It records each loan as a BookLending, which answers who has this copy, since when, and due when. And it talks to two plug-ins, a FinePolicy and a Notifier. We'll walk through each box now.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s012",
+      "layout": "bullets",
+      "kicker": "LendingService rules",
+      "title": "LendingService: the checkout rules",
+      "bullets": [
+        "Lock the member, then lock the copy",
+        "Account active? Fewer than 5 books?",
+        "Copy available, or reserved for this member?",
+        "Mark loaned, count plus one, due in 10 days",
+        "Remove the member from the title's waitlist"
+      ],
+      "steps": [
+        {
+          "say": "Let's walk through checkout with member M2 borrowing copy B-DUNE-1. Step one: lock M2's member object, then lock the copy. Always member first, then copy. Hold that thought.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: is M2's account active, and does M2 have fewer than five books? In the demo, M1 takes five Hobbits and the sixth is refused: M1 already has five books.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: check the copy. Available is fine. Reserved is fine only if it's reserved for M2. Loaned or lost, refuse.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: mark the copy loaned, add one to M2's count, and record a BookLending due ten days from today. Borrow on March first, it's due March eleventh.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five: if M2 was waiting in line for Dune, remove them. Why a service, not methods on Member? A Member doing checkout would have two reasons to change: being a person, and the lending rules.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s013",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Why always lock member first, then copy?",
+      "bullets": [
+        "A) It's faster",
+        "B) A fixed order makes deadlock impossible",
+        "C) Members are more important than books"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Checkout locks the member, then the copy. Return does the same. Why does the order matter so much?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s014",
+      "layout": "bullets",
+      "kicker": "Concurrency",
+      "title": "Locks make the last copy safe",
+      "bullets": [
+        "Lock on the copy: only one borrower wins",
+        "Lock on the member: never a sixth book",
+        "Fixed order: member, then copy, so no deadlock",
+        "Many servers: a conditional UPDATE in the DB"
+      ],
+      "steps": [
+        {
+          "say": "The answer is B. But first, what each lock buys. In the demo, eight members race for the only copy of Dune at the same instant. Because the check and the mark-loaned happen inside the copy's lock, there's always exactly one winner and seven losers.",
+          "reveal": 1
+        },
+        {
+          "say": "The member lock protects the quota. Two librarians at two desks can't both lend M1 a fifth book.",
+          "reveal": 2
+        },
+        {
+          "say": "Now the order. A deadlock is two threads each holding a lock the other needs, so both wait forever. If return locked copy then member, it could freeze against checkout. One global order makes that impossible.",
+          "reveal": 3
+        },
+        {
+          "say": "And across several servers, Java locks aren't enough. The database does it: update book item, set status loaned, where barcode matches and status is available. Then check exactly one row changed. That's called a conditional update.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s015",
+      "layout": "diagram",
+      "title": "A copy's life is a state machine",
+      "mermaid": "flowchart LR\n  A[\"AVAILABLE\"] -->|\"checkout\"| L[\"LOANED\"]\n  L -->|\"return, nobody waiting\"| A\n  L -->|\"return, waitlist not empty\"| R[\"RESERVED for one member\"]\n  R -->|\"checkout by that member\"| L\n  L -->|\"reported lost\"| X[\"LOST\"]",
+      "caption": "A returned copy goes to the first person in line",
+      "steps": [
+        {
+          "say": "A copy's life is a small state machine. Available, checked out, loaned. Returned with nobody waiting, back to available.",
+          "reveal": 0
+        },
+        {
+          "say": "Returned while someone waits, it becomes reserved for one member. In the demo, M2 reserved Dune first, then M4. When Dune comes back, it's held for M2, and M4 is refused.",
+          "reveal": 0
+        },
+        {
+          "say": "Notice the waitlist is per title, first in, first out. A member wants a copy of Dune, not copy number three. If you queued on one copy, you might wait on copy three while copy one sits on the shelf. Renewal is also refused while anyone waits for that title.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s016",
+      "layout": "number",
+      "kicker": "Fine Strategy",
+      "title": "Fine as a Strategy",
+      "big": "3 days late x $0.50 = $1.50",
+      "caption": "PerDayFine behind the FinePolicy interface",
+      "steps": [
+        {
+          "say": "Fines. A Strategy is a swappable rule behind an interface. The FinePolicy interface has one method: given the due date and the return date, how much?",
+          "reveal": 0
+        },
+        {
+          "say": "Worked example. Dune was due March eleventh. It came back March fourteenth. Three days late, times fifty cents, is one dollar fifty. That's exactly what the demo prints.",
+          "reveal": 0
+        },
+        {
+          "say": "Next year the library adds a ten dollar cap. You write a new FinePolicy class, and the lending code doesn't change. Money is a BigDecimal, Java's exact decimal type, never a double.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s017",
+      "layout": "bullets",
+      "kicker": "Observer, Facade, indexes",
+      "title": "Notifier, facade and indexes",
+      "bullets": [
+        "Notifier: lending announces, someone delivers",
+        "Library facade: one front door, role checks",
+        "Catalog: one map per kind of search",
+        "Available count derived, never a stored counter"
+      ],
+      "steps": [
+        {
+          "say": "Notifier is Observer-style. Observer means the sender announces events to whoever subscribed. Lending code just says: tell M2 their Dune is held. Email, S-M-S or push is someone else's job.",
+          "reveal": 1
+        },
+        {
+          "say": "Library is a facade, one simple front object for the whole subsystem. The desk software talks only to it. And it does role checks: only a librarian may add stock. A member trying to add a book is refused.",
+          "reveal": 2
+        },
+        {
+          "say": "The Catalog keeps one index per search. An index is a lookup map that jumps straight to matches. Search by author Tolkien, and it reads one map entry: The Hobbit and The Lord of the Rings. The cost: each new kind of search adds a map.",
+          "reveal": 3
+        },
+        {
+          "say": "And how many Hobbits are free? Don't store a counter that can drift. Count copies with status available. The demo prints six.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s018",
+      "layout": "bullets",
+      "kicker": "Library recap",
+      "title": "Library: in the interview, say this",
+      "bullets": [
+        "Book is the title, BookItem is the copy",
+        "LendingService: 5 books, 10 days, BookLending",
+        "Fines as Strategy, FIFO waitlist per title",
+        "Lock member then copy: last copy lent once"
+      ],
+      "steps": [
+        {
+          "say": "Here's your thirty-second answer. The key split is Book, the title, versus BookItem, a physical copy with a barcode and a rack. Members borrow copies, and search works on titles through a catalog with one index per search type.",
+          "reveal": 1
+        },
+        {
+          "say": "A LendingService enforces five books and ten days, and records BookLendings.",
+          "reveal": 2
+        },
+        {
+          "say": "It charges fines through a FinePolicy strategy, and hands returned copies to a first-in, first-out waitlist per title, with a notification.",
+          "reveal": 3
+        },
+        {
+          "say": "Checkout locks member, then copy, so the last copy can't be lent twice. One-line recap: title versus copy, limits on the member, state on the copy, history in BookLending.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s019",
+      "layout": "section",
+      "kicker": "Part 3 of 6 - Movies",
+      "title": "Movie Ticket Booking, like BookMyShow",
+      "steps": [
+        {
+          "say": "Next, the classic. A movie booking app like BookMyShow or Fandango. You pick a city, a movie, a show, seats on a seat map, pay, and get a ticket. It has places, time, and a genuine race: two people tapping the same seat.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 15 · 15.2 Design a Movie Ticket Booking System"
+    },
+    {
+      "id": "s020",
+      "layout": "bullets",
+      "kicker": "Concept 3 of 5 - Movies",
+      "title": "Clarify scope",
+      "bullets": [
+        "Many cities; cinemas have many halls",
+        "A hall runs one show at a time",
+        "Pick several seats from a seat map",
+        "Seats kept 5 minutes while paying",
+        "Card or cash, coupon, refund up to 2h before"
+      ],
+      "steps": [
+        {
+          "say": "Our running example: Bengaluru, a cinema called P-V-R Forum, and Audi one, a small hall with two rows of five seats. Row A is regular at two hundred rupees. Row B is premium at three fifty.",
+          "reveal": 1
+        },
+        {
+          "say": "A hall runs one show at a time. The demo schedules Inception at six p.m., then tries to add R-R-R at seven in the same hall. Refused: it overlaps.",
+          "reveal": 2
+        },
+        {
+          "say": "A customer picks several seats on a seat map.",
+          "reveal": 3
+        },
+        {
+          "say": "While they pay, seats are kept for five minutes. If payment doesn't finish, the seats go back.",
+          "reveal": 4
+        },
+        {
+          "say": "Payment is card or cash, with an optional discount coupon. Cancel up to two hours before the show for a full refund. And one hard rule: no two customers can ever reserve the same seat.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s021",
+      "layout": "twocol",
+      "kicker": "ShowSeat per show",
+      "title": "You book a ShowSeat, not a seat",
+      "left": {
+        "heading": "HallSeat (bolted down)",
+        "bullets": [
+          "Id and type: regular, premium",
+          "No booking state at all"
+        ]
+      },
+      "right": {
+        "heading": "ShowSeat (seat for one show)",
+        "bullets": [
+          "Price for this show",
+          "Booked flag: this is what is sold"
+        ]
+      },
+      "steps": [
+        {
+          "say": "This is where the design succeeds or fails. A HallSeat is the physical seat bolted to the floor. Seat B3, premium.",
+          "reveal": 1
+        },
+        {
+          "say": "It has no booking state. Why? Because seat B3 can be empty for the three p.m. show and sold for the nine p.m. one.",
+          "reveal": 2
+        },
+        {
+          "say": "So every Show owns one ShowSeat per hall seat. For Inception at six, the show creates ten ShowSeats, one for each physical seat.",
+          "reveal": 3
+        },
+        {
+          "say": "That's what gets booked. It also lets each show price seats differently: B3 costs three fifty at six, maybe more on a Saturday premiere. If you book HallSeat directly, your design breaks the moment there are two shows a day.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s022",
+      "layout": "diagram",
+      "title": "From city to show seat",
+      "mermaid": "flowchart LR\n  C[\"City\"] --> CI[\"Cinema\"]\n  CI --> H[\"CinemaHall\"]\n  H --> HS[\"HallSeat\"]\n  M[\"Movie\"] --> S[\"Show\"]\n  S --> H\n  S --> SS[\"ShowSeat\"]\n  SS --> HS",
+      "caption": "The venue is a hierarchy; the show adds time and owns its seats",
+      "steps": [
+        {
+          "say": "Here's the shape. City, cinema, hall, physical seat. A cinema points at its city, but owns its halls. A hall owns its seats.",
+          "reveal": 0
+        },
+        {
+          "say": "Then the time dimension. A movie has many shows. Each show runs in one hall, and owns a ShowSeat for each of that hall's seats, pointing back at the physical seat.",
+          "reveal": 0
+        },
+        {
+          "say": "Search by city is answered from shows, not stored on the movie. A movie is in Bengaluru only once a show is scheduled there.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s023",
+      "layout": "bullets",
+      "kicker": "SeatLockProvider",
+      "title": "SeatLockProvider: holds with a TTL",
+      "bullets": [
+        "lock: take all requested seats, expiry now + 5 min",
+        "holds: still mine, none expired?",
+        "commit: re-check and mark booked, atomically",
+        "unlock: give back on decline or give up",
+        "Swap in Redis or a DB table later"
+      ],
+      "steps": [
+        {
+          "say": "Holds live in their own component, the SeatLockProvider. T-T-L means time to live, an expiry. Lock takes the seats a customer wants, each stamped with an expiry five minutes from now.",
+          "reveal": 1
+        },
+        {
+          "say": "Holds asks: are these seats still mine, and has none expired? We call it just before charging.",
+          "reveal": 2
+        },
+        {
+          "say": "Commit re-checks the hold and marks the seats booked in one atomic step. More on why in a minute.",
+          "reveal": 3
+        },
+        {
+          "say": "Unlock gives the seats back if the card is declined or the user gives up.",
+          "reveal": 4
+        },
+        {
+          "say": "It's an interface, so the in-memory version can be swapped for Redis, a fast in-memory store with expiring keys, or a database table with an expires-at column. And expired holds are lazy: no background thread, an expired hold is simply ignored next time anyone looks.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s024",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "All-or-nothing lock, worked",
+      "table": {
+        "head": [
+          "Seat",
+          "State when Neha asks for B1 B2 B3"
+        ],
+        "rows": [
+          [
+            "B1",
+            "free"
+          ],
+          [
+            "B2",
+            "free"
+          ],
+          [
+            "B3",
+            "held by Ravi, expires in 2 min"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "All-or-nothing means a customer asking for seats together is never left with only some. Neha wants B1, B2 and B3 for her family. Pass one checks every seat first. B1 is free.",
+          "reveal": 1
+        },
+        {
+          "say": "B2 is free.",
+          "reveal": 2
+        },
+        {
+          "say": "B3 is held by Ravi, still valid. So lock returns false and takes nothing. She isn't stuck with two lonely seats. Only if every seat is free, or its hold has expired, does pass two take them all.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s025",
+      "layout": "number",
+      "kicker": "Monitor per show",
+      "title": "One monitor per show",
+      "big": "10 clicks on B3+B4 = 1 hold",
+      "caption": "Shows never block each other; inside a show, one decision at a time",
+      "steps": [
+        {
+          "say": "How is that check atomic? The lock provider keeps a lock table per show, and every operation for that show runs inside synchronized on that table. That's one monitor per show.",
+          "reveal": 0
+        },
+        {
+          "say": "In the demo, ten customers click B3 and B4 at the same instant. Holds granted: one. The other nine see not available. The seat map shows L L on B3 and B4, held.",
+          "reveal": 0
+        },
+        {
+          "say": "Why not one global lock? It's correct, but every booking in the country would wait in one line. Per show, Inception never blocks R-R-R.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s026",
+      "layout": "diagram",
+      "title": "Hold, pay, commit",
+      "mermaid": "flowchart LR\n  H[\"hold: lock seats, TTL 5 min\"] --> V[\"still held?\"]\n  V -->|\"no\"| A1[\"ABANDONED, no charge\"]\n  V -->|\"yes\"| P[\"charge card\"]\n  P -->|\"declined\"| A2[\"unlock seats, ABANDONED\"]\n  P -->|\"paid\"| C[\"commit: re-check + mark booked\"]\n  C -->|\"hold lost\"| R[\"refund, ABANDONED\"]\n  C -->|\"ok\"| OK[\"CONFIRMED\"]",
+      "caption": "Three steps, three failure exits",
+      "steps": [
+        {
+          "say": "This is the heart of the design. Step one, hold. Seats locked, booking is pending.",
+          "reveal": 0
+        },
+        {
+          "say": "Step two, pay. First ask: is my hold still valid? If not, mark the booking abandoned and charge nothing. Then charge the card through the payment gateway. Declined? Unlock the seats immediately and mark abandoned.",
+          "reveal": 0
+        },
+        {
+          "say": "Step three, commit. Re-check the hold and mark booked. If the hold was lost, refund. Otherwise, confirmed.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s027",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Payment took 6 minutes. The hold was 5. Now what?",
+      "bullets": [
+        "A) Mark booked anyway, they paid",
+        "B) Re-check inside the lock; if lost, refund",
+        "C) Cancel the other customer's booking"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. The bank was slow. The charge took six minutes, but the hold was five. Someone else may already own the seat. What should commit do?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s028",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Commit re-validation and compensation",
+      "table": {
+        "head": [
+          "Demo",
+          "What happened",
+          "Result"
+        ],
+        "rows": [
+          [
+            "5",
+            "Asha's hold expired before paying",
+            "Ravi re-held; Asha not charged"
+          ],
+          [
+            "6",
+            "Meena's hold expired during the charge",
+            "Kiran took A5; Meena refunded 200"
+          ],
+          [
+            "7",
+            "Neha's card declined",
+            "B1 released at once"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The answer is B. Commit verifies these seats are still held by me and not expired, and marks them booked, in one atomic step. A naive mark-booked would double-book. Let's see the three failure paths from the demo.",
+          "reveal": 0
+        },
+        {
+          "say": "Section five. Asha holds A1 and A2 and wanders off. After five minutes Ravi grabs them and pays. When Asha finally pays, the quick check fails: hold expired, nothing charged.",
+          "reveal": 1
+        },
+        {
+          "say": "Section six, the tricky one. Meena pays for A5. While the bank is thinking, her hold expires and Kiran takes A5. She was charged two hundred rupees, but commit fails. A card charge can't be rolled back, so we run a compensating action: a refund. That's the Saga idea: each step has an undo.",
+          "reveal": 2
+        },
+        {
+          "say": "Section seven. Neha's card is declined, so her seats are unlocked immediately, not after five minutes. Is B1 held by anyone now? False.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s029",
+      "layout": "bullets",
+      "kicker": "Strategy and Adapter",
+      "title": "Idempotent pay, pricing and payments",
+      "bullets": [
+        "Idempotent pay: paying twice charges once",
+        "Coupon on the booking: 700 minus 10% = 630",
+        "Refund rule is a Strategy: CutoffRefundPolicy",
+        "Pricing Strategy: base by seat type, surcharges",
+        "PaymentGateway adapter wraps Stripe or Razorpay"
+      ],
+      "steps": [
+        {
+          "say": "Idempotent means safe to repeat: two calls have the effect of one. A user double-clicks Pay. Paying a booking that's no longer pending just returns it unchanged. Real systems also send an idempotency key per request.",
+          "reveal": 1
+        },
+        {
+          "say": "Coupons. The winner of B3 and B4 pays three fifty plus three fifty, seven hundred rupees, with a ten percent coupon. Six hundred thirty. The coupon reduces the booking amount before any payment exists, so no payment type needs discount logic.",
+          "reveal": 2
+        },
+        {
+          "say": "The refund rule is a Strategy. CutoffRefundPolicy says: full refund up to two hours before the show, nothing after.",
+          "reveal": 3
+        },
+        {
+          "say": "Pricing too. Today it's a price map by seat type. The extension is a PricingStrategy: base price by seat type, plus a weekend or premiere surcharge.",
+          "reveal": 4
+        },
+        {
+          "say": "And the payment gateway is an adapter, a wrapper that turns a foreign interface into ours. Stripe or Razorpay sit behind our own charge and refund methods, and tests use a fake gateway.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s030",
+      "layout": "table",
+      "kicker": "Scale-out",
+      "title": "Across many servers",
+      "table": {
+        "head": [
+          "Option",
+          "How it guards a seat"
+        ],
+        "rows": [
+          [
+            "Conditional update",
+            "UPDATE ... WHERE status FREE or hold expired"
+          ],
+          [
+            "Pessimistic lock",
+            "SELECT ... FOR UPDATE in a transaction"
+          ],
+          [
+            "Optimistic lock",
+            "version column, retry on conflict"
+          ],
+          [
+            "Unique constraint",
+            "(show, seat) once in confirmed tickets"
+          ],
+          [
+            "Redis hold store",
+            "SET NX PX for holds; DB is the truth"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Real BookMyShow runs many servers, so a Java monitor protects only one of them. Option one, a conditional update: set seats held where they're free or their hold expired, then check the row count equals the number of seats.",
+          "reveal": 1
+        },
+        {
+          "say": "Option two, pessimistic locking: lock the seat rows first with select for update. Good for hot shows.",
+          "reveal": 2
+        },
+        {
+          "say": "Option three, optimistic locking: a version column, update only if the version still matches, retry otherwise. Good when conflicts are rare.",
+          "reveal": 3
+        },
+        {
+          "say": "Option four, a unique constraint on show and seat in the confirmed-tickets table, as a final safety net.",
+          "reveal": 4
+        },
+        {
+          "say": "Option five, Redis keys with a T-T-L for holds, with the database as the source of truth for confirmed seats. With two servers, correctness comes from the database.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s031",
+      "layout": "bullets",
+      "kicker": "Movies recap",
+      "title": "Movies: in the interview, say this",
+      "bullets": [
+        "City, Cinema, Hall, HallSeat; Show owns ShowSeats",
+        "Hold all-or-nothing with a 5-minute TTL",
+        "Commit re-checks atomically; lost hold, refund",
+        "Per-show monitor here; DB guarantees at scale"
+      ],
+      "steps": [
+        {
+          "say": "Thirty-second answer. The venue is city, cinema, hall, hall seat. A show owns a ShowSeat per hall seat, and that's what's booked.",
+          "reveal": 1
+        },
+        {
+          "say": "Booking is hold, pay, commit. A SeatLockProvider takes all requested seats atomically with a five-minute T-T-L.",
+          "reveal": 2
+        },
+        {
+          "say": "Payment goes through a gateway interface. Commit re-checks the hold and marks seats booked atomically, and if the hold was lost, we refund.",
+          "reveal": 3
+        },
+        {
+          "say": "One monitor per show guarantees no double booking in one process. Across servers, a conditional update or unique constraint is the real guarantee, with Redis for holds. Recap: book show seats, hold, pay, commit, refund if lost.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s032",
+      "layout": "section",
+      "kicker": "Part 4 of 6 - Concerts",
+      "title": "Concert Ticket Booking",
+      "steps": [
+        {
+          "say": "Concert ticketing, like Ticketmaster. The objects look just like movies, so we won't repeat them. The enemy is different. A movie show has a few hundred seats and demand spread over days. A stadium tour sells fifty thousand tickets in minutes to a million people who all arrive at ten o'clock sharp.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 15 · 15.3 Design a Concert Ticket Booking System"
+    },
+    {
+      "id": "s033",
+      "layout": "bullets",
+      "kicker": "Concept 4 of 5 - Concerts",
+      "title": "What extreme contention changes",
+      "bullets": [
+        "Fairness: who gets to try first?",
+        "Throughput: locks become the bottleneck",
+        "Abuse: scalpers and bots",
+        "Tiers: VIP and PREMIUM seats, GA is a count"
+      ],
+      "steps": [
+        {
+          "say": "Three things change. First, fairness. Who gets to even try? Our answer will be a virtual waiting room.",
+          "reveal": 1
+        },
+        {
+          "say": "Second, throughput, meaning requests finished per second. A lock that makes everyone wait in line becomes the bottleneck. So we go lock-free.",
+          "reveal": 2
+        },
+        {
+          "say": "Third, abuse by scalpers, who resell at a markup, and bots. So we cap tickets per user at four, and give fans who miss out a waitlist.",
+          "reveal": 3
+        },
+        {
+          "say": "Our running example has three tiers. VIP at five thousand and Premium at twenty-five hundred are numbered seats. General admission, or G-A, at eight hundred, is a standing area. It's just a count. Holds last ten minutes.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s034",
+      "layout": "bullets",
+      "kicker": "Lock-free CAS",
+      "title": "Lock-free CAS per seat",
+      "bullets": [
+        "Each seat: one AtomicReference to its state",
+        "Read the current state",
+        "Free, or Held but expired? Then claimable",
+        "compareAndSet(current, new Held): one winner",
+        "Lost the CAS? Re-read and decide again"
+      ],
+      "steps": [
+        {
+          "say": "Each numbered seat holds one atomic reference, a holder for one object that supports compare-and-set. Let's follow a fan claiming VIP-1.",
+          "reveal": 1
+        },
+        {
+          "say": "Step one: read the seat's current state.",
+          "reveal": 2
+        },
+        {
+          "say": "Step two: is it claimable? Free is claimable. Held is claimable only if that hold has expired. Anything else, give up and return false.",
+          "reveal": 3
+        },
+        {
+          "say": "Step three: compare-and-set. Replace the state with a new Held, but only if it's still exactly the object I read. In the demo, forty admitted fans do this on VIP-1 at once. Holds on VIP-1: one.",
+          "reveal": 4
+        },
+        {
+          "say": "Step four: if my C-A-S failed, someone changed the seat between my read and my swap. Re-read and decide again. Why lock-free? Buyers of different seats never wait for each other, losers learn instantly, and no thread ever sleeps holding a lock, so no deadlock.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s035",
+      "layout": "diagram",
+      "title": "SeatState: immutable and sealed",
+      "mermaid": "flowchart LR\n  F[\"Free\"] -->|\"CAS by one winner\"| H[\"Held: holdId, user, expiry\"]\n  H -->|\"confirm before expiry\"| S[\"Sold\"]\n  H -->|\"rollback, reaper, declined\"| F\n  H -->|\"CAS over an EXPIRED hold\"| H\n  S -->|\"order cancelled\"| F",
+      "caption": "Every arrow is a single compareAndSet",
+      "steps": [
+        {
+          "say": "A seat's whole state is one immutable value. Free, Held, or Sold. Each is a small record, and sealed means those three are the only kinds allowed, so the compiler checks every case.",
+          "reveal": 0
+        },
+        {
+          "say": "Why immutable? C-A-S compares references, which object it is, not what's inside. Each change creates a fresh object, so the state I read is exactly the state I replace. Separate mutable fields could be seen half-updated.",
+          "reveal": 0
+        },
+        {
+          "say": "It also kills the A-B-A problem: a value goes A to B and back to A, and a C-A-S wrongly succeeds. Here a returned Free is a brand-new object, so the stale C-A-S fails safely.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s036",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Multi-seat hold: sorted, with rollback",
+      "table": {
+        "head": [
+          "Step",
+          "Ben asks P-2, P-1",
+          "Cai asks P-1, P-3"
+        ],
+        "rows": [
+          [
+            "Sort",
+            "P-1, P-2",
+            "P-1, P-3"
+          ],
+          [
+            "First CAS",
+            "wins P-1",
+            "loses P-1"
+          ],
+          [
+            "Then",
+            "wins P-2, hold done",
+            "takes nothing, fails fast"
+          ],
+          [
+            "If later seat fails",
+            "release own P-1",
+            "nothing to undo"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "What about several seats? Each seat is its own C-A-S, so we need all-or-nothing by hand. Ben wants P-2 and P-1. Cai wants P-1 and P-3, at the same instant. Step one, sort. Both lists now start with P-1.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, both race for the first seat. Ben's C-A-S wins P-1. Cai's loses.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, Ben goes on to P-2 and his hold is complete. Cai fails fast, holding nothing. Sorting makes overlapping buyers collide on the same first seat.",
+          "reveal": 3
+        },
+        {
+          "say": "And step four, rollback. Had Ben then lost P-2, he releases only the seats he took, the ones still marked with his hold id. Every failure path also gives back his per-user limit.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s037",
+      "layout": "number",
+      "kicker": "GA counter",
+      "title": "General admission is a counter",
+      "big": "1,000 fans, 98 places: sold 98",
+      "caption": "CAS loop on an AtomicInteger: if cur < qty fail, else CAS(cur, cur - qty)",
+      "steps": [
+        {
+          "say": "Standing places are interchangeable. There's nothing to name, so forty thousand seat objects would be pointless. G-A is one atomic integer.",
+          "reveal": 0
+        },
+        {
+          "say": "The loop: read the count. If it's less than the quantity, fail. Otherwise C-A-S from current to current minus quantity. If someone beat you, read again.",
+          "reveal": 0
+        },
+        {
+          "say": "In the demo, a flash sale. One thousand virtual threads, ninety-eight places left. Sold: ninety-eight. Sold out: nine hundred two. Places left: zero. Never negative.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s038",
+      "layout": "bullets",
+      "kicker": "Waiting room and limits",
+      "title": "Fair access and anti-scalping",
+      "bullets": [
+        "Waiting room: a number in arrival order",
+        "Admit in batches, first in, first out",
+        "Join twice? You keep your number",
+        "Per-user limit: 4, checked atomically",
+        "compute on one key, not get then put"
+      ],
+      "steps": [
+        {
+          "say": "The virtual waiting room. Everyone gets a queue number in arrival order. Ana gets one, Ben two, Cai three, Dev four, Eli five.",
+          "reveal": 1
+        },
+        {
+          "say": "Every few seconds the system admits a batch, in order. Batch one: Ana, Ben, Cai. Eli is refused: still in the waiting room. Batches cap the load, and bots gain nothing by hammering buy.",
+          "reveal": 2
+        },
+        {
+          "say": "Ben joins again and keeps number two. Join is synchronized, so number order and line order can never disagree.",
+          "reveal": 3
+        },
+        {
+          "say": "Per-user limits. Ben holds P-1, P-2 and P-3, seventy-five hundred in total. He tries for two more. Refused: he'd exceed four.",
+          "reveal": 4
+        },
+        {
+          "say": "The limiter uses compute on a concurrent hash map, which runs check-and-update for one key atomically. With get, then put, two parallel requests from Ben could both see three and both slip under the limit.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s039",
+      "layout": "bullets",
+      "kicker": "Reaper and waitlist",
+      "title": "TTL reaper and the waitlist",
+      "bullets": [
+        "Seat holds expire lazily: CAS over them",
+        "GA holds need a reaper every few seconds",
+        "Hold claimed once: remove(id) or remove(id, h)",
+        "Released tickets go to the waitlist first",
+        "Lost hold after payment: release and refund"
+      ],
+      "steps": [
+        {
+          "say": "Holds expire after ten minutes. For numbered seats, that's lazy: an expired Held is claimable by the next C-A-S.",
+          "reveal": 1
+        },
+        {
+          "say": "General admission holds have no per-seat state, so a reaper sweeps them every few seconds. In the demo the reaper returns three holds: VIP-1, an unpaid waitlist offer, and Dev's seat P-6.",
+          "reveal": 2
+        },
+        {
+          "say": "What if purchase and reaper hit the same hold? Both start by removing it from the active map, atomically. Only one can get it, so inventory is never released twice. Dev's late purchase fails.",
+          "reveal": 3
+        },
+        {
+          "say": "Released tickets go to the tier's waitlist first. Cai found G-A sold out and joined the waitlist. A cancellation frees a ticket, and Cai is admitted directly, given a fresh hold, and notified. Unpaid, it passes to the next fan.",
+          "reveal": 4
+        },
+        {
+          "say": "And as with movies: if a seat can't be confirmed after payment, release it and refund.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s040",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Lock-free or locks: when does each win?",
+      "bullets": [
+        "A) Lock-free always wins",
+        "B) Lock-free for tiny swaps under heavy contention",
+        "C) Locks always win, they're simpler"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. An interviewer asks: why not one lock per concert, like movies? When does lock-free win, and when is a lock better?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s041",
+      "layout": "bullets",
+      "kicker": "Concerts recap",
+      "title": "Concerts: in the interview, say this",
+      "bullets": [
+        "B: lock-free when the change is one field swap",
+        "Locks when many things must change together",
+        "CAS per seat, CAS counter for GA",
+        "Waiting room, limits, TTL holds, waitlist"
+      ],
+      "steps": [
+        {
+          "say": "The answer is B. Lock-free wins when contention is high and the critical step is tiny, one field swap. At fifty thousand buyers, one monitor per concert puts everyone in one line.",
+          "reveal": 1
+        },
+        {
+          "say": "Locks are simpler when one operation must update many things together. And if the queue service fails? Fail closed: pause admissions, don't open the floodgates.",
+          "reveal": 2
+        },
+        {
+          "say": "Thirty-second answer. Seated tiers are an atomic reference per seat, claimed by compare-and-set. One winner, no locks. G-A is an atomic integer with a C-A-S loop, so it never goes negative.",
+          "reveal": 3
+        },
+        {
+          "say": "Everyone enters through a waiting room in arrival order, with an atomic per-user limit. Holds expire after ten minutes, a reaper returns them, and released tickets go to a waitlist first. At scale, the waiting room is a separate service handing out signed tokens.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s042",
+      "layout": "section",
+      "kicker": "Part 5 of 6 - Hotel",
+      "title": "Hotel Management System",
+      "steps": [
+        {
+          "say": "Last design: a hotel management system. It knows every room, takes bookings, checks guests in and out, issues key cards, logs housekeeping and room service, and produces the bill. The twist: a room isn't sold once. It's sold night by night.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 15 · 15.4 Design a Hotel Management System"
+    },
+    {
+      "id": "s043",
+      "layout": "bullets",
+      "kicker": "Concept 5 of 5 - Hotel",
+      "title": "Clarify scope",
+      "bullets": [
+        "Hotel has locations; each location has rooms",
+        "Room types: standard, deluxe, family suite",
+        "Search by room type and date range",
+        "Full refund if cancelled over 24h ahead",
+        "Extras on the bill; pay by card, check or cash"
+      ],
+      "steps": [
+        {
+          "say": "Our running example: Seaside Hotels. In Goa, rooms one-oh-one and one-oh-two are deluxe at a hundred twenty dollars a night, and two-oh-one is a family suite at two fifty. Kochi has deluxe room K-1.",
+          "reveal": 1
+        },
+        {
+          "say": "Room types: standard, deluxe, family suite, and business suite.",
+          "reveal": 2
+        },
+        {
+          "say": "Guests search by type and a date range. Search deluxe for July tenth to thirteenth: Goa gives one-oh-one and one-oh-two, Kochi gives K-1. Search lives on the location, because one room can't know which other rooms are free.",
+          "reveal": 3
+        },
+        {
+          "say": "Cancel more than twenty-four hours before check-in for a full refund. Otherwise, nothing.",
+          "reveal": 4
+        },
+        {
+          "say": "Room service, food and amenities go on the bill, paid by credit card, check or cash. One booking is one room.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s044",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Availability is a set of booked nights",
+      "table": {
+        "head": [
+          "Guest",
+          "Stay in room 102",
+          "Nights taken"
+        ],
+        "rows": [
+          [
+            "Asha",
+            "Jul 10 to Jul 13",
+            "10, 11, 12"
+          ],
+          [
+            "Ben",
+            "Jul 13 to Jul 15",
+            "13, 14"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The key line for the interview: a status field is not availability. Occupied describes right now. A guest asks about the future: can I have it from the tenth to the thirteenth? So each room stores the set of nights it has already sold.",
+          "reveal": 0
+        },
+        {
+          "say": "Nights are half-open: from check-in, up to but not including check-out. Asha books one-oh-two from July tenth to thirteenth. She takes the nights of the tenth, eleventh and twelfth.",
+          "reveal": 1
+        },
+        {
+          "say": "Ben books from the thirteenth to the fifteenth: nights thirteen and fourteen. No clash. Asha leaves the morning of the thirteenth and Ben arrives that afternoon. The changeover day is shared.",
+          "reveal": 2
+        }
+      ]
+    },
+    {
+      "id": "s045",
+      "layout": "bullets",
+      "kicker": "tryReserve",
+      "title": "tryReserve: synchronized on the room",
+      "bullets": [
+        "Check: is every night in the range free?",
+        "Act: add every night to the booked set",
+        "Both inside the room's monitor, atomically",
+        "Rooms never block each other",
+        "Search is advisory; booking is the real check"
+      ],
+      "steps": [
+        {
+          "say": "Booking calls try reserve on the room. Step one, check. Walk every night from check-in to the day before check-out. Any already booked? Return false.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, act. Add every one of those nights to the set.",
+          "reveal": 2
+        },
+        {
+          "say": "Both steps are synchronized on the room, so it's one atomic check-then-act. In the demo, six guests try to book room one-oh-one for overlapping dates at once. Successful bookings: one of six.",
+          "reveal": 3
+        },
+        {
+          "say": "The lock is per room, not hotel-wide, so a booking for one-oh-two never waits for one-oh-one.",
+          "reveal": 4
+        },
+        {
+          "say": "And search is advisory. It may show a room that's gone a millisecond later. Always handle no longer available when you book.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s046",
+      "layout": "bullets",
+      "kicker": "Undo on failure",
+      "title": "Releasing nights when the deposit fails",
+      "bullets": [
+        "1. tryReserve the nights",
+        "2. Take the deposit",
+        "3. Deposit failed? Release the nights at once",
+        "4. Otherwise store booking and notify"
+      ],
+      "steps": [
+        {
+          "say": "Booking is reserve then pay, so it needs an undo. Step one, reserve the nights on the room.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, take the deposit through the payment object.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, if the deposit fails, give the nights straight back. Otherwise you'd leave phantom reservations: nights nobody paid for that nobody else can book.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, store the booking and notify: R2 confirmed, room one-oh-two, July tenth to thirteenth. Same idea as the movie decline path.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s047",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Invoice = lines; total is computed",
+      "table": {
+        "head": [
+          "Line",
+          "Amount"
+        ],
+        "rows": [
+          [
+            "Room service: Extra towels",
+            "$5.00"
+          ],
+          [
+            "Kitchen: Fish curry dinner",
+            "$24.00"
+          ],
+          [
+            "Amenity: Spa access",
+            "$30.00"
+          ],
+          [
+            "3 nights x $120.00",
+            "$360.00"
+          ],
+          [
+            "Deposit paid",
+            "-$120.00"
+          ],
+          [
+            "TOTAL",
+            "$299.00"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Asha's invoice. It's a list of lines, and the total is always computed from them, never stored, so it can never disagree with the lines. Room service, extra towels, five dollars.",
+          "reveal": 1
+        },
+        {
+          "say": "Kitchen, a fish curry dinner, twenty-four.",
+          "reveal": 2
+        },
+        {
+          "say": "Amenity, spa access, thirty.",
+          "reveal": 3
+        },
+        {
+          "say": "At check-out, three nights at a hundred twenty: three sixty.",
+          "reveal": 4
+        },
+        {
+          "say": "Minus the deposit she already paid: minus one twenty.",
+          "reveal": 5
+        },
+        {
+          "say": "Total: two ninety-nine. Five plus twenty-four plus thirty plus three sixty minus one twenty. The demo prints exactly this.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s048",
+      "layout": "twocol",
+      "kicker": "Template Method",
+      "title": "Template Method for room charges",
+      "left": {
+        "heading": "RoomCharge parent (final)",
+        "bullets": [
+          "addInvoiceItem: describe, price, write line",
+          "Order fixed, cannot be overridden"
+        ]
+      },
+      "right": {
+        "heading": "Subclasses fill one step",
+        "bullets": [
+          "Amenity, RoomService, KitchenService",
+          "Only description() differs"
+        ]
+      },
+      "steps": [
+        {
+          "say": "How do those first three lines get there? Template Method. The parent class fixes the steps of an algorithm, and subclasses fill in one. RoomCharge has a final method, add invoice item: get the description, take the amount, write a line.",
+          "reveal": 1
+        },
+        {
+          "say": "Final means no subclass can change the order.",
+          "reveal": 2
+        },
+        {
+          "say": "There are three subclasses: Amenity, RoomService and KitchenService.",
+          "reveal": 3
+        },
+        {
+          "say": "Each fills in only the description. Amenity says: Amenity, spa access. Add a minibar charge next year? A new subclass, no edit to Invoice. Compare with Strategy, where the whole method is swapped, not just one step.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s049",
+      "layout": "table",
+      "kicker": "Payment subclasses",
+      "title": "Three payment subclasses, really different",
+      "table": {
+        "head": [
+          "Payment",
+          "initiateTransaction()"
+        ],
+        "rows": [
+          [
+            "Credit card",
+            "COMPLETED immediately"
+          ],
+          [
+            "Check",
+            "PENDING until it clears, days later"
+          ],
+          [
+            "Cash",
+            "DECLINED if tendered is short"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Payment is a sealed abstract class with three subclasses, and they behave genuinely differently. That's when subclasses earn their place. A credit card completes immediately.",
+          "reveal": 1
+        },
+        {
+          "say": "A check stays pending until the bank clears it, days later, but the guest may still leave.",
+          "reveal": 2
+        },
+        {
+          "say": "Cash is declined if the guest hands over too little. In the demo, Asha's cash is short: declined, guest still checked in. She retries by card and pays two ninety-nine. The nights and deposit lines are written only after payment succeeds, so the retry never duplicates a line.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s050",
+      "layout": "number",
+      "kicker": "Refund rule",
+      "title": "The refund rule, in one method",
+      "big": "24h 30m ahead = full refund",
+      "caption": "Compare Durations; toHours() would truncate to 24 and refuse",
+      "steps": [
+        {
+          "say": "The refund rule lives in exactly one method, refund due. Change the policy, edit one place. Need several policies? Promote it to a cancellation Strategy, like movies.",
+          "reveal": 0
+        },
+        {
+          "say": "Worked example. Asha cancels family suite two-oh-one eight days early: full refund, two fifty. Carl cancels nineteen hours before check-in: zero.",
+          "reveal": 0
+        },
+        {
+          "say": "Here's the trap. Someone cancels twenty-four hours and thirty minutes ahead. To-hours drops the minutes and says twenty-four, which isn't more than twenty-four, so they'd wrongly lose the refund. Compare the durations themselves, and they correctly get their money back.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s051",
+      "layout": "diagram",
+      "title": "A whole stay",
+      "mermaid": "flowchart LR\n  B[\"book: tryReserve nights\"] --> C[\"CONFIRMED\"]\n  C -->|\"check-in\"| I[\"CHECKED_IN, key issued\"]\n  I -->|\"addCharge\"| I\n  I -->|\"check-out, bill paid\"| O[\"CHECKED_OUT, keys dead\"]\n  C -->|\"cancel\"| X[\"CANCELLED, nights released\"]\n  O --> H[\"room BEING_SERVICED\"]",
+      "caption": "Booking transitions run under the booking's monitor; lock order booking, then room",
+      "steps": [
+        {
+          "say": "The whole stay. Book, and the nights are reserved: confirmed. Check-in issues a key card, and the room is occupied.",
+          "reveal": 0
+        },
+        {
+          "say": "During the stay a server adds charges, only while the guest is checked in. Check-out totals the bill, takes payment, deactivates the keys, and the room goes to housekeeping. When the housekeeping log is written, it's available again.",
+          "reveal": 0
+        },
+        {
+          "say": "Check-in, add charge, check-out and cancel all run under the booking's own lock, so no charge sneaks in after the bill is totalled. Lock order: booking, then room. A whole chain keeps per-type, per-night counts in one table with a conditional update.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s052",
+      "layout": "bullets",
+      "kicker": "Hotel recap",
+      "title": "Hotel: in the interview, say this",
+      "bullets": [
+        "A status field is not availability",
+        "Room keeps booked nights; tryReserve atomic",
+        "Invoice lines; RoomCharge Template Method",
+        "Card, check, cash; one 24-hour refund method"
+      ],
+      "steps": [
+        {
+          "say": "Thirty-second answer. Say early: a status field is not availability. A Hotel has locations, which own rooms and implement search by type and date range.",
+          "reveal": 1
+        },
+        {
+          "say": "Each room keeps the nights it's sold, and reserving is a synchronized check-then-act, so two guests can't get the same night.",
+          "reveal": 2
+        },
+        {
+          "say": "A booking owns an invoice made of lines. Room service, kitchen and amenities are RoomCharge subclasses using Template Method.",
+          "reveal": 3
+        },
+        {
+          "say": "Payment is card, check or cash. Cancellation refunds in full if more than twenty-four hours ahead, in one method. Check-out kills the keys and hands the room to housekeeping.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s053",
+      "layout": "section",
+      "kicker": "Part 6 of 6 - Pulling it together",
+      "title": "Chapter summary",
+      "steps": [
+        {
+          "say": "Let's line the four designs up side by side. You'll see the same five questions answered four different ways.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 15 · Chapter summary"
+    },
+    {
+      "id": "s054",
+      "layout": "table",
+      "kicker": "Chapter summary",
+      "title": "Four designs side by side",
+      "table": {
+        "head": [
+          "Problem",
+          "Unit",
+          "Made safe by",
+          "Failure"
+        ],
+        "rows": [
+          [
+            "Library",
+            "BookItem",
+            "lock member, then copy",
+            "fines recorded"
+          ],
+          [
+            "Movies",
+            "ShowSeat",
+            "per-show monitor, TTL",
+            "refund if lost"
+          ],
+          [
+            "Concerts",
+            "seat state, GA count",
+            "lock-free CAS, queue",
+            "refund if lost"
+          ],
+          [
+            "Hotel",
+            "room x night",
+            "synchronized tryReserve",
+            "release nights"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Library. The unit is the copy. Safety comes from locking member, then copy, in a fixed order. Cancellation means a return, and the copy goes to a first-in, first-out waitlist per title.",
+          "reveal": 1
+        },
+        {
+          "say": "Movies. The unit is a seat for one show. A per-show monitor and all-or-nothing holds with a T-T-L. Declined, release. Hold lost, refund. Refunds follow a cancellation policy.",
+          "reveal": 2
+        },
+        {
+          "say": "Concerts. The unit is a seat state or a G-A count. Lock-free C-A-S, a waiting room, per-user limits. Same compensation as movies, and released tickets go to the waitlist first.",
+          "reveal": 3
+        },
+        {
+          "say": "Hotel. The unit is a room for one night. A synchronized try reserve over a date range. A failed deposit releases the nights, and the refund is full if more than twenty-four hours ahead.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s055",
+      "layout": "bullets",
+      "kicker": "Remember",
+      "title": "Five sentences for any booking interview",
+      "bullets": [
+        "Name the real unit of inventory first",
+        "Every if-free-then-take is one atomic step",
+        "Temporary holds need an expiry",
+        "Money can't be rolled back: compensate",
+        "Many servers: the database is the guarantee"
+      ],
+      "steps": [
+        {
+          "say": "Memorize these five. One: name the real unit of inventory first. Copy, show seat, room-night, or G-A count.",
+          "reveal": 1
+        },
+        {
+          "say": "Two: every if free, then take must be one atomic step. A monitor, a C-A-S, or a conditional update.",
+          "reveal": 2
+        },
+        {
+          "say": "Three: temporary holds need an expiry, or abandoned checkouts block inventory forever.",
+          "reveal": 3
+        },
+        {
+          "say": "Four: money can't be rolled back. Failures after payment need a compensating refund.",
+          "reveal": 4
+        },
+        {
+          "say": "Five: in-process locks protect one server. With many servers, database constraints and conditional updates, or a T-T-L store like Redis, are the real guarantee.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s056",
+      "layout": "recap",
+      "title": "Recap",
+      "bullets": [
+        "Five themes: inventory, holds, races, money, cancel",
+        "Library: title vs copy, Strategy, Observer, Facade",
+        "Movies: ShowSeat, TTL hold, commit, compensate",
+        "Concerts: CAS, GA counter, queue, limits, reaper",
+        "Hotel: booked nights, Template Method, refund rule",
+        "Next: Episode 18, Car Rental to Meeting Scheduler"
+      ],
+      "steps": [
+        {
+          "say": "Let's recap. Booking problems are CRUD until two people want the same thing. Then it's inventory, holds, double-booking, payments and cancellations.",
+          "reveal": 1
+        },
+        {
+          "say": "Library: Book versus BookItem, a LendingService, fines as a Strategy, a Notifier, a facade, and lock member then copy.",
+          "reveal": 2
+        },
+        {
+          "say": "Movies: book ShowSeats. Hold all-or-nothing with a T-T-L, pay idempotently through an adapter, commit with re-validation, and refund if the hold was lost.",
+          "reveal": 3
+        },
+        {
+          "say": "Concerts: C-A-S per seat, sorted holds with rollback, a G-A counter, a waiting room, limits, a reaper and a waitlist.",
+          "reveal": 4
+        },
+        {
+          "say": "Hotel: booked nights, a synchronized try reserve, invoice lines with Template Method, three payment subclasses, and one refund rule.",
+          "reveal": 5
+        },
+        {
+          "say": "Run the four demos from the chapter fifteen PDF. Next up, episode eighteen: Booking, Car Rental to Meeting Scheduler. See you there.",
+          "reveal": 6
+        }
+      ]
+    }
+  ]
+}

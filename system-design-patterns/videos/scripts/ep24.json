@@ -1,0 +1,1988 @@
+{
+  "series": "System Design Workshop",
+  "episode": 24,
+  "title": "Case Studies: Money and Reservations",
+  "subtitle": "Payment rails, hotel booking, digital wallet, stock exchange, ticketing",
+  "scenes": [
+    {
+      "layout": "title",
+      "title": "Case Studies: Money and Reservations",
+      "subtitle": "Payment rails, hotel booking, digital wallet, stock exchange, ticketing",
+      "steps": [
+        {
+          "say": "Welcome to episode twenty-four of the System Design Workshop: Case Studies, Money and Reservations.",
+          "reveal": 0
+        },
+        {
+          "say": "These are the systems where a wrong answer costs real money. A hotel booking site, a digital wallet, a stock exchange, and a concert ticketing site on a flash-sale morning. First, a short primer on how money actually moves between banks.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll be able to stop two people booking the last room, move money across shards without losing a cent, explain why an exchange runs on one thread, and keep three million fans from crushing a ticket store.",
+          "reveal": 0
+        },
+        {
+          "say": "Keep the module seventeen notes PDF open beside the video. When I say pause and think, pause, and answer before I do.",
+          "reveal": 0
+        }
+      ],
+      "id": "s001"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Before we start",
+      "title": "Five terms we'll use all episode",
+      "bullets": [
+        "Ledger: append-only record of every movement",
+        "Clearing: agreeing who owes whom",
+        "Settlement: the money actually moves",
+        "Idempotency key: one ID per operation, reused on retry",
+        "Reconciliation: compare two records, chase every gap"
+      ],
+      "steps": [
+        {
+          "say": "Five terms first. A ledger is an append-only record of every movement of value. Balances are computed from it, never edited in place.",
+          "reveal": 1
+        },
+        {
+          "say": "Clearing means agreeing who owes whom, and how much.",
+          "reveal": 2
+        },
+        {
+          "say": "Settlement is the moment the money really moves. Clearing and settlement are often hours or days apart.",
+          "reveal": 3
+        },
+        {
+          "say": "An idempotency key is a unique ID the caller attaches to one operation and reuses on every retry, so it takes effect once however many times it arrives.",
+          "reveal": 4
+        },
+        {
+          "say": "And reconciliation means comparing two independently produced records, like your ledger and the bank statement, and investigating every difference.",
+          "reveal": 5
+        }
+      ],
+      "id": "s002"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 1 of 21",
+      "title": "How money moves",
+      "steps": [
+        {
+          "say": "Part one: the primer. To a customer a payment is one event: I paid. Underneath is a chain of separate companies, each with its own ledger, connected by payment rails.",
+          "reveal": 0
+        },
+        {
+          "say": "Think of friends on a weekend trip keeping an I-O-U notebook, then settling up by bank transfer on Monday. The notebook is clearing. Monday is settlement.",
+          "reveal": 0
+        }
+      ],
+      "id": "s003",
+      "caption": "Book: Module 17 · How Money Moves (primer)"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 1 of 21",
+      "title": "Every rail answers four questions",
+      "bullets": [
+        "How fast is the confirmation?",
+        "When does money really move?",
+        "Can it be pulled back?",
+        "Who is liable when it goes wrong?"
+      ],
+      "steps": [
+        {
+          "say": "A rail is a network plus a rulebook for moving money between banks. Cards, batch bank transfers, wires, and real-time payments. One: how fast is the confirmation? A card says yes in about two seconds.",
+          "reveal": 1
+        },
+        {
+          "say": "Two: when does money really move? For that same card, a day or two later.",
+          "reveal": 2
+        },
+        {
+          "say": "Three: can it be pulled back? A card payment can be charged back months later. A wire can't.",
+          "reveal": 3
+        },
+        {
+          "say": "Four: who is liable? Get these wrong and you make the three classic mistakes: treating an authorization as money received, treating success as final, and assuming an outside call happens exactly once.",
+          "reveal": 4
+        }
+      ],
+      "id": "s004"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 2 of 21",
+      "title": "Card payments: the four-party model",
+      "steps": [
+        {
+          "say": "Concept two. When you tap your card for a fifty dollar pair of shoes, who's involved?",
+          "reveal": 0
+        },
+        {
+          "say": "Five parties: four hold accounts, with the card network in the middle.",
+          "reveal": 0
+        }
+      ],
+      "id": "s005",
+      "caption": "Book: Module 17 · Card payments, four-party model"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 2 of 21",
+      "title": "Who's in a card payment",
+      "bullets": [
+        "Cardholder: you, paying",
+        "Merchant: the shoe shop",
+        "Acquirer: the merchant's bank, often via a P-S-P",
+        "Card network: Visa or Mastercard, sets the rules",
+        "Issuer: your bank, which gave you the card"
+      ],
+      "steps": [
+        {
+          "say": "Let's follow the shoes. The cardholder is you, paying fifty dollars.",
+          "reveal": 1
+        },
+        {
+          "say": "The merchant is the shoe shop.",
+          "reveal": 2
+        },
+        {
+          "say": "The acquirer is the merchant's bank. Shops usually reach it through a payment service provider, a P-S-P, such as Stripe or Adyen.",
+          "reveal": 3
+        },
+        {
+          "say": "The card network, Visa or Mastercard, connects thousands of acquirers to thousands of issuers and sets the rules.",
+          "reveal": 4
+        },
+        {
+          "say": "And the issuer is your bank. It gave you the card and owns the account the money comes from.",
+          "reveal": 5
+        }
+      ],
+      "id": "s006"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 2 of 21",
+      "title": "A card payment, phase by phase",
+      "caption": "Authorize in seconds, clear in batches, settle net a day or two later.",
+      "steps": [
+        {
+          "say": "Phase one, authorization, in real time, about one to two seconds. The request travels shop, acquirer, network, issuer. Your bank checks the balance and fraud signals, and places a hold of fifty dollars. Money is reserved, not moved.",
+          "reveal": 1
+        },
+        {
+          "say": "Phase two, capture and clearing. When the shop ships, it captures, meaning it confirms the final amount. Captures go to the network in daily batches, and the network works out who owes whom.",
+          "reveal": 2
+        },
+        {
+          "say": "Phase three, settlement, typically one to two business days later. Banks pay one net amount per bank per day, not one transfer per purchase. The shop's payout comes later still.",
+          "reveal": 3
+        },
+        {
+          "say": "And phase four lurks: disputes. You can charge back the shoes for weeks or months. So even a settled card payment isn't final.",
+          "reveal": 4
+        }
+      ],
+      "id": "s007",
+      "table": {
+        "head": [
+          "Phase",
+          "When",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "1. Authorize",
+            "1-2 seconds",
+            "Issuer holds 50, nothing moves"
+          ],
+          [
+            "2. Capture and clear",
+            "Daily batch",
+            "Network works out who owes whom"
+          ],
+          [
+            "3. Settle",
+            "1-2 business days",
+            "Banks pay one net amount each"
+          ],
+          [
+            "4. Dispute",
+            "Weeks to months",
+            "Chargeback can pull it back"
+          ]
+        ]
+      }
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: the fifty dollar shoes",
+      "table": {
+        "head": [
+          "When",
+          "State",
+          "Money moved?"
+        ],
+        "rows": [
+          [
+            "Monday 10:00",
+            "Authorized, hold 50",
+            "No, reserved"
+          ],
+          [
+            "Tuesday",
+            "Captured 50 at shipping",
+            "No, cleared in batch"
+          ],
+          [
+            "Thursday",
+            "Settled to acquirer",
+            "Yes, net between banks"
+          ],
+          [
+            "Friday",
+            "Paid out to shop",
+            "Yes, minus fees"
+          ],
+          [
+            "Six weeks later",
+            "Disputed",
+            "Pulled back by issuer"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's put dates on it. Monday at ten, authorized. Fifty dollars held on your account. Nothing has moved.",
+          "reveal": 1
+        },
+        {
+          "say": "Tuesday, the shoes ship and the shop captures fifty. It's in tonight's clearing batch.",
+          "reveal": 2
+        },
+        {
+          "say": "Thursday, settlement. The banks move net amounts.",
+          "reveal": 3
+        },
+        {
+          "say": "Friday, the shop gets its payout, minus the merchant fee.",
+          "reveal": 4
+        },
+        {
+          "say": "And six weeks later you dispute it. So your system needs separate states: authorized, captured, settled, and disputed. One more rule: never store raw card numbers. Store a P-S-P token, or every service falls under the card security audit, P-C-I D-S-S.",
+          "reveal": 5
+        }
+      ],
+      "id": "s008"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 3 of 21",
+      "title": "Bank transfers",
+      "steps": [
+        {
+          "say": "Concept three: moving money bank to bank, without a card. There are four families, and each one changes what your code must handle.",
+          "reveal": 0
+        }
+      ],
+      "id": "s009",
+      "caption": "Book: Module 17 · Bank transfers"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 3 of 21",
+      "title": "Four ways banks move money",
+      "bullets": [
+        "A-C-H: cheap batches, push or pull, returns later",
+        "Wires (R-T-G-S): each payment final, at once",
+        "Real-time rails: instant, 24/7, push-only",
+        "Cross-border: SWIFT messages, correspondent banks"
+      ],
+      "steps": [
+        {
+          "say": "One, A-C-H, the US Automated Clearing House. Banks exchange files of instructions a few times a day. Cheap, for payroll and bills, push or pull. The catch is returns: a pull can bounce days later.",
+          "reveal": 1
+        },
+        {
+          "say": "Two, wires, which run on real-time gross settlement, R-T-G-S, like Fedwire. Each payment settles alone, immediately, in central bank money. Final and irrevocable. No returns to model, but no undo either. A mistaken wire is recovered only by asking nicely.",
+          "reveal": 2
+        },
+        {
+          "say": "Three, real-time rails: FedNow, U-P-I in India, Pix in Brazil, UK Faster Payments. Instant, twenty-four seven, push-only, final. With no chargebacks, fraud moves from stolen cards to people tricked into sending, so risk checks must happen before sending.",
+          "reveal": 3
+        },
+        {
+          "say": "Four, cross-border. SWIFT is a messaging network, not a settlement system. Money hops through correspondent banks that hold accounts for each other, each taking a fee. Slow and costly.",
+          "reveal": 4
+        }
+      ],
+      "id": "s010"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: same 500 dollars, four rails",
+      "table": {
+        "head": [
+          "Rail",
+          "Payee sees it",
+          "Can it reverse?"
+        ],
+        "rows": [
+          [
+            "Card",
+            "Auth now, funds in 1-2 days",
+            "Yes, chargeback for months"
+          ],
+          [
+            "ACH pull",
+            "1-2 days",
+            "Yes, returns"
+          ],
+          [
+            "Wire",
+            "Minutes",
+            "No, only by asking"
+          ],
+          [
+            "FedNow / Pix / UPI",
+            "Seconds",
+            "No, push-only"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Imagine a user paying five hundred dollars for a laptop. By card, the shop gets a yes now and money in a day or two, but it can be charged back for months. So keep evidence.",
+          "reveal": 1
+        },
+        {
+          "say": "By A-C-H pull, it takes a day or two and can come back as a return. Don't ship the laptop when the transfer is merely initiated.",
+          "reveal": 2
+        },
+        {
+          "say": "By wire, the money arrives in minutes and it's final. So verify the payee very carefully before sending.",
+          "reveal": 3
+        },
+        {
+          "say": "By a real-time rail, seconds and final. Fraud checks must come first. In the interview, say this: paid means different things on different rails, so I model each as a state machine.",
+          "reveal": 4
+        }
+      ],
+      "id": "s011"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 4 of 21",
+      "title": "Clearing, settlement and reconciliation",
+      "steps": [
+        {
+          "say": "Concept four. Every party keeps its own ledger. So how do you know they agree? And what happens between clearing and settlement?",
+          "reveal": 0
+        }
+      ],
+      "id": "s012",
+      "caption": "Book: Module 17 · Clearing, settlement, reconciliation"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 4 of 21",
+      "title": "How the books are kept honest",
+      "bullets": [
+        "Gross settlement: each payment alone, needs cash",
+        "Net settlement: once a day, banks exposed until then",
+        "Reconciliation: daily three-way match",
+        "Idempotency across companies: key stored with state",
+        "Hotspot accounts: split, batch, or own shard"
+      ],
+      "steps": [
+        {
+          "say": "Gross settlement pays each payment on its own. It needs a lot of cash on hand, but builds no risk.",
+          "reveal": 1
+        },
+        {
+          "say": "Net settlement pays once a day on the difference. Far less cash, but banks are exposed to each other until then. In nineteen seventy-four, Bankhaus Herstatt failed after receiving one side of its currency trades but before paying the other. That's settlement risk.",
+          "reveal": 2
+        },
+        {
+          "say": "Reconciliation. A payments company runs a daily match between three things: its own ledger, the provider's A-P-I responses and webhooks, and the provider's settlement report. Every mismatch becomes a ticket.",
+          "reveal": 3
+        },
+        {
+          "say": "Idempotency across companies. No rail gives exactly-once delivery. You build an exactly-once effect: send every outbound instruction with an idempotency key, store that key in the same database transaction as your state change, and dedupe every incoming webhook by the provider's event ID.",
+          "reveal": 4
+        },
+        {
+          "say": "And hotspot accounts, like your fee account that every transaction touches. One row updated thousands of times a second becomes a lock queue. Split it into sub-accounts, batch credits, or give it its own shard. We'll use this in the wallet.",
+          "reveal": 5
+        }
+      ],
+      "id": "s013"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: one day's reconciliation",
+      "table": {
+        "head": [
+          "Our ledger",
+          "Provider report",
+          "Verdict"
+        ],
+        "rows": [
+          [
+            "Order 101: 50.00 captured",
+            "50.00 settled",
+            "Match"
+          ],
+          [
+            "Order 102: 80.00 captured",
+            "Missing",
+            "Not settled yet, chase it"
+          ],
+          [
+            "Order 103: 30.00 captured",
+            "30.00 settled twice",
+            "Duplicate, refund"
+          ],
+          [
+            "Fee: 1.45",
+            "Fee: 1.60",
+            "Fee differs, ticket"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Imagine yesterday's shop sales. Order one-oh-one: we recorded fifty captured, the report says fifty settled. Match.",
+          "reveal": 1
+        },
+        {
+          "say": "Order one-oh-two: we recorded eighty, but the report has nothing. Chase it.",
+          "reveal": 2
+        },
+        {
+          "say": "Order one-oh-three settled twice. A retry with a new key turned one payment into two. Refund one, and fix the retry code.",
+          "reveal": 3
+        },
+        {
+          "say": "And fees differ by fifteen cents. Ticket. That's why you can't just trust the webhook: webhooks are at-least-once and may never arrive. Also, never use floating point for money. Use integer cents plus a currency code.",
+          "reveal": 4
+        }
+      ],
+      "id": "s014"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "ACH top-up, then instant withdrawal. What's the risk?",
+      "bullets": [
+        "A. None, the transfer was initiated",
+        "B. The pull can be returned days later",
+        "C. ACH is final, like a wire"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. A user tops up their wallet by A-C-H pull, and one minute later withdraws it all to a card. What's the risk? Answer on the next slide.",
+          "reveal": 0
+        }
+      ],
+      "id": "s015"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 5 of 21",
+      "title": "Design a hotel reservation system",
+      "steps": [
+        {
+          "say": "Answer: B. The pull can bounce days later for insufficient funds, and the money's already gone. Hold the funds until the return window passes, or limit instant availability by risk.",
+          "reveal": 0
+        },
+        {
+          "say": "Now, concept five, our first full design. Guests search by city and dates, reserve a room type, pay, and maybe cancel. What's hard isn't traffic. It's a small, hot counter: how many deluxe rooms are left on June tenth?",
+          "reveal": 0
+        }
+      ],
+      "id": "s016",
+      "caption": "Book: Module 17 · Design a Hotel Reservation System"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 5 of 21",
+      "title": "Hotel: requirements and numbers",
+      "bullets": [
+        "5,000 hotels x 200 rooms = 1 million rooms",
+        "233,000 bookings a day, about 30 a second at peak",
+        "Search 100x bookings: about 3,000 queries a second",
+        "Inventory: 36.5 million night rows, about 2 GB",
+        "Must: no double booking beyond our overbook limit"
+      ],
+      "steps": [
+        {
+          "say": "Let's size it. Five thousand hotels times two hundred rooms is one million rooms. At seventy percent occupancy, seven hundred thousand occupied room-nights each night.",
+          "reveal": 1
+        },
+        {
+          "say": "Average stay three nights, so about two hundred thirty-three thousand new bookings a day. That's under three a second, or about thirty a second with a ten times peak.",
+          "reveal": 2
+        },
+        {
+          "say": "People look a hundred times for every booking, so search peaks around three thousand queries a second. That wants a cache.",
+          "reveal": 3
+        },
+        {
+          "say": "Inventory is one row per hotel, room type and night: thirty-six and a half million rows, about two gigabytes. It fits in memory on one database server.",
+          "reveal": 4
+        },
+        {
+          "say": "So this design is not about throughput. Thirty writes a second is trivial. It's about correctness under concurrency, and no double booking beyond the overbooking limit we choose.",
+          "reveal": 5
+        }
+      ],
+      "id": "s017"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 5 of 21",
+      "title": "Hotel architecture",
+      "mermaid": "flowchart LR\n  G[\"Guest app\"] --> S[\"Search service\"]\n  G --> R[\"Reservation service\"]\n  S --> C[\"Availability cache\"]\n  R --> DB[(\"Inventory DB, shard by hotel_id\")]\n  R --> P[\"Payment service\"]\n  DB --> OB[\"Outbox to event stream\"]\n  OB --> C\n  SW[\"Hold sweeper\"] --> DB",
+      "caption": "Search reads a cache. Booking writes one shard, one short transaction.",
+      "steps": [
+        {
+          "say": "Here's the shape. Search reads a cache and search index, refreshed from an event stream. Seconds of staleness are fine.",
+          "reveal": 0
+        },
+        {
+          "say": "The reservation service is the only writer. Every booking is one short transaction on the primary of the hotel's shard. A stay never crosses shards.",
+          "reveal": 0
+        },
+        {
+          "say": "The booking transaction also writes an outbox row, so the cache, notifications and partner sites can't miss a committed booking. And a hold sweeper releases holds that expired unpaid. We'll meet it soon.",
+          "reveal": 0
+        }
+      ],
+      "id": "s018"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 6 of 21",
+      "title": "Deep dive: the last room",
+      "steps": [
+        {
+          "say": "Concept six. Twenty guests click book at the same moment. There are three rooms left, on each of three nights. What happens?",
+          "reveal": 0
+        }
+      ],
+      "id": "s019",
+      "caption": "Book: Module 17 · Hotel · Deep dive 1, the last room"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: 20 guests, 3 rooms left",
+      "table": {
+        "head": [
+          "Approach",
+          "Bookings accepted",
+          "Reserved per night"
+        ],
+        "rows": [
+          [
+            "Naive read, check, then write",
+            "20",
+            "38, but should be 40"
+          ],
+          [
+            "Conditional UPDATE",
+            "3",
+            "40, correct"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Naive code reads reserved equals thirty-seven, checks there's room in the app, and writes thirty-eight. All twenty read thirty-seven first, then all write thirty-eight. Twenty confirmations for three rooms, and the counter doesn't even show it. That's the lost update anomaly.",
+          "reveal": 1
+        },
+        {
+          "say": "With a conditional update, exactly three bookings succeed and the counter reads forty. The check has to be part of the write.",
+          "reveal": 2
+        }
+      ],
+      "id": "s020"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 6 of 21",
+      "title": "Three correct fixes, simplest first",
+      "bullets": [
+        "1. Conditional UPDATE: check and write in one statement",
+        "2. Pessimistic lock: SELECT FOR UPDATE, then decide",
+        "3. Optimistic lock: version column, retry on conflict",
+        "Lock nights in date order",
+        "Keep the transaction short: no payment inside"
+      ],
+      "steps": [
+        {
+          "say": "Fix one, the default: an atomic conditional update. Add one to reserved, only where it stays within the limit. For a three-night stay, one per night, in one transaction. If any night updates zero rows, roll back. The row lock lines up the racers, and the losers just update nothing.",
+          "reveal": 1
+        },
+        {
+          "say": "Fix two, a pessimistic lock: select the night rows for update, check in code, then write. Use it when the rule is too complex for a where clause.",
+          "reveal": 2
+        },
+        {
+          "say": "Fix three, an optimistic lock: read a version number, and update only if it hasn't changed. Fine when conflicts are rare. Terrible for the last room on New Year's Eve, where most attempts retry.",
+          "reveal": 3
+        },
+        {
+          "say": "Lock nights in ascending date order in every transaction. Otherwise two multi-night bookings can each hold one night and wait for the other: a deadlock.",
+          "reveal": 4
+        },
+        {
+          "say": "And keep the transaction milliseconds long. Never call the payment provider inside it. A double-click is handled by a unique idempotency key on the reservation.",
+          "reveal": 5
+        }
+      ],
+      "id": "s021"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 7 of 21",
+      "title": "Overbooking on purpose",
+      "steps": [
+        {
+          "say": "Concept seven. Here's a twist. Hotels sell more rooms than they have. On purpose.",
+          "reveal": 0
+        }
+      ],
+      "id": "s022",
+      "caption": "Book: Module 17 · Hotel · Deep dive 2, overbooking"
+    },
+    {
+      "layout": "number",
+      "kicker": "Concept 7 of 21",
+      "title": "Overbook while P(run out) < price/(price + walk)",
+      "big": "150 / (150 + 400) = 0.27",
+      "caption": "Accept 215 bookings for 200 rooms; walk fewer than one guest a night",
+      "steps": [
+        {
+          "say": "Some confirmed guests never show. A two-hundred-room hotel with eight percent no-shows leaves about sixteen rooms empty every night. So hotels accept extra bookings.",
+          "reveal": 0
+        },
+        {
+          "say": "The risk is the opposite: more guests than rooms, and the hotel must walk someone, paying for a room elsewhere plus compensation. The rule: keep accepting while the chance of running out stays below price divided by price plus walk cost.",
+          "reveal": 0
+        },
+        {
+          "say": "Worked example: room one hundred fifty dollars, walk cost four hundred. Threshold about zero point two seven. With a ninety-two percent show rate, accept up to two hundred fifteen bookings, and expect to walk fewer than one guest a night.",
+          "reveal": 0
+        },
+        {
+          "say": "If walking costs twelve hundred, accept only two hundred twelve. If ninety-seven percent show, only two hundred five. For the system, overbooking is just a number per room type and night that the same conditional update reads. Overbooking is a number, not a bug.",
+          "reveal": 0
+        }
+      ],
+      "id": "s023"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 8 of 21",
+      "title": "Holds, payment and cancellation",
+      "steps": [
+        {
+          "say": "Concept eight. Card authorization takes one to three seconds, and the confirm in your bank app step can take a minute. We can't hold a row lock that long. So booking becomes a small saga: a chain of short local transactions, with an undo for each.",
+          "reveal": 0
+        }
+      ],
+      "id": "s024",
+      "caption": "Book: Module 17 · Hotel · Deep dive 3, holds and payment"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 8 of 21",
+      "title": "The booking saga, step by step",
+      "bullets": [
+        "1. Hold: take the nights, status HELD, expires in 10 min",
+        "2. Pay: payment call, reservation ID as idempotency key",
+        "3. Confirm: set CONFIRMED only where status is HELD",
+        "4. Compensate: on failure or expiry, give nights back",
+        "Sweeper: every minute, SKIP LOCKED"
+      ],
+      "steps": [
+        {
+          "say": "Step one, hold. Maria books three nights in Lisbon at ten o'clock. One transaction takes the three nights and inserts her reservation as held, expiring at ten past ten.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, pay. Call the payment service outside any transaction, with the reservation ID as the idempotency key. If her phone retries, she's charged once.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, confirm. Set status to confirmed, but only where status is still held. A duplicate confirm then changes nothing.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, compensate. If her card is declined, or the hold expires, mark it expired and give the three nights back, in one transaction.",
+          "reveal": 4
+        },
+        {
+          "say": "The hold sweeper runs every minute, picking expired holds with select for update skip locked, so several sweepers don't fight over the same rows.",
+          "reveal": 5
+        }
+      ],
+      "id": "s025"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: the late payment race",
+      "table": {
+        "head": [
+          "Time",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "10:10:00",
+            "Sweeper expires Maria's hold, nights released"
+          ],
+          [
+            "10:10:01",
+            "Payment succeeds"
+          ],
+          [
+            "10:10:01",
+            "Confirm sees EXPIRED, tries to re-take nights"
+          ],
+          [
+            "Room gone?",
+            "Refund automatically and apologize"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's a race you must design for. At ten ten exactly, the sweeper expires Maria's hold.",
+          "reveal": 1
+        },
+        {
+          "say": "One second later her payment succeeds.",
+          "reveal": 2
+        },
+        {
+          "say": "Confirm finds the reservation expired, so it tries to re-take the nights with the same conditional update.",
+          "reveal": 3
+        },
+        {
+          "say": "If the room's gone, refund automatically. A designed path, not an accident. In the interview, say this: the database is the lock, and I never hold it across a payment call.",
+          "reveal": 4
+        }
+      ],
+      "id": "s026"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Why not put a Redis lock around the room type?",
+      "bullets": [
+        "A. Redis is faster, so use it",
+        "B. The row lock already does it, tied to the data",
+        "C. Redis locks never expire"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. An interviewer asks: why not add a distributed Redis lock around the room type? Answer next.",
+          "reveal": 0
+        }
+      ],
+      "id": "s027"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 9 of 21",
+      "title": "Design a digital wallet",
+      "steps": [
+        {
+          "say": "Answer: B. The row lock already gives mutual exclusion, and it's tied to the transaction writing the data. A separate lock can expire mid-write, and adds a dependency.",
+          "reveal": 0
+        },
+        {
+          "say": "Concept nine. A wallet: top up, send money instantly, withdraw. Peak is one hundred thousand transfers a second on salary day. Money must never be created or destroyed.",
+          "reveal": 0
+        }
+      ],
+      "id": "s028",
+      "caption": "Book: Module 17 · Design a Digital Wallet"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 9 of 21",
+      "title": "Wallet: numbers and the double-entry ledger",
+      "bullets": [
+        "100,000 transfers/s x 5 row writes = 500,000 writes/s",
+        "About 5,000 transfers/s per shard: 20 shards, provision 40+",
+        "Journal entry: one business event",
+        "Postings: the legs, always summing to zero",
+        "Balance: a rebuildable projection of postings"
+      ],
+      "steps": [
+        {
+          "say": "Each transfer writes one journal entry, two postings and an idempotency row, and changes two balances. About five row writes, so half a million writes a second at peak.",
+          "reveal": 1
+        },
+        {
+          "say": "A tuned database shard might do five thousand transfers a second. So twenty shards at peak, and we'd provision forty or more for headroom. We must shard, which means most transfers touch two shards. That's the heart of this design.",
+          "reveal": 2
+        },
+        {
+          "say": "The data model is double-entry. A journal entry is one business event, like Alice paid Bob twenty-five dollars with a twenty-five cent fee.",
+          "reveal": 3
+        },
+        {
+          "say": "Its postings are the legs, and they always sum to zero. Money can only move, never appear.",
+          "reveal": 4
+        },
+        {
+          "say": "The balance column is a projection: a cache of the sum of postings that you can always rebuild.",
+          "reveal": 5
+        }
+      ],
+      "id": "s029"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: Alice pays Bob 25.00, fee 0.25",
+      "table": {
+        "head": [
+          "Account",
+          "Leg",
+          "Cents"
+        ],
+        "rows": [
+          [
+            "Alice",
+            "Debit",
+            "2,525"
+          ],
+          [
+            "Bob",
+            "Credit",
+            "2,500"
+          ],
+          [
+            "Fees",
+            "Credit",
+            "25"
+          ],
+          [
+            "Sum of legs",
+            "",
+            "0"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here it is in cents. Alice is debited two thousand five hundred twenty-five. Why a debit? To the wallet company, Alice's balance is money it owes her. Paying out reduces what it owes, which in accounting is a debit.",
+          "reveal": 1
+        },
+        {
+          "say": "Bob is credited two thousand five hundred.",
+          "reveal": 2
+        },
+        {
+          "say": "The fee account is credited twenty-five.",
+          "reveal": 3
+        },
+        {
+          "say": "Signed, the three legs sum to zero. And the trial balance, the sum of every account, stays zero after every entry.",
+          "reveal": 4
+        }
+      ],
+      "id": "s030"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 10 of 21",
+      "title": "Transfers across shards",
+      "steps": [
+        {
+          "say": "Concept ten. Alice lives on shard A. Bob lives on shard B. How do we move twenty-five dollars between two machines?",
+          "reveal": 0
+        }
+      ],
+      "id": "s031",
+      "caption": "Book: Module 17 · Wallet · Transfers across shards"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 10 of 21",
+      "title": "Four options for a cross-shard transfer",
+      "bullets": [
+        "1. Two-phase commit: correct, but blocks",
+        "2. Same shard for both: impossible, anyone pays anyone",
+        "3. Saga through a transit account: the usual choice",
+        "4. Log-first: partitioned log, deduped events"
+      ],
+      "steps": [
+        {
+          "say": "Option one, two-phase commit. Correct, but if the coordinator crashes, both shards sit holding account locks. And every transfer pays two extra round trips.",
+          "reveal": 1
+        },
+        {
+          "say": "Option two, put both accounts on one shard. Impossible in general. Anyone can pay anyone.",
+          "reveal": 2
+        },
+        {
+          "say": "Option three, a saga through a transit account. The common choice. Each step is a local, atomic, idempotent transaction on one shard. I'll walk it on the diagram.",
+          "reveal": 3
+        },
+        {
+          "say": "Option four, log-first. Write the transfer to a partitioned log keyed by the payer. The payer's processor checks the balance, then emits debit and credit events to each account's partition, deduped by transfer ID. That's a saga too, driven by a log.",
+          "reveal": 4
+        }
+      ],
+      "id": "s032"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 10 of 21",
+      "title": "The transit-account saga",
+      "caption": "Money is always in Alice's account, in transit, or in Bob's.",
+      "steps": [
+        {
+          "say": "Step one, on shard A: debit Alice twenty-five, credit shard A's transit-out account twenty-five, and record transfer T as debited. The balance check happens right here, atomically.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, on shard B: debit B's mirror transit-in account, and credit Bob twenty-five, keyed by T, so a repeat does nothing.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, back on shard A: mark T completed. If step two can never succeed, say Bob's account is closed, post a reversing entry on shard A.",
+          "reveal": 3
+        },
+        {
+          "say": "Money is never lost. It's in Alice's account, in transit, or in Bob's. And the transit pair must net to zero, which is itself a reconciliation check. The cost: for a few milliseconds the API may say pending.",
+          "reveal": 4
+        }
+      ],
+      "id": "s033",
+      "table": {
+        "head": [
+          "Step",
+          "Shard",
+          "What it writes"
+        ],
+        "rows": [
+          [
+            "1. Debit",
+            "A",
+            "Alice -25, TRANSIT_OUT +25, T = DEBITED"
+          ],
+          [
+            "2. Credit",
+            "B",
+            "TRANSIT_IN -25, Bob +25, keyed by T"
+          ],
+          [
+            "3. Complete",
+            "A",
+            "Mark T COMPLETED, or post a reversal"
+          ],
+          [
+            "Invariant",
+            "A and B",
+            "Transit pair nets to zero"
+          ]
+        ]
+      }
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 11 of 21",
+      "title": "Exactly-once transfers",
+      "steps": [
+        {
+          "say": "Concept eleven. Exactly-once delivery doesn't exist, so we build an exactly-once effect, in three places.",
+          "reveal": 0
+        }
+      ],
+      "id": "s034",
+      "caption": "Book: Module 17 · Wallet · Exactly-once transfers"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 11 of 21",
+      "title": "Exactly-once effect in three places",
+      "bullets": [
+        "Client to service: key stored with the journal entry",
+        "Saga steps: keyed by transfer ID plus step number",
+        "Consumers: dedupe the stream by entry ID"
+      ],
+      "steps": [
+        {
+          "say": "Place one, client to service. Alice taps send. The app creates an idempotency key and reuses it on every retry. The ledger stores that key with a unique constraint, in the same transaction as the entry. A duplicate gets the original result back.",
+          "reveal": 1
+        },
+        {
+          "say": "Place two, saga steps. Each step is keyed by transfer ID plus step number, so a redelivered step two does nothing.",
+          "reveal": 2
+        },
+        {
+          "say": "Place three, consumers. History, notifications and analytics read the event stream at least once, and dedupe by entry ID. The demo sends sixteen thousand transfers, each twice. Total money before and after: the same. Trial balance zero.",
+          "reveal": 3
+        }
+      ],
+      "id": "s035"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Why store the key in the SAME transaction as the entry?",
+      "bullets": [
+        "A. It's faster",
+        "B. A crash between two writes could double-apply or lose it",
+        "C. Databases require it"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Why must the idempotency key be written in the same transaction as the ledger entry, not in a separate cache? Answer next.",
+          "reveal": 0
+        }
+      ],
+      "id": "s036"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 12 of 21",
+      "title": "Hot accounts and rebuilding balances",
+      "steps": [
+        {
+          "say": "Answer: B. If the key and entry are separate writes, a crash between them either lets a retry apply the transfer twice, or loses the record that it happened. A dedupe cache with a timeout alone can lose keys.",
+          "reveal": 0
+        },
+        {
+          "say": "Concept twelve. Now the throughput tricks, and how we recover from mistakes.",
+          "reveal": 0
+        }
+      ],
+      "id": "s037",
+      "caption": "Book: Module 17 · Wallet · Hot accounts, rebuilding"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 12 of 21",
+      "title": "Throughput, hot accounts, rebuilding",
+      "bullets": [
+        "Conditional debit: WHERE balance >= amount",
+        "Batching: group commit, 10 to 100x throughput",
+        "Hot account: N sub-accounts, sum on read",
+        "Rebuild: replay journal from a snapshot",
+        "Mistake? Post a reversing entry, never edit"
+      ],
+      "steps": [
+        {
+          "say": "First, the balance check. Debit only where balance is at least the amount, in the same transaction as the postings. Or use a single writer per shard. Both avoid lost updates.",
+          "reveal": 1
+        },
+        {
+          "say": "Second, batching. A single writer groups hundreds of transfers into one disk flush, trading a millisecond of latency for ten to a hundred times the throughput.",
+          "reveal": 2
+        },
+        {
+          "say": "Third, hot accounts. Imagine a big merchant receiving twenty thousand payments a second. One row becomes a queue. Split it into, say, sixteen sub-accounts. Credit a random one, and sum all sixteen to read the balance.",
+          "reveal": 3
+        },
+        {
+          "say": "Fourth, rebuilding. The journal is the truth, so any balance can be recomputed. Snapshots keep the replay short. The demo checks that the cached balance equals a full replay.",
+          "reveal": 4
+        },
+        {
+          "say": "And fifth, mistakes. A wrong transfer moved five dollars from user three to user four. We don't edit it. We post a reversal. Both entries stay forever, so an auditor sees the mistake and the fix.",
+          "reveal": 5
+        }
+      ],
+      "id": "s038"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 13 of 21",
+      "title": "Design a stock exchange",
+      "steps": [
+        {
+          "say": "Concept thirteen. Brokers send buy and sell orders, the exchange matches them fairly, and publishes every trade. Almost every system we've seen scales by adding machines. An exchange core does the opposite.",
+          "reveal": 0
+        },
+        {
+          "say": "For each stock, one thread on one machine decides the order of events, because fairness, who was first at this price, needs a single order.",
+          "reveal": 0
+        }
+      ],
+      "id": "s039",
+      "caption": "Book: Module 17 · Design a Stock Exchange"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 13 of 21",
+      "title": "The order book and matching",
+      "bullets": [
+        "Limit order: buy or sell at this price or better",
+        "Market order: best price now, remainder not kept",
+        "Price-time priority: best price, then earliest",
+        "Crosses the book: trades. Otherwise: rests",
+        "Trade at the resting order's price"
+      ],
+      "steps": [
+        {
+          "say": "A limit order says: buy up to this price, or sell at this price or better.",
+          "reveal": 1
+        },
+        {
+          "say": "A market order says: best price available now. Any remainder may not wait in the book.",
+          "reveal": 2
+        },
+        {
+          "say": "Matching uses price-time priority. Best price first. At the same price, earliest first.",
+          "reveal": 3
+        },
+        {
+          "say": "The order book holds all waiting orders for one stock: bids sorted high to low, asks sorted low to high. A buy priced at or above the best ask crosses the book and trades. Otherwise it rests and waits.",
+          "reveal": 4
+        },
+        {
+          "say": "And each trade happens at the resting order's price. Let's see it with numbers.",
+          "reveal": 5
+        }
+      ],
+      "id": "s040"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: buy 180 shares at 101.00",
+      "table": {
+        "head": [
+          "Fill",
+          "Resting order",
+          "Price",
+          "Shares"
+        ],
+        "rows": [
+          [
+            "1",
+            "Order 1 (arrived first)",
+            "100.50",
+            "100"
+          ],
+          [
+            "2",
+            "Order 2",
+            "100.50",
+            "50"
+          ],
+          [
+            "3",
+            "Order 3",
+            "101.00",
+            "30"
+          ],
+          [
+            "Left in book",
+            "Order 3 remainder",
+            "101.00",
+            "170"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The asks: a hundred fifty shares at one hundred dollars fifty, from two orders, and two hundred at one hundred and one dollars. A buyer sends: buy one hundred eighty at up to one hundred and one. First fill: order one, a hundred shares at one hundred dollars fifty.",
+          "reveal": 1
+        },
+        {
+          "say": "Second fill: order two, fifty shares at the same price. Order one went first because it arrived first. That's time priority.",
+          "reveal": 2
+        },
+        {
+          "say": "Third fill: thirty shares at one hundred and one. The buyer was willing to pay one hundred and one, but got most shares at one hundred dollars fifty.",
+          "reveal": 3
+        },
+        {
+          "say": "One hundred seventy shares stay resting at one hundred and one. Prices are integer ticks, in cents, never floating point.",
+          "reveal": 4
+        }
+      ],
+      "id": "s041"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 14 of 21",
+      "title": "Sequencer and determinism",
+      "steps": [
+        {
+          "say": "Concept fourteen. Why one thread? With locks, threads would spend more time coordinating than matching, and lock order would decide who traded first. Unfair, and unrepeatable.",
+          "reveal": 0
+        },
+        {
+          "say": "A single thread over one totally ordered log is both faster and fair.",
+          "reveal": 0
+        }
+      ],
+      "id": "s042",
+      "caption": "Book: Module 17 · Exchange · Sequencer, determinism"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 14 of 21",
+      "title": "Exchange architecture",
+      "mermaid": "flowchart LR\n  B[\"Brokers\"] --> OG[\"Order gateways\"]\n  OG --> RK[\"Pre-trade risk, in memory\"]\n  RK --> SQ[\"Sequencer: stamp, persist, replicate\"]\n  SQ --> ME[\"Matching engine, one thread\"]\n  SQ -. \"same log\" .-> SB[\"Hot standby engine\"]\n  ME --> OUT[\"Output: reports, market data\"]",
+      "caption": "Log before act. Replicate the input, not the state.",
+      "steps": [
+        {
+          "say": "Orders arrive at gateways, which handle broker sessions. Pre-trade risk checks credit limits, oversized orders and wild prices, in memory, in about two microseconds.",
+          "reveal": 0
+        },
+        {
+          "say": "Then the sequencer. It gives every command a gap-free sequence number, writes it durably, and replicates it to the standby, all before the engine acts. That's the exchange's write-ahead log.",
+          "reveal": 0
+        },
+        {
+          "say": "The matching engine is a pure, deterministic function of that log. Same input in the same order, same trades. So replication is just replay: the standby reads the same log and ends with the identical book.",
+          "reveal": 0
+        },
+        {
+          "say": "Output goes to brokers as execution reports, and to subscribers as market data.",
+          "reveal": 0
+        }
+      ],
+      "id": "s043"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 14 of 21",
+      "title": "Rules that keep the engine deterministic",
+      "bullets": [
+        "No clock reads: time is stamped in the command",
+        "No random numbers, no unordered hash map loops",
+        "No floating point",
+        "Gap detection: refuse anything but the next number",
+        "Persist and replicate before acting"
+      ],
+      "steps": [
+        {
+          "say": "Rule one, no clock reads. Imagine the primary reads ten o'clock and the standby, replaying later, reads ten oh one. They could decide differently. So the sequencer stamps time into the command.",
+          "reveal": 1
+        },
+        {
+          "say": "Rule two, no random numbers, and no looping over unordered hash maps, whose order can differ between machines.",
+          "reveal": 2
+        },
+        {
+          "say": "Rule three, no floating point. Integer ticks only.",
+          "reveal": 3
+        },
+        {
+          "say": "Rule four, gap detection. If the engine expects command five hundred and gets five hundred and two, it stops rather than guess.",
+          "reveal": 4
+        },
+        {
+          "say": "Rule five, persist and replicate before acting. Acknowledged means durable on both machines.",
+          "reveal": 5
+        }
+      ],
+      "id": "s044"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 15 of 21",
+      "title": "Failover",
+      "steps": [
+        {
+          "say": "Concept fifteen. The primary engine dies at ten thirty. What now?",
+          "reveal": 0
+        }
+      ],
+      "id": "s045",
+      "caption": "Book: Module 17 · Exchange · Sequencer and failover"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 15 of 21",
+      "title": "Failover, step by step",
+      "bullets": [
+        "1. Standby has already applied the same log",
+        "2. Consensus coordinator (Raft) promotes it",
+        "3. Old primary is fenced",
+        "4. Brokers reconnect, replay missed reports",
+        "5. Duplicates rejected by clOrdId"
+      ],
+      "steps": [
+        {
+          "say": "Step one: the standby has been replaying the same log all along, so it already holds the identical book.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: a consensus-backed coordinator, for example using Raft, promotes it. Consensus guarantees exactly one primary.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: the old primary is fenced, so if it wakes up, it can't act.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: brokers reconnect and ask for missed execution reports by sequence number.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five: orders the sequencer acknowledged are in the replicated log. Unacknowledged ones the broker resends, and the broker's client order ID lets the exchange reject duplicates. Snapshots plus the log tail make restarts fast.",
+          "reveal": 5
+        }
+      ],
+      "id": "s046"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 16 of 21",
+      "title": "Low latency and fairness",
+      "steps": [
+        {
+          "say": "Concept sixteen. Throughput isn't the problem. A Python toy matches eight hundred thousand orders a second. The problems are ordering, durability, and tail latency: avoiding pauses.",
+          "reveal": 0
+        }
+      ],
+      "id": "s047",
+      "caption": "Book: Module 17 · Exchange · Low latency and fairness"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: a 20 microsecond budget",
+      "table": {
+        "head": [
+          "Step",
+          "Budget"
+        ],
+        "rows": [
+          [
+            "Gateway: parse, session checks",
+            "about 5 us"
+          ],
+          [
+            "Pre-trade risk, in memory",
+            "about 2 us"
+          ],
+          [
+            "Sequencer: stamp, persist, replicate",
+            "5 to 10 us"
+          ],
+          [
+            "Matching",
+            "about 1 us"
+          ],
+          [
+            "Publish reports and market data",
+            "about 5 us"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's an illustrative budget inside the exchange. The gateway parses and checks the session in about five microseconds.",
+          "reveal": 1
+        },
+        {
+          "say": "Risk, two microseconds, because it's all in memory.",
+          "reveal": 2
+        },
+        {
+          "say": "The sequencer is the biggest piece, five to ten microseconds, because it persists and replicates.",
+          "reveal": 3
+        },
+        {
+          "say": "Matching itself: one microsecond. Matching is cheap.",
+          "reveal": 4
+        },
+        {
+          "say": "Publishing, about five. Total around twenty microseconds. The design effort is everything around matching.",
+          "reveal": 5
+        }
+      ],
+      "id": "s048"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 16 of 21",
+      "title": "How to stay fast and fair",
+      "bullets": [
+        "Fewer hops: one machine or rack",
+        "No pauses: preallocate, pin cores, ring buffers",
+        "Kernel bypass: packets straight to the app",
+        "Multicast market data: one packet, all at once",
+        "Co-location: same cable length for everyone",
+        "Measure p99 and p99.9, not averages"
+      ],
+      "steps": [
+        {
+          "say": "Fewer hops: everything on one machine or rack.",
+          "reveal": 1
+        },
+        {
+          "say": "No pauses. Preallocate memory so there's no garbage collection, pin the engine thread to a core, busy-spin instead of sleeping, and pass messages through lock-free ring buffers, as in the LMAX Disruptor.",
+          "reveal": 2
+        },
+        {
+          "say": "Kernel bypass. Special network cards deliver packets straight to the application, skipping the operating system's network stack.",
+          "reveal": 3
+        },
+        {
+          "say": "Multicast market data. One U-D-P multicast packet reaches every subscriber at the same moment, instead of thousands of T-C-P sends. Efficient and fair. A subscriber that sees sequence one thousand and one after nine ninety-eight asks a retransmit service for the gap.",
+          "reveal": 4
+        },
+        {
+          "say": "Co-location fairness. Firms rent racks next to the engine, and every one gets the same cable length, so nobody wins nanoseconds by proximity.",
+          "reveal": 5
+        },
+        {
+          "say": "And measure the tail: p ninety-nine and p ninety-nine point nine. One pause at the market open is what brokers notice.",
+          "reveal": 6
+        }
+      ],
+      "id": "s049"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Why not split one hot stock across many engines?",
+      "bullets": [
+        "A. One stock is too slow for one thread",
+        "B. Price-time priority needs one total order per book",
+        "C. Multicast can't handle it"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Apple stock is very busy. Why not split its order book across several engines? Answer next.",
+          "reveal": 0
+        }
+      ],
+      "id": "s050"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 17 of 21",
+      "title": "Design event ticketing and flash sales",
+      "steps": [
+        {
+          "say": "Answer: B. Price-time priority needs one total order per book. And one stock fits on one thread easily. You scale by spreading symbols across engines.",
+          "reveal": 0
+        },
+        {
+          "say": "Concept seventeen. A stadium tour goes on sale at ten o'clock, and millions arrive at once. For the Eras Tour presale in twenty twenty-two, Ticketmaster reported three and a half billion system requests, four times its previous peak.",
+          "reveal": 0
+        }
+      ],
+      "id": "s051",
+      "caption": "Book: Module 17 · Design Event Ticketing and Flash-Sale"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 17 of 21",
+      "title": "Ticketing: the numbers",
+      "bullets": [
+        "Supply: 10 shows x 60,000 = 600,000 tickets",
+        "Demand: 3 million people at 10:00",
+        "Store: 50,000 shoppers, 5 min each = 170 admits/s",
+        "Sale lasts about 25 minutes",
+        "Holds: about 500 attempts/s on one shard"
+      ],
+      "steps": [
+        {
+          "say": "Supply: ten stadium shows times sixty thousand seats is six hundred thousand tickets. At three per order, two hundred thousand orders.",
+          "reveal": 1
+        },
+        {
+          "say": "Demand: three million people at ten o'clock. If each browser refreshes every two seconds, that's one and a half million requests a second, before bots.",
+          "reveal": 2
+        },
+        {
+          "say": "The store can serve about fifty thousand shoppers at once, each taking about five minutes. Fifty thousand divided by three hundred seconds is about a hundred seventy admissions a second, ten thousand a minute.",
+          "reveal": 3
+        },
+        {
+          "say": "If eighty percent buy, two hundred thousand orders need two hundred fifty thousand admissions. That's about twenty-five minutes. Admitting all three million would take nearly five hours. Most of the queue never gets in, and must be told early.",
+          "reveal": 4
+        },
+        {
+          "say": "Inventory writes are small: about five hundred hold attempts a second on one event's shard. So the real problems are the three-thousand-to-one gap between people and capacity, and contention on hot seats. It's a supply problem, not a capacity problem.",
+          "reveal": 5
+        }
+      ],
+      "id": "s052"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 17 of 21",
+      "title": "Ticketing architecture",
+      "mermaid": "flowchart LR\n  F[\"Fan browser\"] --> E[\"CDN edge: bots, waiting room\"]\n  E --> QS[\"Queue service: nowServing\"]\n  AC[\"Admission controller\"] --> QS\n  E -- \"access token only\" --> INV[\"Inventory service\"]\n  INV --> DB[(\"Seat DB, shard by event_id\")]\n  INV --> PAY[\"Payment service\"]\n  INV -- \"store health\" --> AC",
+      "caption": "The waiting room protects the store. The seat row is the lock.",
+      "steps": [
+        {
+          "say": "All traffic lands at the C-D-N edge. Bot screening and the waiting room's token checks run there, without calling the origin.",
+          "reveal": 0
+        },
+        {
+          "say": "The queue service assigns positions and holds one number: now serving, the highest position allowed in.",
+          "reveal": 0
+        },
+        {
+          "say": "The admission controller raises now serving based on store health. A feedback loop, not a fixed rate.",
+          "reveal": 0
+        },
+        {
+          "say": "Only fans with an access token reach the store. The inventory service is the only writer of seat state, on the event's shard. In the interview, say this: the waiting room protects the store.",
+          "reveal": 0
+        }
+      ],
+      "id": "s053"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 17 of 21",
+      "title": "The virtual waiting room, part by part",
+      "bullets": [
+        "1. Pre-queue, then random positions at 10:00",
+        "2. Signed tokens the edge can check",
+        "3. nowServing, paced by a feedback loop",
+        "4. Honest wait estimates and early sold-out"
+      ],
+      "steps": [
+        {
+          "say": "Part one. Arrivals before ten wait in a pre-queue with a countdown. At ten, everyone in it gets a random position. Later arrivals join the back in order. Pure first-come rewards bots by milliseconds. Randomising removes the race.",
+          "reveal": 1
+        },
+        {
+          "say": "Part two. Imagine Priya's queue token: event, position forty-two thousand, account, device, issue time. It's signed with an H-MAC, a hash using a secret key, so any edge node can verify it without a database, and editing the position breaks it. It's bound to her account and device.",
+          "reveal": 2
+        },
+        {
+          "say": "Part three. Priya gets in when her position is at most now serving. Every few seconds the controller checks store health, then raises the counter. That's backpressure. Because it's one shared number, the edge caches it for seconds, so three million pollers become a few origin requests a second.",
+          "reveal": 3
+        },
+        {
+          "say": "Part four. Her wait estimate is positions ahead divided by the recent admission rate. Forty-two thousand ahead at ten thousand a minute: about four minutes. Position two million is told early it's likely sold out. On admission, the queue token is swapped for a fifteen-minute access token.",
+          "reveal": 4
+        }
+      ],
+      "id": "s054"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 18 of 21",
+      "title": "Seat holds and inventory consistency",
+      "steps": [
+        {
+          "say": "Concept eighteen. Priya's in. She picks four seats together. Thousands of others are clicking the same section. How do we sell each seat exactly once?",
+          "reveal": 0
+        }
+      ],
+      "id": "s055",
+      "caption": "Book: Module 17 · Ticketing · Seat holds with a TTL"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 18 of 21",
+      "title": "Holding seats exactly once",
+      "bullets": [
+        "One conditional UPDATE across all 4 seats",
+        "Free means AVAILABLE, or HELD and expired",
+        "All or nothing: 4 rows updated, or roll back",
+        "Best available: server hands out different blocks",
+        "GA: split 20,000 tickets into 10 buckets"
+      ],
+      "steps": [
+        {
+          "say": "One conditional update covers all four seats in one transaction: set status held, with an eight minute expiry.",
+          "reveal": 1
+        },
+        {
+          "say": "The where clause accepts a seat that's available, or held with an expired hold. So even if the sweeper is stuck, inventory isn't stranded.",
+          "reveal": 2
+        },
+        {
+          "say": "All or nothing. If four rows update, she has them. If only three do, roll back and tell her which seat went. A family of four doesn't want three together and one elsewhere. Lock rows in seat ID order to avoid deadlocks.",
+          "reveal": 3
+        },
+        {
+          "say": "If everyone clicks seat A one, hundreds fight over one row. So default to best available: the server picks, and hands different adjacent blocks to concurrent requests. Most succeed first try.",
+          "reveal": 4
+        },
+        {
+          "say": "General admission has the hot-row problem too. Split it into ten buckets of two thousand. Pick a random bucket, decrement if enough remain, try another if not. The cost: a final sweep for the last tickets.",
+          "reveal": 5
+        }
+      ],
+      "id": "s056"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 18 of 21",
+      "title": "Seat states",
+      "mermaid": "flowchart LR\n  A[\"AVAILABLE\"] -- \"hold, TTL 8 min\" --> H[\"HELD\"]\n  H -- \"TTL expires or released\" --> A\n  H -- \"fan submits payment\" --> P[\"PAYMENT_PENDING\"]\n  P -- \"authorized, confirmed\" --> S[\"SOLD\"]\n  P -- \"declined\" --> A\n  S -- \"refund\" --> A",
+      "caption": "The sweeper never touches PAYMENT_PENDING.",
+      "steps": [
+        {
+          "say": "Here's the seat state machine. Available, then held for eight minutes. Too short loses fans mid-typing. Too long locks seats in abandoned carts.",
+          "reveal": 0
+        },
+        {
+          "say": "When Priya submits payment, one transaction moves her seats from held to payment pending, only if the hold is still valid, and inserts the order with its idempotency key.",
+          "reveal": 0
+        },
+        {
+          "say": "From that moment, the sweeper doesn't touch these seats. A hold must never expire while a payment is in flight. Seat maps and only twelve left banners come from a cache and may lag. Only the conditional update decides.",
+          "reveal": 0
+        }
+      ],
+      "id": "s057"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 19 of 21",
+      "title": "Payment timeouts",
+      "steps": [
+        {
+          "say": "Concept nineteen. Priya's payment call times out. Did she pay or not?",
+          "reveal": 0
+        }
+      ],
+      "id": "s058",
+      "caption": "Book: Module 17 · Ticketing · Payment timeouts"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: Priya's payment times out",
+      "table": {
+        "head": [
+          "Time",
+          "What the system does"
+        ],
+        "rows": [
+          [
+            "10:04:00",
+            "Seats PAYMENT_PENDING, deadline 10:06"
+          ],
+          [
+            "10:04:30",
+            "Payment call times out: outcome UNKNOWN"
+          ],
+          [
+            "10:05:00",
+            "Reconciler asks provider by idempotency key"
+          ],
+          [
+            "Authorized",
+            "Seats SOLD, capture, issue tickets"
+          ],
+          [
+            "Declined or none by 10:06",
+            "Release seats, void any late authorization"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "At four past ten, her seats move to payment pending, with a deadline of two minutes.",
+          "reveal": 1
+        },
+        {
+          "say": "Thirty seconds later the payment call times out. A timed-out call is unknown, not failed.",
+          "reveal": 2
+        },
+        {
+          "say": "A reconciler asks the payment service for the status, by idempotency key. Notice we authorise, reserving the money, rather than capture, taking it.",
+          "reveal": 3
+        },
+        {
+          "say": "If authorized: mark seats sold, bump her purchase count, which fails if she's over the four ticket limit, then capture and issue tickets.",
+          "reveal": 4
+        },
+        {
+          "say": "If declined, or nothing by the deadline: release the seats and void any late authorization. Never release first and ask later. That's how one seat gets paid for twice. Releasing seats and voiding are the saga's compensations.",
+          "reveal": 5
+        }
+      ],
+      "id": "s059"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 20 of 21",
+      "title": "Bots and fairness",
+      "steps": [
+        {
+          "say": "Concept twenty. Bots buy fast, in volume, with many identities. No single defence stops them, so we stack defences at every step.",
+          "reveal": 0
+        }
+      ],
+      "id": "s060",
+      "caption": "Book: Module 17 · Ticketing · Bots and fairness"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 20 of 21",
+      "title": "Six layers of bot defence",
+      "bullets": [
+        "1. Before: registration and lottery",
+        "2. Edge: rate limits, fingerprints, challenges",
+        "3. Queue: one place per person",
+        "4. Store: limits enforced in the transaction",
+        "5. After: find clusters, cancel orders",
+        "6. The law: BOTS Act"
+      ],
+      "steps": [
+        {
+          "say": "Layer one, before the sale. Fans register days ahead with a verified phone, and a lottery invites a subset, like Ticketmaster's Verified Fan. The fight moves from fastest request to real, distinct person, where bots are weakest.",
+          "reveal": 1
+        },
+        {
+          "say": "Layer two, the edge. Rate limits per I-P, browser fingerprinting, and a challenge for suspicious sessions. A proof-of-work puzzle makes running ten thousand sessions expensive.",
+          "reveal": 2
+        },
+        {
+          "say": "Layer three, the queue. Tokens bound to account and device. If Priya joins twice, she gets the same position.",
+          "reveal": 3
+        },
+        {
+          "say": "Layer four, the store. The per-account limit lives in the purchase transaction, plus checks across accounts on card, address and phone. A limit only in the user interface doesn't count.",
+          "reveal": 4
+        },
+        {
+          "say": "Layer five, after the sale. Find account clusters sharing cards or devices, and cancel their orders.",
+          "reveal": 5
+        },
+        {
+          "say": "Layer six, the law. The US BOTS Act of twenty sixteen. Trade-off: every defence also catches real fans, so challenge before you block, and measure false positives.",
+          "reveal": 6
+        }
+      ],
+      "id": "s061"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "The sweeper has been down for an hour. Are seats lost?",
+      "bullets": [
+        "A. Yes, held seats stay stuck",
+        "B. No, expired holds count as free in the UPDATE",
+        "C. Only general admission is affected"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. The hold sweeper crashed an hour ago. Are seats stuck forever? Answer next.",
+          "reveal": 0
+        }
+      ],
+      "id": "s062"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 21 of 21",
+      "title": "Pattern review: money and reservations",
+      "steps": [
+        {
+          "say": "Answer: B. The hold update treats an expired hold as available, so sales continue. Only the seat map overstates what's taken. Alert on hold age.",
+          "reveal": 0
+        },
+        {
+          "say": "Concept twenty-one. Let's turn the four designs into a symptom-to-pattern cheat sheet.",
+          "reveal": 0
+        }
+      ],
+      "id": "s063",
+      "caption": "Book: Module 17 · Pattern Review (money and reservations)"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 21 of 21",
+      "title": "Symptom, then pattern",
+      "table": {
+        "head": [
+          "Symptom",
+          "Reach for"
+        ],
+        "rows": [
+          [
+            "Two people got the last unit",
+            "Conditional UPDATE, short transaction"
+          ],
+          [
+            "Retry made a second booking",
+            "Idempotency key in the same transaction"
+          ],
+          [
+            "Payment call holds a lock",
+            "Hold, act, confirm saga with expiry"
+          ],
+          [
+            "Transfer spans two shards",
+            "Saga via transit account, not 2PC"
+          ],
+          [
+            "One row gets thousands of writes",
+            "Sub-accounts or buckets"
+          ],
+          [
+            "Who was first must be fair",
+            "Sequencer plus single-thread engine"
+          ],
+          [
+            "Demand 1,000x capacity",
+            "Edge waiting room, paced admission"
+          ],
+          [
+            "Our books disagree with the bank",
+            "Reconciliation"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Two people got the last room or seat: a conditional update in one short transaction. Hotel and ticketing.",
+          "reveal": 1
+        },
+        {
+          "say": "A retry created a second booking or transfer: an idempotency key stored in the same transaction. All four designs.",
+          "reveal": 2
+        },
+        {
+          "say": "A payment call would hold a lock: a hold, act, confirm saga with an expiry.",
+          "reveal": 3
+        },
+        {
+          "say": "A transfer spans two shards: a saga through a transit account, not two-phase commit.",
+          "reveal": 4
+        },
+        {
+          "say": "One row gets thousands of writes: split into sub-accounts or buckets. The wallet's merchant, the ticketing floor.",
+          "reveal": 5
+        },
+        {
+          "say": "Who was first must be fair and repeatable: a sequencer and a single-threaded deterministic engine.",
+          "reveal": 6
+        },
+        {
+          "say": "Demand is thousands of times capacity: an edge waiting room paced by store health.",
+          "reveal": 7
+        },
+        {
+          "say": "Our records disagree with the bank's: reconciliation against independent reports.",
+          "reveal": 8
+        }
+      ],
+      "id": "s064"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 21 of 21",
+      "title": "The designs side by side",
+      "table": {
+        "head": [
+          "",
+          "Hotel",
+          "Wallet",
+          "Exchange"
+        ],
+        "rows": [
+          [
+            "Peak writes",
+            "~30 bookings/s",
+            "~100,000 transfers/s",
+            "~500,000 msgs/s"
+          ],
+          [
+            "Source of truth",
+            "Relational rows",
+            "Append-only journal",
+            "Sequenced input log"
+          ],
+          [
+            "Scaling unit",
+            "Hotel",
+            "Account",
+            "Symbol"
+          ],
+          [
+            "Concurrency",
+            "Row locks",
+            "Conditional debit",
+            "One thread, no locks"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Side by side. Peak writes span four orders of magnitude: thirty bookings a second, a hundred thousand transfers, half a million exchange messages.",
+          "reveal": 1
+        },
+        {
+          "say": "The source of truth differs: relational rows, an append-only journal, a sequenced input log.",
+          "reveal": 2
+        },
+        {
+          "say": "The scaling unit: a hotel, an account, a stock symbol.",
+          "reveal": 3
+        },
+        {
+          "say": "And concurrency: row locks, a conditional debit, or one thread with no locks at all. Ticketing has the hotel's shape, plus a waiting room in front.",
+          "reveal": 4
+        }
+      ],
+      "id": "s065"
+    },
+    {
+      "layout": "recap",
+      "kicker": "Episode 24 complete",
+      "title": "Episode 24 recap",
+      "bullets": [
+        "Rails differ in finality: never credit on authorization",
+        "Hotel: the row is the lock, hold then pay then confirm",
+        "Wallet: double entry, transit-account saga, keys",
+        "Exchange: one sequencer, one thread, replay the log",
+        "Ticketing: edge waiting room, seat row is the lock",
+        "A timed-out payment is unknown, not failed"
+      ],
+      "steps": [
+        {
+          "say": "Let's recap. Rails differ in finality: cards and A-C-H can be reversed, wires and real-time rails can't. Never credit on authorization, and reconcile daily.",
+          "reveal": 1
+        },
+        {
+          "say": "Hotel: conditional per-night updates in date order, one short transaction, an idempotency key, and hold, pay, confirm. Overbooking is a limit you compute.",
+          "reveal": 2
+        },
+        {
+          "say": "Wallet: a double-entry journal is the truth and balances are projections. Cross-shard transfers are sagas through a transit account. Exactly-once is idempotent writes plus deduplicating consumers.",
+          "reveal": 3
+        },
+        {
+          "say": "Exchange: one sequencer, one thread per book, log before act, replicate the input and replay.",
+          "reveal": 4
+        },
+        {
+          "say": "Ticketing: an edge waiting room with random pre-queue, signed tokens, and a paced now serving counter. The seat row is the lock.",
+          "reveal": 5
+        },
+        {
+          "say": "And remember: a timed-out payment is unknown, not failed. Next time, in episode twenty-five: Client and Mobile System Design. See you there.",
+          "reveal": 6
+        }
+      ],
+      "id": "s066"
+    }
+  ]
+}

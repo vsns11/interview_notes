@@ -1,0 +1,2179 @@
+{
+  "series": "LLD Workshop",
+  "episode": 4,
+  "title": "SOLID Principles",
+  "subtitle": "SRP, OCP, LSP, ISP, DIP, plus cohesion, coupling and separation of concerns",
+  "scenes": [
+    {
+      "id": "s001",
+      "layout": "title",
+      "title": "SOLID Principles",
+      "subtitle": "SRP, OCP, LSP, ISP, DIP, plus cohesion, coupling and separation of concerns",
+      "steps": [
+        {
+          "say": "Welcome to episode four of the L-L-D Workshop, the low-level design series. Today: the five SOLID principles, and the three older ideas they're built on.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll find the actors behind a class, spot a growing type switch, catch a subclass that quietly lies, size an interface by its callers, and invert a dependency. Then you'll refactor one checkout class through all five.",
+          "reveal": 0
+        },
+        {
+          "say": "Keep the chapter four notes open. Every concept here matches a section there, in order, and every listing runs. Pause before each output and predict it.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s002",
+      "layout": "table",
+      "kicker": "Concept 1 of 18",
+      "title": "What SOLID is",
+      "table": {
+        "head": [
+          "Letter",
+          "Principle",
+          "The one-line rule"
+        ],
+        "rows": [
+          [
+            "S",
+            "Single Responsibility",
+            "One reason to change"
+          ],
+          [
+            "O",
+            "Open/Closed",
+            "Add code, don't edit working code"
+          ],
+          [
+            "L",
+            "Liskov Substitution",
+            "A subtype works wherever its parent does"
+          ],
+          [
+            "I",
+            "Interface Segregation",
+            "No caller depends on methods it doesn't use"
+          ],
+          [
+            "D",
+            "Dependency Inversion",
+            "Depend on abstractions, not details"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Why does one small edit sometimes break three unrelated features? SOLID is five guidelines that answer that. Here they are, one row each.",
+          "reveal": 0
+        },
+        {
+          "say": "S, the single responsibility principle: a class should have one reason to change.",
+          "reveal": 1
+        },
+        {
+          "say": "O, open closed: you add new behaviour by adding code, not by editing code that already works.",
+          "reveal": 2
+        },
+        {
+          "say": "L, Liskov substitution: a subtype must be usable anywhere its parent type is expected.",
+          "reveal": 3
+        },
+        {
+          "say": "I, interface segregation: no caller should be forced to depend on methods it never uses.",
+          "reveal": 4
+        },
+        {
+          "say": "D, dependency inversion: depend on abstractions, meaning interfaces or abstract classes, not on concrete details.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 4 SOLID · 4.1 What SOLID is and why you should learn it"
+    },
+    {
+      "id": "s003",
+      "layout": "bullets",
+      "kicker": "Concept 1 of 18",
+      "title": "The common thread: stop a change spreading",
+      "bullets": [
+        "S: each class has one owner",
+        "O: add a class instead of editing one",
+        "L: a new subclass can't break old callers",
+        "I: a method change skips callers who never use it",
+        "D: a driver change never reaches business rules"
+      ],
+      "steps": [
+        {
+          "say": "Every principle limits how far one change spreads. S gives each class one owner, so finance's change never ships inside operations' code.",
+          "reveal": 1
+        },
+        {
+          "say": "O lets the next invoice format arrive as a new class, so tested code stays untouched.",
+          "reveal": 2
+        },
+        {
+          "say": "L means a new subclass can't break callers that were written against the parent.",
+          "reveal": 3
+        },
+        {
+          "say": "I means changing a method only reaches callers that actually call it.",
+          "reveal": 4
+        },
+        {
+          "say": "D means swapping the database driver never reaches pricing, the rules the app exists for. Bonus: a shared vocabulary for design arguments.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s004",
+      "layout": "bullets",
+      "kicker": "Concept 1 of 18",
+      "title": "How to use SOLID honestly",
+      "bullets": [
+        "1. Treat each principle as a name for a problem",
+        "2. When code hurts to change, find the name for the pain",
+        "3. Apply the fix when a real change asks for it",
+        "4. Always say the cost: classes, interfaces, wiring"
+      ],
+      "steps": [
+        {
+          "say": "Step one: treat each principle as a name for a problem, not a law. Imagine an order class nobody wants to touch.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: when a change hurts, find the principle that names the pain. Every discount edit breaks the email? That's single responsibility.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: fix it when a real change asks, not in advance. Split it the day the second team files a request.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: always say the cost. More classes, more interfaces, more wiring, meaning code that creates objects and connects them.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s005",
+      "layout": "section",
+      "kicker": "Concept 2 of 18",
+      "title": "Single Responsibility: one actor per class",
+      "steps": [
+        {
+          "say": "Martin's first wording was: a class should have only one reason to change. Later he sharpened it: a module should answer to one, and only one, actor. An actor is a person or group who can ask for a change.",
+          "reveal": 0
+        },
+        {
+          "say": "An army knife has three jobs, so three reasons to change. A kitchen knife just cuts.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 4 SOLID · 4.2 Single Responsibility Principle"
+    },
+    {
+      "id": "s006",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: who asks Employee to change?",
+      "table": {
+        "head": [
+          "Method",
+          "Actor",
+          "Example request"
+        ],
+        "rows": [
+          [
+            "calculatePay",
+            "Finance",
+            "Overtime after 38 hours, not 40"
+          ],
+          [
+            "reportHours",
+            "Operations",
+            "Show the week-ending date"
+          ],
+          [
+            "save",
+            "Database team",
+            "Move from SQL to a document store"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Every method of Employee is about employees, so do one thing passes. Now ask the sharper question: who can send me a change request?",
+          "reveal": 0
+        },
+        {
+          "say": "Calculate pay belongs to finance. Their request: overtime starts after thirty-eight hours, not forty.",
+          "reveal": 1
+        },
+        {
+          "say": "Report hours belongs to operations: show the week-ending date in the report.",
+          "reveal": 2
+        },
+        {
+          "say": "Save belongs to the database team: move from a SQL table database to a document store. Three owners, three reasons. A finance edit re-ships the report, and if the layout breaks, operations pays for a decision it never made.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s007",
+      "layout": "bullets",
+      "kicker": "Concept 2 of 18",
+      "title": "The hidden trap: accidental duplication",
+      "bullets": [
+        "calculatePay and reportHours share regularHours()",
+        "Finance changes the helper for pay",
+        "The operations report silently shows wrong hours",
+        "Same code, different actors: don't merge it"
+      ],
+      "steps": [
+        {
+          "say": "Martin's sharper story. Pay and the hours report share a private helper, regular hours, because today the maths matches.",
+          "reveal": 1
+        },
+        {
+          "say": "Finance changes that helper for a pay rule.",
+          "reveal": 2
+        },
+        {
+          "say": "Now the operations report silently prints wrong numbers.",
+          "reveal": 3
+        },
+        {
+          "say": "That's accidental duplication. Code that looks the same but changes for different reasons should not be merged.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s008",
+      "layout": "bullets",
+      "kicker": "Concept 2 of 18",
+      "title": "How to split by actor, step by step",
+      "bullets": [
+        "1. List the methods",
+        "2. Name who would ask each to change",
+        "3. Group methods by actor",
+        "4. Move each group to a class named for its job",
+        "5. Keep plain data in a record",
+        "6. Verify the split with three checks"
+      ],
+      "steps": [
+        {
+          "say": "Step one, list the methods: calculate pay, report hours, save.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, name the asker: finance, operations, the database team.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, group by actor. Here each group has one method, but a group could have ten.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, move each group into a class named for its job: Pay Calculator, Hours Report, Employee Repository.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, keep the data in a record, a compact, unchangeable class holding fields. Employee becomes name, hours worked and hourly rate.",
+          "reveal": 5
+        },
+        {
+          "say": "Step six, verify. For Ada, forty-five hours at twenty an hour, pay is nine hundred fifty, before and after. Forty normal hours is eight hundred, five overtime at thirty is one fifty.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s009",
+      "layout": "diagram",
+      "kicker": "Concept 2 of 18",
+      "title": "Employee split by actor",
+      "mermaid": "flowchart LR\n  E[\"Employee record<br/>name, hours, rate\"]\n  P[\"PayCalculator<br/>Finance\"] -->|\"reads\"| E\n  H[\"HoursReport<br/>Operations\"] -->|\"reads\"| E\n  R[\"EmployeeRepository<br/>DB team\"] -->|\"stores\"| E",
+      "caption": "Data in a record, one class per actor",
+      "steps": [
+        {
+          "say": "Here's the result. Employee holds data and no rules, so no actor edits it for a rule change. Each class around it has exactly one owner, and the overtime threshold is a named constant, so finance's next request is a one-line edit in one class.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s010",
+      "layout": "bullets",
+      "kicker": "Concept 2 of 18",
+      "title": "Where splitting goes wrong: three checks",
+      "bullets": [
+        "1. Do the pieces change together? Read the commit log",
+        "2. Does each name stand on its own?",
+        "3. Could another caller use it?",
+        "Splitting does not automatically lower coupling"
+      ],
+      "steps": [
+        {
+          "say": "Badly applied S-R-P is worse than none. Check one: do the pieces change together? If two classes appear together in nearly every Git commit, you cut one responsibility in two.",
+          "reveal": 1
+        },
+        {
+          "say": "Check two: does each name stand alone? Employee Pay Calculator describes a job. Employee Helper or Employee Utils describes nothing.",
+          "reveal": 2
+        },
+        {
+          "say": "Check three: could it be used elsewhere? A pay calculator could serve a payroll export, a contractor quote, or a unit test. No second caller imaginable? Question the split.",
+          "reveal": 3
+        },
+        {
+          "say": "And remember: splitting only gives you a seam. Coupling drops when the dependency across it points at an abstraction. In the interview: I split only when I can name two groups. Recap: one class, one actor.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s011",
+      "layout": "section",
+      "kicker": "Concept 3 of 18",
+      "title": "Cohesion: do the insides belong together?",
+      "steps": [
+        {
+          "say": "Cohesion is how closely the contents of one class belong together. High cohesion: every method serves one purpose. Low cohesion: unrelated jobs in one pile, like a garbage dump instead of sorted bins.",
+          "reveal": 0
+        },
+        {
+          "say": "It works both ways. Mixing unrelated things is low cohesion, and so is scattering one job, add user here and delete user there, across classes.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 4 SOLID · 4.3 Cohesion"
+    },
+    {
+      "id": "s012",
+      "layout": "table",
+      "kicker": "Concept 3 of 18",
+      "title": "The classic types of cohesion, worst to best",
+      "table": {
+        "head": [
+          "Type",
+          "What groups the code",
+          "Example"
+        ],
+        "rows": [
+          [
+            "Coincidental",
+            "Nothing",
+            "Utils: formatDate, sendEmail, parseCsv"
+          ],
+          [
+            "Logical",
+            "Same category, flag-picked",
+            "handle(type) with a big switch"
+          ],
+          [
+            "Temporal",
+            "Runs at the same time",
+            "startup(): DB, cache, banner"
+          ],
+          [
+            "Procedural",
+            "Steps in an order",
+            "validate, then log, then retry"
+          ],
+          [
+            "Communicational",
+            "Same data",
+            "ReportBuilder on one Order list"
+          ],
+          [
+            "Sequential",
+            "Output feeds next input",
+            "parse, validate, transform"
+          ],
+          [
+            "Functional",
+            "One well-defined task",
+            "PayCalculator"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Worst is coincidental: nothing links the code. A Utils class with format date, send email and parse C-S-V.",
+          "reveal": 1
+        },
+        {
+          "say": "Logical: same category, chosen by a flag. A handle method with a big switch over unrelated actions.",
+          "reveal": 2
+        },
+        {
+          "say": "Temporal: things that run at the same moment. A startup method that opens the database, warms the cache and prints a banner.",
+          "reveal": 3
+        },
+        {
+          "say": "Procedural: steps that follow an order, like validate, then log, then retry, in one method.",
+          "reveal": 4
+        },
+        {
+          "say": "Communicational: methods that work on the same data, like a report builder whose methods all read one order list.",
+          "reveal": 5
+        },
+        {
+          "say": "Sequential: each step's output feeds the next, parse then validate then transform.",
+          "reveal": 6
+        },
+        {
+          "say": "Best is functional: everything serves one task, like Pay Calculator. Aim for functional, and treat Utils as a warning.",
+          "reveal": 7
+        }
+      ]
+    },
+    {
+      "id": "s013",
+      "layout": "twocol",
+      "kicker": "Example",
+      "title": "Example: UserManager, two jobs in one class",
+      "left": {
+        "heading": "Before: one class",
+        "bullets": [
+          "users list: addUser, deleteUser",
+          "auditLines list: writeToFile, readFromFile",
+          "Two groups touch two different fields"
+        ]
+      },
+      "right": {
+        "heading": "After: two classes",
+        "bullets": [
+          "UserManager: addUser, deleteUser",
+          "AuditFile: writeLine, readAll",
+          "Same output, new log format edits AuditFile only"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's the test. Check which fields each method uses. Add user and delete user touch the users list.",
+          "reveal": 1
+        },
+        {
+          "say": "Write to file and read from file touch the audit lines list.",
+          "reveal": 2
+        },
+        {
+          "say": "Two groups, two fields, two purposes. That's low cohesion.",
+          "reveal": 3
+        },
+        {
+          "say": "So split. User Manager keeps users.",
+          "reveal": 4
+        },
+        {
+          "say": "Audit File keeps the log lines.",
+          "reveal": 5
+        },
+        {
+          "say": "Run add Ada, write created Ada, delete Ada, read back, and both versions print the same four lines. The cost: the caller holds two objects. In the interview, say: high cohesion is S-R-P seen from inside the class. Size is a hint, not the measure.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s014",
+      "layout": "section",
+      "kicker": "Concept 4 of 18",
+      "title": "Coupling: how much A must know about B",
+      "steps": [
+        {
+          "say": "Coupling is how much one class depends on another. It always describes a pair. Loose coupling: change, replace or test one without touching the other. Tight coupling: change one, and you must change the other.",
+          "reveal": 0
+        },
+        {
+          "say": "Picture a remote that only works with one TV. Replace either, replace both. A universal remote and a TV that follow the infrared standard swap freely. That shared standard is exactly what an interface is.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 4 SOLID · 4.4 Coupling"
+    },
+    {
+      "id": "s015",
+      "layout": "table",
+      "kicker": "Concept 4 of 18",
+      "title": "The classic types of coupling, worst to best",
+      "table": {
+        "head": [
+          "Type",
+          "What A knows about B",
+          "Example"
+        ],
+        "rows": [
+          [
+            "Content",
+            "B's internals",
+            "Reflection sets B's private field"
+          ],
+          [
+            "Common",
+            "Shared global mutable data",
+            "Both write a public static Map"
+          ],
+          [
+            "External",
+            "A shared outside format",
+            "Both parse one homemade file format"
+          ],
+          [
+            "Control",
+            "A flag telling B how to work",
+            "print(doc, boolean asPdf)"
+          ],
+          [
+            "Stamp",
+            "A whole structure for one field",
+            "sendInvoice(Customer c) reads c.email()"
+          ],
+          [
+            "Data",
+            "Only the values B needs",
+            "sendInvoice(String email, Money total)"
+          ],
+          [
+            "Message",
+            "A message through an interface",
+            "notifier.send(message)"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Worst is content coupling: A reaches into B's internals, for example using reflection to set B's private field.",
+          "reveal": 1
+        },
+        {
+          "say": "Common coupling: both share global mutable data, like a public static map anyone can write.",
+          "reveal": 2
+        },
+        {
+          "say": "External: both depend on the same outside format, like one homemade file format.",
+          "reveal": 3
+        },
+        {
+          "say": "Control: A passes a flag telling B how to work, print document, as P-D-F true.",
+          "reveal": 4
+        },
+        {
+          "say": "Stamp: A passes a whole customer when B only reads the email.",
+          "reveal": 5
+        },
+        {
+          "say": "Data: A passes just the email and the total.",
+          "reveal": 6
+        },
+        {
+          "say": "Message, the loosest: A sends a message through an interface, notifier dot send. The practical goal: depend on interfaces, pass only what's needed, never share mutable globals.",
+          "reveal": 7
+        }
+      ]
+    },
+    {
+      "id": "s016",
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Example: Student in three steps",
+      "bullets": [
+        "Start: Student stores data AND prints SQL",
+        "Step 1: extract MySqlDatabase, but new it inside",
+        "Step 2: depend on a StudentRepository interface",
+        "Production: MySqlStudentRepository",
+        "Test: InMemoryStudentRepository records S-2048"
+      ],
+      "steps": [
+        {
+          "say": "Let's follow one Student class. At the start, Student holds data and also prints connecting to MySQL. One class, two jobs. That's a cohesion problem, not coupling. There's nothing to couple to yet.",
+          "reveal": 1
+        },
+        {
+          "say": "Step one: extract a My S-Q-L Database class. But Student creates it with new, inside itself. Cohesion is fixed, coupling is tight. Every test now needs a live MySQL server.",
+          "reveal": 2
+        },
+        {
+          "say": "Step two: describe the job as an interface, Student Repository, one method, save. Student receives it through its constructor.",
+          "reveal": 3
+        },
+        {
+          "say": "Now production passes the MySQL repository, and student S-1024 is saved to MySQL.",
+          "reveal": 4
+        },
+        {
+          "say": "And a test passes an in-memory fake that just keeps a list. It records S-2048, no database needed. Moving code didn't lower coupling. Pointing at an interface did.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s017",
+      "layout": "diagram",
+      "kicker": "Concept 4 of 18",
+      "title": "From tight to loose coupling",
+      "mermaid": "flowchart LR\n  S1[\"Step 1<br/>Student\"] -->|\"new\"| M[\"MySqlDatabase\"]\n  S2[\"Step 2<br/>Student\"] -->|\"uses\"| I[\"StudentRepository<br/>interface\"]\n  MY[\"MySql<br/>StudentRepository\"] -->|\"implements\"| I\n  F[\"InMemory<br/>StudentRepository\"] -->|\"implements\"| I",
+      "caption": "In step 2 the concrete classes point toward the contract",
+      "steps": [
+        {
+          "say": "In step one, Student names a concrete class. In step two, Student names only the contract, and both concrete repositories point toward it.",
+          "reveal": 0
+        },
+        {
+          "say": "In the interview, say: I look for where a class names a concrete collaborator, describe the job as an interface, and pass it in. But I don't put interfaces in front of stable things like String or LocalDate. Recap: extracting a class isn't enough, aim the dependency at an abstraction.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s018",
+      "layout": "section",
+      "kicker": "Concept 5 of 18",
+      "title": "Separation of Concerns",
+      "steps": [
+        {
+          "say": "A concern is one area of the work: storing data, deciding whether an email is acceptable, drawing the screen. Separation of concerns, a term from Edsger Dijkstra in nineteen seventy-four, says give each area its own module.",
+          "reveal": 0
+        },
+        {
+          "say": "Think of a restaurant. The kitchen cooks, waiters serve, the cashier takes payment. A new menu doesn't change how you pay.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 4 SOLID · 4.5 Separation of Concerns (SoC)"
+    },
+    {
+      "id": "s019",
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Example: user registration, step by step",
+      "bullets": [
+        "1. List concerns: storage and business rules",
+        "2. UserStore keeps users, never judges them",
+        "3. UserService checks rules, calls store.addUser",
+        "4. Count modules each change opens: ideally one"
+      ],
+      "steps": [
+        {
+          "say": "Step one, list the concerns. For registration: storage, and the rules about what's acceptable.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, give each a module. User Store keeps users and never judges validity.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, connect them through small methods. User Service checks the rules: username at least three characters, email containing an at sign and a dot. Then it calls add user. Register Ada with ada at example dot com: stored. Jo: rejected, too short. Grace with grace dash at dash example: rejected, not an email. One user in the store.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, test the design by counting modules per change. Moving to a real database opens User Store only. Requiring eight-character usernames opens User Service only. Testing rules without a database means passing a stand-in store.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s020",
+      "layout": "bullets",
+      "kicker": "Concept 5 of 18",
+      "title": "SoC: costs and the interview line",
+      "bullets": [
+        "SRP is for a class, SoC for modules and layers",
+        "Cross-cutting concerns still touch many modules",
+        "A 50-line script needs no layers",
+        "Interview: how many modules does a change open?"
+      ],
+      "steps": [
+        {
+          "say": "S-R-P and separation of concerns are the same instinct at different sizes. S-R-P is about one class. Separation of concerns is about modules, layers and subsystems.",
+          "reveal": 1
+        },
+        {
+          "say": "The cost: cross-cutting concerns, like logging, security and transactions, still touch many modules, and need tools like decorators or aspects.",
+          "reveal": 2
+        },
+        {
+          "say": "And a fifty-line script doesn't need layers. Separate concerns that change for different reasons or at different speeds.",
+          "reveal": 3
+        },
+        {
+          "say": "In the interview, say: my test is, when a requirement changes, how many modules do I open? Ideally one.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s021",
+      "layout": "table",
+      "kicker": "Concept 6 of 18",
+      "title": "SRP vs cohesion vs coupling vs SoC",
+      "table": {
+        "head": [
+          "Idea",
+          "Question it asks",
+          "Scope"
+        ],
+        "rows": [
+          [
+            "SRP",
+            "How many actors can ask for a change?",
+            "Class or module"
+          ],
+          [
+            "Cohesion",
+            "Do the parts belong together?",
+            "Inside one unit"
+          ],
+          [
+            "Coupling",
+            "How much does A depend on B?",
+            "Between two units"
+          ],
+          [
+            "SoC",
+            "Is each area of work its own module?",
+            "Modules, layers"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "S-R-P asks how many actors can request a change, for one class. Employee had three.",
+          "reveal": 1
+        },
+        {
+          "say": "Cohesion asks whether the parts inside one unit belong together. S-R-P usually raises it, because one job means related parts. User Manager was the example.",
+          "reveal": 2
+        },
+        {
+          "say": "Coupling asks how much A depends on B, between two units. S-R-P tends to lower it but doesn't guarantee it. Student after step one proved that.",
+          "reveal": 3
+        },
+        {
+          "say": "Separation of concerns asks whether each area of work has its own module. Applying S-R-P to every class is one route there. The textbook goal is high cohesion, low coupling. S-R-P gets you the first half, depending on abstractions gets the second.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Ch 4 SOLID · 4.6 SRP vs cohesion vs coupling vs SoC"
+    },
+    {
+      "id": "s022",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Student creates its own MySqlDatabase. What's wrong?",
+      "bullets": [
+        "Low cohesion inside Student",
+        "Tight coupling to a concrete class",
+        "Nothing, the code was extracted"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. After extracting the database code, Student still does new My S-Q-L Database in its constructor. Is that a cohesion problem, a coupling problem, or fine?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s023",
+      "layout": "section",
+      "kicker": "Concept 7 of 18",
+      "title": "Open/Closed: add code, don't edit it",
+      "steps": [
+        {
+          "say": "Answer: tight coupling. It names and creates a concrete class, so it's welded to MySQL.",
+          "reveal": 0
+        },
+        {
+          "say": "Now the O. Software entities should be open for extension but closed for modification. Closed means a tested class needn't be reopened for the next variation. Open means new behaviour arrives as new parts, through interfaces and polymorphism, one call with many implementations.",
+          "reveal": 0
+        },
+        {
+          "say": "Think of a game console. You plug in a racing wheel, a motion controller, a V-R headset, and nobody rewires the console. The standard port is the interface. Bertrand Meyer named the idea in nineteen eighty-eight using inheritance. Martin's version, using interfaces, is what people mean today.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 4 SOLID · 4.7 Open/Closed Principle (OCP)"
+    },
+    {
+      "id": "s024",
+      "layout": "twocol",
+      "kicker": "Example",
+      "title": "Example: invoice formats",
+      "left": {
+        "heading": "Before: a branch per type",
+        "bullets": [
+          "generate(String invoiceType)",
+          "if basic ... else if international ...",
+          "A new type edits a tested method"
+        ]
+      },
+      "right": {
+        "heading": "After: one class per format",
+        "bullets": [
+          "InvoiceGenerator interface: generate(amount)",
+          "Basic, International, Detailed generators",
+          "Invoice delegates, no branch at all"
+        ]
+      },
+      "steps": [
+        {
+          "say": "With one invoice format, there was nothing to fix. Then sales wants international invoices, and the quick route is a type parameter.",
+          "reveal": 1
+        },
+        {
+          "say": "And an if, else if branch inside generate.",
+          "reveal": 2
+        },
+        {
+          "say": "Every new type now edits code that already works. The quick test: can I add the next case without opening this file? Here, no.",
+          "reveal": 3
+        },
+        {
+          "say": "So step one: the part that varies, the format, becomes an interface, Invoice Generator, with one method, generate amount.",
+          "reveal": 4
+        },
+        {
+          "say": "Step two: each format gets its own class.",
+          "reveal": 5
+        },
+        {
+          "say": "Step three: Invoice holds a generator and delegates, meaning it hands the work over. Step four: a detailed format is one new class. For an amount of one hundred twenty, basic, international, detailed and even a one-line lambda pro-forma all print, and Invoice was never opened. This shape is the Strategy pattern.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s025",
+      "layout": "diagram",
+      "kicker": "Concept 7 of 18",
+      "title": "Invoice delegates to a generator",
+      "mermaid": "flowchart LR\n  INV[\"Invoice<br/>amount, generator\"] -->|\"delegates\"| G[\"InvoiceGenerator<br/>interface\"]\n  B[\"Basic<br/>generator\"] -->|\"implements\"| G\n  IN[\"International<br/>generator\"] -->|\"implements\"| G\n  D[\"Detailed<br/>generator, new\"] -->|\"implements\"| G",
+      "caption": "A new format is a new file, not an edit",
+      "steps": [
+        {
+          "say": "Invoice has no branch and doesn't know how many formats exist. The detailed generator was the only new code.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s026",
+      "layout": "bullets",
+      "kicker": "Concept 7 of 18",
+      "title": "Why not subclass Invoice? And what's still open",
+      "bullets": [
+        "Subclassing also satisfies OCP, fine when small",
+        "Two axes: 3 formats x 4 currencies = 12 subclasses",
+        "Delegation: 3 + 4 = 7 classes",
+        "Delegation picks the format at run time",
+        "A new discount rule still edits Invoice: that's OK"
+      ],
+      "steps": [
+        {
+          "say": "Why not International Invoice extends Invoice? Fine in a small program.",
+          "reveal": 1
+        },
+        {
+          "say": "But add a second axis of change. Three formats times four currencies means twelve subclasses.",
+          "reveal": 2
+        },
+        {
+          "say": "With delegation you combine two independent objects: three plus four, seven classes.",
+          "reveal": 3
+        },
+        {
+          "say": "And an object's class is fixed at new, while a generator can be picked once you know the customer's country.",
+          "reveal": 4
+        },
+        {
+          "say": "Notice what's still not closed. A new discount kind still edits Invoice, and that's fine. A class is closed against a specific kind of change, usually one you've already seen.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s027",
+      "layout": "table",
+      "kicker": "Concept 7 of 18",
+      "title": "Approaches to OCP",
+      "table": {
+        "head": [
+          "Approach",
+          "Pattern or feature",
+          "Example"
+        ],
+        "rows": [
+          [
+            "Interface + delegation",
+            "Strategy",
+            "New InvoiceGenerator class"
+          ],
+          [
+            "Inheritance + override",
+            "Template Method",
+            "Subclass fills one hook step"
+          ],
+          [
+            "Wrapping",
+            "Decorator",
+            "BufferedInputStream wraps a file"
+          ],
+          [
+            "Listening",
+            "Observer",
+            "New subscriber to order-shipped"
+          ],
+          [
+            "Plug-ins / registry",
+            "ServiceLoader",
+            "New JDBC driver JAR"
+          ],
+          [
+            "Functions",
+            "Lambda",
+            "a -> pro-forma invoice"
+          ],
+          [
+            "Data / config",
+            "Rules table, feature flag",
+            "New tax rate row"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Interface plus delegation, the Strategy pattern: the invoice generators we just built.",
+          "reveal": 1
+        },
+        {
+          "say": "Inheritance plus overriding, Template Method: a fixed skeleton where a subclass fills in one hook step.",
+          "reveal": 2
+        },
+        {
+          "say": "Wrapping, the Decorator: buffered input stream adds buffering around a file stream without editing it.",
+          "reveal": 3
+        },
+        {
+          "say": "Listening, the Observer: a new reaction to order shipped is a new subscriber.",
+          "reveal": 4
+        },
+        {
+          "say": "Plug-ins: a new database is a new driver JAR found by Service Loader.",
+          "reveal": 5
+        },
+        {
+          "say": "Functions: pass a lambda, like our pro-forma invoice.",
+          "reveal": 6
+        },
+        {
+          "say": "And data: if variants are just different numbers, a new row in a table is enough. The switch doesn't vanish. It moves to one place at the edge, a factory or a map.",
+          "reveal": 7
+        }
+      ]
+    },
+    {
+      "id": "s028",
+      "layout": "bullets",
+      "kicker": "Concept 7 of 18",
+      "title": "Caution: don't over-engineer OCP",
+      "bullets": [
+        "Start simple: write the if first",
+        "Rule of three: abstract at the second or third case",
+        "Too many layers defeat the purpose",
+        "Unused extension points: Speculative Generality",
+        "Fixed small set? A sealed interface + switch"
+      ],
+      "steps": [
+        {
+          "say": "Start simple. Write the if first.",
+          "reveal": 1
+        },
+        {
+          "say": "Introduce the interface when the second or third case actually arrives. That's the rule of three.",
+          "reveal": 2
+        },
+        {
+          "say": "Balance. Too many abstraction layers make code harder to read.",
+          "reveal": 3
+        },
+        {
+          "say": "Extension points for futures that never come are waste.",
+          "reveal": 4
+        },
+        {
+          "say": "And for a fixed, small set, Java twenty-one's sealed interfaces with a pattern-matching switch let the compiler check every case. In the interview, say: when a type switch keeps growing, I put the varying part behind an interface, one class per variant. I wait until the variation is real, and a class is closed against a specific kind of change. Recap: add, don't edit, when the variation is real.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s029",
+      "layout": "section",
+      "kicker": "Concept 8 of 18",
+      "title": "Liskov Substitution: subtypes keep promises",
+      "steps": [
+        {
+          "say": "A subtype must be usable wherever its parent is expected, without making the program incorrect. Barbara Liskov introduced it in nineteen eighty-seven. Substitutable means more than it compiles. It means correct results.",
+          "reveal": 0
+        },
+        {
+          "say": "A hire-car firm promises a car that takes petrol. Hand over an electric car and the promise breaks at the pump, though an electric car is certainly a car.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 4 SOLID · 4.8 Liskov Substitution Principle"
+    },
+    {
+      "id": "s030",
+      "layout": "twocol",
+      "kicker": "Example",
+      "title": "Example: Car and ElectricCar",
+      "left": {
+        "heading": "Before",
+        "bullets": [
+          "Car: start, stop, refuel",
+          "ElectricCar.refuel() throws",
+          "service(Car) crashes on an electric car"
+        ]
+      },
+      "right": {
+        "heading": "After",
+        "bullets": [
+          "Vehicle: start, stop, replenishEnergy()",
+          "Car pumps gasoline",
+          "ElectricCar charges its battery"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Car has start, stop and refuel.",
+          "reveal": 1
+        },
+        {
+          "say": "Electric Car extends Car, and its refuel throws unsupported operation.",
+          "reveal": 2
+        },
+        {
+          "say": "A service method that takes any Car calls start, refuel, stop, and crashes for the electric one. L-S-P is tested by code that doesn't know which subclass it got.",
+          "reveal": 3
+        },
+        {
+          "say": "The root cause: refuel names a mechanism, pouring liquid fuel. A base method should name the shared goal. So raise a general parent, Vehicle, with replenish energy.",
+          "reveal": 4
+        },
+        {
+          "say": "Car pumps gasoline.",
+          "reveal": 5
+        },
+        {
+          "say": "Electric Car charges its battery. They're siblings now, and substitution is child to parent only, never between siblings.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s031",
+      "layout": "twocol",
+      "kicker": "Example",
+      "title": "Example: birds, inheritance versus composition",
+      "left": {
+        "heading": "Inheritance: is-a",
+        "bullets": [
+          "Bird.fly(), Penguin overrides and throws",
+          "Smell: Refused Bequest"
+        ]
+      },
+      "right": {
+        "heading": "Composition: has-a",
+        "bullets": [
+          "Bird holds a MovementStyle",
+          "Flying, Swimming, Running",
+          "bird.travel(); changeMovement at run time"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Same story with birds. Put fly on Bird and Penguin inherits a promise it must refuse.",
+          "reveal": 1
+        },
+        {
+          "say": "Refactoring calls a subclass that rejects what it inherits the Refused Bequest smell.",
+          "reveal": 2
+        },
+        {
+          "say": "The fix is composition. Bird has a movement style instead of being a flying thing.",
+          "reveal": 3
+        },
+        {
+          "say": "Movement styles are small objects: flying, swimming, running. The penguin gets swimming, the ostrich running, no Ostrich subclass needed.",
+          "reveal": 4
+        },
+        {
+          "say": "Bird promises only eat and travel. And an injured sparrow can switch to running at run time. Inherit when the child keeps every promise. Compose when a behaviour differs.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s032",
+      "layout": "twocol",
+      "kicker": "Concept 8 of 18",
+      "title": "Tell, Don't Ask",
+      "left": {
+        "heading": "Asking",
+        "bullets": [
+          "if (bird instanceof Penguin) swim(bird)",
+          "else fly(bird)",
+          "Caller must know every subtype"
+        ]
+      },
+      "right": {
+        "heading": "Telling",
+        "bullets": [
+          "bird.travel()",
+          "The object decides how",
+          "Works with any substitute"
+        ]
+      },
+      "steps": [
+        {
+          "say": "From The Pragmatic Programmer: tell an object what to do, don't ask about its state and decide for it. Asking looks like: if the bird is an instance of Penguin, swim it.",
+          "reveal": 1
+        },
+        {
+          "say": "Otherwise fly it.",
+          "reveal": 2
+        },
+        {
+          "say": "That caller must know every subtype, which breaks open closed and hides L-S-P problems.",
+          "reveal": 3
+        },
+        {
+          "say": "Telling is just bird dot travel.",
+          "reveal": 4
+        },
+        {
+          "say": "The object decides how.",
+          "reveal": 5
+        },
+        {
+          "say": "And it works with any substitute. A caller that needs instance-of on a base type is a strong hint the base type promises the wrong thing.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s033",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Square extends Rectangle. setWidth(5), setHeight(4). Area?",
+      "bullets": [
+        "20",
+        "16",
+        "It throws an exception"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Square extends Rectangle and keeps its sides equal, so setting the width also sets the height. A method written for Rectangle sets width five, then height four, and reads the area. What does it get?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s034",
+      "layout": "table",
+      "kicker": "Concept 9 of 18",
+      "title": "The rules a subclass must follow",
+      "table": {
+        "head": [
+          "Rule",
+          "Subclass may not",
+          "Example"
+        ],
+        "rows": [
+          [
+            "Preconditions",
+            "demand more",
+            "SmallOrderDiscount rejects 250"
+          ],
+          [
+            "Postconditions",
+            "guarantee less",
+            "OverdraftAccount goes to -30"
+          ],
+          [
+            "Invariants",
+            "break what always held",
+            "Square: expected 20, got 16"
+          ],
+          [
+            "Exceptions",
+            "throw something new",
+            "ElectricCar.refuel() throws"
+          ],
+          [
+            "History",
+            "allow forbidden changes",
+            "AdjustablePrice: quoted 100, charged 120"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Answer: sixteen, and nothing throws. That silent wrong answer is why these rules matter. A subclass may do the job differently, but may not require more, give less, or break an assumption. The vocabulary is Meyer's design by contract. Five rules.",
+          "reveal": 0
+        },
+        {
+          "say": "Rule one, preconditions, what the caller must provide, may not be strengthened. Discount accepts any amount zero or more. Small Order Discount refuses one hundred or more, so a valid two hundred fifty order breaks.",
+          "reveal": 1
+        },
+        {
+          "say": "Rule two, postconditions, what a method guarantees, may not be weakened. Account withdraw promises the balance never goes negative. Overdraft Account pays eighty from fifty and leaves minus thirty. A payment job keeps paying suppliers from an overdrawn account.",
+          "reveal": 2
+        },
+        {
+          "say": "Rule three, invariants, what's always true, must be kept. Rectangle implied width and height change independently. Square broke it: expected twenty, got sixteen. Base inheritance on promises in the code, not real-world categories.",
+          "reveal": 3
+        },
+        {
+          "say": "Rule four, no new exceptions callers can't handle. Electric Car's refuel broke this, and it compiled, because Java only checks checked exceptions. Loud failures are the least harmful.",
+          "reveal": 4
+        },
+        {
+          "say": "Rule five, the history constraint: a subtype mustn't allow changes the parent forbids. Price never changes. Adjustable Price adds adjust, so a quote of one hundred gets charged one hundred twenty. That's why String is final.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 4 SOLID · 4.8 The rules a subclass must follow"
+    },
+    {
+      "id": "s035",
+      "layout": "bullets",
+      "kicker": "Concept 9 of 18",
+      "title": "How to check a subclass",
+      "bullets": [
+        "Widen, never narrow: accept more, promise more",
+        "1. List the parent's promises, not signatures",
+        "2. Write one test against the parent, run per subclass",
+        "Fix shapes: immutable Rect and Sq share only area()"
+      ],
+      "steps": [
+        {
+          "say": "The one-line version: a subclass may accept more and promise more, never less of either.",
+          "reveal": 1
+        },
+        {
+          "say": "Check one: list the parent's promises, not its method signatures. Balance never below zero. Width and height change independently. Most violations slip in because nobody wrote the promise down.",
+          "reveal": 2
+        },
+        {
+          "say": "Check two: write one test against the parent type and run it for every subclass. Resize and check sets five and four and expects twenty. It never mentions Square, yet Square fails it.",
+          "reveal": 3
+        },
+        {
+          "say": "The shapes fix: make Rect and Sq immutable records behind a Shape interface promising only area. Resizing returns a new object, so no setter can break an invariant. In the interview, say: a subclass can't demand more, promise less, break an invariant, throw new exceptions, or allow forbidden changes. I test with one base-type test per subclass. Recap: inheritance follows promises.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s036",
+      "layout": "section",
+      "kicker": "Concept 10 of 18",
+      "title": "Interface Segregation: shaped by callers",
+      "steps": [
+        {
+          "say": "Clients should not be forced to depend on methods they don't use. Martin found it at Xerox, where one giant Job class served every printer task, so a stapling change rebuilt everything.",
+          "reveal": 0
+        },
+        {
+          "say": "Like handing every guest a forty-page menu when they only want coffee. A fat interface grew one feature at a time. A role interface is small, shaped for one kind of caller.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 4 SOLID · 4.9 Interface Segregation Principle"
+    },
+    {
+      "id": "s037",
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Example: the fat Printer interface",
+      "bullets": [
+        "Printer: print, scan, fax, staple",
+        "AdvancedPrinter: all four, honest",
+        "BasicPrinter: print works, three methods throw",
+        "First fix: one interface per capability",
+        "OfficeWorkflow now takes the same device 3 times"
+      ],
+      "steps": [
+        {
+          "say": "Here's one Printer interface with print, scan, fax and staple.",
+          "reveal": 1
+        },
+        {
+          "say": "For the advanced printer it's honest. It really does all four.",
+          "reveal": 2
+        },
+        {
+          "say": "For the basic printer, three methods exist only to throw: cannot scan, cannot fax, cannot staple. The simplest device carries the heaviest burden.",
+          "reveal": 3
+        },
+        {
+          "say": "First fix: one interface per capability, Printer, Scanner, Fax, Stapler. Nobody implements what it can't do.",
+          "reveal": 4
+        },
+        {
+          "say": "But an office workflow that scans, prints and staples now takes three parameters, and its creator passes the same advanced printer three times. No dependency removed, two names added.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s038",
+      "layout": "bullets",
+      "kicker": "Concept 10 of 18",
+      "title": "How small should an interface be?",
+      "bullets": [
+        "Group by caller, not by method",
+        "Q1: Is an implementer forced to fake a method?",
+        "Q2: Does a caller depend on methods it never calls?",
+        "PrintQueue needs Printer",
+        "OfficeWorkflow needs DocumentProcessor extends Printer"
+      ],
+      "steps": [
+        {
+          "say": "The answer: group by caller. An interface carries what one kind of caller needs.",
+          "reveal": 1
+        },
+        {
+          "say": "Question one: is any implementer forced to supply a method it can't honour? Basic printer with scan: yes, too wide.",
+          "reveal": 2
+        },
+        {
+          "say": "Question two: does any caller depend on methods it never calls? If both answers are no, it's right-sized, one method or six.",
+          "reveal": 3
+        },
+        {
+          "say": "So: a print queue only prints, so it needs the role Printer, and a basic printer fits it.",
+          "reveal": 4
+        },
+        {
+          "say": "An office workflow scans, prints and staples, so it needs one role, Document Processor, which extends Printer. One dependency instead of three, and any office device also fits a print queue. Split only when you can point to the caller that wants the smaller piece.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s039",
+      "layout": "table",
+      "kicker": "Concept 10 of 18",
+      "title": "Five signals of an ISP violation",
+      "table": {
+        "head": [
+          "Signal",
+          "Example"
+        ],
+        "rows": [
+          [
+            "Low cohesion in the interface",
+            "MediaDevice: playAudio, playVideo, recordVideo"
+          ],
+          [
+            "Fat, mechanism-named methods",
+            "PaymentProcessor: creditCard, payPal, bank"
+          ],
+          [
+            "Empty or throwing methods",
+            "Vehicle: drive, fly, sail on a Car"
+          ],
+          [
+            "One interface, many roles",
+            "Employee: salary, queries, manageTeam"
+          ],
+          [
+            "Long test stand-ins",
+            "A fake with dozens of empty bodies"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Signal one, low cohesion: Media Device has play audio, play video and record video. A speaker can only play audio.",
+          "reveal": 1
+        },
+        {
+          "say": "Signal two, a fat interface with mechanism names: process credit card, process PayPal, process bank transfer. A PayPal-only shop must supply all three. Better: one pay method, one class per payment method.",
+          "reveal": 2
+        },
+        {
+          "say": "Signal three, the clearest: empty or throwing methods. A Car implementing Vehicle must throw from fly and sail.",
+          "reveal": 3
+        },
+        {
+          "say": "Signal four, one interface serving several roles. Employee with calculate salary, handle queries and manage team. A support agent throws from two.",
+          "reveal": 4
+        },
+        {
+          "say": "Signal five, long test stand-ins. If a fake needs dozens of empty bodies for one call, the interface is too wide for that caller. In the interview, say: S-R-P protects the class, I-S-P protects the caller. Recap: one interface per kind of caller.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s040",
+      "layout": "section",
+      "kicker": "Concept 11 of 18",
+      "title": "Dependency Inversion: policy owns the abstraction",
+      "steps": [
+        {
+          "say": "Two statements. High-level modules shouldn't depend on low-level modules, both depend on abstractions. And abstractions shouldn't depend on details. High level means business policy, notify the user when an order ships. Low level means technical detail, like S-M-T-P email or an S-M-S gateway.",
+          "reveal": 0
+        },
+        {
+          "say": "Why inversion? The call still goes from policy to detail at run time. But the source-code dependency flips: the detail imports and implements an interface that belongs to the policy.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 4 SOLID · 4.10 Dependency Inversion Principle"
+    },
+    {
+      "id": "s041",
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Example: notifications in four steps",
+      "bullets": [
+        "Before: NotificationService does new EmailService()",
+        "1. Introduce NotificationSender in package app",
+        "2. EmailSender, SmsSender implement it in infra",
+        "3. Service takes a sender in its constructor",
+        "4. Test with a RecordingSender fake"
+      ],
+      "steps": [
+        {
+          "say": "Before: Notification Service creates an Email Service itself. Adding S-M-S means editing business code.",
+          "reveal": 1
+        },
+        {
+          "say": "Step one: introduce an abstraction, Notification Sender, with send recipient and message. It lives in the app package, next to the policy that uses it. That's the most-missed part. The high-level side owns the interface.",
+          "reveal": 2
+        },
+        {
+          "say": "Step two: the details implement it. Email Sender and S-M-S Sender live in infra and import app, so the arrows point up into the policy.",
+          "reveal": 3
+        },
+        {
+          "say": "Step three: the service depends only on the interface, through its constructor. User u-forty-two gets your order shipped by email, then by S-M-S, with zero edits.",
+          "reveal": 4
+        },
+        {
+          "say": "Step four: test with a recording fake. It captures u-seven, test message, with no mail server.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s042",
+      "layout": "diagram",
+      "kicker": "Concept 11 of 18",
+      "title": "The dependency is inverted",
+      "mermaid": "flowchart LR\n  NS[\"NotificationService<br/>app\"] -->|\"uses\"| I[\"NotificationSender<br/>app\"]\n  EM[\"EmailSender<br/>infra\"] -->|\"implements\"| I\n  SMS[\"SmsSender<br/>infra\"] -->|\"implements\"| I\n  REC[\"RecordingSender<br/>test\"] -->|\"implements\"| I",
+      "caption": "Every arrow across packages points from detail into policy",
+      "steps": [
+        {
+          "say": "Every arrow between packages now points from the detail into the policy. That's the inversion. App imports nothing from infra.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s043",
+      "layout": "table",
+      "kicker": "Concept 12 of 18",
+      "title": "DIP in practice: four real-world techniques",
+      "table": {
+        "head": [
+          "Technique",
+          "How",
+          "Example"
+        ],
+        "rows": [
+          [
+            "Dependency injection",
+            "Pass dependencies in",
+            "new NotificationService(new SmsSender())"
+          ],
+          [
+            "Service locator",
+            "Ask a registry at run time",
+            "locator.paymentService(\"PayPal\")"
+          ],
+          [
+            "IoC container",
+            "Framework wires objects",
+            "Spring injects PaymentService"
+          ],
+          [
+            "Plug-in architecture",
+            "Core defines a contract",
+            "MediaPlayer installs Mp3, Flac decoders"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "How do teams actually get the implementation in? Four techniques.",
+          "reveal": 0
+        },
+        {
+          "say": "One, dependency injection: give a class its dependencies from outside. Constructor injection is the default, for required dependencies. Setter injection suits optional ones with a default. Method injection suits a dependency that changes each call. The one place doing all the new calls is the composition root, usually main.",
+          "reveal": 1
+        },
+        {
+          "say": "Two, a service locator: a central registry hands out services by name. Checkout Flow asks for PayPal and pays one hundred dollars. It follows D-I-P, but the real dependency hides inside method bodies, and a missing registration fails only at run time.",
+          "reveal": 2
+        },
+        {
+          "say": "Three, inversion of control containers, like Spring. Order Service takes a Payment Service interface in its constructor, and Spring finds the bean. But the framework is just wiring. Without it, it's one line in main.",
+          "reveal": 3
+        },
+        {
+          "say": "Four, plug-ins. Media Player defines Audio Decoder. M-P-three and FLAC decoders install themselves. Song dot M-P-three plays, concert dot FLAC plays, voice dot O-G-G says no plug-in installed, and the core was never edited.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Ch 4 SOLID · 4.10 DIP in practice"
+    },
+    {
+      "id": "s044",
+      "layout": "table",
+      "kicker": "Concept 13 of 18",
+      "title": "DIP vs DI vs IoC",
+      "table": {
+        "head": [
+          "Term",
+          "Kind",
+          "Example"
+        ],
+        "rows": [
+          [
+            "Dependency Inversion",
+            "Principle",
+            "Service depends on NotificationSender"
+          ],
+          [
+            "Dependency Injection",
+            "Technique",
+            "new NotificationService(new SmsSender())"
+          ],
+          [
+            "Inversion of Control",
+            "Broad idea",
+            "JUnit calls your @Test methods"
+          ],
+          [
+            "IoC container",
+            "Tool",
+            "Spring ApplicationContext, Guice"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Dependency inversion is a principle: depend on abstractions, and the policy owns them.",
+          "reveal": 1
+        },
+        {
+          "say": "Dependency injection is a technique, one way to get there: pass dependencies in.",
+          "reveal": 2
+        },
+        {
+          "say": "Inversion of control is a broad idea: the framework calls your code. The Hollywood principle, don't call us, we'll call you. JUnit calling your test methods is an example.",
+          "reveal": 3
+        },
+        {
+          "say": "An I-o-C container is a tool that performs injection for you, like Spring. They really differ. Injecting a concrete My S-Q-L Database parameter is injection without inversion. And this whole chapter is inversion without a framework.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Ch 4 SOLID · 4.10 DIP vs DI vs IoC"
+    },
+    {
+      "id": "s045",
+      "layout": "twocol",
+      "kicker": "Concept 13 of 18",
+      "title": "Stable vs volatile dependencies",
+      "left": {
+        "heading": "Volatile: invert these",
+        "bullets": [
+          "Databases, networks, clocks",
+          "Third-party APIs, changing business rules"
+        ]
+      },
+      "right": {
+        "heading": "Stable: use directly",
+        "bullets": [
+          "String, List, LocalDate, Math",
+          "Value objects like Order, BigDecimal"
+        ]
+      },
+      "steps": [
+        {
+          "say": "D-I-P targets volatile dependencies, things that change often or that you want to fake. Databases, networks and clocks.",
+          "reveal": 1
+        },
+        {
+          "say": "Third-party APIs and business rules that keep changing.",
+          "reveal": 2
+        },
+        {
+          "say": "Stable concrete classes are fine to use directly. Nobody wraps String in an interface.",
+          "reveal": 3
+        },
+        {
+          "say": "The same goes for value objects. In the interview, say: business code depends on interfaces it owns, details implement them, main wires them. D-I is the how, D-I-P the why, Spring the tool. Recap: invert only what's volatile.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s046",
+      "layout": "section",
+      "kicker": "Concept 14 of 18",
+      "title": "One checkout class through all five",
+      "steps": [
+        {
+          "say": "Real code rarely shows one principle at a time. Here's a checkout class that grew quietly over two years. It validates, prices, saves and emails, and it works. We'll refactor it five times, each step triggered by a real change request.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 4 SOLID · 4.11 Refactoring one class through all five"
+    },
+    {
+      "id": "s047",
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Steps 0 to 2: split, then open the pricing",
+      "bullets": [
+        "Step 0: OrderService.process does it all",
+        "Step 1 SRP: Validator, PriceCalculator, Repository, Notifier",
+        "Step 2 OCP: PricingRule, one class per rate"
+      ],
+      "steps": [
+        {
+          "say": "Step zero. One process method. It validates the amount is positive, prices with a branch, members pay ninety percent and staff seventy, prints a SQL insert, then emails the total. Order A-2, staff, one hundred, saves seventy.",
+          "reveal": 1
+        },
+        {
+          "say": "Step one, single responsibility. Four actors: the business-rules owner for validation, finance for pricing, the database team for the insert, marketing for the email wording. Rewording the email redeploys pricing. So split into Order Validator, Price Calculator, Order Repository and Notifier. Same output.",
+          "reveal": 2
+        },
+        {
+          "say": "Step two, open closed. The customer-type switch survived inside Price Calculator, so a student rate would edit working code. Each rate becomes a Pricing Rule class: regular, member, staff. On one hundred: one hundred, ninety, seventy. A student rate is now one new class.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s048",
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Steps 3 to 5: promises, roles, wiring",
+      "bullets": [
+        "Step 3 LSP: FixedDiscount(20) on 10 must not be -10",
+        "Contract test: 4 of 5 rules safe",
+        "Step 4 ISP: Checkout needs OrderSaver, not a repository",
+        "Step 5 DIP: Checkout(rule, saver, notifier)",
+        "Same class: production, test and lambda wirings"
+      ],
+      "steps": [
+        {
+          "say": "Step three, Liskov. Finance wants a fixed twenty off. The careless version turns a ten order into minus ten, no exception. So write the promise down: every pricing rule returns a total of zero or more. The correct version clamps to zero.",
+          "reveal": 1
+        },
+        {
+          "say": "Then one contract test runs every rule on zero, ten, one hundred and two fifty. Regular, member, staff and the fixed discount pass. The careless one fails with minus twenty on zero. Four of five are safe substitutes.",
+          "reveal": 2
+        },
+        {
+          "say": "Step four, interface segregation. The repository grew find by I-D and list all for reporting, but checkout only saves. So checkout depends on a one-method role, Order Saver. Order Finder serves reporting, and the S-Q-L repository plays both roles.",
+          "reveal": 3
+        },
+        {
+          "say": "Step five, dependency inversion. Checkout used to create its collaborators. Now it takes a pricing rule, an order saver and a notifier in its constructor, and main chooses.",
+          "reveal": 4
+        },
+        {
+          "say": "The proof: order A-9 for two hundred, member discount. Production saves one eighty and emails Ada. A test wiring keeps it in memory with no email. A lambda wiring works too. One Checkout class, three wirings, zero edits.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s049",
+      "layout": "table",
+      "kicker": "Concept 14 of 18",
+      "title": "Reading the five steps back",
+      "table": {
+        "head": [
+          "Step",
+          "Question it asked",
+          "What changed"
+        ],
+        "rows": [
+          [
+            "SRP",
+            "Who might request changes?",
+            "One class became four"
+          ],
+          [
+            "OCP",
+            "What breaks on a new case?",
+            "Each pricing branch became a class"
+          ],
+          [
+            "LSP",
+            "Does each rule work via the interface?",
+            "Every rule keeps total at least 0"
+          ],
+          [
+            "ISP",
+            "Is the caller tied to more than it calls?",
+            "Checkout needs only save"
+          ],
+          [
+            "DIP",
+            "Who picks the concrete class?",
+            "The entry point, not Checkout"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "S-R-P came first, because the varying part was buried in a four-job method.",
+          "reveal": 1
+        },
+        {
+          "say": "O-C-P then introduced an interface for pricing.",
+          "reveal": 2
+        },
+        {
+          "say": "L-S-P mattered once the interface had several implementations.",
+          "reveal": 3
+        },
+        {
+          "say": "I-S-P mattered once a new caller, reporting, appeared.",
+          "reveal": 4
+        },
+        {
+          "say": "D-I-P came last, because inversion needs abstractions to point at. What we didn't do: Order stayed a plain record, validation still edits Checkout because it hasn't varied, and BigDecimal is used directly. Every step was triggered by a real change, never a checklist.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s050",
+      "layout": "table",
+      "kicker": "Concept 15 of 18",
+      "title": "SOLID and design patterns",
+      "table": {
+        "head": [
+          "Pattern",
+          "Serves",
+          "How"
+        ],
+        "rows": [
+          [
+            "Strategy",
+            "OCP, DIP",
+            "Varying algorithm behind an interface"
+          ],
+          [
+            "Decorator",
+            "OCP, SRP",
+            "Adds behaviour by wrapping"
+          ],
+          [
+            "Adapter",
+            "DIP, ISP",
+            "Plugs a foreign class into your interface"
+          ],
+          [
+            "Factory",
+            "DIP, OCP",
+            "Hides constructors, one switch"
+          ],
+          [
+            "Observer",
+            "OCP, DIP",
+            "New reaction is a new subscriber"
+          ],
+          [
+            "Null Object",
+            "LSP",
+            "Do-nothing class that keeps the contract"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Principles say what good structure looks like. Patterns are named ways to produce it. Strategy is open closed for an algorithm, like our pricing rules.",
+          "reveal": 1
+        },
+        {
+          "say": "Decorator adds behaviour by wrapping, without editing the wrapped class.",
+          "reveal": 2
+        },
+        {
+          "say": "Adapter lets a caller keep its own interface while a foreign class is plugged in.",
+          "reveal": 3
+        },
+        {
+          "say": "Factory keeps callers away from concrete constructors, so the switch lives in one place.",
+          "reveal": 4
+        },
+        {
+          "say": "Observer: new reactions are new subscribers.",
+          "reveal": 5
+        },
+        {
+          "say": "Null Object is a do-nothing implementation that still keeps the contract, instead of null checks everywhere.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Ch 4 SOLID · 4.12 SOLID and design patterns"
+    },
+    {
+      "id": "s051",
+      "layout": "table",
+      "kicker": "Concept 16 of 18",
+      "title": "Five checks over your class diagram",
+      "table": {
+        "head": [
+          "Letter",
+          "Look for",
+          "Example"
+        ],
+        "rows": [
+          [
+            "S",
+            "An 'and' in the one-sentence job",
+            "Formats AND emails the report"
+          ],
+          [
+            "O",
+            "A switch over a type",
+            "switch (vehicleType) for fees"
+          ],
+          [
+            "L",
+            "A subclass refusing a method",
+            "ReadOnlyList.add throws"
+          ],
+          [
+            "I",
+            "Empty bodies in a wide interface",
+            "Robot implements eat()"
+          ],
+          [
+            "D",
+            "High level naming low level",
+            "ParkingLot creates CreditCardTransaction"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "In a design round, spend about five minutes running five checks over the diagram you drew. S: describe each class in one sentence. If there's an and, like formats and emails the report, that's a split.",
+          "reveal": 1
+        },
+        {
+          "say": "O: a switch over a type, like a parking fee switch on vehicle type. Put fees behind a Parking Rate interface.",
+          "reveal": 2
+        },
+        {
+          "say": "L: a subclass refusing a parent method, like a read-only list that throws from add. Re-read inheritance arrows at the end, they get added late.",
+          "reveal": 3
+        },
+        {
+          "say": "I: empty bodies in a wide interface, like a Robot forced to implement eat on a Worker interface.",
+          "reveal": 4
+        },
+        {
+          "say": "D: a high-level class naming a low-level one, like Parking Lot creating a credit card transaction. Calibration: two findings is a good pass, five means rework, zero means you didn't look.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 4 SOLID · 4.13 SOLID in the design interview"
+    },
+    {
+      "id": "s052",
+      "layout": "bullets",
+      "kicker": "Concept 16 of 18",
+      "title": "Naming a design problem out loud",
+      "bullets": [
+        "1. What you see: a specific fact",
+        "2. What it will cost: the painful future change",
+        "3. What you'd do, and what that costs you",
+        "Describe first, name the principle last"
+      ],
+      "steps": [
+        {
+          "say": "Interviewers rarely ask for definitions. They judge whether you can explain your design's shape. Use three parts. Part one, what you see. Take a Report Generator that formats, writes to disk and emails. Say: three owners can request changes. Marketing owns wording, the platform team owns file paths, email owners own delivery.",
+          "reveal": 1
+        },
+        {
+          "say": "Part two, what it will cost: a copy edit redeploys the file-writing code.",
+          "reveal": 2
+        },
+        {
+          "say": "Part three, what you'd do and its price: pull formatting apart from delivery, a formatter and a sink. It costs two classes and some wiring, worth it because wording changes often. The weak answer was just: it breaks S-R-P, I'd make three classes.",
+          "reveal": 3
+        },
+        {
+          "say": "Describe before you label, then name the principle at the end. And when asked would you always do that, the answer is almost never yes.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s053",
+      "layout": "table",
+      "kicker": "Concept 17 of 18",
+      "title": "Common questions about SOLID",
+      "table": {
+        "head": [
+          "Question",
+          "Short answer"
+        ],
+        "rows": [
+          [
+            "SRP vs ISP?",
+            "SRP guards the class, ISP the caller"
+          ],
+          [
+            "When not to apply them?",
+            "Nothing varied, throwaway code, no actors"
+          ],
+          [
+            "Still relevant?",
+            "Valuable as diagnosis, misleading as rules"
+          ],
+          [
+            "OCP means never edit?",
+            "No: bug fixes and refactors still edit"
+          ],
+          [
+            "Most violated principle?",
+            "SRP, and ISP in reverse: over-splitting"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Give the two-line version and stop. S-R-P versus I-S-P: S-R-P guards the class doing the work, I-S-P guards the caller at a boundary. Either can break without the other.",
+          "reveal": 1
+        },
+        {
+          "say": "When wouldn't you apply them? When nothing has varied yet, the code is small or throwaway, you can't name the two groups, or five four-line files read worse than one twenty-line file. Each principle buys flexibility later with simplicity now.",
+          "reveal": 2
+        },
+        {
+          "say": "Is SOLID still relevant? Yes, as vocabulary and diagnosis, misleading as absolute rules.",
+          "reveal": 3
+        },
+        {
+          "say": "Does open closed mean never editing a file? No. One more variation of a known kind is an addition. Bug fixes still edit.",
+          "reveal": 4
+        },
+        {
+          "say": "Which is violated most? S-R-P, because classes grow by small sensible additions. And I-S-P in reverse, an interface per method.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 4 SOLID · 4.14 Common questions about SOLID"
+    },
+    {
+      "id": "s054",
+      "layout": "table",
+      "kicker": "Concept 18 of 18",
+      "title": "Over-engineering: the warning signs",
+      "table": {
+        "head": [
+          "Warning sign",
+          "Do instead"
+        ],
+        "rows": [
+          [
+            "XHelper, XUtils after a split",
+            "Split by actor, names stand alone"
+          ],
+          [
+            "Six classes, same commit every time",
+            "Merge them back"
+          ],
+          [
+            "Interface + factory for one implementation",
+            "Write the if, rule of three"
+          ],
+          [
+            "Subclass silently does nothing",
+            "Better parent, or composition"
+          ],
+          [
+            "Same object passed three times",
+            "Group by caller into roles"
+          ],
+          [
+            "Interface in front of String",
+            "Invert only volatile things"
+          ],
+          [
+            "DI container for 200 lines",
+            "Wire by hand in main"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Helper and Utils classes after a split mean you split by verb. Split by actor instead.",
+          "reveal": 1
+        },
+        {
+          "say": "Six small classes in every commit together is over-split S-R-P, the Shotgun Surgery smell. Merge them.",
+          "reveal": 2
+        },
+        {
+          "say": "An interface, factory and registry for one implementation is Speculative Generality. Write the if.",
+          "reveal": 3
+        },
+        {
+          "say": "A subclass that works by silently doing nothing turns a loud failure into a quiet wrong answer.",
+          "reveal": 4
+        },
+        {
+          "say": "The same object passed three times is over-split I-S-P.",
+          "reveal": 5
+        },
+        {
+          "say": "An interface in front of String is D-I-P misapplied.",
+          "reveal": 6
+        },
+        {
+          "say": "And a D-I container for a two-hundred-line program? Wire it by hand. The counterweight is YAGNI, you aren't gonna need it. SOLID says what a good seam looks like. YAGNI says when to cut it: when a real change asks.",
+          "reveal": 7
+        }
+      ],
+      "caption": "Book: Ch 4 SOLID · 4.15 Over-engineering"
+    },
+    {
+      "id": "s055",
+      "layout": "table",
+      "kicker": "Self-check",
+      "title": "Self-check: answer before I do",
+      "table": {
+        "head": [
+          "Question",
+          "Answer"
+        ],
+        "rows": [
+          [
+            "switch (vehicleType) for parking fees?",
+            "OCP: ParkingRate, one class per rate"
+          ],
+          [
+            "ReadOnlyList extends ArrayList, add throws?",
+            "LSP: compose or read-only interface"
+          ],
+          [
+            "Robot implements Worker with eat()?",
+            "ISP: split Workable and Eater"
+          ],
+          [
+            "OrderService creates MySqlOrderDao itself?",
+            "DIP: inject an OrderSaver it owns"
+          ],
+          [
+            "Why is Square worse than Penguin.fly()?",
+            "It's silent: a wrong result"
+          ],
+          [
+            "Usual refactor order?",
+            "SRP, OCP, LSP, ISP, DIP"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Self-check. Pause and answer each. A switch on vehicle type computing parking fees? Open closed. Fees behind a Parking Rate interface, one class per rate.",
+          "reveal": 1
+        },
+        {
+          "say": "A read-only list extending ArrayList that throws from add? Liskov. Use composition or a read-only interface.",
+          "reveal": 2
+        },
+        {
+          "say": "A Robot implementing a Worker interface with work and eat? Interface segregation. Split into Workable and Eater roles.",
+          "reveal": 3
+        },
+        {
+          "say": "Order Service creating a My S-Q-L Order DAO itself? Dependency inversion and untestable. Inject an Order Saver the service owns.",
+          "reveal": 4
+        },
+        {
+          "say": "Why is Square worse than a penguin throwing from fly? It's silent. The program carries on with a wrong result.",
+          "reveal": 5
+        },
+        {
+          "say": "The usual refactor order? S-R-P, O-C-P, L-S-P, I-S-P, D-I-P, each setting up the next.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Ch 4 SOLID · Chapter self-check"
+    },
+    {
+      "id": "s056",
+      "layout": "recap",
+      "kicker": "Episode 4 complete",
+      "title": "Episode 4 recap",
+      "bullets": [
+        "SOLID: five names for pain, used to diagnose",
+        "SRP: one actor per class; cohesion in, coupling out",
+        "OCP: vary behind an interface, when variation is real",
+        "LSP: widen, never narrow; compose when refusing",
+        "ISP: roles per caller; DIP: policy owns the interface",
+        "Next: Episode 5, More Design Principles, GRASP and DDD"
+      ],
+      "steps": [
+        {
+          "say": "SOLID is five names for the ways code gets painful to change. Use them to diagnose, not as a checklist.",
+          "reveal": 1
+        },
+        {
+          "say": "S-R-P: one actor per class. Split by who asks for changes, keep cohesion high, and check coupling after every split.",
+          "reveal": 2
+        },
+        {
+          "say": "O-C-P: put the part that has varied behind an interface and add variants as classes. Closure is against a specific kind of change.",
+          "reveal": 3
+        },
+        {
+          "say": "L-S-P: accept at least as much, promise at least as much, keep invariants and history, throw nothing new. Compose when a subclass would refuse.",
+          "reveal": 4
+        },
+        {
+          "say": "I-S-P: one role per kind of caller. D-I-P: policy owns the abstraction, details implement it, main wires it.",
+          "reveal": 5
+        },
+        {
+          "say": "In the interview: observation, cost, fix, and the price of the fix. Next episode, episode five: More Design Principles, GRASP and D-D-D. See you there.",
+          "reveal": 6
+        }
+      ]
+    }
+  ]
+}

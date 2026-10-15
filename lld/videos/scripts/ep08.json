@@ -1,0 +1,1915 @@
+{
+  "series": "LLD Workshop",
+  "episode": 8,
+  "title": "Design Patterns Intro and Creational Patterns",
+  "subtitle": "What patterns are, all 23 GoF, and the creational family in depth",
+  "scenes": [
+    {
+      "id": "s001",
+      "layout": "title",
+      "title": "Design Patterns Intro and Creational Patterns",
+      "subtitle": "What patterns are, all 23 GoF, and the creational family in depth",
+      "steps": [
+        {
+          "say": "Welcome to episode eight of the L-L-D Workshop, the low-level design series. Today we open the design patterns toolbox, and then go deep on the patterns that create objects.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll know what a pattern really is, where all twenty-three classic patterns fit, how to pick one from a signal in the requirements, and how to write and defend Singleton, the factories, Builder, Prototype and Object Pool.",
+          "reveal": 0
+        },
+        {
+          "say": "Keep the chapter eight PDF open beside the video. Each concept here matches a section there, with full Java code and real output. Pause whenever a pause-and-think question shows up.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s002",
+      "layout": "section",
+      "kicker": "Concept 1 of 20",
+      "title": "What is a design pattern?",
+      "steps": [
+        {
+          "say": "Quick question. Why do experienced developers solve the same tricky problem in the same shape, without talking to each other? Because they've seen it before.",
+          "reveal": 0
+        },
+        {
+          "say": "A design pattern is a named, reusable description of a good solution to a problem that keeps coming back. It isn't a library you install. It's a recipe you adapt, the written-down experience of many developers.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 8 · 8.1 What is a design pattern?"
+    },
+    {
+      "id": "s003",
+      "layout": "bullets",
+      "title": "The four parts of every pattern",
+      "bullets": [
+        "Name: a word that becomes team vocabulary",
+        "Problem: when to apply it, the forces in tension",
+        "Solution: roles and collaborations, a template",
+        "Consequences: the costs and benefits"
+      ],
+      "steps": [
+        {
+          "say": "Every classic pattern description has four parts. Let's walk them with one running example: a notification service that sends email, S-M-S and push. Part one, the name. Say, factory, and your teammate instantly pictures the shape.",
+          "reveal": 1
+        },
+        {
+          "say": "Part two, the problem. Ours: code all over the app writes new Sms Notification, and adding WhatsApp means hunting every copy.",
+          "reveal": 2
+        },
+        {
+          "say": "Part three, the solution. A template of roles, not code. One method takes a channel and returns a Notification interface. The roles are a product and a creator.",
+          "reveal": 3
+        },
+        {
+          "say": "Part four, consequences. Adding a channel now edits one place, but that place knows every type. A pattern without its trade-offs is only half a pattern.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s004",
+      "layout": "table",
+      "kicker": "Concept 1 of 20",
+      "title": "Why patterns pay off",
+      "table": {
+        "head": [
+          "Benefit",
+          "In practice"
+        ],
+        "rows": [
+          [
+            "Shared vocabulary",
+            "'Use a Factory' replaces a paragraph"
+          ],
+          [
+            "Proven solutions",
+            "Start from years of refinement"
+          ],
+          [
+            "Best practices built in",
+            "Loose coupling, open for extension"
+          ],
+          [
+            "Readable code",
+            "A known shape is easy for the next person"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The biggest win, especially in interviews, is vocabulary. One word replaces a paragraph of explanation.",
+          "reveal": 1
+        },
+        {
+          "say": "You start from a solution that's been refined over years, instead of a fresh, slightly buggy one.",
+          "reveal": 2
+        },
+        {
+          "say": "Patterns bake in good habits, like loose coupling, where parts know little about each other.",
+          "reveal": 3
+        },
+        {
+          "say": "And the next reader recognises the shape. The catch: forcing a pattern where it isn't needed adds classes and confusion. Recap: a pattern is name, problem, solution template and consequences.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s005",
+      "layout": "table",
+      "kicker": "Concept 2 of 20",
+      "title": "From buildings to the Gang of Four",
+      "table": {
+        "head": [
+          "Year",
+          "Event"
+        ],
+        "rows": [
+          [
+            "1977",
+            "Alexander: A Pattern Language (buildings)"
+          ],
+          [
+            "1987",
+            "Beck and Cunningham: patterns in code"
+          ],
+          [
+            "1994",
+            "Gang of Four: 23 patterns, 3 categories"
+          ],
+          [
+            "2004",
+            "Head First Design Patterns, in Java"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's a surprise: patterns started in architecture. In nineteen seventy-seven the architect Christopher Alexander wrote A Pattern Language, about where a front door or a window works best in towns and houses.",
+          "reveal": 1
+        },
+        {
+          "say": "In nineteen eighty-seven Kent Beck and Ward Cunningham applied the idea to programming user interfaces in Smalltalk, an early object-oriented language.",
+          "reveal": 2
+        },
+        {
+          "say": "In nineteen ninety-four, four authors, Gamma, Helm, Johnson and Vlissides, published Design Patterns. They're called the Gang of Four, or G-o-F. The book catalogues twenty-three patterns in three categories.",
+          "reveal": 3
+        },
+        {
+          "say": "And in two thousand four, Head First Design Patterns taught them in Java with stories, like a pizza store for factories.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Ch 8 · 8.2 A short history"
+    },
+    {
+      "id": "s006",
+      "layout": "twocol",
+      "kicker": "Concept 2 of 20",
+      "title": "The two GoF principles",
+      "left": {
+        "heading": "Program to an interface",
+        "bullets": [
+          "Declare variables as Notification",
+          "Caller never cares which class it got"
+        ]
+      },
+      "right": {
+        "heading": "Favour composition",
+        "bullets": [
+          "Hold objects: has-a",
+          "Not only extend classes: is-a"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Two principles run through the whole book. First, program to an interface, not an implementation. In our notification app, a variable is typed Notification, not Sms Notification.",
+          "reveal": 1
+        },
+        {
+          "say": "So the caller never cares which concrete class it got.",
+          "reveal": 2
+        },
+        {
+          "say": "Second, favour object composition over class inheritance. Get behaviour by holding objects, a has-a relationship.",
+          "reveal": 3
+        },
+        {
+          "say": "Rather than only extending classes, is-a. And here's the link to today: if code must never name concrete classes, someone still has to create them. Creational patterns decide who, and how.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s007",
+      "layout": "table",
+      "kicker": "Concept 3 of 20",
+      "title": "Three categories, 23 patterns",
+      "table": {
+        "head": [
+          "Category",
+          "Question",
+          "Count"
+        ],
+        "rows": [
+          [
+            "Creational",
+            "How do objects get made?",
+            "5"
+          ],
+          [
+            "Structural",
+            "How are objects put together?",
+            "7"
+          ],
+          [
+            "Behavioral",
+            "How do objects talk and share work?",
+            "11"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The Gang of Four grouped patterns by purpose. Creational patterns answer: how do objects get made? Five of them: Abstract Factory, Builder, Factory Method, Prototype and Singleton. That's today.",
+          "reveal": 1
+        },
+        {
+          "say": "Structural patterns answer: how are objects put together? There are seven of them, and they're episode nine.",
+          "reveal": 2
+        },
+        {
+          "say": "Behavioral patterns answer: how do objects talk and share work? There are eleven. Five plus seven plus eleven is twenty-three.",
+          "reveal": 3
+        }
+      ],
+      "caption": "Book: Ch 8 · 8.3 The three categories and all 23 GoF patterns"
+    },
+    {
+      "id": "s007a",
+      "layout": "table",
+      "kicker": "Concept 3 of 20",
+      "title": "The seven structural patterns",
+      "table": {
+        "head": [
+          "Pattern",
+          "Intent in one line"
+        ],
+        "rows": [
+          [
+            "Adapter",
+            "Convert one interface into the expected one"
+          ],
+          [
+            "Bridge",
+            "Abstraction and implementation vary apart"
+          ],
+          [
+            "Composite",
+            "Treat one object and a tree the same way"
+          ],
+          [
+            "Decorator",
+            "Add behaviour by wrapping an object"
+          ],
+          [
+            "Facade",
+            "One simple entry to a complex subsystem"
+          ],
+          [
+            "Flyweight",
+            "Share common state across many tiny objects"
+          ],
+          [
+            "Proxy",
+            "A stand-in that controls access"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's walk the other eighteen quickly, one line each, so every name has a meaning. Structural first. Adapter converts one interface into the one a client expects, like a travel plug.",
+          "reveal": 1
+        },
+        {
+          "say": "Bridge splits an abstraction from its implementation, so shapes and renderers can vary independently.",
+          "reveal": 2
+        },
+        {
+          "say": "Composite treats a single object and a whole tree of them the same way, like a file and a folder.",
+          "reveal": 3
+        },
+        {
+          "say": "Decorator wraps an object to add behaviour at run time. Facade gives one simple front door to a complicated subsystem.",
+          "reveal": 5
+        },
+        {
+          "say": "Flyweight shares common state, so a million tiny objects stay cheap. Proxy is a stand-in that controls access, for lazy loading, a remote call or a permission check.",
+          "reveal": 7
+        }
+      ]
+    },
+    {
+      "id": "s007b",
+      "layout": "table",
+      "kicker": "Concept 3 of 20",
+      "title": "The eleven behavioral patterns, part one",
+      "table": {
+        "head": [
+          "Pattern",
+          "Intent in one line"
+        ],
+        "rows": [
+          [
+            "Chain of Responsibility",
+            "Pass a request along handlers"
+          ],
+          [
+            "Command",
+            "Turn a request into an object"
+          ],
+          [
+            "Interpreter",
+            "A tiny language's grammar as classes"
+          ],
+          [
+            "Iterator",
+            "Walk a collection, hide its storage"
+          ],
+          [
+            "Mediator",
+            "Route chatter through one object"
+          ],
+          [
+            "Memento",
+            "Save and restore state privately"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Now behavioral. Chain of Responsibility passes a request along a chain of handlers until one takes it, like support tickets escalating.",
+          "reveal": 1
+        },
+        {
+          "say": "Command turns a request into an object, so it can be queued, logged or undone.",
+          "reveal": 2
+        },
+        {
+          "say": "Interpreter represents a small language's grammar as classes. It's the rarely used one, which is why some lists show only ten.",
+          "reveal": 3
+        },
+        {
+          "say": "Iterator walks a collection without exposing how it's stored. Mediator centralises messy communication in one object, like an air-traffic tower.",
+          "reveal": 5
+        },
+        {
+          "say": "Memento captures and restores an object's state without breaking encapsulation. Think undo.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s007c",
+      "layout": "table",
+      "kicker": "Concept 3 of 20",
+      "title": "The eleven behavioral patterns, part two",
+      "table": {
+        "head": [
+          "Pattern",
+          "Intent in one line"
+        ],
+        "rows": [
+          [
+            "Observer",
+            "Notify many dependents of a change"
+          ],
+          [
+            "State",
+            "Behaviour changes with internal state"
+          ],
+          [
+            "Strategy",
+            "Interchangeable algorithms, one interface"
+          ],
+          [
+            "Template Method",
+            "Fixed skeleton, subclasses fill steps"
+          ],
+          [
+            "Visitor",
+            "New operations without editing classes"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Observer notifies many dependents automatically when one object changes.",
+          "reveal": 1
+        },
+        {
+          "say": "State lets an object change behaviour when its status changes, as if it changed class.",
+          "reveal": 2
+        },
+        {
+          "say": "Strategy makes a family of algorithms interchangeable behind one interface.",
+          "reveal": 3
+        },
+        {
+          "say": "Template Method fixes an algorithm's skeleton in a base class, and subclasses fill in the steps.",
+          "reveal": 4
+        },
+        {
+          "say": "And Visitor adds new operations to a set of classes without changing them. That's all twenty-three. Structural is episode nine, behavioral comes after that.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s008",
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "The categories, applied to an online shop",
+      "bullets": [
+        "Creational: Builder for an Order with many options",
+        "Structural: Adapter wraps a third-party payment API",
+        "Structural: Decorator adds gift wrap to an item",
+        "Behavioral: Strategy swaps discount rules",
+        "Behavioral: Observer notifies on order shipped",
+        "Scope: class patterns use inheritance"
+      ],
+      "steps": [
+        {
+          "say": "Let's place a few in one online shop so the categories stick. Creational: an Order with ten optional fields gets a Builder.",
+          "reveal": 1
+        },
+        {
+          "say": "Structural: a third-party payment library with the wrong method names gets an Adapter, which converts one interface into the one we expect.",
+          "reveal": 2
+        },
+        {
+          "say": "Structural again: gift wrapping added around an item at run time is a Decorator.",
+          "reveal": 3
+        },
+        {
+          "say": "Behavioral: holiday, student and loyalty discounts swap behind one interface. That's Strategy.",
+          "reveal": 4
+        },
+        {
+          "say": "Behavioral: when an order ships, email, S-M-S and the analytics log all react. That's Observer.",
+          "reveal": 5
+        },
+        {
+          "say": "One more axis, scope. Class patterns use inheritance, fixed at compile time, like Factory Method. Object patterns use composition, changeable at run time. Almost everything else is an object pattern. Beyond the twenty-three, you'll also meet Simple Factory, Object Pool and dependency injection.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s009",
+      "layout": "table",
+      "kicker": "Concept 4 of 20",
+      "title": "OO principles behind the patterns",
+      "table": {
+        "head": [
+          "Principle",
+          "Seen in"
+        ],
+        "rows": [
+          [
+            "Encapsulate what varies",
+            "Factory Method, Strategy, Builder"
+          ],
+          [
+            "Composition over inheritance",
+            "Abstract Factory, Decorator"
+          ],
+          [
+            "Program to interfaces",
+            "Every creational pattern"
+          ],
+          [
+            "Open-closed",
+            "Factory Method: new type, new class"
+          ],
+          [
+            "Dependency inversion",
+            "Factories: client never says new"
+          ],
+          [
+            "Hollywood principle",
+            "Template Method, Factory Method"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Patterns are principles applied to recurring situations. Encapsulate what varies: put the changing part behind its own abstraction. In a report generator, only the document format varies, so that's what we hide.",
+          "reveal": 1
+        },
+        {
+          "say": "Composition over inheritance: an Abstract Factory client holds a factory object rather than extending one.",
+          "reveal": 2
+        },
+        {
+          "say": "Program to interfaces: every creational pattern hands back an interface type.",
+          "reveal": 3
+        },
+        {
+          "say": "Open-closed: open for extension, closed for modification. Supporting C-S-V reports means adding a class, not editing tested code.",
+          "reveal": 4
+        },
+        {
+          "say": "Dependency inversion: depend on abstractions. But writing new Pdf Document is a dependency on a concrete class. So creational patterns move that new somewhere controlled.",
+          "reveal": 5
+        },
+        {
+          "say": "Hollywood principle: don't call us, we'll call you. A base class decides when to call the subclass's hook. Also behind it all: single responsibility and least knowledge. Recap: creational patterns exist to make dependency inversion practical.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Ch 8 · 8.4 The OO principles behind every pattern"
+    },
+    {
+      "id": "s010",
+      "layout": "section",
+      "kicker": "Concept 5 of 20",
+      "title": "How to pick a pattern",
+      "steps": [
+        {
+          "say": "Learning twenty-three patterns and then hunting for places to use them is backwards. Start from a signal in the requirements, then reach for the pattern that answers it.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 8 · 8.5 How to pick a pattern"
+    },
+    {
+      "id": "s011",
+      "layout": "bullets",
+      "kicker": "Concept 5 of 20",
+      "title": "Five steps, on a parking lot",
+      "bullets": [
+        "1. Name the problem in plain words",
+        "2. Decide the category",
+        "3. Match the signal to a pattern",
+        "4. Check the cost; is there something simpler?",
+        "5. Say what you rejected, and why"
+      ],
+      "steps": [
+        {
+          "say": "Running example: a parking-lot design where pricing will change. Step one, name the problem plainly: the pricing rule will change, weekend tariffs and monthly passes are coming.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, decide the category. Creating, structuring or behaving? Calculating a fee is behaviour.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, match the signal. One operation, several swappable versions chosen at run time: that's Strategy.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, check the cost. Three small classes plus an interface. Could an enum or a lambda do it? With three tariffs and more coming, Strategy earns its place.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, say what you rejected. No State pattern for the ticket, because active, paid and closed fit one guarded method. In an interview that's worth as much as the pick.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s012",
+      "layout": "diagram",
+      "kicker": "Concept 5 of 20",
+      "title": "A decision tree for creational patterns",
+      "mermaid": "flowchart TD\n    A[\"Creating objects?\"] -->|\"exactly one\"| SG[\"Singleton or DI scope\"]\n    A -->|\"hide concrete class\"| F{\"One product or family?\"}\n    F -->|\"type value\"| SF[\"Simple Factory\"]\n    F -->|\"subclasses decide\"| FM[\"Factory Method\"]\n    F -->|\"matching family\"| AF[\"Abstract Factory\"]\n    A -->|\"many optional fields\"| BU[\"Builder\"]\n    A -->|\"copy or expensive\"| PR[\"Prototype or Pool\"]",
+      "caption": "Start from the signal, not the catalogue",
+      "steps": [
+        {
+          "say": "Here's the creational half of the decision tree. Exactly one instance must exist? Singleton, or a dependency-injection container's singleton scope.",
+          "reveal": 0
+        },
+        {
+          "say": "The caller shouldn't know the concrete class? Ask: one product or a family? One product chosen by a type value is a Simple Factory. One product chosen by subclasses is Factory Method. A family that must match is Abstract Factory.",
+          "reveal": 0
+        },
+        {
+          "say": "Many optional fields or cross-field validation points to Builder. Copying a configured object points to Prototype, and expensive reusable objects point to Object Pool.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s013",
+      "layout": "table",
+      "kicker": "Concept 6 of 20",
+      "title": "Six patterns in almost every LLD interview",
+      "table": {
+        "head": [
+          "Pattern",
+          "The signal"
+        ],
+        "rows": [
+          [
+            "Strategy",
+            "One operation, swappable versions"
+          ],
+          [
+            "Factory",
+            "Caller shouldn't care which class"
+          ],
+          [
+            "Observer",
+            "Many react to a change"
+          ],
+          [
+            "State",
+            "Behaviour depends on lifecycle status"
+          ],
+          [
+            "Singleton",
+            "Genuinely exactly one"
+          ],
+          [
+            "Builder",
+            "Constructor keeps growing"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Six patterns recur in object-oriented design rounds. Let's apply each to a parking lot. Strategy: price per hour, then a weekend tariff and a monthly pass. A Parking Rate interface with three implementations. A new tariff is one new class.",
+          "reveal": 1
+        },
+        {
+          "say": "Factory: the entrance panel turns a type string into a Car, Bike or Truck object. The factory becomes the single place to register new vehicle types.",
+          "reveal": 2
+        },
+        {
+          "say": "Observer: when a spot is taken, every display board on that floor refreshes. The spot notifies subscribers without knowing what they are. But a library notifying exactly one member? A direct call suffices.",
+          "reveal": 3
+        },
+        {
+          "say": "State: a ticket goes active, paid, closed. With many states and transitions, each status gets a class knowing its legal next moves. With three states, an enum and one guarded method reads better.",
+          "reveal": 4
+        },
+        {
+          "say": "Singleton: one physical car park, so one Parking Lot object. Raise thread safety and testability yourself.",
+          "reveal": 5
+        },
+        {
+          "say": "Builder: a book copy with barcode, price, format, dates and rack. Once a constructor passes about six arguments, a builder names every field. Rule of thumb: one or two patterns in a forty-five minute design, exactly where the signal appears.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Ch 8 · 8.5 The six patterns in almost every LLD interview"
+    },
+    {
+      "id": "s014",
+      "layout": "table",
+      "kicker": "Concept 7 of 20",
+      "title": "Anti-patterns: when patterns go wrong",
+      "table": {
+        "head": [
+          "Anti-pattern",
+          "Fix"
+        ],
+        "rows": [
+          [
+            "God Object: one class does everything",
+            "Split by responsibility"
+          ],
+          [
+            "Golden Hammer: one tool everywhere",
+            "Start from the signal"
+          ],
+          [
+            "Patternitis: patterns just in case",
+            "YAGNI; wait for variant two"
+          ],
+          [
+            "Singletonitis: globals in disguise",
+            "Inject dependencies"
+          ],
+          [
+            "Cargo cult: shape without intent",
+            "Name the property or drop it"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "An anti-pattern is a common solution that looks reasonable but reliably causes more trouble than it solves. Example: a System Manager class with eighty methods and forty fields. That's a God Object. Every change touches it. Split it by responsibility.",
+          "reveal": 1
+        },
+        {
+          "say": "Golden Hammer: when all you have is a hammer, everything looks like a nail. Every object a Singleton, every if statement a Strategy.",
+          "reveal": 2
+        },
+        {
+          "say": "Pattern overuse, or patternitis: a factory that creates exactly one class, five layers of indirection for a simple form. The fix is YAGNI, you aren't gonna need it. Add the pattern when the second variant actually arrives.",
+          "reveal": 3
+        },
+        {
+          "say": "Singletonitis: singletons used as convenient global variables, with hidden dependencies and tests that depend on order. Pass the object in instead.",
+          "reveal": 4
+        },
+        {
+          "say": "Cargo cult: copying the structure without the intent, like a Builder that validates nothing. If you can't name what property it gives you, drop it.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 8 · 8.6 Anti-patterns"
+    },
+    {
+      "id": "s015",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Which creational pattern is a class pattern?",
+      "bullets": [
+        "Singleton",
+        "Abstract Factory",
+        "Factory Method",
+        "Builder"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Class patterns use inheritance, fixed at compile time. Which creational pattern works by subclasses overriding a method?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s016",
+      "layout": "bullets",
+      "kicker": "Concept 8 of 20",
+      "title": "Creational patterns at a glance",
+      "bullets": [
+        "Singleton: exactly one instance",
+        "Factory Method: subclass picks the class",
+        "Abstract Factory: a matching family",
+        "Builder: assemble step by step",
+        "Prototype: copy a configured instance",
+        "Plus Simple Factory and Object Pool"
+      ],
+      "steps": [
+        {
+          "say": "Answer: Factory Method. Subclasses override the creation method. Now, creational patterns control how objects are created, so the rest of the system isn't tied to concrete classes. Singleton: exactly one instance, one way to reach it.",
+          "reveal": 1
+        },
+        {
+          "say": "Factory Method: a base class defines a creation method, and subclasses decide which class it returns.",
+          "reveal": 2
+        },
+        {
+          "say": "Abstract Factory: one factory creates a whole family of objects that must match.",
+          "reveal": 3
+        },
+        {
+          "say": "Builder: assemble one complex object step by step.",
+          "reveal": 4
+        },
+        {
+          "say": "Prototype: create new objects by cloning a ready-made one.",
+          "reveal": 5
+        },
+        {
+          "say": "And two extras. Simple Factory, an idiom: one method with a switch. Object Pool, a bonus: reuse a bounded set of expensive objects. Each hides which class, how it's assembled, or even whether a new one is made at all.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Ch 8 · 8.7 Creational patterns at a glance"
+    },
+    {
+      "id": "s017",
+      "layout": "section",
+      "kicker": "Concept 9 of 20",
+      "title": "Singleton",
+      "steps": [
+        {
+          "say": "Singleton restricts a class to exactly one instance per running program, strictly per class loader, and gives everyone one well-known way to reach it.",
+          "reveal": 0
+        },
+        {
+          "say": "Running example: a Config Store holding region, retry count and timeout, read by billing, the nightly report job and the mailer. Three private copies would mean three file parses, and a change in one never reaches the others.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 8 · 8.8 Singleton"
+    },
+    {
+      "id": "s018",
+      "layout": "bullets",
+      "kicker": "Concept 9 of 20",
+      "title": "How Singleton works",
+      "bullets": [
+        "1. Make the constructor private",
+        "2. Keep the instance in a private static field",
+        "3. Expose public static getInstance()",
+        "4. Create on demand, safely across threads",
+        "5. Add ordinary methods: get, set"
+      ],
+      "steps": [
+        {
+          "say": "Step one: make the constructor private, so nobody can write new Config Store. That one keyword is the whole enforcement.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: keep the one instance in a private static field, owned by the class rather than any object.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: expose a public static get Instance method. Static, because the caller has no instance yet.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: inside it, return the stored instance, creating it first if needed, and safely when threads are involved.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five: add normal methods for the real work. In the demo, the report job sets region to e-u west one, and billing immediately reads e-u west one. Same object, and they never referenced each other.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s019",
+      "layout": "table",
+      "kicker": "Concept 10 of 20",
+      "title": "Six ways to write a Singleton in Java",
+      "table": {
+        "head": [
+          "Variant",
+          "Lazy?",
+          "Thread-safe?"
+        ],
+        "rows": [
+          [
+            "1. Eager static final",
+            "No",
+            "Yes, free"
+          ],
+          [
+            "2. Naive lazy null check",
+            "Yes",
+            "NO"
+          ],
+          [
+            "3. synchronized getInstance",
+            "Yes",
+            "Yes, lock every call"
+          ],
+          [
+            "4. Double-checked + volatile",
+            "Yes",
+            "Yes"
+          ],
+          [
+            "5. Holder idiom (Bill Pugh)",
+            "Yes",
+            "Yes, no locks"
+          ],
+          [
+            "6. enum with one constant",
+            "No",
+            "Yes, most robust"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "There are six ways to write it. Eager: a static final field assigned when the class initialises. The Java spec guarantees that runs exactly once, so it's thread-safe for free. Cost: built even if never used.",
+          "reveal": 1
+        },
+        {
+          "say": "Naive lazy: if instance is null, create it. Two threads can both see null and both construct. The demo releases eight threads at once, and the constructor ran eight times. Never use it with threads.",
+          "reveal": 2
+        },
+        {
+          "say": "Synchronized method: one thread inside at a time. Correct, but it takes a lock on every call forever, though only the first call needs it.",
+          "reveal": 3
+        },
+        {
+          "say": "Double-checked locking: check without a lock, then lock, then check again. The field must be volatile, or another thread can see a half-built object. More on that in a second.",
+          "reveal": 4
+        },
+        {
+          "say": "Holder idiom, named after Bill Pugh: put the instance in a private nested class. The JVM doesn't initialise it until first use. Lazy, thread-safe, no locks. The demo prints constructed so far: zero, before the first call.",
+          "reveal": 5
+        },
+        {
+          "say": "Enum with one constant: the JVM guarantees one instance and blocks reflection and serialization tricks. Shortest and most robust. Pick eager by default, holder when start-up cost is measured, double-checked when construction needs a run-time value, enum for bullet-proof safety.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Ch 8 · 8.8 The six ways to write a Singleton in Java"
+    },
+    {
+      "id": "s020",
+      "layout": "diagram",
+      "kicker": "Example",
+      "title": "Double-checked locking, step by step",
+      "mermaid": "flowchart TD\n    A[\"Thread 1 and Thread 2 call getInstance()\"] --> B[\"1st check, no lock: both see null\"]\n    B --> C[\"Thread 1 takes the lock, Thread 2 waits\"]\n    C --> D[\"Thread 1: 2nd check null, construct, volatile write\"]\n    D --> E[\"Thread 1 releases the lock\"]\n    E --> F[\"Thread 2: 2nd check NOT null\"]\n    F --> G[\"Thread 2 returns the existing instance\"]",
+      "caption": "Exactly one object, fully built, visible to both",
+      "steps": [
+        {
+          "say": "Watch two threads. Both call get Instance and both see null on the first check, which has no lock. Thread one takes the lock. Thread two waits.",
+          "reveal": 0
+        },
+        {
+          "say": "Thread one checks again, still null, constructs the object and writes the volatile field. Creating an object is three steps: allocate, run the constructor, store the reference. Without volatile, the store can become visible before the constructor's writes.",
+          "reveal": 0
+        },
+        {
+          "say": "Thread one releases the lock. Thread two gets it, checks again, sees an instance and returns it. Exactly one object, fully constructed. Volatile creates a happens-before link, so everything the constructor did is visible to any thread that reads the reference.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s021",
+      "layout": "table",
+      "kicker": "Concept 11 of 20",
+      "title": "Breaking a Singleton, and the fixes",
+      "table": {
+        "head": [
+          "Attack",
+          "Fix"
+        ],
+        "rows": [
+          [
+            "Reflection calls private constructor",
+            "Throw if instance exists, or enum"
+          ],
+          [
+            "Deserialization makes a new object",
+            "readResolve returns INSTANCE"
+          ],
+          [
+            "clone() copies it",
+            "Override clone to throw"
+          ],
+          [
+            "Several class loaders",
+            "Shared parent loader or container"
+          ],
+          [
+            "Several servers",
+            "External coordinator: DB, Redis"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Private is a language rule, not a JVM guarantee. Attack one, reflection: get the declared constructor, set it accessible, call new instance. In the demo, same object? false. Fix: throw from the constructor if the instance already exists, or use an enum.",
+          "reveal": 1
+        },
+        {
+          "say": "Attack two, serialization: reading the object back from bytes builds a new one without your constructor. Fix: add a read Resolve method that returns the real instance. The hardened demo prints same? true.",
+          "reveal": 2
+        },
+        {
+          "say": "Attack three, cloning: if a parent exposes a public clone, it copies the object. Fix: override clone to throw. Enums resist both reflection and serialization with no extra code.",
+          "reveal": 3
+        },
+        {
+          "say": "Several class loaders, common in app servers, each load their own copy of the class.",
+          "reveal": 4
+        },
+        {
+          "say": "And four servers means four singletons. So a unique I-D generator across ten servers is not a Singleton. Use a database sequence, a Snowflake-style I-D, or U-U-I-Ds.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 8 · 8.8 Breaking a Singleton, and the fixes"
+    },
+    {
+      "id": "s022",
+      "layout": "twocol",
+      "kicker": "Concept 12 of 20",
+      "title": "Subclassing versus dependency injection",
+      "left": {
+        "heading": "Subclassable Singleton",
+        "bullets": [
+          "protected constructor",
+          "getInstance picks subclass once"
+        ]
+      },
+      "right": {
+        "heading": "DI alternative",
+        "bullets": [
+          "Normal class, one instance at start-up",
+          "Passed in through constructors",
+          "Spring beans: one per container"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Can you subclass a Singleton? Only if you design it in. Make the constructor protected instead of private.",
+          "reveal": 1
+        },
+        {
+          "say": "Then get Instance decides once, at run time, which subclass becomes the instance. Our App Logger reads a system property: log format equals json gives a Json Logger, otherwise a Plain Logger.",
+          "reveal": 2
+        },
+        {
+          "say": "But in modern code the best singleton is often not a Singleton class at all. A normal class with a public constructor, and exactly one instance created at start-up, in the composition root.",
+          "reveal": 3
+        },
+        {
+          "say": "That instance is passed in through constructors. Billing Service takes a Config. A test just writes new Billing Service with a test config, and the demo prints charged one cent in test region. No reset hooks.",
+          "reveal": 4
+        },
+        {
+          "say": "Spring does exactly this. Every bean is singleton-scoped by default, meaning one per container, not one per JVM. In the interview, say: eager or holder, enum for safety, but in a Spring app I'd inject a singleton-scoped bean. Recap: Singleton is global state, so prefer wiring.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 8 · 8.8 Subclassing a Singleton; DI alternative"
+    },
+    {
+      "id": "s023",
+      "layout": "section",
+      "kicker": "Concept 13 of 20",
+      "title": "Simple Factory, an idiom",
+      "steps": [
+        {
+          "say": "A Simple Factory is one method that takes a type value, a string or enum, and returns the matching object typed as a common interface. Like a vending machine: press B three, get a snack, never mind how it's picked.",
+          "reveal": 0
+        },
+        {
+          "say": "It's very common and often the right answer, but it's not one of the twenty-three. Head First calls it a programming idiom.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 8 · 8.9 Simple Factory"
+    },
+    {
+      "id": "s024",
+      "layout": "bullets",
+      "kicker": "Concept 13 of 20",
+      "title": "Building a notification factory",
+      "bullets": [
+        "1. Product interface: Notification",
+        "2. Concrete classes: Email, Sms, Push",
+        "3. One create(type): switch or registry",
+        "4. Callers hold the interface only",
+        "5. Reject unknown types loudly"
+      ],
+      "steps": [
+        {
+          "say": "Back to our notification service. Step one, define the product interface, Notification, with a send method.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, write the concrete classes: Email Notification, Sms Notification, Push Notification.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, one create method. Version one is a switch over a Channel enum with no default branch, so if someone adds WhatsApp to the enum and forgets the switch, it won't compile. Version two is a registry, a map from names to suppliers, so new types are registered at start-up.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, callers hold the result as Notification and never write new Sms Notification.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, reject unknown types loudly. In the demo, creating whatsapp before registration prints rejected: unknown notification type. After registering it, WhatsApp to grace: table for two confirmed.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s025",
+      "layout": "twocol",
+      "kicker": "Concept 13 of 20",
+      "title": "Simple Factory: trade-offs",
+      "left": {
+        "heading": "Good",
+        "bullets": [
+          "Centralises the switch in one place",
+          "Short; great for small, stable sets"
+        ]
+      },
+      "right": {
+        "heading": "Watch out",
+        "bullets": [
+          "Adding a type still edits the factory",
+          "Not GoF; not Factory Method",
+          "Calendar.getInstance is one, not Singleton"
+        ]
+      },
+      "steps": [
+        {
+          "say": "The good: the switch now lives in one place, so callers depend only on the interface.",
+          "reveal": 1
+        },
+        {
+          "say": "And for a short, rarely changing list chosen by config, it's perfectly respectable.",
+          "reveal": 2
+        },
+        {
+          "say": "The catch: it centralises the decision but doesn't remove it. A new channel still edits the factory, which knows every type. Strictly, that's not open-closed.",
+          "reveal": 3
+        },
+        {
+          "say": "Don't call it a Factory Method in an interview. That's a classic slip.",
+          "reveal": 4
+        },
+        {
+          "say": "Fun fact: Calendar dot get Instance sounds like a Singleton, but it returns a new object each call. It's a static factory method, like List dot of. Recap: one create method returning an interface.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s026",
+      "layout": "section",
+      "kicker": "Concept 14 of 20",
+      "title": "Factory Method",
+      "steps": [
+        {
+          "say": "Factory Method defines a creation method in a base class, but lets subclasses decide which concrete class it returns. The base class uses the object without naming its type.",
+          "reveal": 0
+        },
+        {
+          "say": "Think of a franchise manual: take order, prepare the dish, serve, bill. Only prepare differs per branch. Running example: a report generator that collects rows, creates a document, renders it and announces the file name. Only creating the document depends on the format.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 8 · 8.10 Factory Method"
+    },
+    {
+      "id": "s027",
+      "layout": "bullets",
+      "kicker": "Concept 14 of 20",
+      "title": "Factory Method in six steps",
+      "bullets": [
+        "1. Product interface: Document",
+        "2. Concrete products: PdfDocument, HtmlDocument",
+        "3. Creator: abstract protected createDocument()",
+        "4. Shared logic generate() calls it",
+        "5. Concrete creator per product overrides it",
+        "6. Client picks a creator once"
+      ],
+      "steps": [
+        {
+          "say": "Step one, the product interface, Document, with render rows and file name.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, the concrete products, Pdf Document and Html Document.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, the creator: an abstract Report Generator with an abstract, protected create Document method. Protected, because it's a hook for subclasses, not public A-P-I.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, the shared logic. Generate is final and written once: collect three rows, north one twenty, south ninety-five, east one forty, then call create Document, render, print report ready.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, one concrete creator per product. Pdf Report Generator returns a new Pdf Document. That's the only place a concrete type is named.",
+          "reveal": 5
+        },
+        {
+          "say": "Step six, the client picks a creator once. Later we add C-S-V: a Csv Document and a Csv Report Generator. No existing class is edited, and the output says report ready: sales dot csv. That's open-closed.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s028",
+      "layout": "diagram",
+      "kicker": "Concept 14 of 20",
+      "title": "Factory Method structure",
+      "mermaid": "flowchart LR\n    C[\"Client\"] --> RG[\"ReportGenerator: generate()\"]\n    RG -->|\"calls hook\"| H[\"createDocument()\"]\n    P[\"PdfReportGenerator\"] -->|\"overrides\"| H\n    X[\"CsvReportGenerator\"] -->|\"overrides\"| H\n    P --> PD[\"PdfDocument\"]\n    X --> XD[\"CsvDocument\"]",
+      "caption": "The procedure is written once; only creation varies",
+      "steps": [
+        {
+          "say": "Here's the shape. The client calls generate on Report Generator. Generate calls the create Document hook at the moment it needs a document.",
+          "reveal": 0
+        },
+        {
+          "say": "Each subclass overrides only that hook and returns its own document. The identical collecting rows line in every run comes from code that exists once.",
+          "reveal": 0
+        },
+        {
+          "say": "Trade-offs: more classes, a subclass per product, and it's all cost with only one product type. In modern Java you can pass a Supplier of Document instead of subclassing, and a test passes a lambda returning a fake. Real world: Collection dot iterator. Every list returns its own iterator.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s029",
+      "layout": "section",
+      "kicker": "Concept 15 of 20",
+      "title": "Abstract Factory",
+      "steps": [
+        {
+          "say": "Abstract Factory provides one interface for creating families of related objects that must be used together, without the client naming any concrete class. Choosing a family means choosing a factory. Like ordering the chair, sofa and table from one Victorian catalogue.",
+          "reveal": 0
+        },
+        {
+          "say": "Running example: database storage. Postgres wraps table names in double quotes, MySQL in backticks. Build a Postgres connection with a MySQL query builder and it compiles, then fails at the database with a confusing syntax error.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 8 · 8.11 Abstract Factory"
+    },
+    {
+      "id": "s030",
+      "layout": "bullets",
+      "kicker": "Concept 15 of 20",
+      "title": "Abstract Factory in five steps",
+      "bullets": [
+        "1. Interface per product kind",
+        "2. Abstract factory: one create per kind",
+        "3. Concrete factory implements EVERY method",
+        "4. Client receives a factory, uses abstractions",
+        "5. Choose the factory once, at the root"
+      ],
+      "steps": [
+        {
+          "say": "Step one, give each product kind an interface: Connection and Query Builder.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, the abstract factory, Storage Factory, with create Connection and create Query Builder.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, per database, a concrete factory implementing every method and returning only its own family. Postgres Factory returns a Postgres Connection and a Postgres Query Builder.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, the client, Report Service, receives a factory through its constructor and uses only the abstract types. It has no branch on the database.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, choose the factory once, at the composition root near main. The demo prints select star from orders limit ten, with double quotes for Postgres, backticks for MySQL, and a recorded call for the fake factory. One line swaps the whole outside world for tests.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s031",
+      "layout": "diagram",
+      "kicker": "Concept 15 of 20",
+      "title": "Abstract Factory: matched families",
+      "mermaid": "flowchart LR\n    M[\"Main: composition root\"] --> PF[\"PostgresFactory\"]\n    RS[\"ReportService\"] --> SF[\"StorageFactory\"]\n    PF -.->|\"implements\"| SF\n    PF --> PC[\"PostgresConnection\"]\n    PF --> PQ[\"PostgresQueryBuilder\"]\n    MF[\"MySqlFactory\"] -.->|\"implements\"| SF",
+      "caption": "It removes the ability to build a wrong combination",
+      "steps": [
+        {
+          "say": "Main creates the Postgres Factory and hands it to Report Service, which knows only the Storage Factory interface.",
+          "reveal": 0
+        },
+        {
+          "say": "Both the connection and the query builder come from the same factory, so they always match. The pattern doesn't help you choose the right combination. It removes the ability to build a wrong one.",
+          "reveal": 0
+        },
+        {
+          "say": "Remember the asymmetry. A new family, say SQLite, is easy: three new classes and one line at the root. A new product kind, like a migration runner, is hard: the interface and every factory change.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s032",
+      "layout": "table",
+      "kicker": "Concept 16 of 20",
+      "title": "Abstract Factory versus Factory Method",
+      "table": {
+        "head": [
+          "",
+          "Factory Method",
+          "Abstract Factory"
+        ],
+        "rows": [
+          [
+            "Creates",
+            "One product",
+            "A family of products"
+          ],
+          [
+            "Mechanism",
+            "Inheritance: override",
+            "Composition: hold a factory"
+          ],
+          [
+            "Who chooses",
+            "Creator subclass",
+            "Factory passed in"
+          ],
+          [
+            "New variant",
+            "New subclass + product",
+            "New factory + products"
+          ],
+          [
+            "New product kind",
+            "n/a",
+            "Edit every factory"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "These two get confused constantly, so compare them row by row. Factory Method creates one product. Abstract Factory creates a family, like a connection plus a query builder.",
+          "reveal": 1
+        },
+        {
+          "say": "Factory Method works by inheritance, a subclass overriding a method. Abstract Factory works by composition: the client holds a factory object.",
+          "reveal": 2
+        },
+        {
+          "say": "So in Factory Method, the creator subclass chooses. In Abstract Factory, whichever factory was passed in chooses.",
+          "reveal": 3
+        },
+        {
+          "say": "Adding a variant: a new subclass and product, versus a new factory and one product per kind.",
+          "reveal": 4
+        },
+        {
+          "say": "And adding a product kind only exists as a problem for Abstract Factory. They also combine: each create method inside a concrete factory is often itself a factory method. One-liner for the interview: one product by inheritance versus a matching family by composition.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 8 · 8.11 Abstract Factory vs Factory Method"
+    },
+    {
+      "id": "s033",
+      "layout": "section",
+      "kicker": "Concept 17 of 20",
+      "title": "Builder",
+      "steps": [
+        {
+          "say": "Imagine this call: new Http Request, url, GET, headers, null, thirty, three, true, false, null. Which null is the body? What does the first true switch on? Swap the booleans and it still compiles.",
+          "reveal": 0
+        },
+        {
+          "say": "Builder separates construction from the object. A builder collects values one named step at a time, and a final build produces a finished, usually immutable, product. Like ordering a sandwich: bread, cheese, vegetables, sauce, and the sandwich only at the end.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 8 · 8.12 Builder"
+    },
+    {
+      "id": "s034",
+      "layout": "twocol",
+      "kicker": "Concept 17 of 20",
+      "title": "The two bad fixes Builder replaces",
+      "left": {
+        "heading": "Telescoping constructors",
+        "bullets": [
+          "Pizza(size), Pizza(size, crust), ...",
+          "Positional, easy to swap"
+        ]
+      },
+      "right": {
+        "heading": "JavaBeans setters",
+        "bullets": [
+          "Object exists half-built",
+          "Can't be immutable or validated"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Bad fix one: telescoping constructors, one overload per combination. Pizza with size, pizza with size and crust, and so on.",
+          "reveal": 1
+        },
+        {
+          "say": "Call sites stay positional. Pizza large, thin, true, false, true. Which boolean is olives?",
+          "reveal": 2
+        },
+        {
+          "say": "Bad fix two: an empty constructor plus setters. The object exists half-built and someone can use it before it's ready.",
+          "reveal": 3
+        },
+        {
+          "say": "And it can't be immutable, and there's no single place to check rules that span several fields.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s035",
+      "layout": "bullets",
+      "kicker": "Concept 17 of 20",
+      "title": "Building an HttpRequest",
+      "bullets": [
+        "1. Product fields final, constructor private",
+        "2. Static nested Builder, defaults set",
+        "3. Required values in builder's constructor",
+        "4. Named methods that return this",
+        "5. build(): validate, copy, construct",
+        "6. Optional: Director, staged, toBuilder"
+      ],
+      "steps": [
+        {
+          "say": "Step one: Http Request fields are final and its constructor is private, taking the builder.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: a static nested Builder with the same fields, optional ones defaulted: method GET, timeout thirty seconds, three retries.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: the required url goes in the builder's constructor, so nobody can forget it.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: each method is named for what it sets and returns this, so calls chain. Method POST, timeout five.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five: build is the one gate. It checks four rules, including the cross-field one: a GET can't have a body. The demo prints rejected: a GET request cannot have a body. It also copies the headers map, so reusing a builder can't leak X Debug into an earlier request.",
+          "reveal": 5
+        },
+        {
+          "say": "Step six, optional extras, which come next. Trade-off: every field appears twice. For a three-field object, it's noise.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s036",
+      "layout": "bullets",
+      "kicker": "Concept 17 of 20",
+      "title": "Director, staged builder, Lombok and records",
+      "bullets": [
+        "Director: a named recipe of steps",
+        "Keep it only if builders vary",
+        "Staged: types force required steps",
+        "Lombok @Builder generates it, no validation",
+        "Records: immutable product, compact constructor"
+      ],
+      "steps": [
+        {
+          "say": "The Director, from the Gang of Four, knows the order of steps. Our Request Director has json Post: method POST, content type json, timeout five. And health Check: method HEAD, timeout one, zero retries.",
+          "reveal": 1
+        },
+        {
+          "say": "Quick test: will it ever drive a different kind of builder? The original G-o-F example drives plain text and TeX builders from one reader. If not, you rarely need it, because usually only values vary.",
+          "reveal": 2
+        },
+        {
+          "say": "A staged builder encodes order in types. Email dot builder returns a To Step, which only offers to. That returns a Subject Step, then an Optional Step, which finally has build. Email dot builder dot build doesn't compile.",
+          "reveal": 3
+        },
+        {
+          "say": "Lombok's at-Builder annotation generates all this boilerplate at compile time, and to Builder gives copy-and-change. But it doesn't validate by default.",
+          "reveal": 4
+        },
+        {
+          "say": "Java records give you the immutable product for free. Validate in the record's compact constructor, so it runs however it's created. Recap: named steps, defaults, one validating build, immutable product.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 8 · 8.12 The Director; staged builder; Lombok"
+    },
+    {
+      "id": "s037",
+      "layout": "section",
+      "kicker": "Concept 18 of 20",
+      "title": "Prototype",
+      "steps": [
+        {
+          "say": "Prototype creates new objects by copying an existing, already-configured one. Like photocopying a contract template legal drafted once, then changing only the name and date.",
+          "reveal": 0
+        },
+        {
+          "say": "Two reasons to use it. Construction is expensive, like parsing a template from disk. Or, the deeper reason, you only hold an interface, like Shape, and can't write new without a class name. The object always knows its own class.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 8 · 8.13 Prototype"
+    },
+    {
+      "id": "s038",
+      "layout": "bullets",
+      "kicker": "Concept 18 of 20",
+      "title": "Prototype in practice: welcome emails",
+      "bullets": [
+        "1. Normal constructor: expensive parse",
+        "2. Private copy constructor: no parse",
+        "3. Immutable fields shared, mutable copied",
+        "4. Public copy() returns a new instance",
+        "5. Optional: Shape interface, registry"
+      ],
+      "steps": [
+        {
+          "say": "Running example: a Notification Template. Step one, the normal constructor parses the template from disk. Expensive.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, a private copy constructor that takes another template and does none of that work.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, field by field. Subject and body are strings, immutable, so share them. Channels is a mutable list, so make a new Array List.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, a public copy method. The demo makes copies for Ada with push and Grace with S-M-S. Parsing prints once, and the prototype still has only email.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, optionally a Shape interface with copy, so code can copy any shape, and a registry that hands out copies, never the original.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s039",
+      "layout": "table",
+      "kicker": "Concept 18 of 20",
+      "title": "Shallow versus deep copy",
+      "table": {
+        "head": [
+          "",
+          "Shallow",
+          "Deep"
+        ],
+        "rows": [
+          [
+            "Immutables, primitives",
+            "Shared, safe",
+            "Shared, safe"
+          ],
+          [
+            "Mutable lists, maps",
+            "SHARED",
+            "Duplicated"
+          ],
+          [
+            "Cost",
+            "Cheap",
+            "Grows with object graph"
+          ],
+          [
+            "Risk",
+            "Copy changes original",
+            "Cycles, copying resources"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "A shallow copy copies the fields, so references point to the same objects. A deep copy also copies what they point to. Strings and numbers are safe either way.",
+          "reveal": 1
+        },
+        {
+          "say": "Mutable lists are the trap. If the copy constructor wrote this dot channels equals other dot channels, adding push to Ada's copy would add it to the prototype, and every later copy would inherit it.",
+          "reveal": 2
+        },
+        {
+          "say": "Deep copies cost more as the graph grows.",
+          "reveal": 3
+        },
+        {
+          "say": "Deep copy has risks too: mutual references can recurse forever, and copying a connection means two objects both close it. Copy depth is a choice made field by field.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Ch 8 · 8.13 Shallow vs deep copy"
+    },
+    {
+      "id": "s040",
+      "layout": "bullets",
+      "kicker": "Concept 18 of 20",
+      "title": "Why Java's Cloneable is a trap",
+      "bullets": [
+        "Marker interface; doesn't declare clone()",
+        "Object.clone() is protected",
+        "Shallow copy by default",
+        "Skips constructors and validation",
+        "Can't deep-copy final fields",
+        "Prefer a copy constructor"
+      ],
+      "steps": [
+        {
+          "say": "Java's built-in prototype, Cloneable, is widely considered broken. It's a marker interface with no methods. It doesn't even declare clone.",
+          "reveal": 1
+        },
+        {
+          "say": "Object dot clone is protected, so you must override it as public.",
+          "reveal": 2
+        },
+        {
+          "say": "It copies shallowly. In the demo, editing a cloned playlist's songs changed the original's songs too.",
+          "reveal": 3
+        },
+        {
+          "say": "It creates the object without running any constructor, skipping your validation.",
+          "reveal": 4
+        },
+        {
+          "say": "Deep copying means reassigning fields after super dot clone, which is impossible for final fields. And it throws a checked exception that can't happen.",
+          "reveal": 5
+        },
+        {
+          "say": "So write a copy constructor or a static copy factory. In the interview, also say: never copy objects with identity, like a database I-D or an open socket.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Ch 8 · 8.13 Why Java's Cloneable is a trap"
+    },
+    {
+      "id": "s041",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Which Singleton resists reflection and serialization?",
+      "bullets": [
+        "Double-checked locking",
+        "Holder idiom",
+        "Single-element enum",
+        "synchronized getInstance"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think, before our last pattern. Which Singleton variant survives both reflection and serialization without any defensive code?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s042",
+      "layout": "section",
+      "kicker": "Concept 19 of 20",
+      "title": "Bonus: Object Pool",
+      "steps": [
+        {
+          "say": "Answer: the single-element enum. The JVM refuses to create enum objects reflectively, and deserialization returns the existing constant.",
+          "reveal": 0
+        },
+        {
+          "say": "Now, Object Pool. It keeps a bounded set of reusable objects. A client borrows one, uses it and returns it. Like a bike-sharing dock: fixed bikes, take one, ride, dock it. If all are out, you wait, or give up after a while. Not in the twenty-three, but well known.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 8 · 8.14 Bonus: Object Pool"
+    },
+    {
+      "id": "s043",
+      "layout": "bullets",
+      "kicker": "Concept 19 of 20",
+      "title": "Pooling database connections",
+      "bullets": [
+        "1. Idle queue, live count, semaphore cap",
+        "2. acquire(): wait with timeout",
+        "3. Client releases in finally",
+        "4. release(): validate, reset, return",
+        "5. Everything thread-safe"
+      ],
+      "steps": [
+        {
+          "say": "A database connection needs a network handshake, encryption setup and authentication, and the database accepts only so many. Step one: keep an idle queue, a count of live objects, and a semaphore, a counter of permits, with one permit per object. Our cap is three.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, acquire: wait up to two seconds for a permit. Take an idle connection if there is one, otherwise create one.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, the client always releases in a finally block. A leaked connection is gone from the pool forever.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, release: validate it. A broken connection is discarded, and its permit still comes back so a fresh one can be made. A good one has its state reset, so no user's data leaks to the next, and goes back to the queue.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, make it all thread-safe, because pools exist because threads compete. The demo runs ten tasks on six threads and opens only three connections.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s044",
+      "layout": "diagram",
+      "kicker": "Concept 19 of 20",
+      "title": "Object lifecycle in a pool",
+      "mermaid": "flowchart LR\n    N[\"Created by factory\"] --> I[\"Idle\"]\n    I -->|\"acquire()\"| U[\"In use\"]\n    U -->|\"release(): valid, reset\"| I\n    U -->|\"release(): invalid\"| D[\"Discarded\"]",
+      "caption": "Borrow, use, return, always in finally",
+      "steps": [
+        {
+          "say": "Each object loops between idle and in use. An invalid object on release is discarded instead of reused.",
+          "reveal": 0
+        },
+        {
+          "say": "When the pool is exhausted, borrowers time out. The demo prints pool exhausted: timed out after a hundred milliseconds. Don't pool cheap objects, since the JVM allocates faster. And in production, use HikariCP rather than writing your own.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s045",
+      "layout": "table",
+      "kicker": "Concept 20 of 20",
+      "title": "Pick a creational pattern by your question",
+      "table": {
+        "head": [
+          "You are asking",
+          "Pattern"
+        ],
+        "rows": [
+          [
+            "Only one, ever?",
+            "Singleton or DI scope"
+          ],
+          [
+            "Avoid scattered new?",
+            "Simple Factory"
+          ],
+          [
+            "Let subclasses decide?",
+            "Factory Method"
+          ],
+          [
+            "Objects must match?",
+            "Abstract Factory"
+          ],
+          [
+            "Ten-argument constructor?",
+            "Builder"
+          ],
+          [
+            "Another one of this?",
+            "Prototype"
+          ],
+          [
+            "Stop creating expensive things?",
+            "Object Pool"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's compare them all with one tool: the question you're asking. How do I make sure there's only one? Singleton, or a container's singleton scope. Example: one Config Store.",
+          "reveal": 1
+        },
+        {
+          "say": "How do I avoid new Concrete Class scattered around? Simple Factory. Example: notifications by channel.",
+          "reveal": 2
+        },
+        {
+          "say": "How do I let subclasses or plug-ins decide what to create? Factory Method. Example: P-D-F, H-T-M-L and C-S-V reports.",
+          "reveal": 3
+        },
+        {
+          "say": "How do I make sure these objects always match? Abstract Factory. Postgres versus MySQL.",
+          "reveal": 4
+        },
+        {
+          "say": "How do I make this ten-argument constructor safe? Builder, our Http Request.",
+          "reveal": 5
+        },
+        {
+          "say": "How do I make another one of this, cheaply or without knowing its class? Prototype, the notification template.",
+          "reveal": 6
+        },
+        {
+          "say": "How do I stop creating and destroying this expensive thing? Object Pool, for connections.",
+          "reveal": 7
+        }
+      ],
+      "caption": "Book: Ch 8 · 8.15 Creational patterns compared"
+    },
+    {
+      "id": "s046",
+      "layout": "bullets",
+      "kicker": "Concept 20 of 20",
+      "title": "How they combine",
+      "bullets": [
+        "Abstract Factory built from Factory Methods",
+        "Factory configured with Prototypes",
+        "One factory per family, often Singleton",
+        "Builder uses a Factory to pick parts",
+        "Start with Factory Method, evolve"
+      ],
+      "steps": [
+        {
+          "say": "They also work together. An Abstract Factory is often implemented with factory methods, one per product.",
+          "reveal": 1
+        },
+        {
+          "say": "A factory can be configured with prototype objects it copies, instead of a class per product.",
+          "reveal": 2
+        },
+        {
+          "say": "An application usually needs one factory per family, so it's often a Singleton, though passing it in is better.",
+          "reveal": 3
+        },
+        {
+          "say": "A Builder can use a factory to pick which parts to build.",
+          "reveal": 4
+        },
+        {
+          "say": "And designs often start with Factory Method and evolve towards Abstract Factory, Prototype or Builder as more flexibility is needed.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s047",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Why must the double-checked locking field be volatile?",
+      "bullets": [
+        "To make reads faster",
+        "So no thread sees a half-built object",
+        "To stop reflection attacks",
+        "To make it lazy"
+      ],
+      "steps": [
+        {
+          "say": "Chapter self-check. Pause and think: why must the field in double-checked locking be volatile?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s048",
+      "layout": "bullets",
+      "title": "Chapter self-check: answers",
+      "bullets": [
+        "Volatile: no half-built object visible",
+        "Categories: 5 + 7 + 11 = 23",
+        "Simple Factory vs FM: switch vs hook",
+        "Prototype bug: shallow-shared list",
+        "Patterns per interview design: one or two"
+      ],
+      "steps": [
+        {
+          "say": "Answer: so no thread sees a reference to an object whose constructor hasn't finished. Volatile creates a happens-before edge.",
+          "reveal": 1
+        },
+        {
+          "say": "The three categories: creational five, structural seven, behavioral eleven, twenty-three in all.",
+          "reveal": 2
+        },
+        {
+          "say": "Simple Factory versus Factory Method: a switch in one method, versus a creation hook overridden by subclasses.",
+          "reveal": 3
+        },
+        {
+          "say": "The classic Prototype bug: a shallow copy sharing a mutable list with the original.",
+          "reveal": 4
+        },
+        {
+          "say": "And in a forty-five minute design, use one or two patterns, and name the one you rejected.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 8 · 8.16 Chapter self-check"
+    },
+    {
+      "id": "s049",
+      "layout": "recap",
+      "title": "TL;DR: create objects on purpose",
+      "bullets": [
+        "Patterns: vocabulary + trade-offs; pick by signal",
+        "Singleton: eager / holder / enum; volatile; prefer DI",
+        "Simple Factory idiom; Factory Method by subclass",
+        "Abstract Factory: matched family, chosen at root",
+        "Builder validates; Prototype copies, no Cloneable",
+        "Pool: borrow/return. Next: Ep 9, Structural"
+      ],
+      "steps": [
+        {
+          "say": "Here's the whole chapter. Patterns are named, proven templates with trade-offs. Vocabulary first, code second. Pick from the signal, not the catalogue.",
+          "reveal": 1
+        },
+        {
+          "say": "Singleton: one per JVM. Eager, holder or enum. Double-checked locking needs volatile. Prefer dependency injection.",
+          "reveal": 2
+        },
+        {
+          "say": "Simple Factory is one create method, an idiom. Factory Method is a base-class procedure with a subclass-chosen product.",
+          "reveal": 3
+        },
+        {
+          "say": "Abstract Factory: one factory, one matching family, chosen at the composition root.",
+          "reveal": 4
+        },
+        {
+          "say": "Builder: named steps and one validating build for an immutable product. Prototype: copy a configured object, decide shallow versus deep, avoid Cloneable.",
+          "reveal": 5
+        },
+        {
+          "say": "Object Pool: borrow and return expensive objects, using a real library. Next time, episode nine: Structural Design Patterns, where Adapter, Decorator, Facade and friends fit objects together. See you there.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Ch 8 · 8.17 Chapter TL;DR"
+    }
+  ]
+}

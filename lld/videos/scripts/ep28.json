@@ -1,0 +1,1384 @@
+{
+ "series": "LLD Workshop",
+ "episode": 28,
+ "title": "Machine Coding: Coding Blox to Unix find",
+ "subtitle": "Contests, property search, loan ledgers, warehouse stock and a mini find: five machine-coding rounds end to end",
+ "scenes": [
+  {
+   "id": "s001",
+   "layout": "title",
+   "title": "Machine Coding: Coding Blox to Unix find",
+   "subtitle": "Contests, property search, loan ledgers, warehouse stock and a mini find: five machine-coding rounds end to end",
+   "steps": [
+    {
+     "say": "Welcome to the L-L-D Workshop, episode twenty-eight: Machine Coding, Coding Blox to Unix find. L-L-D means low-level design, the class-by-class design of one program.",
+     "reveal": 0
+    },
+    {
+     "say": "Last time we learned the ninety-minute method and built a task manager, a wallet and a calendar. Today we finish chapter twenty-one with five more real machine-coding statements: Coding Blox, a contest platform. PropertyHunt, a property search site. Ledger Co, a loan ledger. An inventory system. And a small version of the Unix find command.",
+     "reveal": 0
+    },
+    {
+     "say": "By the end you'll be able to build each one in a timed round. You'll run a contest and update ratings exactly once, turn search filters into predicates, derive a loan balance from facts, ship an order without overselling, and combine file filters with AND, OR and NOT.",
+     "reveal": 0
+    },
+    {
+     "say": "Keep the chapter twenty-one PDF open. Every number I use comes from the program output in the book. If a step goes by too fast, pause, find the section named on the slide, and read it there.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s002",
+   "layout": "bullets",
+   "title": "One shape behind all five",
+   "bullets": [
+    "Entities guard their own rules",
+    "Services orchestrate the steps",
+    "Strategies hold the 'X or Y' rules",
+    "The driver parses and prints",
+    "Every error is a message, not a crash"
+   ],
+   "steps": [
+    {
+     "say": "One shape repeats in all five problems. First, entities guard their own rules. A contest refuses to run twice. A property refuses to be sold twice.",
+     "reveal": 1
+    },
+    {
+     "say": "Second, a service class orchestrates. It looks things up, calls the entity, and puts the steps in order.",
+     "reveal": 2
+    },
+    {
+     "say": "Third, anything that sounds like 'X or Y' goes behind an interface. Random or scripted solving. Nearest warehouse or most stock. Simple or compound interest.",
+     "reveal": 3
+    },
+    {
+     "say": "Fourth, the driver, the outer layer that reads commands, does all the parsing and printing. The service returns plain data.",
+     "reveal": 4
+    },
+    {
+     "say": "Fifth, bad input prints one clear error line and the program keeps going. Interviewers check that on purpose. Watch for these five in every design today.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s003",
+   "layout": "section",
+   "kicker": "Problem 1 of 5",
+   "title": "Coding Blox: a LeetCode-like contest platform",
+   "caption": "Book: Ch 21 · 21.4 Design a LeetCode-like Coding Platform",
+   "steps": [
+    {
+     "say": "Problem one comes from a Flipkart S-D-E two round. It's called Coding Blox. Think of a tiny LeetCode. Users sign up, create contests, join other people's contests, and their rating moves after each contest.",
+     "reveal": 0
+    },
+    {
+     "say": "The whole thing is driven by text commands, one per line. Your job is to model it cleanly and survive every bad command.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s004",
+   "layout": "table",
+   "kicker": "Coding Blox",
+   "title": "The commands",
+   "table": {
+    "head": [
+     "Command",
+     "What it does"
+    ],
+    "rows": [
+     [
+      "CreateUser name",
+      "New user, score starts at 1500"
+     ],
+     [
+      "CreateQuestion level score",
+      "Question ids 1, 2, 3 ..."
+     ],
+     [
+      "CreateContest name level creator",
+      "Creator attends automatically"
+     ],
+     [
+      "AttendContest / WithdrawContest",
+      "Join or leave before the run"
+     ],
+     [
+      "RunContest id creator",
+      "Only creator; simulate, then rate"
+     ],
+     [
+      "LeaderBoard asc or desc",
+      "Users sorted by score"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's walk the commands with our running example: four friends, Ross, Monica, Joey and Chandler. CreateUser Ross registers Ross with a score of fifteen hundred.",
+     "reveal": 1
+    },
+    {
+     "say": "CreateQuestion LOW ten adds question one, a low-level question worth ten points. We add three low questions worth ten, twenty and thirty, two medium ones worth forty and fifty, and one high worth a hundred.",
+     "reveal": 2
+    },
+    {
+     "say": "CreateContest diwali contest, LOW, Ross. A contest uses every question of its level, so this contest has questions one, two and three. Ross attends automatically.",
+     "reveal": 3
+    },
+    {
+     "say": "Monica, Joey and Chandler attend. Then Chandler withdraws. Ross tries to withdraw too, and gets an error: the creator can't leave.",
+     "reveal": 4
+    },
+    {
+     "say": "RunContest one, Monica: error, Monica didn't create it. RunContest one, Ross: it runs. Each participant gets a random set of solved questions, and their points are the sum of those scores.",
+     "reveal": 5
+    },
+    {
+     "say": "LeaderBoard lists users by score. There are two bonus commands: ContestHistory shows each contest's own results, and WithdrawContest you've already seen.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s005",
+   "layout": "number",
+   "title": "The rating rule lives on the level",
+   "big": "new = score + points - penalty",
+   "caption": "Penalty: LOW 50, MEDIUM 30, HIGH 0",
+   "steps": [
+    {
+     "say": "Here's the scoring rule. New score equals the old score, plus the contest points, minus a penalty that depends on the contest level. Low costs fifty, medium thirty, high nothing.",
+     "reveal": 0
+    },
+    {
+     "say": "So easy contests are harder to gain from. Solve twenty points in a low contest and you actually lose thirty.",
+     "reveal": 0
+    },
+    {
+     "say": "The design move: put this rule on the Level enum itself. Each constant carries its own penalty and a method called newScore. That's a Strategy hiding inside an enum. Adding a very-high level with a bonus is one new constant, and nothing else changes.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s006",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: running both contests",
+   "table": {
+    "head": [
+     "Who",
+     "Contest",
+     "Points",
+     "Score"
+    ],
+    "rows": [
+     [
+      "Ross",
+      "1, LOW",
+      "20",
+      "1500 + 20 - 50 = 1470"
+     ],
+     [
+      "Joey",
+      "1, LOW",
+      "30",
+      "1500 + 30 - 50 = 1480"
+     ],
+     [
+      "Monica",
+      "1, LOW",
+      "30",
+      "1500 + 30 - 50 = 1480"
+     ],
+     [
+      "Monica",
+      "2, MEDIUM",
+      "90",
+      "1480 + 90 - 30 = 1540"
+     ],
+     [
+      "Chandler",
+      "2, MEDIUM",
+      "40",
+      "1500 + 40 - 30 = 1510"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's check the arithmetic from the book's run. Contest one is LOW. Ross solved question two, twenty points. Fifteen hundred plus twenty minus fifty is fourteen seventy.",
+     "reveal": 1
+    },
+    {
+     "say": "Joey solved questions one and two, thirty points. Fifteen hundred plus thirty minus fifty, fourteen eighty.",
+     "reveal": 2
+    },
+    {
+     "say": "Monica also scored thirty, so she's at fourteen eighty too.",
+     "reveal": 3
+    },
+    {
+     "say": "Contest two is MEDIUM, created by Monica. She solved questions four and five, ninety points. Fourteen eighty plus ninety minus thirty is fifteen forty.",
+     "reveal": 4
+    },
+    {
+     "say": "Chandler solved question four, forty points. Fifteen hundred plus forty minus thirty, fifteen ten. So the leaderboard, descending, reads Monica, Chandler, Joey, Ross. Exactly what the program prints.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s007",
+   "layout": "diagram",
+   "title": "RunContest: complete first, then rate",
+   "mermaid": "flowchart LR\n    A[\"RunContest 1 Ross\"] --> B{\"Ross is creator?\"}\n    B -- no --> X[\"error\"]\n    B -- yes --> C[\"pool = LOW questions\"]\n    C --> D[\"SolveSimulator per user\"]\n    D --> E[\"sum points\"]\n    E --> F[\"contest.complete\"]\n    F --> G[\"update each rating\"]",
+   "caption": "If complete throws, no rating has changed",
+   "steps": [
+    {
+     "say": "Here's the run flow. First, check the requester is the creator. Then gather the question pool for the contest's level.",
+     "reveal": 0
+    },
+    {
+     "say": "For each participant, ask the SolveSimulator which questions they solved, and sum the scores. SolveSimulator is an interface, a Strategy. In the demo it's random but seeded, so every run prints the same thing. In tests you plug in a scripted one. Later, a real judge.",
+     "reveal": 0
+    },
+    {
+     "say": "Now the ordering trick. Compute all results first, then call contest dot complete, and only after that update ratings. Complete throws if the contest already ran. So a second RunContest fails before any rating moves. Ratings can never be applied twice.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s008",
+   "layout": "twocol",
+   "kicker": "Coding Blox",
+   "title": "Coding Blox: the design moves",
+   "left": {
+    "heading": "Patterns",
+    "bullets": [
+     "Command map: name to handler",
+     "Level enum carries scoring rule",
+     "SolveSimulator Strategy, seeded",
+     "Generic Repository for 3 stores"
+    ]
+   },
+   "right": {
+    "heading": "Concurrency and gaps",
+    "bullets": [
+     "User rating update under its lock",
+     "Contest methods synchronized",
+     "Gap: attend during a run",
+     "Fix: RUNNING status, one step"
+    ]
+   },
+   "steps": [
+    {
+     "say": "The driver keeps a map from command name to handler. Adding a command is one put. No giant switch, and parsing stays out of the service.",
+     "reveal": 1
+    },
+    {
+     "say": "The scoring rule rides on the Level enum, as we saw.",
+     "reveal": 2
+    },
+    {
+     "say": "Randomness hides behind SolveSimulator, with a seed. Unseeded randomness is the trap the book calls out.",
+     "reveal": 3
+    },
+    {
+     "say": "One generic Repository class stores users, questions and contests. The statement asks for DRY, don't repeat yourself, so three copy-pasted maps would lose marks.",
+     "reveal": 4
+    },
+    {
+     "say": "Concurrency. Each user's read-modify-write of the score happens under that user's lock, so two contests finishing at once can't lose an update.",
+     "reveal": 5
+    },
+    {
+     "say": "Contest methods are synchronized, so attend and complete don't interleave badly.",
+     "reveal": 6
+    },
+    {
+     "say": "But say the honest gap out loud. Run contest copies the participant list, simulates, then completes. Someone who attends in that window is registered but gets no result.",
+     "reveal": 7
+    },
+    {
+     "say": "The fix: add a RUNNING status, and have the contest switch to it and hand back its participants in one synchronized step.",
+     "reveal": 8
+    }
+   ]
+  },
+  {
+   "id": "s009",
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "How do you make RunContest deterministic in a test?",
+   "bullets": [
+    "A. Sleep between participants",
+    "B. Inject a scripted or seeded SolveSimulator",
+    "C. Run it twice and compare"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. You want a unit test that always produces the same ratings. How?",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s010",
+   "layout": "section",
+   "kicker": "Problem 2 of 5",
+   "title": "PropertyHunt: a property listing site",
+   "caption": "Book: Ch 21 · 21.5 Design a Property Listing Site",
+   "steps": [
+    {
+     "say": "The answer was B. Inject a scripted simulator, or a seeded random one. That's the whole reason it's an interface.",
+     "reveal": 0
+    },
+    {
+     "say": "Problem two is from ClearTrip: PropertyHunt. Users list homes to sell or rent, search with any mix of filters, shortlist other people's homes, and owners mark them sold. It tests one thing above all: can you handle many optional filters without an if pyramid?",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s011",
+   "layout": "bullets",
+   "kicker": "PropertyHunt",
+   "title": "The features, one by one",
+   "bullets": [
+    "Register, list a property",
+    "Search: location, price, type, size, rooms",
+    "Sort by price or size",
+    "Shortlist others' homes; view them",
+    "Mark sold: owner only; view sold",
+    "Bonus: units, nearby areas, 60L, 2Cr"
+   ],
+   "steps": [
+    {
+     "say": "Our running story has two users, Jack and Jill. Jack registers, then lists a three-bedroom flat for sale in Bellandur at ninety lakh. A lakh is a hundred thousand rupees, so that's nine million.",
+     "reveal": 1
+    },
+    {
+     "say": "Search takes any combination of filters. Location, matched ignoring case. A price range. Sell or rent. A size range. And the room count, like two B-H-K, meaning two bedrooms, a hall and a kitchen.",
+     "reveal": 2
+    },
+    {
+     "say": "Results can be sorted by price or by size, ascending.",
+     "reveal": 3
+    },
+    {
+     "say": "Jill can shortlist Jack's flats, but Jack can't shortlist his own. Jill's shortlist still shows a flat after it's sold, marked SOLD.",
+     "reveal": 4
+    },
+    {
+     "say": "Only the owner can mark a property sold. Jill trying to mark Jack's flat sold is an error.",
+     "reveal": 5
+    },
+    {
+     "say": "The bonus is where it gets fun. Sizes in square feet, square metres or square yards. Nearby localities, shown after exact matches. And Indian price units: forty k is forty thousand, sixty L is sixty lakh, two C-R is two crore, which is twenty million.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s012",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: normalise units at the boundary",
+   "table": {
+    "head": [
+     "Typed",
+     "Stored as"
+    ],
+    "rows": [
+     [
+      "90L",
+      "9,000,000 rupees"
+     ],
+     [
+      "40k",
+      "40,000 rupees"
+     ],
+     [
+      "2.5Cr",
+      "25,000,000 rupees"
+     ],
+     [
+      "70 sqm",
+      "about 753 sq ft"
+     ],
+     [
+      "400 sqyd",
+      "3,600 sq ft"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "The first design rule: normalise at the boundary. The moment input arrives, convert it to one internal unit. Prices become whole rupees. Ninety L becomes nine million.",
+     "reveal": 1
+    },
+    {
+     "say": "Forty k becomes forty thousand.",
+     "reveal": 2
+    },
+    {
+     "say": "Two point five crore becomes twenty-five million. The book parses this with BigDecimal, so there's no floating-point rounding.",
+     "reveal": 3
+    },
+    {
+     "say": "Sizes become square feet. Jill lists a cosy flat at seventy square metres. One square metre is about ten point seven six square feet, so it's stored as about seven hundred fifty-three.",
+     "reveal": 4
+    },
+    {
+     "say": "Her villa is four hundred square yards. One square yard is nine square feet, so thirty-six hundred. Now a buyer searching in square metres can match a seller who listed in square yards, because the business code only ever compares plain numbers. Comparing the string ninety L to sixty L is the trap.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s013",
+   "layout": "diagram",
+   "title": "Search: criteria to predicates to sorted list",
+   "mermaid": "flowchart LR\n    A[\"Search line\"] --> B[\"parse and normalise\"]\n    B --> C[\"SearchCriteria Builder\"]\n    C --> D[\"one predicate per filter\"]\n    D --> E[\"reduce with AND\"]\n    E --> F[\"sort: location rank, key, id\"]\n    F --> G[\"print table\"]",
+   "caption": "Specification: each filter is one Predicate",
+   "steps": [
+    {
+     "say": "Here's the search pipeline. The driver parses the fields and normalises units. Then it fills a SearchCriteria using a Builder. Every field is optional. A constructor with eight nulls would be unreadable, so the Builder lets you set only what was given.",
+     "reveal": 0
+    },
+    {
+     "say": "Inside search, each criterion that's present becomes one predicate, a yes-or-no test on a property. Always add 'is available'. If there's a max price, add 'price at most max'. And so on.",
+     "reveal": 0
+    },
+    {
+     "say": "Then reduce the list with AND into one combined predicate. That's the Specification pattern. A new filter, say furnished, is one field and one line. No nested ifs.",
+     "reveal": 0
+    },
+    {
+     "say": "Finally sort. First by location rank, then by the chosen key, then by id. The sort key is a SortBy enum of comparators, another small Strategy.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s014",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: Jack searches Bellandur, 30k to 50k, rent",
+   "table": {
+    "head": [
+     "Property",
+     "Location rank",
+     "Passes?"
+    ],
+    "rows": [
+     [
+      "1: 3BHK sale, bellandur, 90L",
+      "0 exact",
+      "No: sale, price"
+     ],
+     [
+      "2: 2BHK rent, sarjapur, 40k",
+      "1 nearby",
+      "Yes"
+     ],
+     [
+      "3: 1BHK rent, hsr, 25k",
+      "2 no match",
+      "No: location"
+     ],
+     [
+      "4: villa sale, whitefield",
+      "2 no match",
+      "No"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's run the book's sample. Jack searches Bellandur, thirty thousand to fifty thousand, rent, at least a hundred fifty square feet, two rooms, sorted by price. Location rank is zero for an exact match, one for a nearby match, two for no match. Rank two is filtered out. Property one is in Bellandur, rank zero, but it's for sale at ninety lakh. It fails.",
+     "reveal": 1
+    },
+    {
+     "say": "Property two is in Sarjapur. But Jack listed it with nearby localities Bellandur, Kadubeesanahalli and Marathahalli. So it's rank one, a nearby match. It's for rent at forty thousand with two rooms. It passes.",
+     "reveal": 2
+    },
+    {
+     "say": "Property three, H-S-R, has no link to Bellandur. Rank two, out.",
+     "reveal": 3
+    },
+    {
+     "say": "Property four is out too. So the answer is just the Sarjapur flat. One small rank function does both jobs: it filters, and it orders exact matches before nearby ones.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s015",
+   "layout": "twocol",
+   "kicker": "PropertyHunt",
+   "title": "Shortlist as ids, and the rules",
+   "left": {
+    "heading": "Design",
+    "bullets": [
+     "Shortlist = set of property ids",
+     "Status read live: SOLD shows itself",
+     "markSold synchronized"
+    ]
+   },
+   "right": {
+    "heading": "Ranges",
+    "bullets": [
+     "X-Y is inclusive",
+     "Single price X = at most X",
+     "Single size X = at least X"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Each user's shortlist is just a set of property ids. Why ids, not copies? Because when Jack marks flat one sold, Jill's shortlist reads the live status and shows SOLD automatically. Copies would go stale.",
+     "reveal": 1
+    },
+    {
+     "say": "Jack marks flat one sold. It vanishes from searches but stays in Jill's shortlist, labelled SOLD.",
+     "reveal": 2
+    },
+    {
+     "say": "Mark sold is synchronized on the property, so two mark-sold calls can't both succeed. A search racing a sale might briefly show the flat. That's fine for listings. A real purchase would recheck under a lock.",
+     "reveal": 3
+    },
+    {
+     "say": "Now the range rules from the statement. X dash Y is inclusive at both ends.",
+     "reveal": 4
+    },
+    {
+     "say": "A single number for price means at most X. Jill searching one crore means anything up to one crore.",
+     "reveal": 5
+    },
+    {
+     "say": "But a single number for size means at least X. Small detail, easy to get wrong, so read the statement twice.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s016",
+   "layout": "section",
+   "kicker": "Problem 3 of 5",
+   "title": "Ledger Co: a loan ledger",
+   "caption": "Book: Ch 21 · 21.6 Design a Loan Ledger",
+   "steps": [
+    {
+     "say": "Problem three, Ledger Co, a Geektrust backend challenge that Navi has used for hiring. A bank lends money. The borrower repays in E-M-Is, equated monthly instalments, the same amount every month. They may also pay a lump sum, a one-off extra payment, at any time.",
+     "reveal": 0
+    },
+    {
+     "say": "Only three commands. LOAN records a loan. PAYMENT records a lump sum after some E-M-I number. BALANCE asks: after E-M-I number k, how much is paid and how many E-M-Is are left?",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s017",
+   "layout": "bullets",
+   "kicker": "Ledger Co",
+   "title": "The formulas, step by step",
+   "bullets": [
+    "Interest I = P x N x R / 100",
+    "Total A = P + I",
+    "EMI = A / (N x 12), rounded UP",
+    "Paid at k = k x EMI + lump sums up to k",
+    "EMIs left = (A - paid) / EMI, rounded UP",
+    "Paid never exceeds A"
+   ],
+   "steps": [
+    {
+     "say": "Let's walk the formulas with one borrower, Dale, who borrows five thousand from the bank IDIDI for one year at six percent. Step one, simple interest: principal times years times rate over a hundred. Five thousand times one times six over a hundred is three hundred.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two, the total to repay: five thousand plus three hundred, fifty-three hundred.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three, the E-M-I: fifty-three hundred over twelve months is four hundred forty-one point six seven. Always round up, so four hundred forty-two. Even one hundred point one would round up to a hundred and one.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four, amount paid after E-M-I k: k times the E-M-I, plus every lump sum made at or before E-M-I k.",
+     "reveal": 4
+    },
+    {
+     "say": "Step five, E-M-Is left: what's still owed divided by the E-M-I, rounded up again.",
+     "reveal": 5
+    },
+    {
+     "say": "Step six, a cap. Paid can never exceed the total. That's also why the last E-M-I shrinks to whatever is left. Notice: a lump sum reduces the number of E-M-Is, never the E-M-I amount.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s018",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: Dale and Shelly",
+   "table": {
+    "head": [
+     "Step",
+     "Dale",
+     "Shelly"
+    ],
+    "rows": [
+     [
+      "P, N, R",
+      "5000, 1 yr, 6%",
+      "15000, 2 yrs, 9%"
+     ],
+     [
+      "I and A",
+      "300, 5300",
+      "2700, 17700"
+     ],
+     [
+      "EMI",
+      "ceil(441.67) = 442",
+      "ceil(737.5) = 738"
+     ],
+     [
+      "Lump sum",
+      "1000 after EMI 5",
+      "7000 by EMI 12"
+     ],
+     [
+      "Paid",
+      "6 x 442 + 1000 = 3652",
+      "12 x 738 + 7000 = 15856"
+     ],
+     [
+      "EMIs left",
+      "ceil(1648 / 442) = 4",
+      "ceil(1844 / 738) = 3"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Two worked examples straight from the official samples. Dale: five thousand, one year, six percent. Shelly at the bank U-O-N: fifteen thousand, two years, nine percent.",
+     "reveal": 1
+    },
+    {
+     "say": "Dale's interest is three hundred, total fifty-three hundred. Shelly's interest is fifteen thousand times two times nine over a hundred, twenty-seven hundred. Total seventeen thousand seven hundred.",
+     "reveal": 2
+    },
+    {
+     "say": "Dale's E-M-I rounds up to four forty-two. Shelly's is seventeen seven hundred over twenty-four, seven thirty-seven point five, rounded up to seven thirty-eight.",
+     "reveal": 3
+    },
+    {
+     "say": "Dale pays a thousand extra right after E-M-I five. Shelly has paid seven thousand in lump sums by E-M-I twelve.",
+     "reveal": 4
+    },
+    {
+     "say": "Dale's balance after E-M-I six: six times four forty-two is twenty-six fifty-two, plus a thousand, thirty-six fifty-two. Shelly after twelve: eight eight five six plus seven thousand, fifteen thousand eight hundred fifty-six.",
+     "reveal": 5
+    },
+    {
+     "say": "Dale still owes sixteen forty-eight. Divided by four forty-two is three point seven three, round up, four left. Shelly owes eighteen forty-four, that's two point five E-M-Is, round up, three. The program prints IDIDI Dale thirty-six fifty-two four, and U-O-N Shelly fifteen eight fifty-six three. Matches the expected output.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s019",
+   "layout": "twocol",
+   "kicker": "Ledger Co",
+   "title": "Derive the balance from facts",
+   "left": {
+    "heading": "Store only facts",
+    "bullets": [
+     "Total A and EMI, computed once",
+     "List of lump sums",
+     "Balance computed per query"
+    ]
+   },
+   "right": {
+    "heading": "Why not a running balance?",
+    "bullets": [
+     "BALANCE can ask about any EMI",
+     "Even one before a later payment",
+     "A mutable field gives wrong answers"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Here's the key design idea: state equals facts, balances are derived. The loan stores the total and the E-M-I, worked out once in the constructor.",
+     "reveal": 1
+    },
+    {
+     "say": "It keeps a list of lump sums, each with its amount and the E-M-I number it came after.",
+     "reveal": 2
+    },
+    {
+     "say": "Every BALANCE query computes paid and left fresh, by filtering the lump sums up to k.",
+     "reveal": 3
+    },
+    {
+     "say": "Why not keep a remaining field and subtract as commands arrive? Because BALANCE can ask about any E-M-I number, in any order.",
+     "reveal": 4
+    },
+    {
+     "say": "Imagine a payment after E-M-I ten is recorded, then someone asks for the balance at E-M-I five. That payment must not count. Only lump sums with afterEmi at most five do.",
+     "reveal": 5
+    },
+    {
+     "say": "A running balance would already include it, and you'd need to replay history. Deriving is always consistent. Storing a running balance is exactly the trap listed in the chapter summary.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s020",
+   "layout": "bullets",
+   "kicker": "Ledger Co",
+   "title": "Ledger Co: the supporting choices",
+   "bullets": [
+    "InterestPolicy Strategy: simple today",
+    "LoanKey record (bank, borrower) as map key",
+    "BigDecimal + CEILING, not Math.ceil",
+    "putIfAbsent: one loan per pair",
+    "Overpay capped: paid = A, 0 left"
+   ],
+   "steps": [
+    {
+     "say": "Interest sits behind an InterestPolicy interface. Simple interest today. Reducing-balance, like real banks use, is a new class tomorrow, and Loan doesn't change.",
+     "reveal": 1
+    },
+    {
+     "say": "The loan's identity is a LoanKey record of bank and borrower. Records get equals and hashCode for free, so it's a perfect map key. Gluing strings like IDIDI hash Dale is fragile.",
+     "reveal": 2
+    },
+    {
+     "say": "Money uses BigDecimal with ceiling rounding. Math dot ceil on doubles can bite: a value like four point zero zero zero zero zero zero zero zero one ceils to five.",
+     "reveal": 3
+    },
+    {
+     "say": "Loans live in a concurrent map, and putIfAbsent makes one loan per pair atomic. The lump-sum list is guarded by synchronized methods.",
+     "reveal": 4
+    },
+    {
+     "say": "Edge case from the book: Asha's loan totals eleven twenty, and she pays two thousand after E-M-I one. Paid is capped at eleven twenty, zero E-M-Is left. Floor instead of ceiling would leave a shortfall at the end, so always ceil.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s021",
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "Payment after EMI 10: does BALANCE at EMI 5 count it?",
+   "bullets": [
+    "A. Yes, payments always count",
+    "B. No, only lump sums with afterEmi at most 5",
+    "C. Only half of it"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think about that one before we move on.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s022",
+   "layout": "section",
+   "kicker": "Problem 4 of 5",
+   "title": "Inventory management",
+   "caption": "Book: Ch 21 · 21.7 Design an Inventory Management System",
+   "steps": [
+    {
+     "say": "The answer is B. Only lump sums made at or before E-M-I five count. That's derived state doing its job.",
+     "reveal": 0
+    },
+    {
+     "say": "Problem four is very common in e-commerce and quick-commerce rounds. Track products, called S-K-Us, stock keeping units, across several warehouses. Record every stock movement. Ship orders by choosing warehouses. And alert the purchasing team when stock runs low.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s023",
+   "layout": "table",
+   "kicker": "Inventory",
+   "title": "Clarify the rules",
+   "table": {
+    "head": [
+     "Question",
+     "Answer used"
+    ],
+    "rows": [
+     [
+      "Stock tracked how?",
+      "Per (SKU, warehouse)"
+     ],
+     [
+      "Split an order?",
+      "Yes, by a pluggable strategy"
+     ],
+     [
+      "Short on stock?",
+      "All or nothing, no partial ship"
+     ],
+     [
+      "Reorder alert when?",
+      "Total at or below reorder point, once"
+     ],
+     [
+      "Reorder how much?",
+      "max level minus current"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Our running example: one S-K-U called PHONE, with a reorder point of twenty and a max level of a hundred. Three warehouses: B-L-R one and B-L-R two in Bengaluru, and D-E-L one in Delhi. Stock is a map from S-K-U to warehouse to quantity.",
+     "reveal": 1
+    },
+    {
+     "say": "An order can be split across warehouses. Which warehouses go first is a pluggable Strategy.",
+     "reveal": 2
+    },
+    {
+     "say": "If there isn't enough stock in total, the whole order fails. No partial shipments, and stock never goes negative.",
+     "reveal": 3
+    },
+    {
+     "say": "A reorder alert fires when the total across all warehouses drops to the reorder point or below. Once per dip, not on every sale.",
+     "reveal": 4
+    },
+    {
+     "say": "The suggested reorder quantity is the max level minus what's left.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s024",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: the PHONE story",
+   "table": {
+    "head": [
+     "Step",
+     "BLR-1",
+     "BLR-2",
+     "DEL-1",
+     "Total"
+    ],
+    "rows": [
+     [
+      "Receive 30, 5, 40",
+      "30",
+      "5",
+      "40",
+      "75"
+     ],
+     [
+      "Ship 32, nearest city",
+      "0",
+      "3",
+      "40",
+      "43"
+     ],
+     [
+      "Transfer 15 DEL to BLR",
+      "15",
+      "3",
+      "25",
+      "43"
+     ],
+     [
+      "Ship 25, most stock first",
+      "15",
+      "3",
+      "0",
+      "18 ALERT"
+     ],
+     [
+      "Ship 1 more",
+      "14",
+      "3",
+      "0",
+      "17 no alert"
+     ],
+     [
+      "Count: 2 damaged",
+      "12",
+      "3",
+      "0",
+      "15"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's walk the book's run. We receive thirty phones into B-L-R one, five into B-L-R two, forty into Delhi. Total seventy-five. Each receive writes an INBOUND movement.",
+     "reveal": 1
+    },
+    {
+     "say": "A Bengaluru customer orders thirty-two, using the nearest-city-first strategy. Bengaluru warehouses go first, biggest stock first. Take thirty from B-L-R one, then two from B-L-R two. Delhi is untouched. Total forty-three.",
+     "reveal": 2
+    },
+    {
+     "say": "Transfer fifteen from Delhi to B-L-R one. That's one TRANSFER movement. Totals don't change.",
+     "reveal": 3
+    },
+    {
+     "say": "Now ship twenty-five with most-stock-first. Delhi has twenty-five, the most, so it takes all of them. Total drops to eighteen, which is at or below twenty. Alert: PHONE low, eighteen left, reorder eighty-two to reach a hundred.",
+     "reveal": 4
+    },
+    {
+     "say": "Ship one more. Total seventeen. Still low, but no second alert. That's once per dip.",
+     "reveal": 5
+    },
+    {
+     "say": "A physical count finds two damaged units in B-L-R one. An ADJUSTMENT movement records minus two. Total fifteen. Later a restock of ninety pushes the total above twenty, which re-arms the alert, and when stock falls back to fifteen it fires again.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s025",
+   "layout": "diagram",
+   "title": "ship(): lock, check, plan, apply",
+   "mermaid": "flowchart LR\n    A[\"ship PHONE 25\"] --> B[\"lock PHONE\"]\n    B --> C{\"total at least 25?\"}\n    C -- no --> X[\"error, nothing changed\"]\n    C -- yes --> D[\"strategy orders warehouses\"]\n    D --> E[\"build full plan\"]\n    E --> F[\"apply and write movements\"]\n    F --> G[\"checkReorder, unlock\"]",
+   "caption": "Plan then apply = all or nothing",
+   "steps": [
+    {
+     "say": "Here's ship, step by step. Step one, take the lock for this S-K-U. One lock per S-K-U, not per warehouse and not global.",
+     "reveal": 0
+    },
+    {
+     "say": "Step two, check the total first. If the order needs more than exists, throw before touching anything.",
+     "reveal": 0
+    },
+    {
+     "say": "Step three, hand the strategy a snapshot copy of the stock levels, and it returns the warehouse order. A copy, so a buggy strategy can't change live stock.",
+     "reveal": 0
+    },
+    {
+     "say": "Step four, build the full plan: take this many from here, this many from there. Step five, apply it and write an OUTBOUND movement for each piece. Step six, check the reorder point, then unlock. Plan then apply means all or nothing, with no rollback code.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s026",
+   "layout": "twocol",
+   "kicker": "Inventory",
+   "title": "Why these four choices",
+   "left": {
+    "heading": "Lock per SKU",
+    "bullets": [
+     "An order is one SKU, many warehouses",
+     "One lock covers them all",
+     "Different SKUs run in parallel"
+    ]
+   },
+   "right": {
+    "heading": "Ledger and alerts",
+    "bullets": [
+     "Append-only StockMovement ledger",
+     "Adjustments store the delta, -2",
+     "ReorderListener fires once per dip"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Why one lock per S-K-U? Because one order is for one S-K-U but may touch three warehouses.",
+     "reveal": 1
+    },
+    {
+     "say": "A per-S-K-U lock covers all of them, so there's no lock-ordering puzzle. Per warehouse locks would need ordering. One global lock would kill parallelism.",
+     "reveal": 2
+    },
+    {
+     "say": "And different S-K-Us use different locks, so phone orders and case orders never wait on each other. The proof in the book: two hundred threads each order one unit of a product with fifty in stock. Exactly fifty ship, a hundred and fifty are rejected. No overselling.",
+     "reveal": 3
+    },
+    {
+     "say": "Every change is a line in an append-only StockMovement ledger: inbound, outbound, transfer, adjustment. Levels can be rebuilt by replaying it, and every unit is explainable.",
+     "reveal": 4
+    },
+    {
+     "say": "An adjustment stores the change, minus two, not just the new number. So damage and shrinkage are auditable.",
+     "reveal": 5
+    },
+    {
+     "say": "ReorderListener is an Observer, and it's edge-triggered: it fires when the total crosses the line, not every time it's below. A set of alerted S-K-Us does it. Add to the set and alert only if it wasn't there. Remove when stock recovers. Level-triggered alerts would spam purchasing.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s027",
+   "layout": "section",
+   "kicker": "Problem 5 of 5",
+   "title": "Unix file search: a small find",
+   "caption": "Book: Ch 21 · 21.8 Design a Unix File Search (find)",
+   "steps": [
+    {
+     "say": "Problem five: build a small version of the Unix find command. Find walks a directory tree and prints every entry that passes some tests. For example, find slash var slash log, type f, size plus ten M, mtime plus seven. That means regular files under var log, bigger than ten mebibytes, last changed more than seven days ago.",
+     "reveal": 0
+    },
+    {
+     "say": "Interviewers love it because the obvious answer, one search method with ten optional parameters and a pile of ifs, is exactly what they want you to avoid.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s028",
+   "layout": "bullets",
+   "kicker": "Unix find",
+   "title": "Three words, then the tests",
+   "bullets": [
+    "Predicate: a yes/no test on one entry",
+    "Glob: *.log, ? = one char, [0-9]",
+    "Depth: levels below the start (start = 0)",
+    "Tests: name, iname, type, size, mtime, user",
+    "Combine: AND, OR, NOT, parentheses"
+   ],
+   "steps": [
+    {
+     "say": "Three words first. A predicate is a yes or no question about one entry. Is its name star dot log?",
+     "reveal": 1
+    },
+    {
+     "say": "A glob is a filename pattern. Star means any characters. Question mark means exactly one. Square brackets zero to nine means one digit. So app dot log dot bracket zero to nine matches app dot log dot one, but not plain app dot log.",
+     "reveal": 2
+    },
+    {
+     "say": "Depth is how many levels below the start an entry sits. The start itself is depth zero. Min depth and max depth limit the walk.",
+     "reveal": 3
+    },
+    {
+     "say": "The tests: name, and iname which ignores case. Type, file or directory. Size, age in days, owner, and empty.",
+     "reveal": 4
+    },
+    {
+     "say": "And you can combine tests with AND, OR, NOT and parentheses. Two tests side by side mean AND.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s029",
+   "layout": "diagram",
+   "title": "Two Composites: file tree and filter tree",
+   "mermaid": "flowchart TD\n    A[\"AND\"] --> O[\"OR\"]\n    A --> N[\"NOT\"]\n    O --> J[\"name *.jpg\"]\n    O --> P[\"name *.png\"]\n    N --> S[\"size over 1 MiB\"]",
+   "caption": "find /home ( -name *.jpg -o -name *.png ) ! -size +1M",
+   "steps": [
+    {
+     "say": "Here's the heart of the design. Each test is a small class with one method, matches node. That's the Specification pattern. A new test is one class, and the search loop never changes. That's Open-Closed.",
+     "reveal": 0
+    },
+    {
+     "say": "And AND, OR and NOT are filters that hold other filters. That's the Composite pattern: a tree of filters that is itself a filter. This command, photos that are jpg or png, and not bigger than one mebibyte, parses into exactly this tree. AND on top, an OR of two name tests on the left, a NOT of a size test on the right.",
+     "reveal": 0
+    },
+    {
+     "say": "There's a second Composite: the file tree. A directory is a node that contains nodes. The searcher walks the file tree and asks the filter tree one question per entry. And because the filters are records, not lambdas, they can print themselves with describe, which is how the program shows what it parsed.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s030",
+   "layout": "bullets",
+   "kicker": "Example",
+   "title": "Example: precedence and the -size gotcha",
+   "bullets": [
+    "NOT binds tightest, then AND, then OR",
+    "-name a -o -name b -type f",
+    "= a OR (b AND file)",
+    "Size rounds UP to whole units",
+    "-size -1M matches only empty files"
+   ],
+   "steps": [
+    {
+     "say": "Precedence decides which operator applies first. NOT binds tightest, then AND, then OR, the weakest.",
+     "reveal": 1
+    },
+    {
+     "say": "So take this command: name a, or, name b, type f.",
+     "reveal": 2
+    },
+    {
+     "say": "It means a, or, b and file. Not, a or b, and file. A classic surprise, and the reason real find users write parentheses.",
+     "reveal": 3
+    },
+    {
+     "say": "Now the size gotcha. Like G-N-U find, the file size is rounded up to whole units before comparing.",
+     "reveal": 4
+    },
+    {
+     "say": "So minus size one M means fewer than one mebibyte after rounding up. A two kilobyte notes file rounds up to one unit, and one is not less than one. In the book's run, only the empty todo dot md matches. Interviewers ask why.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s031",
+   "layout": "diagram",
+   "title": "The search loop: explicit stack, pre-order",
+   "mermaid": "flowchart LR\n    A[\"push start\"] --> B[\"pop node\"]\n    B --> C{\"matches?\"}\n    C -- yes --> D[\"emit\"]\n    C -- no --> E[\"push children\"]\n    D --> E\n    E -- \"until empty or limit\" --> B",
+   "caption": "Explicit stack, no recursion: deep trees cannot overflow",
+   "steps": [
+    {
+     "say": "The walk uses an explicit stack, not recursion, so a very deep tree can't overflow the call stack. Push the start at depth zero. Pop an entry. If it's deep enough and the filter matches, send it straight to a consumer. Results stream out like find printing line by line, so memory doesn't grow with the result count.",
+     "reveal": 0
+    },
+    {
+     "say": "If it's a directory, below max depth and not pruned, push its children in reverse name order so they pop in name order. Pruning, say skipping node modules, stops the walk from entering a directory at all. A filter only hides the entry itself. Stop when the stack is empty or the limit is hit.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s032",
+   "layout": "twocol",
+   "kicker": "Unix find",
+   "title": "Builder and parser",
+   "left": {
+    "heading": "SearchCriteria.Builder",
+    "bullets": [
+     "from('/home').where(...)",
+     "maxDepth, minDepth, limit, prune",
+     "build() validates once, immutable"
+    ]
+   },
+   "right": {
+    "heading": "FindCommandParser",
+    "bullets": [
+     "parseOr calls parseAnd",
+     "parseAnd calls parseUnary",
+     "Clear errors: Missing ')'"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Code users get a fluent Builder. From slash home, where iname star dot jpg, and size plus one M. Each where is ANDed with earlier ones.",
+     "reveal": 1
+    },
+    {
+     "say": "Optional settings get named calls: max depth, min depth, a result limit, and directory names to prune.",
+     "reveal": 2
+    },
+    {
+     "say": "Build checks the settings once, for example min depth three with max depth one is an error, and freezes them into an immutable SearchCriteria.",
+     "reveal": 3
+    },
+    {
+     "say": "Shell users type a find command line. A recursive-descent parser, one method per precedence level, builds the same criteria. Parse OR reads ANDs separated by dash o.",
+     "reveal": 4
+    },
+    {
+     "say": "Parse AND reads unary items side by side. Parse unary handles NOT, parentheses, and the leaf tests. The precedence lives in the call order, so it's explicit and testable.",
+     "reveal": 5
+    },
+    {
+     "say": "Bad input gives one clear line. Size ten X is an invalid size. An open parenthesis with no closing one prints missing close parenthesis. An unknown test prints unknown predicate.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s033",
+   "layout": "bullets",
+   "kicker": "Unix find",
+   "title": "find: concurrency and the interview plan",
+   "bullets": [
+    "Children in ConcurrentSkipListMap",
+    "Parallel: one task per sub-directory",
+    "Cheap tests first: AND short-circuits",
+    "Interview: model + 2 filters first",
+    "Parser last, only if time allows"
+   ],
+   "steps": [
+    {
+     "say": "Children live in a concurrent skip list map: sorted, so output is deterministic, and safe to iterate while files are added. A tree map would throw a concurrent modification exception.",
+     "reveal": 1
+    },
+    {
+     "say": "The parallel version forks one task per sub-directory. Tasks only read, each builds its own list, so no locks. On twenty thousand generated files, sequential and parallel both found the same sixteen hundred paths in the same order.",
+     "reveal": 2
+    },
+    {
+     "say": "AND and OR short-circuit, so put cheap tests like name before expensive ones like size on a real disk.",
+     "reveal": 3
+    },
+    {
+     "say": "In the interview, spend the first ten minutes on the node classes and the filter interface with two leaves, name and size. That alone demos a search. Then AND, OR, NOT, the Builder and the walk.",
+     "reveal": 4
+    },
+    {
+     "say": "Add the parser last, only if time allows. Interviewers mostly score the filter design. Say it out loud: a new filter is one class, and the searcher never changes.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s034",
+   "layout": "section",
+   "kicker": "Chapter summary",
+   "title": "Chapter summary: all eight problems",
+   "caption": "Book: Ch 21 · Chapter summary",
+   "steps": [
+    {
+     "say": "Let's zoom out over the whole chapter, all eight machine-coding problems, including the three from last episode.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s035",
+   "layout": "table",
+   "kicker": "Chapter summary",
+   "title": "Eight problems, one table",
+   "table": {
+    "head": [
+     "Problem",
+     "Key pattern",
+     "Trap to avoid"
+    ],
+    "rows": [
+     [
+      "Task Mgmt",
+      "Specification, state enum",
+      "TODO jumps to DONE"
+     ],
+     [
+      "Wallet",
+      "Strategy offers, idempotency",
+      "double for money"
+     ],
+     [
+      "Calendar",
+      "Strategy, plan-then-save",
+      "closed intervals"
+     ],
+     [
+      "Coding Blox",
+      "Command map, Strategy",
+      "running a contest twice"
+     ],
+     [
+      "PropertyHunt",
+      "Builder + predicates",
+      "comparing '90L' strings"
+     ],
+     [
+      "Ledger Co",
+      "Strategy, derived state",
+      "running balance; floor"
+     ],
+     [
+      "Inventory",
+      "Strategy, Observer",
+      "partial ships; alert spam"
+     ],
+     [
+      "Unix find",
+      "Specification + Composite",
+      "parameter-list search"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Task management: Specification filters and an enum state machine. Trap: letting a task jump from to-do straight to done.",
+     "reveal": 1
+    },
+    {
+     "say": "Digital wallet: offer strategies and idempotency. Trap: using double for money.",
+     "reveal": 2
+    },
+    {
+     "say": "Event calendar: a strategy for picking representatives and plan-then-save. Trap: closed intervals, where a meeting ending at ten clashes with one starting at ten.",
+     "reveal": 3
+    },
+    {
+     "say": "Coding Blox: a command map and two strategies. Trap: running a contest twice, or unseeded randomness.",
+     "reveal": 4
+    },
+    {
+     "say": "PropertyHunt: a Builder and a list of predicates. Trap: comparing ninety L as a string, or stale shortlist copies.",
+     "reveal": 5
+    },
+    {
+     "say": "Ledger Co: an interest strategy and derived state. Trap: a running balance, or floor instead of ceiling.",
+     "reveal": 6
+    },
+    {
+     "say": "Inventory: allocation strategy and an Observer, with a lock per S-K-U. Trap: partial shipments and alert spam.",
+     "reveal": 7
+    },
+    {
+     "say": "Unix find: Specification plus Composite filters, a Builder and a parser. Trap: a search method with a growing parameter list, and forgetting that AND binds tighter than OR.",
+     "reveal": 8
+    }
+   ]
+  },
+  {
+   "id": "s036",
+   "layout": "recap",
+   "kicker": "Episode 28 recap",
+   "title": "Episode 28 recap",
+   "bullets": [
+    "Coding Blox: complete first, then rate",
+    "PropertyHunt: normalise, predicates, ids",
+    "Ledger Co: facts stored, balance derived",
+    "Inventory: SKU lock, plan-apply, once per dip",
+    "find: two Composites, Builder, ! > AND > OR",
+    "Entities guard, services orchestrate"
+   ],
+   "steps": [
+    {
+     "say": "Let's recap. Coding Blox: commands in a map, the scoring rule on the Level enum, a seeded SolveSimulator, and complete the contest before updating ratings, so they never apply twice.",
+     "reveal": 1
+    },
+    {
+     "say": "PropertyHunt: normalise prices and sizes at the boundary, turn every filter into a predicate and AND them, sort by location rank, and keep shortlists as ids so SOLD shows live.",
+     "reveal": 2
+    },
+    {
+     "say": "Ledger Co: store facts, derive balances, and round the E-M-I and the E-M-Is left up, with BigDecimal.",
+     "reveal": 3
+    },
+    {
+     "say": "Inventory: stock per S-K-U and warehouse, one lock per S-K-U, plan then apply, an append-only movement ledger, a strategy for warehouses, and a reorder alert once per dip.",
+     "reveal": 4
+    },
+    {
+     "say": "Unix find: two Composites, the file tree and the filter tree. Specification filters, a Builder, an iterative walk, and NOT before AND before OR.",
+     "reveal": 5
+    },
+    {
+     "say": "And the shape behind all eight: entities guard rules, services orchestrate, strategies hold the X-or-Y choices, the driver parses and prints, and every error is a message, not a crash.",
+     "reveal": 6
+    },
+    {
+     "say": "Next time, episode twenty-nine: Quick-Fire Review, Cheat Sheets and Q and A. We'll sweep the whole course in rapid questions and answers so it all sticks. See you there.",
+     "reveal": 6
+    }
+   ]
+  }
+ ]
+}

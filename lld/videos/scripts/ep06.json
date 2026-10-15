@@ -1,0 +1,2001 @@
+{
+  "series": "LLD Workshop",
+  "episode": 6,
+  "title": "Clean Code",
+  "subtitle": "Names, functions, errors, tests, classes, systems, review and testing strategy",
+  "scenes": [
+    {
+      "id": "s001",
+      "layout": "title",
+      "title": "Clean Code",
+      "subtitle": "Names, functions, errors, tests, classes, systems, review and testing strategy",
+      "steps": [
+        {
+          "say": "Welcome to episode six of the L-L-D Workshop, the low-level design series. Last time we chose which classes exist. Today we look inside them: clean code.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll name things so code reads like the requirement, shrink a messy function step by step, throw useful exceptions instead of returning minus one, write tests that check themselves, and review code with a shared checklist.",
+          "reveal": 0
+        },
+        {
+          "say": "Keep the chapter six notes open. Every concept here matches a section there, in order, and every before and after program runs. Pause before each output and predict it.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s002",
+      "layout": "section",
+      "kicker": "Concept 1 of 19",
+      "title": "What clean code is, and why bother",
+      "steps": [
+        {
+          "say": "Here's the working definition: clean code is code whose intent is obvious to the next reader, and which is easy to change safely. Think of a tidy kitchen. Anyone can walk in and cook.",
+          "reveal": 0
+        },
+        {
+          "say": "Why care? We read code far more than we write it, often quoted as more than ten reads for every write. And in a machine coding round, the interviewer reads your code line by line.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 6 Clean Code · What is clean code, and why bother?"
+    },
+    {
+      "id": "s003",
+      "layout": "number",
+      "title": "Read versus write",
+      "big": "10 : 1",
+      "caption": "Code is read more than ten times for every time it's written",
+      "steps": [
+        {
+          "say": "So a minute saved while writing, at the cost of a minute lost on every read, is a terrible trade. And, I'll clean it up later, rarely happens. Later equals never.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s004",
+      "layout": "bullets",
+      "title": "How you get there",
+      "bullets": [
+        "Treat readability as a real requirement",
+        "Boy Scout Rule: leave it cleaner than you found it",
+        "Write tests so you can clean without fear",
+        "Clean in small steps: make it work, then right"
+      ],
+      "steps": [
+        {
+          "say": "Four habits. Our running example: you open the booking service on Monday to fix one bug. Habit one: readability is a requirement, so the fix must read clearly too, not just pass.",
+          "reveal": 1
+        },
+        {
+          "say": "Habit two, the Boy Scout Rule. While you're in the file, rename one cryptic variable, say d, to elapsed days. One small improvement per visit.",
+          "reveal": 2
+        },
+        {
+          "say": "Habit three: tests. Rename safely only because a test proves the booking total is still one thousand and eighty rupees afterwards.",
+          "reveal": 3
+        },
+        {
+          "say": "Habit four: small steps. Get the fix working, then tidy it, in minutes, not a big-bang rewrite. Trade-off: avoid gold-plating code that's already clear and never changes.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s005",
+      "layout": "section",
+      "kicker": "Concept 2 of 19",
+      "title": "Meaningful names",
+      "steps": [
+        {
+          "say": "A good name answers three questions: why it exists, what it does, and how it's used. If a name needs a comment to explain it, it isn't good enough. Think moving boxes labelled kitchen, glasses, fragile, versus box seven.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 6 Clean Code · 1. Meaningful Names"
+    },
+    {
+      "id": "s006",
+      "layout": "table",
+      "title": "The naming rules, bad versus good",
+      "table": {
+        "head": [
+          "Rule",
+          "Bad",
+          "Good"
+        ],
+        "rows": [
+          [
+            "Reveal intention",
+            "int d",
+            "elapsedTimeInDays"
+          ],
+          [
+            "No disinformation",
+            "accountList (a Set)",
+            "accounts"
+          ],
+          [
+            "Meaningful distinctions",
+            "ProductInfo, ProductData",
+            "Product"
+          ],
+          [
+            "Pronounceable, searchable",
+            "crtdTs, 7",
+            "createdAt, MAX_LOGIN_ATTEMPTS"
+          ],
+          [
+            "No encodings",
+            "strName, IShapeFactory",
+            "name, ShapeFactory"
+          ],
+          [
+            "Nouns for classes, verbs for methods",
+            "Mgr, data()",
+            "Customer, postPayment()"
+          ],
+          [
+            "One word per concept, no puns",
+            "fetch, get, retrieve",
+            "get"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Reveal intention: d tells you nothing. Elapsed time in days tells you everything.",
+          "reveal": 1
+        },
+        {
+          "say": "No disinformation: don't call a set an account list. Just say accounts.",
+          "reveal": 2
+        },
+        {
+          "say": "Meaningful distinctions: product info and product data are noise words. What's the difference? Nobody knows. Keep one product.",
+          "reveal": 3
+        },
+        {
+          "say": "Pronounceable and searchable: you can't say c-r-t-d-T-s in a meeting, and you can't search for a bare seven. Use created at, and a named constant for max login attempts.",
+          "reveal": 4
+        },
+        {
+          "say": "No encodings: no type codes like s-t-r name, and no capital I on interfaces in Java.",
+          "reveal": 5
+        },
+        {
+          "say": "Classes are nouns, methods are verbs. Manager and data are vague. Customer and post payment aren't.",
+          "reveal": 6
+        },
+        {
+          "say": "One word per concept: pick get, not fetch in one class and retrieve in the next. And don't pun: don't use add for both sum and append.",
+          "reveal": 7
+        }
+      ]
+    },
+    {
+      "id": "s007",
+      "layout": "twocol",
+      "kicker": "Example",
+      "title": "Example: the task board, before and after",
+      "left": {
+        "heading": "Before",
+        "bullets": [
+          "class Mgr, list lst",
+          "getThem(): i1 == 4 && i2 > 18000 && !flg"
+        ]
+      },
+      "right": {
+        "heading": "After",
+        "bullets": [
+          "class TaskBoard",
+          "findCompletedLongRunningTasks()",
+          "isCompleted(), tookLongerThan(5h)",
+          "Temperature.ofCelsius(25) = 298.15 K"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Before: a class called M-g-r with a method get them. Inside, it checks whether i one equals four.",
+          "reveal": 1
+        },
+        {
+          "say": "And i two is over eighteen thousand, and flag is false. What's four? What's eighteen thousand? You'd need the author to tell you.",
+          "reveal": 2
+        },
+        {
+          "say": "After: the class is task board. Status codes became an enum, so four becomes done.",
+          "reveal": 3
+        },
+        {
+          "say": "The method is find completed long running tasks. It says exactly what it returns.",
+          "reveal": 4
+        },
+        {
+          "say": "And the condition reads aloud: completed, took longer than five hours, not archived. The magic number became a named constant.",
+          "reveal": 5
+        },
+        {
+          "say": "Bonus: named static factories. new Temperature of twenty-five, is that Celsius? Temperature dot of Celsius twenty-five is unambiguous: two hundred ninety-eight point one five kelvin. In the interview, say: I name things so the code reads like the requirement.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s008",
+      "layout": "section",
+      "kicker": "Concept 3 of 19",
+      "title": "Functions",
+      "steps": [
+        {
+          "say": "Clean functions are small, do one thing, stay at one level of abstraction, take few arguments, have no hidden side effects, and either do something or answer something, never both. Let's take each rule and apply it to one running example: cinema ticket pricing.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 6 Clean Code · 2. Functions"
+    },
+    {
+      "id": "s009",
+      "layout": "bullets",
+      "title": "The function rules, one by one",
+      "bullets": [
+        "Small: hardly ever 20 lines; 2 to 4 lines is ideal",
+        "One thing, at one level of abstraction",
+        "Stepdown: read top to bottom like a story",
+        "Few arguments: no flags, use argument objects",
+        "No hidden side effects, no output arguments",
+        "Command-query separation; exceptions, not codes"
+      ],
+      "steps": [
+        {
+          "say": "Small. The book says a function should hardly ever reach twenty lines, and it praises two to four. Our old booking function did validation, pricing, discounts, logging and session work in one block. That's five jobs.",
+          "reveal": 1
+        },
+        {
+          "say": "One thing means you can't extract another function with a name that isn't just a restatement. And don't mix high-level steps like total for request with low-level ones like appending a comma.",
+          "reveal": 2
+        },
+        {
+          "say": "The stepdown rule: total for calls require at least one seat, price per seat, and apply group discount, each defined just below, one level more detailed.",
+          "reveal": 3
+        },
+        {
+          "say": "Arguments: zero is best, then one, then two. book with true as a parameter is a flag argument. True what? Replace it with an enum, day type weekend. And wrap seat, count and day in one booking request object.",
+          "reveal": 4
+        },
+        {
+          "say": "Side effects: the old function quietly wrote to a global session. That's hidden behaviour. It also added to a log list passed in by the caller, an output argument. Both surprise readers.",
+          "reveal": 5
+        },
+        {
+          "say": "Command-query separation, or C-Q-S: a command changes state and returns nothing, a query returns data and changes nothing. If enable dark mode returns a boolean, are you asking or enabling? And throw exceptions instead of returning minus one. And a switch on a type code, like seat name, is tolerated only once, buried in a factory. Otherwise, use polymorphism or enum data.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s010",
+      "layout": "diagram",
+      "title": "Stepdown: the pricer reads top-down",
+      "mermaid": "flowchart TD\n    A[\"totalFor(request)\"] --> B[\"requireAtLeastOneSeat\"]\n    A --> C[\"pricePerSeat\"]\n    A --> D[\"applyGroupDiscount\"]\n    C --> E[\"addPercent\"]\n    D --> E",
+      "caption": "Each function sits one level above the ones it calls",
+      "steps": [
+        {
+          "say": "Here's the after shape. Total for is the story. Below it, three helpers, and below those, one tiny add percent. You can stop reading at whatever level of detail you need.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s011",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: 4 gold seats on a weekend",
+      "table": {
+        "head": [
+          "Step",
+          "Function",
+          "Value"
+        ],
+        "rows": [
+          [
+            "Validate",
+            "requireAtLeastOneSeat",
+            "4 seats, OK"
+          ],
+          [
+            "Base price",
+            "SeatType.GOLD",
+            "Rs 250"
+          ],
+          [
+            "Weekend surcharge",
+            "pricePerSeat: +20%",
+            "Rs 300"
+          ],
+          [
+            "Times seats",
+            "totalFor",
+            "Rs 1,200"
+          ],
+          [
+            "Group discount",
+            "applyGroupDiscount: -10%",
+            "Rs 1,080"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's run it. Four gold seats on a weekend. Validation first: four seats is positive, so we continue.",
+          "reveal": 1
+        },
+        {
+          "say": "Gold's base price lives on the seat type enum: two hundred fifty rupees. The old switch on a string became data.",
+          "reveal": 2
+        },
+        {
+          "say": "The weekend surcharge is twenty percent, so three hundred per seat.",
+          "reveal": 3
+        },
+        {
+          "say": "Times four seats: twelve hundred.",
+          "reveal": 4
+        },
+        {
+          "say": "Four or more seats gets ten percent off: one thousand and eighty rupees. Same answer as before, but now an unknown seat type throws, sorry, unknown seat type platinum, instead of a silent minus one.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s012",
+      "layout": "section",
+      "kicker": "Concept 4 of 19",
+      "title": "Comments",
+      "steps": [
+        {
+          "say": "Comments are at best a necessary evil. Code changes, comments often don't, so they drift and lie. Rule: explain yourself in code first, and keep only what code can't say.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 6 Clean Code · 3. Comments"
+    },
+    {
+      "id": "s013",
+      "layout": "twocol",
+      "title": "Good comments versus bad comments",
+      "left": {
+        "heading": "Keep",
+        "bullets": [
+          "Legal header, informative (regex)",
+          "Why: intent behind a decision",
+          "Warning: billed per call",
+          "TODO with owner; public Javadoc"
+        ]
+      },
+      "right": {
+        "heading": "Delete",
+        "bullets": [
+          "Redundant: i++ // increment i",
+          "Journal and bylines: git knows",
+          "Commented-out code",
+          "Closing-brace, noise Javadoc"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Keep a licence header, and informative comments, like what a regular expression matches: ten characters, five letters, four digits, one letter.",
+          "reveal": 1
+        },
+        {
+          "say": "Keep the why. For example: we copy the list because callers may pass an unmodifiable one.",
+          "reveal": 2
+        },
+        {
+          "say": "Keep warnings of consequences: this call hits the credit bureau and is billed per request.",
+          "reveal": 3
+        },
+        {
+          "say": "Keep a TODO with an owner, and Javadoc on public APIs, the contract callers rely on.",
+          "reveal": 4
+        },
+        {
+          "say": "Delete redundant comments that repeat the code.",
+          "reveal": 5
+        },
+        {
+          "say": "Delete change logs and added by Rick. Version control records that.",
+          "reveal": 6
+        },
+        {
+          "say": "Delete commented-out code. Others are scared to remove it, so it rots. Git remembers it.",
+          "reveal": 7
+        },
+        {
+          "say": "And delete end while comments. If you need one, the function is too long.",
+          "reveal": 8
+        }
+      ]
+    },
+    {
+      "id": "s014",
+      "layout": "twocol",
+      "kicker": "Example",
+      "title": "Example: the premium loan check",
+      "left": {
+        "heading": "Before",
+        "bullets": [
+          "// check if eligible for premium loan",
+          "age >= 21 && age <= 60 && score > 750",
+          "&& !defaulted && income >= 5000000"
+        ]
+      },
+      "right": {
+        "heading": "After",
+        "bullets": [
+          "isEligibleForPremiumLoan(a)",
+          "isWorkingAge && hasGoodCredit",
+          "&& earnsEnough"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Before: a comment says check if eligible for a premium loan, because the code can't say it.",
+          "reveal": 1
+        },
+        {
+          "say": "Then a long condition: age between twenty-one and sixty, credit score over seven fifty.",
+          "reveal": 2
+        },
+        {
+          "say": "Not defaulted, and income at least five million paise. That's fifty thousand rupees a month, but you'd never guess.",
+          "reveal": 3
+        },
+        {
+          "say": "After: the comment became the function name, is eligible for premium loan.",
+          "reveal": 4
+        },
+        {
+          "say": "Its body reads as three named rules: is working age, has good credit, and earns enough.",
+          "reveal": 5
+        },
+        {
+          "say": "Each rule is a one-line helper with named constants. Asha is still eligible, Ravi still isn't. No comment needed.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s015",
+      "layout": "section",
+      "kicker": "Concept 5 of 19",
+      "title": "Formatting",
+      "steps": [
+        {
+          "say": "Formatting is communication. Layout tells the reader what belongs together and what matters most. A team agrees one style and lets a tool apply it everywhere.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 6 Clean Code · 4. Formatting"
+    },
+    {
+      "id": "s016",
+      "layout": "bullets",
+      "title": "Vertical and horizontal rules",
+      "bullets": [
+        "Newspaper order: headline first, detail below",
+        "Blank lines between concepts, related lines close",
+        "Fields at the top, caller above callee",
+        "Short lines: 100 to 120 characters",
+        "No column alignment; indentation shows scope",
+        "One team style, enforced by a formatter in CI"
+      ],
+      "steps": [
+        {
+          "say": "Running example: a looping playlist class. Rule one, newspaper order. The class name and one line of Javadoc are the headline: a looping playlist. Detail grows as you scroll.",
+          "reveal": 1
+        },
+        {
+          "say": "Rule two: a blank line between the constructor, name, add and next. No blank lines inside the three field declarations, because they belong together.",
+          "reveal": 2
+        },
+        {
+          "say": "Rule three: fields at the top. And next calls a private helper, display title, which sits right below it.",
+          "reveal": 3
+        },
+        {
+          "say": "Rule four: line width. Google's Java style uses one hundred characters, Martin uses one twenty. The old playlist crammed a whole method on one line.",
+          "reveal": 4
+        },
+        {
+          "say": "Rule five: don't align declarations in columns. It draws the eye to types instead of names and breaks on every rename.",
+          "reveal": 5
+        },
+        {
+          "say": "Rule six: one style for everyone, applied by google-java-format or Spotless, and checked by continuous integration, or C-I, the server that builds every change. Before and after print the same songs. Formatting only changes how fast a human understands it.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s017",
+      "layout": "section",
+      "kicker": "Concept 6 of 19",
+      "title": "Objects versus data structures",
+      "steps": [
+        {
+          "say": "Two different kinds of type. An object hides its data and exposes behaviour, like a vending machine. A data structure exposes its data and has no real behaviour, like a spreadsheet row.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 6 Clean Code · 5. Objects and Data Structures"
+    },
+    {
+      "id": "s018",
+      "layout": "table",
+      "title": "The anti-symmetry",
+      "table": {
+        "head": [
+          "You add a new...",
+          "Data structures + functions",
+          "Objects (polymorphism)"
+        ],
+        "rows": [
+          [
+            "Function, e.g. perimeter",
+            "Easy: one new function",
+            "Hard: edit every class"
+          ],
+          [
+            "Type, e.g. Triangle",
+            "Hard: edit every function",
+            "Easy: one new class"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Running example: shapes. Add a perimeter function. In procedural style, with records and one geometry class, that's one new method: square gives eight, circle gives six point two eight. In object style, you edit every shape class.",
+          "reveal": 1
+        },
+        {
+          "say": "Now add a triangle. Object style: one new class, area six for base three, height four. Nothing else changes. Procedural style: edit every switch. So choose by which change you expect more. Java's sealed interfaces make the procedural switch safe, because the compiler flags a missing case.",
+          "reveal": 2
+        }
+      ]
+    },
+    {
+      "id": "s019",
+      "layout": "twocol",
+      "kicker": "Example",
+      "title": "Example: hide structure, avoid train wrecks",
+      "left": {
+        "heading": "Train wreck",
+        "bullets": [
+          "order.getCustomer()",
+          "  .getAddress().city()"
+        ]
+      },
+      "right": {
+        "heading": "Tell the object",
+        "bullets": [
+          "order.isMetroDelivery()",
+          "Address record: isMetro()",
+          "OrderDto: pure data, no behaviour"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's a train wreck: order, get customer, get address, city. The caller now knows the whole internal shape of an order.",
+          "reveal": 1
+        },
+        {
+          "say": "Change how addresses are stored, and every caller like this breaks. That's the Law of Demeter being broken.",
+          "reveal": 2
+        },
+        {
+          "say": "Instead, ask the order: is metro delivery. Still true for Pune, but the structure stays hidden.",
+          "reveal": 3
+        },
+        {
+          "say": "The address itself is a record, a data structure. Exposing data is its job, so it's fine.",
+          "reveal": 4
+        },
+        {
+          "say": "And a D-T-O, a data transfer object, is the purest data structure for a web response. Avoid hybrids: public fields plus business rules. In the interview: objects hide data, data structures expose it, and the anti-symmetry decides.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s020",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "book(seat, count, weekend, log) returns -1. Rules broken?",
+      "bullets": [
+        "One: it's too long",
+        "Two: flag and error code",
+        "At least four",
+        "None, it works"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Count the function rules this signature breaks. Answer on the next slide.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s021",
+      "layout": "section",
+      "kicker": "Concept 7 of 19",
+      "title": "Error handling",
+      "steps": [
+        {
+          "say": "Answer: at least four. A flag argument, an output argument, an error code, and a hidden session write. Now, error handling. It matters, but if it hides the logic, it's wrong. Clean error handling keeps the happy path readable and makes failures hard to ignore.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 6 Clean Code · 6. Error Handling"
+    },
+    {
+      "id": "s022",
+      "layout": "bullets",
+      "title": "The error-handling rules",
+      "bullets": [
+        "Exceptions, not return codes",
+        "Write try first; use try-with-resources",
+        "Unchecked exceptions, with context",
+        "Wrap third-party exceptions, keep the cause",
+        "Special Case object for normal absence",
+        "Don't return null, don't pass null"
+      ],
+      "steps": [
+        {
+          "say": "Running example: a bank transfer. Rule one: the old transfer returned one for no account. Which account? The caller has to decode it. An exception carries the answer.",
+          "reveal": 1
+        },
+        {
+          "say": "Rule two: write the try first. Try-with-resources closes the audit file even when the transfer crashes. The output shows the file closed before the catch ran.",
+          "reveal": 2
+        },
+        {
+          "say": "Rule three: unchecked, with context. Account B has one hundred but nine hundred was requested. Checked exceptions ripple through every signature, which breaks open closed.",
+          "reveal": 3
+        },
+        {
+          "say": "Rule four: the S-M-S vendor throws I-O exception. Our S-M-S notifier wraps it in a banking exception, and keeps the original as the cause, so the stack trace isn't lost.",
+          "reveal": 4
+        },
+        {
+          "say": "Rule five, the special case pattern. A customer with no loyalty membership gets a no membership object: zero points, tier none. Callers need no null check.",
+          "reveal": 5
+        },
+        {
+          "say": "Rule six: return an empty list or an optional, never null. And reject null arguments at the door with requires non null. Every null you return is a future crash.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s023",
+      "layout": "diagram",
+      "title": "Wrap the vendor at the boundary",
+      "mermaid": "flowchart LR\n    A[\"Vendor throws IOException\"] --> B[\"SmsNotifier wraps it\"]\n    B --> C[\"BankingException with cause\"]\n    C --> D[\"Caller catches one domain type\"]",
+      "caption": "Vendor exceptions never leak past the wrapper",
+      "steps": [
+        {
+          "say": "The flow: the vendor throws, our wrapper translates, and callers only ever catch our own domain type. Swap S-M-S vendors and only one class changes. In the interview: unchecked domain exceptions with context, wrap vendors, no null in or out.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s024",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: before and after outputs",
+      "table": {
+        "head": [
+          "Call",
+          "Before",
+          "After"
+        ],
+        "rows": [
+          [
+            "transfer to unknown Z",
+            "returns 1",
+            "account 'Z' does not exist"
+          ],
+          [
+            "transfer 900 from B",
+            "returns 2",
+            "B has 100 but 900 requested"
+          ],
+          [
+            "history(A)",
+            "null, then crash",
+            "empty list, size 0"
+          ],
+          [
+            "loyalty(B)",
+            "crash on unboxing",
+            "0 pts, tier NONE"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Transfer to an unknown account Z. Before: the number one. After: a sentence naming the account.",
+          "reveal": 1
+        },
+        {
+          "say": "Transfer nine hundred from B. Before: two. After: exactly how much was there and how much was asked.",
+          "reveal": 2
+        },
+        {
+          "say": "History for A. Before: null, and someone forgot to check. After: an empty list.",
+          "reveal": 3
+        },
+        {
+          "say": "Loyalty for a non-member. Before: a crash when Java unboxes a null integer. After: the special case, zero points.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s025",
+      "layout": "section",
+      "kicker": "Concept 8 of 19",
+      "title": "Boundaries",
+      "steps": [
+        {
+          "say": "A boundary is where your code meets code you don't control: libraries, frameworks, other teams' services, even a general type like map. Keep foreign code at the edge, behind interfaces shaped for your needs.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 6 Clean Code · 7. Boundaries"
+    },
+    {
+      "id": "s026",
+      "layout": "bullets",
+      "title": "Three boundary techniques",
+      "bullets": [
+        "Wrap boundary types: no raw Map passed around",
+        "Learning tests: pin down how the library behaves",
+        "Code against the interface you wish you had"
+      ],
+      "steps": [
+        {
+          "say": "One: wrap. Running example: user sessions. Before, a raw map of tokens to sessions went everywhere, and a buggy admin tool called clear. Everyone got logged out. After, a session registry hides the map and offers only open, active session and close. The expiry rule lives in one place: active at eleven, yes; at one p-m, expired.",
+          "reveal": 1
+        },
+        {
+          "say": "Two: learning tests. Small tests that call the library the way you plan to. Hash map allows one null key. Concurrent hash map rejects it. String split drops trailing empty strings unless you pass minus one. Rerun them on every upgrade.",
+          "reveal": 2
+        },
+        {
+          "say": "Three: the fraud team's A-P-I isn't built yet. Define the fraud check interface you want, use a fake that flags anything over one lakh rupees, and later write an adapter to the real one.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s027",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: what the learning tests pinned down",
+      "table": {
+        "head": [
+          "Learning test",
+          "Result"
+        ],
+        "rows": [
+          [
+            "HashMap.put(null, 1)",
+            "allowed: one null key"
+          ],
+          [
+            "ConcurrentHashMap.put(null, 1)",
+            "throws NullPointerException"
+          ],
+          [
+            "Map.of(\"k\",1,\"k\",2)",
+            "throws: duplicate key"
+          ],
+          [
+            "\"a,b,,\".split(\",\")",
+            "2 parts; with -1, 4 parts"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Hash map: one null key is fine.",
+          "reveal": 1
+        },
+        {
+          "say": "Swap to concurrent hash map, and the same put throws. Better to learn that in a test than in production.",
+          "reveal": 2
+        },
+        {
+          "say": "Map dot of with a duplicate key throws illegal argument.",
+          "reveal": 3
+        },
+        {
+          "say": "And a comma split of a, b, comma, comma gives two parts, not four. Four tests, four passed. In the interview: wrap foreign code, learn it with tests, adapt, don't leak.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s028",
+      "layout": "section",
+      "kicker": "Concept 9 of 19",
+      "title": "Unit tests",
+      "steps": [
+        {
+          "say": "Unit tests are small automated tests of one unit of behaviour in isolation. Clean Code's claim: test code is as important as production code, because it's what lets you change production code without fear.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 6 Clean Code · 8. Unit Tests"
+    },
+    {
+      "id": "s029",
+      "layout": "bullets",
+      "title": "The three laws of T-D-D",
+      "bullets": [
+        "No production code without a failing test",
+        "Only enough test to fail (not compiling counts)",
+        "Only enough code to pass that test"
+      ],
+      "steps": [
+        {
+          "say": "T-D-D means test-driven development. Running example: the checkout's quote method. Law one: before writing quote, write a test expecting three teas at one hundred twenty rupees to cost three sixty.",
+          "reveal": 1
+        },
+        {
+          "say": "Law two: stop as soon as it fails. The test doesn't even compile, because quote doesn't exist. That counts.",
+          "reveal": 2
+        },
+        {
+          "say": "Law three: write just enough of quote to pass. Then refactor. That's red, green, refactor, in cycles of maybe thirty seconds.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s030",
+      "layout": "table",
+      "title": "F.I.R.S.T.: what clean tests are",
+      "table": {
+        "head": [
+          "Letter",
+          "Meaning",
+          "How the checkout tests do it"
+        ],
+        "rows": [
+          [
+            "F",
+            "Fast",
+            "In-memory doubles, no network"
+          ],
+          [
+            "I",
+            "Independent",
+            "Fresh instance per test"
+          ],
+          [
+            "R",
+            "Repeatable",
+            "Fixed Clock, not now()"
+          ],
+          [
+            "S",
+            "Self-validating",
+            "Assertions, not println"
+          ],
+          [
+            "T",
+            "Timely",
+            "Written just before the code"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "F, fast: milliseconds, so you run them constantly. The checkout tests use in-memory stand-ins, no network or database.",
+          "reveal": 1
+        },
+        {
+          "say": "I, independent: no test depends on another's leftovers. The runner creates a fresh test object for each test.",
+          "reveal": 2
+        },
+        {
+          "say": "R, repeatable: same result any day. The coupon expiry test injects a fixed clock set to the twenty-eighth of September, so it won't break next month.",
+          "reveal": 3
+        },
+        {
+          "say": "S, self-validating: pass or fail automatically. No human reading printed numbers.",
+          "reveal": 4
+        },
+        {
+          "say": "T, timely: written just before the production code, as in the T-D-D cycle.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s031",
+      "layout": "twocol",
+      "kicker": "Example",
+      "title": "Example: a dirty test versus a clean one",
+      "left": {
+        "heading": "test1()",
+        "bullets": [
+          "quotes twice, checks out once",
+          "uses the system clock",
+          "prints a=36000 b=36000"
+        ]
+      },
+      "right": {
+        "heading": "expired_coupon_is_ignored()",
+        "bullets": [
+          "Given: OLD coupon, expired yesterday",
+          "When: quote 1 TEA with OLD",
+          "Then: assertEquals(12000, total)"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Test one checks three different things in one go.",
+          "reveal": 1
+        },
+        {
+          "say": "It uses the real clock, so it isn't repeatable.",
+          "reveal": 2
+        },
+        {
+          "say": "And it only prints numbers. It passes, but proves nothing, because someone has to check by eye.",
+          "reveal": 3
+        },
+        {
+          "say": "The clean one is named as a behaviour: expired coupon is ignored. Given a coupon called old that expired yesterday.",
+          "reveal": 4
+        },
+        {
+          "say": "When we quote one tea with it.",
+          "reveal": 5
+        },
+        {
+          "say": "Then the total is twelve thousand paise, full price. One concept per test. The chapter runs these on a tiny runner of about sixty lines instead of J-Unit: it finds methods marked test by reflection, makes a fresh instance for each, and prints pass or fail. Eight tests, eight passed.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s032",
+      "layout": "section",
+      "kicker": "Concept 10 of 19",
+      "title": "Classes",
+      "steps": [
+        {
+          "say": "Clean classes are small, measured in responsibilities, not lines. They have one reason to change, they're cohesive, and they're organised so new features mean new classes, not edits to old ones.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 6 Clean Code · 9. Classes"
+    },
+    {
+      "id": "s033",
+      "layout": "bullets",
+      "title": "The class rules",
+      "bullets": [
+        "Order: constants, fields, public methods, helpers",
+        "Small: describe it in about 25 words, no 'and'",
+        "Cohesive: methods use most of the fields",
+        "Organise for change: new feature, new class",
+        "Isolate from change: depend on interfaces"
+      ],
+      "steps": [
+        {
+          "say": "Running example: a report manager. Rule one, organisation: constants, then private fields, then public methods, each followed by its private helpers.",
+          "reveal": 1
+        },
+        {
+          "say": "Rule two: if the name needs manager or processor, or the description needs and, it does too much. Report manager totals sales and formats output and sends email. Three reasons to change.",
+          "reveal": 2
+        },
+        {
+          "say": "Rule three, cohesion: the S-M-T-P host field is only used by the email method. A subset of methods using a subset of fields wants to be its own class.",
+          "reveal": 3
+        },
+        {
+          "say": "Rule four: render grows another if branch for each format. Split so each format is its own formatter class.",
+          "reveal": 4
+        },
+        {
+          "say": "Rule five: a portfolio depends on a price source interface, not a live stock exchange client, so a test can feed fixed prices.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s034",
+      "layout": "table",
+      "title": "After the split: one reason to change each",
+      "steps": [
+        {
+          "say": "Here is the result. Sales report owns only the business totals, so it changes only when sales rules change.",
+          "reveal": 1
+        },
+        {
+          "say": "Formatters implement one report formatter interface, one class per format.",
+          "reveal": 2
+        },
+        {
+          "say": "J-SON was added later as a brand-new class, without editing any existing class.",
+          "reveal": 3
+        },
+        {
+          "say": "The mailer owns delivery, including the S-M-T-P host.",
+          "reveal": 4
+        },
+        {
+          "say": "And portfolio depends on a price source interface, not a live exchange client.",
+          "reveal": 5
+        }
+      ],
+      "table": {
+        "head": [
+          "Class",
+          "Owns",
+          "Reason to change"
+        ],
+        "rows": [
+          [
+            "SalesReport",
+            "Business totals by region",
+            "Sales rules change"
+          ],
+          [
+            "ReportFormatter",
+            "Interface: one class per format",
+            "A new format arrives"
+          ],
+          [
+            "Csv, Html, JsonFormatter",
+            "Json added later, no edits",
+            "That format changes"
+          ],
+          [
+            "ReportMailer",
+            "Email delivery, SMTP host",
+            "Delivery changes"
+          ],
+          [
+            "Portfolio + PriceSource",
+            "Values holdings via an interface",
+            "Valuation rules change"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "s035",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: the numbers after the split",
+      "table": {
+        "head": [
+          "Class",
+          "Output"
+        ],
+        "rows": [
+          [
+            "CsvFormatter",
+            "region,total North,6000 South,7000"
+          ],
+          [
+            "JsonFormatter",
+            "{\"North\":6000,\"South\":7000}"
+          ],
+          [
+            "Portfolio, fixed prices",
+            "INFY 1,500 + TCS 4,000 x holdings = Rs 23,000"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Same sales data. C-S-V gives north six thousand, south seven thousand.",
+          "reveal": 1
+        },
+        {
+          "say": "J-SON gives the same totals, from a brand-new class. That's open closed in action.",
+          "reveal": 2
+        },
+        {
+          "say": "And the portfolio, priced with a fixed stub, is worth two million three hundred thousand paise, twenty-three thousand rupees, in a test that never touches a network.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s036",
+      "layout": "section",
+      "kicker": "Concept 11 of 19",
+      "title": "Systems: separate construction from use",
+      "steps": [
+        {
+          "say": "At system level, clean code means building and wiring objects in one place, and keeping that apart from the logic that uses them. Think of a city: water, power and roads are separate systems with clear connections.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 6 Clean Code · 10. Systems"
+    },
+    {
+      "id": "s037",
+      "layout": "bullets",
+      "title": "How systems stay clean",
+      "bullets": [
+        "Composition root: build everything in main",
+        "Dependency injection through constructors",
+        "Factories when the app decides when to create",
+        "Cross-cutting concerns in one place: proxies, AOP",
+        "Grow incrementally; decide late"
+      ],
+      "steps": [
+        {
+          "say": "Running example: an account service. Before, it built its own repository on first use: if repo is null, make a new in-memory one. Construction mixed with use, and hard-wired. After, main is the composition root, the only place that knows concrete classes.",
+          "reveal": 1
+        },
+        {
+          "say": "Dependency injection: the service receives its repository through its constructor. A test can pass a different one. Prefer this over a service locator that hides dependencies.",
+          "reveal": 2
+        },
+        {
+          "say": "When the app itself must decide when to create something, say a line item per scan, give it an abstract factory interface. The concrete factory stays on main's side.",
+          "reveal": 3
+        },
+        {
+          "say": "Logging was copied into every method. Now it's written once, in a Java dynamic proxy that wraps the interface. That's how Spring's transactional annotation works too, using aspect-oriented programming, or A-O-P.",
+          "reveal": 4
+        },
+        {
+          "say": "Separated concerns let the system grow, from a module to a service, and let you decide at the last responsible moment.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s038",
+      "layout": "diagram",
+      "title": "Main wires, the proxy logs",
+      "mermaid": "flowchart LR\n    M[\"main: composition root\"] --> R[\"InMemoryAccountRepository\"]\n    M --> S[\"AccountServiceImpl(repo)\"]\n    M --> P[\"Logging proxy\"]\n    C[\"Caller\"] --> P\n    P --> S\n    S --> R",
+      "caption": "Business code contains no wiring and no logging",
+      "steps": [
+        {
+          "say": "Main builds the repository, the service and the proxy. The caller only ever holds the proxy. One gotcha: a call from inside the same object skips the proxy, which is why self-invoked transactional methods start no transaction.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s039",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: deposit through the proxy",
+      "table": {
+        "head": [
+          "Call",
+          "Log",
+          "Result"
+        ],
+        "rows": [
+          [
+            "deposit(acc-1, 50)",
+            "LOG -> deposit, LOG <- deposit",
+            "balance 150"
+          ],
+          [
+            "deposit(acc-1, -5)",
+            "LOG !! deposit threw",
+            "caller sees the real message"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Deposit fifty into account one. The proxy logs entering and leaving. The balance goes from one hundred to one fifty.",
+          "reveal": 1
+        },
+        {
+          "say": "Deposit minus five. The service throws amount must be positive. The proxy logs it and rethrows the real exception, not the reflection wrapper. In the interview: composition root plus constructor injection, and cross-cutting concerns in one place.",
+          "reveal": 2
+        }
+      ]
+    },
+    {
+      "id": "s040",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Beck's four rules of simple design: which comes first?",
+      "bullets": [
+        "No duplication",
+        "Reveals intention",
+        "Passes all the tests",
+        "Fewest classes and methods"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think: Kent Beck's four rules of simple design are in priority order. Which one comes first?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s041",
+      "layout": "table",
+      "kicker": "Concept 12 of 19",
+      "title": "Emergence: the four rules of simple design",
+      "table": {
+        "head": [
+          "Priority",
+          "Rule",
+          "In the leave policy example"
+        ],
+        "rows": [
+          [
+            "1",
+            "Passes all the tests",
+            "Old and new give equal days"
+          ],
+          [
+            "2",
+            "Reveals intention",
+            "daysPerYear(), maxCarryForwardDays()"
+          ],
+          [
+            "3",
+            "No duplication",
+            "One Template Method algorithm"
+          ],
+          [
+            "4",
+            "Fewest elements",
+            "Drop the useless provider interface"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Answer: passes the tests. Without them you can't refactor safely. These four rules, in priority order, let good design emerge. Running example: leave days for India and U-S staff.",
+          "reveal": 1
+        },
+        {
+          "say": "Rule one: tests compare the old calculator with the new policy for a veteran, a new hire and a probationer. They pass before and after.",
+          "reveal": 2
+        },
+        {
+          "say": "Rule two, reveals intention: eighteen and forty-five were magic numbers. Now they're days per year and max carry forward days.",
+          "reveal": 3
+        },
+        {
+          "say": "Rule three, no duplication: the India and U-S methods were copies with different numbers. Now one template method holds the algorithm and subclasses supply the numbers.",
+          "reveal": 4
+        },
+        {
+          "say": "Rule four, fewest elements: a leave calc strategy provider interface did nothing. Delete it. Note Clean Code swaps rules two and three; in an interview, quote Beck's order and mention the swap.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Ch 6 Clean Code · 11. Emergence"
+    },
+    {
+      "id": "s042",
+      "layout": "number",
+      "kicker": "Example",
+      "title": "Example: Ravi, 8 months worked",
+      "big": "18 x 8 / 12 = 12 days",
+      "caption": "India: 18 days a year, capped at 45. US: 15 a year, capped at 30",
+      "steps": [
+        {
+          "say": "Ravi has worked eight months. India gives eighteen a year, so eighteen times eight over twelve is twelve days. The U-S policy, fifteen a year, gives ten. Asha, a veteran, hits the caps: forty-five in India, thirty in the U-S. Same numbers as the old code, proven by the tests.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s043",
+      "layout": "section",
+      "kicker": "Concept 13 of 19",
+      "title": "Concurrency in clean code",
+      "steps": [
+        {
+          "say": "Concurrency means several tasks in progress at once, usually on separate threads. It decouples what gets done from when. It can raise throughput, but it's hard. Myth: it always makes things faster. Only if there's waiting or spare cores. Key words: a deadlock is threads waiting on each other forever, and starvation is a thread that never gets its turn.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 6 Clean Code · 12. Concurrency"
+    },
+    {
+      "id": "s044",
+      "layout": "bullets",
+      "title": "Defence principles",
+      "bullets": [
+        "Keep concurrency code separate from logic",
+        "Limit shared data; guard critical sections",
+        "Use copies: confine data, merge at the end",
+        "Know your library: executors, atomics",
+        "Small locks, planned shutdown",
+        "Test with more threads than cores"
+      ],
+      "steps": [
+        {
+          "say": "Running example: counting words across pages. One: count words is pure logic, testable without threads. The executor code lives apart.",
+          "reveal": 1
+        },
+        {
+          "say": "Two: limit the scope of shared data, and guard any critical section, code one thread at a time must run.",
+          "reveal": 2
+        },
+        {
+          "say": "Three: give each thread its own map, and merge once at the end. No sharing, no locks.",
+          "reveal": 3
+        },
+        {
+          "say": "Four: use the java util concurrent tools: an executor service, concurrent hash map, atomic integer. Not hand-made wait and notify.",
+          "reveal": 4
+        },
+        {
+          "say": "Five: keep locked sections small to avoid queuing, and plan shutdown: shutdown, await termination, then shutdown now.",
+          "reveal": 5
+        },
+        {
+          "say": "Six: treat a one-off failure as a real threading bug, and run one, four and sixteen threads to shake it out.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s045",
+      "layout": "number",
+      "kicker": "Example",
+      "title": "Example: four threads, one shared counter",
+      "big": "320,000 expected, 182,526 counted",
+      "caption": "count++ is read, add, write: 137,474 updates lost",
+      "steps": [
+        {
+          "say": "Before: four threads each count the word the into one shared integer. We expect three hundred twenty thousand. We got one hundred eighty-two thousand five hundred twenty-six, and the number changes every run. Over a hundred thirty-seven thousand updates were lost, because plus plus is read, add, write, and two threads overwrite each other. After, with thread-confined maps merged at the end, the count always matches: eighty thousand with one thread, three hundred twenty thousand with four, and one million two hundred eighty thousand with sixteen.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s046",
+      "layout": "section",
+      "kicker": "Concept 14 of 19",
+      "title": "Successive refinement and the case studies",
+      "steps": [
+        {
+          "say": "Clean Code's chapters fourteen to sixteen are case studies. No new rules, just the process of cleaning real code. The lesson: make it work, then make it right, in small tested steps.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 6 Clean Code · 13. Successive Refinement and the Case Studies"
+    },
+    {
+      "id": "s047",
+      "layout": "table",
+      "kicker": "Concept 14 of 19",
+      "title": "Three case studies, one lesson each",
+      "table": {
+        "head": [
+          "Case study",
+          "What happened",
+          "Lesson"
+        ],
+        "rows": [
+          [
+            "Args parser",
+            "Each new type made it messier",
+            "Stop adding; restructure"
+          ],
+          [
+            "JUnit ComparisonCompactor",
+            "Good code, small renames",
+            "Even good code gets cleaner"
+          ],
+          [
+            "SerialDate",
+            "Coverage 50% to 92%, bugs found",
+            "First work, then right"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Case one: a command-line argument parser, reading things like dash p eight zero eight zero. Each new argument type made it messier, so Martin stopped adding features and restructured. Each type became its own class behind one interface, so new types never touched the parser. Tests ran after every tiny step.",
+          "reveal": 1
+        },
+        {
+          "say": "Case two: a class from J-Unit by Kent Beck and Erich Gamma, already good. Still: f expected became expected, should not compact became the positive can be compacted, and a hidden ordering between finding the prefix and the suffix was made explicit.",
+          "reveal": 2
+        },
+        {
+          "say": "Case three: a date class. First, more tests: coverage rose from about fifty to ninety-two percent and exposed real bugs. Then rename, swap integer month constants for an enum, and delete dead code. Tests green at every step.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s048",
+      "layout": "section",
+      "kicker": "Concept 15 of 19",
+      "title": "Smells and heuristics checklist",
+      "steps": [
+        {
+          "say": "Clean Code ends with a catalogue of smells and heuristics, short rules with codes like G five or N one. Each is a hint, not a law. Their value is shared vocabulary: this is G twenty-eight, encapsulate that conditional.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 6 Clean Code · 14. Smells and Heuristics"
+    },
+    {
+      "id": "s049",
+      "layout": "table",
+      "title": "The catalogue, by group",
+      "table": {
+        "head": [
+          "Group",
+          "Examples"
+        ],
+        "rows": [
+          [
+            "C: Comments",
+            "C5 commented-out code"
+          ],
+          [
+            "E: Environment",
+            "E1 one-step build, E2 one-step tests"
+          ],
+          [
+            "F: Functions",
+            "F1 too many args, F3 flag args"
+          ],
+          [
+            "G: General",
+            "G5 duplication, G25 magic numbers, G29 negatives"
+          ],
+          [
+            "J: Java",
+            "J3 enums over int constants"
+          ],
+          [
+            "N: Names",
+            "N1 descriptive, N7 name the side effect"
+          ],
+          [
+            "T: Tests",
+            "T5 test boundaries, T9 fast tests"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "C is comments: C five, delete commented-out code.",
+          "reveal": 1
+        },
+        {
+          "say": "E is environment: one command builds, one command runs all tests.",
+          "reveal": 2
+        },
+        {
+          "say": "F is functions: too many arguments, output arguments, flag arguments, dead functions.",
+          "reveal": 3
+        },
+        {
+          "say": "G is general, the biggest group. G five, duplication, which the book calls one of its most important rules. G twenty-five, magic numbers. G twenty-nine, avoid negative conditionals. G twenty-six, be precise: never use double for money.",
+          "reveal": 4
+        },
+        {
+          "say": "J is Java: prefer enums to int constants.",
+          "reveal": 5
+        },
+        {
+          "say": "N is names. N seven: if get user also creates one, call it get or create user.",
+          "reveal": 6
+        },
+        {
+          "say": "T is tests: test the boundaries, where off-by-one bugs live, and keep tests fast.",
+          "reveal": 7
+        }
+      ]
+    },
+    {
+      "id": "s050",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: a 2 kg parcel, 300 km, not Prime",
+      "table": {
+        "head": [
+          "Part",
+          "Named in the after code",
+          "Rupees"
+        ],
+        "rows": [
+          [
+            "Base fee (not Prime)",
+            "BASE_FEE",
+            "40.00"
+          ],
+          [
+            "Special handling",
+            "needsSpecialHandling: no",
+            "0.00"
+          ],
+          [
+            "Weight charge",
+            "2 x RATE_PER_KG 12.5",
+            "25.00"
+          ],
+          [
+            "Standard total",
+            "Speed.STANDARD x 1.0",
+            "65.00"
+          ],
+          [
+            "Express total",
+            "Speed.EXPRESS x 1.5",
+            "97.50"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The before function was called calc. It had a double negative, a tangled and-or condition, magic numbers, a flag for express, and money in a double. Let's price one parcel with the after code. Not Prime, so the base fee is forty.",
+          "reveal": 1
+        },
+        {
+          "say": "Special handling: heavy means over twenty kilos, or fragile and over fifteen hundred kilometres. Neither, so zero. That condition now has a name, G twenty-eight.",
+          "reveal": 2
+        },
+        {
+          "say": "Weight charge: two kilos at twelve fifty: twenty-five. An explanatory variable, G nineteen.",
+          "reveal": 3
+        },
+        {
+          "say": "Standard speed: sixty-five rupees.",
+          "reveal": 4
+        },
+        {
+          "say": "Express multiplies by one point five: ninety-seven fifty. Before and after match on all eight cases, using big decimal with one explicit rounding.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s051",
+      "layout": "section",
+      "kicker": "Concept 16 of 19",
+      "title": "Code review checklist",
+      "steps": [
+        {
+          "say": "A code review is a peer reading a change before it's merged. A checklist keeps it thorough, and in an interview it's what you run over your own code before saying done. Let's review the old booking function with it.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 6 Clean Code · 15. Code Review Checklist"
+    },
+    {
+      "id": "s052",
+      "layout": "bullets",
+      "title": "Review in this order",
+      "bullets": [
+        "Correctness: edge cases, errors, concurrency",
+        "Design: right class, DIP, OCP, no over-engineering",
+        "Readability: names, small functions, no flags",
+        "Tests: new behaviour and a regression test",
+        "Security: validation, no secrets, authorisation",
+        "Performance, operability; style left to tools"
+      ],
+      "steps": [
+        {
+          "say": "Correctness first. Zero seats returns minus one, and a caller can forget to check. Edge cases: zero, empty, max, duplicates, time zones, rounding.",
+          "reveal": 1
+        },
+        {
+          "say": "Design: a type-code switch on seat names, and pricing mixed with logging. Is each responsibility in the right class?",
+          "reveal": 2
+        },
+        {
+          "say": "Readability: a boolean weekend flag, magic numbers like four and ten percent.",
+          "reveal": 3
+        },
+        {
+          "say": "Tests: any fix for the minus one bug needs a regression test so it can't come back.",
+          "reveal": 4
+        },
+        {
+          "say": "Security: validate input, never put secrets or customer details in logs, and check this user may do this action.",
+          "reveal": 5
+        },
+        {
+          "say": "Then performance, like one query per item in a loop, operability, meaning logs and metrics, and finally style, which a formatter should handle. Keep pull requests small, mark nits as optional, and explain why.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s053",
+      "layout": "section",
+      "kicker": "Concept 17 of 19",
+      "title": "Error-handling strategy for real services",
+      "steps": [
+        {
+          "say": "Earlier rules were about one function. A strategy is the system-wide policy: which errors exist, where they're translated, which get retried, and what callers see. Think hospital triage. Quick key term: H-T-T-P four hundreds mean the client was wrong, five hundreds mean the server failed.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 6 Clean Code · 16. Error-Handling Strategy"
+    },
+    {
+      "id": "s054",
+      "layout": "table",
+      "title": "Classify every error",
+      "table": {
+        "head": [
+          "Class",
+          "Online shop example",
+          "Handling"
+        ],
+        "rows": [
+          [
+            "Validation",
+            "qty 'abc'",
+            "400, clear message, no retry"
+          ],
+          [
+            "Business rule",
+            "seat already booked",
+            "409 conflict"
+          ],
+          [
+            "Not found",
+            "sku X-404",
+            "404, no retry"
+          ],
+          [
+            "Transient",
+            "inventory timed out",
+            "Retry with backoff"
+          ],
+          [
+            "Permanent infra",
+            "bad DB password",
+            "Fail fast, alert"
+          ],
+          [
+            "Bug",
+            "index out of bounds",
+            "Generic 500, log details"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Running example: an online shop. Validation errors, like a quantity of a-b-c, get a four hundred and a clear message. Never retried.",
+          "reveal": 1
+        },
+        {
+          "say": "Business rule violations, like a seat already booked, get a four oh nine conflict.",
+          "reveal": 2
+        },
+        {
+          "say": "Not found, like an unknown product code, gets a four oh four.",
+          "reveal": 3
+        },
+        {
+          "say": "Transient errors, like the inventory service timing out, are the only ones you retry, and only if the operation is idempotent, meaning safe to repeat.",
+          "reveal": 4
+        },
+        {
+          "say": "Permanent infrastructure errors, like a wrong database password: fail fast and alert someone.",
+          "reveal": 5
+        },
+        {
+          "say": "Programming bugs: don't catch them locally. The edge returns a generic five hundred, and the details go to the logs.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s055",
+      "layout": "diagram",
+      "title": "Where errors flow",
+      "mermaid": "flowchart TD\n    A[\"Adapter: timeout becomes TransientException\"] --> B[\"Retry policy: backoff, max 3 attempts\"]\n    B --> C[\"Global handler: all non-retryable errors\"]\n    C --> D[\"Log once with request id\"]\n    D --> E[\"Safe response: status and error code\"]",
+      "caption": "Translate at the edge, retry transient, handle globally",
+      "steps": [
+        {
+          "say": "The adapter turns a socket timeout into a transient exception marked retryable. The retry policy tries again. When attempts run out, or for any non-retryable error, one global handler logs once, with a request id, and returns a safe response with no stack trace.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s056",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: five requests through the handler",
+      "table": {
+        "head": [
+          "Request",
+          "What happens",
+          "Response"
+        ],
+        "rows": [
+          [
+            "req-1 stock",
+            "timeout, wait 10 ms, timeout, wait 20 ms, OK",
+            "200 stock 7"
+          ],
+          [
+            "req-2 sku X-404",
+            "not retryable, fails at once",
+            "404 NOT_FOUND"
+          ],
+          [
+            "req-3 stock",
+            "3 timeouts, gives up",
+            "503"
+          ],
+          [
+            "req-4 a bug",
+            "index out of bounds, not caught",
+            "500 INTERNAL, request id only"
+          ],
+          [
+            "req-5 import 4 rows",
+            "collects 3 row errors",
+            "400: 3 invalid rows"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Request one: the inventory call times out. Wait ten milliseconds, time out again, wait twenty. Exponential backoff doubles each wait. Add jitter, a little randomness, in production. Third try succeeds: two hundred, stock seven.",
+          "reveal": 1
+        },
+        {
+          "say": "Request two: not found is not retryable, so it fails at once with a four oh four.",
+          "reveal": 2
+        },
+        {
+          "say": "Request three: three timeouts in a row, then it gives up with a five oh three.",
+          "reveal": 3
+        },
+        {
+          "say": "Request four hits a real bug, an index out of bounds. Nobody catches it locally. The global handler logs the full details once and returns a generic five hundred with only the request id. No stack trace leaks to the client.",
+          "reveal": 4
+        },
+        {
+          "say": "Request five: a bulk import uses result values, not exceptions, so it collects all three bad rows at once instead of stopping at the first. For payments, use an idempotency key so a retry can't charge twice.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s057",
+      "layout": "section",
+      "kicker": "Concept 18 of 19",
+      "title": "Testing strategies",
+      "steps": [
+        {
+          "say": "A testing strategy decides what kinds of tests to write, how many of each, and how to isolate code. Too few tests, bugs ship. Mostly slow end-to-end tests, and nobody trusts the pipeline. Too many mocks, and tests pass while the real system is broken.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 6 Clean Code · 17. Testing Strategies"
+    },
+    {
+      "id": "s058",
+      "layout": "diagram",
+      "title": "The test pyramid",
+      "mermaid": "flowchart TB\n    E[\"End-to-end: few, slow, broad\"] --> I[\"Integration: some, seconds\"]\n    I --> U[\"Unit: many, milliseconds\"]",
+      "caption": "Many fast unit tests, fewer integration, very few end-to-end",
+      "steps": [
+        {
+          "say": "At the base, many unit tests: one class, milliseconds, catching logic errors. In the middle, integration tests with real components like a database: seconds, catching wiring and query bugs. At the top, a handful of end-to-end tests through the whole system. Avoid the ice-cream cone, mostly manual and end-to-end tests. For example, the checkout integration test wires real in-memory parts together: two teas at one twenty and a cup at eighty, with a twenty-five percent welcome coupon, gives one receipt of two hundred forty rupees. Between services, contract tests check that a consumer and a provider agree on the A-P-I.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s059",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: the five test doubles in the checkout tests",
+      "table": {
+        "head": [
+          "Double",
+          "What it does",
+          "In CheckoutTest"
+        ],
+        "rows": [
+          [
+            "Dummy",
+            "Fills a parameter, never used",
+            "DummyAuditLog throws if called"
+          ],
+          [
+            "Stub",
+            "Returns canned answers",
+            "StubCatalog: TEA = Rs 120"
+          ],
+          [
+            "Spy",
+            "Records calls to assert later",
+            "SpySender.sent has 1 receipt"
+          ],
+          [
+            "Mock",
+            "Pre-set expectations, verifies itself",
+            "MockAuditLog.verify()"
+          ],
+          [
+            "Fake",
+            "Simplified working version",
+            "FakeCoupons, in-memory list"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "A test double is anything that stands in for a real dependency. A dummy just fills a parameter. The dummy audit log throws if anyone calls it, proving small orders aren't audited.",
+          "reveal": 1
+        },
+        {
+          "say": "A stub returns canned answers: tea costs one hundred twenty rupees.",
+          "reveal": 2
+        },
+        {
+          "say": "A spy records calls. After checkout, the test asserts exactly one receipt for Asha, for twelve thousand paise.",
+          "reveal": 3
+        },
+        {
+          "say": "A mock is told up front what to expect, high-value order for Ravi, and verifies itself. A television over ten thousand rupees triggers it.",
+          "reveal": 4
+        },
+        {
+          "say": "A fake is a real but simple implementation, like an in-memory coupon list.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s060",
+      "layout": "bullets",
+      "title": "Rules of thumb",
+      "bullets": [
+        "Prefer state verification; mock only side effects",
+        "Don't mock types you don't own: wrap them",
+        "One or two mocks per test at most",
+        "Coverage is necessary, not sufficient"
+      ],
+      "steps": [
+        {
+          "say": "Check results with stubs and fakes. Use mocks only for outgoing effects you can't otherwise see, like emails or audit events.",
+          "reveal": 1
+        },
+        {
+          "say": "Never mock a vendor type. Wrap it, as in boundaries, and mock your wrapper.",
+          "reveal": 2
+        },
+        {
+          "say": "Needing five mocks means the class has too many dependencies.",
+          "reveal": 3
+        },
+        {
+          "say": "Coverage shows code ran, not that a test would catch a bug. Mutation testing checks that. In the interview: pyramid, right double, state over behaviour.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s061",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "saveAndValidate(order, sendEmail): what's wrong?",
+      "bullets": [
+        "Nothing, it's descriptive",
+        "Only the flag argument",
+        "Two jobs, a flag, and it breaks C-Q-S"
+      ],
+      "steps": [
+        {
+          "say": "Chapter self-check. Pause and think: what's wrong with save and validate, taking an order and a send email boolean, and returning a boolean?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s062",
+      "layout": "bullets",
+      "kicker": "Concept 19 of 19",
+      "title": "Chapter self-check",
+      "bullets": [
+        "saveAndValidate: two jobs, flag (F3), breaks CQS",
+        "findOrders with none: an empty list, never null",
+        "First rule of simple design: passes the tests",
+        "Mock versus stub: verifies calls versus canned data"
+      ],
+      "steps": [
+        {
+          "say": "Answer: the last option. The name has and in it, so it does two things. Send email is a flag argument, F three. And it changes state while returning a boolean, which breaks command-query separation.",
+          "reveal": 1
+        },
+        {
+          "say": "Next: find orders for a customer with none returns an empty list, never null.",
+          "reveal": 2
+        },
+        {
+          "say": "First rule of simple design: passes all the tests.",
+          "reveal": 3
+        },
+        {
+          "say": "A stub supplies canned answers so you check state. A mock holds expectations and verifies the calls itself.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Ch 6 Clean Code · Chapter summary"
+    },
+    {
+      "id": "s063",
+      "layout": "recap",
+      "title": "TL;DR: write for the next reader",
+      "bullets": [
+        "Names reveal intent; small functions, no flags, CQS",
+        "Comment the why; let a formatter do layout",
+        "Exceptions with context; no null; wrap vendors",
+        "F.I.R.S.T. tests; pyramid; right test double",
+        "Small cohesive classes; composition root; emergence",
+        "Review: correctness first. Next: Ep 7, Refactoring"
+      ],
+      "steps": [
+        {
+          "say": "Here's the whole chapter. Honest names that read like the requirement.",
+          "reveal": 1
+        },
+        {
+          "say": "Tiny functions that do one thing, no flags, commands or queries.",
+          "reveal": 1
+        },
+        {
+          "say": "Few comments, only the why. One automated layout.",
+          "reveal": 2
+        },
+        {
+          "say": "Unchecked exceptions with context, no null in or out, vendors wrapped at the edge.",
+          "reveal": 3
+        },
+        {
+          "say": "Fast, independent, self-checking tests, and a pyramid of them.",
+          "reveal": 4
+        },
+        {
+          "say": "Small cohesive classes wired from one composition root, design that emerges through refactoring, and careful concurrency.",
+          "reveal": 5
+        },
+        {
+          "say": "Review against a shared checklist, correctness first. Next time, episode seven: Refactoring, Smells and the Catalogue, where we turn these smells into named, safe, step-by-step fixes. See you there.",
+          "reveal": 6
+        }
+      ]
+    }
+  ]
+}

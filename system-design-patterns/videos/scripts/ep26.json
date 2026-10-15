@@ -1,0 +1,1964 @@
+{
+ "series": "System Design Workshop",
+ "episode": 26,
+ "title": "Case Studies: Search, Logging, Q&A",
+ "subtitle": "Distributed search, logging and crash monitoring, and a Quora-style Q&A site",
+ "scenes": [
+  {
+   "layout": "title",
+   "title": "Case Studies: Search, Logging, Q&A",
+   "subtitle": "Distributed search, logging and crash monitoring, and a Quora-style Q&A site",
+   "steps": [
+    {
+     "say": "Welcome to episode twenty-six of the System Design Workshop: Case Studies, Search, Logging, and Q and A. Three full designs that interviewers love, built from the patterns you already know.",
+     "reveal": 0
+    },
+    {
+     "say": "By the end you'll be able to design a search engine that finds a post two seconds after it's written, a logging and crash-monitoring platform that survives the outage it's recording, and a question and answer site that serves seventy thousand page views a second.",
+     "reveal": 0
+    },
+    {
+     "say": "Keep the Module twenty notes open. Each concept slide names the book section. When I say pause, answer on paper first.",
+     "reveal": 0
+    }
+   ],
+   "id": "s001"
+  },
+  {
+   "layout": "table",
+   "title": "Three cases, three centres of gravity",
+   "table": {
+    "head": [
+     "Case",
+     "What decides the design"
+    ],
+    "rows": [
+     [
+      "1. Distributed search",
+      "Freshness, sharding, fan-out, ranking"
+     ],
+     [
+      "2. Logging and errors",
+      "Volume, storage cost, sampling, alerting"
+     ],
+     [
+      "3. Q&A platform",
+      "Read-heavy caching, ranking, feed, spam"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Case one, distributed search. The hard parts are freshness, how you split the index, the cost of asking every shard, and ranking.",
+     "reveal": 1
+    },
+    {
+     "say": "Case two, logging and error monitoring. Here it's raw volume and money: what to store, for how long, and what to throw away on purpose.",
+     "reveal": 2
+    },
+    {
+     "say": "Case three, a Quora-style Q and A site. Almost all reads, so caching wins, plus fair answer ranking, a follow feed, and a constant fight with spam.",
+     "reveal": 3
+    }
+   ],
+   "id": "s002"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 1 of 19",
+   "title": "Search: the problem and the numbers",
+   "caption": "Book: Module 20 · Case 1 — Distributed Search",
+   "steps": [
+    {
+     "say": "Case one. Imagine the search box on a big social network. You type world cup final, and you get posts, either Latest, newest first, or Top, most relevant. And a post written two seconds ago is already there.",
+     "reveal": 0
+    }
+   ],
+   "id": "s003"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 1 of 19",
+   "title": "Three things make search hard",
+   "bullets": [
+    "Freshness: findable in seconds",
+    "Fan-out: many shards, wait for slowest",
+    "Ranking: best 20 of 4 million, in 200 ms"
+   ],
+   "steps": [
+    {
+     "say": "First, freshness. During a live match, posts must be searchable within seconds. But the fastest search structures are built once and never changed.",
+     "reveal": 1
+    },
+    {
+     "say": "Second, fan-out. The index is spread over many machines, so a query is only as fast as the slowest machine it asks.",
+     "reveal": 2
+    },
+    {
+     "say": "Third, ranking. Picking the best twenty out of four million matches, in two hundred milliseconds, is the actual product.",
+     "reveal": 3
+    }
+   ],
+   "id": "s004"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: sizing the search index",
+   "table": {
+    "head": [
+     "Quantity",
+     "Value"
+    ],
+    "rows": [
+     [
+      "Posts",
+      "500M/day, about 17K/s at peak"
+     ],
+     [
+      "Index cost",
+      "~1 KB per post, 500 GB/day"
+     ],
+     [
+      "Real-time tier (7 days)",
+      "3.5 TB, 20 shards of 175 GB in RAM"
+     ],
+     [
+      "Queries",
+      "~35K/s at peak, each hits 20 shards"
+     ],
+     [
+      "Replicas",
+      "700K shard-queries/s, so 35 copies"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's size it. Five hundred million posts a day. That's about five thousand eight hundred a second on average, and about seventeen thousand at peak during live events.",
+     "reveal": 1
+    },
+    {
+     "say": "Each post costs about one kilobyte in the index, text terms plus a few sortable fields. So five hundred gigabytes a day.",
+     "reveal": 2
+    },
+    {
+     "say": "Most queries only care about the last seven days. That's three and a half terabytes. Split it into twenty shards of about a hundred seventy-five gigabytes, each held in memory.",
+     "reveal": 3
+    },
+    {
+     "say": "At peak we get about thirty-five thousand queries a second. And each query visits all twenty shards.",
+     "reveal": 4
+    },
+    {
+     "say": "So that's seven hundred thousand shard queries a second. If one copy of a shard handles about a thousand a second, we need thirty-five copies of every shard. Notice: replicas here exist mostly for read throughput, not safety.",
+     "reveal": 5
+    }
+   ],
+   "id": "s005"
+  },
+  {
+   "layout": "diagram",
+   "kicker": "Concept 1 of 19",
+   "title": "Search pipeline",
+   "mermaid": "flowchart LR\n  PS[\"Post service\"] --> LOG[\"Event log\"]\n  LOG --> IDX[\"Indexers\"]\n  IDX --> RT[\"Real-time tier RAM\"]\n  LOG --> AR[\"Archive tier SSD\"]\n  API[\"Search API\"] --> BR[\"Query broker\"]\n  BR --> RT\n  BR --> HY[\"Hydrate and filter\"]",
+   "caption": "Index asynchronously, query by scatter-gather, hydrate at the end",
+   "steps": [
+    {
+     "say": "Here's the shape. The post service saves the post, its source of truth, and publishes an event to a log like Kafka. Search is never on the posting path.",
+     "reveal": 0
+    },
+    {
+     "say": "Indexer workers read the log, break text into terms, and send each post to the one shard that owns the hash of its post I-D. Every replica of that shard applies it.",
+     "reveal": 0
+    },
+    {
+     "say": "A daily batch job builds compact monthly archive indexes on SSD for older posts.",
+     "reveal": 0
+    },
+    {
+     "say": "A query hits the broker, which scatters to one replica of every shard, gathers each shard's best results, and re-ranks.",
+     "reveal": 0
+    },
+    {
+     "say": "Finally, hydration fetches the twenty winning posts from the post store and drops anything deleted or hidden since indexing. That last check is what lets the index be eventually consistent.",
+     "reveal": 0
+    }
+   ],
+   "id": "s006"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 2 of 19",
+   "title": "Near-real-time indexing",
+   "caption": "Book: Module 20 · Case 1 · Deep dive 1, near-real-time indexing",
+   "steps": [
+    {
+     "say": "Concept two. How can an index be both super fast to read and updated every second? The trick is: never change anything. Only add.",
+     "reveal": 0
+    }
+   ],
+   "id": "s007"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 2 of 19",
+   "title": "Immutable segments plus a refresh",
+   "bullets": [
+    "1. New posts buffer in memory",
+    "2. Refresh: buffer becomes a new segment",
+    "3. Queries search all segments, merge",
+    "4. Background merges compact segments",
+    "5. Durability comes from the log, not refresh"
+   ],
+   "steps": [
+    {
+     "say": "Step one. A new post arrives at the shard. It goes into an in-memory buffer. It's not searchable yet.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two, the refresh. About once a second, the buffer is frozen into a new, small, read-only segment. A segment is a mini inverted index, a map from each word to the sorted list of post I-Ds containing it. Now the post is findable.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three. A query searches every segment on the shard and merges the hits.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four. In the background, small segments get merged into bigger ones, and deleted posts are physically dropped. Same idea as an L-S-M tree.",
+     "reveal": 4
+    },
+    {
+     "say": "Step five. A refresh makes data searchable, not durable. If the shard crashes, it replays the event log from its last saved offset. Elasticsearch keeps its own log, called the translog, for the same job.",
+     "reveal": 5
+    }
+   ],
+   "id": "s008"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: one post through the refresh",
+   "table": {
+    "head": [
+     "Time",
+     "What happens"
+    ],
+    "rows": [
+     [
+      "12:00:00.2",
+      "Post 9012 \"world cup final!\" arrives"
+     ],
+     [
+      "12:00:00.3",
+      "Analysed to terms: world, cup, final"
+     ],
+     [
+      "12:00:01.0",
+      "Refresh: new segment, now searchable"
+     ],
+     [
+      "12:05",
+      "Merge folds it into a bigger segment"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Imagine post nine-oh-one-two, world cup final, arrives a fifth of a second past noon.",
+     "reveal": 1
+    },
+    {
+     "say": "The analyser lowercases and splits it into three terms: world, cup, and final. They sit in the buffer.",
+     "reveal": 2
+    },
+    {
+     "say": "At the one-second refresh, a new segment opens. Now the cup list contains nine-oh-one-two. Elasticsearch refreshes every second by default, so near real time means about one second. Twitter reported cutting its indexing delay from about fifteen seconds to about one.",
+     "reveal": 3
+    },
+    {
+     "say": "A few minutes later, a merge folds it into a larger segment. The trade-off: a longer refresh interval, say thirty seconds, makes bulk loading much cheaper, but less fresh.",
+     "reveal": 4
+    }
+   ],
+   "id": "s009"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 3 of 19",
+   "title": "Sharding: by document or by term?",
+   "caption": "Book: Module 20 · Case 1 · Deep dive 2, document vs term",
+   "steps": [
+    {
+     "say": "Concept three. You have twenty shards. Do you give each shard some of the posts, or some of the words?",
+     "reveal": 0
+    }
+   ],
+   "id": "s010"
+  },
+  {
+   "layout": "table",
+   "kicker": "Concept 3 of 19",
+   "title": "Example: world AND cup on 20 shards",
+   "table": {
+    "head": [
+     "",
+     "By document",
+     "By term"
+    ],
+    "rows": [
+     [
+      "Write a 25-word post",
+      "1 shard",
+      "Up to 25 shards"
+     ],
+     [
+      "Query world AND cup",
+      "All 20, each intersects locally",
+      "2 shards, ship huge lists"
+     ],
+     [
+      "Trending #worldcup",
+      "Load spread evenly",
+      "One shard melts"
+     ],
+     [
+      "Ranking",
+      "All fields local",
+      "Fields live elsewhere"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Document partitioning means each shard has a complete index of its own posts. Term partitioning means each shard owns full lists for some words, say A to F. Now a twenty-five-word post. By document, it touches one shard. By term, up to twenty-five shards, so every write becomes a distributed operation.",
+     "reveal": 1
+    },
+    {
+     "say": "The query world and cup. By document, all twenty shards each intersect their local lists. By term, only two shards, but the world list may hold tens of millions of I-Ds that must cross the network to be intersected.",
+     "reveal": 2
+    },
+    {
+     "say": "Hot spots. A trending hashtag under term partitioning lands on one shard, which becomes the bottleneck for all reads and writes. By document, hashing spreads it evenly.",
+     "reveal": 3
+    },
+    {
+     "say": "And ranking needs each post's likes and time, which are local only under document partitioning. So the answer, like Elasticsearch, Solr and Twitter: shard by document, and pay with fan-out.",
+     "reveal": 4
+    }
+   ],
+   "id": "s011"
+  },
+  {
+   "layout": "bullets",
+   "title": "Time first, hash second",
+   "bullets": [
+    "Real-time tier: last 7 days, in RAM",
+    "Archive: one index per month, on SSD",
+    "Latest stops once it has 20 results",
+    "Reshard by giving new indexes new counts"
+   ],
+   "steps": [
+    {
+     "say": "The second dimension is time. The real-time tier holds the last seven days in memory.",
+     "reveal": 1
+    },
+    {
+     "say": "Older posts live in monthly archive indexes on SSD, hashed within each month.",
+     "reveal": 2
+    },
+    {
+     "say": "Latest starts at the newest tier and stops when it has twenty results. Top over seven days never touches the archive. This tiering is the biggest single saving.",
+     "reveal": 3
+    },
+    {
+     "say": "And since shard counts are fixed when an index is created, time-based indexes make resharding painless: next month's index just gets thirty shards, and the old layout ages out.",
+     "reveal": 4
+    }
+   ],
+   "id": "s012"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 4 of 19",
+   "title": "Scatter-gather and tail latency",
+   "caption": "Book: Module 20 · Case 1 · Deep dive 3, scatter-gather",
+   "steps": [
+    {
+     "say": "Concept four. If you ask twenty shards and wait for all of them, whose speed do you get? The slowest one's.",
+     "reveal": 0
+    }
+   ],
+   "id": "s013"
+  },
+  {
+   "layout": "number",
+   "kicker": "Example",
+   "title": "The tail-latency tax",
+   "big": "1 - 0.99^20 = about 18%",
+   "caption": "Each shard is slow 1% of the time; one in five queries waits",
+   "steps": [
+    {
+     "say": "Say each shard answers within fifty milliseconds ninety-nine percent of the time. The chance that at least one of twenty is slower is one minus point nine nine to the twentieth power. That's about eighteen percent.",
+     "reveal": 0
+    },
+    {
+     "say": "So roughly one query in five sees some shard's p ninety-nine. More shards, worse odds. That's why this case needs explicit tail-latency tricks.",
+     "reveal": 0
+    }
+   ],
+   "id": "s014"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 4 of 19",
+   "title": "Four ways to cut the tail",
+   "bullets": [
+    "Fastest replica, not round-robin",
+    "Hedged requests after the p95",
+    "Deadline at ~150 ms, partial results",
+    "Early termination for Latest",
+    "Two-phase: IDs first, content later"
+   ],
+   "steps": [
+    {
+     "say": "One, send to the fastest replica. Elasticsearch ranks copies by recent response time and queue length, so a node stuck in a long garbage-collection pause stops getting traffic.",
+     "reveal": 1
+    },
+    {
+     "say": "Two, hedged requests. If shard seven hasn't answered by its p ninety-five, send the same query to a second replica and take whichever answers first. It costs a few percent extra load.",
+     "reveal": 2
+    },
+    {
+     "say": "Three, a deadline. At about a hundred fifty milliseconds, merge what has arrived and mark the result partial. Missing one of twenty shards loses five percent of candidates. In Top, nobody notices.",
+     "reveal": 3
+    },
+    {
+     "say": "Four, early termination. Latest walks lists newest first, so each shard stops after its first K matches.",
+     "reveal": 4
+    },
+    {
+     "say": "And a bonus: query then fetch. Shards return only post I-D and score. Twenty shards times a thousand I-Ds is cheap. Twenty thousand full posts would not be. That's also why you cap deep pagination: page fifty forces every shard to return a thousand results.",
+     "reveal": 5
+    }
+   ],
+   "id": "s015"
+  },
+  {
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "Why does this search cluster need 35 replicas per shard?",
+   "bullets": [
+    "A. To survive 34 machine failures",
+    "B. Read throughput from fan-out",
+    "C. Faster refresh"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. Thirty-five copies of every shard. Why? Answer on the next slide.",
+     "reveal": 0
+    }
+   ],
+   "id": "s016"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 5 of 19",
+   "title": "Ranking in two stages",
+   "caption": "Book: Module 20 · Case 1 · Deep dive 4, two-stage ranking",
+   "steps": [
+    {
+     "say": "The answer was B, throughput. Every query hits every shard, so seven hundred thousand shard queries a second need many copies. Now concept five: how do we rank millions of matches in time?",
+     "reveal": 0
+    }
+   ],
+   "id": "s017"
+  },
+  {
+   "layout": "table",
+   "kicker": "Concept 5 of 19",
+   "title": "Example: ranking world cup",
+   "table": {
+    "head": [
+     "Stage",
+     "Where",
+     "Candidates",
+     "Scoring"
+    ],
+    "rows": [
+     [
+      "1. Cheap",
+      "Each shard",
+      "Millions to top K",
+      "BM25 + recency + likes"
+     ],
+     [
+      "2. Expensive",
+      "Broker",
+      "Top ~500",
+      "ML model, viewer features"
+     ],
+     [
+      "Signals",
+      "Doc values",
+      "58K likes/s",
+      "Updated in place, no reindex"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Stage one runs on every shard, cheap and wide. The text score is B-M twenty-five: rare words count more, repeated words help but saturate, and long documents are normalised. For short posts, recency and engagement matter more, so a score might be half B-M twenty-five, plus point three times a recency decay, plus point two times the log of likes plus twice reposts.",
+     "reveal": 1
+    },
+    {
+     "say": "Stage two runs at the broker on only the merged top five hundred. A machine-learning model adds viewer features: language, who you follow, what you clicked. Scoring five hundred instead of millions keeps p ninety-nine under two hundred milliseconds.",
+     "reveal": 2
+    },
+    {
+     "say": "And engagement? About fifty-eight thousand like and repost updates a second. They live in doc values, one column per field, updated in place in batches. So a like never forces the text to be re-analysed.",
+     "reveal": 3
+    }
+   ],
+   "id": "s018"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 6 of 19",
+   "title": "Deletes, edits and reindexing",
+   "caption": "Book: Module 20 · Case 1 · Deep dive 5, deletes and reindexing",
+   "steps": [
+    {
+     "say": "Concept six. Segments are immutable. So how do you delete a post right now?",
+     "reveal": 0
+    }
+   ],
+   "id": "s019"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 6 of 19",
+   "title": "Deletes and index versions",
+   "bullets": [
+    "Delete: set a bit in the deletion bitmap",
+    "Gone at next refresh, removed at merge",
+    "Edit = delete + insert",
+    "Hydrate-time visibility check as backup",
+    "Schema change: new index + alias swap"
+   ],
+   "steps": [
+    {
+     "say": "Each segment has a deletion bitmap, one bit per document. Deleting sets the bit, and queries skip it.",
+     "reveal": 1
+    },
+    {
+     "say": "So it disappears at the next refresh, and is physically removed at the next merge.",
+     "reveal": 2
+    },
+    {
+     "say": "An edit is just a delete plus an insert.",
+     "reveal": 3
+    },
+    {
+     "say": "Deletes are urgent, for example a legal takedown. So hydration checks visibility again, a second line of defence even if a shard lags.",
+     "reveal": 4
+    },
+    {
+     "say": "Now say you add a new language analyser. Build a new index version beside the old one from the archive plus a log replay, compare results, then switch the alias, a stable name, atomically. It's a blue-green deploy for indexes.",
+     "reveal": 5
+    }
+   ],
+   "id": "s020"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: failure walk for search",
+   "table": {
+    "head": [
+     "Failure",
+     "What users see"
+    ],
+    "rows": [
+     [
+      "One replica dies",
+      "Nothing; 34 others take ~3% more"
+     ],
+     [
+      "All replicas of a shard bad",
+      "Partial results from 19 of 20"
+     ],
+     [
+      "Indexers behind in a spike",
+      "Freshness 1 s slips to ~30 s"
+     ],
+     [
+      "10K identical queries/s",
+      "5 to 10 s result cache absorbs it"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's walk failures. One replica dies: the other thirty-four absorb about three percent more each, and a new copy is built from a healthy replica plus log replay.",
+     "reveal": 1
+    },
+    {
+     "say": "A bad deploy breaks every replica of one shard: return partial results from nineteen shards, roll back, and spread replicas across zones next time.",
+     "reveal": 2
+    },
+    {
+     "say": "A live event triples posting: Kafka holds the backlog, nothing is lost, but freshness slips. So indexing lag is a top-level S-L-O, a service level objective.",
+     "reveal": 3
+    },
+    {
+     "say": "A celebrity story makes ten thousand identical queries a second: a short result cache of five to ten seconds collapses them. In the interview, say: async indexing into time-tiered, document-sharded segments, scatter with deadlines and hedging, two-stage ranking, then hydrate and filter.",
+     "reveal": 4
+    }
+   ],
+   "id": "s021"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 7 of 19",
+   "title": "Logging and error monitoring",
+   "caption": "Book: Module 20 · Case 2 — Distributed Logging",
+   "steps": [
+    {
+     "say": "Case two. Every service in the company writes log lines, like level error, service checkout, card declined, order eighty-one. We collect them, make them searchable in an incident, keep them affordably, and alert on spikes. Plus a Sentry-style crash monitor for web and mobile apps.",
+     "reveal": 0
+    }
+   ],
+   "id": "s022"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 7 of 19",
+   "title": "Why logging is hard",
+   "bullets": [
+    "99% of lines are never read",
+    "Storms arrive exactly during outages",
+    "Client crashes: minified, late, bursty",
+    "Logs are needles, not sums"
+   ],
+   "steps": [
+    {
+     "say": "First, low value per byte. Ninety-nine percent of lines are never read, but nobody knows which one percent will matter.",
+     "reveal": 1
+    },
+    {
+     "say": "Second, you need it most when everything is broken. Outages cause log storms at the exact moment engineers start querying.",
+     "reveal": 2
+    },
+    {
+     "say": "Third, client errors come from devices you don't control: minified code, sent late after the crash, in bursts. Without grouping, one bug becomes a hundred thousand alerts.",
+     "reveal": 3
+    },
+    {
+     "say": "And unlike metrics, which are small numbers you sum, logs are large text events you search for a needle, like every line for request seven-f-three-a.",
+     "reveal": 4
+    }
+   ],
+   "id": "s023"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: the logging budget",
+   "table": {
+    "head": [
+     "Quantity",
+     "Value"
+    ],
+    "rows": [
+     [
+      "Ingest",
+      "2M lines/s avg, 5M peak, 500 B each"
+     ],
+     [
+      "Raw",
+      "1 GB/s = 86 TB/day"
+     ],
+     [
+      "Columnar, 10x compressed, x2",
+      "~17 TB/day"
+     ],
+     [
+      "Hot 7 d / warm 30 d / archive 1 y",
+      "120 TB / 200 TB / 2.9 PB"
+     ],
+     [
+      "Crash events",
+      "2K/s normal, 30K/s bad release"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Two million lines a second on average, five million at peak, about five hundred bytes each.",
+     "reveal": 1
+    },
+    {
+     "say": "That's one gigabyte a second, eighty-six terabytes of raw logs a day.",
+     "reveal": 2
+    },
+    {
+     "say": "Structured logs are repetitive, so a columnar store compresses them about ten times. With two replicas, about seventeen terabytes a day.",
+     "reveal": 3
+    },
+    {
+     "say": "Keep seven days hot on SSD, about a hundred twenty terabytes. Warm to thirty days, two hundred terabytes. Archive for a year, about two point nine petabytes in cheap object storage. The archive is about ninety percent of the bytes, so price per byte decides the bill.",
+     "reveal": 4
+    },
+    {
+     "say": "Crash events: two thousand a second normally, thirty thousand in a bad release, twenty kilobytes each. Low volume, but bursty and heavy to process.",
+     "reveal": 5
+    }
+   ],
+   "id": "s024"
+  },
+  {
+   "layout": "diagram",
+   "kicker": "Concept 7 of 19",
+   "title": "Logging and error pipeline",
+   "mermaid": "flowchart LR\n  APP[\"Services stdout\"] --> AG[\"Node agent\"]\n  AG --> GW[\"Ingest gateway\"]\n  SDK[\"App SDKs\"] --> EGW[\"Error edge\"]\n  GW --> K[\"Kafka\"]\n  EGW --> K\n  K --> PR[\"Processors\"]\n  K --> EP[\"Symbolicate and group\"]",
+   "caption": "Never block the app; buffer, then shed the lowest-value data first",
+   "steps": [
+    {
+     "say": "Services just write to standard out. A node agent on each host tails it, adds service and pod, batches about a megabyte or a second, compresses, and ships.",
+     "reveal": 0
+    },
+    {
+     "say": "The ingestion gateway checks the team's quota and answers four twenty-nine, slow down, under pressure.",
+     "reveal": 0
+    },
+    {
+     "say": "Kafka is the shock absorber, holding three days. Processors parse lines, redact secrets and personal data, sample, and write big sorted batches to a columnar store.",
+     "reveal": 0
+    },
+    {
+     "say": "Crash S-D-Ks go through a rate-limited edge into the same Kafka, then workers symbolicate, fingerprint and group events into issues. An alert evaluator watches both.",
+     "reveal": 0
+    }
+   ],
+   "id": "s025"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 8 of 19",
+   "title": "Agents and the ingestion buffer",
+   "caption": "Book: Module 20 · Case 2 · Deep dive 1, agents and buffer",
+   "steps": [
+    {
+     "say": "Concept eight. The rule: logging must never slow down or crash the app that's logging.",
+     "reveal": 0
+    }
+   ],
+   "id": "s026"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 8 of 19",
+   "title": "The buffering chain",
+   "bullets": [
+    "1. stdout: microseconds, app never waits",
+    "2. Agent memory: seconds",
+    "3. Agent disk buffer: minutes, ~1 GB cap",
+    "4. Kafka: days, replayable",
+    "Full? Drop debug, then info, never error"
+   ],
+   "steps": [
+    {
+     "say": "Stage one. The app writes to standard out. It costs microseconds. An in-app library calling the backend would share the app's threads, so a slow backend would slow checkout.",
+     "reveal": 1
+    },
+    {
+     "say": "Stage two. The agent holds seconds of data in memory.",
+     "reveal": 2
+    },
+    {
+     "say": "Stage three. If the backend struggles, the agent spills to a disk buffer, capped at say one gigabyte, which covers minutes of trouble.",
+     "reveal": 3
+    },
+    {
+     "say": "Stage four. Kafka keeps three days. About two hundred fifty megabytes a second after compression, times three replicas, is roughly a hundred ninety-five terabytes of broker disk.",
+     "reveal": 4
+    },
+    {
+     "say": "Every stage is bounded, and when full, it drops debug first, then info, never errors. That's backpressure with priorities. Delivery is at least once, and batch I-Ds let the writer drop duplicate retried batches.",
+     "reveal": 5
+    }
+   ],
+   "id": "s027"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: a log storm from checkout",
+   "table": {
+    "head": [
+     "Moment",
+     "What the system does"
+    ],
+    "rows": [
+     [
+      "Retry loop: 200K errors/s",
+      "Checkout quota trips at the gateway"
+     ],
+     [
+      "Gateway answers 429",
+      "Agents back off, spill to disk"
+     ],
+     [
+      "Buffers fill",
+      "Drop debug, info; keep errors"
+     ],
+     [
+      "Summary line",
+      "\"repeated 199,843 times\""
+     ],
+     [
+      "Other teams",
+      "Unaffected: own partitions"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Imagine checkout gets stuck in a retry loop and logs two hundred thousand errors a second.",
+     "reveal": 1
+    },
+    {
+     "say": "Its quota trips, and the gateway answers four twenty-nine.",
+     "reveal": 2
+    },
+    {
+     "say": "Agents back off and spill to disk. As buffers fill, they drop debug and info lines.",
+     "reveal": 3
+    },
+    {
+     "say": "Errors are kept as one representative line with a count: repeated a hundred ninety-nine thousand eight hundred forty-three times.",
+     "reveal": 4
+    },
+    {
+     "say": "Other teams don't notice, because checkout is limited at the edge and has its own partitions. That's a bulkhead.",
+     "reveal": 5
+    }
+   ],
+   "id": "s028"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 9 of 19",
+   "title": "Indexing everything vs columnar",
+   "caption": "Book: Module 20 · Case 2 · Deep dive 2, indexing vs columnar",
+   "steps": [
+    {
+     "say": "Concept nine. Where do the logs live? Do you index every word, or store columns and scan cleverly?",
+     "reveal": 0
+    }
+   ],
+   "id": "s029"
+  },
+  {
+   "layout": "table",
+   "kicker": "Concept 9 of 19",
+   "title": "Three ways to store logs",
+   "table": {
+    "head": [
+     "",
+     "Index all text",
+     "Columnar + skip",
+     "Labels only"
+    ],
+    "rows": [
+     [
+      "Write cost",
+      "High",
+      "Low",
+      "Lowest"
+     ],
+     [
+      "Storage",
+      "Index ~ data size",
+      "~10x compression",
+      "Cheap object store"
+     ],
+     [
+      "Rare word, a week",
+      "Fast lookup",
+      "Scan + Bloom skips",
+      "Brute-force scan"
+     ],
+     [
+      "Count by service/min",
+      "Heavier",
+      "Very fast",
+      "Via scans"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Three options. Classic E-L-K indexes every word, like our search engine. A columnar store like ClickHouse stores each field's values together. And Loki-style indexes only a few labels. Write cost: indexing every term is expensive, columnar just appends sorted blocks, labels-only is cheapest.",
+     "reveal": 1
+    },
+    {
+     "say": "Storage: a full index can be as big as the data. Columnar compresses about ten times.",
+     "reveal": 2
+    },
+    {
+     "say": "Finding a rare word across a week: the full index wins. Columnar scans the message column, but per-block Bloom filters, which say definitely not here or maybe, skip most blocks.",
+     "reveal": 3
+    },
+    {
+     "say": "Counting errors by service per minute is the columnar sweet spot. Uber moved its platform from E-L-K to ClickHouse for exactly this cost reason.",
+     "reveal": 4
+    }
+   ],
+   "id": "s030"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Example",
+   "title": "Example: checkout errors, last hour",
+   "bullets": [
+    "Partition by (tenant, day): expiry drops a day",
+    "Sort by (service, level, timestamp)",
+    "Query reads one narrow range of 3 columns",
+    "Exact-match index on trace_id",
+    "Unknown keys go into map columns"
+   ],
+   "steps": [
+    {
+     "say": "Our choice is columnar. The table is partitioned by team and day, so expiring old data means dropping a whole day, never deleting rows.",
+     "reveal": 1
+    },
+    {
+     "say": "It's sorted by service, then level, then time.",
+     "reveal": 2
+    },
+    {
+     "say": "So the query, checkout errors in the last hour, reads one narrow sorted range, and only the three columns it needs. Reading three of thirty fields reads about ten percent of the bytes.",
+     "reveal": 3
+    },
+    {
+     "say": "trace I-D and request I-D get exact-match indexes, so one error can pull every line of its request.",
+     "reveal": 4
+    },
+    {
+     "say": "New attribute keys go into map columns, and hot ones get promoted to real columns, so new fields need no migration. The price: a week-long rare-word search may take twenty seconds. That's fine.",
+     "reveal": 5
+    }
+   ],
+   "id": "s031"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 10 of 19",
+   "title": "Retention tiers and sampling",
+   "caption": "Book: Module 20 · Case 2 · Deep dive 3, retention and sampling",
+   "steps": [
+    {
+     "say": "Concept ten. Storage cost is a lever. You pull it with tiers, and with deliberate sampling.",
+     "reveal": 0
+    }
+   ],
+   "id": "s032"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 10 of 19",
+   "title": "Sampling: keeping a fraction on purpose",
+   "bullets": [
+    "Never sample ERROR, audit, security",
+    "Head: decide at creation, keep 10% INFO",
+    "Tail: decide after request; keep the bad ones",
+    "Dynamic: over quota, rate rises, recorded",
+    "Showback: daily bytes per team"
+   ],
+   "steps": [
+    {
+     "say": "Rule one: never sample errors, audit logs or security logs.",
+     "reveal": 1
+    },
+    {
+     "say": "Head sampling decides when the line is created. For example, keep ten percent of info logs from the cart service. Cheap, done in the agent.",
+     "reveal": 2
+    },
+    {
+     "say": "Tail sampling decides after the whole request finishes. Keep every log and span of a failed or slow request, and sample the boring successes. It buffers each trace a few seconds and needs the whole trace on one collector, so route by trace I-D.",
+     "reveal": 3
+    },
+    {
+     "say": "Dynamic sampling: a service over quota gets a higher sample rate automatically, and each kept line says sample rate ten, so counts can be scaled back up.",
+     "reveal": 4
+    },
+    {
+     "say": "And the best cost control in practice is a daily report of bytes per team. Most volume comes from a handful of noisy log statements.",
+     "reveal": 5
+    }
+   ],
+   "id": "s033"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: the life of one log line",
+   "table": {
+    "head": [
+     "Age",
+     "Tier",
+     "Cost and speed"
+    ],
+    "rows": [
+     [
+      "0-7 days",
+      "Hot: SSD, 2 replicas, all indexes",
+      "95% of queries, < 2 s"
+     ],
+     [
+      "8-30 days",
+      "Warm: cheap disk / object + cache",
+      "Seconds to tens of seconds"
+     ],
+     [
+      "31-365 days",
+      "Archive: compressed object files",
+      "Restore on request, audits"
+     ],
+     [
+      "Day 366",
+      "Drop whole day partition",
+      "Never row by row"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Follow one checkout error line. For its first week it's hot: on SSD, two replicas, fully indexed. Ninety-five percent of queries land here.",
+     "reveal": 1
+    },
+    {
+     "say": "Days eight to thirty it's warm: one copy on cheaper disks, queries take seconds.",
+     "reveal": 2
+    },
+    {
+     "say": "Then archive, compressed in object storage, restored only for an audit.",
+     "reveal": 3
+    },
+    {
+     "say": "On day three hundred sixty-six, its whole day partition is dropped. Elasticsearch calls this lifecycle hot, warm, cold, frozen, delete.",
+     "reveal": 4
+    }
+   ],
+   "id": "s034"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 11 of 19",
+   "title": "Client crash reporting",
+   "caption": "Book: Module 20 · Case 2 · Deep dive 4, crash reporting",
+   "steps": [
+    {
+     "say": "Concept eleven. Your iOS app crashes on a user's phone. How does that become one tidy issue on a dashboard?",
+     "reveal": 0
+    }
+   ],
+   "id": "s035"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 11 of 19",
+   "title": "From crash to issue in five steps",
+   "bullets": [
+    "1. Capture: handler writes report to disk",
+    "2. Send on next launch, sampled, scrubbed",
+    "3. Symbolicate with uploaded symbols",
+    "4. Fingerprint: in-app stack frames",
+    "5. Release health: crash-free sessions"
+   ],
+   "steps": [
+    {
+     "say": "Step one, capture. A global handler catches the exception. On a native crash the process is dying, so the S-D-K just writes a small report to disk, with release, device and the last hundred breadcrumbs, like taps and network calls.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two. It sends the report on the next launch, before the rest of the app starts, so even a crash-on-launch loop gets reported. The S-D-K also samples, rate-limits itself and scrubs personal data.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three, symbolicate. At build time, C-I uploads source maps or debug symbols for that release. The pipeline turns a dot j-s, line one, column forty-eight thousand, into Cart dot t-s-x, line eighty-eight, in apply coupon.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four, fingerprint. Group by the stack trace using only your own app's frames, ignoring line numbers, so shifted code doesn't create a new issue.",
+     "reveal": 4
+    },
+    {
+     "say": "Step five, release health. Crash-free sessions equals one minus crashed sessions over all sessions.",
+     "reveal": 5
+    }
+   ],
+   "id": "s036"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: a bad release, version 5.2.0",
+   "table": {
+    "head": [
+     "Signal",
+     "Value"
+    ],
+    "rows": [
+     [
+      "Events",
+      "40,000 TypeError in applyCoupon"
+     ],
+     [
+      "Grouped into",
+      "1 issue, 12,000 users"
+     ],
+     [
+      "Crash-free sessions",
+      "99.8% -> 98.9%"
+     ],
+     [
+      "Spike guard",
+      "Count all; store first 100, then 1/s"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Imagine release five point two point oh ships, and forty thousand type errors, cannot read price of undefined, fire from apply coupon.",
+     "reveal": 1
+    },
+    {
+     "say": "Same fingerprint, so it's one issue with forty thousand events and twelve thousand users, not forty thousand alerts.",
+     "reveal": 2
+    },
+    {
+     "say": "Crash-free sessions drop from ninety-nine point eight to ninety-eight point nine percent. That's a rollback signal for the canary.",
+     "reveal": 3
+    },
+    {
+     "say": "And spike protection: at thirty thousand events a second, the edge counts every event, so numbers stay accurate, but stores only a sample of full events, say the first hundred, then one a second.",
+     "reveal": 4
+    }
+   ],
+   "id": "s037"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 12 of 19",
+   "title": "Alerting people trust",
+   "caption": "Book: Module 20 · Case 2 · Deep dive 5, alerting",
+   "steps": [
+    {
+     "say": "Concept twelve. An alert system is only useful if on-call keeps reading it, and if it still works during the outage.",
+     "reveal": 0
+    }
+   ],
+   "id": "s038"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 12 of 19",
+   "title": "Four rules for trusted alerts",
+   "bullets": [
+    "Alert on error ratio, not raw count",
+    "Extract metrics at ingest",
+    "Group, dedupe, route by ownership",
+    "Separate failure domain + dead-man's switch"
+   ],
+   "steps": [
+    {
+     "say": "One. Count of payment errors over five minutes above two hundred will fire on any busy day. Alert on errors divided by requests instead. It doesn't care if traffic doubles.",
+     "reveal": 1
+    },
+    {
+     "say": "Two. Turn hot queries into metrics at ingest. A processor bumps payments errors total as lines flow by. It's cheap, and works even if the log store is slow.",
+     "reveal": 2
+    },
+    {
+     "say": "Three. Group by service and fingerprint, deduplicate within a window, and route by owner, service to team to on-call. Three hundred pages for one outage teaches people to stop reading.",
+     "reveal": 3
+    },
+    {
+     "say": "Four. Run the evaluator in its own failure domain, reading Kafka-fed counters, with a dead-man's switch: a heartbeat alert that pages a human if alerting itself goes quiet.",
+     "reveal": 4
+    }
+   ],
+   "id": "s039"
+  },
+  {
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "Kafka is down for 17 minutes. What's the real failure?",
+   "bullets": [
+    "A. Losing debug lines",
+    "B. Losing them silently",
+    "C. Slower queries"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. Kafka is down, agent buffers fill up. What's the failure that actually matters?",
+     "reveal": 0
+    }
+   ],
+   "id": "s040"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 13 of 19",
+   "title": "Q&A platform: the problem",
+   "caption": "Book: Module 20 · Case 3 — Q&A Platform (Quora-like)",
+   "steps": [
+    {
+     "say": "The answer was B. Dropping debug lines is a choice. Dropping them without saying so is the failure. Report exactly what was dropped, for example one point two billion debug lines between ten oh two and ten nineteen.",
+     "reveal": 0
+    },
+    {
+     "say": "Now case three, a Quora-style site. Ask, answer, vote, follow people, topics and questions, get a home feed, search, and stay readable while spammers attack.",
+     "reveal": 0
+    }
+   ],
+   "id": "s041"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 13 of 19",
+   "title": "Why Q&A is hard",
+   "bullets": [
+    "Overwhelmingly reads, mostly logged-out",
+    "Best answer is a ranking problem",
+    "Follow graph with giant topics",
+    "Public and writeable: spam magnet"
+   ],
+   "steps": [
+    {
+     "say": "No single request is expensive. But first, traffic is overwhelmingly reads, mostly logged-out visitors from search engines. So caching decides the cost.",
+     "reveal": 1
+    },
+    {
+     "say": "Second, best answer is a ranking problem. A three-hour-old answer with nine upvotes may beat a three-year-old one with three hundred.",
+     "reveal": 2
+    },
+    {
+     "say": "Third, the follow graph mixes people, topics and questions, and some topics have tens of millions of followers.",
+     "reveal": 3
+    },
+    {
+     "say": "Fourth, it's public and indexed by search engines, so spammers love it, and a bad answer that ranks well reaches millions.",
+     "reveal": 4
+    }
+   ],
+   "id": "s042"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: Q&A by the numbers",
+   "table": {
+    "head": [
+     "Quantity",
+     "Value"
+    ],
+    "rows": [
+     [
+      "Page views",
+      "2B/day, ~70K/s peak"
+     ],
+     [
+      "Votes",
+      "100M/day, ~3,600/s peak"
+     ],
+     [
+      "Answers",
+      "5M/day, 2 KB each = 10 GB/day"
+     ],
+     [
+      "Read:write",
+      "15:1 requests, ~200:1 at storage"
+     ],
+     [
+      "Hot set",
+      "10M pages x 50 KB = ~500 GB cache"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "A hundred million daily users, twenty page views each: two billion a day, about seventy thousand a second at peak.",
+     "reveal": 1
+    },
+    {
+     "say": "A hundred million votes a day, about thirty-six hundred a second at peak. The busiest write.",
+     "reveal": 2
+    },
+    {
+     "say": "Five million answers a day at two kilobytes is ten gigabytes a day, nearly four terabytes a year. Ten years won't fit on one server.",
+     "reveal": 3
+    },
+    {
+     "say": "Reads to writes are fifteen to one by request, but each page fans out into ten to thirty lookups, so storage sees about two hundred to one. Cache first, shard second.",
+     "reveal": 4
+    },
+    {
+     "say": "And views follow a power law: ten million hot pages carry eighty percent of traffic, about five hundred gigabytes of cache, a dozen nodes.",
+     "reveal": 5
+    }
+   ],
+   "id": "s043"
+  },
+  {
+   "layout": "diagram",
+   "kicker": "Concept 13 of 19",
+   "title": "Q&A architecture",
+   "mermaid": "flowchart LR\n  C[\"Browser\"] --> CDN[\"CDN\"]\n  CDN --> WEB[\"Web tier\"]\n  WEB --> MC[\"Cache tier\"]\n  WEB --> DB[\"Sharded SQL\"]\n  DB --> BUS[\"Event log\"]\n  BUS --> W[\"Async workers\"]",
+   "caption": "Workers rank, count, fan out, index, fight spam, refresh cache",
+   "steps": [
+    {
+     "say": "Logged-out readers get question pages from the C-D-N for about sixty seconds.",
+     "reveal": 0
+    },
+    {
+     "say": "Stateless web servers assemble pages from cached fragments, adding a small per-user overlay like my votes.",
+     "reveal": 0
+    },
+    {
+     "say": "Sharded SQL is the source of truth for users, questions, answers, votes and follows. Every write emits an event, like answer created or vote set.",
+     "reveal": 0
+    },
+    {
+     "say": "Independent workers consume them: ranking, counters, feed fan-out, the search indexer and spam classifiers. A slow ranker never blocks the feed.",
+     "reveal": 0
+    }
+   ],
+   "id": "s044"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 14 of 19",
+   "title": "Ranking answers",
+   "caption": "Book: Module 20 · Case 3 · Deep dive 1, ranking answers",
+   "steps": [
+    {
+     "say": "Concept fourteen. Why not just sort by votes?",
+     "reveal": 0
+    }
+   ],
+   "id": "s045"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 14 of 19",
+   "title": "Why simple sorts fail",
+   "bullets": [
+    "Net votes favour old answers",
+    "Average favours tiny samples: 1/0 = 100%",
+    "Wilson lower bound: worst likely true rate",
+    "Few votes, wide band, low bound"
+   ],
+   "steps": [
+    {
+     "say": "Up minus down favours old answers that had years to collect votes.",
+     "reveal": 1
+    },
+    {
+     "say": "Average, ups over total, favours tiny samples. One up, zero down scores a hundred percent and beats five hundred up, a hundred down.",
+     "reveal": 2
+    },
+    {
+     "say": "The fix is the Wilson score lower bound. It asks: given these votes, what's the lowest the true upvote fraction probably is, at ninety-five percent confidence?",
+     "reveal": 3
+    },
+    {
+     "say": "Few votes means a wide uncertainty band, so a low bound. Many votes narrow it.",
+     "reveal": 4
+    }
+   ],
+   "id": "s046"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: four answers, Wilson ordered",
+   "table": {
+    "head": [
+     "Answer",
+     "Votes",
+     "Fraction",
+     "Wilson bound"
+    ],
+    "rows": [
+     [
+      "D",
+      "500 up / 100 down",
+      "0.833",
+      "0.801"
+     ],
+     [
+      "B",
+      "90 / 20",
+      "0.818",
+      "0.736"
+     ],
+     [
+      "A",
+      "9 / 1",
+      "0.900",
+      "0.596"
+     ],
+     [
+      "C",
+      "1 / 0",
+      "1.000",
+      "0.207"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Answer D: five hundred up, a hundred down. Plenty of evidence, so the bound is point eight oh one. It's first.",
+     "reveal": 1
+    },
+    {
+     "say": "B: ninety up, twenty down, bound point seven three six.",
+     "reveal": 2
+    },
+    {
+     "say": "A: nine up, one down. A higher raw fraction than B, point nine, but only ten votes, so point five nine six. B beats A because it's more certain.",
+     "reveal": 3
+    },
+    {
+     "say": "C: one up, zero down. A perfect hundred percent, but the bound is only point two oh seven. Last.",
+     "reveal": 4
+    }
+   ],
+   "id": "s047"
+  },
+  {
+   "layout": "bullets",
+   "title": "Beyond Wilson",
+   "bullets": [
+    "Learned model: who voted, expertise, reads",
+    "New answers: exploration slot, e.g. #3",
+    "Dirty-mark, batch per question every few s",
+    "1,000 votes/s -> 1 recompute per few s"
+   ],
+   "steps": [
+    {
+     "say": "In production, a learned model predicts helpfulness from votes, who voted, since an expert's upvote counts more than a fresh account's, author credibility, and reading time.",
+     "reveal": 1
+    },
+    {
+     "say": "Cold start: a new answer has no votes, so it'd never be seen. Give it a bounded exploration slot, say position three for its first N views.",
+     "reveal": 2
+    },
+    {
+     "say": "And it runs off the request path. Each vote marks the answer dirty. A worker batches dirty answers per question every few seconds and writes the ranked I-D list to cache.",
+     "reveal": 3
+    },
+    {
+     "say": "So a viral question at a thousand votes a second triggers one recompute every few seconds, not a thousand. Interview line: Wilson baseline, learned model as the upgrade, both offline.",
+     "reveal": 4
+    }
+   ],
+   "id": "s048"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 15 of 19",
+   "title": "Follow graph and home feed",
+   "caption": "Book: Module 20 · Case 3 · Deep dive 2, follow graph and feed",
+   "steps": [
+    {
+     "say": "Concept fifteen. You follow your friend Priya, the topic Technology, and one question about learning Python. How is your feed built?",
+     "reveal": 0
+    }
+   ],
+   "id": "s049"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 15 of 19",
+   "title": "Edges stored twice, feed built hybrid",
+   "bullets": [
+    "out_edges by follower: whom do I follow?",
+    "in_edges by target: who follows this?",
+    "Push to small audiences on write",
+    "Pull big topics at read time",
+    "Rank: model + diversity, cache a few minutes"
+   ],
+   "steps": [
+    {
+     "say": "Follows are stored twice. Out-edges are sharded by follower, answering whom do I follow in one range scan.",
+     "reveal": 1
+    },
+    {
+     "say": "In-edges are sharded by target, answering who follows this topic. Two writes per follow, but every read hits one shard.",
+     "reveal": 2
+    },
+    {
+     "say": "Fan-out on write means pushing a new item into every follower's feed list. Great for Priya with five hundred followers.",
+     "reveal": 3
+    },
+    {
+     "say": "Ruinous for Technology with tens of millions. So big topics are pulled at read time: the feed service merges your pushed list with cached best recent items for each big topic you follow.",
+     "reveal": 4
+    },
+    {
+     "say": "Then a few hundred candidates go through a model and diversity rules, like at most two items from one topic in a row. The result is cached a few minutes so scrolling uses a stable cursor.",
+     "reveal": 5
+    }
+   ],
+   "id": "s050"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: building your feed",
+   "table": {
+    "head": [
+     "Source",
+     "Path",
+     "Items"
+    ],
+    "rows": [
+     [
+      "Priya (500 followers) answers",
+      "Pushed at write time",
+      "In your list already"
+     ],
+     [
+      "Python question gets answer",
+      "Pushed + notification",
+      "In your list already"
+     ],
+     [
+      "Technology (30M followers)",
+      "Pulled from topic_top cache",
+      "Merged at read"
+     ],
+     [
+      "Merge + rank ~300 candidates",
+      "Feed service",
+      "Top 20, cursor"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Priya answers something. Her five hundred followers each get the item pushed. It's already sitting in your list.",
+     "reveal": 1
+    },
+    {
+     "say": "The Python question you follow gets a new answer. Pushed too, plus a notification.",
+     "reveal": 2
+    },
+    {
+     "say": "Technology has thirty million followers, so nothing was pushed. At read time the service pulls its cached top recent items.",
+     "reveal": 3
+    },
+    {
+     "say": "Merge about three hundred candidates, rank, show twenty, and page with a cursor. That's the hybrid feed.",
+     "reveal": 4
+    }
+   ],
+   "id": "s051"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 16 of 19",
+   "title": "Read-heavy caching",
+   "caption": "Book: Module 20 · Case 3 · Deep dive 3, read-heavy caching",
+   "steps": [
+    {
+     "say": "Concept sixteen. Two hundred reads per write. The cache is the main design object. How do you keep it correct enough?",
+     "reveal": 0
+    }
+   ],
+   "id": "s052"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 16 of 19",
+   "title": "Four cache layers",
+   "bullets": [
+    "1. CDN: logged-out HTML, ~60 s",
+    "2. Fragments: answer:{aid}:v{n}",
+    "3. Objects: question:{qid}, user:{uid}",
+    "4. Lists: ranked_answers:{qid}"
+   ],
+   "steps": [
+    {
+     "say": "Layer one, the C-D-N, holds whole pages for logged-out readers for about a minute.",
+     "reveal": 1
+    },
+    {
+     "say": "Layer two, fragments, keyed by object and version. Editing one answer invalidates one fragment, not every page that shows it.",
+     "reveal": 2
+    },
+    {
+     "say": "Layer three, objects like a question or a user.",
+     "reveal": 3
+    },
+    {
+     "say": "Layer four, lists, like the ranked answer I-Ds for a question, or a topic's top items.",
+     "reveal": 4
+    }
+   ],
+   "id": "s053"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: you edit your answer",
+   "table": {
+    "head": [
+     "Step",
+     "What happens"
+    ],
+    "rows": [
+     [
+      "1. Write DB",
+      "Answer 77 becomes version 4"
+     ],
+     [
+      "2. Change event",
+      "Delete keys (not overwrite)"
+     ],
+     [
+      "3. Versioned key",
+      "answer:77:v4; v3 ages out"
+     ],
+     [
+      "4. Your overlay",
+      "You read from primary briefly"
+     ],
+     [
+      "5. Viral expiry",
+      "Coalesce: one recomputes, rest wait"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Imagine you edit answer seventy-seven. Step one, write the database first. It's now version four.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two. The change event deletes affected cache keys. Delete, not overwrite, so a slow, out-of-order event can't put an older value back.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three. The page now asks for answer seventy-seven version four. Version three just ages out. Versioned keys make most invalidation unnecessary.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four, read-your-writes. For a short window, your own overlay is read from the primary, so you see your edit while everyone else sees cache. Vote counts just refresh every few seconds. Nobody can tell twelve hundred three from twelve hundred seven.",
+     "reveal": 4
+    },
+    {
+     "say": "Step five. When a viral question's list expires, request coalescing lets one request recompute while the others wait. No stampede.",
+     "reveal": 5
+    }
+   ],
+   "id": "s054"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 17 of 19",
+   "title": "Sharding the store",
+   "caption": "Book: Module 20 · Case 3 · Deep dive 4, sharding the store",
+   "steps": [
+    {
+     "say": "Concept seventeen. Tens of terabytes of answers and votes. How do you split them?",
+     "reveal": 0
+    }
+   ],
+   "id": "s055"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 17 of 19",
+   "title": "Shard by question ID",
+   "bullets": [
+    "Quora: split by table, then by key range",
+    "qid shards questions, answers, votes",
+    "By-author view: async secondary index",
+    "4,096 logical shards on 64 servers",
+    "Hot question: cache + sharded counter"
+   ],
+   "steps": [
+    {
+     "say": "Quora's real path: first move whole tables to separate database groups, then, as single tables outgrew a machine, split them by key range.",
+     "reveal": 1
+    },
+    {
+     "say": "Here the dominant read is everything about one question. So question I-D shards questions, answers, comments and votes together. A question page is one range read on one shard.",
+     "reveal": 2
+    },
+    {
+     "say": "All answers by user U is then a secondary index sharded by author, filled asynchronously from events. A deliberate copy, not a cross-shard query.",
+     "reveal": 3
+    },
+    {
+     "say": "Use many logical shards, say four thousand ninety-six, on sixty-four servers, with a small map. Moving one is a copy plus a map update, no rehashing.",
+     "reveal": 4
+    },
+    {
+     "say": "And a viral question's reads hit cache, while its vote count goes through a sharded counter, so no single row gets hammered.",
+     "reveal": 5
+    }
+   ],
+   "id": "s056"
+  },
+  {
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: a viral question",
+   "table": {
+    "head": [
+     "Pressure",
+     "Defence"
+    ],
+    "rows": [
+     [
+      "Front-page link, logged-out flood",
+      "CDN serves the page"
+     ],
+     [
+      "Ranked list expires",
+      "Coalesced recompute"
+     ],
+     [
+      "1,000 votes/s",
+      "Vote rows + sharded counter, batched"
+     ],
+     [
+      "Shard primary dies",
+      "Promote replica; retry with same key"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Imagine a news site links one question. The logged-out flood is absorbed by the C-D-N.",
+     "reveal": 1
+    },
+    {
+     "say": "When the ranked list expires, one request recomputes.",
+     "reveal": 2
+    },
+    {
+     "say": "A thousand votes a second write vote rows, while the total is a sharded counter updated in batches. The vote table's key, answer plus voter, guarantees one vote per person, and the vote endpoint sets a value instead of adding, so a retry is harmless.",
+     "reveal": 3
+    },
+    {
+     "say": "And if that shard's primary dies, a replica is promoted in seconds, and clients retry with the same idempotency key, so no duplicate answers.",
+     "reveal": 4
+    }
+   ],
+   "id": "s057"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 18 of 19",
+   "title": "Search, duplicates and spam",
+   "caption": "Book: Module 20 · Case 3 · Deep dive 5, search, duplicates, spam",
+   "steps": [
+    {
+     "say": "Concept eighteen. The last deep dive: finding questions, merging duplicates, and keeping spam out.",
+     "reveal": 0
+    }
+   ],
+   "id": "s058"
+  },
+  {
+   "layout": "bullets",
+   "kicker": "Concept 18 of 19",
+   "title": "Search and duplicates",
+   "bullets": [
+    "Inverted index: titles, details, top answers",
+    "BM25 + popularity + answer quality",
+    "Similar questions while typing: embeddings",
+    "Merge duplicates: one canonical_qid"
+   ],
+   "steps": [
+    {
+     "say": "Search reuses case one: an inverted index over titles, details and top answers, built by the indexer from the event log, document-partitioned with fan-out.",
+     "reveal": 1
+    },
+    {
+     "say": "Ranking mixes B-M twenty-five text relevance with popularity and answer quality.",
+     "reveal": 2
+    },
+    {
+     "say": "While you type a question, a similar-questions call uses text search plus embeddings, vectors that capture meaning. So how do I learn Python fast lands right next to quickest way to learn Python, and you're nudged to follow the existing one.",
+     "reveal": 3
+    },
+    {
+     "say": "Confirmed duplicates are merged: one canonical question, answers moved, the old U-R-L redirects. Better answers per question, less index bloat.",
+     "reveal": 4
+    }
+   ],
+   "id": "s059"
+  },
+  {
+   "layout": "table",
+   "kicker": "Concept 18 of 19",
+   "title": "Example: five layers against a spam account",
+   "table": {
+    "head": [
+     "Layer",
+     "What it catches"
+    ],
+    "rows": [
+     [
+      "1. Friction",
+      "New account: few posts/hour, links held"
+     ],
+     [
+      "2. Classifiers",
+      "Link spam scored within seconds"
+     ],
+     [
+      "3. Behaviour",
+      "Vote ring, 40 accounts on one device"
+     ],
+     [
+      "4. Reports",
+      "Users flag; moderator queue"
+     ],
+     [
+      "5. Graduated actions",
+      "Collapse, remove, shadow-limit, ban"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Imagine a spammer creates an account and posts a link to a pill shop. Layer one, friction: new accounts get few posts an hour, and links are held until trust is earned.",
+     "reveal": 1
+    },
+    {
+     "say": "Layer two, content classifiers score every answer asynchronously within seconds, for link spam, promotion, hate, or low effort.",
+     "reveal": 2
+    },
+    {
+     "say": "Layer three, behaviour: forty accounts on one device that always upvote each other, a vote ring.",
+     "reveal": 3
+    },
+    {
+     "say": "Layer four, users report it into a moderator queue.",
+     "reveal": 4
+    },
+    {
+     "say": "Layer five, graduated actions: collapse it, remove it, shadow-limit, meaning the account thinks it posts normally but nothing is distributed, or ban. And the ring's votes are retracted and scores recomputed, just a replay of the event log. Async keeps posting fast, and graduated actions limit damage from false positives.",
+     "reveal": 5
+    }
+   ],
+   "id": "s060"
+  },
+  {
+   "layout": "section",
+   "kicker": "Concept 19 of 19",
+   "title": "Putting the three cases together",
+   "caption": "Book: Module 20 · Case 3 · 8. Trade-offs",
+   "steps": [
+    {
+     "say": "Concept nineteen. Notice the common thread before we recap.",
+     "reveal": 0
+    }
+   ],
+   "id": "s061"
+  },
+  {
+   "layout": "table",
+   "kicker": "Concept 19 of 19",
+   "title": "One shape, three systems",
+   "table": {
+    "head": [
+     "Case",
+     "Source of truth",
+     "Derived, async"
+    ],
+    "rows": [
+     [
+      "Search",
+      "Post store",
+      "Sharded index, refreshed ~1 s"
+     ],
+     [
+      "Logging",
+      "Kafka, then object archive",
+      "Columnar tiers, issues, metrics"
+     ],
+     [
+      "Q&A",
+      "Sharded SQL by qid",
+      "Scores, counts, feeds, search"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "In search, the post store is the truth, and the index is a rebuildable, derived view.",
+     "reveal": 1
+    },
+    {
+     "say": "In logging, Kafka is the short-term truth, and the columnar store, issues and alert metrics derive from it.",
+     "reveal": 2
+    },
+    {
+     "say": "In Q and A, sharded SQL is the truth, and rankings, counts, feeds and search are all derived from its events. In the interview, say this: one source of truth, an event log, and derived read models that may lag by seconds, with a check at read time for anything that must never be wrong.",
+     "reveal": 3
+    }
+   ],
+   "id": "s062"
+  },
+  {
+   "layout": "recap",
+   "title": "Recap",
+   "bullets": [
+    "Search: segments + 1 s refresh, doc sharding, time tiers",
+    "Scatter-gather: hedge, deadlines, partial; 2-stage ranking",
+    "Logging: agent, Kafka, columnar tiers, never sample errors",
+    "Crashes: symbolicate, fingerprint; alerts on ratios, dead-man",
+    "Q&A: caches, qid shards, Wilson, hybrid feed, layered spam",
+    "Next: Episode 27, Case Studies: Photos, Microblog, Ad Clicks"
+   ],
+   "steps": [
+    {
+     "say": "Let's recap. Search: index asynchronously into immutable segments refreshed every second, shard by document, and split by time first so most queries stay in a small in-memory tier.",
+     "reveal": 1
+    },
+    {
+     "say": "Every query fans out, so fight the tail with fastest replicas, hedging, deadlines and partial results. Rank cheaply per shard, then with a model on the top five hundred, and hydrate to hide deletes.",
+     "reveal": 2
+    },
+    {
+     "say": "Logging: apps write to standard out, agents buffer into Kafka, processors redact and sample into hot, warm and archive columnar tiers. Shed debug first, never errors, and never silently.",
+     "reveal": 3
+    },
+    {
+     "say": "Crashes: send on next launch, symbolicate, group by in-app stack fingerprint, and watch crash-free sessions. Alerts use ratios and ingest-time metrics, with a dead-man's switch.",
+     "reveal": 4
+    },
+    {
+     "say": "Q and A: layered caches, S-Q-L sharded by question I-D, Wilson then a learned model for answers, a push-pull hybrid feed, and five layers of spam defence.",
+     "reveal": 5
+    },
+    {
+     "say": "Next time, episode twenty-seven, Case Studies: Photos, Microblog, and Ad Clicks. See you there.",
+     "reveal": 6
+    }
+   ],
+   "id": "s063"
+  }
+ ]
+}

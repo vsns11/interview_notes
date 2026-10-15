@@ -1,0 +1,2044 @@
+{
+  "series": "LLD Workshop",
+  "episode": 21,
+  "title": "Platforms: Stack Overflow and Cricinfo",
+  "subtitle": "Votes, reputation and a live scoreboard: rich models with rules in one place",
+  "scenes": [
+    {
+      "id": "s001",
+      "layout": "title",
+      "title": "Platforms: Stack Overflow and Cricinfo",
+      "subtitle": "Votes, reputation and a live scoreboard: rich models with rules in one place",
+      "steps": [
+        {
+          "say": "Welcome to the L-L-D Workshop, episode twenty-one: Platforms, part one. Today we design Stack Overflow and Cricinfo, plus a ninety-minute cricket dashboard from a real machine-coding round.",
+          "reveal": 0
+        },
+        {
+          "say": "Until now we designed things, like a parking lot or a chess board. Today the objects are people, posts, votes and live events.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll be able to model a Q and A site with votes, reputation and privileges, and a cricket site that follows the real rules and updates live. Keep the chapter eighteen PDF open. Every number I quote comes from its real program output.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s002",
+      "layout": "section",
+      "kicker": "Part 1 of 4",
+      "title": "What platform problems test",
+      "steps": [
+        {
+          "say": "Part one. Why do interviewers love platform problems? Because one problem checks six skills at once. And a small toolkit of ideas solves all of them.",
+          "reveal": 0
+        },
+        {
+          "say": "A platform problem asks you to design a site where users produce the content. Questions and answers, posts and comments, match commentary. Think of it as a town, not a toaster. Many people, many buildings, rules about who may enter where, a notice board, a post office and a library catalogue.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 18 · 18.0 What platform problems test"
+    },
+    {
+      "id": "s003",
+      "layout": "table",
+      "title": "Six skills one problem tests",
+      "table": {
+        "head": [
+          "Skill",
+          "Where you see it"
+        ],
+        "rows": [
+          [
+            "Rich domain model",
+            "Many small classes, each one rule"
+          ],
+          [
+            "User roles",
+            "Guest, member, moderator, admin"
+          ],
+          [
+            "Feeds",
+            "Ranked list of recent content"
+          ],
+          [
+            "Notifications",
+            "Email, push, in-app channels"
+          ],
+          [
+            "Search",
+            "Inverted index: word to items"
+          ],
+          [
+            "Reputation / trust",
+            "Points that unlock abilities"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Skill one: a rich domain model. That means turning a long list of nouns into classes with clear jobs. For example, in cricket, an over class that knows a wide isn't one of its six balls.",
+          "reveal": 1
+        },
+        {
+          "say": "Skill two: user roles. Different people may do different things. On Stack Overflow, a guest can only read. A member can vote. A moderator can close any question.",
+          "reveal": 2
+        },
+        {
+          "say": "Skill three: feeds. A personalised, ranked list of recent content from people you follow. That's next episode.",
+          "reveal": 3
+        },
+        {
+          "say": "Skill four: notifications. Telling a user something happened, through a channel. For example, Alice gets an email saying Bob answered her question.",
+          "reveal": 4
+        },
+        {
+          "say": "Skill five: search, using an inverted index.",
+          "reveal": 5
+        },
+        {
+          "say": "Skill six: reputation, or trust. Numbers that summarise past behaviour and unlock abilities. Stack Overflow reputation is the classic case.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s004",
+      "layout": "bullets",
+      "kicker": "Concept 1",
+      "title": "The reusable toolkit, part one",
+      "bullets": [
+        "1. A facade in front: one entry point",
+        "2. Shared content behaviour in a base class",
+        "3. Store who, not how many",
+        "4. Derive, don't store"
+      ],
+      "steps": [
+        {
+          "say": "Now the toolkit: eight ideas you'll reuse every time, on a simple Q and A site. Idea one: a facade in front. One class offers the simple operations the screens need, like ask, vote and answer, and hides everything behind it. It's the one place to check: is this account active, and is this person allowed?",
+          "reveal": 1
+        },
+        {
+          "say": "Idea two: shared behaviour goes in a base class. Questions, answers and comments can all be voted on and flagged. So we write voting once, in a post base class, and keep only the differences in subclasses.",
+          "reveal": 2
+        },
+        {
+          "say": "Idea three: store who, not how many. Keep votes as a set of member ids, not a counter. If Bob clicks upvote twice, the set already has Bob, so the second click is refused. And the count is just the size of the set.",
+          "reveal": 3
+        },
+        {
+          "say": "Idea four: derive, don't store. If you can compute a number from data you already keep, compute it. A stored copy will one day disagree with the source. If computing is too slow, keep a cache you can always rebuild.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Ch 18 · 18.0 How it works, the reusable toolkit"
+    },
+    {
+      "id": "s005",
+      "layout": "bullets",
+      "kicker": "Concept 1",
+      "title": "The reusable toolkit, part two",
+      "bullets": [
+        "5. Two-sided operations live in a service",
+        "6. Notify via Observer plus Strategy",
+        "7. Search is its own class",
+        "8. Privacy asked in one place"
+      ],
+      "steps": [
+        {
+          "say": "Idea five: an operation that changes two objects lives in a service. Accepting a friend request changes both people. Put it on neither. A small service class updates both sides together, so they can never drift apart.",
+          "reveal": 1
+        },
+        {
+          "say": "Idea six: notifications through Observer plus Strategy. The domain announces an event, like answer posted. Observers subscribe and get called back. How the message is delivered, email or push, is a Strategy: one interface, one class per channel. Adding SMS means adding a class, not another if.",
+          "reveal": 2
+        },
+        {
+          "say": "Idea seven: search is its own class. An inverted index belongs in a search index class, not on the question. And every word maps to a collection, even if only one item matches today.",
+          "reveal": 3
+        },
+        {
+          "say": "Idea eight: privacy and permissions are asked in one place. If both the feed and search must hide a private post, write one can-see check and call it from both.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s006",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Counter versus set of voters",
+      "table": {
+        "head": [
+          "Event",
+          "int likeCount",
+          "Set of voter ids"
+        ],
+        "rows": [
+          [
+            "Bob likes",
+            "1",
+            "{bob} size 1"
+          ],
+          [
+            "Bob likes again",
+            "2, wrong!",
+            "refused, still 1"
+          ],
+          [
+            "Bob unlikes",
+            "who? can't tell",
+            "{} size 0"
+          ],
+          [
+            "Carol likes",
+            "count only",
+            "{carol} size 1"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's see idea three happen. Bob likes a post. The counter says one. The set holds Bob, size one. Both fine.",
+          "reveal": 1
+        },
+        {
+          "say": "Bob clicks like again. The counter happily goes to two. That's wrong. The set already contains Bob, so it refuses. Still one.",
+          "reveal": 2
+        },
+        {
+          "say": "Now Bob wants to unlike. With a counter, you can't even tell whether Bob liked it. With the set, you remove Bob. Size zero.",
+          "reveal": 3
+        },
+        {
+          "say": "Carol likes. Both say one, but only the set knows it's Carol. The cost? Memory grows with votes. Real systems keep a votes table and cache the count.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s007",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Inverted index: word to items",
+      "table": {
+        "head": [
+          "Word",
+          "Questions containing it"
+        ],
+        "rows": [
+          [
+            "hashmap",
+            "#101, #107"
+          ],
+          [
+            "java",
+            "#101, #105, #107"
+          ],
+          [
+            "collisions",
+            "#101"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Idea seven, worked through. An inverted index is a map from each word to the items that contain it. Question one-oh-one is about how HashMap handles collisions. So hashmap, and collisions, each point to it.",
+          "reveal": 1
+        },
+        {
+          "say": "Java points to three questions. Notice each value is a set, never a single item. When the second question about Java arrives, nothing breaks.",
+          "reveal": 2
+        },
+        {
+          "say": "Now a guest searches for hashmap collisions. We look up two sets and intersect them. Only one-oh-one is in both. No scanning every question. That's why search is fast on a read-heavy site.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s008",
+      "layout": "diagram",
+      "title": "Notifications: Observer plus Strategy",
+      "mermaid": "flowchart LR\n  A[\"Domain: answer posted\"] --> B[\"Notifier (observer)\"]\n  B --> C{\"Channel interface\"}\n  C --> D[\"EmailChannel\"]\n  C --> E[\"PushChannel\"]\n  C --> F[\"InAppChannel\"]",
+      "caption": "The domain announces; channels are swappable strategies",
+      "steps": [
+        {
+          "say": "Here's idea six as a picture. The domain raises one event: answer posted. It doesn't know who's listening.",
+          "reveal": 0
+        },
+        {
+          "say": "The notifier is an observer. It receives the event and hands it to every channel through one interface. Today only email. Tomorrow push, then in-app. Each is a new class. The voting and answering code never changes.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s009",
+      "layout": "twocol",
+      "title": "Trade-offs and when not to use it",
+      "left": {
+        "heading": "Costs",
+        "bullets": [
+          "More classes to explain in 45 minutes",
+          "Voter sets use more memory",
+          "Deriving is slow without a cache",
+          "Too many services make thin entities"
+        ]
+      },
+      "right": {
+        "heading": "When not to",
+        "bullets": [
+          "Asked only for a like button?",
+          "A set on the post is enough",
+          "No services, no observers"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Every idea has a cost. A rich model means more classes to explain in a forty-five minute interview.",
+          "reveal": 1
+        },
+        {
+          "say": "Voter sets use memory that a counter wouldn't.",
+          "reveal": 2
+        },
+        {
+          "say": "Deriving numbers from raw events is slow on big data, so you'll need a cache.",
+          "reveal": 3
+        },
+        {
+          "say": "And if you put everything in services, your entities become thin data bags. People call that anemic.",
+          "reveal": 4
+        },
+        {
+          "say": "So when not to use the toolkit? If the interviewer only asks for a like button,",
+          "reveal": 5
+        },
+        {
+          "say": "a set on the post is plenty.",
+          "reveal": 6
+        },
+        {
+          "say": "In the interview, say: I'll put each rule in one place, and name which operations need a service.",
+          "reveal": 7
+        }
+      ]
+    },
+    {
+      "id": "s010",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Why isn't accept-friend-request a method on Member?",
+      "bullets": [
+        "A. Members can't have methods",
+        "B. It changes two members; one place must update both",
+        "C. It's too slow"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Why don't we put accept friend request on the member class? Take a few seconds.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s011",
+      "layout": "section",
+      "kicker": "Part 2 of 4",
+      "title": "Design Stack Overflow",
+      "steps": [
+        {
+          "say": "The answer was B. It changes two members, so a service updates both. Keep that in your pocket for next episode.",
+          "reveal": 0
+        },
+        {
+          "say": "Part two: Stack Overflow. A huge Q and A site for programmers. Members upvote and downvote, earn reputation points and badges, and higher reputation unlocks privileges. The hook: how do you stop double voting, and how do you undo a vote's points when someone changes their mind?",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 18 · 18.1 Design Stack Overflow"
+    },
+    {
+      "id": "s012",
+      "layout": "table",
+      "title": "Clarify first",
+      "table": {
+        "head": [
+          "Question",
+          "Our answer"
+        ],
+        "rows": [
+          [
+            "Who uses it?",
+            "Guest, member, moderator, admin, system"
+          ],
+          [
+            "Guest can?",
+            "Search and read only"
+          ],
+          [
+            "Voted on?",
+            "Questions, answers; comments upvote only"
+          ],
+          [
+            "Close a question?",
+            "3 close votes, or one moderator"
+          ],
+          [
+            "Bounty?",
+            "Stake 50 to 500 rep, runs 7 days"
+          ],
+          [
+            "Scale?",
+            "Read-heavy; never double-count votes"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Ask before you draw. Who uses it? Five actors. Guests, members, moderators, admins, and the system itself, which sends notifications and awards badges.",
+          "reveal": 1
+        },
+        {
+          "say": "What can a guest do? Only search and read. Posting or voting needs membership.",
+          "reveal": 2
+        },
+        {
+          "say": "What can be voted on? Questions and answers, up or down. Comments can only be upvoted, like the real site.",
+          "reveal": 3
+        },
+        {
+          "say": "How is a question closed? Three close votes from members who have the privilege, or a single moderator.",
+          "reveal": 4
+        },
+        {
+          "say": "What's a bounty? Reputation you stake, fifty to five hundred points, to attract answers. It runs seven days. The points leave you immediately and are never refunded.",
+          "reveal": 5
+        },
+        {
+          "say": "And scale: read-heavy, many more views than posts. And votes must never double-count.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s013",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Reputation rules (today's values)",
+      "table": {
+        "head": [
+          "Event",
+          "Author gets",
+          "Voter gets"
+        ],
+        "rows": [
+          [
+            "Upvote on question or answer",
+            "+10",
+            "0"
+          ],
+          [
+            "Downvote on question",
+            "-2",
+            "0"
+          ],
+          [
+            "Downvote on answer",
+            "-2",
+            "-1"
+          ],
+          [
+            "Answer accepted",
+            "+15",
+            "asker +2"
+          ],
+          [
+            "Comment upvote",
+            "0",
+            "0"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here are the scoring rules. An upvote on a question or an answer gives the author ten points. Question upvotes were worth only five until November twenty nineteen. Remember that.",
+          "reveal": 1
+        },
+        {
+          "say": "A downvote on a question costs the author two. Downvoting a question is free for the voter.",
+          "reveal": 2
+        },
+        {
+          "say": "A downvote on an answer costs the author two, and costs the voter one point. That stops people downvoting carelessly.",
+          "reveal": 3
+        },
+        {
+          "say": "When the asker accepts an answer, the answerer gets fifteen, and the asker gets two.",
+          "reveal": 4
+        },
+        {
+          "say": "And comment upvotes earn nothing. Every account starts at one point, and can never drop below one.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s014",
+      "layout": "table",
+      "title": "Privileges unlocked by reputation",
+      "table": {
+        "head": [
+          "Privilege",
+          "Reputation needed"
+        ],
+        "rows": [
+          [
+            "Vote up, flag",
+            "15"
+          ],
+          [
+            "Comment everywhere",
+            "50"
+          ],
+          [
+            "Set bounty",
+            "75"
+          ],
+          [
+            "Vote down",
+            "125"
+          ],
+          [
+            "Create tag",
+            "1,500"
+          ],
+          [
+            "Close votes / delete votes",
+            "3,000 / 10,000"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Reputation unlocks privileges. This is a table of data, so we store it as a table: an enum called Privilege, each value holding its minimum reputation. Vote up needs fifteen.",
+          "reveal": 1
+        },
+        {
+          "say": "Commenting on other people's posts needs fifty. On your own thread, it's free.",
+          "reveal": 2
+        },
+        {
+          "say": "Setting a bounty needs seventy-five.",
+          "reveal": 3
+        },
+        {
+          "say": "Downvoting needs one hundred twenty-five.",
+          "reveal": 4
+        },
+        {
+          "say": "Creating a brand new tag needs fifteen hundred.",
+          "reveal": 5
+        },
+        {
+          "say": "Casting close votes needs three thousand, and delete votes ten thousand. Now has-privilege is one comparison: reputation greater than or equal to the minimum. No scattered ifs.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s015",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Alice and Dave hit the privilege table",
+      "table": {
+        "head": [
+          "Action",
+          "Rep",
+          "Result"
+        ],
+        "rows": [
+          [
+            "Alice tags a question with new tag 'hashmap'",
+            "200",
+            "Rejected: needs 1,500"
+          ],
+          [
+            "Alice asks with existing tags java, collections",
+            "200",
+            "Question #101 posted"
+          ],
+          [
+            "Dave tries to upvote",
+            "1",
+            "Rejected: needs 15"
+          ],
+          [
+            "Dave comments on Carol's answer",
+            "1",
+            "Rejected: needs 50"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's watch it happen with the demo's members. Alice has two hundred points. She asks a question and tries to add a new tag, hashmap. Rejected. She needs fifteen hundred to create a tag.",
+          "reveal": 1
+        },
+        {
+          "say": "She retries with existing tags, java and collections. Question one-oh-one is posted. The tag check matches the activity diagram: does the tag exist? If not, does the member have enough reputation?",
+          "reveal": 2
+        },
+        {
+          "say": "Dave is brand new, one point. He tries to upvote. Rejected: needs fifteen.",
+          "reveal": 3
+        },
+        {
+          "say": "He tries to comment on Carol's answer. Rejected: needs fifty. Same one-line check every time.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s016",
+      "layout": "diagram",
+      "title": "The class model",
+      "mermaid": "flowchart TD\n  F[\"StackOverflow facade\"] --> Q[\"Question\"]\n  P[\"Post (abstract, sealed)\"] --> Q\n  P --> A[\"Answer\"]\n  P --> C[\"Comment\"]\n  Q --> T[\"Tag (shared)\"]\n  Q --> B[\"Bounty\"]\n  F --> R[\"ReputationPolicy (Strategy)\"]\n  F --> X[\"QuestionIndex (search)\"]",
+      "caption": "Post holds voting and flagging once; facade checks, delegates, scores",
+      "steps": [
+        {
+          "say": "At the centre is Post, an abstract base class. Question, Answer and Comment extend it, because voting and flagging work the same on all three. It's sealed: it names exactly those three subclasses, so the compiler knows every kind.",
+          "reveal": 0
+        },
+        {
+          "say": "A question owns its answers and its bounty. That's composition: delete the question, they go too. Tags are shared by many questions and outlive each one, so that's a plain association.",
+          "reveal": 0
+        },
+        {
+          "say": "On the side, the facade talks to a reputation policy and a question index. And the member hierarchy: moderator and admin extend member. A guest is simply no member object at all. Every write method needs a member argument, so a guest can't even call it.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s017",
+      "layout": "bullets",
+      "title": "Concept: votes stored per voter",
+      "bullets": [
+        "Post keeps a map: voter id to UP or DOWN",
+        "castVote: can't vote on your own post",
+        "put() returns the previous vote",
+        "Same vote twice: rejected",
+        "Score is derived: ups minus downs"
+      ],
+      "steps": [
+        {
+          "say": "Now the heart: storing votes. Each post keeps a map from voter id to the vote type, up or down. Our running example is Carol's answer, number one-oh-three.",
+          "reveal": 1
+        },
+        {
+          "say": "Step one, cast vote checks: are you the author? You can't vote on your own post. In the demo, that's exactly what gets rejected.",
+          "reveal": 2
+        },
+        {
+          "say": "Step two, the map's put call does two jobs. It records the new vote and returns the voter's previous vote, if any. So we learn whether this is a fresh vote or a change.",
+          "reveal": 3
+        },
+        {
+          "say": "Step three, if the previous vote equals the new one, it throws. Erin can't downvote Carol twice.",
+          "reveal": 4
+        },
+        {
+          "say": "Step four, the score isn't stored. It's derived: count the ups, subtract the downs. And the whole method is synchronized, so two simultaneous voters are each counted once.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s018",
+      "layout": "diagram",
+      "title": "Voting flow with a changed vote",
+      "mermaid": "sequenceDiagram\n  participant V as Voter\n  participant F as Facade\n  participant P as Post\n  participant R as Policy\n  participant A as Author\n  V->>F: vote(post, UP)\n  F->>F: check active and privilege\n  F->>P: castVote(voter, UP)\n  P-->>F: previous vote, maybe DOWN\n  F->>R: delta for old vote\n  F->>A: undo old delta\n  F->>R: delta for UP\n  F->>A: apply +10",
+      "caption": "Undo the old effect, then apply the new one",
+      "steps": [
+        {
+          "say": "Here's the full flow. The voter calls vote on the facade. The facade first checks: is the account active, and does this person have the privilege for this kind of vote?",
+          "reveal": 0
+        },
+        {
+          "say": "Then it asks the post to record the vote. The post returns the previous vote. If there was one, the facade asks the policy what that old vote was worth, and reverses it. Then it asks what the new vote is worth, and applies it. Finally, listeners hear about the change.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s019",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Erin changes her mind",
+      "table": {
+        "head": [
+          "Step",
+          "Carol (author)",
+          "Erin (voter)"
+        ],
+        "rows": [
+          [
+            "Start",
+            "3,200",
+            "3,100"
+          ],
+          [
+            "Erin downvotes answer #103",
+            "-2 to 3,198",
+            "-1 to 3,099"
+          ],
+          [
+            "Erin downvotes again",
+            "rejected",
+            "rejected"
+          ],
+          [
+            "Erin switches to UP: undo old",
+            "+2 to 3,200",
+            "+1 to 3,100"
+          ],
+          [
+            "Apply new UP",
+            "+10 to 3,210",
+            "0"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's run it with real numbers from the demo. Carol starts at thirty-two hundred. Erin at thirty-one hundred.",
+          "reveal": 1
+        },
+        {
+          "say": "Erin downvotes Carol's answer. Carol loses two, down to thirty-one ninety-eight. Erin pays one, down to thirty ninety-nine.",
+          "reveal": 2
+        },
+        {
+          "say": "Erin tries to downvote again. Rejected: already voted down.",
+          "reveal": 3
+        },
+        {
+          "say": "Now Erin switches to an upvote. The post returns her previous vote: down. So the facade undoes it. Carol gets two back, Erin gets one back.",
+          "reveal": 4
+        },
+        {
+          "say": "Then the new upvote applies. Carol plus ten, to thirty-two ten. That's why we store who voted what. A counter could never do this.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s020",
+      "layout": "bullets",
+      "kicker": "Concept 2",
+      "title": "Concept: reputation rules as a Strategy",
+      "bullets": [
+        "Interface: ReputationPolicy",
+        "authorDeltaForVote, voterDeltaForVote",
+        "Default policy: switch over sealed Post",
+        "2019 change: +5 to +10 is one number",
+        "Daily cap of 200? Wrap it in a Decorator"
+      ],
+      "steps": [
+        {
+          "say": "Why not hard-code plus ten inside vote? Because scoring rules change. So they go behind a Strategy: an interface called reputation policy.",
+          "reveal": 1
+        },
+        {
+          "say": "It answers two questions. How much does the author get for this vote? And how much does the voter get?",
+          "reveal": 2
+        },
+        {
+          "say": "The default policy switches on the type of the post. Question: plus ten or minus two. Answer: same. Comment: zero. Because post is sealed, if someone adds a fourth post kind, the compiler forces this switch to handle it.",
+          "reveal": 3
+        },
+        {
+          "say": "The payoff: when Stack Overflow raised question upvotes from five to ten, our design changes one number in the policy.",
+          "reveal": 4
+        },
+        {
+          "say": "And a follow-up you might get: the real site caps vote reputation at two hundred a day. Wrap the policy in a Decorator, a capped policy with the same interface that tracks today's total and trims the delta. Still no voting code changes.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 18 · 18.1 Design decisions & patterns used"
+    },
+    {
+      "id": "s021",
+      "layout": "bullets",
+      "kicker": "Concept 3",
+      "title": "Concept: badges and notifications as Observers",
+      "bullets": [
+        "ReputationListener: onReputationChanged",
+        "BadgeAwarder fires when a threshold is crossed",
+        "Thresholds 15, 50, 125",
+        "Notifier sends via NotificationChannel"
+      ],
+      "steps": [
+        {
+          "say": "Next pattern: Observer. Anything that wants to react to a reputation change implements a reputation listener, with one method: on reputation changed, given the old and new values.",
+          "reveal": 1
+        },
+        {
+          "say": "The badge awarder is one listener. It awards a badge only when a threshold is crossed: old value below the level, new value at or above it. So members who were already high don't get showered with badges. And badges sit in a set, so each is added once.",
+          "reveal": 2
+        },
+        {
+          "say": "The levels are fifteen for Contributor, fifty for Helpful, one twenty-five for Trusted.",
+          "reveal": 3
+        },
+        {
+          "say": "The notifier is the system actor. It sends through every notification channel. Today that's email. The facade doesn't know any of these listeners exist. It just announces.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s022",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Dave earns his first badge",
+      "table": {
+        "head": [
+          "Event",
+          "Dave's rep",
+          "Badge?"
+        ],
+        "rows": [
+          [
+            "Dave asks question #107",
+            "1",
+            "no"
+          ],
+          [
+            "Bob upvotes",
+            "11",
+            "no, below 15"
+          ],
+          [
+            "Carol upvotes",
+            "21",
+            "Contributor! email sent"
+          ],
+          [
+            "Erin upvotes",
+            "31",
+            "no, already has it"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's watch the observer fire. Dave, at one point, asks question one-oh-seven, is Java pass by value?",
+          "reveal": 1
+        },
+        {
+          "say": "Bob upvotes. Plus ten. Dave's at eleven. Eleven is below fifteen, so no badge.",
+          "reveal": 2
+        },
+        {
+          "say": "Carol upvotes. Twenty-one. Old value eleven was below fifteen, new value twenty-one is above. Threshold crossed. Contributor badge, and an email goes out.",
+          "reveal": 3
+        },
+        {
+          "say": "Erin upvotes. Thirty-one. Nothing crossed, and the set already holds Contributor. Quiet. That's Observer: the vote code never mentioned badges.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s023",
+      "layout": "diagram",
+      "title": "Question lifecycle",
+      "mermaid": "stateDiagram-v2\n  [*] --> OPEN : asked\n  OPEN --> CLOSED : 3rd close vote or moderator\n  CLOSED --> OPEN : moderator reopen\n  CLOSED --> DELETED : 3rd delete vote or moderator\n  OPEN --> DELETED : moderator delete\n  DELETED --> CLOSED : moderator undelete",
+      "caption": "No new answers while closed; deleted is hidden from search",
+      "steps": [
+        {
+          "say": "A question has states. It starts open. The third close vote, or a single moderator, moves it to closed. While closed, no new answers are allowed.",
+          "reveal": 0
+        },
+        {
+          "say": "A moderator can reopen it. From closed, three delete votes or a moderator delete it. A moderator can also delete an open question directly. And undelete brings it back to closed, not open. Deleted questions are hidden from search.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s024",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Moderation, step by step",
+      "table": {
+        "head": [
+          "Action",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "Bob, Carol, Erin vote to close #107",
+            "3rd vote closes it"
+          ],
+          [
+            "Someone answers #107",
+            "Rejected: question is CLOSED"
+          ],
+          [
+            "Mia (moderator) reopens",
+            "OPEN again"
+          ],
+          [
+            "3 members flag a rude comment",
+            "3rd flag emails every moderator"
+          ],
+          [
+            "Root (admin) blocks Dave",
+            "Every later action rejected"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's moderation from the demo. Bob, Carol and Erin each vote to close Dave's question as a duplicate. Each close vote is stored as a voter id, so nobody votes twice. The third vote closes it.",
+          "reveal": 1
+        },
+        {
+          "say": "Someone tries to answer. Rejected: the question is closed.",
+          "reveal": 2
+        },
+        {
+          "say": "Mia, a moderator, reopens it. Notice: close and reopen take a moderator parameter. You can't even call them without a moderator object. The permission check is the type itself.",
+          "reveal": 3
+        },
+        {
+          "say": "Dave posts a rude comment. Three members flag it. The third flag notifies every moderator.",
+          "reveal": 4
+        },
+        {
+          "say": "Finally, root, the admin, blocks Dave. Every write goes through a require-active check, so Dave can do nothing now.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s025",
+      "layout": "bullets",
+      "kicker": "Concept 4",
+      "title": "Bounty and the facade",
+      "bullets": [
+        "offerBounty: needs SET_BOUNTY (75)",
+        "Amount 50 to 500; deducted at once",
+        "awardBounty: sponsor only, before expiry",
+        "Facade: check status, privilege, delegate",
+        "Then apply reputation and tell listeners",
+        "Hot questions: a ranking Strategy with decay"
+      ],
+      "steps": [
+        {
+          "say": "Two more pieces. The bounty. Offering one needs the set bounty privilege, seventy-five points.",
+          "reveal": 1
+        },
+        {
+          "say": "The amount must be fifty to five hundred, and it leaves the sponsor immediately. In the demo, Alice at two twelve stakes fifty and drops to one sixty-two.",
+          "reveal": 2
+        },
+        {
+          "say": "Later, she awards it. Only the sponsor can, not to their own answer, and only before the seven days expire. Carol's answer wins and Carol gets plus fifty.",
+          "reveal": 3
+        },
+        {
+          "say": "And the facade itself. Every method follows the same recipe: check the account is active, check the privilege,",
+          "reveal": 4
+        },
+        {
+          "say": "delegate the state change to the post, then apply reputation through the policy and tell the listeners. One entry point that validates, delegates and scores.",
+          "reveal": 5
+        },
+        {
+          "say": "Last follow-up: hot questions. That's a ranking Strategy. One ranker interface scores each question from recent votes, answers and views, with time decay, so older activity counts less and less. Twenty votes today can beat fifty from last year. A new ranking rule is just a new class.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s026",
+      "layout": "twocol",
+      "title": "Concurrency and edge cases",
+      "left": {
+        "heading": "In memory",
+        "bullets": [
+          "castVote synchronized per post",
+          "Reputation is an AtomicInteger",
+          "Floor of 1 breaks perfect reversal"
+        ]
+      },
+      "right": {
+        "heading": "In a database",
+        "bullets": [
+          "Unique key on (post_id, voter_id)",
+          "Vote and rep in one transaction",
+          "Or a reputation ledger to recompute"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concurrency. Imagine two members upvote the same answer at the same instant. Cast vote is synchronized on the post, so only one thread at a time touches its vote map. Both are counted, once each.",
+          "reveal": 1
+        },
+        {
+          "say": "Reputation is an atomic integer, updated in one indivisible step. So two simultaneous plus tens to Bob both land.",
+          "reveal": 2
+        },
+        {
+          "say": "One quirk: reputation can't go below one. If Dave is at one and gets downvoted, he stays at one. Reverse that vote and he gains two. Not perfectly symmetric. The real site has the same quirk.",
+          "reveal": 3
+        },
+        {
+          "say": "In a database, you'd enforce one vote per member per post with a unique constraint on post id and voter id. The database refuses the second row.",
+          "reveal": 4
+        },
+        {
+          "say": "And you'd put the vote and the reputation change in one transaction: all succeed or all fail. In memory, a reader might briefly see the vote before the reputation. That's eventual consistency, fine for a score.",
+          "reveal": 5
+        },
+        {
+          "say": "If exact reversal matters, keep a ledger: an append-only list of every reputation event, and recompute from it.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s027",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Which requirement is enforced by class shape, not an if?",
+      "bullets": [
+        "A. One vote per member",
+        "B. Guests can't post or vote",
+        "C. Bounty between 50 and 500"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Which requirement is enforced by the shape of the classes rather than by an if statement?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s028",
+      "layout": "bullets",
+      "kicker": "Interview",
+      "title": "Stack Overflow: in the interview",
+      "bullets": [
+        "0 to 10: actors, rep rules, use cases",
+        "10 to 20: Post base, Member tree, Tag, facade",
+        "20 to 30: vote and accept flows, state machine",
+        "30 to 45: code castVote, policy; concurrency"
+      ],
+      "steps": [
+        {
+          "say": "The answer is B. Guests have no member object, and every write method needs one. Now, how to spend forty-five minutes. First ten: actors and reputation rules, then use cases. Say out loud: a guest has no posting method.",
+          "reveal": 1
+        },
+        {
+          "say": "Ten to twenty: the class diagram. Post base with three subclasses, member hierarchy, tag, bounty, index, facade.",
+          "reveal": 2
+        },
+        {
+          "say": "Twenty to thirty: walk through vote and accept answer, including reversal, and the question state machine.",
+          "reveal": 3
+        },
+        {
+          "say": "Thirty to forty-five: code cast vote, the policy and the facade's vote, then concurrency and extensions.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s029",
+      "layout": "section",
+      "kicker": "Part 3 of 4",
+      "title": "Design Cricinfo",
+      "steps": [
+        {
+          "say": "Part three: Cricinfo, the cricket site with live ball-by-ball commentary and a database of every match.",
+          "reveal": 0
+        },
+        {
+          "say": "Here's the hook. This design is graded on whether you model cricket's rules, not just its nouns. Get one rule wrong, and the highest wicket taker of all time is silently wrong for years. So first, a quick primer.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 18 · 18.2 Design Cricinfo"
+    },
+    {
+      "id": "s030",
+      "layout": "table",
+      "title": "Two-minute cricket primer",
+      "table": {
+        "head": [
+          "Term",
+          "Meaning"
+        ],
+        "rows": [
+          [
+            "Over",
+            "Six LEGAL balls by one bowler"
+          ],
+          [
+            "Wide / no ball",
+            "Penalty run, re-bowled, not one of the six"
+          ],
+          [
+            "Striker",
+            "Batters swap ends on odd runs and each over"
+          ],
+          [
+            "Extras",
+            "Byes, leg byes: team's runs, not batter's"
+          ],
+          [
+            "Run out",
+            "A wicket, but NOT the bowler's"
+          ],
+          [
+            "Formats",
+            "T20: 20 overs, ODI: 50, Test: no limit, 2 innings"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "An over is six legal deliveries by one bowler. The key word is legal.",
+          "reveal": 1
+        },
+        {
+          "say": "A wide is a ball too far from the batter. A no ball is an illegal delivery, like overstepping the line. Both give the batting side a penalty run and must be bowled again. They don't count toward the six.",
+          "reveal": 2
+        },
+        {
+          "say": "Two batters are in at once. The striker faces. They swap ends when they run an odd number, one or three, and again after every over.",
+          "reveal": 3
+        },
+        {
+          "say": "Runs are either off the bat, credited to the batter, or extras. Byes and leg byes go to the team, not the batter.",
+          "reveal": 4
+        },
+        {
+          "say": "A batter can be out many ways: bowled, caught, L-B-W, stumped. But a run out goes to the fielding side, not the bowler.",
+          "reveal": 5
+        },
+        {
+          "say": "Formats: T-twenty is twenty overs per side. O-D-I, one day international, is fifty. A Test has no over limit and two innings per side.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s031",
+      "layout": "bullets",
+      "kicker": "Concept 5",
+      "title": "Concept: people, teams, squads, elevens",
+      "bullets": [
+        "Player holds a Person, doesn't extend it",
+        "MatchOfficial: Umpire, Referee, Commentator",
+        "Team, then squad, then playing eleven",
+        "Playing11 rejects outsiders and a 12th"
+      ],
+      "steps": [
+        {
+          "say": "Stage one, people. A player holds a person instead of extending one, because one human can play today and commentate after retiring. Composition gives both roles without copying.",
+          "reveal": 1
+        },
+        {
+          "say": "Umpires, referees and commentators share one behaviour: getting assigned to matches. So that lives once, in an abstract match official class.",
+          "reveal": 2
+        },
+        {
+          "say": "Stage two. The requirements say each team announces a squad per tournament, and an eleven per match. That's three nested sets. The team, everyone ever picked. Inside it, the tournament squad. Inside that, the playing eleven.",
+          "reveal": 3
+        },
+        {
+          "say": "The playing eleven keeps a reference to its squad, so it can refuse anyone outside it. In the demo, picking Manav fails: not in the Lions squad. Picking a twelfth player, Lokesh, fails too. The rule lives in code, not in a comment.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Ch 18 · 18.2 Class diagram, stages 1 and 2"
+    },
+    {
+      "id": "s032",
+      "layout": "diagram",
+      "title": "Match, innings, over, ball",
+      "mermaid": "flowchart TD\n  M[\"Match (abstract)\"] --> T[\"T20 / ODI / Test\"]\n  M --> I[\"Innings: strike, over rule, end\"]\n  I --> O[\"Over: six legal balls\"]\n  O --> B[\"Ball (record)\"]\n  B --> BO[\"BallOutcome: runs, extras, wicket\"]\n  B --> W[\"Wicket: creditedToBowler()\"]\n  M --> L[\"MatchObserver: feed, scorecard\"]",
+      "caption": "Each level owns the level below it",
+      "steps": [
+        {
+          "say": "Here's the core model. A match owns its innings. An innings owns its overs. An over owns its balls. And a ball is an immutable record, holding a ball outcome and maybe a wicket.",
+          "reveal": 0
+        },
+        {
+          "say": "The ball outcome is what the scorer typed: bat runs, extra type, extra runs, boundary, wicket type, commentary. The wicket knows one important thing: whether it's credited to the bowler. And the match tells observers about every ball.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s033",
+      "layout": "bullets",
+      "kicker": "Concept 6",
+      "title": "Concept: an over is six legal balls",
+      "bullets": [
+        "BallOutcome.isLegal: not wide, not no ball",
+        "Over.legalBalls counts only legal ones",
+        "isComplete: legalBalls equals 6",
+        "Wide and no ball share the re-bowled number"
+      ],
+      "steps": [
+        {
+          "say": "Stage three decides whether your design understands cricket. Rule one. A ball outcome says it's legal if it's neither a wide nor a no ball.",
+          "reveal": 1
+        },
+        {
+          "say": "The over counts only legal balls. It filters its list and counts.",
+          "reveal": 2
+        },
+        {
+          "say": "So over complete means legal balls equals six. Not six entries in the list.",
+          "reveal": 3
+        },
+        {
+          "say": "And numbering: a wide or no ball carries the number of the ball that must be re-bowled. So the scorecard shows the same number twice. Let's see that.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s034",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "The demo's first over: eight deliveries",
+      "table": {
+        "head": [
+          "Ball",
+          "What happened",
+          "Legal?"
+        ],
+        "rows": [
+          [
+            "0.1",
+            "FOUR, driven through cover",
+            "yes, 1"
+          ],
+          [
+            "0.2",
+            "Wide down leg",
+            "no"
+          ],
+          [
+            "0.2",
+            "1 run, pushed to mid-on",
+            "yes, 2"
+          ],
+          [
+            "0.3",
+            "No ball, overstepped",
+            "no"
+          ],
+          [
+            "0.3",
+            "Bala BOWLED",
+            "yes, 3"
+          ],
+          [
+            "0.4",
+            "Chetan RUN OUT",
+            "yes, 4"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's the demo's first over, bowled by Tarun. Ball zero point one: Arun drives a four. Legal, count one.",
+          "reveal": 1
+        },
+        {
+          "say": "Next: a wide down leg. Not legal. It keeps the number zero point two.",
+          "reveal": 2
+        },
+        {
+          "say": "Zero point two again, a single. Now it's legal, count two.",
+          "reveal": 3
+        },
+        {
+          "say": "Then a no ball. Not legal, keeps zero point three.",
+          "reveal": 4
+        },
+        {
+          "say": "Zero point three again: Bala is bowled. That's the bowler's wicket. Count three. And notice, bowled off the no ball would have been impossible. The ball outcome's constructor rejects it.",
+          "reveal": 5
+        },
+        {
+          "say": "Zero point four: Chetan is run out going for a second run. Count four. Then a dot ball and a six finish the over at zero point six. Eight deliveries, six legal. And Tarun can't bowl the next over: two overs in a row are rejected.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s035",
+      "layout": "twocol",
+      "kicker": "Concept 6",
+      "title": "Who gets the credit?",
+      "left": {
+        "heading": "Wickets",
+        "bullets": [
+          "Bowled, caught, LBW: bowler's",
+          "Run out: fielding side only",
+          "creditedToBowler() decides"
+        ]
+      },
+      "right": {
+        "heading": "Runs",
+        "bullets": [
+          "Off the bat: batter and bowler",
+          "Wide, no ball: charged to bowler",
+          "Bye, leg bye: team only"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Now credit. Bowled, caught and L-B-W count for the bowler.",
+          "reveal": 1
+        },
+        {
+          "say": "A run out counts in the team's wickets, but not the bowler's. In the demo scorecard, Tarun's figures show one wicket, the bowled, not two.",
+          "reveal": 2
+        },
+        {
+          "say": "One method decides: credited to bowler, on the wicket type. Every stat reads that one method.",
+          "reveal": 3
+        },
+        {
+          "say": "Runs off the bat go to the batter, and count against the bowler.",
+          "reveal": 4
+        },
+        {
+          "say": "Wides and no balls are the bowler's fault, so runs charged to bowler includes them. But they're not the batter's runs.",
+          "reveal": 5
+        },
+        {
+          "say": "Byes and leg byes go to the team. Not the batter, and not charged to the bowler either.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s036",
+      "layout": "diagram",
+      "title": "Recording one ball",
+      "mermaid": "sequenceDiagram\n  participant S as Scorer\n  participant M as Match\n  participant I as Innings\n  participant O as Over\n  participant L as Observers\n  S->>M: bowl(outcome)\n  M->>I: record(outcome)\n  I->>O: add(ball)\n  I->>I: odd runs or over done? swap ends\n  M->>L: onBall, onOverEnd, onMatchEnd",
+      "caption": "The innings owns the over rule and the strike",
+      "steps": [
+        {
+          "say": "Here's how the scorer records a ball. The scorer calls bowl on the match, with an outcome. The match passes it to the current innings.",
+          "reveal": 0
+        },
+        {
+          "say": "The innings builds the ball with the current bowler and striker, adds it to the over, adds the runs, and if there's a wicket, brings in the next batter. If odd runs were run, it swaps ends. If the over is complete, it swaps ends again. Then the match tells its observers. Why does the innings decide? It owns the overs. The class with the data makes the decision.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s037",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Strike rotation, worked",
+      "table": {
+        "head": [
+          "Event",
+          "Striker",
+          "Non-striker"
+        ],
+        "rows": [
+          [
+            "Start",
+            "Arun",
+            "Bala"
+          ],
+          [
+            "Arun takes 1 run (odd)",
+            "Bala",
+            "Arun"
+          ],
+          [
+            "Bala hits a 4 (boundary, 0 run)",
+            "Bala",
+            "Arun"
+          ],
+          [
+            "Bala takes 2 (even)",
+            "Bala",
+            "Arun"
+          ],
+          [
+            "Last ball: 1 run, then over ends",
+            "Bala",
+            "Arun"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's trace strike rotation. Arun is on strike, Bala at the other end.",
+          "reveal": 1
+        },
+        {
+          "say": "Arun takes one run. Odd, so they crossed. Bala is now on strike.",
+          "reveal": 2
+        },
+        {
+          "say": "Bala hits a four. A boundary means they didn't run, so runs run is zero. No swap.",
+          "reveal": 3
+        },
+        {
+          "say": "Bala runs two. Even, so they end where they started. No swap.",
+          "reveal": 4
+        },
+        {
+          "say": "Last ball of the over: one run. Odd, swap, Arun on strike. Then the over ends, swap again. So Bala faces the next over. Two swaps, both in one place.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s038",
+      "layout": "table",
+      "title": "When does an innings end?",
+      "caption": "Checked by Innings.isComplete after every ball",
+      "steps": [
+        {
+          "say": "When does an innings end? After every ball, the innings runs four checks. Any yes ends it. Check one: is the team all out? Wickets equal the number of players minus one, because the last batter has no partner.",
+          "reveal": 1
+        },
+        {
+          "say": "Check two: is this the final innings, and has the target been reached? In the T-twenty demo, Lions make one fifty-one, so the target becomes one fifty-two, first-innings total plus one.",
+          "reveal": 2
+        },
+        {
+          "say": "Check three: has the over limit been hit, with the last over finished? The Tigers reach one twenty-eight after twenty overs. The over limit ends it, and the Lions win by twenty-three runs.",
+          "reveal": 3
+        },
+        {
+          "say": "Check four: did the captain declare? That only happens in a Test.",
+          "reveal": 4
+        }
+      ],
+      "table": {
+        "head": [
+          "Check, after every ball",
+          "Any yes ends the innings"
+        ],
+        "rows": [
+          [
+            "1. All out?",
+            "Wickets equal players minus one"
+          ],
+          [
+            "2. Final innings, target reached?",
+            "Tigers needed 152"
+          ],
+          [
+            "3. Over limit hit, last over done?",
+            "Tigers 128 after 20 overs: ends"
+          ],
+          [
+            "4. Declared?",
+            "Test only: captain closes it"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "s039",
+      "layout": "bullets",
+      "kicker": "Concept 7",
+      "title": "Concept: formats differ in two numbers",
+      "bullets": [
+        "Match is abstract and holds everything",
+        "oversPerInnings: 20, 50, or 0 for no limit",
+        "inningsPerSide: 1, 1, 2",
+        "Bowler quota: overs divided by 5",
+        "Not Template Method: plain specialisation"
+      ],
+      "steps": [
+        {
+          "say": "What really changes between formats? Starting an innings, recording a ball, deciding a winner are all the same. So match is abstract and holds everything.",
+          "reveal": 1
+        },
+        {
+          "say": "Only two numbers differ. Overs per innings: twenty for T-twenty, fifty for O-D-I, zero meaning no limit for a Test.",
+          "reveal": 2
+        },
+        {
+          "say": "And innings per side: one, one, two.",
+          "reveal": 3
+        },
+        {
+          "say": "Even the bowler limit is derived: overs divided by five. Four overs per bowler in a T-twenty, ten in an O-D-I. In the demo, five bowlers each bowl exactly four.",
+          "reveal": 4
+        },
+        {
+          "say": "Careful with naming in the interview. The course says this is plain abstract class specialisation, not a named pattern. The real Template Method is next.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s040",
+      "layout": "bullets",
+      "kicker": "Concept 8",
+      "title": "Concept: stat queries via Template Method",
+      "bullets": [
+        "StatQuery.answer(): final, loops all players",
+        "valueOf(stats): the one abstract step",
+        "MostRuns, MostWickets, MostHundreds, MostSixes",
+        "New stat equals one tiny subclass"
+      ],
+      "steps": [
+        {
+          "say": "Template Method. A base class fixes the outline of an algorithm, and subclasses fill in one step. Our running example: answering, who's the highest wicket taker?",
+          "reveal": 1
+        },
+        {
+          "say": "The stat query class has a final method, answer. It loops over every player's stats and keeps the best, breaking ties by name. That loop is written once.",
+          "reveal": 2
+        },
+        {
+          "say": "The one abstract step is value of. Most runs returns the runs. Most wickets returns the wickets. Each subclass is one line.",
+          "reveal": 3
+        },
+        {
+          "say": "So adding most catches? Add the fielder to the wicket, count catches in player stats, and write a most catches subclass. The loop never changes. That's open for extension, closed for editing.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s041",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Stat queries over both demo matches",
+      "table": {
+        "head": [
+          "Query",
+          "valueOf returns",
+          "Answer"
+        ],
+        "rows": [
+          [
+            "Most runs",
+            "s.runs",
+            "Chetan (131)"
+          ],
+          [
+            "Most hundreds",
+            "s.hundreds",
+            "Chetan (1)"
+          ],
+          [
+            "Highest wicket taker",
+            "s.wickets",
+            "Kiran (5)"
+          ],
+          [
+            "Most sixes",
+            "s.sixes",
+            "Nabil (5)"
+          ],
+          [
+            "Most runs in ODIs",
+            "s.runs, format filter",
+            "Chetan (130)"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here are the real answers after one T-twenty and one O-D-I. Most runs: Chetan, one thirty-one. Remember Chetan was run out for one in the T-twenty? So he made one thirty in the O-D-I.",
+          "reveal": 1
+        },
+        {
+          "say": "Most hundreds: Chetan, one. Hundreds are per-innings milestones, so they're counted after each innings, not per ball.",
+          "reveal": 2
+        },
+        {
+          "say": "Highest wicket taker: Kiran, five. Run outs never counted toward anyone's five.",
+          "reveal": 3
+        },
+        {
+          "say": "Most sixes: Nabil, five.",
+          "reveal": 4
+        },
+        {
+          "say": "And most runs in O-D-Is reuses the same service with a format filter. One thirty. Same loop, different input.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s042",
+      "layout": "bullets",
+      "kicker": "Concept 9",
+      "title": "Concept: derive, don't store, stats",
+      "bullets": [
+        "StatsService.compute walks every ball",
+        "Striker and bowler each count the ball",
+        "Scorer fixes a ball: every number fixes",
+        "Too slow? A rebuildable cache via Observer"
+      ],
+      "steps": [
+        {
+          "say": "Where do player stats come from? They're derived. The stats service walks every recorded ball of the chosen matches.",
+          "reveal": 1
+        },
+        {
+          "say": "For each ball, the striker counts it as a batter and the bowler counts it as a bowler. A wicket counts for the bowler only if credited to bowler says yes. Byes aren't the batter's runs.",
+          "reveal": 2
+        },
+        {
+          "say": "Imagine the scorer realises a ball was a leg bye, not a single off the bat. They correct that one ball, and the batter's runs and strike rate fix themselves. A stored field would drift forever.",
+          "reveal": 3
+        },
+        {
+          "say": "If recomputing is too slow at scale, keep a running total per player as a cache, updated by an observer on each ball, and rebuild it whenever a ball is corrected. The balls stay the truth. The total is only a cache.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s043",
+      "layout": "diagram",
+      "title": "Live updates with Observer",
+      "mermaid": "flowchart LR\n  S[\"Scorer\"] --> M[\"Match.bowl (synchronized)\"]\n  M --> C[\"CommentaryFeed\"]\n  M --> L[\"LiveScorecard\"]\n  M --> P[\"PushAlerts (new class)\"]\n  M --> K[\"Message broker at scale\"]\n  K --> R[\"Millions of readers\"]",
+      "caption": "Subscribers plug in; the match doesn't know them",
+      "steps": [
+        {
+          "say": "Live updates. The match keeps a list of match observers. The interface has four default methods: on ball, on over end, on innings end, on match end. Default means they do nothing, so a subscriber overrides only what it needs. The commentary feed prints each ball's line. The live scorecard prints every five overs, like Lions twenty-nine for two after five.",
+          "reveal": 0
+        },
+        {
+          "say": "Push alerts for wickets? A new observer class. At web scale, the match publishes each ball to a message broker, and millions of readers get it over WebSockets within seconds.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s044",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "The scorecard, derived from balls",
+      "table": {
+        "head": [
+          "Batter",
+          "Dismissal",
+          "Runs (balls)"
+        ],
+        "rows": [
+          [
+            "Arun",
+            "b Uday",
+            "45 (32)"
+          ],
+          [
+            "Bala",
+            "b Tarun",
+            "0 (2)"
+          ],
+          [
+            "Chetan",
+            "run out",
+            "1 (1)"
+          ],
+          [
+            "Dev",
+            "caught b Yash",
+            "51 (51)"
+          ],
+          [
+            "Total",
+            "Extras 6",
+            "151/5 (20 ov)"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's part of the Lions batting card from the demo. Arun, bowled by Uday, forty-five off thirty-two balls.",
+          "reveal": 1
+        },
+        {
+          "say": "Bala, bowled by Tarun, nought off two. Two, because the no ball counted as a ball he faced, then the legal one bowled him.",
+          "reveal": 2
+        },
+        {
+          "say": "Chetan, run out, one off one. The dismissal says run out with no bowler's name. That's credited to bowler returning false.",
+          "reveal": 3
+        },
+        {
+          "say": "Dev, caught off Yash, fifty-one off fifty-one.",
+          "reveal": 4
+        },
+        {
+          "say": "Total one fifty-one for five in twenty overs, with six extras. Every number on this card is computed from the ball list.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s045",
+      "layout": "twocol",
+      "title": "Concurrency and edge cases",
+      "left": {
+        "heading": "Writers and readers",
+        "bullets": [
+          "Match.bowl synchronized: one lock per match",
+          "Different matches never block",
+          "Observers in CopyOnWriteArrayList"
+        ]
+      },
+      "right": {
+        "heading": "Rejected inputs",
+        "bullets": [
+          "Same bowler twice in a row",
+          "Bowled or LBW off a no ball",
+          "Bowling after the innings ended"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concurrency. Imagine two scorers on the same match. Bowl is synchronized on the match, so balls go in one at a time, in order. Nobody corrupts an over.",
+          "reveal": 1
+        },
+        {
+          "say": "But it's one lock per match. The India match never waits for the England match.",
+          "reveal": 2
+        },
+        {
+          "say": "Observers sit in a copy-on-write list, which makes a fresh copy on every change. So a reader can subscribe while balls are being broadcast, safely.",
+          "reveal": 3
+        },
+        {
+          "say": "And edge cases are rejected early. The same bowler twice in a row. A bowler over his quota.",
+          "reveal": 4
+        },
+        {
+          "say": "Impossible dismissals: bowled, caught, L-B-W, stumped or hit wicket off a no ball. Off a wide, bowled, caught or L-B-W. The constructor fails fast, so bad data never enters the record.",
+          "reveal": 5
+        },
+        {
+          "say": "Bowling after the innings ended. A twelfth player. And a tie gives a tie result. A super over would be an extension.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s046",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "One wide, one no ball: how many deliveries?",
+      "bullets": [
+        "A. Six",
+        "B. Seven",
+        "C. Eight"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. A bowler bowls one wide and one no ball in an over. How many deliveries does the over have?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s047",
+      "layout": "bullets",
+      "kicker": "Interview",
+      "title": "Cricinfo: in the interview",
+      "bullets": [
+        "Say early: an over is six LEGAL balls",
+        "Team, squad, eleven; people hold a Person",
+        "Match, innings, over, ball; two numbers",
+        "Run out isn't the bowler's; derive stats"
+      ],
+      "steps": [
+        {
+          "say": "The answer is C, eight. Six legal plus the two illegal ones. Now the interview. In the first five minutes, say out loud: an over ends after six legal balls, however many deliveries that takes.",
+          "reveal": 1
+        },
+        {
+          "say": "Next five: team contains squad contains eleven, and people hold a person.",
+          "reveal": 2
+        },
+        {
+          "say": "Ten to twenty: the class diagram. Abstract match, innings, over, ball. Formats differ in two numbers.",
+          "reveal": 3
+        },
+        {
+          "say": "Then the ball flow and strike rotation, credit rules, derived stats, Template Method, Observers, and one scorer lock per match.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s048",
+      "layout": "section",
+      "kicker": "Part 4 of 4",
+      "title": "Machine coding: Cricket Match Dashboard",
+      "steps": [
+        {
+          "say": "Part four. A machine-coding round asks you to write a working, runnable program in sixty to ninety minutes. It's judged on correctness, readability and extensibility. This one was set by Udaan, an Indian business-to-business e-commerce company.",
+          "reveal": 0
+        },
+        {
+          "say": "The hook: how do you shrink the whole Cricinfo design into ninety minutes without losing the good structure?",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 18 · Machine-coding variant: Cricket Match Dashboard"
+    },
+    {
+      "id": "s049",
+      "layout": "bullets",
+      "title": "The problem",
+      "bullets": [
+        "Input: players, overs, batting orders",
+        "Then balls: 0 to 6, W, Wd, Nb",
+        "After each over: batters' runs, 4s, 6s, balls",
+        "Strike: swap on 1s and 3s and each over",
+        "End: all out, overs done, target passed",
+        "Print winner and margin"
+      ],
+      "steps": [
+        {
+          "say": "The input gives players per team, overs, and batting orders.",
+          "reveal": 1
+        },
+        {
+          "say": "Then each ball on its own line. A number of runs, zero to six. W for a wicket. W-d for a wide. N-b for a no ball.",
+          "reveal": 2
+        },
+        {
+          "say": "After every over, print each batter's runs, fours, sixes and balls faced, with a star on the two at the crease. Then team total, wickets and overs.",
+          "reveal": 3
+        },
+        {
+          "say": "Strike changes on ones and threes, and at the end of each over. Wides and no balls add a run and are re-bowled.",
+          "reveal": 4
+        },
+        {
+          "say": "The innings ends when the team is all out, the overs run out, or in the second innings, the target is passed.",
+          "reveal": 5
+        },
+        {
+          "say": "And at the end, print the winner and the margin, by runs or by wickets.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s050",
+      "layout": "table",
+      "kicker": "Concept 10",
+      "title": "Shrinking Cricinfo to 90 minutes",
+      "table": {
+        "head": [
+          "Cricinfo",
+          "Machine-coding version"
+        ],
+        "rows": [
+          [
+            "BallOutcome with validation",
+            "sealed BallEvent + parse(token)"
+          ],
+          [
+            "Innings: strike, over rule, end",
+            "TeamInnings: same jobs, plain ints"
+          ],
+          [
+            "Scorecard from balls",
+            "Batter counters + ScorecardPrinter"
+          ],
+          [
+            "Match + Result",
+            "MatchRunner: two innings, result"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's the mapping. The rich ball outcome becomes a sealed ball event with four kinds: runs, wide, no ball, wicket. A factory method, parse, turns one input word into the right object.",
+          "reveal": 1
+        },
+        {
+          "say": "The innings becomes team innings. Same responsibilities: strike, the over rule, the end rule. Just plain integers instead of objects, because there's no bowler data in the input.",
+          "reveal": 2
+        },
+        {
+          "say": "The scorecard becomes batter counters plus a separate printer. Separate, so a web view could replace it later.",
+          "reveal": 3
+        },
+        {
+          "say": "And match plus result becomes a match runner that reads input, plays two innings, and prints the result. The lesson: same responsibilities in the same places, simplest data that fits the input.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s051",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Team 1, over 2: W 4 4 Wd W 1 6",
+      "table": {
+        "head": [
+          "Token",
+          "What happens",
+          "Total"
+        ],
+        "rows": [
+          [
+            "W",
+            "P1 out; P3 comes in on strike",
+            "7/1"
+          ],
+          [
+            "4, 4",
+            "P3 hits two fours",
+            "15/1"
+          ],
+          [
+            "Wd",
+            "+1 extra; not legal, re-bowled",
+            "16/1"
+          ],
+          [
+            "W",
+            "P3 out for 8; P4 in on strike",
+            "16/2"
+          ],
+          [
+            "1",
+            "P4 runs one, odd: P2 on strike",
+            "17/2"
+          ],
+          [
+            "6",
+            "P2 six; over ends, swap: P4",
+            "23/2"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's walk the sample. Five players, two overs. Team one's first over is one, one, one, one, one, two. They swap on every single, and the over ends at seven for none. P one on strike. Now over two. W: P one is out. P three comes in and takes strike. Seven for one.",
+          "reveal": 1
+        },
+        {
+          "say": "Four, four. P three hits two boundaries. Fifteen for one.",
+          "reveal": 2
+        },
+        {
+          "say": "W-d, a wide. Plus one, as an extra. It's not legal, so the reading loop doesn't count it. That's why this over has seven tokens. Sixteen for one.",
+          "reveal": 3
+        },
+        {
+          "say": "W again. P three is out for eight. P four comes in on strike. Sixteen for two.",
+          "reveal": 4
+        },
+        {
+          "say": "One. P four runs a single. Odd, so P two is on strike. Seventeen for two.",
+          "reveal": 5
+        },
+        {
+          "say": "Six. P two hits a six, up to ten runs. That's the sixth legal ball, so the over ends and they swap again. Twenty-three for two. Target for team two: twenty-four.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s052",
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Team 2 and a sample bug worth spotting",
+      "bullets": [
+        "Over 1: 4 6 W W 1 1, so 12/2, not 12/1",
+        "Over 2: 6 1 W W, 4th wicket, all out",
+        "5 players: all out at 4 wickets, overs 1.4",
+        "Result: Team 1 won by 4 runs"
+      ],
+      "steps": [
+        {
+          "say": "Team two's first over: four, six, then W, W, then one, one. Two wickets: P six and P eight. So the score is twelve for two. But the published sample says twelve for one. That's an inconsistency in the problem itself.",
+          "reveal": 1
+        },
+        {
+          "say": "Second over: six, one, W, W. That's the fourth wicket.",
+          "reveal": 2
+        },
+        {
+          "say": "With five players, four wickets means only one batter is left. All out. Overs shows one point four: one full over and four legal balls.",
+          "reveal": 3
+        },
+        {
+          "say": "Nineteen for four versus twenty-three. Team one wins by four runs. And in the interview, pointing out the sample's mistake, calmly, with the rule that proves it, is a plus.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s053",
+      "layout": "recap",
+      "kicker": "Episode 21 recap",
+      "title": "Recap",
+      "bullets": [
+        "Toolkit: facade, base class, who not how many",
+        "SO: votes per voter, rep Strategy, badge Observer",
+        "Cricinfo: six legal balls; innings owns the rules",
+        "Derived stats, Template Method, live Observers",
+        "Udaan: same responsibilities, simpler data"
+      ],
+      "steps": [
+        {
+          "say": "Let's recap. The toolkit: a facade in front, a content base class, store who not how many, derive don't store, services for two-sided operations, Observer plus Strategy for notifications.",
+          "reveal": 1
+        },
+        {
+          "say": "Stack Overflow: a sealed post base storing votes per voter, so a changed vote can be undone. Reputation is a Strategy, badges are an Observer, privileges are a data table, and moderator actions take a moderator parameter.",
+          "reveal": 2
+        },
+        {
+          "say": "Cricinfo: an over is six legal balls. The innings owns the over rule, strike and the end rule. Run outs aren't the bowler's, byes aren't the batter's. Formats differ in two numbers.",
+          "reveal": 3
+        },
+        {
+          "say": "Stats are derived from balls, stat questions are Template Method subclasses, and live pages are Observers, with one scorer lock per match.",
+          "reveal": 4
+        },
+        {
+          "say": "And the Udaan dashboard is the same responsibilities in ninety-minute form: parse, play, print.",
+          "reveal": 5
+        },
+        {
+          "say": "Next time, episode twenty-two: Platforms, LinkedIn and Facebook. We'll build connections and their degrees, invitations, privacy, and the news feed. See you there.",
+          "reveal": 5
+        }
+      ]
+    }
+  ]
+}

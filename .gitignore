@@ -26,3 +26,5 @@ __pycache__/
 # Workshop videos are delivered to the local Mac only, never pushed
 */videos/*.mp4
 */videos/*.mov
+*/videos/*.pdf
+video-workshop/.local/

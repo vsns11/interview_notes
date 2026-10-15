@@ -1,0 +1,2042 @@
+{
+  "series": "System Design Workshop",
+  "episode": 9,
+  "title": "Serving Data Fast: Caching Patterns",
+  "subtitle": "Five patterns for getting data into a cache and keeping it correct",
+  "scenes": [
+    {
+      "id": "s001",
+      "layout": "title",
+      "title": "Serving Data Fast: Caching Patterns",
+      "subtitle": "Five patterns for getting data into a cache and keeping it correct",
+      "steps": [
+        {
+          "say": "Welcome to episode nine of the System Design Workshop: serving data fast. Today is all about caching, one of the most used, most misused, and most asked-about tools in interviews.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll be able to pick between five patterns: cache-aside, read-through, write-through, write-behind, and cache stampede prevention. And you'll be able to defend each choice with numbers.",
+          "reveal": 0
+        },
+        {
+          "say": "Keep the Module four notes open beside the video. One product page, for a bestseller called item eight four one two, runs through every lesson. We finish by caching that whole page, flash sale included.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s002",
+      "layout": "bullets",
+      "title": "What a cache is, and the one metric that matters",
+      "kicker": "Module introduction",
+      "bullets": [
+        "Cache: small, fast copy of slower, authoritative data",
+        "Hit: found in cache. Miss: go to the source",
+        "Hit ratio: share of requests that hit",
+        "Real question: how does data get in, and stay correct?"
+      ],
+      "steps": [
+        {
+          "say": "A cache is a small, fast copy of data whose real version lives somewhere slower, usually a database. Think of the few books you keep on your desk instead of walking to the library. Quick, but if the library's copy is revised, yours is out of date.",
+          "reveal": 1
+        },
+        {
+          "say": "A hit means the data was in the cache. A miss means it wasn't, so the request goes to the database.",
+          "reveal": 2
+        },
+        {
+          "say": "The hit ratio is the share of requests that hit. Every cache you run, you should know this number.",
+          "reveal": 3
+        },
+        {
+          "say": "So the real question isn't 'should I cache?' It's: how does data get into the cache, and how does it stay correct? Five patterns, five answers.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s003",
+      "layout": "number",
+      "title": "Hit ratio decides whether a cache pays off",
+      "kicker": "Example",
+      "big": "2 ms vs 51 ms",
+      "caption": "Average at 99% hits vs 50% hits (hit 1 ms, miss 1 ms + 100 ms DB)",
+      "steps": [
+        {
+          "say": "Let's put numbers on it. A hit costs one millisecond. A miss costs that same millisecond plus a one hundred millisecond database call.",
+          "reveal": 0
+        },
+        {
+          "say": "At ninety-nine percent hits, the average is about two milliseconds. At fifty percent hits, the average is about fifty-one milliseconds. Same cache, same database. And at fifty percent you're also paying to run an extra system for very little gain.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s004",
+      "layout": "table",
+      "title": "Five situations, five patterns",
+      "kicker": "The five patterns",
+      "table": {
+        "head": [
+          "Situation",
+          "Pattern"
+        ],
+        "rows": [
+          [
+            "On a miss, the app fetches and saves a copy",
+            "Cache-Aside"
+          ],
+          [
+            "Same, but the cache does the fetching",
+            "Read-Through"
+          ],
+          [
+            "Update copy and original before confirming",
+            "Write-Through"
+          ],
+          [
+            "Update copy now, original later in batches",
+            "Write-Behind"
+          ],
+          [
+            "Hot entry expires: only one request refetches",
+            "Stampede Prevention"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's the map. One, cache-aside: on a miss, the application fetches the data and saves a copy for next time.",
+          "reveal": 1
+        },
+        {
+          "say": "Two, read-through: the same idea, except the cache does the fetching itself.",
+          "reveal": 2
+        },
+        {
+          "say": "Three, write-through: update the copy and the original together before confirming.",
+          "reveal": 3
+        },
+        {
+          "say": "Four, write-behind: update the copy now, and write the original later, in batches.",
+          "reveal": 4
+        },
+        {
+          "say": "Five, cache stampede prevention: a popular entry expires, and only one request should go fetch it again.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Module 4 Caching · Module Introduction"
+    },
+    {
+      "id": "s005",
+      "layout": "twocol",
+      "title": "Two facts and four terms",
+      "kicker": "Module introduction",
+      "left": {
+        "heading": "Two facts",
+        "bullets": [
+          "Speed is bought with some accuracy",
+          "Caches fail as crowds"
+        ]
+      },
+      "right": {
+        "heading": "Four terms",
+        "bullets": [
+          "TTL: per-entry expiry timer",
+          "Eviction: drop LRU entry when full",
+          "Invalidation: remove entry when source changes"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Fact one: a cache buys speed with some accuracy. Any copy can disagree with its source, so you decide how much staleness is OK and what keeps the copy correct.",
+          "reveal": 1
+        },
+        {
+          "say": "Fact two: caches fail as crowds, not one request at a time. One miss is one short query. The disaster is ten thousand requests missing the same key at once.",
+          "reveal": 2
+        },
+        {
+          "say": "Now four terms. Hit, miss and hit ratio, you already know. T-T-L, or time to live, is a per-entry expiry timer, like 'trust this for five minutes'.",
+          "reveal": 3
+        },
+        {
+          "say": "Eviction: a cache is smaller than the data, so when it's full it throws something out, usually by L-R-U, least recently used. Whatever went untouched longest goes first.",
+          "reveal": 4
+        },
+        {
+          "say": "Invalidation: actively deleting or updating an entry when its source changes. More precise than a TTL, but harder to get right.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s006",
+      "layout": "section",
+      "title": "Cache-Aside",
+      "kicker": "Concept 1 of 11",
+      "steps": [
+        {
+          "say": "Concept one: cache-aside, the default caching pattern. If an interviewer says 'the product page is slow', this is usually your first move.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Module 4 Caching · Cache-Aside"
+    },
+    {
+      "id": "s007",
+      "layout": "bullets",
+      "title": "The problem: a database that mostly repeats itself",
+      "kicker": "Cache-aside",
+      "bullets": [
+        "Item 8412: 4,000 reads/min, unchanged for 3 weeks",
+        "Each read recomputes the same 15 ms answer",
+        "12,000 reads/s at peak, 99% repeats, 8 replicas",
+        "Goal: serve the last answer until data changes"
+      ],
+      "steps": [
+        {
+          "say": "Imagine the bestseller, item eight four one two. It's read four thousand times a minute. Its row hasn't changed in three weeks.",
+          "reveal": 1
+        },
+        {
+          "say": "Yet every single read recomputes the same fifteen millisecond answer.",
+          "reveal": 2
+        },
+        {
+          "say": "Catalog reads peak at twelve thousand a second, and over ninety-nine percent return the same answer as last time. That's running on eight replica machines.",
+          "reveal": 3
+        },
+        {
+          "say": "At peak, requests queue, latency climbs, and every marketing campaign triggers a capacity meeting. The fix: keep the last answer in fast storage, and serve it until the data changes.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s008",
+      "layout": "bullets",
+      "title": "Why the obvious fixes fail",
+      "kicker": "Cache-aside",
+      "bullets": [
+        "More replicas: cost grows, repetition remains",
+        "Per-server dictionary: 40 copies, wiped every deploy",
+        "Cache forever: fast, but old data"
+      ],
+      "steps": [
+        {
+          "say": "Fix one: more replicas. They scale reads, but cost grows just as fast, and you're still running full queries to reproduce unchanged answers. The problem is repetition, not capacity.",
+          "reveal": 1
+        },
+        {
+          "say": "Fix two: a dictionary in each app server's memory. With forty app servers you get forty private copies. Forty cold misses per key, forty copies going stale on their own, and every deploy wipes them all and dumps full load on the database.",
+          "reveal": 2
+        },
+        {
+          "say": "Fix three: cache it forever. Great hit ratio, but Friday's price change never shows up. That's just fast old data. What we need is one shared fast copy that fills on demand, plus a plan to keep it correct.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s009",
+      "layout": "diagram",
+      "title": "Cache-aside: the cache sits to the side",
+      "kicker": "Cache-aside",
+      "mermaid": "flowchart LR\n  APP[\"App\"] -->|\"1 GET key\"| C[(\"Redis cache\")]\n  APP -->|\"2 on miss SELECT\"| DB[(\"Database\")]\n  APP -->|\"3 SET key with TTL\"| C\n  APP -->|\"write: UPDATE\"| DB\n  APP -->|\"then DEL key\"| C",
+      "caption": "The app owns every step; the cache never calls the database",
+      "steps": [
+        {
+          "say": "Here's the shape. The app checks the cache first. On a hit, it returns right away.",
+          "reveal": 0
+        },
+        {
+          "say": "On a miss, the app reads the database, saves a copy in the cache with a TTL, and returns. On a write, the app updates the database and then deletes the cached key.",
+          "reveal": 0
+        },
+        {
+          "say": "Notice the cache never talks to the database. That's why it's called aside. Redis and Memcached, which are in-memory key-value servers, only answer 'here it is' or 'not here'. Every decision lives in your code.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s010",
+      "layout": "bullets",
+      "title": "The six rules, applied to item 8412",
+      "kicker": "Cache-aside",
+      "bullets": [
+        "1. Read: check the cache, return on hit",
+        "2. Miss: fetch from the database",
+        "3. Save with a TTL (lazy loading)",
+        "4. Write: update DB, then DELETE the key",
+        "5. TTL on everything, as insurance",
+        "6. Eviction (LRU) handles overflow"
+      ],
+      "steps": [
+        {
+          "say": "Rule one, read: check the cache. A request for product eight four one two asks Redis first, and on a hit returns in one millisecond.",
+          "reveal": 1
+        },
+        {
+          "say": "Rule two, on a miss, fetch from the database. The fifteen millisecond SELECT runs once.",
+          "reveal": 2
+        },
+        {
+          "say": "Rule three, save a copy with a TTL, say one hour. This is called lazy loading: only data someone asks for gets cached. So the bestseller is cached because it's popular, while thousands of rarely read items use no memory at all.",
+          "reveal": 3
+        },
+        {
+          "say": "Rule four, on a write, update the database, then delete the key. Don't overwrite the copy. We'll see why in a minute.",
+          "reveal": 4
+        },
+        {
+          "say": "Rule five, a TTL on everything, even with invalidation. Some bulk import or rushed admin tool will eventually forget to delete. The TTL caps how long that mistake lasts. Invalidation gives freshness. The TTL gives insurance.",
+          "reveal": 5
+        },
+        {
+          "say": "Rule six, let eviction handle overflow. L-R-U drops the least recently used item, and an evicted key is just a harmless later miss.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s011",
+      "layout": "table",
+      "title": "Walkthrough: one hour of item 8412",
+      "kicker": "Example",
+      "table": {
+        "head": [
+          "Event",
+          "What happens",
+          "Number"
+        ],
+        "rows": [
+          [
+            "First read (miss)",
+            "check + DB + SET",
+            "17 ms"
+          ],
+          [
+            "Next 240,000 reads",
+            "cache hits",
+            "1 ms each, avg 1.1 ms"
+          ],
+          [
+            "Database reads",
+            "only real misses",
+            "12,000/s to 150/s"
+          ],
+          [
+            "Price change",
+            "UPDATE then DEL",
+            "stale for milliseconds"
+          ],
+          [
+            "Bulk import forgets DEL",
+            "TTL expires copies",
+            "stale up to 1 hour"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's run it with Redis, a one-hour TTL, and a delete on every write. First read of eight four one two misses: one millisecond to check, fifteen for the database, one to save. Seventeen milliseconds, slightly worse than no cache. That's the honest cost of a miss.",
+          "reveal": 1
+        },
+        {
+          "say": "The next two hundred forty thousand reads that hour take one millisecond each. The catalog hit ratio settles near ninety-nine point two percent, for an average of about one point one milliseconds, down from fifteen.",
+          "reveal": 2
+        },
+        {
+          "say": "Database reads drop from twelve thousand a second to about one hundred fifty, the real misses. Six of the eight replicas get retired. Memory is cheap. Database machines aren't.",
+          "reveal": 3
+        },
+        {
+          "say": "Then a price change: UPDATE, then delete. The next reader refills. Staleness lasts milliseconds, instead of up to an hour with TTL alone.",
+          "reveal": 4
+        },
+        {
+          "say": "And the forgotten-delete drill. Three months later a bulk import updates two thousand products without invalidating. They're stale for up to an hour, then heal themselves. Annoying, bounded, survivable. Exactly the TTL's job.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s012",
+      "layout": "twocol",
+      "title": "Cache-aside trade-offs",
+      "kicker": "Cache-aside",
+      "left": {
+        "heading": "You gain",
+        "bullets": [
+          "About 100x less DB read load",
+          "15 ms down to 1 ms",
+          "Full control; Redis down = slow, not wrong"
+        ]
+      },
+      "right": {
+        "heading": "You pay",
+        "bullets": [
+          "Bounded staleness",
+          "Every write path must invalidate",
+          "Costlier misses; crowds on expiry"
+        ]
+      },
+      "steps": [
+        {
+          "say": "You gain big read relief, about a hundred times less database load, for one small service and a few gigabytes of memory.",
+          "reveal": 1
+        },
+        {
+          "say": "Latency drops from fifteen milliseconds to one on the hottest pages.",
+          "reveal": 2
+        },
+        {
+          "say": "And full control. Your code decides what to cache, how to key it, and how long to trust it. If Redis dies, every read misses: slow, but still correct.",
+          "reveal": 3
+        },
+        {
+          "say": "You pay with managed staleness. Between a change and its delete or expiry, readers see the old value.",
+          "reveal": 4
+        },
+        {
+          "say": "You pay with a permanent chore: every current and future write path must invalidate.",
+          "reveal": 5
+        },
+        {
+          "say": "And misses cost more, cache check plus database. Fine at ninety-nine percent hits, but at sixty percent you add a hop and save very little. Cold starts and hot expiries also send crowds to the database, which is our stampede lesson.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s013",
+      "layout": "bullets",
+      "title": "When not to use it, and the interview answer",
+      "kicker": "Cache-aside",
+      "bullets": [
+        "Skip: little repetition, zero staleness allowed",
+        "Skip: slow query that just needs an index",
+        "Say: check, miss-fill with TTL, DEL on write, watch hit ratio",
+        "Recap: check, fetch, save with TTL, delete on write"
+      ],
+      "steps": [
+        {
+          "say": "Skip it when data barely repeats, like one-time tokens. Skip it when staleness is unacceptable, like the last unit of stock at checkout. Read the source.",
+          "reveal": 1
+        },
+        {
+          "say": "And if the query takes fifteen milliseconds on small, in-memory data, you're probably missing an index. Fix the query first, because a cache in front of a bad query still pays full cost on every miss.",
+          "reveal": 2
+        },
+        {
+          "say": "In the interview, say this: the app checks Redis and serves hits in a millisecond. On a miss it reads the database and fills the cache with a TTL. On writes I update the database and delete the key. Every entry keeps a TTL as insurance, sized per data type. And I track hit ratio.",
+          "reveal": 3
+        },
+        {
+          "say": "Recap: check, fetch, save with TTL, and on writes, delete.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s014",
+      "layout": "table",
+      "title": "On a write: delete the key, or set the new value?",
+      "kicker": "Concept 2 of 11",
+      "table": {
+        "head": [
+          "",
+          "DEL the key",
+          "SET new value"
+        ],
+        "rows": [
+          [
+            "Next read",
+            "one extra miss",
+            "immediate fresh hit"
+          ],
+          [
+            "Race safety",
+            "safe",
+            "risky: wrong order wins"
+          ],
+          [
+            "Wasted work",
+            "none",
+            "may store unread values"
+          ],
+          [
+            "Complexity",
+            "one line",
+            "needs ordering or versions"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept two: a classic interview question. You changed a price in the database. Do you delete the cached entry, or overwrite it with the new value? Let's compare. Next read: delete costs one extra miss. Set gives an immediate fresh hit.",
+          "reveal": 1
+        },
+        {
+          "say": "Race safety: delete is safe, because the true value is fetched after the writes settle. Set is risky, because two writes can land in the wrong order.",
+          "reveal": 2
+        },
+        {
+          "say": "Wasted work: delete wastes nothing. Set might store values nobody reads.",
+          "reveal": 3
+        },
+        {
+          "say": "Complexity: delete is one line that's hard to get wrong. Set needs you to force updates one at a time, or version them.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Module 4 Caching · Delete vs. update on write"
+    },
+    {
+      "id": "s015",
+      "layout": "bullets",
+      "title": "Example: the forty-five versus forty dollar race",
+      "kicker": "Example",
+      "bullets": [
+        "Write A: $45. Write B: $40",
+        "A commits last: truth is $45",
+        "Cache SETs arrive reversed: cache shows $40",
+        "With DEL: two deletes, next read gets $45",
+        "Rare leftover race: bounded by the TTL"
+      ],
+      "steps": [
+        {
+          "say": "Imagine two price writes at almost the same moment. Write A sets forty-five dollars. Write B sets forty dollars.",
+          "reveal": 1
+        },
+        {
+          "say": "A commits last in the database, so the truth is forty-five dollars.",
+          "reveal": 2
+        },
+        {
+          "say": "But the cache updates arrive reversed. B's 'set forty' lands after A's 'set forty-five'. Now the cache says forty, the database says forty-five, and it stays wrong for up to a full TTL.",
+          "reveal": 3
+        },
+        {
+          "say": "With delete, the worst ordering is two deletes, and the next reader fetches forty-five. One extra miss removes a whole class of wrong answers.",
+          "reveal": 4
+        },
+        {
+          "say": "One small race remains: a slow reader that fetched the old value before the write could put it back right after the delete. The short TTL bounds that too. Recap: delete, don't update, and keep the TTL.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s016",
+      "layout": "quiz",
+      "title": "Admin edits instant, bulk imports stale up to 1 h. Why?",
+      "kicker": "Pause and think",
+      "bullets": [
+        "A. Redis is evicting the wrong keys",
+        "B. The import writes the DB but never deletes keys",
+        "C. The hit ratio is too low"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Admin panel edits show up right away. But changes from the nightly bulk import take up to an hour, seemingly at random. No errors anywhere. What's going on, and what saved you from something worse?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s017",
+      "layout": "bullets",
+      "title": "Answer: a forgotten write path",
+      "kicker": "Answer",
+      "bullets": [
+        "B: import skips invalidation",
+        "Each copy waits for its own TTL",
+        "Fix: delete keys, or one shared write layer",
+        "The TTL kept it from lasting forever"
+      ],
+      "steps": [
+        {
+          "say": "The answer is B. The admin panel deletes keys after writing. The import writes the database without invalidating.",
+          "reveal": 1
+        },
+        {
+          "say": "So each stale copy lives until its own TTL runs out. That's the 'random, up to an hour'.",
+          "reveal": 2
+        },
+        {
+          "say": "The fix: have the import delete affected keys. Better, route every write through one data-access layer, so no future path can forget.",
+          "reveal": 3
+        },
+        {
+          "say": "And what prevented worse? The TTL. Without it, two thousand products would stay stale forever.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s018a",
+      "layout": "section",
+      "kicker": "Concept 3 of 11",
+      "title": "Read-Through",
+      "caption": "Book: Module 4 Caching · Read-Through",
+      "steps": [
+        {
+          "say": "Concept three: read-through.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s018",
+      "layout": "bullets",
+      "title": "Read-through: the cache fetches for you",
+      "kicker": "Read-through",
+      "bullets": [
+        "Problem: miss logic copied into every function",
+        "App only calls get(key); cache runs the loader",
+        "One stocker, one trip for twenty requests"
+      ],
+      "steps": [
+        {
+          "say": "Cache-aside repeats check, fetch, set, return in every data-access function. Across many services, someone forgets the set, someone uses a different key.",
+          "reveal": 1
+        },
+        {
+          "say": "Read-through fixes that. The app only ever calls get key on the cache. On a miss, the cache itself fetches from the database using a configured loader, a function that knows how to fetch, say, a product by its key.",
+          "reveal": 2
+        },
+        {
+          "say": "Think of one shelf-stocker instead of every employee phoning the warehouse. And if twenty people ask at once, the stocker makes just one trip.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s019",
+      "layout": "diagram",
+      "title": "Read-through: the app talks only to the cache",
+      "kicker": "Read-through",
+      "mermaid": "flowchart TB\n  APP[\"App: get product:8412\"] -->|\"1 get\"| C[(\"Loading cache\")]\n  C -->|\"2 miss: loader runs SELECT\"| DB[(\"Database\")]\n  DB -->|\"3 row\"| C\n  C -->|\"4 value, saved with TTL\"| APP",
+      "caption": "Same miss path as cache-aside; the cache owns it",
+      "steps": [
+        {
+          "say": "Here's the flow. The app's code is one line, every time: get product eight four one two. On a hit, the cache returns it.",
+          "reveal": 0
+        },
+        {
+          "say": "On a miss, the cache's loader runs the SELECT, saves the value with a TTL, and returns it. Same miss steps as cache-aside, just a different owner.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s020",
+      "layout": "bullets",
+      "title": "Read-through, step by step",
+      "kicker": "Read-through",
+      "bullets": [
+        "1. App calls get(key) only",
+        "2. Hit: cache returns value",
+        "3. Miss: loader fetches, saves with TTL",
+        "4. Coalescing: 5,000 misses become 1 query",
+        "5. Writes still need their own plan"
+      ],
+      "steps": [
+        {
+          "say": "Step one: the app calls get key. No cache-checking or database logic in app code at all.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: on a hit, the cache returns the value.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: on a miss, the cache runs its loader: fetch, save with a TTL, return.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, the big bonus: request coalescing. Because the cache sees every reader, it can merge them. Under cache-aside, five thousand simultaneous misses on one key are five thousand database queries. A loading cache lets the first caller fetch while the other four thousand nine hundred ninety-nine wait briefly for the same answer. One query.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five: writes aren't handled. You still need delete-on-write plus TTLs, or write-through. You'll meet read-through in Caffeine and Guava's loading cache in Java, Hibernate's second-level cache, and Dynamo-D-B DAX.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s021",
+      "layout": "table",
+      "title": "Read-through versus cache-aside",
+      "kicker": "Read-through",
+      "table": {
+        "head": [
+          "",
+          "Cache-Aside",
+          "Read-Through"
+        ],
+        "rows": [
+          [
+            "Who fetches on miss",
+            "your app",
+            "cache's loader"
+          ],
+          [
+            "Miss logic lives",
+            "every function",
+            "one place"
+          ],
+          [
+            "N misses, one key",
+            "N queries",
+            "1 query"
+          ],
+          [
+            "Computed, multi-source",
+            "yes",
+            "awkward"
+          ],
+          [
+            "Infrastructure",
+            "any simple cache",
+            "smart cache needed"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Who fetches on a miss? In cache-aside, your app. In read-through, the cache's loader.",
+          "reveal": 1
+        },
+        {
+          "say": "Where does miss logic live? In every function, versus one configured place.",
+          "reveal": 2
+        },
+        {
+          "say": "Concurrent misses on one key: N queries, versus merged into one. That's the main benefit.",
+          "reveal": 3
+        },
+        {
+          "say": "Computed results from several sources? Cache-aside can cache anything the app builds. A loader fetches one kind of thing by key, so that's awkward.",
+          "reveal": 4
+        },
+        {
+          "say": "Infrastructure: cache-aside works with plain Memcached. Read-through needs a smart cache: a library, an ORM layer, or a service.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Module 4 Caching · Read-through vs. cache-aside"
+    },
+    {
+      "id": "s022",
+      "layout": "table",
+      "title": "Example: which pattern for which data?",
+      "kicker": "Example",
+      "table": {
+        "head": [
+          "Case",
+          "Choice",
+          "Why"
+        ],
+        "rows": [
+          [
+            "Products, 40 services, 6 languages",
+            "Read-through",
+            "one loader, coalescing"
+          ],
+          [
+            "Seller dashboard from 3 DBs",
+            "Cache-aside",
+            "app must combine sources"
+          ],
+          [
+            "Stale after bulk import?",
+            "Not fixed",
+            "that's the write path"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's apply it. Case one: product records read by forty services written in six languages. Use read-through as a shared layer. One loader, one TTL policy, coalescing protecting the shared database, instead of forty slightly different procedures.",
+          "reveal": 1
+        },
+        {
+          "say": "Case two: a per-seller dashboard computed from three databases. Use cache-aside. The app has to combine three sources before caching, and a per-key loader can't do that.",
+          "reveal": 2
+        },
+        {
+          "say": "Case three: does read-through fix the stale-after-bulk-import bug? No. That bug is on the write path, and read-through only controls reads. In the interview, say: same miss path, different owner. Centralizing gives one implementation and coalescing, but computed results stay with cache-aside, and writes still need invalidation.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s023a",
+      "layout": "section",
+      "kicker": "Concept 4 of 11",
+      "title": "Write-Through",
+      "caption": "Book: Module 4 Caching · Write-Through",
+      "steps": [
+        {
+          "say": "Concept four: write-through.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s023",
+      "layout": "bullets",
+      "title": "Write-through: the cache is the write path",
+      "kicker": "Write-through",
+      "bullets": [
+        "Problem: forgotten deletes; miss on read-back",
+        "Write goes to cache; cache writes DB, then copy",
+        "Caller hears 'done' only after both"
+      ],
+      "steps": [
+        {
+          "say": "Delete-on-write relies on every write path remembering. And it costs a miss exactly when a user reads back what they just saved.",
+          "reveal": 1
+        },
+        {
+          "say": "Write-through makes upkeep structural. The app sends the write to the cache layer. The cache writes the database synchronously, meaning the caller waits, then updates its own copy, then says done.",
+          "reveal": 2
+        },
+        {
+          "say": "Think of a secretary who records your change in the official register, updates the front-desk card, and only then says 'done'. Paired with read-through, the cache becomes the single entry point to your data.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s024",
+      "layout": "diagram",
+      "title": "Write-through: database first, then the copy",
+      "kicker": "Write-through",
+      "mermaid": "flowchart TB\n  APP[\"App\"] -->|\"1 write\"| C[(\"Cache layer\")]\n  C -->|\"2 write DB, synchronous\"| DB[(\"Database\")]\n  DB -->|\"3 committed\"| C\n  C -->|\"4 update copy, then confirm\"| APP",
+      "caption": "Never stale for anything written through it",
+      "steps": [
+        {
+          "say": "Here's the sequence. App sends the write to the cache. The cache writes the database first, because the database is the truth.",
+          "reveal": 0
+        },
+        {
+          "say": "Only when the database commits does the cache update its copy and confirm to the app.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s025",
+      "layout": "bullets",
+      "title": "The seven steps, with a profile edit",
+      "kicker": "Write-through",
+      "bullets": [
+        "1. App writes to the cache layer",
+        "2. Cache writes the DB first",
+        "3. DB fails: error, store nothing. 4. DB ok: update, confirm",
+        "5. Copy update fails: invalidate, still succeed",
+        "6. Read-after-write is a fresh hit",
+        "7. Bypassing writers break the promise"
+      ],
+      "steps": [
+        {
+          "say": "Let's walk it with a user editing their display name. Step one: the app sends the write to the cache layer, not the database.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: the cache writes the database first, synchronously.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: if the database write fails, the cache stores nothing and returns the error. The copy never shows a name the database doesn't have.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: if it succeeds, the cache updates its copy, then confirms.",
+          "reveal": 3
+        },
+        {
+          "say": "Step five: if the database succeeds but the cache update fails, invalidate the entry and still report success. The commit is safe, and the next read fetches the truth.",
+          "reveal": 4
+        },
+        {
+          "say": "Step six: fresh and warm. When the user reloads their profile, it's a hit with the new name.",
+          "reveal": 5
+        },
+        {
+          "say": "Step seven: the guarantee has a boundary. Only writes through the cache stay fresh. A direct database write from another service bypasses it. So either every writer uses the cache, or every entry keeps TTL insurance.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s026",
+      "layout": "table",
+      "title": "Write-through versus delete-on-write",
+      "kicker": "Write-through",
+      "table": {
+        "head": [
+          "",
+          "Cache-aside + DEL",
+          "Write-through"
+        ],
+        "rows": [
+          [
+            "After a write",
+            "key empty",
+            "already fresh"
+          ],
+          [
+            "Read-after-write",
+            "one extra miss",
+            "immediate hit"
+          ],
+          [
+            "Write latency",
+            "DB only",
+            "DB + cache"
+          ],
+          [
+            "Caches unread data?",
+            "never",
+            "yes"
+          ],
+          [
+            "Requires",
+            "any cache",
+            "smart cache in write path"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "After a write, cache-aside with delete leaves the key empty. Write-through leaves it already fresh.",
+          "reveal": 1
+        },
+        {
+          "say": "Read-after-write: one extra miss, versus an immediate hit.",
+          "reveal": 2
+        },
+        {
+          "say": "Write latency: just the database, versus database plus cache update, a little slower.",
+          "reveal": 3
+        },
+        {
+          "say": "Caching data nobody reads? Delete never does. Write-through does, because every write lands in the cache.",
+          "reveal": 4
+        },
+        {
+          "say": "Requirements: any simple cache, versus a smart cache sitting in the write path.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Module 4 Caching · Write-through vs. delete-on-write"
+    },
+    {
+      "id": "s027",
+      "layout": "bullets",
+      "title": "Example: when write-through fits, and when it breaks",
+      "kicker": "Example",
+      "bullets": [
+        "Fit: profile edits read back right away",
+        "Misfit: click logs nobody reads",
+        "Failure: TTLs removed, bulk tool bypasses cache",
+        "Fix: route tool through cache, restore TTLs"
+      ],
+      "steps": [
+        {
+          "say": "Fit: users editing profiles they view right away. Write-through plus read-through gives structural freshness and a warm read-back.",
+          "reveal": 1
+        },
+        {
+          "say": "Misfit: an activity log written on every click and almost never read. Caching each record wastes memory and evicts hot entries. Write straight to storage.",
+          "reveal": 2
+        },
+        {
+          "say": "Now a failure story. Six months after adopting write-through, the team removed every TTL. Customers see stale prices, but only for products changed by a new bulk-pricing tool.",
+          "reveal": 3
+        },
+        {
+          "say": "Diagnosis: the tool writes the database directly, bypassing the cache, and with TTLs gone those copies stay stale until evicted. Fix: route the tool through the cache and restore TTLs. In the interview, say: writes go through the cache, database first, so read-after-write hits fresh. It costs write latency and churn, and bypassing writers still need TTL insurance.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s028a",
+      "layout": "section",
+      "kicker": "Concept 5 of 11",
+      "title": "Write-Behind (Write-Back)",
+      "caption": "Book: Module 4 Caching · Write-Behind",
+      "steps": [
+        {
+          "say": "Concept five: write-behind, also called write-back.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s028",
+      "layout": "bullets",
+      "title": "Write-behind: the problem is the writes",
+      "kicker": "Write-behind",
+      "bullets": [
+        "Goal: live 'viewed today' counter",
+        "12,000 views/s = 12,000 UPDATEs/s on one row",
+        "Row lock queue: 1 s latency, checkout slows",
+        "Really needed: one '+24,000' every 2 seconds"
+      ],
+      "steps": [
+        {
+          "say": "Product wants 'twelve thousand people viewed this today' on every page.",
+          "reveal": 1
+        },
+        {
+          "say": "Naively, that's one UPDATE, views plus one, per view. At peak the bestseller gets twelve thousand views a second. That's twelve thousand UPDATEs a second on one row.",
+          "reveal": 2
+        },
+        {
+          "say": "The database guards a changing row with a lock, so the updates queue. Latency passes one second, waiting connections eat capacity, and checkout slows because view counting hogs the database.",
+          "reveal": 3
+        },
+        {
+          "say": "But nobody needs each plus one on disk instantly. One summary every two seconds would do: plus twenty-four thousand.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s029",
+      "layout": "bullets",
+      "title": "Why the obvious fixes fail",
+      "kicker": "Write-behind",
+      "bullets": [
+        "Write-through: still every write to the DB",
+        "Sampling: small counts come out wrong",
+        "Queue: can't serve the live count"
+      ],
+      "steps": [
+        {
+          "say": "Write-through fixes staleness, but still sends every write to the database synchronously. This incident is about write volume.",
+          "reveal": 1
+        },
+        {
+          "say": "Sample every tenth view? Fine for rough analytics, but small counts come out wrong. Seven might show as zero or ten. Not OK once badges or payouts depend on it.",
+          "reveal": 2
+        },
+        {
+          "say": "Queue the writes? A queue with a batching worker is the closest valid alternative. But the page must show the current count, and a queue can't serve reads. Add a cache beside it, and you've built most of this pattern.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s030",
+      "layout": "diagram",
+      "title": "Write-behind: acknowledge now, save later",
+      "kicker": "Write-behind",
+      "mermaid": "flowchart LR\n  APP[\"Page view\"] -->|\"INCR, ack under 1 ms\"| C[(\"Cache: dirty entries\")]\n  C --> F[\"Flusher every 2 s\"]\n  F -->|\"one batched UPDATE +24000\"| DB[(\"Database\")]\n  APP -->|\"read live count\"| C",
+      "caption": "The cache is both write buffer and read layer",
+      "steps": [
+        {
+          "say": "Here's how it flows. A write lands in the cache and is confirmed immediately. The entry is marked dirty.",
+          "reveal": 0
+        },
+        {
+          "say": "A background flusher sweeps the dirty entries every few seconds and writes them to the database in batches.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s031",
+      "layout": "bullets",
+      "title": "The five mechanics, on the view counter",
+      "kicker": "Write-behind",
+      "bullets": [
+        "1. Write to cache, ack immediately",
+        "2. Dirty entries are pinned, never evicted",
+        "3. Coalesce: 12,000 x '+1' becomes '+24,000'",
+        "4. Flush every N seconds or N entries",
+        "5. Retry failures; quarantine bad records"
+      ],
+      "steps": [
+        {
+          "say": "One: the write lands in the cache and is confirmed right away. INCR views eight four one two in Redis, under a millisecond.",
+          "reveal": 1
+        },
+        {
+          "say": "Two: dirty tracking. An entry with changes not yet in the database is dirty, and must never be evicted before flushing, or you'd delete confirmed data. So dirty entries are pinned.",
+          "reveal": 2
+        },
+        {
+          "say": "Three: the flusher coalesces, which means merging many changes to one key into one write. Twelve thousand plus-ones become plus twenty-four thousand. Five product edits in two seconds become one write of the final state.",
+          "reveal": 3
+        },
+        {
+          "say": "Four: flush policy. Every N seconds or every N dirty entries, whichever comes first. Shorter risks less, longer batches more.",
+          "reveal": 4
+        },
+        {
+          "say": "Five: flush failures. If the database is briefly down, keep the batch and retry. An entry that keeps failing goes to quarantine, so one bad record can't block every later flush.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s032",
+      "layout": "twocol",
+      "title": "The most dangerous pattern in the module",
+      "kicker": "Write-behind",
+      "left": {
+        "heading": "Ack is not saved",
+        "bullets": [
+          "Crash loses one flush window",
+          "Write the loss sentence first"
+        ]
+      },
+      "right": {
+        "heading": "Truth flips",
+        "bullets": [
+          "Cache is current, DB is behind",
+          "DB readers silently see the past"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Cost one: acknowledged no longer means saved. Until the next flush, confirmed changes live only in cache memory. A node crash loses up to one flush interval.",
+          "reveal": 1
+        },
+        {
+          "say": "So every use must finish this sentence in writing: if we lose the last N seconds of these writes, then blank. And the answer has to be truly acceptable.",
+          "reveal": 2
+        },
+        {
+          "say": "Cost two: the truth flips. During the dirty interval, the cache holds the current value and the database holds an older one.",
+          "reveal": 3
+        },
+        {
+          "say": "Anyone reading the database directly, like a report, sees the past. For that stretch the cache is the authority, not a disposable copy.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s033",
+      "layout": "table",
+      "title": "Walkthrough: the view counter with a 2-second flush",
+      "kicker": "Example",
+      "table": {
+        "head": [
+          "Step",
+          "Detail",
+          "Number"
+        ],
+        "rows": [
+          [
+            "Write path",
+            "Redis INCR, page reads same key",
+            "< 1 ms"
+          ],
+          [
+            "DB writes",
+            "one batched UPDATE per 2 s",
+            "12,000/s to 0.5/s"
+          ],
+          [
+            "Crash drill",
+            "dies 1.8 s after flush",
+            "~21,600 views lost"
+          ],
+          [
+            "Shrink window",
+            "replica, AOF, shorter interval",
+            "AOF everysec: ~1 s"
+          ],
+          [
+            "Payments?",
+            "no acceptable loss",
+            "reject"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Write path: INCR in Redis, under a millisecond, no lock, no queue. The page reads the same key, so the count is always current.",
+          "reveal": 1
+        },
+        {
+          "say": "Database load: one UPDATE plus twenty-four thousand every two seconds. Twelve thousand writes a second becomes half a write a second, a twenty-four thousand times reduction.",
+          "reveal": 2
+        },
+        {
+          "say": "Crash drill: a node dies one point eight seconds after its last flush, losing about twenty-one thousand six hundred views. The loss sentence, 'the numbers are imperceptibly lower', was accepted before launch. So this is fine.",
+          "reveal": 3
+        },
+        {
+          "say": "Shrinking the window: a Redis replica survives one node failure. Redis A-O-F, the append-only file, is basically the cache's own write-ahead log. Or use a shorter interval. Each buys durability with speed. Careful: AOF's default fsync every second still allows about one second of loss.",
+          "reveal": 4
+        },
+        {
+          "say": "And the proposal to reject: write-behind for payments. 'If we lose two seconds of payments, then' has no safe ending.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s034",
+      "layout": "table",
+      "title": "Example: complete the loss sentence",
+      "kicker": "Example",
+      "table": {
+        "head": [
+          "Data",
+          "Write-behind?",
+          "If we lose 2 s, then..."
+        ],
+        "rows": [
+          [
+            "View counts",
+            "Yes",
+            "numbers slightly low"
+          ],
+          [
+            "Trending score",
+            "Yes",
+            "recomputed anyway"
+          ],
+          [
+            "Shopping carts",
+            "No",
+            "customers lose items"
+          ],
+          [
+            "Payments",
+            "Never",
+            "no safe ending"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's practise the loss sentence. View counts: yes. If we lose two seconds, the numbers are imperceptibly lower.",
+          "reveal": 1
+        },
+        {
+          "say": "A trending-now score: yes. It's approximate and can be recomputed.",
+          "reveal": 2
+        },
+        {
+          "say": "Shopping carts: no. Losing someone's choices is visible harm, and the volume rarely justifies it. Use a durable store.",
+          "reveal": 3
+        },
+        {
+          "say": "Payments: never. No loss window is acceptable. Money keeps the write-ahead log's promise.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s035",
+      "layout": "table",
+      "title": "Write-behind versus a queue with a batching worker",
+      "kicker": "Concept 6 of 11",
+      "table": {
+        "head": [
+          "",
+          "Write-behind",
+          "Queue + worker"
+        ],
+        "rows": [
+          [
+            "Ack from",
+            "cache memory",
+            "durable broker"
+          ],
+          [
+            "Durability",
+            "flush window at risk",
+            "nothing confirmed lost"
+          ],
+          [
+            "Coalescing",
+            "natural",
+            "clumsier"
+          ],
+          [
+            "Live reads",
+            "yes",
+            "no"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept six: the closest alternative. Where does the acknowledgment come from? Write-behind: cache memory, fast but volatile. Queue: the broker, once it has persisted the message.",
+          "reveal": 1
+        },
+        {
+          "say": "So durability: write-behind risks the flush window. A queue loses nothing confirmed.",
+          "reveal": 2
+        },
+        {
+          "say": "Coalescing plus-ones: natural in the cache. Possible in the worker, but clumsier.",
+          "reveal": 3
+        },
+        {
+          "say": "Live reads of the current value: the cache serves them, which is the whole point. A queue can't. Readers see the database's lag.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Module 4 · Write-behind vs. queue + batching worker"
+    },
+    {
+      "id": "s036",
+      "layout": "bullets",
+      "title": "The deciding question",
+      "kicker": "Write-behind vs queue",
+      "bullets": [
+        "Does anyone need the live value?",
+        "Yes (view count on page): write-behind",
+        "No (telemetry, analytics): durable queue",
+        "Recap: speed for durability; write the loss sentence"
+      ],
+      "steps": [
+        {
+          "say": "Ask: does any reader need the hot, current value?",
+          "reveal": 1
+        },
+        {
+          "say": "The product page shows the live view count. So write-behind wins: the cache is both the write buffer and the read layer.",
+          "reveal": 2
+        },
+        {
+          "say": "Analytics events or telemetry that nobody reads immediately? Use a queue and a worker. The broker keeps every confirmed write.",
+          "reveal": 3
+        },
+        {
+          "say": "In the interview, say: twelve thousand increments a second on one row is lock contention, so I buffer in the cache and flush merged totals every couple of seconds. A crash loses that window, which is fine for view counts and never for money. Recap: write-behind trades durability for write speed. Always write the loss sentence.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s037a",
+      "layout": "section",
+      "kicker": "Concept 7 of 11",
+      "title": "Cache Stampede Prevention",
+      "caption": "Book: Module 4 Caching · Cache Stampede Prevention",
+      "steps": [
+        {
+          "say": "Concept seven: cache stampede prevention.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s037",
+      "layout": "bullets",
+      "title": "Cache stampede: one expiry takes the site down",
+      "kicker": "Stampede prevention",
+      "bullets": [
+        "1. 8:00 PM: hot key expires, rebuild = 50 ms",
+        "2. 12,000/s x 0.05 s = 600 misses",
+        "3. 600 identical queries hit the DB",
+        "4. Query slows to 500 ms: 6,000 missing",
+        "5. Pool full, checkout down by 8:00:03"
+      ],
+      "steps": [
+        {
+          "say": "A stampede, also called dog-piling, is thousands of simultaneous misses all rebuilding the same entry. Let's watch one happen, step by step. It's a flash sale. The bestseller's page serves twelve thousand requests a second at ninety-nine point nine percent hits. The database sees one hundred fifty queries a second. At eight o'clock exactly, the entry hits its one-hour TTL. Rebuilding takes one fifty millisecond query.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: every request in those fifty milliseconds also misses. Twelve thousand times zero point zero five is six hundred simultaneous misses.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: under plain cache-aside, each one runs its own miss path. Six hundred identical queries hit a database used to one hundred fifty a second.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: the burst slows the query to five hundred milliseconds. That stretches the miss window, so now six thousand requests are missing.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five: the connection pool fills, queries queue, and checkout, which shares the database, stops. Three seconds in, one ordinary expiry has taken the site down.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s038",
+      "layout": "number",
+      "title": "Damage = request rate x rebuild time",
+      "kicker": "Example",
+      "big": "12,000/s x 0.05 s = 600",
+      "caption": "600 simultaneous misses; overload stretches the rebuild, crowd grows",
+      "steps": [
+        {
+          "say": "Here's the formula to say aloud in the interview. The crowd equals request rate times rebuild time.",
+          "reveal": 0
+        },
+        {
+          "say": "And overload makes the rebuild slower, which makes the crowd bigger. That's a feedback loop. And a cache cluster restarting empty at peak runs this math on every key at once.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s039",
+      "layout": "bullets",
+      "title": "Why the obvious fixes fail",
+      "kicker": "Stampede prevention",
+      "bullets": [
+        "Longer TTLs: rarer, not smaller",
+        "Bigger DB: huge cost for a 50 ms event",
+        "Refresh everything: wasted work on cold keys"
+      ],
+      "steps": [
+        {
+          "say": "Longer TTLs? A six-hour TTL makes stampedes rarer, not smaller, and keeps data stale longer.",
+          "reveal": 1
+        },
+        {
+          "say": "Size the database for the burst? Paying permanently for six thousand simultaneous queries, to survive a fifty millisecond event a few times a day, is a terrible deal.",
+          "reveal": 2
+        },
+        {
+          "say": "Refresh everything from a background job? Recomputing millions of unread entries wastes resources. Misses aren't the problem. Six hundred requests repeating the same work is. The fix is coordination.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s040",
+      "layout": "diagram",
+      "title": "Tool 1: the lock, or single flight",
+      "kicker": "Concept 8 of 11",
+      "mermaid": "flowchart LR\n  R1[\"Request 1\"] -->|\"SETNX lock wins\"| L[(\"lock:bestseller\")]\n  R1 -->|\"one SELECT\"| DB[(\"Database\")]\n  R1 -->|\"fill cache\"| C[(\"Cache\")]\n  RN[\"Requests 2 to 600\"] -->|\"lock taken, wait 20 ms\"| C",
+      "caption": "Book: Module 4 · Cache Stampede Prevention · Tool 1",
+      "steps": [
+        {
+          "say": "Concept eight: request coalescing, also called single flight, using a lock. Here's the flow. Request number one misses and takes a short per-key lock using SETNX, which means set if not exists. Only one caller can win it.",
+          "reveal": 0
+        },
+        {
+          "say": "Request one rebuilds from the database and fills the cache. Requests two through six hundred see the lock, wait about twenty milliseconds, and re-check the cache. Database queries: one.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s041",
+      "layout": "bullets",
+      "title": "Single flight, step by step",
+      "kicker": "Single flight",
+      "bullets": [
+        "1. First misser takes lock (SETNX)",
+        "2. It rebuilds and fills the cache",
+        "3. Others wait ~20 ms, re-check",
+        "4. Lock has its own short TTL",
+        "Use proven code: Go singleflight, leases"
+      ],
+      "steps": [
+        {
+          "say": "Step one: the first missing request takes a short per-key lock, atomically, in Redis.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: it fetches from the database and fills the cache.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: everyone else sees the lock, waits briefly, then re-checks. Six hundred misses become one query and five hundred ninety-nine short waits.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, crucial: the lock needs its own short TTL. If its holder crashes, a lock that never expires is an outage by itself. With a TTL, it releases automatically and waiters retry.",
+          "reveal": 4
+        },
+        {
+          "say": "Don't write your own. Use proven code, like Go's singleflight package or documented Redis lock recipes. Facebook's memcache leases are the same idea at huge scale.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s042a",
+      "layout": "section",
+      "kicker": "Concept 9 of 11",
+      "title": "Serve Stale and Early Refresh",
+      "caption": "Book: Module 4 · Cache Stampede Prevention · Tools 2 and 3",
+      "steps": [
+        {
+          "say": "Concept nine: two ways to avoid waiting at all.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s042",
+      "layout": "bullets",
+      "title": "Tool 2: serve stale, refresh behind",
+      "kicker": "Serve stale",
+      "bullets": [
+        "Keep entries past logical expiry",
+        "Serve the stale copy at once",
+        "One locked refresh in the background",
+        "HTTP: stale-while-revalidate"
+      ],
+      "steps": [
+        {
+          "say": "First, serve stale. If slightly old data is fine, nobody waits.",
+          "reveal": 1
+        },
+        {
+          "say": "Keep each entry a little past its logical expiry. When a request finds it stale, serve the stale copy immediately.",
+          "reveal": 2
+        },
+        {
+          "say": "Meanwhile, one lock-protected background refresh fetches the new value.",
+          "reveal": 3
+        },
+        {
+          "say": "A product page fifty milliseconds old looks identical to a fresh one. H-T-T-P standardizes this as the stale-while-revalidate header, used by C-D-Ns and browsers.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s043",
+      "layout": "bullets",
+      "title": "Tool 3: probabilistic early refresh",
+      "kicker": "Early refresh",
+      "bullets": [
+        "Goal: hottest keys never expire",
+        "Small random chance to refresh near expiry",
+        "Hot key: refreshed in time; cold key: expires",
+        "Work goes where traffic is (XFetch)"
+      ],
+      "steps": [
+        {
+          "say": "Second, probabilistic early refresh. The goal: the hottest keys never expire at all.",
+          "reveal": 1
+        },
+        {
+          "say": "Near the end of the TTL, each request rolls a small random chance of refreshing early, and that chance rises as expiry gets closer.",
+          "reveal": 2
+        },
+        {
+          "say": "Imagine the bestseller with twelve thousand reads a second. In the last few seconds, some request almost certainly wins the roll and refreshes it in time. A cold key read once a minute just expires quietly.",
+          "reveal": 3
+        },
+        {
+          "say": "So the randomness aims refresh work at exactly the keys whose traffic justifies it. The math comes from the XFetch paper.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s044",
+      "layout": "twocol",
+      "title": "Fleet tools: TTL jitter and a cold-start plan",
+      "kicker": "Stampede prevention",
+      "left": {
+        "heading": "TTL jitter",
+        "bullets": [
+          "3600 s +/- 10%: spread expiries"
+        ]
+      },
+      "right": {
+        "heading": "Cold-start plan",
+        "bullets": [
+          "1. Warm top keys from access log",
+          "2. Ramp traffic slowly",
+          "3. Single flight: 1 query per key"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Two more tools protect the whole fleet. Jitter: a deploy warms ten thousand entries in one minute, all with a thirty-six hundred second TTL. An hour later, they all expire together. Randomize by plus or minus ten percent, and expirations spread over many minutes.",
+          "reveal": 1
+        },
+        {
+          "say": "Cold start: an empty cluster at peak means one hundred percent misses. Step one, warm the most popular keys from an access log or snapshot.",
+          "reveal": 2
+        },
+        {
+          "say": "Step two, ramp traffic up slowly, so load stays within database capacity.",
+          "reveal": 3
+        },
+        {
+          "say": "Step three, rely on single flight to cap database work at one query per distinct key. And route the cluster with consistent hashing, so a normal resize doesn't cause mass misses.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s045",
+      "layout": "table",
+      "title": "Walkthrough: 8 PM again, with protection",
+      "kicker": "Example",
+      "table": {
+        "head": [
+          "Measure",
+          "Unprotected",
+          "Protected"
+        ],
+        "rows": [
+          [
+            "DB queries at expiry",
+            "600, spiraling to 6,000",
+            "1"
+          ],
+          [
+            "Page latency",
+            "seconds",
+            "flat 1 ms"
+          ],
+          [
+            "Cold restart at 7:50",
+            "outage",
+            "< 2,000 queries/s, recovers"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's replay eight o'clock with serve-stale plus a per-key lock. The bestseller hits logical expiry. The next request finds it stale, takes the lock, starts the rebuild, and serves the stale copy in one millisecond. So do the other five hundred ninety-nine.",
+          "reveal": 1
+        },
+        {
+          "say": "Database queries: one, not six hundred spiraling to six thousand. Page latency: a flat one millisecond. Staleness served: fifty milliseconds, unnoticeable.",
+          "reveal": 2
+        },
+        {
+          "say": "Cold-start drill: a bad deploy restarts the cluster at seven fifty. Warming restores the top ten thousand keys in about forty seconds. The load balancer ramps traffic over two minutes. The database peaks under two thousand queries a second. Unpleasant, but survivable.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s046",
+      "layout": "table",
+      "title": "The three hot-key tools compared",
+      "kicker": "Concept 10 of 11",
+      "table": {
+        "head": [
+          "",
+          "Lock",
+          "Serve stale",
+          "Early refresh"
+        ],
+        "rows": [
+          [
+            "Others get",
+            "short wait",
+            "stale copy now",
+            "no expiry"
+          ],
+          [
+            "Staleness",
+            "none",
+            "one rebuild",
+            "almost none"
+          ],
+          [
+            "Complexity",
+            "lock TTL, waiters",
+            "stale window",
+            "probability math"
+          ],
+          [
+            "Wasted work",
+            "none",
+            "none",
+            "some early refreshes"
+          ],
+          [
+            "Best for",
+            "no staleness allowed",
+            "default",
+            "hottest keys"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept ten: the comparison. During a rebuild, what do other requests get? Lock: a few milliseconds of waiting. Serve stale: the old copy, right away. Early refresh: nothing, because expiry rarely comes.",
+          "reveal": 1
+        },
+        {
+          "say": "Staleness served: lock, none. Serve stale, one rebuild's worth. Early refresh, practically none.",
+          "reveal": 2
+        },
+        {
+          "say": "Complexity: lock TTLs and waiter logic. Tracking the stale window. Probability math in the client.",
+          "reveal": 3
+        },
+        {
+          "say": "Wasted work: none, none, and a few refreshes that happen early.",
+          "reveal": 4
+        },
+        {
+          "say": "Best for: the lock when staleness isn't allowed. Serve stale as the default for tolerant data. Early refresh for the very hottest keys. Big systems run all of these, plus jitter and a cold-start runbook. None replaces another.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Module 4 · The three hot-key tools compared"
+    },
+    {
+      "id": "s047",
+      "layout": "table",
+      "title": "Example: pick a tool for each key",
+      "kicker": "Example",
+      "table": {
+        "head": [
+          "Key",
+          "Tool",
+          "Why"
+        ],
+        "rows": [
+          [
+            "News headlines",
+            "Serve stale",
+            "seconds-old is harmless"
+          ],
+          [
+            "Stock price",
+            "Lock, short wait",
+            "stale means wrong"
+          ],
+          [
+            "Top 100 products",
+            "Early refresh",
+            "never let them expire"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's apply it. A news site's headline block: serve stale while refreshing. Seconds-old news is harmless, and latency stays flat.",
+          "reveal": 1
+        },
+        {
+          "say": "A stock-price display: staleness makes it wrong. Use a lock-guarded refresh with a short wait, if you cache it at all.",
+          "reveal": 2
+        },
+        {
+          "say": "A retailer's top one hundred product pages: probabilistic or scheduled early refresh, so they almost never expire. And skip all of this for cold keys or systems at fifty requests a second. Measure simultaneous misses first.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s048",
+      "layout": "quiz",
+      "title": "DB spikes daily at 4 AM; deploys run at 4 PM. Why?",
+      "kicker": "Pause and think",
+      "bullets": [
+        "A. Nightly backups at 4 AM",
+        "B. Keys warmed at 4 PM with a 12-hour TTL",
+        "C. Too few database replicas"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Every day at four in the morning, the database has a ten-minute load spike. No errors. The team deploys every day at four in the afternoon. What's the link, and what's the one-line fix?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s049",
+      "layout": "bullets",
+      "title": "Answer: synchronized expiry",
+      "kicker": "Answer",
+      "bullets": [
+        "B: same TTL, warmed together",
+        "4 PM + 12 h = all expire at 4 AM",
+        "Fix: ttl = 43200 +/- rand(10%)",
+        "Moving the deploy only moves the spike"
+      ],
+      "steps": [
+        {
+          "say": "It's B. The four PM deploy warms thousands of entries with the same twelve-hour TTL.",
+          "reveal": 1
+        },
+        {
+          "say": "So they all expire together at four AM, and all rebuild at once.",
+          "reveal": 2
+        },
+        {
+          "say": "The one-line fix is TTL jitter: forty-three thousand two hundred seconds, plus or minus a random ten percent. Expirations spread over about an hour.",
+          "reveal": 3
+        },
+        {
+          "say": "Moving the deploy would just move the spike. Jitter removes the synchronization. In the interview, say: request rate times rebuild time, then stack lock, serve stale, early refresh, jitter, and a cold-start plan.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s050a",
+      "layout": "section",
+      "kicker": "Concept 11 of 11",
+      "title": "Capstone: Caching the Product Catalog",
+      "caption": "Book: Module 4 · Capstone - Caching the Product Catalog",
+      "steps": [
+        {
+          "say": "Concept eleven, the capstone.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s050",
+      "layout": "bullets",
+      "title": "Capstone: caching the product catalog",
+      "kicker": "Capstone",
+      "bullets": [
+        "One page, five kinds of data",
+        "12,000 req/s, 99%+ reads",
+        "Description, price, inventory, views, recs",
+        "Sharded DB, Redis + consistent hashing, bulk tool",
+        "Per type: pattern + mechanism + staleness sentence"
+      ],
+      "steps": [
+        {
+          "say": "A product page looks like one thing. But behind the URL are five kinds of data, each with its own read and write pattern and its own cost of being wrong.",
+          "reveal": 1
+        },
+        {
+          "say": "The brief: twelve thousand requests a second at peak, over ninety-nine percent reads.",
+          "reveal": 2
+        },
+        {
+          "say": "The five data types: the description, the price, live inventory, the view counter, and 'customers also bought' recommendations.",
+          "reveal": 3
+        },
+        {
+          "say": "Existing infrastructure: a sharded, replicated database, a Redis cluster on consistent hashing, and a bulk-import tool that writes straight to the database.",
+          "reveal": 4
+        },
+        {
+          "say": "For each type we'll name the pattern, its correctness mechanism, and finish the sentence: if this data is N seconds old, then blank.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s051",
+      "layout": "table",
+      "title": "Decisions 1 and 2: description and price",
+      "kicker": "Capstone",
+      "table": {
+        "head": [
+          "Data",
+          "Pattern",
+          "Correctness",
+          "Staleness"
+        ],
+        "rows": [
+          [
+            "Description",
+            "Cache-aside",
+            "DEL on edit + 1 h TTL",
+            "~1 hour"
+          ],
+          [
+            "Price (display)",
+            "Cache-aside",
+            "DEL first + 5 min TTL",
+            "seconds"
+          ],
+          [
+            "Price (on order)",
+            "No cache",
+            "read the DB",
+            "zero"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Decision one, the description. Read constantly, edited every few weeks, staleness costs almost nothing. Cache-aside, one-hour TTL, delete on edit. The TTL stays because the bulk importer doesn't invalidate. Staleness sentence: if it's an hour old, a typo fix took an hour to appear. Fine.",
+          "reveal": 1
+        },
+        {
+          "say": "Decision two, the displayed price. Same read profile, but a wrong price costs money, legal trouble and trust. Same pattern, stricter rules: invalidation is the main mechanism, and the backup TTL shrinks to five minutes, so the bulk tool can leave a price wrong for five minutes at most.",
+          "reveal": 2
+        },
+        {
+          "say": "And the price saved on an order always comes from the database. The module's central principle: the read profile chooses the cache pattern. The cost of being wrong chooses the correctness rules.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s052",
+      "layout": "table",
+      "title": "Decisions 3 to 5: inventory, views, recommendations",
+      "kicker": "Capstone",
+      "table": {
+        "head": [
+          "Data",
+          "Pattern",
+          "Correctness",
+          "Staleness"
+        ],
+        "rows": [
+          [
+            "Inventory badge",
+            "Cache-aside",
+            "10 s TTL only",
+            "~10 s"
+          ],
+          [
+            "Inventory decision",
+            "No cache",
+            "conditional decrement",
+            "zero"
+          ],
+          [
+            "View counter",
+            "Write-behind",
+            "2 s flush, flush on shutdown",
+            "live"
+          ],
+          [
+            "Recommendations",
+            "Cache-aside",
+            "12 h TTL + nightly invalidate",
+            "hours"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Decision three, live inventory: 'only three left!' changes hundreds of times a second. Split it. The display badge is a marketing number: ten-second TTL, no per-sale invalidation, because hundreds of deletes a second would recreate the database load. If it's ten seconds old, someone sees three left when it's two. Urgency marketing survives.",
+          "reveal": 1
+        },
+        {
+          "say": "The checkout decision always runs a conditional database decrement, which succeeds only if stock remains. No cache. One number, two designs.",
+          "reveal": 2
+        },
+        {
+          "say": "Decision four, the view counter: twelve thousand increments a second. Write-behind: Redis INCR, flushed every two seconds, loss sentence written, and flush-on-shutdown in the deploy process.",
+          "reveal": 3
+        },
+        {
+          "say": "Decision five, 'customers also bought': four hundred milliseconds to compute from several tables, refreshed by a nightly model. Cache-aside, not read-through, because a per-key loader can't combine sources. Twelve-hour TTL, invalidated when the nightly model publishes.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s053",
+      "layout": "bullets",
+      "title": "Decision 6: the flash sale, six layered defenses",
+      "kicker": "Capstone",
+      "bullets": [
+        "1. Serve stale: recs rebuild once, not 600x",
+        "2. Single flight: 1 query per expired key",
+        "3. Early refresh for top 100 products",
+        "4. Jitter all TTLs by +/- 10%",
+        "5. Consistent hashing: resize moves ~1/N keys",
+        "6. Written cold-start runbook"
+      ],
+      "steps": [
+        {
+          "say": "Decision six: at eight PM, traffic triples. Defense one, serve stale by default. Descriptions, display prices and recommendations return stale values in one millisecond while one refresh runs. The four hundred millisecond recommendation rebuild runs once, not six hundred times.",
+          "reveal": 1
+        },
+        {
+          "say": "Defense two, single flight on every rebuild. The database sees at most one query per distinct expired key. That's what makes capacity planning possible.",
+          "reveal": 2
+        },
+        {
+          "say": "Defense three, early refresh for the top one hundred products. The bestseller refreshes before it expires, so the eight o'clock stampede never happens.",
+          "reveal": 3
+        },
+        {
+          "say": "Defense four, plus or minus ten percent jitter on every TTL, so values warmed by the four PM deploy expire over several minutes.",
+          "reveal": 4
+        },
+        {
+          "say": "Defense five, consistent hashing for Redis. Adding a node remaps about one over N of the keys, instead of about ninety-five percent. No miss storm.",
+          "reveal": 5
+        },
+        {
+          "say": "Defense six, a written cold-start runbook. Result: database reads stay under four hundred queries a second, despite tripled traffic.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s054",
+      "layout": "diagram",
+      "title": "The final architecture",
+      "kicker": "Capstone",
+      "mermaid": "flowchart TB\n  PG[\"Product page\"] --> RC[(\"Redis cluster\")]\n  NIGHT[\"Nightly recs\"] -->|\"invalidate\"| RC\n  RC -->|\"miss, single flight\"| DB[(\"Sharded DB\")]\n  RC -->|\"views flush 2 s\"| DB\n  ADM[\"Admin edits\"] -->|\"UPDATE then DEL\"| DB\n  BULK[\"Bulk import\"] -->|\"direct, TTL bounds\"| DB\n  CO[\"Checkout\"] -->|\"no cache\"| DB",
+      "caption": "Each data type gets its own path; checkout stays on the truth",
+      "steps": [
+        {
+          "say": "Here's the whole picture. The product page reads from the Redis cluster, which goes to the database on a miss, with single flight. Views are INCRs flushed every two seconds.",
+          "reveal": 0
+        },
+        {
+          "say": "Admin edits update the database, then delete the key. The bulk import writes directly, and the TTL bounds its staleness. The nightly model invalidates recommendation keys. And checkout never touches the cache: price read and stock decrement go straight to the database.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s055",
+      "layout": "recap",
+      "title": "Recap: Caching Patterns",
+      "kicker": "Episode 9",
+      "bullets": [
+        "Cache-aside: TTL + DEL on write",
+        "Read-through: one loader, coalescing",
+        "Write-through: fresh writes; TTLs still needed",
+        "Write-behind: fast writes; write the loss sentence",
+        "Stampede: lock, stale, early refresh, jitter",
+        "Next: Ep 10, Surviving Failure: Reliability"
+      ],
+      "steps": [
+        {
+          "say": "Let's recap. Cache-aside is the default: check, fetch, save with a TTL, delete on write. Delete, don't update, to avoid the race.",
+          "reveal": 1
+        },
+        {
+          "say": "Read-through moves the miss path into the cache, giving one implementation and coalescing. It doesn't fix writes.",
+          "reveal": 2
+        },
+        {
+          "say": "Write-through keeps the cache fresh for writes that go through it. Bypassing writers still need TTLs.",
+          "reveal": 3
+        },
+        {
+          "say": "Write-behind trades durability for write speed. Always finish the loss sentence. Use a queue if nobody needs the live value.",
+          "reveal": 4
+        },
+        {
+          "say": "Stampede prevention: lock, serve stale, early refresh, jitter, and a cold-start plan. Damage equals request rate times rebuild time.",
+          "reveal": 5
+        },
+        {
+          "say": "And the capstone principle: the read profile picks the pattern, and the cost of being wrong picks the rules. Next time, episode ten: Surviving Failure, reliability patterns. See you there.",
+          "reveal": 6
+        }
+      ]
+    }
+  ]
+}

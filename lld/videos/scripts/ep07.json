@@ -1,0 +1,1918 @@
+{
+  "series": "LLD Workshop",
+  "episode": 7,
+  "title": "Refactoring: Smells and the Catalogue",
+  "subtitle": "Fundamentals, 24 smells, 66 refactorings, a worked example and patterns",
+  "scenes": [
+    {
+      "id": "s001",
+      "layout": "title",
+      "title": "Refactoring: Smells and the Catalogue",
+      "subtitle": "Fundamentals, 24 smells, 66 refactorings, a worked example and patterns",
+      "steps": [
+        {
+          "say": "Welcome to episode seven of the L-L-D Workshop, the low-level design series. Last time we learned what clean code looks like. Today we learn how to get there safely from messy code: refactoring.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll name all twenty-four code smells, pick the right named refactoring for each one, clean a messy invoice in six safe steps, and refactor your way into Strategy and State.",
+          "reveal": 0
+        },
+        {
+          "say": "Keep the chapter seven notes open. The catalogue is big, so we move fast here, one example per item, and the notes hold every code listing. Pause whenever you want to read one.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s002",
+      "layout": "section",
+      "kicker": "Concept 1 of 22",
+      "title": "What refactoring is",
+      "steps": [
+        {
+          "say": "Refactoring is a change to the internal structure of code that makes it easier to understand and cheaper to change, without changing what it does from the outside. Think of reorganising a restaurant kitchen while it stays open, one shelf at a time.",
+          "reveal": 0
+        },
+        {
+          "say": "Two words do all the work. Behaviour-preserving: same outputs, same side effects, same errors. And small steps: the code compiles and the tests pass after every single step.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 7 · 7.1 Refactoring fundamentals · What it is"
+    },
+    {
+      "id": "s003",
+      "layout": "table",
+      "kicker": "Concept 1 of 22",
+      "title": "Is it refactoring?",
+      "table": {
+        "head": [
+          "Activity",
+          "Refactoring?"
+        ],
+        "rows": [
+          [
+            "Rename a method with the IDE",
+            "Yes, tiny and safe"
+          ],
+          [
+            "Fix a bug / add a feature",
+            "No, behaviour changes"
+          ],
+          [
+            "Performance tuning",
+            "No, the goal is speed"
+          ],
+          [
+            "Two days broken, works at the end",
+            "No, that's rewriting"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Renaming a method with your I-D-E, your integrated development environment, is refactoring: nothing visible changes.",
+          "reveal": 1
+        },
+        {
+          "say": "Fixing a bug or adding a feature changes behaviour on purpose, so it's not refactoring. It's useful, just a different activity.",
+          "reveal": 2
+        },
+        {
+          "say": "Performance tuning keeps behaviour, but the goal is speed, not clarity.",
+          "reveal": 3
+        },
+        {
+          "say": "And if your code was broken for two days, you were rewriting. If you sit with broken code for an hour, you've stopped refactoring.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s004",
+      "layout": "diagram",
+      "kicker": "Concept 1 of 22",
+      "title": "The refactoring loop",
+      "mermaid": "flowchart LR\n  A[\"Tests green\"] --> B[\"Spot a smell\"]\n  B --> C[\"Pick a refactoring\"]\n  C --> D[\"One small step\"]\n  D --> E{\"Tests pass?\"}\n  E -- \"yes\" --> F[\"Commit, repeat\"]\n  E -- \"no\" --> G[\"Revert, go smaller\"]",
+      "caption": "Small step, test, commit. Red means revert, never debug.",
+      "steps": [
+        {
+          "say": "Here's the loop. Start with green tests. Spot a smell, a surface sign the design could be better. Pick a named refactoring that cures it.",
+          "reveal": 0
+        },
+        {
+          "say": "Apply one small step, then compile and test. Green? Commit. Red? Undo the step, don't debug it, and take a smaller one. Repeat until the code is clean enough for the feature you're about to add.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s005",
+      "layout": "twocol",
+      "kicker": "Concept 2 of 22",
+      "title": "The two hats",
+      "left": {
+        "heading": "Adding function hat",
+        "bullets": [
+          "Add new behaviour",
+          "Add new tests",
+          "No restructuring"
+        ]
+      },
+      "right": {
+        "heading": "Refactoring hat",
+        "bullets": [
+          "Restructure code",
+          "Same behaviour",
+          "No new features"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Kent Beck's metaphor: at any moment you wear one of two hats. With the adding function hat, you add behaviour and tests for it.",
+          "reveal": 1
+        },
+        {
+          "say": "Imagine adding a discount to checkout. That's new behaviour and a new test.",
+          "reveal": 2
+        },
+        {
+          "say": "But you don't restructure under this hat.",
+          "reveal": 3
+        },
+        {
+          "say": "With the refactoring hat, you restructure. Say, extracting the price calculation into its own method first.",
+          "reveal": 4
+        },
+        {
+          "say": "Behaviour stays identical, so existing tests stay green.",
+          "reveal": 5
+        },
+        {
+          "say": "And no new features. You swap hats every few minutes, but always know which you're wearing. Mix them, and a failing test can't tell you which change broke it.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Ch 7 · 7.1.1 The two hats"
+    },
+    {
+      "id": "s006",
+      "layout": "bullets",
+      "kicker": "Concept 3 of 22",
+      "title": "Why refactor",
+      "bullets": [
+        "Improves design, mostly by removing duplication",
+        "Moves understanding from your head into the code",
+        "Exposes bugs",
+        "Design Stamina: clean code means faster features"
+      ],
+      "steps": [
+        {
+          "say": "Four reasons. One: design decays under quick fixes. Refactoring repairs it, mostly by putting each fact in one place.",
+          "reveal": 1
+        },
+        {
+          "say": "Two: when you figure out that d holds days overdue, rename it. Now the next reader, maybe you in six months, gets it for free.",
+          "reveal": 2
+        },
+        {
+          "say": "Three: clearer structure exposes hidden assumptions, so bugs surface.",
+          "reveal": 3
+        },
+        {
+          "say": "Four, the big one: Fowler's Design Stamina Hypothesis. A team that keeps quality high soon ships features faster than one that doesn't. Speed, not beauty, is the economic argument.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Ch 7 · 7.1.2 Why refactor"
+    },
+    {
+      "id": "s007",
+      "layout": "table",
+      "kicker": "Concept 4 of 22",
+      "title": "When to refactor",
+      "table": {
+        "head": [
+          "Trigger",
+          "Example"
+        ],
+        "rows": [
+          [
+            "Rule of Three",
+            "3rd copy of a validator: extract it"
+          ],
+          [
+            "Preparatory",
+            "Split calc from format before HTML"
+          ],
+          [
+            "Comprehension",
+            "Rename d to daysOverdue"
+          ],
+          [
+            "Litter-pickup (Boy Scout)",
+            "Drop an unused parameter in passing"
+          ],
+          [
+            "Long-term: Branch by Abstraction",
+            "Swap ORM behind a repository"
+          ],
+          [
+            "Code review",
+            "Pair on Remove Flag Argument"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Rule of Three. First time, just write it. Second time, wince and duplicate. Third copy of the same validation? Now extract it, because by then you know what varies.",
+          "reveal": 1
+        },
+        {
+          "say": "Preparatory refactoring: make the change easy, then make the easy change. Before adding H-T-M-L invoices, split calculation from text formatting. We'll do exactly that later.",
+          "reveal": 2
+        },
+        {
+          "say": "Comprehension refactoring: once you work out what a variable holds, rename it so the understanding lives in the code.",
+          "reveal": 3
+        },
+        {
+          "say": "Litter-pickup: the Boy Scout rule. Spot an unused parameter in passing? Remove it if quick, note it if not. Most refactoring is opportunistic like this, not a quarterly refactoring sprint.",
+          "reveal": 4
+        },
+        {
+          "say": "Long-term changes, like swapping an O-R-M library, go gradually with Branch by Abstraction: add an interface, move callers to it, swap the implementation behind it, delete the old.",
+          "reveal": 5
+        },
+        {
+          "say": "And in code review, try the refactoring with the author, not just a comment. And no, you don't need your manager's permission, any more than for writing tests.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Ch 7 · 7.1.3 When to refactor"
+    },
+    {
+      "id": "s008",
+      "layout": "bullets",
+      "kicker": "Concept 5 of 22",
+      "title": "When NOT to refactor",
+      "bullets": [
+        "Messy code behind a clean API you never touch",
+        "When a rewrite is cheaper",
+        "Without a safety net: add tests first",
+        "Published interfaces: keep old version, deprecate"
+      ],
+      "steps": [
+        {
+          "say": "A working module behind a clean A-P-I that nobody ever changes can stay messy. Leave it alone.",
+          "reveal": 1
+        },
+        {
+          "say": "If the code doesn't work at all, rewriting may be cheaper. That's an experience call.",
+          "reveal": 2
+        },
+        {
+          "say": "No tests and no safe tools? Add tests first.",
+          "reveal": 3
+        },
+        {
+          "say": "And a public A-P-I other teams call can't just be renamed. Keep the old one working, mark it deprecated, and migrate.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Ch 7 · 7.1.4 When NOT to refactor"
+    },
+    {
+      "id": "s009",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Costs, and how to soften them",
+      "table": {
+        "head": [
+          "Problem",
+          "Mitigation"
+        ],
+        "rows": [
+          [
+            "Slows new features",
+            "Refactor code you are about to change"
+          ],
+          [
+            "Code ownership",
+            "Old name delegates, @Deprecated"
+          ],
+          [
+            "Long-lived branches",
+            "Integrate at least daily"
+          ],
+          [
+            "Database schemas",
+            "Parallel change: expand, migrate, contract"
+          ],
+          [
+            "Missing tests",
+            "Tests first; only IDE-safe moves"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "First, the worry that refactoring slows down features. You refactor because it speeds features up, so focus on the code you're about to change, not the whole codebase.",
+          "reveal": 1
+        },
+        {
+          "say": "Code ownership: you can't rename a method called from another team's repo. Keep the old name as a deprecated method that just calls the new one.",
+          "reveal": 2
+        },
+        {
+          "say": "Long-lived feature branches turn renames into merge pain. Integrate into the main line at least daily.",
+          "reveal": 3
+        },
+        {
+          "say": "Databases: use parallel change. Example, renaming a column: expand by adding the new column, migrate by copying data and switching readers, then contract by dropping the old one. Nothing is ever broken.",
+          "reveal": 4
+        },
+        {
+          "say": "And missing tests: add them first. Until they exist, use only the I-D-E's automated refactorings, which the tool proves safe.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 7 · 7.1.5 Problems and costs of refactoring"
+    },
+    {
+      "id": "s010",
+      "layout": "bullets",
+      "kicker": "Concept 6 of 22",
+      "title": "YAGNI, tests and IDE tools",
+      "bullets": [
+        "YAGNI: build for today, refactor when needs are real",
+        "Self-testing code, run after every step",
+        "Test behaviour, not private methods",
+        "Characterisation tests pin current behaviour",
+        "IDE refactors by symbol, not text",
+        "Watch reflection, config, JSON field names"
+      ],
+      "steps": [
+        {
+          "say": "Because you can reshape code safely later, build only what today needs. That's YAGNI, you aren't gonna need it. Think hard up front only about things truly hard to change, like a public A-P-I or a schema.",
+          "reveal": 1
+        },
+        {
+          "say": "The safety net is self-testing code: automated, pass or fail, runs in seconds. Run it after every step so a failure points at the three lines you just touched.",
+          "reveal": 2
+        },
+        {
+          "say": "Test through public behaviour. Tests of private methods break on every refactoring and become a cost.",
+          "reveal": 3
+        },
+        {
+          "say": "No tests at all? Write characterisation tests that record what the code does today, even if it looks wrong. Our worked example compares every step's output to the original, byte for byte.",
+          "reveal": 4
+        },
+        {
+          "say": "Your I-D-E renames by symbol, using the compiler's knowledge, not text search. A text replace of name would also hit comments and strings. In IntelliJ, rename is Shift F six, extract method is Control Alt M.",
+          "reveal": 5
+        },
+        {
+          "say": "The catch: tools miss reflection, config files and serialised names. Rename a field and your J-S-O-N response changes. That's an observable behaviour change.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Ch 7 · 7.1.6 YAGNI · 7.1.7 Tests · 7.1.8 IDE"
+    },
+    {
+      "id": "s011",
+      "layout": "bullets",
+      "kicker": "Concept 7 of 22",
+      "title": "Performance and refactoring",
+      "bullets": [
+        "JIT inlines small methods: extra calls nearly free",
+        "Most time is spent in a small part of the code",
+        "Well-factored code is easier to tune",
+        "Work, then clean, then profile and make fast"
+      ],
+      "steps": [
+        {
+          "say": "Doesn't refactoring add method calls and slow things down? Barely. The Java just-in-time compiler inlines small methods.",
+          "reveal": 1
+        },
+        {
+          "say": "Programs spend most of their time in a tiny fraction of the code. In Chrysler's slow payroll story, everyone guessed the cause wrong. Profiling found one unexpected spot.",
+          "reveal": 2
+        },
+        {
+          "say": "And in clean code, that hot spot is small and isolated, so it's easy to optimise.",
+          "reveal": 3
+        },
+        {
+          "say": "So: make it work, make it clean, then profile and speed up only the hot spots.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Ch 7 · 7.1.9 Performance and refactoring"
+    },
+    {
+      "id": "s012",
+      "layout": "twocol",
+      "kicker": "Concept 7 of 22",
+      "title": "Refactor versus rewrite",
+      "left": {
+        "heading": "Refactor",
+        "bullets": [
+          "Many tiny safe steps",
+          "System always works",
+          "Value delivered continuously"
+        ]
+      },
+      "right": {
+        "heading": "Rewrite",
+        "bullets": [
+          "One big replacement",
+          "Old bugs come back",
+          "Use a Strangler Fig"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Refactoring is many tiny steps.",
+          "reveal": 1
+        },
+        {
+          "say": "The system works the whole time.",
+          "reveal": 2
+        },
+        {
+          "say": "And you deliver value continuously.",
+          "reveal": 3
+        },
+        {
+          "say": "A rewrite is one big replacement that usually doesn't work until the end.",
+          "reveal": 4
+        },
+        {
+          "say": "Bugs fixed years ago creep back, and the old system keeps changing while you rewrite.",
+          "reveal": 5
+        },
+        {
+          "say": "If you must rewrite, use the Strangler Fig: grow the new system around the old, routing one feature at a time until the old one can be switched off.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Ch 7 · 7.1.10 Refactoring vs rewriting"
+    },
+    {
+      "id": "s013",
+      "layout": "bullets",
+      "kicker": "Concept 7 of 22",
+      "title": "Legacy code: code without tests",
+      "bullets": [
+        "1. Identify change points",
+        "2. Find test points",
+        "3. Break dependencies at a seam",
+        "4. Write characterisation tests",
+        "5. Change and refactor under the net",
+        "Sprout or Wrap the new behaviour"
+      ],
+      "steps": [
+        {
+          "say": "Michael Feathers defines legacy code as code without tests. Say you must add a fee to an old billing method. Step one: find where the change goes, the billing method.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: find where you can observe its behaviour, say the bill total it returns.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: break dependencies at a seam. The method calls new Database inside? Pass a database interface through the constructor instead, so a test can hand in a fake.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: write characterisation tests pinning today's totals.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five: make the change and refactor, safely.",
+          "reveal": 5
+        },
+        {
+          "say": "Or sprout: write the fee as a brand new, fully tested method and call it with a one-line change. Wrap is similar: rename the old method and wrap it with a new one carrying the extra behaviour.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Ch 7 · 7.1.11 Legacy code"
+    },
+    {
+      "id": "s014",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Is a bug fix during tidying one refactoring?",
+      "bullets": [
+        "Yes, if it's in the same method",
+        "No, the bug fix changes behaviour",
+        "Yes, if the tests pass"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. You're tidying a method and spot a bug. Is fixing it part of the refactoring?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s015",
+      "layout": "section",
+      "kicker": "Concept 8 of 22",
+      "title": "Code smells",
+      "steps": [
+        {
+          "say": "Answer: no. The fix changes behaviour, so it's a separate step under the other hat, ideally a separate commit.",
+          "reveal": 0
+        },
+        {
+          "say": "Now, where should you refactor? A code smell, Kent Beck's term, is a surface sign of a deeper design problem. Like a smell in the fridge, it tells you where to look, not exactly what's wrong. Smells are heuristics, not rules.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 7 · 7.2 Code smells"
+    },
+    {
+      "id": "s016",
+      "layout": "table",
+      "kicker": "Concept 8 of 22",
+      "title": "Five smell families",
+      "table": {
+        "head": [
+          "Group",
+          "Idea"
+        ],
+        "rows": [
+          [
+            "Bloaters",
+            "Grew too big: Long Function, Large Class"
+          ],
+          [
+            "OO Abusers",
+            "Wrong OO use: Repeated Switches"
+          ],
+          [
+            "Change Preventers",
+            "One change, many edits"
+          ],
+          [
+            "Dispensables",
+            "Pointless: dead code, Lazy Element"
+          ],
+          [
+            "Couplers",
+            "Too tangled: Feature Envy, Middle Man"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The refactoring dot guru site groups smells into five families. Bloaters: things that slowly grew too big, like a five-hundred-line method.",
+          "reveal": 1
+        },
+        {
+          "say": "Object-orientation abusers: half-used O-O ideas, like the same switch on a type code everywhere.",
+          "reveal": 2
+        },
+        {
+          "say": "Change preventers: one change forces many others.",
+          "reveal": 3
+        },
+        {
+          "say": "Dispensables: things you could delete and be better off.",
+          "reveal": 4
+        },
+        {
+          "say": "Couplers: classes too tangled up with each other. A few newer smells, like Mysterious Name and Global Data, sit outside these families. Now all twenty-four, with one example each.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 7 · 7.2 Smell groups"
+    },
+    {
+      "id": "s017",
+      "layout": "table",
+      "kicker": "Concept 9 of 22",
+      "title": "Smells 1 to 6",
+      "table": {
+        "head": [
+          "Smell",
+          "Example",
+          "Cure"
+        ],
+        "rows": [
+          [
+            "Mysterious Name",
+            "calc(l, d)",
+            "Rename"
+          ],
+          [
+            "Duplicated Code",
+            "net * 0.18 in two methods",
+            "Extract Function"
+          ],
+          [
+            "Long Function",
+            "printOwing does 4 jobs",
+            "Extract Function"
+          ],
+          [
+            "Long Parameter List",
+            "book(id, from, to, 2, 1, true)",
+            "Parameter Object"
+          ],
+          [
+            "Global Data",
+            "public static discountRate",
+            "Encapsulate Variable"
+          ],
+          [
+            "Mutable Data",
+            "public total, updated by hand",
+            "Derived Variable to Query"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "One, Mysterious Name. calc of l and d tells you nothing. Rename it average daily revenue of daily revenues and days in period. If you can't find a good name, the thing probably does too much.",
+          "reveal": 1
+        },
+        {
+          "say": "Two, Duplicated Code. Invoice total and quote total both add eighteen percent tax. Extract one with-tax function, so the rate lives in one place.",
+          "reveal": 2
+        },
+        {
+          "say": "Three, Long Function. Print owing prints a banner, sums orders, sets a due date and prints details. Rule of thumb: when a block wants a comment, extract it into a function named after its intent.",
+          "reveal": 3
+        },
+        {
+          "say": "Four, Long Parameter List. book with hotel, from, to, two, one, true. Which is which? Introduce Stay and Guests objects, and replace the true with a meal plan enum.",
+          "reveal": 4
+        },
+        {
+          "say": "Five, Global Data. A public static discount rate anyone can overwrite. You can't find who changed it. First move, always: Encapsulate Variable, so every write goes through one method you can search for.",
+          "reveal": 5
+        },
+        {
+          "say": "Six, Mutable Data. A cart with a public items list and a total you must update by hand. It goes stale. Hide the list, and compute the total on demand.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Ch 7 · 7.2.1 Mysterious Name to 7.2.6"
+    },
+    {
+      "id": "s018",
+      "layout": "table",
+      "kicker": "Concept 10 of 22",
+      "title": "Smells 7 to 12",
+      "table": {
+        "head": [
+          "Smell",
+          "Example",
+          "Cure"
+        ],
+        "rows": [
+          [
+            "Divergent Change",
+            "ProductService: DB + tax + CSV",
+            "Extract Class, Split Phase"
+          ],
+          [
+            "Shotgun Surgery",
+            "free shipping 500 in 4 classes",
+            "Move Function"
+          ],
+          [
+            "Feature Envy",
+            "Order computes Line's total",
+            "Move Function"
+          ],
+          [
+            "Data Clumps",
+            "(start, end) everywhere",
+            "DateRange object"
+          ],
+          [
+            "Primitive Obsession",
+            "money as double",
+            "Money value object"
+          ],
+          [
+            "Repeated Switches",
+            "switch on bird type x3",
+            "Polymorphism"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Seven, Divergent Change: one class changed for many reasons. Product service saves to My-S-Q-L, computes tax and writes C-S-V. Split it into a repository, a pricing service and a C-S-V writer.",
+          "reveal": 1
+        },
+        {
+          "say": "Eight, Shotgun Surgery, the opposite: one change, many classes. The free shipping threshold of five hundred sits in four classes. Gather it into one Shipping Policy. Divergent: split. Shotgun: gather.",
+          "reveal": 2
+        },
+        {
+          "say": "Nine, Feature Envy. Order computes a line total using only the line's price, quantity and discount. Behaviour belongs with its data, so move total onto Line.",
+          "reveal": 3
+        },
+        {
+          "say": "Ten, Data Clumps. Start date and end date always travel together. Test: delete one, and the other makes no sense alone. Make a Date Range, and contains-a-day finds a home.",
+          "reveal": 4
+        },
+        {
+          "say": "Eleven, Primitive Obsession. Money as a double. Zero point one plus zero point two prints zero point three, then lots of zeros and a four. A Money value object fixes rounding and blocks mixing rupees with dollars.",
+          "reveal": 5
+        },
+        {
+          "say": "Twelve, Repeated Switches. The same switch on bird type in speed, plumage and lifespan. Add a bird, and you edit three places. Replace Conditional with Polymorphism. One switch is fine; repetition is the smell.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Ch 7 · 7.2.7 Divergent Change to 7.2.12"
+    },
+    {
+      "id": "s019",
+      "layout": "table",
+      "kicker": "Concept 11 of 22",
+      "title": "Smells 13 to 18",
+      "table": {
+        "head": [
+          "Smell",
+          "Example",
+          "Cure"
+        ],
+        "rows": [
+          [
+            "Loops",
+            "for + if + add for IT names",
+            "Pipeline"
+          ],
+          [
+            "Lazy Element",
+            "NameFormatter only trims",
+            "Inline Class"
+          ],
+          [
+            "Speculative Generality",
+            "FactoryProvider, 1 impl",
+            "Collapse Hierarchy"
+          ],
+          [
+            "Temporary Field",
+            "tmpDistances, null mostly",
+            "Extract Class"
+          ],
+          [
+            "Message Chains",
+            "order.getCustomer().getAddress()...",
+            "Hide Delegate"
+          ],
+          [
+            "Middle Man",
+            "Person forwards 13 methods",
+            "Remove Middle Man"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Thirteen, Loops. A for loop with an if that collects I-T employees' names. Make it a pipeline: filter by department, map to name, to list. Each step is named.",
+          "reveal": 1
+        },
+        {
+          "say": "Fourteen, Lazy Element. A Name Formatter class whose only method calls trim. It costs a file and a name for nothing. Inline it.",
+          "reveal": 2
+        },
+        {
+          "say": "Fifteen, Speculative Generality. A payment processor factory provider with one implementation, ever, and a future options parameter nobody uses. That's YAGNI broken. Collapse it and delete the parameter.",
+          "reveal": 3
+        },
+        {
+          "say": "Sixteen, Temporary Field. A route planner with temp distances and temp target fields that are null except during one search. Extract a short-lived Route Search object that owns them.",
+          "reveal": 4
+        },
+        {
+          "say": "Seventeen, Message Chains. order dot get customer dot get address dot get city. The client is chained to the whole structure. Hide Delegate: order dot shipping city.",
+          "reveal": 5
+        },
+        {
+          "say": "Eighteen, Middle Man: the opposite risk. Person has thirteen methods that only forward to Department. Remove the middle man and let clients talk to the department. Hiding cures chains but can create middle men, so balance.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Ch 7 · 7.2.13 Loops to 7.2.18"
+    },
+    {
+      "id": "s020",
+      "layout": "table",
+      "kicker": "Concept 12 of 22",
+      "title": "Smells 19 to 24",
+      "table": {
+        "head": [
+          "Smell",
+          "Example",
+          "Cure"
+        ],
+        "rows": [
+          [
+            "Insider Trading",
+            "reads customer.internalTable",
+            "Move Function"
+          ],
+          [
+            "Large Class",
+            "Employee: address, pay, reviews",
+            "Extract Class"
+          ],
+          [
+            "Alt. Classes, Diff. Interfaces",
+            "sendMail vs dispatch",
+            "Common interface"
+          ],
+          [
+            "Data Class",
+            "setBalance from a service",
+            "Move Function in"
+          ],
+          [
+            "Refused Bequest",
+            "Stack extends ArrayList",
+            "Delegate"
+          ],
+          [
+            "Comments",
+            "// check senior discount",
+            "Extract Function"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Nineteen, Insider Trading. Invoice reaches into the customer's internal loyalty table. Move the rule onto Customer, and invoice just asks for loyalty discount.",
+          "reveal": 1
+        },
+        {
+          "say": "Twenty, Large Class, the God class. Employee holds name, a street-city-zip clump, salary and tax, and performance reviews. Extract Address, Compensation and Performance Record.",
+          "reveal": 2
+        },
+        {
+          "say": "Twenty-one, Alternative Classes with Different Interfaces. Email sender has send mail of to and body. S-M-S gateway has dispatch of body and phone. Align the signatures and extract one Notifier interface with send.",
+          "reveal": 3
+        },
+        {
+          "say": "Twenty-two, Data Class. Account is just get and set balance, and a service checks funds and calls set balance. Move withdraw into Account and remove the setter. Immutable records and data transfer objects, plain carriers between layers, are fine though.",
+          "reveal": 4
+        },
+        {
+          "say": "Twenty-three, Refused Bequest. A Stack that extends ArrayList inherits add at any index, which breaks stack rules and Liskov substitution. Hold a deque instead of being a list.",
+          "reveal": 5
+        },
+        {
+          "say": "Twenty-four, Comments as deodorant. A comment saying check if eligible for senior discount above a three-part condition. Extract is eligible for senior discount, and the name replaces the comment. Keep comments that explain why.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Ch 7 · 7.2.19 Insider Trading to 7.2.24"
+    },
+    {
+      "id": "s021",
+      "layout": "table",
+      "kicker": "Concept 12 of 22",
+      "title": "1st-edition smell names you'll still hear",
+      "table": {
+        "head": [
+          "Old name",
+          "Now"
+        ],
+        "rows": [
+          [
+            "Long Method / Lazy Class",
+            "Long Function / Lazy Element"
+          ],
+          [
+            "Switch Statements",
+            "Repeated Switches"
+          ],
+          [
+            "Inappropriate Intimacy",
+            "Insider Trading"
+          ],
+          [
+            "Parallel Inheritance Hierarchies",
+            "Kind of Shotgun Surgery"
+          ],
+          [
+            "Incomplete Library Class / Dead Code",
+            "Wrapper or Adapter / a refactoring"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Refactoring dot guru still uses first-edition names. Long Method became Long Function, and Lazy Class became Lazy Element.",
+          "reveal": 1
+        },
+        {
+          "say": "Switch Statements narrowed to Repeated Switches.",
+          "reveal": 2
+        },
+        {
+          "say": "Inappropriate Intimacy is now Insider Trading.",
+          "reveal": 3
+        },
+        {
+          "say": "Parallel Inheritance Hierarchies, where every new subclass needs a twin elsewhere, is a kind of Shotgun Surgery.",
+          "reveal": 4
+        },
+        {
+          "say": "Incomplete Library Class, a library missing a method, gets a wrapper or adapter. And Dead Code became the refactoring Remove Dead Code.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 7 · 7.2 1st-edition smell names"
+    },
+    {
+      "id": "s022",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "One class edited for DB, tax and CSV: which smell?",
+      "bullets": [
+        "Shotgun Surgery",
+        "Divergent Change",
+        "Feature Envy"
+      ],
+      "steps": [
+        {
+          "say": "Quick check. One class gets edited when the database changes, when tax rules change, and when the export format changes. Which smell?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s023",
+      "layout": "section",
+      "kicker": "Concept 13 of 22",
+      "title": "The refactoring catalogue",
+      "steps": [
+        {
+          "say": "Divergent Change: one class, many reasons. Shotgun Surgery would be one reason, many classes.",
+          "reveal": 0
+        },
+        {
+          "say": "Smells say where. Named refactorings say how. Fowler's second edition lists sixty-one, in seven families, plus five extras online. Each has a motivation, safe mechanics, and often an inverse, like Extract and Inline Function. Go whichever way makes your next change clearer.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 7 · 7.3 The refactoring catalogue"
+    },
+    {
+      "id": "s024",
+      "layout": "table",
+      "kicker": "Concept 13 of 22",
+      "title": "First set: the everyday ones",
+      "table": {
+        "head": [
+          "Refactoring",
+          "Before to after"
+        ],
+        "rows": [
+          [
+            "Extract / Inline Function",
+            "print lines into printDetails()"
+          ],
+          [
+            "Extract / Inline Variable",
+            "basePrice = qty * itemPrice"
+          ],
+          [
+            "Change Function Declaration",
+            "circum to circumference"
+          ],
+          [
+            "Encapsulate / Rename Variable",
+            "getter + setter, then rename"
+          ],
+          [
+            "Introduce Parameter Object",
+            "(min, max) to NumberRange"
+          ],
+          [
+            "Combine into Class / Transform",
+            "ReadingCalculator, enrichReading"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Extract Function: two print lines become print details, named after what they do. Even one line is worth extracting if the name says more. Inline Function is the reverse, when the body is as clear as the name.",
+          "reveal": 1
+        },
+        {
+          "say": "Extract Variable names parts of a hairy expression: base price, quantity discount, shipping. Inline Variable removes a temp that says nothing more than its expression.",
+          "reveal": 2
+        },
+        {
+          "say": "Change Function Declaration renames or changes parameters. Renaming circum to circumference for a public A-P-I? Migration mechanics: add the new one, make the old one delegate and mark it deprecated, migrate callers, delete.",
+          "reveal": 3
+        },
+        {
+          "say": "Encapsulate Variable wraps widely used data in accessors, giving one place to validate. Rename Variable: the wider the scope, the more the name matters.",
+          "reveal": 4
+        },
+        {
+          "say": "Introduce Parameter Object: readings outside range takes min and max. Make a Number Range record, and its contains method finds a home.",
+          "reveal": 5
+        },
+        {
+          "say": "Combine Functions into Class: base, taxable charge and base charge all take a reading, so make a Reading Calculator holding it. For read-only data, Combine into Transform returns an enriched copy with all derived values.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Ch 7 · 7.3.1 A First Set of Refactorings"
+    },
+    {
+      "id": "s025",
+      "layout": "diagram",
+      "kicker": "Concept 13 of 22",
+      "title": "Split Phase",
+      "mermaid": "flowchart LR\n  A[\"Raw line: P-42 3\"] --> B[\"Phase 1: parse\"]\n  B --> C[\"OrderRequest(42, 3)\"]\n  C --> D[\"Phase 2: price\"]\n  D --> E[\"Total: 300\"]",
+      "caption": "Two phases joined by an intermediate data structure",
+      "steps": [
+        {
+          "say": "Split Phase. One function parses an order line, then prices it. Split it in two. Phase one parses P dash forty-two, three into an Order Request record: product forty-two, quantity three.",
+          "reveal": 0
+        },
+        {
+          "say": "Phase two prices that request: three times one hundred is three hundred. Each phase changes alone. Compilers work this way, and it's the classic cure for Divergent Change.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s026",
+      "layout": "table",
+      "kicker": "Concept 14 of 22",
+      "title": "Encapsulation",
+      "table": {
+        "head": [
+          "Refactoring",
+          "Example"
+        ],
+        "rows": [
+          [
+            "Encapsulate Record / Collection",
+            "Map to record; read-only list"
+          ],
+          [
+            "Replace Primitive with Object",
+            "\"high\" to Priority enum"
+          ],
+          [
+            "Replace Temp with Query",
+            "basePrice temp to basePrice()"
+          ],
+          [
+            "Extract / Inline Class",
+            "TelephoneNumber out of Person"
+          ],
+          [
+            "Hide Delegate / Remove Middle Man",
+            "person.manager()"
+          ],
+          [
+            "Substitute Algorithm",
+            "3 ifs to Set.of(...).contains"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Encapsulation is about what each module hides. Encapsulate Record: a map with name and country keys becomes an Organization record. Encapsulate Collection: Person stops returning its live course list, offers add and remove, and returns a read-only view.",
+          "reveal": 1
+        },
+        {
+          "say": "Replace Primitive with Object: priority as the string high becomes a Priority enum with a higher than method. No more typos compiling.",
+          "reveal": 2
+        },
+        {
+          "say": "Replace Temp with Query: the local base price becomes a base price method, so the whole class can use it and extraction gets easier.",
+          "reveal": 3
+        },
+        {
+          "say": "Extract Class: area code and number move out of Person into Telephone Number. Inline Class folds a class that no longer does enough, like tracking info, back into Shipment.",
+          "reveal": 4
+        },
+        {
+          "say": "Hide Delegate: person dot get department dot get manager becomes person dot manager. Remove Middle Man is the inverse, when the forwarding takes over.",
+          "reveal": 5
+        },
+        {
+          "say": "Substitute Algorithm: three if-equals checks for Don, John and Kent become one set lookup. Swap in the clearer algorithm, with tests proving they agree.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Ch 7 · 7.3.2 Encapsulation"
+    },
+    {
+      "id": "s027",
+      "layout": "table",
+      "kicker": "Concept 15 of 22",
+      "title": "Moving features",
+      "table": {
+        "head": [
+          "Refactoring",
+          "Example"
+        ],
+        "rows": [
+          [
+            "Move Function / Field",
+            "overdraftCharge to AccountType"
+          ],
+          [
+            "Move Statements into Fn / to Callers",
+            "title line into photoData()"
+          ],
+          [
+            "Replace Inline Code with Call",
+            "loop for MA to contains(\"MA\")"
+          ],
+          [
+            "Slide Statements",
+            "declare next to first use"
+          ],
+          [
+            "Split Loop / Loop to Pipeline",
+            "youngest + salary: two loops"
+          ],
+          [
+            "Remove Dead Code",
+            "delete, Git remembers"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Move Function: overdraft charge mostly reads the account type, so it moves there. Move Field: discount rate belongs to the plan, not each customer.",
+          "reveal": 1
+        },
+        {
+          "say": "Move Statements into Function: every caller writes the title line before calling photo data, so move it inside. Move Statements to Callers is the reverse, when callers start needing different behaviour.",
+          "reveal": 2
+        },
+        {
+          "say": "Replace Inline Code with Function Call: a loop setting a flag when it finds M-A becomes states dot contains M-A.",
+          "reveal": 3
+        },
+        {
+          "say": "Slide Statements: move each declaration next to its first use. It often prepares an extraction.",
+          "reveal": 4
+        },
+        {
+          "say": "Split Loop: one loop finds the youngest age and sums salaries. Make two loops, each doing one job, then turn each into a pipeline. Iterating twice is rarely the bottleneck.",
+          "reveal": 5
+        },
+        {
+          "say": "Remove Dead Code: delete it, don't comment it out. Version control remembers.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Ch 7 · 7.3.3 Moving Features"
+    },
+    {
+      "id": "s028",
+      "layout": "table",
+      "kicker": "Concept 16 of 22",
+      "title": "Organizing data",
+      "table": {
+        "head": [
+          "Refactoring",
+          "Example"
+        ],
+        "rows": [
+          [
+            "Split Variable",
+            "temp: perimeter, then area"
+          ],
+          [
+            "Rename Field",
+            "encapsulate, then rename"
+          ],
+          [
+            "Replace Derived Variable with Query",
+            "production = sum(adjustments)"
+          ],
+          [
+            "Change Reference to Value",
+            "TelephoneNumber record"
+          ],
+          [
+            "Change Value to Reference",
+            "one Customer per ID, repository"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Split Variable: temp holds the perimeter, then gets reused for the area. One variable, two jobs. Give each its own final variable.",
+          "reveal": 1
+        },
+        {
+          "say": "Rename Field: field names explain your data, so they deserve care. Encapsulate first if it's widely used.",
+          "reveal": 2
+        },
+        {
+          "say": "Replace Derived Variable with Query: a production plan stores production and adds to it on every adjustment. Two things to keep in sync. Compute it on demand as the sum of adjustments instead.",
+          "reveal": 3
+        },
+        {
+          "say": "Change Reference to Value: a telephone number needs no identity, so make it an immutable record and replace it wholesale. Values are safe to share across threads.",
+          "reveal": 4
+        },
+        {
+          "say": "Change Value to Reference, the inverse: each order holds its own copy of customer forty-two, so updates get lost. Fetch one shared instance per I-D from a repository.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 7 · 7.3.4 Organizing Data"
+    },
+    {
+      "id": "s029",
+      "layout": "table",
+      "kicker": "Concept 17 of 22",
+      "title": "Simplifying conditionals",
+      "table": {
+        "head": [
+          "Refactoring",
+          "Example"
+        ],
+        "rows": [
+          [
+            "Decompose Conditional",
+            "isSummer(date) ? summer : regular"
+          ],
+          [
+            "Consolidate Conditional",
+            "3 return-0 checks to one"
+          ],
+          [
+            "Guard Clauses",
+            "separated? 0. retired? 0."
+          ],
+          [
+            "Conditional to Polymorphism",
+            "bird switch to Bird classes"
+          ],
+          [
+            "Introduce Special Case",
+            "UnknownCustomer, no null checks"
+          ],
+          [
+            "Introduce Assertion",
+            "assert discountRate >= 0"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Decompose Conditional: a long date-range check picking summer or regular rates becomes is summer of date, then summer charge or regular charge. The why and the what both get names.",
+          "reveal": 1
+        },
+        {
+          "say": "Consolidate Conditional: seniority under two, return zero. Disabled over twelve months, zero. Part-time, zero. That's one decision: is not eligible for disability.",
+          "reveal": 2
+        },
+        {
+          "say": "Guard Clauses: instead of nested if-else for pay amount, check the unusual cases first and return. Separated, zero. Retired, zero. Then normal pay reads straight down.",
+          "reveal": 3
+        },
+        {
+          "say": "Replace Conditional with Polymorphism: the bird speed switch becomes one class per bird, each with its own speed. A new bird is a new class, not edits to every switch.",
+          "reveal": 4
+        },
+        {
+          "say": "Introduce Special Case: every caller checks if customer is null, then says occupant. Return an Unknown Customer that answers occupant itself. That's the Null Object pattern.",
+          "reveal": 5
+        },
+        {
+          "say": "Introduce Assertion: a comment saying the rate is never negative becomes an assert. It documents the assumption. But Java asserts are off by default, so never use them for user input.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Ch 7 · 7.3.5 Simplifying Conditional Logic"
+    },
+    {
+      "id": "s030",
+      "layout": "table",
+      "kicker": "Concept 18 of 22",
+      "title": "Refactoring APIs, part 1",
+      "table": {
+        "head": [
+          "Refactoring",
+          "Example"
+        ],
+        "rows": [
+          [
+            "Separate Query from Modifier",
+            "findMiscreant + alertForMiscreant"
+          ],
+          [
+            "Parameterize Function",
+            "tenPercentRaise to raise(p, 0.10)"
+          ],
+          [
+            "Remove Flag Argument",
+            "deliveryDate(o, true) to rush..."
+          ],
+          [
+            "Preserve Whole Object",
+            "pass room.daysTempRange()"
+          ],
+          [
+            "Parameter to Query, and back",
+            "drop discountLevel param"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Separate Query from Modifier: alert for miscreant both finds the name and sets off alarms. Split it into find miscreant, which is safe to call anytime, and a modifier that sounds the alarm. That's command-query separation.",
+          "reveal": 1
+        },
+        {
+          "say": "Parameterize Function: ten percent raise and five percent raise become one raise function with a factor.",
+          "reveal": 2
+        },
+        {
+          "say": "Remove Flag Argument: what does delivery date of order, true mean? Make rush delivery date and regular delivery date.",
+          "reveal": 3
+        },
+        {
+          "say": "Preserve Whole Object: don't pull low and high out of a temperature range just to pass them. Pass the range.",
+          "reveal": 4
+        },
+        {
+          "say": "Replace Parameter with Query: if discounted price can get the discount level itself, stop making callers pass it. The inverse, Replace Query with Parameter, removes a hidden global, like a thermostat singleton, by passing the current temperature in. That makes it testable.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 7 · 7.3.6 Refactoring APIs"
+    },
+    {
+      "id": "s031",
+      "layout": "table",
+      "kicker": "Concept 18 of 22",
+      "title": "Refactoring APIs, part 2",
+      "table": {
+        "head": [
+          "Refactoring",
+          "Example"
+        ],
+        "rows": [
+          [
+            "Remove Setting Method",
+            "final field, set in constructor"
+          ],
+          [
+            "Constructor to Factory Function",
+            "Employee.createEngineer(name)"
+          ],
+          [
+            "Function to Command, and back",
+            "score() to Scorer.execute()"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Remove Setting Method: a field that never changes after construction loses its setter and becomes final.",
+          "reveal": 1
+        },
+        {
+          "say": "Replace Constructor with Factory Function: new Employee with name and the letter E is cryptic. Employee dot create engineer of name says it all, and can return a subclass or a cached instance. Think List dot of.",
+          "reveal": 2
+        },
+        {
+          "say": "Replace Function with Command: a sixty-line score function juggles three locals. Turn it into a Scorer object with those locals as fields, and split it into small methods. If a command is trivial, Replace Command with Function turns it back.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s032",
+      "layout": "table",
+      "kicker": "Concept 19 of 22",
+      "title": "Dealing with inheritance",
+      "table": {
+        "head": [
+          "Refactoring",
+          "Example"
+        ],
+        "rows": [
+          [
+            "Pull Up / Push Down Method, Field",
+            "shared name up to Employee"
+          ],
+          [
+            "Pull Up Constructor Body",
+            "super(name, id)"
+          ],
+          [
+            "Type Code to Subclasses / Remove",
+            "\"engineer\" to Engineer class"
+          ],
+          [
+            "Extract Superclass",
+            "Party over Department, Employee"
+          ],
+          [
+            "Collapse Hierarchy",
+            "merge a do-nothing subclass"
+          ],
+          [
+            "Subclass / Superclass to Delegate",
+            "PremiumDelegate; Stack holds Deque"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Pull Up Method and Field: identical methods or fields in sibling subclasses move to the parent. Push Down is the reverse, for things only one subclass uses.",
+          "reveal": 1
+        },
+        {
+          "say": "Pull Up Constructor Body: Manager's constructor sets name and I-D like every sibling. Move that into the Employee constructor and call super of name and I-D.",
+          "reveal": 2
+        },
+        {
+          "say": "Replace Type Code with Subclasses: a type string of engineer, manager or salesman becomes three subclasses created by a factory, ready for polymorphism. Remove Subclass is the inverse: Male and Female subclasses that only return a letter become one field.",
+          "reveal": 3
+        },
+        {
+          "say": "Extract Superclass: Department and Employee both have a name and an annual cost, so pull them into a Party superclass.",
+          "reveal": 4
+        },
+        {
+          "say": "Collapse Hierarchy: when parent and child are no longer different enough, merge them.",
+          "reveal": 5
+        },
+        {
+          "say": "Replace Subclass with Delegate: Premium Booking becomes a premium delegate the booking can gain at runtime. Inheritance gives you one axis; delegation gives many. Replace Superclass with Delegate cures our Stack: hold a deque, forward only push and pop.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Ch 7 · 7.3.7 Dealing with Inheritance"
+    },
+    {
+      "id": "s033",
+      "layout": "table",
+      "kicker": "Concept 20 of 22",
+      "title": "Extras on refactoring.com",
+      "table": {
+        "head": [
+          "Refactoring",
+          "Example"
+        ],
+        "rows": [
+          [
+            "Control Flag to Break",
+            "found flag to break"
+          ],
+          [
+            "Error Code to Exception",
+            "return -1 to throw"
+          ],
+          [
+            "Exception to Precheck",
+            "catch index error to bounds check"
+          ],
+          [
+            "Replace Magic Literal",
+            "9.81 to STANDARD_GRAVITY"
+          ],
+          [
+            "Return Modified Value",
+            "totalAscent = calculateAscent()"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Five extras from the online catalogue. Replace Control Flag with Break: a found boolean that only stops a loop becomes a plain break.",
+          "reveal": 1
+        },
+        {
+          "say": "Replace Error Code with Exception: withdraw returning minus one when funds are short. Callers forget to check. Throw an insufficient funds exception instead.",
+          "reveal": 2
+        },
+        {
+          "say": "Replace Exception with Precheck, the flip side: don't catch an array index exception to return zero. Check the index first.",
+          "reveal": 3
+        },
+        {
+          "say": "Replace Magic Literal: nine point eight one becomes standard gravity. Skip it when the meaning is obvious, like zero as a starting sum.",
+          "reveal": 4
+        },
+        {
+          "say": "Return Modified Value: calculate ascent secretly updates a field. Make it return the total, so the data flow is visible. And remember, first-edition aliases like Extract Method, Inline Temp and Introduce Null Object mean the same moves.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 7 · 7.3.8 Extra refactorings on refactoring.com"
+    },
+    {
+      "id": "s034",
+      "layout": "table",
+      "kicker": "Concept 21 of 22",
+      "title": "Smell to first move",
+      "table": {
+        "head": [
+          "Smell",
+          "First move"
+        ],
+        "rows": [
+          [
+            "Long Function, Duplicated Code, Comments",
+            "Extract Function"
+          ],
+          [
+            "Global / Mutable Data",
+            "Encapsulate Variable"
+          ],
+          [
+            "Feature Envy, Shotgun Surgery",
+            "Move Function"
+          ],
+          [
+            "Large Class, Data Clumps, Temp Field",
+            "Extract Class"
+          ],
+          [
+            "Repeated Switches",
+            "Conditional to Polymorphism"
+          ],
+          [
+            "Refused Bequest",
+            "Replace with Delegate"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's the lookup table in compressed form. Long Function, Duplicated Code and Comments: reach for Extract Function first.",
+          "reveal": 1
+        },
+        {
+          "say": "Global and Mutable Data: Encapsulate Variable first.",
+          "reveal": 2
+        },
+        {
+          "say": "Feature Envy and Shotgun Surgery: Move Function.",
+          "reveal": 3
+        },
+        {
+          "say": "Large Class, Data Clumps and Temporary Field: Extract Class.",
+          "reveal": 4
+        },
+        {
+          "say": "Repeated Switches: Replace Conditional with Polymorphism.",
+          "reveal": 5
+        },
+        {
+          "say": "Refused Bequest: replace the inheritance with a delegate. The full table in the notes covers all twenty-four.",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Ch 7 · 7.4 Smell to refactorings lookup table"
+    },
+    {
+      "id": "s035",
+      "layout": "table",
+      "kicker": "Concept 21 of 22",
+      "title": "Which principle each smell breaks",
+      "table": {
+        "head": [
+          "Smells",
+          "Principle"
+        ],
+        "rows": [
+          [
+            "Divergent Change, Large Class",
+            "Single Responsibility"
+          ],
+          [
+            "Repeated Switches, Shotgun Surgery",
+            "Open/Closed"
+          ],
+          [
+            "Refused Bequest",
+            "Liskov Substitution"
+          ],
+          [
+            "Feature Envy, Data Class",
+            "Tell, Don't Ask"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "And the reverse view, linking back to earlier chapters. Divergent Change and Large Class break single responsibility.",
+          "reveal": 1
+        },
+        {
+          "say": "Repeated Switches and Shotgun Surgery break open-closed: a new case means edits everywhere.",
+          "reveal": 2
+        },
+        {
+          "say": "Refused Bequest breaks Liskov substitution.",
+          "reveal": 3
+        },
+        {
+          "say": "Feature Envy and Data Class break tell, don't ask. Likewise Duplicated Code breaks D-R-Y, Speculative Generality breaks YAGNI, and Message Chains break the Law of Demeter.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s036",
+      "layout": "section",
+      "kicker": "Concept 22 of 22",
+      "title": "Worked example: messy invoice to clean",
+      "steps": [
+        {
+          "say": "Now let's watch it happen. A courier prints invoices. Each shipment has a service type, S-T-D standard, E-X-P express or F-R-G fragile, plus a weight and a distance. Standard costs five plus one point two per kilo, plus five cents for every kilometre beyond one hundred.",
+          "reveal": 0
+        },
+        {
+          "say": "The request: an H-T-M-L invoice now, and an overnight service next quarter. The code is one print function with a switch, names like shp, tot and pts, magic numbers and a dead variable. Adding H-T-M-L now would copy everything. So we refactor first.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 7 · 7.5 Worked example"
+    },
+    {
+      "id": "s037",
+      "layout": "number",
+      "title": "The safety net",
+      "big": "6 steps, SAME output",
+      "caption": "Golden output: 6 shipments, amount owed 109.90, 6 points",
+      "steps": [
+        {
+          "say": "First, a characterisation check. It records the original output, six shipments, amount owed one hundred nine point nine zero, six points, and compares every step byte for byte. It includes boundary cases: exactly one hundred kilometres, exactly ten kilos.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s038",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Six compiling steps",
+      "table": {
+        "head": [
+          "Step",
+          "Refactorings"
+        ],
+        "rows": [
+          [
+            "1",
+            "Extract Function x3, Rename, Remove Dead Code"
+          ],
+          [
+            "2",
+            "Inline Var, Split Loop, Temp to Query, Pipeline"
+          ],
+          [
+            "3",
+            "Split Phase, Transform, Encapsulate Record"
+          ],
+          [
+            "4",
+            "Primitive to enum, Replace Magic Literal"
+          ],
+          [
+            "5",
+            "Polymorphism (Tariff), Move Function"
+          ],
+          [
+            "Then",
+            "New HtmlRenderer, about 15 lines"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Step one: rename shp to Shipment, tot to total amount, pts to loyalty points. Extract the switch into amount for, the points logic into points for, and the formatting into money. Delete the unused variable. The switch was moved, not changed. Move first, change later.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: the loop still does three jobs. Inline the this-amount temp, split into separate loops, turn total and points into query methods, then pipelines. A trap: sum on a double stream may use compensated summation and differ in the last bit. We use reduce, which adds left to right like the loop.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, the key move: Split Phase. A Statement Calculator turns the invoice into Statement Data with lines, total and points. A Text Renderer only formats. Shipment and Invoice become records, and the list is copied.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: the type string becomes a Service Type enum, so a typo fails at the boundary. Every tariff number gets a name, like standard free kilometres. The switch becomes an exhaustive switch expression.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five: each branch becomes a Tariff class, a Strategy, and Express overrides loyalty points for its bonus of two. Charge moves onto Shipment, curing Feature Envy. The calculator has no conditionals left. Checker: same output, every step.",
+          "reveal": 5
+        },
+        {
+          "say": "Now we swap to the adding-function hat. The H-T-M-L renderer is about fifteen lines, reusing phase one unchanged. Overnight next quarter is one new tariff and one enum constant. Notice what we didn't do: switch money to big decimal. That changes rounding, so it's a behaviour change.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s039",
+      "layout": "diagram",
+      "title": "Final design",
+      "mermaid": "flowchart LR\n  A[\"Invoice\"] --> B[\"StatementCalculator\"]\n  B --> C[\"Shipment.charge()\"]\n  C --> D[\"Tariff: Std / Exp / Frg\"]\n  B --> E[\"StatementData\"]\n  E --> F[\"TextRenderer\"]\n  E --> G[\"HtmlRenderer\"]",
+      "caption": "Calculate once, render many ways; new tariffs plug in",
+      "steps": [
+        {
+          "say": "The final shape. The calculator reads the invoice, asks each shipment for its charge, which delegates to its tariff, and builds statement data. Text and H-T-M-L renderers both read that same data. Open for extension, closed for modification.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s040",
+      "layout": "table",
+      "kicker": "Toward patterns",
+      "title": "Refactoring toward patterns",
+      "table": {
+        "head": [
+          "Smell",
+          "Pattern",
+          "Via"
+        ],
+        "rows": [
+          [
+            "switch choosing a discount by tier",
+            "Strategy",
+            "Conditional to Polymorphism"
+          ],
+          [
+            "if status == PAID then ... everywhere",
+            "State",
+            "Type Code to state object"
+          ],
+          [
+            "if (x == null) at every call",
+            "Null Object",
+            "Introduce Special Case"
+          ],
+          [
+            "Same skeleton in sibling classes",
+            "Template Method",
+            "Extract + Pull Up Method"
+          ],
+          [
+            "new Loan(5000, false, 12)",
+            "Creation Methods",
+            "Constructor to Factory"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Patterns aren't only designed up front. You often arrive at one by refactoring, as Joshua Kerievsky shows. Strategy: a switch on customer tier picks a discount. Put one discount policy per tier in an enum map. Gold, two hundred fifty becomes two hundred. A new tier is registered, not coded into a switch.",
+          "reveal": 1
+        },
+        {
+          "say": "State: every order method checks and changes a status string. Make each state an object that allows only its own moves. New can pay or cancel. Paid can ship or cancel. Shipped can't be cancelled. Same structure as Strategy, but a state changes itself.",
+          "reveal": 2
+        },
+        {
+          "say": "Null Object: find by I-D returns an Unknown Customer that says hello occupant on the basic plan, so no client checks for null.",
+          "reveal": 3
+        },
+        {
+          "say": "Template Method: C-S-V and markdown exporters repeat header, rows, footer. A final export method holds the skeleton once, and subclasses fill in the steps.",
+          "reveal": 4
+        },
+        {
+          "say": "Creation Methods: what does false mean in new loan of five thousand, false, twelve? Loan dot term loan of five thousand and twelve, or Loan dot revolver, says it. And when a pattern stops pulling its weight, refactor away from it.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 7 · 7.6 Refactoring toward patterns"
+    },
+    {
+      "id": "s041",
+      "layout": "diagram",
+      "title": "State: an order's lifecycle",
+      "mermaid": "flowchart LR\n  N[\"NEW\"] -- \"pay\" --> P[\"PAID\"]\n  N -- \"cancel\" --> C[\"CANCELLED\"]\n  P -- \"ship\" --> S[\"SHIPPED\"]\n  P -- \"cancel\" --> C",
+      "caption": "Each state allows only its own moves",
+      "steps": [
+        {
+          "say": "Here's that state machine. Try ship while new, and you get cannot ship when new. All the rules live in the states, not scattered across if chains. And the small smell cures, like Money, Date Range and Hide Delegate on Order, are runnable in the notes.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s042",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Vehicle-type switch in 3 places: smell and fix?",
+      "bullets": [
+        "Long Function, Extract Function",
+        "Repeated Switches, Polymorphism giving Strategy",
+        "Data Class, Move Function"
+      ],
+      "steps": [
+        {
+          "say": "Last check before we wrap up. In a parking lot machine-coding round, the switch on vehicle type appears in three places. Name the smell and the fix.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s043",
+      "layout": "bullets",
+      "kicker": "Putting it together",
+      "title": "Putting it together: mistakes and interview",
+      "bullets": [
+        "Keep refactoring commits apart from features",
+        "Tiny steps, never big-bang",
+        "Rule of Three before abstracting",
+        "Know exact API semantics: sum, toList",
+        "Interview: name the smell, then the cure"
+      ],
+      "steps": [
+        {
+          "say": "Answer: Repeated Switches. Replace Conditional with Polymorphism, giving a Strategy per vehicle type. Now the common mistakes. One: calling every change refactoring. Keep refactoring commits separate, so behaviour changes don't hide.",
+          "reveal": 1
+        },
+        {
+          "say": "Two: big-bang refactoring with days of broken code. Tiny steps, test, commit.",
+          "reveal": 2
+        },
+        {
+          "say": "Three: abstracting on the first duplicate. The wrong abstraction costs more than duplication.",
+          "reveal": 3
+        },
+        {
+          "say": "Four: changing semantics while you're there. A stream's to list is unmodifiable; the old loop built a mutable list. That's a behaviour change.",
+          "reveal": 4
+        },
+        {
+          "say": "In the interview, say this: refactoring changes internal structure without changing observable behaviour, in small steps that each pass the tests. Smells show where, named refactorings fix them, tests are the net, and the goal is shipping features faster. Then name smells in their code: Long Function, Primitive Obsession, a Message Chain to Hide.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 7 · 7.7 Putting it together"
+    },
+    {
+      "id": "s044",
+      "layout": "recap",
+      "title": "TL;DR: small safe steps, named smells, named cures",
+      "bullets": [
+        "Small, behaviour-preserving steps; two hats",
+        "When: Rule of Three, preparatory, litter-pickup",
+        "24 smells say where; 5 families",
+        "61 + 5 refactorings say how",
+        "Profile later; Strangler Fig; legacy = no tests",
+        "Next: Ep 8, Design Patterns and Creational"
+      ],
+      "steps": [
+        {
+          "say": "Here's the whole episode. Refactoring is small, behaviour-preserving changes, tested after every step, and never mixed with feature work. Two hats.",
+          "reveal": 1
+        },
+        {
+          "say": "Do it by the Rule of Three, before features, while reading, and in passing. Not without a safety net.",
+          "reveal": 2
+        },
+        {
+          "say": "Twenty-four smells in five families tell you where to look.",
+          "reveal": 3
+        },
+        {
+          "say": "Sixty-one refactorings in seven families, plus five extras, tell you how. The core: extract, inline, rename, move, extract class, split phase, polymorphism.",
+          "reveal": 4
+        },
+        {
+          "say": "Refactor, then profile. Rewrite rarely, with a Strangler Fig. Legacy code means characterisation tests and seams.",
+          "reveal": 5
+        },
+        {
+          "say": "And switches lead to Strategy and State, null checks to Null Object. Next time, episode eight: Design Patterns Intro and Creational Patterns, where Factory, Builder and Singleton get the full treatment. See you there.",
+          "reveal": 6
+        }
+      ]
+    }
+  ]
+}

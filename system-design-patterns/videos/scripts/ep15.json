@@ -1,0 +1,1653 @@
+{
+  "series": "System Design Workshop",
+  "episode": 15,
+  "title": "Batch and Streaming Systems",
+  "subtitle": "From nightly jobs to never-ending pipelines, built on one log",
+  "scenes": [
+    {
+      "layout": "title",
+      "title": "Batch and Streaming Systems",
+      "subtitle": "From nightly jobs to never-ending pipelines, built on one log",
+      "steps": [
+        {
+          "say": "Welcome to episode fifteen of the System Design Workshop: batch and streaming systems. Until now we answered one request at a time. Today we ask questions about huge piles of data that never stop arriving.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll be able to design a pipeline from clicks to dashboard: MapReduce, stream processing, Lambda and Kappa, change data capture, exactly-once, backpressure, partitions, and what Kafka really guarantees.",
+          "reveal": 0
+        },
+        {
+          "say": "Keep the Module ten notes open beside the video. One online store runs through every lesson, and we finish by building its whole analytics platform.",
+          "reveal": 0
+        }
+      ],
+      "id": "s001"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Episode map",
+      "title": "Two facts organize everything",
+      "bullets": [
+        "Batch and streaming: same question, different staleness",
+        "Bounded data has an end; unbounded never does",
+        "The log is the foundation",
+        "Event time versus processing time",
+        "Throughput versus latency"
+      ],
+      "steps": [
+        {
+          "say": "Fact one. Batch and streaming are the same computation with a different staleness budget, meaning how old an answer may be. Revenue per product can be computed nightly, hours stale, or updated with every order, seconds fresh.",
+          "reveal": 1
+        },
+        {
+          "say": "Batch works on bounded data, a finished dataset like yesterday's orders. Streaming works on unbounded data that never ends, so it must decide when a partial answer is good enough to publish.",
+          "reveal": 2
+        },
+        {
+          "say": "Fact two. The log is the foundation. The write-ahead log you met in storage grows here into a platform: Kafka carries events, change data capture publishes a database's log, and replay means rereading from an earlier position.",
+          "reveal": 3
+        },
+        {
+          "say": "Two terms we'll lean on. Event time is when something happened. Processing time is when we received it. A phone order placed in a tunnel at nine oh two may arrive at nine fourteen.",
+          "reveal": 4
+        },
+        {
+          "say": "And throughput versus latency. Batch maximizes rows per hour. Streaming minimizes delay per result. Always say which one matters.",
+          "reveal": 5
+        }
+      ],
+      "id": "s002"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 1 of 17",
+      "title": "MapReduce",
+      "steps": [
+        {
+          "say": "Concept one. Finance asks for total revenue by product category, all time, by region. That's five billion order rows, about two terabytes, sitting in object storage. How do you answer it?",
+          "reveal": 0
+        }
+      ],
+      "id": "s003",
+      "caption": "Book: Module 10 · MapReduce"
+    },
+    {
+      "layout": "number",
+      "kicker": "Concept 1 of 17",
+      "title": "One machine is too slow",
+      "big": "2 TB / 100 MB/s = 5.5 hours",
+      "caption": "Just to read it, before any failure",
+      "steps": [
+        {
+          "say": "An analyst's script reads about a hundred megabytes a second. Two terabytes divided by that is twenty thousand seconds, about five and a half hours, just to read.",
+          "reveal": 0
+        },
+        {
+          "say": "Monday the cheap spot machine gets reclaimed after three hours. Wednesday a network blip kills it after four. Long jobs need two things: parallelism, and automatic recovery.",
+          "reveal": 0
+        }
+      ],
+      "id": "s004"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 1 of 17",
+      "title": "Map, combine, shuffle, reduce",
+      "bullets": [
+        "Map: each record becomes a key and value",
+        "Combine: pre-add locally on each machine",
+        "Shuffle: regroup all values by key",
+        "Reduce: merge each key's values",
+        "Rerun: pure functions make retries safe"
+      ],
+      "steps": [
+        {
+          "say": "Step one, map, run where the data lives. For each order, emit the category and the amount, like electronics, forty dollars. We ship a tiny program to the data instead of two terabytes to a program.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, combine. Each machine adds up its own amounts first, so it sends electronics, four point two million dollars once, instead of a million separate rows.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, the shuffle, the expensive middle. The framework moves every electronics subtotal to one machine and every books subtotal to another, an all-to-all sort across the network.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, reduce. The electronics reducer sums its partial totals and writes the answer.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, recovery. Map and reduce must be pure functions over input that never changes, so any task can rerun anywhere and give the same result. A dead machine costs minutes, not the job.",
+          "reveal": 5
+        }
+      ],
+      "id": "s005"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 1 of 17",
+      "title": "Revenue by category",
+      "mermaid": "flowchart LR\n  I1[\"Block 1\"] --> M1[\"Map + combine\"]\n  I2[\"Block 2\"] --> M2[\"Map + combine\"]\n  M1 --> S{\"Shuffle by key\"}\n  M2 --> S\n  S --> R1[\"Reduce: electronics\"]\n  S --> R2[\"Reduce: books\"]\n  R1 --> O[\"Totals\"]\n  R2 --> O",
+      "caption": "Split locally, regroup by key, merge",
+      "steps": [
+        {
+          "say": "Here's the shape. Blocks feed mappers, mappers pre-add, the shuffle sends each key to one reducer, and the reducers write totals. Every big analytics engine today still runs this shape underneath.",
+          "reveal": 0
+        }
+      ],
+      "id": "s006"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "200 machines, real numbers",
+      "table": {
+        "head": [
+          "Stage",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "Read",
+            "10 GB each, about 100 seconds"
+          ],
+          [
+            "Combine + shuffle",
+            "Kilobytes per machine, not terabytes"
+          ],
+          [
+            "End to end",
+            "About 10 minutes"
+          ],
+          [
+            "Machine 141 dies",
+            "30 map tasks rerun, +90 seconds"
+          ],
+          [
+            "Machine 77 is slow",
+            "Speculative copy finishes first"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's run it on two hundred machines. Each reads ten gigabytes, about a hundred seconds in parallel. Five and a half hours became under two minutes.",
+          "reveal": 1
+        },
+        {
+          "say": "Because combiners pre-added, the shuffle moves only kilobytes per machine.",
+          "reveal": 2
+        },
+        {
+          "say": "End to end, about ten minutes, mostly startup and reading.",
+          "reveal": 3
+        },
+        {
+          "say": "Machine one forty-one dies at minute four. Its thirty map tasks rerun elsewhere, adding ninety seconds. Nobody gets paged.",
+          "reveal": 4
+        },
+        {
+          "say": "Machine seventy-seven has a failing disk and crawls. That's a straggler, a task far slower than the rest. The framework launches a duplicate, the first to finish wins.",
+          "reveal": 5
+        }
+      ],
+      "id": "s007"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 1 of 17",
+      "title": "When not to use it",
+      "bullets": [
+        "Latency floor: minutes to hours, stale by design",
+        "Skew: one hot key overloads one reducer",
+        "Small data: one machine with DuckDB wins",
+        "Interactive questions: use a warehouse"
+      ],
+      "steps": [
+        {
+          "say": "The cost: a latency floor. Startup, a full pass and the shuffle mean minutes at best, and the answer reflects data as of job start.",
+          "reveal": 1
+        },
+        {
+          "say": "Watch for skew. If electronics is forty percent of orders, one reducer does forty percent of the work. Fix it with combiners or salting, splitting the key into electronics one through sixteen.",
+          "reveal": 2
+        },
+        {
+          "say": "Small data has grown. Two terabytes fits on a laptop drive, and DuckDB scans it in minutes. Exhaust one machine before renting two hundred.",
+          "reveal": 3
+        },
+        {
+          "say": "And analysts iterating need seconds, so give them a warehouse. In the interview, say: map where the data lives, combine, shuffle by key, reduce, and reruns are safe because functions are pure.",
+          "reveal": 4
+        }
+      ],
+      "id": "s008"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Average order value per country: what does map emit?",
+      "bullets": [
+        "A. (country, average)",
+        "B. (country, (amount, 1))",
+        "C. (order, country)"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. You want average order value per country. If each machine emits its own local average, can the reducer just average those averages?",
+          "reveal": 0
+        }
+      ],
+      "id": "s009"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 2 of 17",
+      "title": "MapReduce versus Spark",
+      "table": {
+        "head": [
+          "",
+          "Classic MapReduce",
+          "Spark"
+        ],
+        "rows": [
+          [
+            "Between stages",
+            "Written to disk",
+            "Kept in memory"
+          ],
+          [
+            "Shape",
+            "Map, shuffle, reduce only",
+            "Any graph of steps"
+          ],
+          [
+            "Iterative work",
+            "Chain of jobs",
+            "10 to 100 times faster"
+          ],
+          [
+            "Recovery",
+            "Rerun tasks",
+            "Rebuild from lineage"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The answer is B. An average of averages is wrong when machines hold different counts. Emit amount and a count of one, sum both, and divide only at the very end. Build aggregates from mergeable pieces. Now, concept two. Spark keeps the same split-locally-then-merge idea, but changes the implementation. Classic MapReduce saved every stage to disk. Spark holds data in memory across the whole pipeline.",
+          "reveal": 1
+        },
+        {
+          "say": "MapReduce forces map then shuffle then reduce. Spark runs any graph of steps: filter, join, group.",
+          "reveal": 2
+        },
+        {
+          "say": "So a ten-stage analysis, or training that reads the same data a hundred times, is ten to a hundred times faster.",
+          "reveal": 3
+        },
+        {
+          "say": "Recovery is the same idea. Spark records lineage, the chain of transforms, and rebuilds a lost piece from it. Takeaway: the execution model outlived the original tool. Nobody hand-writes MapReduce, but Spark, BigQuery and Snowflake all run its shape.",
+          "reveal": 4
+        }
+      ],
+      "id": "s010",
+      "caption": "Book: Module 10 · MapReduce vs. Spark"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 3 of 17",
+      "title": "Stream Processing",
+      "steps": [
+        {
+          "say": "Concept three. The nightly fraud job catches a ring of thirty stolen-card orders placed between three forty and three fifty-five. It runs at two in the morning. The goods shipped at six. Right, but eight hours too late.",
+          "reveal": 0
+        }
+      ],
+      "id": "s011",
+      "caption": "Book: Module 10 · Stream Processing"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 3 of 17",
+      "title": "A job that never ends",
+      "bullets": [
+        "State: running counts, keyed by card",
+        "Recovery: checkpoint plus rewind",
+        "Windows: tumbling, sliding, session",
+        "Event time, not arrival time",
+        "Watermark: when a window may close"
+      ],
+      "steps": [
+        {
+          "say": "Stream processing is a job that never ends. Step one, state. The job keeps a running count per card, and every event for card one twenty-three is routed to the one instance that owns that card. Forty servers each seeing a fortieth of the orders could never count correctly.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, recovery. Every thirty seconds the job saves a snapshot of all state together with its log position. After a crash it loads the snapshot, rewinds the log, and replays. Some events get processed twice, so outputs must tolerate duplicates.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, windows, which slice endless input into finite pieces. Tumbling windows are back-to-back, like orders per minute. Sliding windows overlap, like the last ten minutes rechecked every thirty seconds. Session windows close after a gap, like thirty idle minutes.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, time. Count the tunnel order at nine oh two, when it happened, not nine fourteen, when it arrived. Arrival time measures the network, not your users.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, the watermark: the job's claim that it has probably seen everything up to some time. When the watermark passes nine oh five, the nine oh five window closes and emits.",
+          "reveal": 5
+        }
+      ],
+      "id": "s012"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Fraud rule: more than 5 orders in 10 minutes",
+      "table": {
+        "head": [
+          "Moment",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "Order 6 at 3:44 PM",
+            "Alert in about 200 ms, goods still here"
+          ],
+          [
+            "State size",
+            "200,000 cards x few bytes = megabytes"
+          ],
+          [
+            "Crash",
+            "Load 30-second checkpoint, replay in a minute"
+          ],
+          [
+            "Replayed alert",
+            "Sink dedupes on card and window"
+          ],
+          [
+            "Order arrives 12 min late",
+            "Fraud updates; dashboard drops it"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Now replay Tuesday with streaming. Order six from the ring arrives at three forty-four. Log, operator, count updated, threshold checked, alert, in about two hundred milliseconds. The goods never leave.",
+          "reveal": 1
+        },
+        {
+          "say": "How much state? About two hundred thousand active cards, a few bytes each. Megabytes. Do that arithmetic before buying heavy state storage.",
+          "reveal": 2
+        },
+        {
+          "say": "The job crashes. It loads the thirty-second-old checkpoint, rewinds thirty seconds and reprocesses, in under a minute, with nothing missed.",
+          "reveal": 3
+        },
+        {
+          "say": "The replay sends some alerts twice, so the alert sink dedupes on card and window.",
+          "reveal": 4
+        },
+        {
+          "say": "And the late tunnel order? Fraud's policy is to process it and alert late. The dashboard on the same stream just drops it. Same stream, two policies: the late policy belongs to the question, not the pipeline.",
+          "reveal": 5
+        }
+      ],
+      "id": "s013"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Outage delays 20 min of events. Arrival-time chart shows?",
+      "bullets": [
+        "A. The true traffic",
+        "B. A fake dip, then a fake spike",
+        "C. Nothing at all"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Twenty minutes of app events are stuck, then land in one burst. If you count by arrival time, what does your chart show?",
+          "reveal": 0
+        }
+      ],
+      "id": "s014"
+    },
+    {
+      "layout": "twocol",
+      "kicker": "Concept 4 of 17",
+      "title": "True streaming versus micro-batch",
+      "left": {
+        "heading": "True streaming",
+        "bullets": [
+          "Per event, milliseconds",
+          "Fraud, alerts, sub-second features",
+          "Flink"
+        ]
+      },
+      "right": {
+        "heading": "Micro-batch",
+        "bullets": [
+          "Tiny jobs every few seconds",
+          "Dashboards, one-minute budgets",
+          "Spark Structured Streaming"
+        ]
+      },
+      "steps": [
+        {
+          "say": "The answer is B. A fake quiet dip during the outage, then a fake spike now. Event time keeps real timestamps, so the numbers settle on reality. Concept four: true streaming versus micro-batch. True streaming handles each event as it arrives, so latency is milliseconds.",
+          "reveal": 1
+        },
+        {
+          "say": "It fits fraud checks, alerting, and features needed in under a second.",
+          "reveal": 2
+        },
+        {
+          "say": "Flink is the classic engine for it.",
+          "reveal": 3
+        },
+        {
+          "say": "Micro-batch runs tiny jobs every few seconds, carrying state from run to run. Its latency floor is the batch interval.",
+          "reveal": 4
+        },
+        {
+          "say": "It's much easier to reason about, and fine for a dashboard with a one-minute budget.",
+          "reveal": 5
+        },
+        {
+          "say": "Spark Structured Streaming does this at scale. The rule: the budget chooses the tool. One minute, micro-batch. One second, true streaming.",
+          "reveal": 6
+        }
+      ],
+      "id": "s015",
+      "caption": "Book: Stream Processing · True streaming vs. micro-batch"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 5 of 17",
+      "title": "Lambda Architecture",
+      "steps": [
+        {
+          "say": "Concept five. Wednesday, finance sees Tuesday's revenue as four hundred twelve thousand eight hundred eighty dollars on the live dashboard, and four hundred thirteen thousand two hundred five in the batch report. Which is the truth? Nobody ever decided.",
+          "reveal": 0
+        }
+      ],
+      "id": "s016",
+      "caption": "Book: Module 10 · Lambda and Kappa"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 5 of 17",
+      "title": "Three layers and an overwrite",
+      "bullets": [
+        "Speed layer: streaming, fast, provisional",
+        "Batch layer: slow, authoritative, from raw history",
+        "Serving layer: recent from speed, settled from batch",
+        "The overwrite: batch replaces each period"
+      ],
+      "steps": [
+        {
+          "say": "Lambda runs both pipelines on purpose. Layer one, the speed layer, is the stream: Tuesday's revenue within seconds, but provisional.",
+          "reveal": 1
+        },
+        {
+          "say": "Layer two, the batch layer, recomputes Tuesday from raw history at two in the morning. Slow, but authoritative.",
+          "reveal": 2
+        },
+        {
+          "say": "Layer three, the serving layer, stitches them: today's hours from speed, settled days from batch.",
+          "reveal": 3
+        },
+        {
+          "say": "The key mechanism is the overwrite. Tuesday's deploy silently lost about three hundred orders from the stream. At two A M, batch replaces Tuesday's numbers, and the bug heals itself. Lambda doesn't prevent stream errors. It limits their lifetime to one batch cycle. The cost: every metric is written twice, and the two codebases drift.",
+          "reveal": 4
+        }
+      ],
+      "id": "s017"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 6 of 17",
+      "title": "Kappa: one pipeline, replay to fix",
+      "bullets": [
+        "Deploy job v2 with the fix",
+        "v2 replays the log from an old offset",
+        "v2 catches up, runs beside v1, compare",
+        "Point consumers at v2, retire v1"
+      ],
+      "steps": [
+        {
+          "say": "Concept six, Kappa, from Jay Kreps. Keep one streaming codebase and a log that retains history. Step one: fix the deploy-gap bug and deploy version two of the job.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: version two reads from Monday's offset, an offset being a position in the log. At about fifty times the live rate, two days reprocess in under an hour.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: version two catches up to now and runs beside version one. You check it against finance's four hundred thirteen thousand two hundred five.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: point the dashboard at version two and retire version one. It's the zero-downtime migration playbook, applied to pipelines. One codebase means drift is impossible. The cost: long retention, burst replay capacity, and a mature stream engine.",
+          "reveal": 4
+        }
+      ],
+      "id": "s018",
+      "caption": "Book: Lambda and Kappa · How it works - Kappa"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 6 of 17",
+      "title": "Lambda versus Kappa",
+      "mermaid": "flowchart LR\n  E1[(\"Raw events\")] --> SP[\"Speed layer\"]\n  E1 --> BL[\"Batch layer\"]\n  SP --> SV[\"Serving layer\"]\n  BL -->|\"overwrite\"| SV\n  E2[(\"Retained log\")] --> V1[\"Job v1\"]\n  E2 -->|\"replay\"| V2[\"Job v2\"]\n  V1 --> OUT[\"Output\"]\n  V2 -.->|\"verify, switch\"| OUT",
+      "caption": "Lambda: two paths and an overwrite. Kappa: one path and a replay.",
+      "steps": [
+        {
+          "say": "On top, Lambda: raw events feed two layers, and batch overwrites the serving layer. Below, Kappa: one retained log, and recovery is just replaying into a new job version.",
+          "reveal": 0
+        }
+      ],
+      "id": "s019"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 7 of 17",
+      "title": "The pragmatic synthesis",
+      "bullets": [
+        "Most teams: stream for ops, warehouse for analysis",
+        "Danger: accidental Lambda, two codes, no overwrite",
+        "Fix: one shared metric-definition library",
+        "Keep scheduled backfills from Lambda",
+        "Engines converge: Flink batch, Iceberg, Delta"
+      ],
+      "steps": [
+        {
+          "say": "Concept seven, what real teams do. Most run a dual path: streaming for operational freshness, a warehouse for deep analysis.",
+          "reveal": 1
+        },
+        {
+          "say": "The danger is accidental Lambda: two pipelines, no automatic overwrite. All the duplication, none of the recovery. That's exactly the four hundred twelve versus four hundred thirteen thousand incident, plus a discount rule changed only in batch.",
+          "reveal": 2
+        },
+        {
+          "say": "The fix is one shared metric-definition library, written once and run by both engines.",
+          "reveal": 3
+        },
+        {
+          "say": "Keep Lambda's best idea as scheduled backfills, recomputing a past period and replacing it, so any streaming error has a bounded lifetime.",
+          "reveal": 4
+        },
+        {
+          "say": "And the tools are converging: Flink runs batch, Spark runs streams, and lakehouse tables like Iceberg take streaming writes and batch queries. In the interview, say: one definition, one logic source, one owner per metric.",
+          "reveal": 5
+        }
+      ],
+      "id": "s020",
+      "caption": "Book: Lambda and Kappa · The pragmatic synthesis"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 8 of 17",
+      "title": "Change Data Capture",
+      "steps": [
+        {
+          "say": "Concept eight. Orders exist in the database but not in search. A bulk import never invalidated the cache. The warehouse reads two terabytes nightly to find twenty gigabytes of changes. Four incidents, one root cause.",
+          "reveal": 0
+        }
+      ],
+      "id": "s021",
+      "caption": "Book: Module 10 · Change Data Capture"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 8 of 17",
+      "title": "Why the obvious fixes fail",
+      "bullets": [
+        "Dual write: crash between writes, silent loss",
+        "Polling: deletes are invisible",
+        "Polling: intermediate states collapse",
+        "Triggers: extra work in every transaction"
+      ],
+      "steps": [
+        {
+          "say": "Fix one, the dual write: update the database, then call search. Imagine the app crashes between the two. No transaction covers both, so they stay out of sync forever, with no error. That's loss, not lag.",
+          "reveal": 1
+        },
+        {
+          "say": "Fix two, polling: select rows where updated at is newer than last check. But a deleted row matches no query, so search keeps a ghost row.",
+          "reveal": 2
+        },
+        {
+          "say": "Polling also collapses states. Three updates between polls look like one. Fine for a cache, wrong for an audit.",
+          "reveal": 3
+        },
+        {
+          "say": "Fix three, database triggers. The right idea, they see every write, but they add work to every transaction, and the database already keeps an ordered record underneath.",
+          "reveal": 4
+        }
+      ],
+      "id": "s022"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 8 of 17",
+      "title": "Tail the write-ahead log",
+      "bullets": [
+        "Cannot miss: every commit passes the log",
+        "Deletes arrive as tombstones",
+        "Ordered per key, in commit order",
+        "At-least-once: consumers must be idempotent",
+        "Zero application changes",
+        "Snapshot first, then tail with no gap"
+      ],
+      "steps": [
+        {
+          "say": "Change data capture, or C-D-C, turns the database's own write-ahead log into a public stream. A connector like Debezium reads the log the way a replica would, but publishes each change. It can't miss: bulk imports and hand-typed SQL updates all pass through the log.",
+          "reveal": 1
+        },
+        {
+          "say": "Deletes arrive as tombstones, events that say this key no longer exists. No ghost rows.",
+          "reveal": 2
+        },
+        {
+          "say": "Changes come in commit order, so per key they're ordered for free.",
+          "reveal": 3
+        },
+        {
+          "say": "Delivery is at-least-once. After a crash the connector resumes from its saved position and may repeat, so consumers must be idempotent, meaning applying twice equals applying once.",
+          "reveal": 4
+        },
+        {
+          "say": "Next, zero application changes. You get a full change history without rewriting the app, and without adopting event sourcing, where every change is stored as an event.",
+          "reveal": 5
+        },
+        {
+          "say": "And a new consumer starts with a consistent snapshot of the table, then switches to tailing with no gap.",
+          "reveal": 6
+        }
+      ],
+      "id": "s023"
+    },
+    {
+      "id": "s023b",
+      "layout": "diagram",
+      "kicker": "Concept 8 of 17",
+      "title": "Every write path lands in the log",
+      "mermaid": "flowchart LR\n  A[\"App code\"] --> W[(\"Database WAL\")]\n  B[\"Bulk import\"] --> W\n  M[\"Manual SQL fix\"] --> W\n  W --> D[\"Debezium connector\"]\n  D --> T[(\"Changes topic\")]\n  T --> S[\"Search indexer\"]\n  T --> C[\"Cache invalidator\"]\n  T --> H[\"Warehouse\"]",
+      "caption": "One integration, many independent readers",
+      "steps": [
+        {
+          "say": "Here's the picture. App code, bulk imports and manual fixes all land in the write-ahead log. Debezium reads it and publishes ordered change events to one topic.",
+          "reveal": 0
+        },
+        {
+          "say": "The search indexer, the cache invalidator and the warehouse each read that topic on their own. One integration, many readers.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "The four incidents, fixed",
+      "table": {
+        "head": [
+          "Consumer",
+          "With CDC"
+        ],
+        "rows": [
+          [
+            "Search index",
+            "Under a second fresh; outage means lag"
+          ],
+          [
+            "Cache",
+            "Delete key on every change event"
+          ],
+          [
+            "Warehouse",
+            "400 writes/s x 500 B = 200 KB/s"
+          ],
+          [
+            "Connector down 6 to 8 PM",
+            "Log retained, catches up in minutes"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's replay the incidents. Search: the indexer applies every change within a second. A connector outage becomes measurable lag, never permanent mismatch.",
+          "reveal": 1
+        },
+        {
+          "say": "Cache: a consumer deletes the cache key on every change, so forgotten invalidations disappear.",
+          "reveal": 2
+        },
+        {
+          "say": "Warehouse: instead of reading two terabytes nightly, we stream four hundred writes a second at five hundred bytes, about two hundred kilobytes a second. Yesterday becomes seconds ago.",
+          "reveal": 3
+        },
+        {
+          "say": "Failure drill: the connector stops Friday at six P M and nobody notices until eight. The database keeps the unread log because of the replication slot, a bookmark for that reader. Restart, and it catches up in minutes. But alert on slot lag: a connector dead for thirty hours can fill the primary's disk.",
+          "reveal": 4
+        }
+      ],
+      "id": "s024"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 9 of 17",
+      "title": "Three ways to publish a change",
+      "table": {
+        "head": [
+          "",
+          "Dual write",
+          "Raw CDC",
+          "Outbox + CDC"
+        ],
+        "rows": [
+          [
+            "Atomic",
+            "No, can tear",
+            "Yes",
+            "Yes, one transaction"
+          ],
+          [
+            "Carries intent",
+            "Maybe",
+            "No, row diffs",
+            "Yes"
+          ],
+          [
+            "Consumers coupled to",
+            "Your API",
+            "Your table schema",
+            "A designed contract"
+          ],
+          [
+            "Use for",
+            "Nothing",
+            "Your own caches, index",
+            "Other teams' events"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept nine, three ways to publish a change. First, atomicity. The dual write can tear. Raw CDC is atomic because the log is the commit. The outbox pattern writes the business event into an outbox table in the same transaction as the data change: both or neither.",
+          "reveal": 1
+        },
+        {
+          "say": "Second, intent. Raw CDC says row eighty-four twelve went from active to cancelled. The outbox says order cancelled, reason: delivery delay. Diffs versus meaning.",
+          "reveal": 2
+        },
+        {
+          "say": "Third, coupling. Raw CDC ties consumers to your table schema, so renaming a column breaks them. The outbox gives them a contract you designed.",
+          "reveal": 3
+        },
+        {
+          "say": "So the rule: raw CDC for infrastructure you own, like caches, indexes and the warehouse. Outbox for events other teams consume. Never dual writes.",
+          "reveal": 4
+        }
+      ],
+      "id": "s025",
+      "caption": "Book: CDC · Three ways to publish a change"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Billing double-counts. Will output dedupe fix it?",
+      "bullets": [
+        "A. Yes, duplicates are dropped",
+        "B. No, internal counts still double",
+        "C. Only with more partitions"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. A billing job counts API calls per partner. After a crash and rewind, partner A was billed one thousand forty-one calls instead of nine hundred eighty-seven. Does deduping the outputs fix it?",
+          "reveal": 0
+        }
+      ],
+      "id": "s026"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 10 of 17",
+      "title": "Exactly-once: an effect, not delivery",
+      "bullets": [
+        "At-least-once: never lost, sometimes twice",
+        "At-most-once: never twice, sometimes lost",
+        "Coupling 1: state saved with its offset",
+        "Coupling 2: outputs committed with offset",
+        "Boundary: emails and webhooks not covered"
+      ],
+      "steps": [
+        {
+          "say": "The answer is B. The output dedupe drops a repeated row, but the job's internal running count already added those events again. Concept ten, exactly-once. Mode one, at-least-once: commit your reading position after processing. A crash replays forty minutes, and partner A is overbilled.",
+          "reveal": 1
+        },
+        {
+          "say": "Mode two, at-most-once: commit before processing. A crash loses in-flight events, and you underbill, silently, for months.",
+          "reveal": 2
+        },
+        {
+          "say": "Exactly-once delivery is impossible over a failing network. But an exactly-once effect is buildable: keep at-least-once and add two couplings. Coupling one: save the running counts atomically with the log offset, so a rewind restores both to the same moment.",
+          "reveal": 3
+        },
+        {
+          "say": "Coupling two: make outputs move with offsets, using either a transactional sink or idempotent upserts. More on those next.",
+          "reveal": 4
+        },
+        {
+          "say": "The boundary: this only holds inside the log system. An email sent from the pipeline needs its own idempotency key.",
+          "reveal": 5
+        }
+      ],
+      "id": "s027",
+      "caption": "Book: Module 10 · Exactly-Once Semantics"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Example",
+      "title": "Crash drill: the billing job",
+      "mermaid": "flowchart LR\n  L[\"Log\"] -->|\"events to 10,000\"| J[\"Job\"]\n  J -->|\"snapshot + offset 10,000\"| C[\"Checkpoint\"]\n  J -->|\"10,001 to 10,412 open txn\"| S[\"Txn sink\"]\n  S -->|\"crash: abort\"| X[\"Hidden\"]\n  C -->|\"restore at 10,000\"| J",
+      "caption": "Partner A's count lands on exactly 987",
+      "steps": [
+        {
+          "say": "Walk through it. The last checkpoint covers event ten thousand. The job writes outputs for events up to ten thousand four hundred twelve in an open transaction, then crashes.",
+          "reveal": 0
+        },
+        {
+          "say": "The open transaction aborts, so readers never see it. State restores at ten thousand, the log replays the same four hundred twelve events, and they commit once. Partner A is billed exactly nine hundred eighty-seven. The price: about three to five percent throughput, and outputs only as fresh as the two-second checkpoint.",
+          "reveal": 0
+        }
+      ],
+      "id": "s028"
+    },
+    {
+      "layout": "twocol",
+      "kicker": "Concept 11 of 17",
+      "title": "Idempotent sink versus transactional sink",
+      "left": {
+        "heading": "Idempotent sink",
+        "bullets": [
+          "Upsert (partner, day) = count",
+          "Replay writes the same value",
+          "Fresh at once; try it first"
+        ]
+      },
+      "right": {
+        "heading": "Transactional sink",
+        "bullets": [
+          "Outputs + offsets commit together",
+          "Readers see committed data only",
+          "For money and ledgers"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept eleven. An idempotent sink uses a deterministic key. Upsert, meaning insert or overwrite, partner and day equals count.",
+          "reveal": 1
+        },
+        {
+          "say": "On replay it writes the identical value again, so nothing changes.",
+          "reveal": 2
+        },
+        {
+          "say": "No transactions and no delay. It covers about eighty percent of cases, so try it first.",
+          "reveal": 3
+        },
+        {
+          "say": "A transactional sink, like Kafka transactions, commits outputs and consumed offsets together, all or nothing.",
+          "reveal": 4
+        },
+        {
+          "say": "Downstream readers set to read committed only see finished transactions, so outputs advance in checkpoint-sized steps.",
+          "reveal": 5
+        },
+        {
+          "say": "Use it where atomicity with offsets is a must: invoices, ledgers. So on one stream, the live dashboard uses upserts and billing uses transactions. The guarantee belongs to the question.",
+          "reveal": 6
+        }
+      ],
+      "id": "s029",
+      "caption": "Book: Exactly-Once · Idempotent sink vs. transactional sink"
+    },
+    {
+      "layout": "number",
+      "kicker": "Concept 12 of 17",
+      "title": "Rate mismatch is normal",
+      "big": "5,000/s in - 3,000/s out = 2,000/s piling up",
+      "caption": "Book: Module 10 · Backpressure",
+      "steps": [
+        {
+          "say": "Concept twelve, backpressure. A producer sends five thousand events a second. The consumer handles three thousand. Every second, two thousand more pile up.",
+          "reveal": 0
+        },
+        {
+          "say": "An unbounded buffer will run out of memory. The only question is when. Backpressure means choosing deliberately what gives.",
+          "reveal": 0
+        }
+      ],
+      "id": "s030"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 12 of 17",
+      "title": "Exactly three responses",
+      "bullets": [
+        "Buffer it, bounded: for short bursts",
+        "Drop it, by policy: when old data is worthless",
+        "Slow the producer: for lasting mismatch",
+        "Log between stages: mismatch becomes lag"
+      ],
+      "steps": [
+        {
+          "say": "Response one, a bounded buffer, with a fixed maximum. It fits a burst in front of a consumer that can catch up. A ninety-second spike at ten times normal traffic? Size the buffer for ninety seconds of it.",
+          "reveal": 1
+        },
+        {
+          "say": "Response two, drop by explicit policy. A driver's live location: keep only the latest, drop the older ones. A one-slot buffer.",
+          "reveal": 2
+        },
+        {
+          "say": "Response three, slow the producer. TCP windows tell the sender how much it may send. Flink credits shrink stage by stage. Reactive streams let the consumer request n more items. And Kafka's pull model means the consumer fetches only when ready, so its pace is the flow rate. At the edge, this becomes a four twenty-nine, too many requests.",
+          "reveal": 3
+        },
+        {
+          "say": "The go-to design: a Kafka topic between stages. The mismatch becomes consumer lag you can see, alert on, and autoscale from. Inside a pipeline, one slow sink paces every stage, and checkpoint timeouts are often the first symptom. A log seam before the slow sink isolates it.",
+          "reveal": 4
+        }
+      ],
+      "id": "s031"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Example",
+      "title": "Pressure travels upstream",
+      "mermaid": "flowchart LR\n  P[\"Producer\"] --> A[\"Stage A\"]\n  A --> B[\"Stage B\"]\n  B --> K[(\"Log seam\")]\n  K --> W[\"Slow warehouse sink\"]\n  B -.->|\"credits shrink\"| A\n  A -.->|\"429 at edge\"| P",
+      "caption": "With the seam, only the warehouse sink falls behind",
+      "steps": [
+        {
+          "say": "Example. At one fifty-five a table lock slows the warehouse sink. Without a seam, its full channels shrink credits stage by stage. Checkpoints time out at two, lag alerts fire at two twenty, and finally the producer gets four twenty-nines.",
+          "reveal": 0
+        },
+        {
+          "say": "With a log seam, the sink lags on its own topic, and the main pipeline keeps running at full speed.",
+          "reveal": 0
+        }
+      ],
+      "id": "s032"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Billing, driver map, 10x burst: which response each?",
+      "bullets": [
+        "A. Drop, buffer, slow",
+        "B. Log buffer, keep-latest, bounded buffer",
+        "C. Slow, slow, slow"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Three streams: order events feeding billing, live driver locations on a map, and a ninety-second burst at ten times normal traffic. Buffer, drop, or slow, for each?",
+          "reveal": 0
+        }
+      ],
+      "id": "s033"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 13 of 17",
+      "title": "When dropping is right",
+      "bullets": [
+        "Freshness-only: positions, video frames",
+        "Sampled observability: metrics, traces",
+        "Never: billing events, orders, facts",
+        "Audit every unbounded queue setting"
+      ],
+      "steps": [
+        {
+          "say": "The answer is B. Orders buffer in the log and are never dropped. Driver locations keep only the latest. The burst gets a bounded buffer sized for it. Which brings us to concept thirteen. Drop when the newest value replaces older ones: a driver's position, a video frame three seconds old.",
+          "reveal": 1
+        },
+        {
+          "say": "Drop when the data is designed to be sampled, like metrics and traces.",
+          "reveal": 2
+        },
+        {
+          "say": "Never drop money or facts. Billing events and orders stay in a log, or the source slows down.",
+          "reveal": 3
+        },
+        {
+          "say": "And hunt hidden unbounded buffers: in-memory queues, default thread-pool queues. Each one is a capacity decision nobody made.",
+          "reveal": 4
+        }
+      ],
+      "id": "s034",
+      "caption": "Book: Backpressure · When dropping is right"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 14 of 17",
+      "title": "Partitioned Consumption",
+      "steps": [
+        {
+          "say": "Concept fourteen. Two workers grab the same customer's events, and a refund is processed before its charge. But one in-order worker can't scale. How do you get both order and parallelism?",
+          "reveal": 0
+        }
+      ],
+      "id": "s035",
+      "caption": "Book: Module 10 · Partitioned Consumption"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 14 of 17",
+      "title": "Order per key, parallelism across keys",
+      "bullets": [
+        "Route: partition = hash(customer) mod 12",
+        "One consumer owns each partition",
+        "Offsets per partition, commit after work",
+        "Rebalance when consumers come and go",
+        "Partition count = max parallelism"
+      ],
+      "steps": [
+        {
+          "say": "Step one, the producer routes by key. Partition equals hash of customer ID, mod twelve. Customer eighty-four twelve always lands in partition seven, in order.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, within a consumer group exactly one consumer owns each partition. Three consumers, four partitions each. Only one reader per lane, so order holds.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, each partition has an offset, a bookmark. Commit after processing, which is at-least-once, so handlers must be idempotent.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, when a consumer joins or dies, partitions are reassigned, and processing pauses briefly. That's a rebalance.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, twelve partitions means at most twelve busy consumers. A thirteenth idles. Growing from twelve to twenty-four later reroutes keys and breaks ordering, so buy plenty up front.",
+          "reveal": 5
+        }
+      ],
+      "id": "s036"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 14 of 17",
+      "title": "Key-hashed lanes",
+      "mermaid": "flowchart LR\n  PR[\"Producer: hash key mod 12\"] --> P0[\"P0 to P3\"]\n  PR --> P4[\"P4 to P7\"]\n  PR --> P8[\"P8 to P11\"]\n  P0 --> CA[\"Consumer A\"]\n  P4 --> CB[\"Consumer B\"]\n  P8 --> CC[\"Consumer C\"]",
+      "caption": "Each lane has exactly one reader",
+      "steps": [
+        {
+          "say": "Here's the picture. One producer hashes keys into twelve lanes, and each consumer owns its own lanes. Ordered within a lane, parallel across lanes.",
+          "reveal": 0
+        }
+      ],
+      "id": "s037"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Sizing and the hot partition",
+      "table": {
+        "head": [
+          "Question",
+          "Answer"
+        ],
+        "rows": [
+          [
+            "50,000/s, 2,000/s per consumer",
+            "25 minimum"
+          ],
+          [
+            "Volume doubles every 18 months",
+            "Choose 96 to 128"
+          ],
+          [
+            "20 consumers, no speedup",
+            "Partition 7 lag is 40 times others"
+          ],
+          [
+            "Fix the hot key",
+            "Own topic, or salt if order allows"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Example. Fifty thousand events a second, each consumer handles two thousand. That's twenty-five partitions minimum.",
+          "reveal": 1
+        },
+        {
+          "say": "Volume doubles every eighteen months, so choose ninety-six to one twenty-eight. Partitions are cheap. Resizing is surgery.",
+          "reveal": 2
+        },
+        {
+          "say": "Later, someone goes from twelve to twenty consumers and nothing improves. Partition seven's lag is forty times the others. One huge customer lives there. Hashing spreads keys, not weight.",
+          "reveal": 3
+        },
+        {
+          "say": "Extra consumers can't split a partition. Give that customer its own topic, or use a composite key if their ordering allows. Check lag per partition, not just total.",
+          "reveal": 4
+        }
+      ],
+      "id": "s038"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 15 of 17",
+      "title": "Partitioned log versus competing consumers",
+      "table": {
+        "head": [
+          "",
+          "Partitioned log",
+          "Competing consumers"
+        ],
+        "rows": [
+          [
+            "Ordering",
+            "Strict per key",
+            "None"
+          ],
+          [
+            "Scaling",
+            "By partition, fixed early",
+            "Add a worker anytime"
+          ],
+          [
+            "Replay",
+            "Rewind offsets",
+            "Gone once acknowledged"
+          ],
+          [
+            "Fits",
+            "Orders, keyed facts",
+            "Image resizes, emails"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept fifteen. A partitioned log, like Kafka, gives strict order per key. Competing consumers, like Amazon S-Q-S, let any worker take any message, so no order.",
+          "reveal": 1
+        },
+        {
+          "say": "The log scales by partition, a ceiling chosen early. A queue scales by worker, add one whenever.",
+          "reveal": 2
+        },
+        {
+          "say": "The log keeps history, so you can rewind. A queue forgets a message once it's acknowledged.",
+          "reveal": 3
+        },
+        {
+          "say": "Ruling: independent jobs like image resizes go to competing consumers. Ordered facts like orders go to a partitioned log.",
+          "reveal": 4
+        }
+      ],
+      "id": "s039",
+      "caption": "Book: Partitioned Consumption · Log vs. competing-consumer queue"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 16 of 17",
+      "title": "Inside Kafka",
+      "steps": [
+        {
+          "say": "Concept sixteen. A team believed Kafka never loses messages. Their producers used acks equals one. A broker's disk failed before followers copied the last forty milliseconds, and about eight hundred confirmed orders vanished. Let's open the box.",
+          "reveal": 0
+        }
+      ],
+      "id": "s040",
+      "caption": "Book: Module 10 · Inside Kafka"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 16 of 17",
+      "title": "Storage: segments, retention, compaction",
+      "bullets": [
+        "Partition = folder of segment files",
+        "Sparse index: offset to byte position",
+        "Delete policy: drop old segments after 7 days",
+        "Compact policy: keep latest value per key",
+        "Fast: sequential I/O, page cache, zero-copy"
+      ],
+      "steps": [
+        {
+          "say": "A partition is a folder of segment files. Only the newest segment is written, append only. At one gigabyte it closes and a new one starts.",
+          "reveal": 1
+        },
+        {
+          "say": "To find offset five hundred thousand one twenty-three, Kafka binary-searches a sparse index, jumps nearby, and scans a few kilobytes.",
+          "reveal": 2
+        },
+        {
+          "say": "Retention with the delete policy simply removes whole old segments, say after seven days. A cheap file delete.",
+          "reveal": 3
+        },
+        {
+          "say": "The compact policy keeps only the latest record per key, like the current name of each product. That's how a CDC reference table stays small.",
+          "reveal": 4
+        },
+        {
+          "say": "Why so fast? Sequential disk writes, the operating system's page cache, zero-copy sends straight to the network, compressed batches end to end, and pull with long polling, where the broker holds a fetch until data arrives.",
+          "reveal": 5
+        }
+      ],
+      "id": "s041"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 16 of 17",
+      "title": "Replication: leader, ISR, high watermark",
+      "bullets": [
+        "Leader takes writes; followers fetch",
+        "ISR: replicas caught up within 30 seconds",
+        "High watermark: what every ISR member has",
+        "acks=all: answer after the ISR has it",
+        "min ISR 2: refuse writes with one copy"
+      ],
+      "steps": [
+        {
+          "say": "Each partition has a leader taking writes and followers on other brokers, ideally other zones. Followers fetch from the leader, like consumers.",
+          "reveal": 1
+        },
+        {
+          "say": "The I-S-R, the in-sync replica set, is the leader plus followers caught up within thirty seconds. A slow follower drops out so it can't hold back commits.",
+          "reveal": 2
+        },
+        {
+          "say": "The high watermark is the highest offset every ISR member has. Below it, a record is committed. Consumers only read up to it, so they never see a record a failover could erase.",
+          "reveal": 3
+        },
+        {
+          "say": "With acks equals all, the producer hears ok only after every in-sync replica has the batch. With acks equals one, only the leader. That's how eight hundred orders vanished.",
+          "reveal": 4
+        },
+        {
+          "say": "Replication factor three isn't enough alone. If the ISR shrinks to one, writes keep flowing on a single copy. Min in-sync replicas equals two makes Kafka refuse writes instead.",
+          "reveal": 5
+        }
+      ],
+      "id": "s042"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "The orders topic, hardened",
+      "table": {
+        "head": [
+          "Event",
+          "Result"
+        ],
+        "rows": [
+          [
+            "Setup",
+            "48 partitions, RF 3 across 3 zones, min ISR 2"
+          ],
+          [
+            "Cost of acks=all",
+            "p99 10 to 15 ms, versus 5 ms"
+          ],
+          [
+            "One broker dies",
+            "New leaders in seconds, nothing lost"
+          ],
+          [
+            "Second broker dies",
+            "Writes rejected: loud, not silent"
+          ],
+          [
+            "Rebalance storm",
+            "Smaller polls: 20 rebalances to 0"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Example: the orders topic. Forty-eight partitions, three copies across three zones, min in-sync replicas two, acks all, idempotence on.",
+          "reveal": 1
+        },
+        {
+          "say": "The cost: p ninety-nine produce latency of ten to fifteen milliseconds, versus five with acks one. That's the price of not losing eight hundred orders.",
+          "reveal": 2
+        },
+        {
+          "say": "One broker dies. New leaders are elected from the ISR in seconds. Producers retry, idempotence drops duplicates, nothing committed is lost.",
+          "reveal": 3
+        },
+        {
+          "say": "A second broker dies. Partitions now have one in-sync copy, below the minimum, so writes are rejected. A visible outage beats silent single-copy data.",
+          "reveal": 4
+        },
+        {
+          "say": "And the rebalance storm: a consumer took six minutes per batch against a five-minute poll limit, so it kept getting kicked out. Shrink the batch from five hundred records to fifty, add static membership, and rebalances per deploy go from twenty to zero.",
+          "reveal": 5
+        }
+      ],
+      "id": "s043"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Can Kafka lose messages? Every path",
+      "table": {
+        "head": [
+          "Where",
+          "How it is lost",
+          "Setting that prevents it"
+        ],
+        "rows": [
+          [
+            "Producer",
+            "acks=1, leader dies",
+            "acks=all"
+          ],
+          [
+            "Producer",
+            "Retries duplicate or reorder",
+            "enable.idempotence=true"
+          ],
+          [
+            "Broker",
+            "ISR shrinks to one copy",
+            "min.insync.replicas=2"
+          ],
+          [
+            "Broker",
+            "Out-of-sync follower elected",
+            "unclean election off"
+          ],
+          [
+            "Consumer",
+            "Commit before processing",
+            "Commit after; idempotent"
+          ],
+          [
+            "Retention",
+            "Lag exceeds 7 days",
+            "Alert on lag age at 50%"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "So, can Kafka lose messages? Yes, if you let it. Path one: acks equals one, and the leader dies before followers copy. Set acks to all.",
+          "reveal": 1
+        },
+        {
+          "say": "Path two: retries create duplicates or reorder batches. Turn on idempotence.",
+          "reveal": 2
+        },
+        {
+          "say": "Path three: the in-sync set shrinks to one copy, and that broker dies. Min in-sync replicas two refuses those writes.",
+          "reveal": 3
+        },
+        {
+          "say": "Path four: an out-of-sync follower becomes leader and offsets go backwards. Keep unclean leader election off.",
+          "reveal": 4
+        },
+        {
+          "say": "Path five, on the consumer: committing the offset before processing, then crashing. Commit after, with idempotent handlers.",
+          "reveal": 5
+        },
+        {
+          "say": "Path six: a consumer falls more than seven days behind, and retention deletes data unread. Alert on lag age at half the retention, about three and a half days. Two more paths: the app ignores a failed send's error callback, so handle send failures. And all replicas sit in one zone, so a power loss wipes unflushed data. Spread replicas across zones.",
+          "reveal": 6
+        }
+      ],
+      "id": "s044"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 16 of 17",
+      "title": "Exactly-once inside Kafka",
+      "bullets": [
+        "Idempotent producer: ID + sequence numbers",
+        "Transactions: writes + offsets, atomic",
+        "read_committed readers skip aborted data",
+        "Zombie instances fenced by epoch",
+        "Only read-process-write within Kafka"
+      ],
+      "steps": [
+        {
+          "say": "Two mechanisms. The idempotent producer gets a producer ID and numbers each batch. If a retry resends batch forty-two, the leader sees it already has forty-two and drops it.",
+          "reveal": 1
+        },
+        {
+          "say": "Transactions let a producer write to several partitions and commit consumer offsets, all or nothing. Commit markers land in each partition.",
+          "reveal": 2
+        },
+        {
+          "say": "Consumers set to read committed never see aborted or open transactions.",
+          "reveal": 3
+        },
+        {
+          "say": "If a restarted instance registers the same transactional ID, the old zombie is fenced, and its writes are rejected.",
+          "reveal": 4
+        },
+        {
+          "say": "But this covers read from Kafka, process, write back to Kafka. A database write or an email is outside, and must be idempotent itself. In the interview, say the safe set: three copies across zones, min ISR two, acks all, idempotence on, commit after processing, and alert on lag age.",
+          "reveal": 5
+        }
+      ],
+      "id": "s045"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 17 of 17",
+      "title": "Capstone: Clickstream to Dashboard",
+      "steps": [
+        {
+          "say": "Concept seventeen, the capstone. Thirty thousand click events a second at peak, plus orders. Three customers: a live dashboard needing seconds, finance reports needing audited daily numbers, and fraud features needing sub-second freshness. Let's build it in six stages.",
+          "reveal": 0
+        }
+      ],
+      "id": "s046",
+      "caption": "Book: Module 10 · Capstone - Clickstream to Dashboard"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 17 of 17",
+      "title": "Stages 1 to 3: ingest, enrich, process",
+      "bullets": [
+        "Stage 1: clicks by session, orders by customer",
+        "Stage 1: 96 partitions; client event IDs",
+        "Stage 2: catalog via CDC into local state",
+        "Stage 3: event time, 60-second watermark",
+        "Stage 3: three late policies, one stream"
+      ],
+      "steps": [
+        {
+          "say": "Stage one, keys. Clickstream is keyed by session ID, so a shopper's journey stays in order. Orders are keyed by customer ID, so a charge always comes before its refund.",
+          "reveal": 1
+        },
+        {
+          "say": "We buy ninety-six partitions up front, since resizing reroutes keys. And the mobile SDK creates each event ID before the first send and reuses it on every retry. Otherwise a retry looks like a brand new click, and no downstream guarantee can catch it.",
+          "reveal": 2
+        },
+        {
+          "say": "Stage two, enrichment. Clicks carry a product ID, but the dashboard wants names and categories. Debezium streams catalog changes into a compacted topic, loaded as local keyed state. Rename Gadgets to Electronics, and the stream sees it within seconds, with no per-event database query.",
+          "reveal": 3
+        },
+        {
+          "say": "Stage three, time. Count in event time with a watermark about sixty seconds behind, so a carrier outage doesn't paint a fake spike.",
+          "reveal": 4
+        },
+        {
+          "say": "Then a late policy per consumer. The dashboard drops late events. Finance accepts same-day restatements. Fraud processes them, because a late alert still helps.",
+          "reveal": 5
+        }
+      ],
+      "id": "s047"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 17 of 17",
+      "title": "Stages 4 to 6: guarantees, reports, peak",
+      "bullets": [
+        "Stage 4: dashboard and fraud get upserts",
+        "Stage 4: finance gets full exactly-once",
+        "Stage 5: one metric library, no second pipeline",
+        "Stage 6: Black Friday, 90,000 events/s",
+        "Stage 6: warehouse sink behind its own log"
+      ],
+      "steps": [
+        {
+          "say": "Stage four, correctness tiers. The dashboard writes idempotent upserts: metric and minute equals value. Every deploy's replay overwrites identical numbers. Fraud features use upserts too.",
+          "reveal": 1
+        },
+        {
+          "say": "Finance revenue gets the full machinery: checkpoints with offsets, a transactional sink, read-committed readers. Transactions everywhere would add cost and lag for consumers that don't need them.",
+          "reveal": 2
+        },
+        {
+          "say": "Stage five, refusing accidental Lambda. No separate nightly batch re-implementing revenue. Metric definitions live in one shared library, and the daily report is the stream's aggregates finalized at day close. The warehouse stores history for ad-hoc and training work but never recomputes these metrics. A definition change is a Kappa replay.",
+          "reveal": 3
+        },
+        {
+          "say": "Stage six, Black Friday. Input triples to ninety thousand events a second. The log absorbs the burst as lag, and consumers autoscale on backlog age, up to the ninety-six partitions we bought in stage one.",
+          "reveal": 4
+        },
+        {
+          "say": "At ten forty the warehouse table lock hits again. But the warehouse sink reads its own topic, a log seam. Only that consumer falls behind. Dashboard, fraud and finance run at full speed, and no facts are dropped.",
+          "reveal": 5
+        }
+      ],
+      "id": "s048"
+    },
+    {
+      "id": "s048b",
+      "layout": "diagram",
+      "kicker": "Concept 17 of 17",
+      "title": "The final architecture",
+      "mermaid": "flowchart LR\n  SDK[\"SDKs with event IDs\"] --> CT[(\"Clicks, 96 lanes\")]\n  CAT[\"Catalog DB\"] -->|\"CDC\"| RT[(\"Reference topic\")]\n  CT --> J[\"Stream jobs\"]\n  RT --> J\n  J -->|\"upserts\"| DF[\"Dashboard, fraud\"]\n  J -->|\"transactions\"| FI[\"Finance\"]\n  J --> WT[(\"Warehouse seam\")]",
+      "caption": "One logic source, tiered guarantees, a seam before the slow sink",
+      "steps": [
+        {
+          "say": "Here's the whole platform. Mobile and web SDKs stamp event IDs and write to the ninety-six-lane clickstream topic, keyed by session. Orders go to their own customer-keyed topic. The catalog database feeds a reference topic through CDC.",
+          "reveal": 0
+        },
+        {
+          "say": "The stream jobs hold keyed state, count in event time and use the one shared metric library. They write upserts to the dashboard and fraud features, transactions to finance, and a separate warehouse topic, the seam, feeds the warehouse.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Debrief: each decision, its incident",
+      "table": {
+        "head": [
+          "Decision",
+          "Incident prevented"
+        ],
+        "rows": [
+          [
+            "Key per topic, extra partitions",
+            "Refund before charge"
+          ],
+          [
+            "acks=all, min ISR 2, lag-age alerts",
+            "Confirmed orders lost"
+          ],
+          [
+            "Client event IDs",
+            "Duplicates upstream"
+          ],
+          [
+            "CDC-fed enrichment",
+            "DB query per event"
+          ],
+          [
+            "Upserts vs transactions by tier",
+            "Over-billing, over-engineering"
+          ],
+          [
+            "One logic source; log seams",
+            "Two truths; one sink stalls all"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Debrief. Keys and spare partitions prevent refund before charge.",
+          "reveal": 1
+        },
+        {
+          "say": "Hardened Kafka settings prevent confirmed orders vanishing.",
+          "reveal": 2
+        },
+        {
+          "say": "Client event IDs stop duplicates born upstream.",
+          "reveal": 3
+        },
+        {
+          "say": "CDC enrichment avoids a database query per event.",
+          "reveal": 4
+        },
+        {
+          "say": "Tiered guarantees prevent both over-billing and over-engineering.",
+          "reveal": 5
+        },
+        {
+          "say": "One logic source prevents two truths, and log seams stop one slow sink stalling everything. Every guarantee was bought for a named customer.",
+          "reveal": 6
+        }
+      ],
+      "id": "s049"
+    },
+    {
+      "layout": "recap",
+      "title": "Recap",
+      "bullets": [
+        "MapReduce: map, shuffle, reduce; Spark in memory",
+        "Streams: state, windows, event time, watermarks",
+        "Lambda overwrites; Kappa replays; one metric logic",
+        "CDC tails the log; outbox for intent",
+        "Exactly-once effect; buffer, drop or slow; keyed lanes",
+        "Next: Ep 16, AI-Era Systems: LLM and ML Infra"
+      ],
+      "steps": [
+        {
+          "say": "Let's recap. MapReduce maps where data lives, shuffles by key and reduces, with safe reruns. Spark keeps the shape in memory.",
+          "reveal": 1
+        },
+        {
+          "say": "Streaming holds keyed state, slices time into windows, counts in event time, and closes windows with watermarks. The budget picks true streaming or micro-batch.",
+          "reveal": 2
+        },
+        {
+          "say": "Lambda bounds errors with an overwrite. Kappa fixes by replay. Either way, one definition per metric, and never accidental Lambda.",
+          "reveal": 3
+        },
+        {
+          "say": "Change data capture can't miss a commit. Raw CDC for your own infrastructure, outbox for other teams, never dual writes.",
+          "reveal": 4
+        },
+        {
+          "say": "Exactly-once is an effect: state with offsets, outputs with offsets. And under pressure, buffer bounded, drop by policy, or slow the producer.",
+          "reveal": 5
+        },
+        {
+          "say": "Partitions give order per key and parallelism across keys. Kafka is safe when you set it: acks all, min ISR two, three zones.",
+          "reveal": 5
+        },
+        {
+          "say": "Thanks for watching. Next up, Episode sixteen: AI-Era Systems, L-L-M and M-L infrastructure.",
+          "reveal": 6
+        }
+      ],
+      "id": "s050"
+    }
+  ]
+}

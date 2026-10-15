@@ -1,0 +1,1736 @@
+{
+  "series": "System Design Workshop",
+  "episode": 25,
+  "title": "Client and Mobile System Design",
+  "subtitle": "Offline-first apps, sync, push, battery, releases, and six app designs",
+  "scenes": [
+    {
+      "layout": "title",
+      "title": "Client and Mobile System Design",
+      "subtitle": "Offline-first apps, sync, push, battery, releases, and six app designs",
+      "steps": [
+        {
+          "say": "Welcome to episode twenty-five of the System Design Workshop: Client and Mobile System Design. Until now we designed the servers behind an A-P-I. Today we design the app at the other end, on the phone.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll be able to draw a client architecture in five minutes, explain offline-first sync with an outbox, and walk six apps: a news feed, chat, stock trading, hotel booking, file sync, and video streaming.",
+          "reveal": 0
+        },
+        {
+          "say": "Keep the Module eighteen notes open beside the video. When I say pause, answer on paper first, then compare.",
+          "reveal": 0
+        }
+      ],
+      "id": "s001"
+    },
+    {
+      "layout": "twocol",
+      "title": "Kitchen versus food truck",
+      "left": {
+        "heading": "Backend interview",
+        "bullets": [
+          "Throughput, storage, fan-out",
+          "A node or region dies",
+          "Redeploy in minutes"
+        ]
+      },
+      "right": {
+        "heading": "Client interview",
+        "bullets": [
+          "One device: network, battery, memory",
+          "Network gone, app killed by the OS",
+          "Store review; old versions live for years"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's a picture to hold on to. A server is a restaurant kitchen: steady power, lots of staff, and you can change the menu any evening. A backend interview grades throughput, storage and fan-out.",
+          "reveal": 1
+        },
+        {
+          "say": "The failures you plan for there are a dead node or a dead region.",
+          "reveal": 2
+        },
+        {
+          "say": "And a fix ships in minutes.",
+          "reveal": 3
+        },
+        {
+          "say": "A phone app is a food truck. A small pantry, which is local storage. No signal in tunnels. A limited fuel tank, which is battery and data plan.",
+          "reveal": 4
+        },
+        {
+          "say": "The failures are a slow or missing network, or the operating system killing your app mid-task.",
+          "reveal": 5
+        },
+        {
+          "say": "And once the truck is on the road you can't swap its engine. You can only radio new instructions. That's remote config and feature flags. So a client design is about the pantry, the radio and the fuel.",
+          "reveal": 6
+        }
+      ],
+      "id": "s002"
+    },
+    {
+      "layout": "bullets",
+      "title": "Three rules for every client design",
+      "bullets": [
+        "1. The UI reads local state, never the network",
+        "2. Every network call has an offline story",
+        "3. Assume you cannot hot-fix"
+      ],
+      "steps": [
+        {
+          "say": "Interviewers grade three rules. Rule one: the screen reads from a local database, and the network only updates that database. Imagine opening a chat app in airplane mode. With rule one, you see yesterday's messages, not a spinner.",
+          "reveal": 1
+        },
+        {
+          "say": "Rule two: every call has an offline story. If you tap send in a tunnel, then swipe the app away, does the message ever go? You must say what the user sees when a call is slow, fails, or succeeds after the app died.",
+          "reveal": 2
+        },
+        {
+          "say": "Rule three: you can't hot-fix a binary, meaning the installed app package. So anything you may need to change later, like a threshold or a risky feature, hides behind remote config or a feature flag, and the server keeps old app versions working.",
+          "reveal": 3
+        }
+      ],
+      "id": "s003"
+    },
+    {
+      "id": "s004a",
+      "layout": "section",
+      "kicker": "Concept 1 of 17",
+      "title": "Client architecture layers",
+      "caption": "Book: Module 18 · 1. Client architecture layers",
+      "steps": [
+        {
+          "say": "Concept one: client architecture layers. The idea is to split the app into single-purpose layers so the network, storage and screens change and test independently.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 1 of 17",
+      "title": "Client architecture layers",
+      "mermaid": "flowchart TD\n  UI[\"UI layer: screens + view models\"] -->|\"observes\"| REPO[\"Repository per data type\"]\n  REPO --> DB[(\"Local database\")]\n  REPO --> NET[\"Network layer\"]\n  SYNC[\"Sync engine + background jobs\"] --> DB\n  SYNC --> NET\n  PUSH[\"Push: APNs / FCM\"] -->|\"hint\"| SYNC\n  NET --> BFF[\"Server: BFF\"]",
+      "caption": "The UI observes the local DB; the network only writes into it",
+      "steps": [
+        {
+          "say": "At the top is the U-I layer: screens plus a view model, which holds screen state and survives the phone rotating. The U-I only renders state and sends events, like user tapped like.",
+          "reveal": 0
+        },
+        {
+          "say": "Below it, an optional domain layer of use cases, and then a data layer with one repository per data type: posts, messages, files. A repository hides where data comes from. It hands the screen a stream from the local database and offers methods that trigger a network refresh.",
+          "reveal": 0
+        },
+        {
+          "say": "Off to the side are shared services: the network client, a sync engine, a push handler, image loader, analytics and remote config, each created once and injected.",
+          "reveal": 0
+        }
+      ],
+      "id": "s004"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Example: tapping send in a chat app",
+      "bullets": [
+        "UI: user taps Send, view model gets the event",
+        "Domain: SendMessage use case",
+        "Data: MessageRepository writes DB + outbox",
+        "Screen updates because it observes the DB",
+        "Sync engine sends it when online"
+      ],
+      "steps": [
+        {
+          "say": "Let's follow one tap through the layers in a chat app. The user taps send. The screen just tells the view model, send this text.",
+          "reveal": 1
+        },
+        {
+          "say": "The view model calls a use case called send message. Its job is to combine steps: write the message, and schedule a sync.",
+          "reveal": 2
+        },
+        {
+          "say": "The message repository writes the new row into the local database, plus an outbox row, which is a local queue of unsent actions.",
+          "reveal": 3
+        },
+        {
+          "say": "The screen never waits for a server. It observes the database, so the bubble appears instantly, marked sending.",
+          "reveal": 4
+        },
+        {
+          "say": "Later the sync engine drains the outbox to the server. The trade-off: layers add boilerplate on simple screens. They pay back the first time you add offline support, because only the repository changes. In the interview, draw this in the first five minutes and say: the U-I observes the local database, the network only writes into it.",
+          "reveal": 5
+        }
+      ],
+      "id": "s005"
+    },
+    {
+      "id": "s006a",
+      "layout": "section",
+      "kicker": "Concept 2 of 17",
+      "title": "Offline-first and sync",
+      "caption": "Book: Module 18 · 2. Offline-first and sync",
+      "steps": [
+        {
+          "say": "Concept two: offline-first and sync. Offline-first means the local database is the screen's source of truth, and the network is a background step, not a prerequisite. Why? A moving phone sees latency from fifty milliseconds to many seconds, plus regular gaps with no signal at all.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 2 of 17",
+      "title": "Offline-first and sync",
+      "bullets": [
+        "Reads: screen reads local DB instantly",
+        "Then ask server: what changed since my sync token?",
+        "Writes: DB row + outbox row in one transaction",
+        "Worker drains outbox with a client-generated ID",
+        "Server response replaces the optimistic row"
+      ],
+      "steps": [
+        {
+          "say": "Reads first. The screen reads the local database, which takes milliseconds.",
+          "reveal": 1
+        },
+        {
+          "say": "In parallel, the repository asks the server, what changed since my sync token? A sync token is a cursor the server handed out last time.",
+          "reveal": 2
+        },
+        {
+          "say": "Writes. The action goes into the local database and into an outbox table, in one local transaction. The screen shows it right away. That's an optimistic update: show the result before the server confirms.",
+          "reveal": 3
+        },
+        {
+          "say": "A sync worker drains the outbox when online. Each operation carries an I-D made on the device, so a retry is idempotent, meaning safe to repeat.",
+          "reveal": 4
+        },
+        {
+          "say": "When the server answers, its version replaces the optimistic row. A common mistake is writing to the network first and the database after. If the app dies in between, the action is lost.",
+          "reveal": 5
+        }
+      ],
+      "id": "s006"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: one note edited on two phones offline",
+      "table": {
+        "head": [
+          "Conflict rule",
+          "What happens to the note"
+        ],
+        "rows": [
+          [
+            "Last-writer-wins",
+            "Later timestamp kept; the other edit silently lost"
+          ],
+          [
+            "Server wins",
+            "Phone discards or re-applies its edit"
+          ],
+          [
+            "Field-level merge",
+            "Title from phone A, body from phone B both survive"
+          ],
+          [
+            "Keep both",
+            "A conflicted copy, as in file sync"
+          ],
+          [
+            "CRDT",
+            "Concurrent edits always merge to the same result"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Imagine a shopping note edited on your phone and your tablet, both offline. When they reconnect, you need a conflict rule. Simplest is last writer wins: the later timestamp survives, and the other edit is silently lost.",
+          "reveal": 1
+        },
+        {
+          "say": "Server wins: the device throws away its edit, or re-applies it on top.",
+          "reveal": 2
+        },
+        {
+          "say": "Field-level merge: phone A changed the title, phone B changed the body, so both changes survive.",
+          "reveal": 3
+        },
+        {
+          "say": "Keep both: save a conflicted copy and let the human choose. File sync apps do this.",
+          "reveal": 4
+        },
+        {
+          "say": "Or C-R-D-Ts, conflict-free replicated data types, whose edits always merge to the same answer. Under the hood this is multi-leader replication with every phone a leader. When not to go offline-first: payments, live auction bids, one-time passwords. Stale data there is dangerous, so stay online-only with a clear you're offline state.",
+          "reveal": 5
+        }
+      ],
+      "id": "s007"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 3 of 17",
+      "title": "Caching and persistence: four tiers",
+      "table": {
+        "head": [
+          "Tier",
+          "Holds",
+          "Budget"
+        ],
+        "rows": [
+          [
+            "Memory LRU",
+            "Decoded images, screen state",
+            "about 1/8 of app memory"
+          ],
+          [
+            "Disk cache",
+            "HTTP responses, image bytes",
+            "100 to 250 MB"
+          ],
+          [
+            "Local database",
+            "Posts, messages, file metadata",
+            "10 to 500 MB"
+          ],
+          [
+            "Prefs + secure storage",
+            "Settings, flags, tokens",
+            "Kilobytes"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept three: caching and persistence. It's about where each kind of data lives on the device, and when it's thrown away. Tier one is a memory cache with L-R-U eviction, least recently used goes first. It holds decoded images. A common start is one eighth of the app's memory limit.",
+          "reveal": 1
+        },
+        {
+          "say": "Tier two, a disk cache for raw responses and image bytes, keyed by U-R-L, around one hundred to two hundred fifty megabytes.",
+          "reveal": 2
+        },
+        {
+          "say": "Tier three, the local database for structured data the screen shows, posts and messages, evicted by your own policy.",
+          "reveal": 3
+        },
+        {
+          "say": "Tier four, small key-value preferences and secure storage. Tokens go in the Keychain on iOS or the Keystore on Android, never in plain preferences.",
+          "reveal": 4
+        }
+      ],
+      "id": "s008",
+      "caption": "Book: Module 18 · 3. Caching and persistence"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Example: an avatar image, fetched once",
+      "bullets": [
+        "Request the displayed size, not the original",
+        "Server sends ETag; next time: If-None-Match",
+        "Unchanged? A bodiless 304, zero image bytes",
+        "Decode off the main thread, keep in memory LRU",
+        "Cancel loads for rows scrolled away"
+      ],
+      "steps": [
+        {
+          "say": "Let's follow one profile picture. First, ask for the size you'll display. The server or C-D-N resizes it. That alone can save ten times the bytes.",
+          "reveal": 1
+        },
+        {
+          "say": "The response carries an E-tag, a version tag. Next time, the app sends an if-none-match header with that tag.",
+          "reveal": 2
+        },
+        {
+          "say": "If the picture hasn't changed, the server answers three-oh-four, not modified, with no body. You paid a few hundred bytes instead of a hundred kilobytes.",
+          "reveal": 3
+        },
+        {
+          "say": "Decode the bytes off the main thread, the thread that draws the screen, and keep the decoded bitmap in the memory cache.",
+          "reveal": 4
+        },
+        {
+          "say": "And if the user scrolls past before it loads, cancel the request. The trade-off: more caching gives faster screens and fewer bytes, but more staleness and more disk on phones that are often full. So every tier gets a byte budget and L-R-U eviction.",
+          "reveal": 5
+        }
+      ],
+      "id": "s009"
+    },
+    {
+      "id": "s010a",
+      "layout": "section",
+      "kicker": "Concept 4 of 17",
+      "title": "Networking and pagination",
+      "caption": "Book: Module 18 · 4. Networking and pagination",
+      "steps": [
+        {
+          "say": "Concept four: networking and pagination. That's how the app talks to the server: the protocol, the shape of each request, paging, retries, and real-time channels.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 4 of 17",
+      "title": "Networking and pagination",
+      "bullets": [
+        "HTTPS with HTTP/2 or 3; a BFF gives one screen one request",
+        "Cursor pagination for lists that change",
+        "Retry only idempotent calls, backoff + jitter",
+        "Real-time: poll, long poll, SSE or WebSocket",
+        "Send app version; server keeps old shapes"
+      ],
+      "steps": [
+        {
+          "say": "Requests go over H-T-T-P-S, ideally H-T-T-P two or three, which run many requests on one connection and save radio time. A B-F-F, a backend built for one front end, gives one screen one request with exactly the fields it shows.",
+          "reveal": 1
+        },
+        {
+          "say": "For any list that changes while you scroll, use cursor pagination. A paging library loads the next page as you near the end, stores pages in the database, and exposes loading, error and end states.",
+          "reveal": 2
+        },
+        {
+          "say": "Retries: only for idempotent requests, or ones with an idempotency key, with exponential backoff and jitter, and honour retry-after. If the phone reports no connectivity, pause retries instead of burning them.",
+          "reveal": 3
+        },
+        {
+          "say": "For server-pushed updates in the foreground you pick polling, long polling, S-S-E for server to client only, or a WebSocket for both directions. Reconnect with backoff, heartbeat about every thirty seconds, and resume from the last sequence number. Close the socket in the background.",
+          "reveal": 4
+        },
+        {
+          "say": "And every request carries the app version, so the server can keep old response shapes working.",
+          "reveal": 5
+        }
+      ],
+      "id": "s010"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Example: offset paging breaks a live feed",
+      "bullets": [
+        "Page 1: posts 1 to 20 by offset",
+        "3 new posts arrive at the top",
+        "Page 2 by offset 20 repeats posts 18 to 20",
+        "Cursor: 'after post id 9071' never shifts",
+        "Page size 20 to 30 is a common default"
+      ],
+      "steps": [
+        {
+          "say": "Imagine paging a live feed by offset. Page one is posts one to twenty.",
+          "reveal": 1
+        },
+        {
+          "say": "While you read, three new posts land at the top. Everything shifts down three places.",
+          "reveal": 2
+        },
+        {
+          "say": "Now you ask for offset twenty, and you get three posts you've already seen. Duplicates on screen.",
+          "reveal": 3
+        },
+        {
+          "say": "A cursor points at a row instead: give me twenty items after post nine-oh-seven-one. New posts at the top don't move that anchor.",
+          "reveal": 4
+        },
+        {
+          "say": "Page size is a trade-off too. Big pages mean fewer requests but a slower first paint. Twenty to thirty items is a common default. And a persistent socket gives sub-second updates but keeps the radio awake, while polling is simpler but stale or wasteful.",
+          "reveal": 5
+        }
+      ],
+      "id": "s011"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Socket lost for 2 minutes. What first on reconnect?",
+      "bullets": [
+        "A. Reconnect at once and wait for new messages",
+        "B. Sync from the last sequence number, then resume the stream",
+        "C. Reload the whole conversation history"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. A phone loses its WebSocket in a tunnel for two minutes. When the signal comes back, what should the app do first? I'll give you the answer when we reach push notifications.",
+          "reveal": 0
+        }
+      ],
+      "id": "s012"
+    },
+    {
+      "id": "s013a",
+      "layout": "section",
+      "kicker": "Concept 5 of 17",
+      "title": "Push notifications",
+      "caption": "Book: Module 18 · 5. Push notifications",
+      "steps": [
+        {
+          "say": "The quiz answer is B. Sync from the last sequence number first, so nothing missed is lost, then resume the live stream. Reloading everything wastes data. Concept five: push notifications. They're delivered by the operating system's push service: A-P-N-s on Apple, F-C-M on Android. The phone keeps one shared, battery-friendly connection, so your app needs no socket in the background.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 5 of 17",
+      "title": "Push notifications",
+      "bullets": [
+        "1. Get a device token; register it every launch",
+        "2. Your server sends to APNs or FCM",
+        "3. Visible alerts or silent data messages",
+        "4. Push is a hint, not the data",
+        "Best-effort: late, duplicated, dropped, collapsed"
+      ],
+      "steps": [
+        {
+          "say": "Step one: on launch, the app gets a device token, an address for this install, and registers it with your server. Tokens change, so re-register every launch.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: your server sends to A-P-N-s or F-C-M with that token, and the operating system delivers it.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: there are two kinds. Visible notifications, with a title and body, shown even if the app isn't running. And silent data messages that briefly wake the app to sync. The system throttles silent ones.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, the big rule: push is a hint, not the data. Payloads are small, four kilobytes on Apple.",
+          "reveal": 4
+        },
+        {
+          "say": "Pushes may arrive late, twice, out of order, or never. A collapse key keeps only the latest of a group.",
+          "reveal": 5
+        }
+      ],
+      "id": "s013"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Example",
+      "title": "Example: push as a hint",
+      "mermaid": "flowchart LR\n  S[\"Chat server\"] -->|\"conv 42 changed\"| P[\"APNs / FCM\"]\n  P --> A[\"App wakes briefly\"]\n  A -->|\"GET /sync?token\"| S\n  S -->|\"missed messages\"| DB[(\"Local DB\")]\n  DB --> UI[\"Conversation screen\"]",
+      "caption": "The sync API is the truth; a dropped push only delays",
+      "steps": [
+        {
+          "say": "Here's how it plays out. Alice messages Bob while Bob's app is closed. The server pushes a small hint: conversation forty-two changed.",
+          "reveal": 0
+        },
+        {
+          "say": "Bob's phone wakes the app for a moment. The app calls the sync endpoint with its token and writes the missed messages into the local database.",
+          "reveal": 0
+        },
+        {
+          "say": "Now say that push got dropped. Nothing is lost. The next time Bob opens the app, it syncs from the same token. The common mistake is putting the whole message in the push and treating it as delivered. In the interview, say: push is a hint, the sync cursor is the truth.",
+          "reveal": 0
+        }
+      ],
+      "id": "s014"
+    },
+    {
+      "id": "s015a",
+      "layout": "section",
+      "kicker": "Concept 6 of 17",
+      "title": "Background work",
+      "caption": "Book: Module 18 · 6. Background work",
+      "steps": [
+        {
+          "say": "Concept six: background work. That's work done while the user isn't looking: draining the outbox, syncing, downloading a video. Both platforms strictly limit it to save battery.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "layout": "twocol",
+      "kicker": "Concept 6 of 17",
+      "title": "Background work",
+      "left": {
+        "heading": "Android",
+        "bullets": [
+          "WorkManager: guaranteed, with constraints",
+          "Foreground service for long user tasks",
+          "Doze and App Standby defer idle apps"
+        ]
+      },
+      "right": {
+        "heading": "iOS",
+        "bullets": [
+          "BGTaskScheduler: system picks the time",
+          "Background URLSession continues transfers",
+          "Rule: idempotent, resumable, no fixed time"
+        ]
+      },
+      "steps": [
+        {
+          "say": "On Android, WorkManager runs deferrable, guaranteed work with constraints like only on Wi-Fi or only while charging, and it survives reboots.",
+          "reveal": 1
+        },
+        {
+          "say": "Long tasks the user started can run as a foreground service, with a visible notification.",
+          "reveal": 2
+        },
+        {
+          "say": "And Doze and App Standby, Android's battery-saving modes, defer jobs and network for idle apps.",
+          "reveal": 3
+        },
+        {
+          "say": "On iOS, the B-G task scheduler runs refresh and processing tasks when the system chooses.",
+          "reveal": 4
+        },
+        {
+          "say": "A background U-R-L session keeps uploads and downloads going even after the app is suspended or killed.",
+          "reveal": 5
+        },
+        {
+          "say": "The design rule for both: every job is idempotent and resumable. It can be killed at any second and rerun, it saves progress in the database, and it never assumes a precise run time.",
+          "reveal": 6
+        }
+      ],
+      "id": "s015"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Example: sync every 5 minutes in background?",
+      "bullets": [
+        "Plan: a timer that syncs every 5 minutes",
+        "Reality: Doze defers it for an hour",
+        "Each wake keeps the radio hot for seconds",
+        "Better: push hint triggers sync",
+        "Otherwise sync on open; let the OS batch"
+      ],
+      "steps": [
+        {
+          "say": "Imagine a candidate says: I'll sync in the background every five minutes.",
+          "reveal": 1
+        },
+        {
+          "say": "On mobile that's wrong. Android Doze or iOS scheduling may defer the job for an hour.",
+          "reveal": 2
+        },
+        {
+          "say": "And when it does run, each wake-up keeps the cellular radio in high power for seconds, twelve times an hour.",
+          "reveal": 3
+        },
+        {
+          "say": "The better design: let a push hint trigger a sync when something actually changed.",
+          "reveal": 4
+        },
+        {
+          "say": "Otherwise, sync when the user opens the app, and let the operating system batch everything else. In the interview, say: the O-S decides when background work runs, so I design for push-triggered sync.",
+          "reveal": 5
+        }
+      ],
+      "id": "s016"
+    },
+    {
+      "id": "s017a",
+      "layout": "section",
+      "kicker": "Concept 7 of 17",
+      "title": "Battery, data and device constraints",
+      "caption": "Book: Module 18 · 7. Battery, data and device constraints",
+      "steps": [
+        {
+          "say": "Concept seven: battery, data and device constraints. These are the budgets a phone imposes: battery, cellular data, memory, disk, and the time you get to draw each frame.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 7 of 17",
+      "title": "Battery, data and device constraints",
+      "bullets": [
+        "Radio is the battery hog: batch requests",
+        "Prefetch big media on Wi-Fi; respect Data Saver",
+        "Memory: 1080x1080 image = about 4.7 MB",
+        "Main thread: 16.7 ms per frame at 60 Hz",
+        "Disk budgets; cold start under 1 to 2 s"
+      ],
+      "steps": [
+        {
+          "say": "Rule one: the radio is the battery hog. After every transfer the cellular radio stays in high power for several seconds, called the tail. So ten small requests across a minute cost far more than one batched request.",
+          "reveal": 1
+        },
+        {
+          "say": "Rule two: check the network type and user settings. Prefetch video and big images only on unmetered Wi-Fi, and respect Low Data Mode and Data Saver.",
+          "reveal": 2
+        },
+        {
+          "say": "Rule three, memory: decoded images dominate. A ten-eighty by ten-eighty image at four bytes a pixel is about four point seven megabytes. Downsample to display size, and recycle list rows.",
+          "reveal": 3
+        },
+        {
+          "say": "Rule four: never do disk, network, J-SON parsing or image decoding on the main thread. At sixty hertz you get sixteen point seven milliseconds per frame. Miss it and you get jank, visible stutter.",
+          "reveal": 4
+        },
+        {
+          "say": "Rule five: phones fill up, so every cache gets a budget, and a cold start, launching from nothing, should take under one to two seconds.",
+          "reveal": 5
+        }
+      ],
+      "id": "s017"
+    },
+    {
+      "layout": "number",
+      "kicker": "Example",
+      "title": "Example: analytics events and the radio",
+      "big": "60 sends/hour vs 12 batches",
+      "caption": "Batch every 5 minutes and piggyback on other requests",
+      "steps": [
+        {
+          "say": "Imagine sending each analytics event as it happens, say one a minute. That's sixty radio wake-ups an hour, each holding high power for seconds.",
+          "reveal": 0
+        },
+        {
+          "say": "Batch them every five minutes instead and you're down to twelve. Better still, piggyback on a request the app was already making, when the radio is up anyway.",
+          "reveal": 0
+        },
+        {
+          "say": "In the interview, say the numbers: each radio wake-up costs seconds of high power, so I batch analytics every few minutes and piggyback them.",
+          "reveal": 0
+        }
+      ],
+      "id": "s018"
+    },
+    {
+      "id": "s019a",
+      "layout": "section",
+      "kicker": "Concept 8 of 17",
+      "title": "App releases and feature flags",
+      "caption": "Book: Module 18 · 8. App releases and feature flags",
+      "steps": [
+        {
+          "say": "Concept eight: app releases and feature flags. A server bug is fixed in minutes. A mobile bug ships in a binary that passes store review, which takes hours to days, and reaches users only when they update. Some never do. So releases are part of the design.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 8 of 17",
+      "title": "App releases and feature flags",
+      "bullets": [
+        "Release train: weekly or fortnightly",
+        "Staged or phased rollout: 1%, 5%, 20%...",
+        "Feature flags + remote config, kill switch",
+        "Minimum supported version, forced upgrade",
+        "Backward-compatible APIs and DB migrations"
+      ],
+      "steps": [
+        {
+          "say": "Step one, a release train: a fixed weekly or fortnightly cadence. Code freeze, internal testing, beta, store submission.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, a staged rollout: release to a small percentage and watch crashes. Google Play's staged rollout can be halted. Apple offers a seven-day phased release.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, feature flags and remote config. Ship code dark, included but switched off, then enable it per user group from the server. Cache the last config on disk with safe defaults.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, a minimum supported version. The server tells very old apps to update, hard block only for security or breaking changes.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, the server supports several old app versions, and each app version ships local database migrations tested from every schema still in the wild.",
+          "reveal": 5
+        }
+      ],
+      "id": "s019"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: a new checkout screen crashes",
+      "table": {
+        "head": [
+          "Time",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "Day 1",
+            "Version 5.2 to 1% of users, new checkout behind a flag at 10%"
+          ],
+          [
+            "Day 2",
+            "Crash-free users drop from 99.8 to 97 percent on checkout"
+          ],
+          [
+            "Minute 0",
+            "Flip the kill switch: old checkout returns, no new binary"
+          ],
+          [
+            "Day 3",
+            "Halt the staged rollout, fix, ship 5.2.1"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Imagine version five point two ships to one percent of users, with a new checkout behind a flag turned on for ten percent.",
+          "reveal": 1
+        },
+        {
+          "say": "Next day, the crash dashboard shows crash-free users dropping from ninety-nine point eight to ninety-seven percent, all on checkout.",
+          "reveal": 2
+        },
+        {
+          "say": "You flip the kill switch. Within minutes, every phone falls back to the old checkout. No store review needed.",
+          "reveal": 3
+        },
+        {
+          "say": "Then you halt the rollout, fix it, and ship five point two point one. The trade-off: flags multiply code paths and need cleanup, forced upgrades annoy users. All cheaper than a bug you can't recall.",
+          "reveal": 4
+        }
+      ],
+      "id": "s020"
+    },
+    {
+      "id": "s021a",
+      "layout": "section",
+      "kicker": "Concept 9 of 17",
+      "title": "Observability on the client",
+      "caption": "Book: Module 18 · 9. Observability on the client",
+      "steps": [
+        {
+          "say": "Concept nine: client observability, knowing what happens on millions of phones you can't log into.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 9 of 17",
+      "title": "Observability on the client",
+      "bullets": [
+        "Crash and hang reports: crash-free users",
+        "Device-side metrics: cold start, jank, latency",
+        "Analytics: batched, sampled, tagged with flags",
+        "Trace ID header into the backend",
+        "Privacy: no personal data in logs"
+      ],
+      "steps": [
+        {
+          "say": "First, crash and hang reports, with stack traces translated back into readable names and grouped by issue. Crash-free users is the release gate.",
+          "reveal": 1
+        },
+        {
+          "say": "Second, performance seen from the device: cold start, time to first content, dropped frames, and request latency including D-N-S, the T-L-S handshake and radio wake-up, which server metrics never see.",
+          "reveal": 2
+        },
+        {
+          "say": "Third, product analytics events: stored locally, batched, uploaded in the background with a sample rate, each tagged with app version and flag values so you can compare flag on versus off.",
+          "reveal": 3
+        },
+        {
+          "say": "Fourth, the app sends a trace I-D header, so a slow screen can be followed into the backend.",
+          "reveal": 4
+        },
+        {
+          "say": "Fifth, privacy: no personal data in logs, consent where required, and a server switch to lower sampling. Example: users say the feed is slow, but server p ninety-five is eighty milliseconds. Device traces show two seconds spent on D-N-S and T-L-S over cellular. Only client metrics could show you that.",
+          "reveal": 5
+        }
+      ],
+      "id": "s021"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 10 of 17",
+      "title": "The framework as an interview checklist",
+      "table": {
+        "head": [
+          "Stage",
+          "What to say for the client"
+        ],
+        "rows": [
+          [
+            "First 5 minutes",
+            "Platforms, offline?, real-time?, items and MB per device"
+          ],
+          [
+            "Architecture",
+            "Layer diagram; UI observes local DB"
+          ],
+          [
+            "API",
+            "Endpoints, paging, sync token, idempotency keys"
+          ],
+          [
+            "Data model",
+            "Local tables, indexes, what is evicted"
+          ],
+          [
+            "Deep dives",
+            "Pick 2 to 3 hard client problems"
+          ],
+          [
+            "Failure walk",
+            "Offline, flaky, killed, stale, old version"
+          ],
+          [
+            "Wrap-up",
+            "Battery and data budget, flags, metrics"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept ten: the nine blocks as an interview checklist. Let's run it on a notes app. First five minutes: scope. iOS and Android? Offline required? Yes. Real-time? No. Per device, maybe two thousand notes, about five megabytes.",
+          "reveal": 1
+        },
+        {
+          "say": "Architecture: draw the layers and say the U-I observes the local database.",
+          "reveal": 2
+        },
+        {
+          "say": "A-P-I: a changes endpoint with a sync token, and every write with an idempotency key.",
+          "reveal": 3
+        },
+        {
+          "say": "Data model: a notes table, an outbox table, and what gets evicted. Here, nothing, since notes are small.",
+          "reveal": 4
+        },
+        {
+          "say": "Deep dives: pick two or three. For notes, offline edits and conflict rules.",
+          "reveal": 5
+        },
+        {
+          "say": "Failure walk: offline, flaky network, app killed mid-save, a server error, stale data, an old app version.",
+          "reveal": 6
+        },
+        {
+          "say": "Wrap-up: battery and data budget, release with flags, and the metrics you'd watch. Seven stages, one story.",
+          "reveal": 7
+        }
+      ],
+      "id": "s022",
+      "caption": "Book: Module 18 · The framework as an interview checklist"
+    },
+    {
+      "id": "s023a",
+      "layout": "section",
+      "kicker": "Concept 11 of 17",
+      "title": "App 1: news feed",
+      "caption": "Book: Module 18 · App 1 — News Feed App",
+      "steps": [
+        {
+          "say": "Concept eleven, our first app: the news feed. An endless list of posts with images, likes, pull to refresh, and something to show offline.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 11 of 17",
+      "title": "App 1: news feed, the numbers",
+      "bullets": [
+        "10-min session: about 150 posts, 8 pages of 20",
+        "JSON: about 240 KB per session",
+        "90 images x 100 KB sized = 9 MB",
+        "Originals would cost about 150 MB",
+        "Decoded 1080x1350 image = 5.8 MB in memory"
+      ],
+      "steps": [
+        {
+          "say": "Let's estimate one ten-minute session: about a hundred and fifty posts, at twenty per page, so eight page requests.",
+          "reveal": 1
+        },
+        {
+          "say": "At one and a half kilobytes of J-SON per post, that's about two hundred forty kilobytes. J-SON is cheap.",
+          "reveal": 2
+        },
+        {
+          "say": "Images aren't. Sixty percent have an image, so ninety images at a hundred kilobytes each at display width: nine megabytes.",
+          "reveal": 3
+        },
+        {
+          "say": "Full-resolution originals would cost about a hundred fifty megabytes. Asking for the right size matters fifteen times over.",
+          "reveal": 4
+        },
+        {
+          "say": "And one decoded image is about five point eight megabytes of memory, so a sixty-four megabyte cache holds only about eleven. Rows must recycle and images must downsample.",
+          "reveal": 5
+        }
+      ],
+      "id": "s023"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 11 of 17",
+      "title": "Feed client: paging through the database",
+      "mermaid": "flowchart LR\n  LIST[\"Feed list\"] -->|\"observes\"| REPO[\"FeedRepository\"]\n  REPO --> DB[(\"Local post tables\")]\n  REPO --> MED[\"Paging mediator\"]\n  MED -->|\"GET feed?cursor\"| BFF[\"Feed BFF\"]\n  MED -->|\"insert page\"| DB\n  LIST --> IMG[\"Image loader\"]",
+      "caption": "The UI never holds the network response",
+      "steps": [
+        {
+          "say": "Here's the flow. Cold start: the view model opens a paged query on the local post table, and the first twenty rows appear from SQLite in milliseconds.",
+          "reveal": 0
+        },
+        {
+          "say": "In parallel, the mediator fetches the fresh first page. If it overlaps what's on screen, it doesn't shift the list under your thumb. It shows a new posts pill and applies the page on tap.",
+          "reveal": 0
+        },
+        {
+          "say": "Scrolling: within about five rows of the end, the mediator fetches the next page with the cursor, inserts it in one transaction, and the list grows. Paging is a database concern.",
+          "reveal": 0
+        },
+        {
+          "say": "Two extra rules: de-duplicate by post I-D, since a ranked feed can return a post twice, and after a long absence replace the feed rather than merge, so there's no hidden gap.",
+          "reveal": 0
+        }
+      ],
+      "id": "s024"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Example: an optimistic like",
+      "bullets": [
+        "Tap: liked = true, count + 1, red heart now",
+        "Outbox row with a fresh idempotency key",
+        "Success: store the server's count",
+        "Like, unlike, like: collapse to final state",
+        "Post deleted: roll back with a toast"
+      ],
+      "steps": [
+        {
+          "say": "Let's walk a like. The user taps the heart. Locally, liked by me becomes true and the count goes up by one. The heart turns red instantly.",
+          "reveal": 1
+        },
+        {
+          "say": "An outbox row is written with a fresh idempotency key.",
+          "reveal": 2
+        },
+        {
+          "say": "The worker sends it. On success, store the server's authoritative count.",
+          "reveal": 3
+        },
+        {
+          "say": "Now say the user taps like, unlike, like before the network answers. The outbox keeps only the final desired state: liked equals true, sent as a set operation. One request, naturally idempotent, no ordering bugs.",
+          "reveal": 4
+        },
+        {
+          "say": "If the error is permanent, say the post was deleted, roll back and show a toast. Interview one-liner: the feed observes a local table filled page by page with cursors, images are sized and cached in two tiers, and every action is an optimistic write drained by an outbox.",
+          "reveal": 5
+        }
+      ],
+      "id": "s025"
+    },
+    {
+      "id": "s026a",
+      "layout": "section",
+      "kicker": "Concept 12 of 17",
+      "title": "App 2: chat",
+      "caption": "Book: Module 18 · App 2 — Chat App",
+      "steps": [
+        {
+          "say": "Concept twelve: the chat app. Messages must never be lost or duplicated, must appear in a sensible order, and arrive in real time whether the app is open or closed. Numbers: an active user sends forty and gets two hundred messages a day. A year is about ninety thousand messages, about forty-five megabytes of SQLite. Fine to keep locally with search.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 12 of 17",
+      "title": "App 2: chat, one write path, two ways in",
+      "mermaid": "flowchart LR\n  UI[\"Chat screen\"] -->|\"send\"| DB[(\"message + outbox\")]\n  DB --> OUT[\"Outbox sender\"]\n  OUT -->|\"socket or HTTPS\"| GW[\"Chat gateway\"]\n  GW -->|\"msg, ack\"| DB\n  PUSH[\"APNs / FCM\"] -->|\"hint\"| SYNC[\"Sync worker\"]\n  SYNC --> DB",
+      "caption": "Socket in the foreground, push plus sync in the background",
+      "steps": [
+        {
+          "say": "Sending: one local transaction inserts the message with status pending and no sequence number, plus an outbox row. The bubble shows a clock icon.",
+          "reveal": 0
+        },
+        {
+          "say": "The outbox sender uses the WebSocket if connected, otherwise it schedules a background job that waits for network.",
+          "reveal": 0
+        },
+        {
+          "say": "Receiving: messages arrive by socket in the foreground, or push then sync in the background. Both write the same tables, so the screen doesn't care which path delivered.",
+          "reveal": 0
+        }
+      ],
+      "id": "s026"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: Meet at 5, then Actually 6",
+      "table": {
+        "head": [
+          "Step",
+          "What the client does"
+        ],
+        "rows": [
+          [
+            "Send 'Meet at 5'",
+            "Row pending, client_msg_id = a1"
+          ],
+          [
+            "Ack lost in a tunnel",
+            "Retry with a1; server returns same ack"
+          ],
+          [
+            "Server assigns seq 102",
+            "Row becomes sent, sorted by seq"
+          ],
+          [
+            "'Actually 6' waits",
+            "One in flight per conversation, so 103"
+          ],
+          [
+            "Holding 101, receive 104",
+            "Gap: sync 102 to 103 before marking read"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's walk it. You send, meet at five. The row is pending with a client message I-D, call it a one, made on the device.",
+          "reveal": 1
+        },
+        {
+          "say": "The server stores it, but the acknowledgement is lost in a tunnel. You retry with the same a one. The server has a unique constraint on it, so it returns the same ack. No duplicate.",
+          "reveal": 2
+        },
+        {
+          "say": "The server assigns sequence number one-oh-two for this conversation. We order by that, never by the phone's clock, because device clocks are wrong.",
+          "reveal": 3
+        },
+        {
+          "say": "Your next message, actually six, waits its turn. One message in flight per conversation, so it gets one-oh-three and can't land before meet at five.",
+          "reveal": 4
+        },
+        {
+          "say": "And on receive: if you hold one-oh-one and get one-oh-four, one-oh-two and one-oh-three are missing. Sync before marking read. Battery note: one socket per app, heartbeat every thirty seconds, close it in the background, and read receipts are read up to sequence N, so two devices merge with max wins.",
+          "reveal": 5
+        }
+      ],
+      "id": "s027"
+    },
+    {
+      "id": "s028a",
+      "layout": "section",
+      "kicker": "Concept 13 of 17",
+      "title": "App 3: stock trading",
+      "caption": "Book: Module 18 · App 3 — Stock Trading App",
+      "steps": [
+        {
+          "say": "Concept thirteen: the stock trading app. Two opposite needs share one screen. Prices must be fresh, but streaming everything burns battery and data.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 13 of 17",
+      "title": "App 3: stock trading, fresh but frugal",
+      "bullets": [
+        "50 symbols x 4 updates/s x 60 B = 43 MB/hour",
+        "Only 10 visible rows: about 9 MB/hour",
+        "Server conflates; UI renders about 2 per second",
+        "Snapshot with seq, then stream newer seq",
+        "No quote for 3 s: grey prices, 'as of 10:42'"
+      ],
+      "steps": [
+        {
+          "say": "Let's do the math. Fifty watchlist symbols, four updates a second, sixty bytes each: forty-three megabytes an hour.",
+          "reveal": 1
+        },
+        {
+          "say": "Subscribe only to the ten rows actually visible, and it's about nine megabytes. Visibility is the biggest lever.",
+          "reveal": 2
+        },
+        {
+          "say": "The server conflates, keeping only the latest price per symbol per interval, and the U-I re-renders each row about twice a second. Humans can't read faster.",
+          "reveal": 3
+        },
+        {
+          "say": "On open, fetch a snapshot where each quote has a sequence number, then subscribe and apply only updates with a higher number.",
+          "reveal": 4
+        },
+        {
+          "say": "And track the last message time. No quote or heartbeat for three seconds, grey out the prices and say as of ten forty-two. Unlike the feed, offline trading isn't allowed. Stale data must say so.",
+          "reveal": 5
+        }
+      ],
+      "id": "s028"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: Buy times out",
+      "table": {
+        "head": [
+          "Step",
+          "Client action"
+        ],
+        "rows": [
+          [
+            "1",
+            "Open confirm: create client_order_id, save draft"
+          ],
+          [
+            "2",
+            "POST /orders with that ID"
+          ],
+          [
+            "3",
+            "Timeout: GET /orders?client_order_id=..."
+          ],
+          [
+            "4a",
+            "Found: adopt its status"
+          ],
+          [
+            "4b",
+            "Not found: resubmit with the SAME ID"
+          ],
+          [
+            "5",
+            "Market order carries a max_price collar"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Imagine you tap buy ten shares, and the request times out. Did it reach the broker? Resending could buy twice. Here's the safe path. Step one: when the confirm sheet opens, create a client order I-D and save the draft locally.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: post the order with that I-D. The server treats it as an idempotency key, unique per account.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: on timeout, don't blindly resend. Ask the server: do you have an order with this client order I-D?",
+          "reveal": 3
+        },
+        {
+          "say": "If found, adopt its status: pending, accepted, filled.",
+          "reveal": 4
+        },
+        {
+          "say": "If not found, resubmit with the same I-D. If the first request was just slow, the unique constraint rejects it, so two orders are impossible.",
+          "reveal": 5
+        },
+        {
+          "say": "And a market order carries a max price collar from the quote the user saw, so a stale screen can't buy at a wildly different price. Money travels as decimal strings, never floats.",
+          "reveal": 6
+        }
+      ],
+      "id": "s029"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Why not queue a stock order offline, like a chat message?",
+      "bullets": [
+        "A. Orders are too large for the outbox",
+        "B. An order means something different in an hour",
+        "C. The exchange rejects offline clients"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Chat queues messages offline. Why shouldn't a trading app queue orders offline the same way? Answer coming up in the hotel app.",
+          "reveal": 0
+        }
+      ],
+      "id": "s030"
+    },
+    {
+      "id": "s031a",
+      "layout": "section",
+      "kicker": "Concept 14 of 17",
+      "title": "App 4: hotel reservation",
+      "caption": "Book: Module 18 · App 4 — Hotel Reservation App",
+      "steps": [
+        {
+          "say": "Answer: B. A chat message means the same thing in an hour. An order doesn't, because markets move. So an offline order must be re-confirmed with a fresh quote. Concept fourteen: the hotel reservation app. It has two halves: search, which is read-heavy browsing, and booking, a money write that must happen exactly once.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 14 of 17",
+      "title": "App 4: hotel reservation",
+      "bullets": [
+        "Search: one query object = cache key + paging scope",
+        "Filter change: new cursor, cancel old requests",
+        "Map panning debounced: 10 requests, not hundreds",
+        "Quote locks price for about 15 minutes",
+        "Booking: idempotency key + payment token"
+      ],
+      "steps": [
+        {
+          "say": "Start with search. the whole search, destination, dates, guests, filters, sort, is one query object, and its normalised form is the cache key.",
+          "reveal": 1
+        },
+        {
+          "say": "Change any filter and you start a new query with a fresh cursor and cancel in-flight requests, so a late answer can't overwrite newer results.",
+          "reveal": 2
+        },
+        {
+          "say": "Map panning could fire a search every frame. Debounce to one request after half a second of rest, and twenty seconds of panning costs about ten requests.",
+          "reveal": 3
+        },
+        {
+          "say": "Search prices are only indicative and cached about five minutes. Reserve creates a server-side quote that locks the price for about fifteen minutes, with a countdown. If it expires and the price changed, show old versus new before paying.",
+          "reveal": 4
+        },
+        {
+          "say": "Booking is the money write. It must happen exactly once.",
+          "reveal": 5
+        }
+      ],
+      "id": "s031"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: payment, then the app is killed",
+      "table": {
+        "head": [
+          "Step",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "Checkout opens",
+            "Idempotency key + quote saved in checkout_draft"
+          ],
+          [
+            "Card entry",
+            "Provider SDK returns a payment token"
+          ],
+          [
+            "POST /bookings",
+            "Server reserves, charges, confirms by key"
+          ],
+          [
+            "App killed",
+            "Response lost"
+          ],
+          [
+            "Next open",
+            "Draft without result: GET by key, 'Confirming...'"
+          ],
+          [
+            "Success",
+            "Trip pinned locally for reception, no signal"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's walk it. When checkout opens, the app creates an idempotency key and saves it with the quote in a checkout draft table.",
+          "reveal": 1
+        },
+        {
+          "say": "Card details go straight to the payment provider's S-D-K, which returns a token. Raw card numbers never touch your storage or servers.",
+          "reveal": 2
+        },
+        {
+          "say": "Post the booking with the key. The server reserves the room, charges the card and confirms, all keyed by it.",
+          "reveal": 3
+        },
+        {
+          "say": "Now the app is killed before the response arrives.",
+          "reveal": 4
+        },
+        {
+          "say": "Next launch, the app sees a draft with no result and asks the server for a booking with that key. The user sees confirming your booking, never a second charge.",
+          "reveal": 5
+        },
+        {
+          "say": "On success the trip is written locally and pinned, never evicted, so at reception with no signal, the confirmation code, address and phone are still there.",
+          "reveal": 6
+        }
+      ],
+      "id": "s032"
+    },
+    {
+      "id": "s033a",
+      "layout": "section",
+      "kicker": "Concept 15 of 17",
+      "title": "App 5: file sync",
+      "caption": "Book: Module 18 · App 5 — File Sync App",
+      "steps": [
+        {
+          "say": "Concept fifteen: the file sync app, a cloud drive client. It's the one app where the device writes lots of data and two devices can edit the same thing offline.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "layout": "number",
+      "kicker": "Concept 15 of 17",
+      "title": "App 5: file sync, the 2 GB upload",
+      "big": "2 GB x 8 / 10 Mbit/s = 27 min",
+      "caption": "8 MB chunks: 256 chunks; a drop costs about 6 seconds",
+      "steps": [
+        {
+          "say": "Upload a two gigabyte video over a ten megabit uplink: two gigabytes times eight, divided by ten, is about sixteen hundred seconds, twenty-seven minutes. An interruption is almost certain.",
+          "reveal": 0
+        },
+        {
+          "say": "So split it into eight-megabyte chunks, two hundred fifty-six of them, each hashed with S-H-A two fifty-six. The client sends the hash list, and the server replies with the chunks it's missing. That one mechanism gives resume and deduplication.",
+          "reveal": 0
+        },
+        {
+          "say": "A drop now costs one chunk, about six seconds, not the whole file. Interrupted at seventy percent? Only the missing thirty percent is resent. Metadata for fifty thousand files is only fifteen megabytes, so the phone keeps the whole tree but fetches content on demand.",
+          "reveal": 0
+        }
+      ],
+      "id": "s033"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: the three-tree sync planner",
+      "table": {
+        "head": [
+          "Local vs base",
+          "Remote vs base",
+          "Action"
+        ],
+        "rows": [
+          [
+            "same",
+            "same",
+            "Nothing"
+          ],
+          [
+            "changed",
+            "same",
+            "Upload"
+          ],
+          [
+            "same",
+            "changed",
+            "Download"
+          ],
+          [
+            "changed",
+            "changed, same hash",
+            "Mark synced"
+          ],
+          [
+            "changed",
+            "changed differently",
+            "Conflict: keep both"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Local and remote differ doesn't tell you who changed the file. So keep three trees: local, remote, and a base, the last state both sides agreed on. Row one: neither side changed versus base. Do nothing.",
+          "reveal": 1
+        },
+        {
+          "say": "Row two: you edited report dot doc on the phone, the server didn't. Upload it.",
+          "reveal": 2
+        },
+        {
+          "say": "Row three: your laptop edited it. Download it.",
+          "reveal": 3
+        },
+        {
+          "say": "Row four: both made the identical edit, same content hash. Just mark it synced.",
+          "reveal": 4
+        },
+        {
+          "say": "Row five: both edited differently. Never overwrite. Keep the server's version under the original name and upload yours as report, Alice's phone conflicted copy. Commit sends a parent revision, and if the server's revision moved, it answers four-oh-nine, conflict. Edit versus delete? The edit wins, because deleting someone's unsynced work is the worst outcome.",
+          "reveal": 5
+        }
+      ],
+      "id": "s034"
+    },
+    {
+      "id": "s035a",
+      "layout": "section",
+      "kicker": "Concept 16 of 17",
+      "title": "App 6: video streaming",
+      "caption": "Book: Module 18 · App 6 — Video Streaming App",
+      "steps": [
+        {
+          "say": "Concept sixteen: the video streaming app. Users judge it on two numbers: time to first frame, under two seconds, and rebuffering, under half a percent of watch time.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 16 of 17",
+      "title": "App 6: video streaming",
+      "bullets": [
+        "480p 1 Mbit/s: 450 MB/hour; 1080p: 2.25 GB/hour",
+        "4-second segments listed in a manifest (HLS/DASH)",
+        "Throughput rule: below 80% of estimated bandwidth",
+        "Buffer rule: low buffer = low quality",
+        "Fast start: preload likely next, start low"
+      ],
+      "steps": [
+        {
+          "say": "Video is heavy. Four-eighty p is about four hundred fifty megabytes an hour, ten-eighty p over two gigabytes. A ten gigabyte plan gets only nine hours of seven-twenty p.",
+          "reveal": 1
+        },
+        {
+          "say": "The video is encoded at several qualities, a bitrate ladder, each cut into four-second segments listed in a manifest. The standards are H-L-S and M-PEG DASH, served from a C-D-N. Before each segment, the player picks a quality. That's adaptive bitrate, A-B-R.",
+          "reveal": 2
+        },
+        {
+          "say": "The throughput rule picks the highest bitrate below eighty percent of measured bandwidth. Fast to react, but noisy on mobile.",
+          "reveal": 3
+        },
+        {
+          "say": "The buffer rule picks from seconds buffered. Low buffer, lowest quality, to refill fast. Full buffer, highest quality.",
+          "reveal": 4
+        },
+        {
+          "say": "For fast start, preload the manifest and first segment of the video you'll probably tap, start low, and switch up within seconds.",
+          "reveal": 5
+        }
+      ],
+      "id": "s035"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: bandwidth drops from 6 to 1.2 Mbit/s",
+      "table": {
+        "head": [
+          "Rule",
+          "Stall time",
+          "Average bitrate"
+        ],
+        "rows": [
+          [
+            "Throughput-based",
+            "0.7 s",
+            "2.10 Mbit/s"
+          ],
+          [
+            "Buffer-based",
+            "0.3 s",
+            "3.06 Mbit/s"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's a toy simulation from the notes. Thirty four-second segments, and bandwidth drops from six to one point two megabits for forty seconds. The throughput rule stalls for point seven seconds and averages two point one megabits. Its safety margin keeps it below ten-eighty p, and it notices the drop only after slow downloads have eaten the buffer.",
+          "reveal": 1
+        },
+        {
+          "say": "The buffer rule starts lowest, climbs as the buffer grows, and rides out the drop on its thirty-second cushion: point three seconds of stall and a higher average of about three megabits. Real players combine both, throughput at startup and buffer once filled, with hysteresis so quality doesn't flicker. Offline downloads are background jobs with an expiring licence, and watch progress syncs through an outbox, latest timestamp wins.",
+          "reveal": 2
+        }
+      ],
+      "id": "s036"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 17 of 17",
+      "title": "Client cheat sheet: symptom to pattern",
+      "table": {
+        "head": [
+          "Symptom",
+          "Reach for"
+        ],
+        "rows": [
+          [
+            "Spinner every launch, blank offline",
+            "UI observes the local DB"
+          ],
+          [
+            "Offline actions vanish on kill",
+            "Durable outbox + background job"
+          ],
+          [
+            "Duplicates after retries",
+            "Client-generated idempotency key"
+          ],
+          [
+            "Items repeat while scrolling",
+            "Cursor paging + de-dup by ID"
+          ],
+          [
+            "Background battery drain",
+            "Close sockets; push as a hint; batch"
+          ],
+          [
+            "Bad release, cannot recall",
+            "Phased rollout + kill switch"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept seventeen: the client cheat sheet. Symptom: a spinner on every launch and a blank screen offline. Reach for offline-first, the U-I observes the local database.",
+          "reveal": 1
+        },
+        {
+          "say": "Actions typed offline vanish when the app is killed: a durable outbox plus a background job.",
+          "reveal": 2
+        },
+        {
+          "say": "Duplicate messages or orders after retries: a client-generated idempotency key, as in chat and trading.",
+          "reveal": 3
+        },
+        {
+          "say": "Items repeat or skip while scrolling: cursor pagination plus de-duplication by I-D, as in the feed.",
+          "reveal": 4
+        },
+        {
+          "say": "Battery drains in the background: close sockets, use push as a hint, batch requests.",
+          "reveal": 5
+        },
+        {
+          "say": "And a bad release crashed five percent of users: phased rollout, a kill switch, and a minimum version. Other pairs: large uploads restarting from zero, use chunked resumable transfers. Fine server metrics but slow for users, measure on the device.",
+          "reveal": 6
+        }
+      ],
+      "id": "s037",
+      "caption": "Book: Module 18 · Pattern Review (client cheat sheet)"
+    },
+    {
+      "id": "s037b",
+      "layout": "table",
+      "kicker": "Concept 17 of 17",
+      "title": "Client cheat sheet: more symptoms",
+      "table": {
+        "head": [
+          "Symptom",
+          "Reach for"
+        ],
+        "rows": [
+          [
+            "Scrolling stutters as images load",
+            "Off-main-thread decode, sized URLs, recycled rows"
+          ],
+          [
+            "Huge data use",
+            "Display-size media, Wi-Fi-only prefetch, conflation"
+          ],
+          [
+            "Messages missing after reconnect",
+            "Sync token and seq gap detection, then stream"
+          ],
+          [
+            "'Did my payment go through?'",
+            "Reconcile by idempotency key before any retry"
+          ],
+          [
+            "Two devices overwrote each other",
+            "Base version + optimistic concurrency; keep both"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Five more pairs from the cheat sheet. Scrolling stutters when images load: decode off the main thread, request sized images, recycle rows, and keep a memory L-R-U. That's the feed.",
+          "reveal": 1
+        },
+        {
+          "say": "Huge data use: request display-size media, prefetch only on Wi-Fi, conflate streams like the trading app, and default to data saver.",
+          "reveal": 2
+        },
+        {
+          "say": "Messages missing after a reconnect: sync from the token, use sequence numbers to detect gaps, then resume the stream. That's our earlier quiz.",
+          "reveal": 3
+        },
+        {
+          "say": "Did my payment go through, after a timeout? Reconcile by the idempotency key before any retry, like the hotel booking.",
+          "reveal": 4
+        },
+        {
+          "say": "Two devices overwrote each other's edits: keep a base version, use optimistic concurrency, and keep both copies on a conflict, like file sync.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 17 of 17",
+      "title": "Seven decision rules",
+      "bullets": [
+        "UI reads local state; network writes into it",
+        "Every write gets an idempotency key",
+        "Push is a hint; a cursor is the truth",
+        "Sockets for the foreground only",
+        "Request only what the screen shows",
+        "Flags for anything that may change; show staleness"
+      ],
+      "steps": [
+        {
+          "say": "Seven decision rules to say out loud. One: the U-I reads local state, and the network writes into it.",
+          "reveal": 1
+        },
+        {
+          "say": "Two: every write gets an idempotency key before it leaves the device.",
+          "reveal": 2
+        },
+        {
+          "say": "Three: push is a hint, a cursor or sequence number is the truth.",
+          "reveal": 3
+        },
+        {
+          "say": "Four: real-time sockets are for the foreground only.",
+          "reveal": 4
+        },
+        {
+          "say": "Five: request only what the screen shows. Sized images, visible symbols, the next page.",
+          "reveal": 5
+        },
+        {
+          "say": "Six: anything that may need changing after release goes behind a flag or remote config. And seven: show staleness honestly, with timestamps and banners, instead of pretending data is live.",
+          "reveal": 6
+        }
+      ],
+      "id": "s038"
+    },
+    {
+      "layout": "recap",
+      "title": "Recap",
+      "bullets": [
+        "Nine blocks: layers, sync, cache, network, push, background...",
+        "Feed: DB-backed cursor paging, sized images, optimistic likes",
+        "Chat: outbox + client ID, server seq, socket then push + sync",
+        "Trading and hotel: client ID or key, reconcile before retry",
+        "File sync: chunks + three trees; video: segments + buffer ABR",
+        "Next: Episode 26, Case Studies: Search, Logging, Q&A"
+      ],
+      "steps": [
+        {
+          "say": "Let's recap. The device has its own database, network and battery budget. Nine blocks cover it: layers, offline-first sync, caching, networking and paging, push, background work, battery and data, releases and flags, and observability.",
+          "reveal": 1
+        },
+        {
+          "say": "News feed: a local table filled page by page with cursors, sized images in two cache tiers, and optimistic likes through an outbox.",
+          "reveal": 2
+        },
+        {
+          "say": "Chat: an outbox with a client message I-D, server sequence numbers for order, a socket in the foreground and push plus sync in the background.",
+          "reveal": 3
+        },
+        {
+          "say": "Trading and hotel: money writes with a client-made I-D, and when in doubt, ask the server before any retry. Show stale prices honestly, and pin trips for offline.",
+          "reveal": 4
+        },
+        {
+          "say": "File sync: hashed resumable chunks, three trees and conflicted copies. Video: segments from a C-D-N, buffer-based A-B-R, and preloading for a fast start.",
+          "reveal": 5
+        },
+        {
+          "say": "Next time, episode twenty-six, Case Studies: Search, Logging, and Q and A. See you there.",
+          "reveal": 6
+        }
+      ],
+      "id": "s039"
+    }
+  ]
+}

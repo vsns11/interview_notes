@@ -1,0 +1,2152 @@
+{
+  "series": "System Design Workshop",
+  "episode": 12,
+  "title": "Keeping Data Consistent",
+  "subtitle": "Two-phase commit, sagas, quorums and vector clocks",
+  "scenes": [
+    {
+      "layout": "title",
+      "title": "Keeping Data Consistent",
+      "subtitle": "Two-phase commit, sagas, quorums and vector clocks",
+      "steps": [
+        {
+          "say": "Welcome to episode twelve of the System Design Workshop: Keeping Data Consistent.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll be able to make a change across machines all or nothing, run a checkout across services that survives crashes, pick how many replicas to write and read, and tell a real conflict from an overwrite.",
+          "reveal": 0
+        },
+        {
+          "say": "Keep the module seven notes PDF open beside the video. It's the smallest module, only four patterns, but the toughest material. When I say pause and think, pause, and answer before I do.",
+          "reveal": 0
+        }
+      ],
+      "id": "s001"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Module introduction",
+      "title": "One database gives you all-or-nothing for free",
+      "bullets": [
+        "Atomicity: both halves happen, or neither",
+        "The write-ahead log records intent first",
+        "After a crash, the log finishes or reverses",
+        "Split across shards: no single log sees both"
+      ],
+      "steps": [
+        {
+          "say": "Start with one database moving fifty dollars from checking to savings. It does both halves or neither. That property is called atomicity.",
+          "reveal": 1
+        },
+        {
+          "say": "It gets atomicity almost for free from its write-ahead log, or WAL. Before it changes anything, it durably writes down what it intends to do.",
+          "reveal": 2
+        },
+        {
+          "say": "If it crashes halfway, it reads the log on restart and either finishes the work or reverses it.",
+          "reveal": 3
+        },
+        {
+          "say": "Now split the data. The subtraction lives on shard two, the addition on shard five, and each has its own log. Nothing ties those two changes together. This episode rebuilds all or nothing across machines, and shows what each way costs.",
+          "reveal": 4
+        }
+      ],
+      "id": "s002",
+      "caption": "Book: Module 7 Consistency · Module Introduction"
+    },
+    {
+      "layout": "table",
+      "kicker": "Module introduction",
+      "title": "Four situations, four patterns",
+      "table": {
+        "head": [
+          "The situation",
+          "The pattern"
+        ],
+        "rows": [
+          [
+            "All parties commit, or all back out",
+            "Two-phase commit"
+          ],
+          [
+            "Many steps; any can fail midway",
+            "Saga"
+          ],
+          [
+            "Copies must agree with no leader",
+            "Quorum"
+          ],
+          [
+            "Who saw which update, in what order",
+            "Vector clocks"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's the map. When several parties must all commit or all back out, that's two-phase commit.",
+          "reveal": 1
+        },
+        {
+          "say": "When a workflow has many steps and any one might fail midway, that's a saga.",
+          "reveal": 2
+        },
+        {
+          "say": "When several copies of the same data must agree, and there's no single leader taking all writes, that's a quorum.",
+          "reveal": 3
+        },
+        {
+          "say": "And when you need to know who saw which update, and in what order, that's vector clocks. Short on time? Saga and quorum cover most interview questions here.",
+          "reveal": 4
+        }
+      ],
+      "id": "s003"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Two facts",
+      "title": "Fact one: in a partition, pick a side",
+      "bullets": [
+        "Partition: machines alive but can't reach each other",
+        "Option A: stop serving, stay consistent",
+        "Option B: keep serving, reconcile later",
+        "This is the CAP trade-off; nothing removes it"
+      ],
+      "steps": [
+        {
+          "say": "Two facts organize this whole module. Fact one. A network partition is when groups of machines are running, but can't reach each other.",
+          "reveal": 1
+        },
+        {
+          "say": "Imagine our shop's two data centers lose the link between them. Option A: stop taking orders until the link returns. You stay consistent, but you're not available.",
+          "reveal": 2
+        },
+        {
+          "say": "Option B: keep taking orders on both sides, and reconcile later. You stay available, but briefly inconsistent.",
+          "reveal": 3
+        },
+        {
+          "say": "That's the CAP trade-off: consistency, availability, partition tolerance. No engineering removes it. It comes from how networks behave. Every pattern today makes its own choice, and interviewers ask about it directly.",
+          "reveal": 4
+        }
+      ],
+      "id": "s004",
+      "caption": "Book: Module 7 · Two facts that organize the module"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Two facts",
+      "title": "Fact two: avoid the distributed transaction",
+      "bullets": [
+        "Distributed transaction: one all-or-nothing change across machines",
+        "Shard-key discipline: keep one customer on one shard",
+        "Idempotent: repeating has the same effect as once",
+        "Commutative: any order gives the same result",
+        "Real need: moving money, promising stock across services"
+      ],
+      "steps": [
+        {
+          "say": "Fact two. The cheapest distributed transaction is the one you never need. A distributed transaction is one all or nothing change that spans machines or services.",
+          "reveal": 1
+        },
+        {
+          "say": "First cheaper tool: choose the shard key so that one customer's whole checkout lives on one shard. Then a normal local transaction still works.",
+          "reveal": 2
+        },
+        {
+          "say": "Second: idempotent operations, where repeating has the same effect as once. Setting status to shipped twice is harmless.",
+          "reveal": 3
+        },
+        {
+          "say": "Third: commutative operations, where order doesn't matter. Adding one like then two likes gives the same total either way.",
+          "reveal": 4
+        },
+        {
+          "say": "What's left is small: moving money between owners, or promising stock across services.",
+          "reveal": 5
+        }
+      ],
+      "id": "s005"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 1 of 4",
+      "title": "Two-Phase Commit",
+      "steps": [
+        {
+          "say": "Concept one: two-phase commit, or two P C. It gives true all or nothing to one operation spread across machines.",
+          "reveal": 0
+        },
+        {
+          "say": "Think of a wedding. Both partners say I do before the officiant declares them married. After I do, neither can leave alone. And if the officiant faints, both are stuck at the altar. Hold onto that last sentence.",
+          "reveal": 0
+        }
+      ],
+      "id": "s006",
+      "caption": "Book: Module 7 Consistency · Two-Phase Commit"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "The fifty dollars that vanished",
+      "bullets": [
+        "A on shard 2 sends $50 to B on shard 5",
+        "Version one: subtract, then add",
+        "2:37 AM: app crashes between the two writes",
+        "Nightly job finds $50 missing",
+        "Reverse the order: the crash invents $50"
+      ],
+      "steps": [
+        {
+          "say": "Imagine our shop lets customers send gift card balances. Customer A lives on shard two, and sends fifty dollars to customer B on shard five.",
+          "reveal": 1
+        },
+        {
+          "say": "Version one does two writes in a row: subtract fifty on shard two, then add fifty on shard five.",
+          "reveal": 2
+        },
+        {
+          "say": "Thousands work. Then at two thirty-seven in the morning, the app server crashes right after the subtraction committed, before the addition was sent. No retry, no error.",
+          "reveal": 3
+        },
+        {
+          "say": "The nightly reconciliation job later finds fifty dollars missing.",
+          "reveal": 4
+        },
+        {
+          "say": "Reverse the order and the same crash invents fifty dollars. Each shard behaved perfectly. The operation as a whole was never atomic.",
+          "reveal": 5
+        }
+      ],
+      "id": "s007"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Two-phase commit",
+      "title": "Why the obvious fixes fail",
+      "bullets": [
+        "Retry B until it works: retry loop dies with the app",
+        "Write both in parallel: two half-done states",
+        "Nightly reconciliation: spots, doesn't prevent"
+      ],
+      "steps": [
+        {
+          "say": "Fix one: retry B until it works. If shard five is down an hour, money's missing for an hour. And if the app dies, its in-memory retry loop dies too. The plan to finish must be durable.",
+          "reveal": 1
+        },
+        {
+          "say": "Fix two: do both writes in parallel. Either can still fail alone, so now you have two possible half-done states. Faster isn't atomic.",
+          "reveal": 2
+        },
+        {
+          "say": "Fix three: let the nightly job fix it. Reconciliation spots mismatches after users may have seen them. It doesn't prevent them.",
+          "reveal": 3
+        }
+      ],
+      "id": "s008"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Two-phase commit",
+      "title": "Coordinator talks to each shard",
+      "mermaid": "flowchart LR\n  C[\"Coordinator - logs decision\"] -->|\"1 prepare\"| S2[\"Shard 2 - subtract 50\"]\n  C -->|\"1 prepare\"| S5[\"Shard 5 - add 50\"]\n  S2 -->|\"vote yes\"| C\n  S5 -->|\"vote yes\"| C\n  C -->|\"2 commit\"| S2\n  C -->|\"2 commit\"| S5",
+      "caption": "The shards never talk to each other",
+      "steps": [
+        {
+          "say": "Here's the shape. A coordinator talks directly to each participant, meaning each database involved. Shard two will subtract fifty, shard five will add fifty.",
+          "reveal": 0
+        },
+        {
+          "say": "Notice the shards never talk to each other. Everything flows through the coordinator. That's why, if the coordinator goes silent, both shards freeze.",
+          "reveal": 0
+        }
+      ],
+      "id": "s009"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Two-phase commit",
+      "title": "The four steps, on the $50 transfer",
+      "bullets": [
+        "1 Prepare: do the work, log PREPARED, keep locks",
+        "2 Vote yes: a binding promise",
+        "3 Coordinator logs COMMIT or ABORT",
+        "4 Commit phase: apply, release locks"
+      ],
+      "steps": [
+        {
+          "say": "Step one, prepare. Shard two does the work, subtracting fifty, writes a durable prepared entry to its log, keeps its row locks on A's balance, then votes. Shard five does the same for B.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two. A yes vote is a binding promise: the work is on disk, I can commit even if I crash, and I'll hold my locks until you tell me the result.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three. Both voted yes, so the coordinator writes commit to its own log. That log entry is the outcome. If any shard had voted no, or stayed silent, it would log abort.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four. The coordinator sends commit, and each shard applies it and releases its locks. The rule: log before you vote, and log the decision before announcing it, so a restarting shard just asks for the decision.",
+          "reveal": 4
+        }
+      ],
+      "id": "s010"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Two-phase commit",
+      "title": "A participant's life: in doubt",
+      "mermaid": "flowchart LR\n  W[\"Working\"] -->|\"vote no\"| AB[\"Aborted\"]\n  W -->|\"log PREPARED, vote yes\"| P[\"Prepared - in doubt\"]\n  P -->|\"coordinator says commit\"| CM[\"Committed\"]\n  P -->|\"coordinator says abort\"| AB\n  P -->|\"coordinator silent, locks held\"| P",
+      "caption": "After voting yes, only the coordinator can move it",
+      "steps": [
+        {
+          "say": "This is the pattern's big risk. After voting yes, a participant is in doubt.",
+          "reveal": 0
+        },
+        {
+          "say": "It can't commit alone, because another participant may have voted no. It can't abort alone, because commit may already be decided. So it waits, holding its locks.",
+          "reveal": 0
+        },
+        {
+          "say": "If the coordinator crashes right after collecting yes votes, every participant is in doubt, and every other transaction that needs those rows blocks. That's called blocking, and it's two P C's trademark cost.",
+          "reveal": 0
+        }
+      ],
+      "id": "s011"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Walkthrough with numbers",
+      "table": {
+        "head": [
+          "Scenario",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "All goes well",
+            "2 round trips + fsyncs: 4x a local write"
+          ],
+          [
+            "Lock time",
+            "1 ms becomes 10 to 20 ms"
+          ],
+          [
+            "Coordinator dies 5 ms after votes",
+            "Both shards frozen 40 s"
+          ],
+          [
+            "Replicate the coordinator",
+            "Faster recovery, same locks"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Numbers on our transfer. When all goes well, you pay two round trips plus an fsync, a forced disk write, at every party. About four times a local write.",
+          "reveal": 1
+        },
+        {
+          "say": "The hidden cost is lock time. Locks span prepare to commit, stretching from one millisecond to ten or twenty. Rate times duration equals concurrency, so ten times longer locks mean about ten times more collisions.",
+          "reveal": 2
+        },
+        {
+          "say": "Failure drill. The coordinator crashes five milliseconds after both votes. Both shards sit in doubt, locks held, until a replacement replays the log forty seconds later. Anyone touching those balances waits.",
+          "reveal": 3
+        },
+        {
+          "say": "Replicating the coordinator makes recovery faster, but doesn't remove the locks, the extra round trips, or the need for every participant to be online.",
+          "reveal": 4
+        }
+      ],
+      "id": "s012"
+    },
+    {
+      "layout": "number",
+      "kicker": "Two-phase commit",
+      "title": "Availability multiplies down",
+      "big": "99.9% x 99.9% x 99.9% = about 99.7%",
+      "caption": "Coordinator and both shards must all be up",
+      "steps": [
+        {
+          "say": "One more number. For a commit, the coordinator and both shards must all be up.",
+          "reveal": 0
+        },
+        {
+          "say": "Three parts at ninety-nine point nine percent each give about ninety-nine point seven percent. And it drops with every participant you add.",
+          "reveal": 0
+        }
+      ],
+      "id": "s013"
+    },
+    {
+      "layout": "twocol",
+      "kicker": "Two-phase commit",
+      "title": "Two-phase commit: gains and costs",
+      "left": {
+        "heading": "You gain",
+        "bullets": [
+          "True atomicity across machines",
+          "Strong consistency",
+          "Looks like a normal transaction (XA)"
+        ]
+      },
+      "right": {
+        "heading": "You pay",
+        "bullets": [
+          "Blocking when the coordinator is silent",
+          "Latency, fsyncs, lock contention",
+          "Can't cross trust boundaries"
+        ]
+      },
+      "steps": [
+        {
+          "say": "What you gain. True atomicity: the vanished fifty dollars can't happen.",
+          "reveal": 1
+        },
+        {
+          "say": "Strong consistency: nobody sees money that left A but hasn't reached B.",
+          "reveal": 2
+        },
+        {
+          "say": "And it looks normal to app code. The X-A standard is the common interface, and Java's J-T-A builds on it.",
+          "reveal": 3
+        },
+        {
+          "say": "What you pay. Blocking: in-doubt participants hold locks while the coordinator may be unreachable.",
+          "reveal": 4
+        },
+        {
+          "say": "Latency and throughput: round trips, fsyncs, longer locks on popular rows.",
+          "reveal": 5
+        },
+        {
+          "say": "And it can't cross trust boundaries. No outside company will let your coordinator hold locks inside its database.",
+          "reveal": 6
+        }
+      ],
+      "id": "s014"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Two-phase commit",
+      "title": "Where two-phase commit fits, and doesn't",
+      "bullets": [
+        "Not between microservices: locks for seconds",
+        "Not on hot rows or across companies",
+        "Fits: short, internal, rare, high-value",
+        "Inside databases: Spanner, quorum groups",
+        "Safeguard: deadlines, alerts on prepared age"
+      ],
+      "steps": [
+        {
+          "say": "When not to use it: between microservices. A checkout takes seconds or minutes, far too long to hold locks.",
+          "reveal": 1
+        },
+        {
+          "say": "Also not on hot rows, meaning rows that take a large share of traffic, not across companies, and not when fixed by morning is good enough.",
+          "reveal": 2
+        },
+        {
+          "say": "Where it does fit: short, internal, rare, high-value operations, like our gift card transfer. Two shards, one cluster, about fifty milliseconds.",
+          "reveal": 3
+        },
+        {
+          "say": "Above all, inside distributed databases. Google Spanner runs two P C between shard groups where every party is quorum-replicated, so one machine dying doesn't block it.",
+          "reveal": 4
+        },
+        {
+          "say": "Even there, set strict deadlines, track the age of prepared transactions, and alert before held locks slow unrelated work.",
+          "reveal": 5
+        }
+      ],
+      "id": "s015"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Coordinator dies after both yes votes. Now what?",
+      "bullets": [
+        "A: Commit on its own",
+        "B: Abort on its own",
+        "C: Wait, holding its locks"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Shard two voted yes on the transfer, and then the coordinator went silent. Which option is it allowed to take?",
+          "reveal": 0
+        }
+      ],
+      "id": "s016"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Pause and think",
+      "title": "Answer: it waits",
+      "bullets": [
+        "Can't commit: shard 5 might have voted no",
+        "Can't abort: commit may be decided",
+        "So: wait with locks held. That's blocking"
+      ],
+      "steps": [
+        {
+          "say": "The answer is C. It can't commit alone, because for all it knows shard five voted no.",
+          "reveal": 1
+        },
+        {
+          "say": "It can't abort alone, because the coordinator may already have logged commit.",
+          "reveal": 2
+        },
+        {
+          "say": "So it waits, holding locks, until the coordinator recovers and replays its log, or a human resolves it. The word interviewers want is blocking.",
+          "reveal": 3
+        }
+      ],
+      "id": "s017"
+    },
+    {
+      "layout": "table",
+      "kicker": "Two-phase commit",
+      "title": "Two-phase commit versus saga",
+      "table": {
+        "head": [
+          "",
+          "Two-phase commit",
+          "Saga"
+        ],
+        "rows": [
+          [
+            "Atomicity",
+            "Genuine, held by locks",
+            "Imitated with compensations"
+          ],
+          [
+            "In-between states",
+            "Hidden from everyone",
+            "Visible: paid, not shipped"
+          ],
+          [
+            "Blocking",
+            "Yes, in-doubt locks",
+            "No, local transactions"
+          ],
+          [
+            "Coordinator dies",
+            "Participants frozen",
+            "Resumes from durable log"
+          ],
+          [
+            "Fits",
+            "Short internal work, in a DB",
+            "Workflows across services"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Before the saga, a preview. Two P C's atomicity is genuine, held by locks. A saga imitates it: steps commit separately, and compensations undo earlier ones on failure.",
+          "reveal": 1
+        },
+        {
+          "say": "In-between states: two P C hides them from everyone. A saga shows them, like payment taken, shipping pending.",
+          "reveal": 2
+        },
+        {
+          "say": "Blocking: two P C blocks. A saga doesn't, since every step is an ordinary local transaction.",
+          "reveal": 3
+        },
+        {
+          "say": "If the coordinator dies, two P C participants freeze. A saga resumes from its durable log.",
+          "reveal": 4
+        },
+        {
+          "say": "In one line: two P C hides the in-between state by holding locks. A saga lets that state show, and manages it.",
+          "reveal": 5
+        }
+      ],
+      "id": "s018",
+      "caption": "Book: Module 7 · Two-Phase Commit · 2PC vs. Saga (preview)"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 1 recap",
+      "title": "In the interview: two-phase commit",
+      "bullets": [
+        "Prepare: work, log, keep locks, vote",
+        "Commit: all yes, else abort",
+        "Downside: blocking if coordinator dies",
+        "Sagas between services; 2PC inside databases"
+      ],
+      "steps": [
+        {
+          "say": "In the interview, say this. Two P C gives genuine atomicity across machines. In prepare, each participant does the work, logs it durably, keeps its locks, and votes.",
+          "reveal": 1
+        },
+        {
+          "say": "If all vote yes, the coordinator tells everyone to commit. Otherwise, abort.",
+          "reveal": 2
+        },
+        {
+          "say": "The downside is blocking. A participant that voted yes can't decide alone, so a coordinator dying at the wrong moment freezes everyone with locks held.",
+          "reveal": 3
+        },
+        {
+          "say": "So I use sagas between microservices, and respect where two P C lives today, inside databases like Spanner. Recap: two P C buys genuine atomicity with blocking.",
+          "reveal": 4
+        }
+      ],
+      "id": "s019"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 2 of 4",
+      "title": "Saga",
+      "steps": [
+        {
+          "say": "Concept two: the saga. It breaks a cross-service workflow into a chain of local transactions, each committing right away in its own service, with no cross-service locks.",
+          "reveal": 0
+        },
+        {
+          "say": "Think of booking a flight, a hotel and a car from different companies. If the hotel falls through, you can't turn back time. You cancel the flight. Cancellation policies are compensations.",
+          "reveal": 0
+        }
+      ],
+      "id": "s020",
+      "caption": "Book: Module 7 Consistency · Saga"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "340 orders stuck in limbo",
+      "bullets": [
+        "Checkout: reserve, then charge, then ship",
+        "Bad deploy: shipping offline 20 minutes",
+        "Catch block just logs an error",
+        "340 orders paid, reserved, never shipped",
+        "3 engineers, a weekend, a spreadsheet"
+      ],
+      "steps": [
+        {
+          "say": "Here's our running example for the saga. Checkout calls three services in order: reserve inventory, charge the card through an external payment provider, create a shipment.",
+          "reveal": 1
+        },
+        {
+          "say": "A bad deploy takes shipping offline for twenty busy minutes. Reservations and charges keep succeeding.",
+          "reveal": 2
+        },
+        {
+          "say": "The third call fails, and the catch block just logs an error.",
+          "reveal": 3
+        },
+        {
+          "say": "Result: three hundred forty orders paid and reserved, but never shipped. Each service did its part, so none noticed. Support learned from angry emails.",
+          "reveal": 4
+        },
+        {
+          "say": "Three engineers spent a weekend refunding by hand from a spreadsheet. And two P C was never an option: the external provider won't hold locks for you.",
+          "reveal": 5
+        }
+      ],
+      "id": "s021"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Saga",
+      "title": "Why the obvious fixes fail",
+      "bullets": [
+        "Undo in the catch block: lost if the process crashes",
+        "Two-phase commit: provider can't join",
+        "One database: works only if every step can share it"
+      ],
+      "steps": [
+        {
+          "say": "Fix one: put the undo logic in the catch block. Better, but a crash mid-checkout or mid-undo loses the in-memory plan. Recovery must outlive the process that started the work.",
+          "reveal": 1
+        },
+        {
+          "say": "Fix two: use two P C. Locks across three services for seconds or hours, and the external provider can't participate anyway.",
+          "reveal": 2
+        },
+        {
+          "say": "Fix three: put everything in one database. If every step can share a transaction, that's the cheapest fix, Fact two. But payment is external here.",
+          "reveal": 3
+        }
+      ],
+      "id": "s022"
+    },
+    {
+      "layout": "table",
+      "kicker": "Saga",
+      "title": "Forward steps and compensations",
+      "caption": "Compensations run in reverse order",
+      "steps": [
+        {
+          "say": "Here's the shape. The forward path is T one reserve, T two charge, T three ship, each a local transaction, ending at order complete.",
+          "reveal": 2
+        },
+        {
+          "say": "If T three still fails after retries, compensations run in reverse. C two refunds the charge, then C one releases the stock. The order ends as failed, the customer's notified, and nothing is owed.",
+          "reveal": 3
+        }
+      ],
+      "id": "s023",
+      "table": {
+        "head": [
+          "Forward step (local transaction)",
+          "Its compensation"
+        ],
+        "rows": [
+          [
+            "T1 Reserve inventory",
+            "C1 Release the stock"
+          ],
+          [
+            "T2 Charge the card",
+            "C2 Refund the charge"
+          ],
+          [
+            "T3 Ship (fails after retries)",
+            "Run C2, then C1: order failed, nothing owed"
+          ]
+        ]
+      }
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Saga",
+      "title": "The six rules, on order 7f3a",
+      "bullets": [
+        "1 Local transactions, no cross-service locks",
+        "2 Saga log: record intent before each step",
+        "3 Conditional updates: one orchestrator wins",
+        "4 On persistent failure, compensate in reverse",
+        "5 Every step and undo is idempotent",
+        "6 Escalate what can't be fixed automatically"
+      ],
+      "steps": [
+        {
+          "say": "Six rules, on order seven F three A. Rule one: local transactions. Inventory reserves in about a millisecond and lets go.",
+          "reveal": 1
+        },
+        {
+          "say": "Rule two: record intent before every step. The saga log says, T one done, starting T two. If the orchestrator, the process driving the workflow, crashes, another instance reads the log and continues.",
+          "reveal": 2
+        },
+        {
+          "say": "Rule three: conditional updates, like compare and set, so two recovering orchestrators never both advance the same order.",
+          "reveal": 3
+        },
+        {
+          "say": "Rule four: on persistent failure, compensate in reverse. Refund first, then release.",
+          "reveal": 4
+        },
+        {
+          "say": "Rule five: every step and compensation is idempotent, with a stable key, so a retried refund is safe.",
+          "reveal": 5
+        },
+        {
+          "say": "Rule six: a refund that keeps failing stays a pending obligation, and after bounded retries becomes a human task with full context.",
+          "reveal": 6
+        }
+      ],
+      "id": "s024"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Saga",
+      "title": "Compensation is a business undo",
+      "bullets": [
+        "A new, visible action, not an erasure",
+        "Business owners define each one",
+        "Confirmation email: send an apology instead",
+        "Pivot: shipping can't be undone, so put it last",
+        "After the pivot, recover forward"
+      ],
+      "steps": [
+        {
+          "say": "Compensations aren't rollbacks. A committed transaction can't be erased, so each step gets a visible opposite action: refund, release, cancel.",
+          "reveal": 1
+        },
+        {
+          "say": "Business owners must define them, because not everything reverses perfectly.",
+          "reveal": 2
+        },
+        {
+          "say": "You can't unsend a confirmation email. Its compensation is an apologetic follow-up. So send confirmation late.",
+          "reveal": 3
+        },
+        {
+          "say": "Some effects can't be compensated at all. A package handed to the courier is gone. That point of no return is called the pivot. Put pivot steps last.",
+          "reveal": 4
+        },
+        {
+          "say": "After the pivot you recover forward: a return label, a support case.",
+          "reveal": 5
+        }
+      ],
+      "id": "s025"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Saga",
+      "title": "The honest price: no isolation",
+      "bullets": [
+        "Isolation hides half-finished state",
+        "Saga shows charged, not shipped",
+        "Product defines in-between states",
+        "Semantic lock: status PROCESSING"
+      ],
+      "steps": [
+        {
+          "say": "The honest price of a saga is isolation. Isolation means hiding a transaction's half-finished state.",
+          "reveal": 1
+        },
+        {
+          "say": "Two P C hides charged but not shipped. A saga shows it, between T two and T three, and other systems can read it and act on it.",
+          "reveal": 2
+        },
+        {
+          "say": "So product must define those in-between states deliberately. Processing is real workflow state, not a bug.",
+          "reveal": 3
+        },
+        {
+          "say": "Some systems add a semantic lock: a field like order status equals processing, telling other workflows this order can't, say, be cancelled and shipped at once, with no database lock across services.",
+          "reveal": 4
+        }
+      ],
+      "id": "s026"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Walkthrough: reserve 50 ms, charge 200, ship 100",
+      "table": {
+        "head": [
+          "Drill",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "Happy path",
+            "About 400 ms, no locks between steps"
+          ],
+          [
+            "Shipping outage",
+            "Retry 30 s, refund, release, about 90 s"
+          ],
+          [
+            "Crash after T2",
+            "New orchestrator reads log, ships"
+          ],
+          [
+            "T2 times out",
+            "Check status or retry same key"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Reserve takes fifty milliseconds, charge two hundred, ship a hundred. Happy path: about four hundred milliseconds, with each lock held about a millisecond.",
+          "reveal": 1
+        },
+        {
+          "say": "Replay the outage. T three fails, and the orchestrator retries with backoff for about thirty seconds. Still down, so refund, then release. Within about ninety seconds the customer knows. No spreadsheet.",
+          "reveal": 2
+        },
+        {
+          "say": "Crash drill. The orchestrator dies after T two commits. Another instance reads T two done, and creates the shipment. The reused idempotency key prevents a double charge.",
+          "reveal": 3
+        },
+        {
+          "say": "Ambiguity drill. T two times out. Was the card charged? Don't guess, and don't refund a charge that may not exist. Log outcome unknown first, then check the charge status or retry with the same key.",
+          "reveal": 4
+        }
+      ],
+      "id": "s027"
+    },
+    {
+      "layout": "table",
+      "kicker": "Saga",
+      "title": "Orchestration versus choreography",
+      "table": {
+        "head": [
+          "",
+          "Orchestration",
+          "Choreography"
+        ],
+        "rows": [
+          [
+            "Who decides next",
+            "One coordinator, a state machine",
+            "Each service reacts to events"
+          ],
+          [
+            "Where is order 7f3a?",
+            "One query",
+            "Hunt through N services' logs"
+          ],
+          [
+            "Adding a step",
+            "Change the workflow definition",
+            "New subscriptions, hidden coupling"
+          ],
+          [
+            "Failure handling",
+            "Central retry and compensate",
+            "Every service builds its part"
+          ],
+          [
+            "Fits",
+            "Ordered, high-stakes workflows",
+            "Analytics, notifications"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Who drives the saga? Orchestration means one coordinator runs an explicit state machine and chooses the next step. Choreography means each service reacts to events others publish, and nobody's in charge.",
+          "reveal": 1
+        },
+        {
+          "say": "Where is order seven F three A? With orchestration, one query. With choreography, a hunt through every service's logs.",
+          "reveal": 2
+        },
+        {
+          "say": "Adding a step: edit the workflow, versus new subscriptions with hidden coupling.",
+          "reveal": 3
+        },
+        {
+          "say": "Failure handling: the orchestrator retries, compensates, escalates. With choreography, every service builds its own piece.",
+          "reveal": 4
+        },
+        {
+          "say": "So the rule: orchestrate the workflow, and use events only for independent reactions. The order saga is orchestrated, and its final order completed event goes out by pub sub to analytics and email.",
+          "reveal": 5
+        }
+      ],
+      "id": "s028",
+      "caption": "Book: Module 7 · Saga · Orchestration vs. choreography"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Charge payment timed out. Do you compensate right away?",
+      "bullets": [
+        "A: Yes, refund immediately",
+        "B: No, mark failed and move on",
+        "C: No, learn the truth first"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. The call to charge the card timed out. You don't know if money moved. What does the orchestrator do?",
+          "reveal": 0
+        }
+      ],
+      "id": "s029"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Pause and think",
+      "title": "Answer: learn the truth first",
+      "bullets": [
+        "Retry with the same idempotency key",
+        "Or query the charge status",
+        "Then continue, or compensate",
+        "Refund keeps failing: dead letter, human"
+      ],
+      "steps": [
+        {
+          "say": "The answer is C. Retry with the same idempotency key, and the provider returns the original result instead of charging twice.",
+          "reveal": 1
+        },
+        {
+          "say": "Or query the charge status directly.",
+          "reveal": 2
+        },
+        {
+          "say": "Only then continue to shipping, or compensate.",
+          "reveal": 3
+        },
+        {
+          "say": "And if the refund itself keeps failing, retry it with backoff, then escalate to a dead letter queue that alerts a person with full context. Compensations must be as reliable as forward steps.",
+          "reveal": 4
+        }
+      ],
+      "id": "s030"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 2 recap",
+      "title": "In the interview: saga",
+      "bullets": [
+        "Local transactions, no cross-service locks",
+        "Durable saga log before every step",
+        "Idempotent compensations in reverse",
+        "In-between states visible on purpose",
+        "Pivot last; orchestrate, events for reactions"
+      ],
+      "steps": [
+        {
+          "say": "In the interview, say this. Checkout is a saga: reserve, charge, ship, each a local transaction, no cross-service locks.",
+          "reveal": 1
+        },
+        {
+          "say": "Progress goes to a durable saga log before every step, so a crashed orchestrator resumes.",
+          "reveal": 2
+        },
+        {
+          "say": "If a step still fails after retries, idempotent compensations run in reverse: refund, then release.",
+          "reveal": 3
+        },
+        {
+          "say": "In-between states like charged, not shipped are visible on purpose, so product defines them.",
+          "reveal": 4
+        },
+        {
+          "say": "Irreversible steps like shipping go last, and I orchestrate, with events only for reactions. Recap: a saga trades isolation for no locks.",
+          "reveal": 5
+        }
+      ],
+      "id": "s031"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 3 of 4",
+      "title": "Quorum",
+      "steps": [
+        {
+          "say": "Concept three: quorum. So far we had different services doing different jobs. Now it's copies of the same data agreeing on a value.",
+          "reveal": 0
+        },
+        {
+          "say": "Picture three friends keeping copies of a shopping list. Tell at least two about each addition. Ask at least two when checking. Since two plus two is more than three, one you ask is one you told. That's the whole idea.",
+          "reveal": 0
+        }
+      ],
+      "id": "s032",
+      "caption": "Book: Module 7 Consistency · Quorum"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "The flickering cart",
+      "bullets": [
+        "Primary-replica failover: 30 s of no cart writes",
+        "Move to leaderless: 3 replicas, no primary",
+        "Version one: write one replica, read one",
+        "Add sneakers via A; reload reads C",
+        "Sneakers vanish, then reappear"
+      ],
+      "steps": [
+        {
+          "say": "Our running example is the shopping cart. It ran primary replica, and failover, promoting a replica when the primary dies, took about thirty seconds with no cart writes. That costs revenue.",
+          "reveal": 1
+        },
+        {
+          "say": "So the team moves to a leaderless store. Three replicas, any of them takes reads and writes, no primary, so no promotion ever.",
+          "reveal": 2
+        },
+        {
+          "say": "Version one writes to one replica and reads from one.",
+          "reveal": 3
+        },
+        {
+          "say": "A customer adds sneakers through replica A, then reloads. The read hits replica C, which hasn't got the update yet.",
+          "reveal": 4
+        },
+        {
+          "say": "The sneakers disappear, then reappear on a later read through A. All replicas are healthy. They just briefly disagree.",
+          "reveal": 5
+        }
+      ],
+      "id": "s033"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Quorum",
+      "title": "Why the obvious fixes fail",
+      "bullets": [
+        "Write all three, read one: one slow replica stalls writes",
+        "Write one, read all three: every read needs every replica",
+        "Sticky routing: a leader with weaker promises",
+        "What's needed: guaranteed overlap"
+      ],
+      "steps": [
+        {
+          "say": "Fix one: write all three, read any one. Now one slow replica holds up every write.",
+          "reveal": 1
+        },
+        {
+          "say": "Fix two is the mirror image. Write one, read all three. Now every read depends on every replica.",
+          "reveal": 2
+        },
+        {
+          "say": "Fix three: sticky routing, same replica per user. It breaks when that replica fails.",
+          "reveal": 3
+        },
+        {
+          "say": "All three need every replica on one side. What we really need is far less: a guaranteed overlap between the replicas that took a write and the ones a later read asks.",
+          "reveal": 4
+        }
+      ],
+      "id": "s034"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Quorum",
+      "title": "N equals 3, W equals 2, R equals 2",
+      "mermaid": "flowchart LR\n  W[\"Write sneakers\"] --> A[\"Replica A - new\"]\n  W --> B[\"Replica B - new\"]\n  W -.-> C[\"Replica C - behind\"]\n  R[\"Read cart\"] --> B\n  R --> C\n  B --> P[\"Compare versions - B newest\"]\n  C --> P\n  P --> RR[\"Read repair C\"]",
+      "caption": "The read group and write group must share a replica",
+      "steps": [
+        {
+          "say": "Here's the rule. N is the number of replicas, three. A write is done when W replicas confirm it, here two. A read asks R replicas, here two.",
+          "reveal": 0
+        },
+        {
+          "say": "The write of sneakers lands on A and B. C is behind. The read asks B and C. B is in both groups, and it has to be.",
+          "reveal": 0
+        },
+        {
+          "say": "The reader compares versions. B's is newer, so the sneakers stay. Then it writes the newer value back to C. That's called read repair.",
+          "reveal": 0
+        }
+      ],
+      "id": "s035"
+    },
+    {
+      "layout": "number",
+      "kicker": "Quorum",
+      "title": "The overlap guarantee",
+      "big": "W + R > N   so   2 + 2 > 3",
+      "caption": "Two groups of 2 from 3 need 4 seats: one replica sits in both",
+      "steps": [
+        {
+          "say": "Why does it work? It's just counting. Two groups of two, chosen from three replicas, need four seats, and there are only three chairs.",
+          "reveal": 0
+        },
+        {
+          "say": "So at least one replica sits in both groups. As long as W plus R is greater than N, every read overlaps every completed write.",
+          "reveal": 0
+        }
+      ],
+      "id": "s036"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Quorum",
+      "title": "Five supporting mechanisms",
+      "bullets": [
+        "1 Versions break ties, not reply speed",
+        "2 Read repair fixes stale replicas on read",
+        "3 Anti-entropy syncs rarely-read keys",
+        "4 W and R are set per operation",
+        "5 Stragglers don't set your p99"
+      ],
+      "steps": [
+        {
+          "say": "Overlap needs helpers. One: each value carries a version, and the reader picks the newest by version, never the fastest reply.",
+          "reveal": 1
+        },
+        {
+          "say": "Two: read repair. When our read saw C was stale, it wrote the newer cart back to C.",
+          "reveal": 2
+        },
+        {
+          "say": "Three: anti-entropy, a background sync that fixes keys nobody reads.",
+          "reveal": 3
+        },
+        {
+          "say": "Four: W and R are per operation. W equals one and R equals one is fast with no overlap. Fine for like counts, and exactly the cart bug if chosen by accident.",
+          "reveal": 4
+        },
+        {
+          "say": "Five: with W of two, the coordinator moves on after the two fastest replies, so the slowest replica doesn't set your p ninety-nine latency.",
+          "reveal": 5
+        }
+      ],
+      "id": "s037"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: one cluster, three datasets",
+      "table": {
+        "head": [
+          "Dataset",
+          "W and R",
+          "Why"
+        ],
+        "rows": [
+          [
+            "Feature flags",
+            "W 3, R 1",
+            "Rare writes wait; reads instant"
+          ],
+          [
+            "Shopping cart",
+            "W 2, R 2",
+            "Overlap through one failure"
+          ],
+          [
+            "Raw clickstream",
+            "W 1, R chosen later",
+            "Fast writes; few late events ok"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's apply per-operation settings to one cluster of three replicas. Feature flags are read constantly and written weekly. Use W three, R one. Rare writes can wait for everyone, and every read needs only one reply and is still current.",
+          "reveal": 1
+        },
+        {
+          "say": "The cart must always be writable. W two, R two. Overlap holds even with one replica dead.",
+          "reveal": 2
+        },
+        {
+          "say": "Raw clickstream, every click and page view, is write heavy and batch read later. W one, and let the batch reader choose R. A few late events cost less than slower writes.",
+          "reveal": 3
+        }
+      ],
+      "id": "s038"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Walkthrough: the cart at N 3, W 2, R 2",
+      "table": {
+        "head": [
+          "Step",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "Write",
+            "Send to 3, succeed after 2 acks, about 5 ms"
+          ],
+          [
+            "Read",
+            "Use first 2 replies, newest version wins"
+          ],
+          [
+            "Replica B dies",
+            "A and C still meet W 2, R 2"
+          ],
+          [
+            "Amplification",
+            "100k reads/s = 200k to 300k requests"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Write: send add sneakers to all three, and succeed after two acks, about five milliseconds, even if C is slow.",
+          "reveal": 1
+        },
+        {
+          "say": "Read: ask all three, use the first two replies, compare versions, return the newest. Overlap guarantees one has the sneakers.",
+          "reveal": 2
+        },
+        {
+          "say": "Failure drill, and this is the point. Replica B dies. A and C still meet W two and R two. Zero failover, zero pause, zero promotion.",
+          "reveal": 3
+        },
+        {
+          "say": "The honest cost is amplification. A hundred thousand logical reads a second may mean two to three hundred thousand replica requests, before repair traffic. Size for replica traffic, not client traffic.",
+          "reveal": 4
+        }
+      ],
+      "id": "s039"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Quorum",
+      "title": "Three qualifications on the guarantee",
+      "bullets": [
+        "Sloppy quorum: stand-in nodes accept writes",
+        "Hinted handoff: stand-ins hand data back later",
+        "Partial writes: failed may still be saved",
+        "Quorum promises visibility, not ordering"
+      ],
+      "steps": [
+        {
+          "say": "The fine print. Sloppy quorum: in Dynamo-style stores like Cassandra, when intended replicas are unreachable in a partition, stand-in nodes accept the write. Imagine the cart's replicas B and C are cut off, so stand-ins count toward W two.",
+          "reveal": 1
+        },
+        {
+          "say": "Hinted handoff: stand-ins hand the data back to B and C later. Meanwhile a read through A and B can miss the write, even with W plus R greater than N. Strict quorum rejects the write instead. Fact one again.",
+          "reveal": 2
+        },
+        {
+          "say": "Partial writes: a write reported failed may still be saved on one replica.",
+          "reveal": 3
+        },
+        {
+          "say": "And quorum promises visibility, not ordering. Two devices updating one cart can each reach W two through different pairs, leaving two newest versions, called siblings. Picking one winner needs consensus, like Raft.",
+          "reveal": 4
+        }
+      ],
+      "id": "s040",
+      "caption": "Book: Module 7 · Quorum · How it works (qualifications)"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "N is 3, W is 2, R is 1. Is every read guaranteed fresh?",
+      "bullets": [
+        "A: Yes, W is a majority",
+        "B: No, W plus R is not greater than N"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Three replicas, writes confirmed by two, reads from one. Do you always see the latest completed write?",
+          "reveal": 0
+        }
+      ],
+      "id": "s041"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Pause and think",
+      "title": "Answer: no overlap guarantee",
+      "bullets": [
+        "2 + 1 = 3, not greater than 3",
+        "Read can hit the replica the write skipped",
+        "Fast reads, eventual consistency",
+        "Fine only when chosen on purpose"
+      ],
+      "steps": [
+        {
+          "say": "The answer is B. Two plus one is three, and three is not greater than three.",
+          "reveal": 1
+        },
+        {
+          "say": "So the single read can land on exactly the replica the write skipped.",
+          "reveal": 2
+        },
+        {
+          "say": "You get faster reads, and eventual consistency.",
+          "reveal": 3
+        },
+        {
+          "say": "That's acceptable, but only when chosen on purpose. A common failure is picking a Dynamo-style store for scale without checking its W and R defaults.",
+          "reveal": 4
+        }
+      ],
+      "id": "s042"
+    },
+    {
+      "layout": "table",
+      "kicker": "Quorum",
+      "title": "Leaderless quorum versus primary-replica",
+      "table": {
+        "head": [
+          "",
+          "Primary-replica",
+          "Leaderless quorum"
+        ],
+        "rows": [
+          [
+            "Write conflicts",
+            "Can't happen: one leader",
+            "Can happen: needs versions"
+          ],
+          [
+            "Failover",
+            "Seconds of write pause",
+            "None: loss goes unnoticed"
+          ],
+          [
+            "Latency",
+            "Leader's p99 is your p99",
+            "Waits only for fastest W"
+          ],
+          [
+            "Complexity lives in",
+            "Failover machinery",
+            "Version and conflict machinery"
+          ],
+          [
+            "Fits",
+            "Catalogs, orders, accounts",
+            "Carts, sessions, presence"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "How does this compare to a leader? With primary replica, write conflicts can't happen, because every write goes through one leader. Leaderless, they can, so you need versioning and resolution.",
+          "reveal": 1
+        },
+        {
+          "say": "Failover: a leader means seconds of write pause. Leaderless: one replica dying goes unnoticed.",
+          "reveal": 2
+        },
+        {
+          "say": "Latency: with a leader, your p ninety-nine is the leader's. Leaderless tolerates stragglers.",
+          "reveal": 3
+        },
+        {
+          "say": "Complexity moves from failover machinery to version and conflict machinery.",
+          "reveal": 4
+        },
+        {
+          "say": "So leaders fit most data, like catalogs and orders. Leaderless fits keys that must always accept writes: carts, sessions, presence. Mature systems choose per dataset.",
+          "reveal": 5
+        }
+      ],
+      "id": "s043",
+      "caption": "Book: Module 7 · Leaderless quorum vs. primary-replica"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 3 recap",
+      "title": "In the interview: quorum",
+      "bullets": [
+        "W + R > N forces overlap",
+        "N 3, W 2, R 2 survives one loss",
+        "Visibility, not ordering: writes can split",
+        "Sloppy quorum trades overlap for availability",
+        "One winner? Use consensus"
+      ],
+      "steps": [
+        {
+          "say": "In the interview, say this. With N replicas I confirm writes at W and read R, keeping W plus R greater than N, so every read overlaps every write and versions pick the newest.",
+          "reveal": 1
+        },
+        {
+          "say": "N three, W two, R two is standard and survives any one replica dying with zero failover.",
+          "reveal": 2
+        },
+        {
+          "say": "But quorum promises visibility, not ordering. Concurrent writes can split, so I need vector clocks or last write wins.",
+          "reveal": 3
+        },
+        {
+          "say": "Sloppy quorums trade the overlap guarantee for availability during partitions.",
+          "reveal": 4
+        },
+        {
+          "say": "Exactly-one-winner problems need consensus. Recap: quorum is overlap by counting, one key at a time.",
+          "reveal": 5
+        }
+      ],
+      "id": "s044"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 4 of 4",
+      "title": "Vector Clocks",
+      "steps": [
+        {
+          "say": "Concept four: vector clocks. A small version label on each key, with one counter per writer. Comparing two labels tells you whether one version knew about the other, or whether they were written concurrently.",
+          "reveal": 0
+        },
+        {
+          "say": "Think of git. Branches are concurrent edits, the commit graph records who built on whose work, and a merge conflict means neither branch descends from the other. A vector clock is that idea squeezed to one number per writer.",
+          "reveal": 0
+        }
+      ],
+      "id": "s045",
+      "caption": "Book: Module 7 Consistency · Vector Clocks"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Which newest version wins?",
+      "bullets": [
+        "Take the later timestamp? Clocks disagree",
+        "Phone writes {sneakers}",
+        "Synced laptop, 3 s later: {sneakers, socks}",
+        "Offline laptop writes {hat}",
+        "Real question: did one write know the other?"
+      ],
+      "steps": [
+        {
+          "say": "Quorum left us two newest carts. Why not take the later timestamp? First, clocks differ by milliseconds, and by seconds when N-T-P clock sync breaks.",
+          "reveal": 1
+        },
+        {
+          "say": "Second problem is deeper. Alice's phone writes a cart with sneakers.",
+          "reveal": 2
+        },
+        {
+          "say": "Three seconds later her synced laptop writes sneakers and socks. It saw the phone's write and built on it, so it should replace it.",
+          "reveal": 3
+        },
+        {
+          "say": "But now imagine instead an offline laptop writes a hat. It never saw the sneakers. Those are two independent real changes, and picking either loses the other, whatever the timestamps say.",
+          "reveal": 4
+        },
+        {
+          "say": "The real question is causality: did one write know about the other? Even perfect clocks can't answer that.",
+          "reveal": 5
+        }
+      ],
+      "id": "s046"
+    },
+    {
+      "layout": "table",
+      "kicker": "Vector clocks",
+      "title": "Sequential versus concurrent histories",
+      "caption": "Same starting cart, two different stories",
+      "steps": [
+        {
+          "say": "Here are two stories from an empty cart, phone zero, laptop zero. Story one: the phone adds sneakers and bumps its own counter, phone one, laptop zero.",
+          "reveal": 2
+        },
+        {
+          "say": "The synced laptop adds socks and bumps its counter: phone one, laptop one. Compare one one against one zero. It's greater or equal in every slot, so it descends, and replaces the old version. One story.",
+          "reveal": 3
+        },
+        {
+          "say": "Story two, from the same empty cart: the phone adds sneakers, while the offline laptop adds a hat. Compare phone one, laptop zero, versus phone zero, laptop one. Each is ahead in one slot. That's concurrent, a true conflict. The store keeps both, as siblings.",
+          "reveal": 4
+        }
+      ],
+      "id": "s047",
+      "table": {
+        "head": [
+          "What happens",
+          "Clock: phone, laptop"
+        ],
+        "rows": [
+          [
+            "Start: empty cart",
+            "0, 0"
+          ],
+          [
+            "Story 1: phone adds sneakers",
+            "1, 0"
+          ],
+          [
+            "Story 1: synced laptop adds socks",
+            "1, 1 descends from 1, 0: replaces"
+          ],
+          [
+            "Story 2: phone sneakers vs offline hat",
+            "1, 0 vs 0, 1: concurrent siblings"
+          ]
+        ]
+      }
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Vector clocks",
+      "title": "How it works, step by step",
+      "bullets": [
+        "1 Each write bumps the writer's own counter",
+        "2 Compare slot by slot",
+        "3 Each ahead somewhere: concurrent siblings",
+        "4 Detect only: app merges on next read",
+        "5 Write back the per-slot maximum"
+      ],
+      "steps": [
+        {
+          "say": "Step one. Each write bumps the writer's own counter. When the phone adds sneakers, phone goes from zero to one.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two. Compare slot by slot. If A is greater or equal everywhere, A descends from B and replaces it.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three. If each leads somewhere, they're concurrent, and the store keeps both siblings: the sneakers cart and the hat cart.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four. Vector clocks detect, they don't settle. On the next read the app merges: for a cart, the union, sneakers plus hat. Or a C-R-D-T, a conflict-free replicated data type that merges itself. Or it asks the user.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five. Write back one merged cart whose clock is the per-slot maximum, phone one, laptop one, so it descends from both siblings. Otherwise another replica sees it as concurrent again and the conflict restarts.",
+          "reveal": 5
+        }
+      ],
+      "id": "s048"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: compare {phone 2, laptop 1}",
+      "table": {
+        "head": [
+          "Other version",
+          "Result"
+        ],
+        "rows": [
+          [
+            "{phone 1, laptop 1}",
+            "Ours descends: ours replaces it"
+          ],
+          [
+            "{phone 2, laptop 2}",
+            "Theirs descends: theirs replaces ours"
+          ],
+          [
+            "{phone 1, laptop 2}",
+            "Concurrent: siblings, merge"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's practice. Our version is phone two, laptop one. Compare it with phone one, laptop one. Ours is greater or equal in every slot, so ours descends and replaces it.",
+          "reveal": 1
+        },
+        {
+          "say": "Next, phone two, laptop two. Now theirs is greater or equal everywhere, so theirs replaces ours.",
+          "reveal": 2
+        },
+        {
+          "say": "Last, phone one, laptop two. We lead on phone, they lead on laptop. Concurrent. Keep both siblings and merge.",
+          "reveal": 3
+        }
+      ],
+      "id": "s049"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "The deleted sneakers that came back",
+      "bullets": [
+        "Phone removes sneakers",
+        "Offline laptop, concurrently, adds a hat",
+        "Union merge: sneakers reappear",
+        "Fix: tombstone, sneakers removed at version X"
+      ],
+      "steps": [
+        {
+          "say": "Here's the trap in union merging. Alice removes the sneakers on her phone.",
+          "reveal": 1
+        },
+        {
+          "say": "Meanwhile her offline laptop, still holding the sneakers, adds a hat. Concurrent versions.",
+          "reveal": 2
+        },
+        {
+          "say": "Union merge treats missing as never there, so the laptop's sneakers come back. The deletion left no trace.",
+          "reveal": 3
+        },
+        {
+          "say": "The fix is a tombstone: an explicit record saying sneakers removed at version X. It takes part in the merge, overrides present, and gets garbage collected later. A deletion is a fact, not missing data.",
+          "reveal": 4
+        }
+      ],
+      "id": "s050"
+    },
+    {
+      "layout": "table",
+      "kicker": "Vector clocks",
+      "title": "Vector clocks versus last-write-wins",
+      "table": {
+        "head": [
+          "",
+          "Last-write-wins",
+          "Vector clocks"
+        ],
+        "rows": [
+          [
+            "Concurrent writes",
+            "One quietly thrown away",
+            "Both kept as siblings"
+          ],
+          [
+            "Clock skew",
+            "Picks the wrong winner",
+            "Doesn't matter"
+          ],
+          [
+            "App burden",
+            "None",
+            "A merge policy per type"
+          ],
+          [
+            "Honest name",
+            "A data-loss policy",
+            "Conflict detection you maintain"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The alternative is last write wins, or L-W-W: the later timestamp overwrites. With concurrent writes, L-W-W quietly throws one away. Vector clocks keep both.",
+          "reveal": 1
+        },
+        {
+          "say": "With clock skew, the gap between machines' clocks, L-W-W can pick the wrong winner. Vector clocks use counters, so skew doesn't matter.",
+          "reveal": 2
+        },
+        {
+          "say": "App burden: none for L-W-W, which is why people like it. Vector clocks need a merge policy per data type.",
+          "reveal": 3
+        },
+        {
+          "say": "Honestly named, L-W-W is a data-loss policy. Cassandra uses it by default. Dynamo and Riak keep siblings. Decide by the cost of losing a real write.",
+          "reveal": 4
+        }
+      ],
+      "id": "s051",
+      "caption": "Book: Module 7 · Vector clocks vs. last-write-wins"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Last-write-wins, vector clocks, or a CRDT?",
+      "bullets": [
+        "A: User last active at",
+        "B: The shopping cart",
+        "C: A shared document's text"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. For each of these three, pick last write wins, vector clocks, or a C-R-D-T.",
+          "reveal": 0
+        }
+      ],
+      "id": "s052"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Pause and think",
+      "title": "Answer: match the cost of losing a write",
+      "bullets": [
+        "Last active at: LWW, a lost sample costs nothing",
+        "Cart: vector clocks, union, tombstones",
+        "Shared document: a CRDT merges edits itself"
+      ],
+      "steps": [
+        {
+          "say": "Last active at is rough recency. Losing a sample costs nothing, so last write wins, on purpose.",
+          "reveal": 1
+        },
+        {
+          "say": "The cart: vector clocks with union and tombstones, because a lost added item is lost revenue.",
+          "reveal": 2
+        },
+        {
+          "say": "A shared document: a C-R-D-T, because the type itself must combine complex concurrent edits automatically, like Figma-style live collaboration.",
+          "reveal": 3
+        }
+      ],
+      "id": "s053"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 4 recap",
+      "title": "In the interview: vector clocks",
+      "bullets": [
+        "Timestamps can't see causality; skew lies",
+        "One counter per writer, bumped per write",
+        "Descends: replace. Concurrent: siblings",
+        "Detect, don't resolve: union, CRDT, ask",
+        "LWW is a data-loss policy, chosen on purpose"
+      ],
+      "steps": [
+        {
+          "say": "In the interview, say this. Timestamps can't tell B overwrote A on purpose from B never saw A, and skew makes later unreliable.",
+          "reveal": 1
+        },
+        {
+          "say": "Vector clocks track causality with one counter per writer, bumped per write.",
+          "reveal": 2
+        },
+        {
+          "say": "Two versions either descend, so one cleanly replaces the other, or they're concurrent and kept as siblings.",
+          "reveal": 3
+        },
+        {
+          "say": "They detect, they don't resolve. The next reader merges.",
+          "reveal": 4
+        },
+        {
+          "say": "And last write wins is a data-loss policy, fine only when chosen on purpose. Recap: vector clocks separate concurrent from sequential, and leave the merge to you.",
+          "reveal": 5
+        }
+      ],
+      "id": "s054"
+    },
+    {
+      "layout": "section",
+      "kicker": "Capstone",
+      "title": "Capstone: Order Fulfillment, Built Twice",
+      "steps": [
+        {
+          "say": "The capstone. We build the same order fulfillment twice, once with two-phase commit, once with a saga, hit both with the same three failures, and compare the damage.",
+          "reveal": 0
+        },
+        {
+          "say": "The question isn't which is better. It's which way of failing the business can live with.",
+          "reveal": 0
+        }
+      ],
+      "id": "s055",
+      "caption": "Book: Module 7 · Capstone - Order Fulfillment, Built Twice"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Capstone",
+      "title": "The brief",
+      "bullets": [
+        "Reserve, then charge (external), then ship",
+        "Never charged-but-unshipped, never shipped-unpaid",
+        "200 orders/s; hot SKU in 30% of checkouts",
+        "Confirm in about 2 s",
+        "Cart: leaderless, always writable"
+      ],
+      "steps": [
+        {
+          "say": "Three steps: reserve inventory, charge payment through an external provider, create the shipment.",
+          "reveal": 1
+        },
+        {
+          "say": "The rule: never charged while nothing ships, never shipped without being charged.",
+          "reveal": 2
+        },
+        {
+          "say": "Load: two hundred orders a second. One SKU, a stock-keeping unit, or product code, appears in thirty percent of active checkouts. That's the hot SKU.",
+          "reveal": 3
+        },
+        {
+          "say": "Checkout confirms in about two seconds, and fulfillment may trail by minutes.",
+          "reveal": 4
+        },
+        {
+          "say": "And the cart sits on the leaderless store from the quorum lesson.",
+          "reveal": 5
+        }
+      ],
+      "id": "s056"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Capstone",
+      "title": "Build one: a flaw before anything breaks",
+      "bullets": [
+        "Coordinator; inventory, payment, shipping as participants",
+        "Provider has no prepare phase",
+        "Commit intent, charge fails: no money moved",
+        "Charge first, commit fails: nothing recorded",
+        "The workaround is a hidden saga"
+      ],
+      "steps": [
+        {
+          "say": "Build one. One coordinator, with inventory, payment and shipping as prepare and commit participants.",
+          "reveal": 1
+        },
+        {
+          "say": "But the payment provider has no prepare phase. Two P C can't cross trust boundaries. So we invent an internal payment intent record as the participant, and the real charge happens outside the transaction.",
+          "reveal": 2
+        },
+        {
+          "say": "Commit the intent, then the charge fails: success reported, no money moved.",
+          "reveal": 3
+        },
+        {
+          "say": "Charge first, then the internal commit fails: money moved, nothing recorded.",
+          "reveal": 4
+        },
+        {
+          "say": "Patching that needs durable retries and compensation. That's a hidden, undocumented saga.",
+          "reveal": 5
+        }
+      ],
+      "id": "s057"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Build one: two-phase commit drills",
+      "table": {
+        "head": [
+          "Drill",
+          "Damage"
+        ],
+        "rows": [
+          [
+            "1 Coordinator dies after yes votes",
+            "Hot SKU locked 40 s; 30% of checkouts stall"
+          ],
+          [
+            "2 Shipping slow: p99 100 ms to 4 s",
+            "Everyone's locks held for 4 s"
+          ],
+          [
+            "3 A normal Tuesday",
+            "Longer locks, queueing, collapse"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Drill one. Inventory voted yes on the hot SKU, then the coordinator crashed. Inventory sits in doubt, holding hot SKU locks about forty seconds. Thirty percent of checkouts include that SKU, so they queue or time out.",
+          "reveal": 1
+        },
+        {
+          "say": "Drill two. Shipping isn't down, just slow during a deploy. Its p ninety-nine goes from a hundred milliseconds to four seconds. Every transaction waits for shipping's prepare reply, so inventory and payment locks are held for shipping's p ninety-nine.",
+          "reveal": 2
+        },
+        {
+          "say": "Drill three: a normal Tuesday. Hot SKU locks last tens of milliseconds instead of one, so at peak, longer locks cause queueing, which causes longer locks. Capacity collapses before anything is down. Verdict: two P C fails by freezing.",
+          "reveal": 3
+        }
+      ],
+      "id": "s058"
+    },
+    {
+      "layout": "number",
+      "kicker": "Capstone",
+      "title": "Rate times duration",
+      "big": "200 orders/s x 4 s = 800 transactions of locks",
+      "caption": "One slow participant sets contention in all three services",
+      "steps": [
+        {
+          "say": "Let's put drill two in one number. Two hundred orders a second, times four seconds of held locks, is eight hundred transactions' worth of locks in flight, many on the same popular rows.",
+          "reveal": 0
+        },
+        {
+          "say": "So one participant's speed sets contention in all three services.",
+          "reveal": 0
+        }
+      ],
+      "id": "s059"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Capstone",
+      "title": "Build two: the saga design",
+      "bullets": [
+        "Orchestrator plus durable saga log",
+        "Reserve, charge, then ship: the pivot last",
+        "Compensations: release, refund",
+        "Every step and undo idempotent",
+        "Confirmation email only at a final state",
+        "Short local transactions, no distributed locks"
+      ],
+      "steps": [
+        {
+          "say": "Build two. An orchestrator with a durable saga log, so crashes resume instead of stranding orders. The log is now consistency-critical: each state change is durable before its external effect.",
+          "reveal": 1
+        },
+        {
+          "say": "Reserve, then charge, then ship. Compensable steps first, and the pivot, irreversible shipping, last.",
+          "reveal": 2
+        },
+        {
+          "say": "Compensations are release inventory and refund payment, both approved by the business.",
+          "reveal": 3
+        },
+        {
+          "say": "Every step and compensation is idempotent, so retries are safe.",
+          "reveal": 4
+        },
+        {
+          "say": "The confirmation email goes out only at a final state, so customers hear only facts that can't be undone.",
+          "reveal": 5
+        },
+        {
+          "say": "And each service runs short local transactions. No distributed locks anywhere.",
+          "reveal": 6
+        }
+      ],
+      "id": "s060"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Build two: saga drills",
+      "table": {
+        "head": [
+          "Drill",
+          "Damage"
+        ],
+        "rows": [
+          [
+            "1 Orchestrator dies after charge",
+            "Nothing locked; resumes at shipping"
+          ],
+          [
+            "2 Shipping down 20 min, 340 orders",
+            "Retry 30 s, refund, release: 90 s each"
+          ],
+          [
+            "3 Nothing down",
+            "Dashboard briefly counts refunded orders"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Drill one. Same moment: money committed, orchestrator dead. What's frozen? Nothing. The log reads reserved, charged, shipping not started, and another orchestrator resumes. Inventory holds a committed reservation, not a lock.",
+          "reveal": 1
+        },
+        {
+          "say": "Drill two. Shipping is down twenty minutes, with three hundred forty orders mid-saga. Each retries thirty seconds, then refunds, releases and emails the customer, in about ninety seconds. Cost: three hundred forty visible, automatic refunds.",
+          "reveal": 2
+        },
+        {
+          "say": "Drill three. A revenue dashboard counting charged orders reads slightly high, since some get refunded. Rule: outward messages come only from final states. Verdict: sagas fail by showing.",
+          "reveal": 3
+        }
+      ],
+      "id": "s061"
+    },
+    {
+      "layout": "twocol",
+      "kicker": "Capstone",
+      "title": "Two builds of the same checkout",
+      "caption": "Build one hides a charge outside the transaction; build two logs every step",
+      "steps": [
+        {
+          "say": "Side by side. In build one, the real charge happens outside the transaction. The coordinator never controls the money.",
+          "reveal": 3
+        },
+        {
+          "say": "In build two, the orchestrator writes the saga log, uses idempotency keys with the provider, ships last as the pivot, and emits order completed only at the final state.",
+          "reveal": 7
+        }
+      ],
+      "id": "s062",
+      "left": {
+        "heading": "Build one: two-phase commit",
+        "bullets": [
+          "Coordinator drives prepare and commit",
+          "Payment intent record is the participant",
+          "Real charge happens outside the transaction"
+        ]
+      },
+      "right": {
+        "heading": "Build two: saga",
+        "bullets": [
+          "Orchestrator writes the saga log first",
+          "Charge and refund with idempotency keys",
+          "Ship last: the pivot",
+          "order.completed only at a final state"
+        ]
+      }
+    },
+    {
+      "layout": "table",
+      "kicker": "Capstone",
+      "title": "The comparison",
+      "table": {
+        "head": [
+          "Failure",
+          "2PC damage",
+          "Saga damage"
+        ],
+        "rows": [
+          [
+            "Coordinator crash",
+            "Frozen locks, hot SKU slows",
+            "Resumes from log"
+          ],
+          [
+            "One service slow",
+            "Everyone waits for its p99",
+            "Only that step retries"
+          ],
+          [
+            "One service down 20 min",
+            "New orders rejected",
+            "340 automatic refunds"
+          ],
+          [
+            "Nothing failing",
+            "Hot rows in single file",
+            "Full speed, provisional states"
+          ],
+          [
+            "Charged, not shipped",
+            "Never seen: its clean win",
+            "Visible, labeled, compensated"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's the scorecard. Coordinator crash: two P C freezes participants with locks, and the hot SKU slows for the whole recovery. The saga resumes from its log.",
+          "reveal": 1
+        },
+        {
+          "say": "One service slow: two P C holds everyone's locks for the slowest p ninety-nine. The saga just retries that one step.",
+          "reveal": 2
+        },
+        {
+          "say": "One service down twenty minutes: two P C rejects new orders. The saga compensates, with three hundred forty visible refunds.",
+          "reveal": 3
+        },
+        {
+          "say": "Nothing failing: two P C forces hot rows into single file. The saga runs full speed, but every consumer must handle provisional states.",
+          "reveal": 4
+        },
+        {
+          "say": "And charged, not shipped: two P C never shows it, its one clean win. The saga shows it, designed and labeled. Customer workflows across services usually pick showing. The gift card transfer stays a fair two P C use.",
+          "reveal": 5
+        }
+      ],
+      "id": "s063"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Capstone",
+      "title": "Postscript: the cart's own consistency",
+      "mermaid": "flowchart LR\n  U[\"Customer\"] --> CART[\"Cart - leaderless N3 W2 R2\"]\n  CART --> VC[\"Vector clocks, union, tombstones\"]\n  U -->|\"Pay\"| SAGA[\"Order saga orchestrator\"]\n  SAGA --> I[\"Inventory\"]\n  SAGA --> P[\"Payment provider\"]\n  SAGA --> S[\"Shipping\"]",
+      "caption": "Two separate consistency problems in one checkout",
+      "steps": [
+        {
+          "say": "One checkout actually holds two separate consistency problems. First, replica agreement for one key, the cart. Leaderless, N three, W two, R two. Alice's phone and laptop update it concurrently through different replica pairs. Vector clocks see neither descends, the read merges siblings by union, and a tombstone keeps her deleted sneakers deleted. She sees one correct cart.",
+          "reveal": 0
+        },
+        {
+          "say": "Second, a cross-service workflow for one order. Once she taps Pay, the saga's log and compensations take over. Good design starts by assigning each failure to its own consistency problem.",
+          "reveal": 0
+        }
+      ],
+      "id": "s064"
+    },
+    {
+      "layout": "recap",
+      "kicker": "Episode 12 complete",
+      "title": "Episode 12 recap",
+      "bullets": [
+        "Partitions force a choice; avoid distributed txns",
+        "2PC: prepare, vote, commit; blocks when in doubt",
+        "Saga: local steps, durable log, compensations",
+        "Quorum: W + R > N; visibility, not ordering",
+        "Vector clocks: descends or concurrent siblings",
+        "2PC fails by freezing; sagas fail by showing"
+      ],
+      "steps": [
+        {
+          "say": "Let's recap. Partitions force you to choose consistency or availability, and the cheapest distributed transaction is the one a good shard key lets you skip.",
+          "reveal": 1
+        },
+        {
+          "say": "Two-phase commit: prepare, binding yes votes, then commit. Genuine atomicity, but in-doubt participants block when the coordinator dies.",
+          "reveal": 2
+        },
+        {
+          "say": "Sagas: local steps, a durable log, idempotent compensations in reverse, the pivot last.",
+          "reveal": 3
+        },
+        {
+          "say": "Quorum: W plus R greater than N guarantees overlap. Visibility, not ordering.",
+          "reveal": 4
+        },
+        {
+          "say": "Vector clocks: versions descend, or are concurrent siblings the app merges, with tombstones for deletes.",
+          "reveal": 5
+        },
+        {
+          "say": "And the capstone: two-phase commit fails by freezing, sagas fail by showing. Pick the failure the business can live with. Next time, in episode thirteen: The Entry Point, A P I and edge patterns. See you there.",
+          "reveal": 6
+        }
+      ],
+      "id": "s065"
+    }
+  ]
+}

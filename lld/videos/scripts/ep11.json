@@ -1,0 +1,2349 @@
+{
+  "series": "LLD Workshop",
+  "episode": 11,
+  "title": "Observer, State, Strategy, Template, Visitor",
+  "subtitle": "Five behavioral patterns, their look-alikes, and when to skip them",
+  "scenes": [
+    {
+      "id": "s001",
+      "layout": "title",
+      "title": "Observer, State, Strategy, Template, Visitor",
+      "subtitle": "Five behavioral patterns, their look-alikes, and when to skip them",
+      "steps": [
+        {
+          "say": "Welcome to episode eleven of the L-L-D Workshop. Today we finish the Gang of Four behavioral patterns: Observer, State, Strategy, Template Method and Visitor.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll explain each with a worked example, spot its classic bugs, and answer the look-alike questions, like State versus Strategy versus Bridge.",
+          "reveal": 0
+        },
+        {
+          "say": "Keep the chapter eleven PDF open alongside. When a pause-and-think question shows up, answer before I do.",
+          "reveal": 0
+        },
+        {
+          "say": "One idea to carry through the whole episode: most of these patterns turn an if, a switch or a hard-coded call into an object that you can swap, subscribe or visit.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s002",
+      "layout": "section",
+      "kicker": "Concept 1 of 15",
+      "title": "Observer: tell everyone, know no one",
+      "steps": [
+        {
+          "say": "Concept one, Observer. Here's the hook. A build finishes. Slack needs a message, the dashboard needs a refresh, metrics need a record, and production needs a deploy. Who should know about all four?",
+          "reveal": 0
+        },
+        {
+          "say": "Observer's answer: nobody. The build just announces it's done, and whoever cares reacts. Think of a YouTube channel. It posts a video, subscribers get notified, and the channel doesn't care what they do with it.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Chapter 11 · 11.1 Observer"
+    },
+    {
+      "id": "s003",
+      "layout": "bullets",
+      "kicker": "Concept 1 of 15",
+      "title": "Observer in plain words",
+      "bullets": [
+        "Subject: the thing that changes and announces it",
+        "Observer: anything that wants to hear about it",
+        "One-to-many: one subject, any number of observers",
+        "Subject knows only the observer interface",
+        "Subscribe and unsubscribe at run time"
+      ],
+      "steps": [
+        {
+          "say": "The subject, also called publisher or observable, is the object that changes. In our story, the build pipeline.",
+          "reveal": 1
+        },
+        {
+          "say": "The observers, also called listeners or subscribers, are the things that react. Slack, dashboard, metrics, deployer.",
+          "reveal": 2
+        },
+        {
+          "say": "The Gang of Four intent is a one-to-many dependency: when the one changes, all the many are told automatically.",
+          "reveal": 3
+        },
+        {
+          "say": "The key point: the subject knows only one thing about them, that they implement the listener interface. It imports none of them.",
+          "reveal": 4
+        },
+        {
+          "say": "And listeners come and go while the program runs. Staging might subscribe three, production four.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s004",
+      "layout": "twocol",
+      "kicker": "Concept 1 of 15",
+      "title": "The problem: four hard-coded calls",
+      "left": {
+        "heading": "Without Observer",
+        "bullets": [
+          "finish calls slack, dashboard, metrics, deployer",
+          "Fifth reaction? Edit the pipeline",
+          "Unit test must fake four services"
+        ]
+      },
+      "right": {
+        "heading": "With Observer",
+        "bullets": [
+          "finish loops over one listener list",
+          "Fifth reaction: one class, one subscribe",
+          "Staging just skips the deploy listener"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's the naive version. The finish method calls Slack, then the dashboard, then metrics, then the deployer. The build pipeline now depends on a chat service.",
+          "reveal": 1
+        },
+        {
+          "say": "Want a fifth reaction, say paging someone on failure? You edit the pipeline, a class that has nothing to do with paging.",
+          "reveal": 2
+        },
+        {
+          "say": "And a unit test, meaning a test of one class on its own, has to fake four services just to test finish.",
+          "reveal": 3
+        },
+        {
+          "say": "With Observer, finish loops over one list of one interface, build listener. That's the only thing it imports.",
+          "reveal": 4
+        },
+        {
+          "say": "A fifth reaction is one new class and one subscribe call. That's the open closed principle in action.",
+          "reveal": 5
+        },
+        {
+          "say": "And staging versus production? No environment flag. Staging simply doesn't subscribe the deploy listener.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s005",
+      "layout": "bullets",
+      "kicker": "Concept 1 of 15",
+      "title": "How it works, step by step",
+      "bullets": [
+        "1. One listener interface: onBuildFinished(number, result)",
+        "2. Subject keeps a list; addListener returns an unsubscribe",
+        "3. Finish changing state first, then notify",
+        "4. Notify each listener, catching errors per listener",
+        "5. Push the data, or let observers pull it"
+      ],
+      "steps": [
+        {
+          "say": "Step one, define one listener interface with one method. For our pipeline, on build finished, taking the build number and the result. One method means a lambda can implement it.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, the subject keeps a list. Add listener returns a handle that unsubscribes.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, the subject finishes changing its own state before it calls anyone. Otherwise a listener might read half-updated data.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, call each listener inside its own try catch.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, decide how data travels, push or pull. More on that in a moment.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s006",
+      "layout": "diagram",
+      "kicker": "Concept 1 of 15",
+      "title": "One list, one interface",
+      "mermaid": "flowchart LR\n  P[\"BuildPipeline\"] -->|\"onBuildFinished\"| L[\"BuildListener list\"]\n  L --> S[\"SlackNotifier\"]\n  L --> D[\"DashboardUpdater\"]\n  L --> M[\"MetricsRecorder\"]\n  L --> X[\"DeployTrigger\"]",
+      "caption": "all arrows point one way: listeners never call back",
+      "steps": [
+        {
+          "say": "Here's the shape. The pipeline holds a list of build listeners, and four concrete classes implement that interface.",
+          "reveal": 0
+        },
+        {
+          "say": "Notice every arrow points one way. Listeners never call the pipeline back, so one notification can't trigger another and loop forever.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s007",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: three builds, four listeners",
+      "table": {
+        "head": [
+          "Event",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "Build 101 success",
+            "slack, dashboard, metrics 1, deploy"
+          ],
+          [
+            "Unsubscribe deploy",
+            "handle.run() removes DeployTrigger"
+          ],
+          [
+            "Build 102 success",
+            "slack, dashboard, metrics 2, no deploy"
+          ],
+          [
+            "Build 103 failed",
+            "dashboard throws: caught, logged"
+          ],
+          [
+            "...and then",
+            "metrics still records build 103"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Build one oh one succeeds. Slack posts, the dashboard updates, metrics records one, and the deployer deploys.",
+          "reveal": 1
+        },
+        {
+          "say": "Now we call the unsubscribe handle we got back from add listener. Think staging, which has no auto deploy.",
+          "reveal": 2
+        },
+        {
+          "say": "Build one oh two succeeds. Slack, dashboard, metrics total two. No deploy line. The pipeline code didn't change at all.",
+          "reveal": 3
+        },
+        {
+          "say": "Build one oh three fails, and this time the dashboard is offline and throws. The pipeline catches it and logs, a listener failed.",
+          "reveal": 4
+        },
+        {
+          "say": "And metrics still records build one oh three. One broken listener didn't starve the rest.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s008",
+      "layout": "twocol",
+      "kicker": "Concept 1 of 15",
+      "title": "Push versus pull",
+      "left": {
+        "heading": "Push",
+        "bullets": [
+          "The call carries all the data",
+          "Simple, no getters needed",
+          "New data changes the interface"
+        ]
+      },
+      "right": {
+        "heading": "Pull",
+        "bullets": [
+          "Call says: I changed, here I am",
+          "Observer reads only what it needs",
+          "Observer must work out what changed"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Push model. A weather station's push display receives a whole reading: thirty one point five degrees, plus humidity and pressure.",
+          "reveal": 1
+        },
+        {
+          "say": "It's simple, and the observer doesn't depend on the station's getters.",
+          "reveal": 2
+        },
+        {
+          "say": "But it sends data some observers don't need, and adding a field changes the interface for everyone.",
+          "reveal": 3
+        },
+        {
+          "say": "Pull model. The pull display just gets a reference to the station and is told, I changed.",
+          "reveal": 4
+        },
+        {
+          "say": "It asks only for the temperature, thirty one point five. Adding humidity later doesn't touch it.",
+          "reveal": 5
+        },
+        {
+          "say": "The cost: it now depends on the subject, and it has to figure out what actually changed. In the interview, say it's a trade-off, not a right answer.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s009",
+      "layout": "bullets",
+      "kicker": "Concept 1 of 15",
+      "title": "Five ways observers go wrong",
+      "bullets": [
+        "No unsubscribe: memory leak",
+        "A throwing listener kills the loop",
+        "Changing the list mid-notify",
+        "Listeners calling back into the subject",
+        "Notifying before state is updated; relying on order"
+      ],
+      "steps": [
+        {
+          "say": "Mistake one, the classic leak. The subject holds every listener strongly, so a forgotten one lives forever. Every subscribe needs an owner for its unsubscribe.",
+          "reveal": 1
+        },
+        {
+          "say": "Mistake two, no per-listener try catch. Listener three throws, and listeners four and five never run.",
+          "reveal": 2
+        },
+        {
+          "say": "Mistake three, a listener unsubscribes mid-loop and Java throws concurrent modification exception. Fix: iterate a copy, or a copy on write list.",
+          "reveal": 3
+        },
+        {
+          "say": "Mistake four, a listener calls back into the subject, which notifies again. Now you've got a cycle or endless recursion.",
+          "reveal": 4
+        },
+        {
+          "say": "Mistake five, notifying before the state is updated, so pull observers read stale data. And relying on order: if order matters, that's coordination, a mediator.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s010",
+      "layout": "bullets",
+      "kicker": "Concept 1 of 15",
+      "title": "When not to use Observer, and the interview line",
+      "bullets": [
+        "One listener forever: just call it",
+        "Need ordering or delivery guarantees: a broker",
+        "Slow reactions: notify asynchronously",
+        "Say: copy the list, catch per listener, unsubscribe"
+      ],
+      "steps": [
+        {
+          "say": "When not to use it. If there's one listener forever, call it directly. A list of one is ceremony.",
+          "reveal": 1
+        },
+        {
+          "say": "If you need ordering or guaranteed delivery, use a message broker like Kafka.",
+          "reveal": 2
+        },
+        {
+          "say": "If reactions are slow, notice that synchronous observers make the subject wait for all of them combined. Hand the work to an executor, a pool of worker threads, or a queue.",
+          "reveal": 3
+        },
+        {
+          "say": "In the interview, say this: Observer swaps hard-coded calls for a list of one interface. In production I iterate a copy, catch exceptions per listener, and pair every subscribe with an unsubscribe. When I need durability I use a broker. Recap: announce, don't orchestrate.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s011",
+      "layout": "section",
+      "kicker": "Concept 2 of 15",
+      "title": "Why java.util.Observable was deprecated",
+      "steps": [
+        {
+          "say": "Concept two. Java has shipped an Observer and Observable since version one. So why were they deprecated in Java nine? Deprecated means don't use in new code, though it hasn't been removed.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 11 · Why java.util.Observer / Observable were deprecated"
+    },
+    {
+      "id": "s012",
+      "layout": "bullets",
+      "kicker": "Concept 2 of 15",
+      "title": "Five reasons Observable fell out of favour",
+      "bullets": [
+        "Observable is a class: you burn single inheritance",
+        "setChanged is protected: no composition",
+        "update(Observable, Object) is untyped",
+        "Notification order is unspecified",
+        "Thread safety is only partial"
+      ],
+      "steps": [
+        {
+          "say": "Reason one. Observable is a class, so your subject must extend it. Java allows one parent, so if our pipeline already extends a base job class, it can't be observable at all.",
+          "reveal": 1
+        },
+        {
+          "say": "Reason two. The set changed method is protected, so you can't hold an Observable as a field. You're forced to subclass.",
+          "reveal": 2
+        },
+        {
+          "say": "Reason three. The update method takes an Observable and a plain Object. Every observer has to cast, and a wrong cast only fails at run time.",
+          "reveal": 3
+        },
+        {
+          "say": "Reason four, from the docs: notification order is unspecified, and changes aren't one-for-one with notifications.",
+          "reveal": 4
+        },
+        {
+          "say": "Reason five. Observers are called outside the lock, so the J-D-K source admits a new observer may miss a notification, and a removed one may still get it.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s013",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: what to use instead",
+      "table": {
+        "head": [
+          "Need",
+          "Use"
+        ],
+        "rows": [
+          [
+            "Bean property changed",
+            "PropertyChangeSupport"
+          ],
+          [
+            "Your own domain events",
+            "A typed listener interface"
+          ],
+          [
+            "Hand-off between threads",
+            "java.util.concurrent queues"
+          ],
+          [
+            "Async streams, back-pressure",
+            "java.util.concurrent.Flow"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "For a changed property, use property change support. A phone's price drops from forty nine thousand nine hundred cents to forty four thousand nine hundred, and the watcher gets old and new. Set the same price again, and no event fires.",
+          "reveal": 1
+        },
+        {
+          "say": "For your own events, write your own typed interface, exactly like build listener. Compiler-checked, no casts.",
+          "reveal": 2
+        },
+        {
+          "say": "For a reliable, ordered hand-off between threads, use a concurrent queue.",
+          "reveal": 3
+        },
+        {
+          "say": "And for reactive streams, the Flow A-P-I, with back-pressure, where a slow consumer tells the producer to slow down. Recap: interfaces beat base classes.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s014",
+      "layout": "section",
+      "kicker": "Concept 3 of 15",
+      "title": "Observer versus its look-alikes",
+      "steps": [
+        {
+          "say": "Concept three. Observer looks a lot like Mediator, Chain of Responsibility, a plain callback, and publish subscribe. Interviewers love asking you to tell them apart. Let's use our build pipeline for all of them.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 11 · Observer vs Mediator, Chain of Responsibility, callbacks"
+    },
+    {
+      "id": "s015",
+      "layout": "table",
+      "kicker": "Concept 3 of 15",
+      "title": "Same event, four different shapes",
+      "table": {
+        "head": [
+          "Looks like",
+          "The actual difference"
+        ],
+        "rows": [
+          [
+            "Mediator",
+            "Decides what's next, calls back, owns order"
+          ],
+          [
+            "Chain of Responsibility",
+            "Stops when one handler accepts"
+          ],
+          [
+            "A callback",
+            "Exactly one listener, fixed"
+          ],
+          [
+            "Pub-sub with a broker",
+            "Adds storage, retries, order, a network"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Mediator. Observer broadcasts one way. A mediator decides what happens next: update the dashboard, then, only if that worked, deploy.",
+          "reveal": 1
+        },
+        {
+          "say": "Chain of Responsibility. Observer tells everybody, and no listener can stop the others. A chain stops as soon as one handler takes the request. If Slack could swallow the event and stop the deployer, that's a chain.",
+          "reveal": 2
+        },
+        {
+          "say": "A callback. One callback is just one observer. It becomes the pattern when the number of listeners varies and they subscribe and unsubscribe at run time.",
+          "reveal": 3
+        },
+        {
+          "say": "Publish subscribe with a broker. Same idea at system scale: an order service publishes order placed, and email and inventory consume it. The broker adds persistence, redelivery and ordering.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s016",
+      "layout": "bullets",
+      "kicker": "Concept 3 of 15",
+      "title": "Observer outside Java",
+      "bullets": [
+        "Listener = a lambda: keep the handle to unsubscribe",
+        "JavaScript: EventEmitter, AbortController",
+        "Python: list of callables, WeakSet",
+        "C#: event, IObservable, IDisposable",
+        "Weak references fix leaks, but listeners can vanish"
+      ],
+      "steps": [
+        {
+          "say": "Outside Java, with first class functions, a listener is just a lambda. Keep the handle, or you'll never be able to unsubscribe it.",
+          "reveal": 1
+        },
+        {
+          "say": "JavaScript has event target and event emitter, and an abort controller can unsubscribe by signal.",
+          "reveal": 2
+        },
+        {
+          "say": "Python usually keeps a list of callables. A weak set avoids the leak.",
+          "reveal": 3
+        },
+        {
+          "say": "C sharp has the event keyword, I-observable, and disposable subscriptions.",
+          "reveal": 4
+        },
+        {
+          "say": "Weak references fix the leak, but a listener can vanish when nothing else holds it. Recap: Observer informs all, one way, with no guarantees.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s017",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "All listeners run, none can stop others: which pattern?",
+      "bullets": [
+        "A. Chain of Responsibility",
+        "B. Observer",
+        "C. Mediator"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Every listener must run, none can stop the others, and order doesn't matter. Chain, Observer or Mediator?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s018",
+      "layout": "section",
+      "kicker": "Concept 4 of 15",
+      "title": "State: the object that changes its mind",
+      "steps": [
+        {
+          "say": "Answer: Observer. A chain stops early, and a mediator owns the order.",
+          "reveal": 0
+        },
+        {
+          "say": "Concept four, State. Hook: think of a phone's ringer switch. A call comes in. In ring mode it rings, in vibrate it buzzes, in silent it does nothing. Same event, different behaviour, depending on the mode.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Chapter 11 · 11.2 State"
+    },
+    {
+      "id": "s019",
+      "layout": "bullets",
+      "kicker": "Concept 4 of 15",
+      "title": "State in plain words",
+      "bullets": [
+        "Context: the object clients use",
+        "State interface: one method per action",
+        "One concrete class per state",
+        "Context forwards each action to its current state",
+        "The state picks the next state"
+      ],
+      "steps": [
+        {
+          "say": "The State pattern says: when an object's internal condition changes, its behaviour changes with it, as if it switched class. The context is the object clients use. Our running example: a subscription.",
+          "reveal": 1
+        },
+        {
+          "say": "The state interface has one method per action. For the subscription: pay, miss payment, and cancel.",
+          "reveal": 2
+        },
+        {
+          "say": "Then one class per state: trialing, active, past due and cancelled.",
+          "reveal": 3
+        },
+        {
+          "say": "The context holds the current state object and forwards every action to it. Each public method is one line.",
+          "reveal": 4
+        },
+        {
+          "say": "And here's the key: the state decides whether the action is legal and which state comes next. The machine advances itself.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s020",
+      "layout": "twocol",
+      "kicker": "Concept 4 of 15",
+      "title": "The problem: the same switch, everywhere",
+      "left": {
+        "heading": "Without State",
+        "bullets": [
+          "pay: if trialing, else if active, else if...",
+          "cancel and missPayment repeat it",
+          "Forgotten branch silently does nothing"
+        ]
+      },
+      "right": {
+        "heading": "With State",
+        "bullets": [
+          "pay() is one line: state.pay(this)",
+          "Each state's rules in one file",
+          "Illegal actions refused, loudly, once"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Without the pattern, pay opens with a four-way branch. If trialing, charge the card. Else if active, renew. Else if past due, settle. Else if cancelled, reject.",
+          "reveal": 1
+        },
+        {
+          "say": "Cancel and miss payment repeat the same branch. A fifth state, say paused, means hunting every copy.",
+          "reveal": 2
+        },
+        {
+          "say": "And a forgotten branch does nothing silently. That surfaces weeks later as, subscriptions randomly stop working.",
+          "reveal": 3
+        },
+        {
+          "say": "With State, pay is one line: state dot pay, passing this.",
+          "reveal": 4
+        },
+        {
+          "say": "Everything about past due sits in one file, which is exactly what a reviewer or auditor wants.",
+          "reveal": 5
+        },
+        {
+          "say": "And the cancelled state refuses every action, the same way, in one place.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s021",
+      "layout": "bullets",
+      "kicker": "Concept 4 of 15",
+      "title": "How it works, step by step",
+      "bullets": [
+        "1. State interface: pay, missPayment, cancel",
+        "2. Classes: Trialing, Active, PastDue, Cancelled",
+        "3. Subscription holds state, delegates",
+        "4. State rules on legality, calls setState",
+        "5. Terminal state refuses everything"
+      ],
+      "steps": [
+        {
+          "say": "Step one, the interface. Every state must answer every action, even if the answer is no.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, one class per state. Tiny records, behind a sealed interface.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, the subscription holds the current state, starting at trialing, and pay just calls state dot pay.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, trialing's pay says, first payment taken, then calls set state with a new active. The state chooses its successor.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, cancelled is terminal. It refuses payments, ignores missed payments, and rejects a second cancel, all in one file.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s022",
+      "layout": "diagram",
+      "kicker": "Concept 4 of 15",
+      "title": "The subscription state machine",
+      "mermaid": "flowchart LR\n  T[\"Trialing\"] -->|\"pay\"| A[\"Active\"]\n  A -->|\"pay: renew\"| A\n  A -->|\"missPayment\"| P[\"PastDue\"]\n  P -->|\"pay\"| A\n  T -->|\"cancel or miss\"| C[\"Cancelled\"]\n  A -->|\"cancel\"| C\n  P -->|\"cancel or miss\"| C",
+      "caption": "states name each other: Trialing creates Active",
+      "steps": [
+        {
+          "say": "Here's the machine. Trialing goes to active on pay. Active drops to past due on a missed payment, and back when paid.",
+          "reveal": 0
+        },
+        {
+          "say": "Any state can reach cancelled. Notice the states know each other: trialing literally creates an active. Remember that, it's the test we'll use against Strategy.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s023",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: one subscription's life",
+      "table": {
+        "head": [
+          "Action",
+          "State",
+          "Result"
+        ],
+        "rows": [
+          [
+            "pay",
+            "trialing",
+            "first payment, now active"
+          ],
+          [
+            "missPayment",
+            "active",
+            "grace period, now past due"
+          ],
+          [
+            "pay",
+            "past due",
+            "arrears paid, now active"
+          ],
+          [
+            "cancel",
+            "active",
+            "now cancelled"
+          ],
+          [
+            "pay",
+            "cancelled",
+            "refused, stays cancelled"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's walk it. A new subscription pays. Trialing takes the first payment and switches to active.",
+          "reveal": 1
+        },
+        {
+          "say": "A payment fails. Active starts a grace period and moves to past due.",
+          "reveal": 2
+        },
+        {
+          "say": "The customer pays the arrears. Past due moves back to active.",
+          "reveal": 3
+        },
+        {
+          "say": "The customer cancels. Active moves to cancelled.",
+          "reveal": 4
+        },
+        {
+          "say": "Then a stray payment arrives. Cancelled refuses it, the same way every time.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s024",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: the vending machine",
+      "table": {
+        "head": [
+          "Step",
+          "State",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "select A1",
+            "idle",
+            "ignored, no money yet"
+          ],
+          [
+            "insert 100",
+            "idle",
+            "balance 100, now has money"
+          ],
+          [
+            "select A1",
+            "has money",
+            "costs 150, balance 100"
+          ],
+          [
+            "insert 100, select A1",
+            "has money",
+            "cola, change 50"
+          ],
+          [
+            "after that",
+            "sold out",
+            "nothing left in stock"
+          ],
+          [
+            "insert 25",
+            "sold out",
+            "coin rejected, returned"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The classic vending machine: idle, has money, sold out. Select A one while idle: ignored.",
+          "reveal": 1
+        },
+        {
+          "say": "Insert one hundred cents. Idle adds it to the balance and moves to has money.",
+          "reveal": 2
+        },
+        {
+          "say": "Select A one, which costs one fifty. Has money says, not enough, balance one hundred, and stays put.",
+          "reveal": 3
+        },
+        {
+          "say": "Insert another hundred, select A one. It dispenses a cola and returns fifty cents change.",
+          "reveal": 4
+        },
+        {
+          "say": "Nothing's left in stock, so it moves to sold out.",
+          "reveal": 5
+        },
+        {
+          "say": "Insert twenty five: rejected and returned. Tip: dispensing lives in the context. States only rule on legality.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s025",
+      "layout": "bullets",
+      "kicker": "Concept 4 of 15",
+      "title": "State: mistakes and when not to use it",
+      "bullets": [
+        "Two states, few methods: a boolean and an if",
+        "Under three repeated switches: enum + switch",
+        "Over about a dozen states: transition table or library",
+        "Business logic in states: move it to the context",
+        "Persist the state name, not the object"
+      ],
+      "steps": [
+        {
+          "say": "When not to use it. Two states and a couple of methods? A boolean and an if reads better.",
+          "reveal": 1
+        },
+        {
+          "say": "Rule of thumb: the pattern pays off once three or more methods repeat the same status switch. Below that, an enum with a switch is easy to defend.",
+          "reveal": 2
+        },
+        {
+          "say": "Above about a dozen states with guards, use a transition table or a library like Spring Statemachine, so the diagram is the source of truth.",
+          "reveal": 3
+        },
+        {
+          "say": "Common mistake: putting business logic in states. Charging cards and sending emails belong in the context or a service.",
+          "reveal": 4
+        },
+        {
+          "say": "And store the state's name in the database, not the object, mapped back in one place. In the interview, say: one class per state, the context forwards, each state picks what follows.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s026",
+      "layout": "section",
+      "kicker": "Concept 5 of 15",
+      "title": "State versus Strategy versus Bridge",
+      "steps": [
+        {
+          "say": "Concept five, one of the most common interview questions. State, Strategy and Bridge draw the exact same class diagram: an object holds an interface and forwards to it. So the diagram can't tell you which is which. The reasons can.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 11 · State vs Strategy (and Bridge)"
+    },
+    {
+      "id": "s027",
+      "layout": "table",
+      "kicker": "Concept 5 of 15",
+      "title": "Same diagram, different reasons",
+      "table": {
+        "head": [
+          "Question",
+          "State",
+          "Strategy",
+          "Bridge"
+        ],
+        "rows": [
+          [
+            "Who chooses?",
+            "the states",
+            "the caller",
+            "wiring, once"
+          ],
+          [
+            "How often changes?",
+            "repeatedly",
+            "once or per call",
+            "never after"
+          ],
+          [
+            "Do they name each other?",
+            "yes",
+            "never",
+            "no"
+          ],
+          [
+            "What varies?",
+            "current condition",
+            "how one job is done",
+            "a design dimension"
+          ],
+          [
+            "Why it exists",
+            "model a lifecycle",
+            "replace an algorithm",
+            "stop class explosion"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Question one: who chooses the object? In State, the states themselves. In Strategy, the caller from outside. In Bridge, it's set once when the object is built, usually from configuration.",
+          "reveal": 1
+        },
+        {
+          "say": "How often does it change? State changes repeatedly, that's the whole point. Strategy is set once, or per call. Bridge, effectively never after wiring.",
+          "reveal": 2
+        },
+        {
+          "say": "Do the alternatives reference each other? State, yes: trialing builds an active. Strategy, never. Bridge, no.",
+          "reveal": 3
+        },
+        {
+          "say": "What varies? In State, the object's current condition and its allowed actions. In Strategy, how one job gets done. In Bridge, a whole dimension of the design.",
+          "reveal": 4
+        },
+        {
+          "say": "And why it exists: State models a lifecycle, Strategy makes one algorithm replaceable, Bridge stops two class hierarchies from multiplying.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s028",
+      "layout": "number",
+      "kicker": "Concept 5 of 15",
+      "title": "The reliable test",
+      "big": "Do the alternatives name each other?",
+      "caption": "yes: State.  no: Strategy, or Bridge if fixed at wiring",
+      "steps": [
+        {
+          "say": "If you remember one thing, make it this naming test. Look at the alternatives. Does any of them mention another?",
+          "reveal": 0
+        },
+        {
+          "say": "Trialing creates active: they name each other, so it's State. Exponential backoff has never heard of fixed delay: Strategy. And if no one names anyone and the choice is fixed when the app is wired, say a drawing A-P-I chosen per platform, it's Bridge. Recap: who chooses, and do they know each other.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s029",
+      "layout": "section",
+      "kicker": "Concept 6 of 15",
+      "title": "State in other languages",
+      "steps": [
+        {
+          "say": "Concept six. The class-per-state version is the textbook form, but most languages give you something lighter. Let's use a traffic light as the running example: red for thirty seconds, then green for twenty five, then yellow for five, then red again.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Chapter 11 · State in other languages"
+    },
+    {
+      "id": "s030",
+      "layout": "bullets",
+      "kicker": "Concept 6 of 15",
+      "title": "Same machine, many languages",
+      "bullets": [
+        "Java: enum constants override next()",
+        "Java: sealed interface + exhaustive switch",
+        "Kotlin, Scala: sealed + when / match",
+        "Rust: enum + match; typestate = compile errors",
+        "Python: dict of (state, action) to handler",
+        "TypeScript: discriminated union + switch"
+      ],
+      "steps": [
+        {
+          "say": "Java enum. Each constant overrides next: red returns green, green returns yellow, yellow returns red. The whole machine fits in one file.",
+          "reveal": 1
+        },
+        {
+          "say": "Java sealed interface plus a pattern-matching switch. The compiler knows every state, so a switch that forgets yellow won't compile.",
+          "reveal": 2
+        },
+        {
+          "say": "Kotlin and Scala do the same with sealed hierarchies and an exhaustive when or match.",
+          "reveal": 3
+        },
+        {
+          "say": "Rust uses enums with match. Its typestate pattern makes each state a separate type, so an illegal action is a compile error, not a run-time refusal.",
+          "reveal": 4
+        },
+        {
+          "say": "Python often uses a dictionary from a state and action pair to a handler. Red plus timer maps to green. A compact transition table.",
+          "reveal": 5
+        },
+        {
+          "say": "TypeScript uses a discriminated union, object types each carrying a fixed tag like kind red, plus a switch on the tag that's checked for missing cases.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s031",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: the traffic light as an enum",
+      "table": {
+        "head": [
+          "State",
+          "Seconds",
+          "next()",
+          "Pedestrians?"
+        ],
+        "rows": [
+          [
+            "RED",
+            "30",
+            "GREEN",
+            "may cross"
+          ],
+          [
+            "GREEN",
+            "25",
+            "YELLOW",
+            "wait"
+          ],
+          [
+            "YELLOW",
+            "5",
+            "RED",
+            "wait"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's the run. Red lasts thirty seconds, its next is green, and pedestrians may cross.",
+          "reveal": 1
+        },
+        {
+          "say": "Green lasts twenty five, next is yellow, and pedestrians wait. Waiting is the default answer, which green and yellow inherit.",
+          "reveal": 2
+        },
+        {
+          "say": "Yellow lasts five, next is red, and the cycle repeats. One enum, three constants, the whole machine. In the interview, for a small machine, say you'd use exactly this. Recap: pick the lightest form your language checks for you.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s032",
+      "layout": "section",
+      "kicker": "Concept 7 of 15",
+      "title": "Strategy: swap the algorithm, not the caller",
+      "steps": [
+        {
+          "say": "Concept seven, Strategy. Hook: how do you get to the airport? Car, train or taxi. Same goal, different algorithm, chosen by time, money and weather. And the trip itself doesn't care which one you picked.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Chapter 11 · 11.3 Strategy"
+    },
+    {
+      "id": "s033",
+      "layout": "bullets",
+      "kicker": "Concept 7 of 15",
+      "title": "Strategy in plain words",
+      "bullets": [
+        "A family of interchangeable algorithms",
+        "Each in its own class, one shared interface",
+        "Context calls the interface, never branches",
+        "The choice is made outside the context"
+      ],
+      "steps": [
+        {
+          "say": "Strategy groups related algorithms into a family. Our running example: retry policies for a failed A-P-I call.",
+          "reveal": 1
+        },
+        {
+          "say": "Each policy is its own class behind one interface, retry policy. No retry, fixed delay, and exponential backoff, which doubles the wait after each failure.",
+          "reveal": 2
+        },
+        {
+          "say": "The context, an A-P-I client, asks one question: how long before the next attempt? It never checks which policy it holds.",
+          "reveal": 3
+        },
+        {
+          "say": "And the choice is made outside: configuration, a feature toggle, or a customer setting. Not inside the client.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s034",
+      "layout": "bullets",
+      "kicker": "Concept 7 of 15",
+      "title": "How it works, step by step",
+      "bullets": [
+        "1. Small interface: delayBeforeAttempt(attempt)",
+        "2. One class per algorithm, own parameters only",
+        "3. Context receives a strategy and calls it",
+        "4. A factory, config or DI container chooses"
+      ],
+      "steps": [
+        {
+          "say": "Step one, a small interface, ideally one question. Delay before attempt, given the attempt number, returns milliseconds, or stop.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, one class per algorithm. Fixed delay holds one hundred milliseconds and four attempts. Backoff holds a base of one hundred. Each knows only its own numbers.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, the client receives the policy through its constructor and calls it inside its retry loop. That loop is identical for every policy.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, something outside picks the policy: a factory, configuration, or a D-I container, which creates objects and hands them their dependencies. Not every call site.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s035",
+      "layout": "diagram",
+      "kicker": "Concept 7 of 15",
+      "title": "The client asks; the policy answers",
+      "mermaid": "flowchart LR\n  F[\"Config or factory\"] -->|\"chooses\"| R[\"RetryPolicy\"]\n  C[\"ApiClient\"] -->|\"delayBeforeAttempt\"| R\n  R --> N[\"none: lambda\"]\n  R --> FD[\"FixedDelay 100 x4\"]\n  R --> E[\"ExponentialBackoff 100 x4\"]",
+      "caption": "no policy references another",
+      "steps": [
+        {
+          "say": "Here's the shape. The client calls one method on retry policy. Config or a factory decides which one is plugged in.",
+          "reveal": 0
+        },
+        {
+          "say": "And notice: no policy references another. Exponential backoff has never heard of fixed delay. That absence is what separates Strategy from State.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s036",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: same client, three policies",
+      "table": {
+        "head": [
+          "Policy",
+          "Attempt 1",
+          "Attempt 2",
+          "Attempt 3"
+        ],
+        "rows": [
+          [
+            "none",
+            "fail, give up",
+            "-",
+            "-"
+          ],
+          [
+            "FixedDelay(100, 4)",
+            "fail, wait 100",
+            "fail, wait 100",
+            "ok"
+          ],
+          [
+            "Backoff(100, 4)",
+            "fail, wait 100",
+            "fail, wait 200",
+            "ok"
+          ],
+          [
+            "Backoff, server down",
+            "wait 100, 200",
+            "then wait 400",
+            "attempt 4: give up"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Same client code, a server that succeeds on the third try. With no retry, attempt one fails and we give up immediately.",
+          "reveal": 1
+        },
+        {
+          "say": "Fixed delay of one hundred, max four. Fail, wait one hundred. Fail, wait one hundred. Attempt three: OK.",
+          "reveal": 2
+        },
+        {
+          "say": "Exponential backoff from one hundred. Fail, wait one hundred. Fail, wait two hundred. Attempt three: OK.",
+          "reveal": 3
+        },
+        {
+          "say": "Now against a server that's always down. Waits of one hundred, two hundred, four hundred, then attempt four fails and it gives up. The client never changed. Only the injected policy did.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s037",
+      "layout": "bullets",
+      "kicker": "Concept 7 of 15",
+      "title": "Strategy: when not to, and the classic mistakes",
+      "bullets": [
+        "Two branches, no third in sight: keep the if",
+        "Variants need different inputs: wrong split",
+        "Every call site choosing: the branch just moved",
+        "Strategies that know each other: that's State",
+        "Shared mutable strategies: keep them immutable"
+      ],
+      "steps": [
+        {
+          "say": "When not to use it. Two branches, and no third in sight? An if reads better. Introduce the pattern when the third one shows up.",
+          "reveal": 1
+        },
+        {
+          "say": "If one variant needs the customer and another needs the warehouse, the shared interface is forced. Rethink the split.",
+          "reveal": 2
+        },
+        {
+          "say": "Mistake one: every call site picks the strategy. The branch didn't disappear, it just moved. Let a factory or config choose.",
+          "reveal": 3
+        },
+        {
+          "say": "Mistake two: strategies that reference each other. Then it's really State.",
+          "reveal": 4
+        },
+        {
+          "say": "Mistake three: a stateful strategy shared between threads. Keep them immutable. Java records help. In the interview, say: the context stops branching, each algorithm is testable alone, and new ones don't touch working code. Recap: chosen from outside, never know each other.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s038",
+      "layout": "section",
+      "kicker": "Concept 8 of 15",
+      "title": "Lambdas as strategies",
+      "steps": [
+        {
+          "say": "Concept eight. Strategy is the pattern a plain function replaces most often. Since Java eight, any interface with a single abstract method, called a functional interface, can be implemented by a lambda. So many strategies need no class at all.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Chapter 11 · Lambdas as strategies"
+    },
+    {
+      "id": "s039",
+      "layout": "bullets",
+      "kicker": "Concept 8 of 15",
+      "title": "Lambda or class?",
+      "bullets": [
+        "Lambda: one-line, no configuration",
+        "Comparator, Function, Predicate, RetryPolicy",
+        "Class or record: has configuration or state",
+        "Class: needs a name for logs, or registration",
+        "Registry: Map from config key to lambda"
+      ],
+      "steps": [
+        {
+          "say": "Use a lambda when the strategy is one line with no configuration. Retry policy dot none is just: given any attempt, return stop.",
+          "reveal": 1
+        },
+        {
+          "say": "The J-D-K is full of these. Comparator is the textbook strategy: list dot sort owns the sorting algorithm and you plug in the comparison.",
+          "reveal": 2
+        },
+        {
+          "say": "Use a class or record when it has configuration, like fixed delay of one hundred milliseconds and four attempts.",
+          "reveal": 3
+        },
+        {
+          "say": "Also when it needs a name for logging, or must be registered as a Spring bean.",
+          "reveal": 4
+        },
+        {
+          "say": "And a neat middle ground: a map from a configuration key to a lambda. That's a strategy registry in a few lines.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s040",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: a pricing registry, keyboard at 49.99",
+      "table": {
+        "head": [
+          "Config key",
+          "Lambda",
+          "Price"
+        ],
+        "rows": [
+          [
+            "regular",
+            "p -> p",
+            "49.99"
+          ],
+          [
+            "member",
+            "10 percent off",
+            "44.99"
+          ],
+          [
+            "flash-sale",
+            "minus 20.00, not below 0",
+            "29.99"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's the registry from the book, pricing a keyboard at forty nine ninety nine. Regular returns the price unchanged: forty nine ninety nine.",
+          "reveal": 1
+        },
+        {
+          "say": "Member multiplies by zero point nine and rounds: forty four ninety nine.",
+          "reveal": 2
+        },
+        {
+          "say": "Flash sale subtracts twenty, but never below zero: twenty nine ninety nine. Three one-line strategies, no classes. Money is BigDecimal, never double, since binary floating point can't hold most cent values exactly.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s041",
+      "layout": "bullets",
+      "kicker": "Concept 8 of 15",
+      "title": "Comparators compose, and other languages",
+      "bullets": [
+        "byRating.reversed().thenComparing(name)",
+        "Python: pass a function; dict as registry",
+        "JS and TS: a function argument",
+        "Kotlin: function-typed constructor parameter",
+        "Go: one-method interface or a func field"
+      ],
+      "steps": [
+        {
+          "say": "Strategies compose too. By rating, reversed, then by name, sorts products to keyboard, cable, mouse, monitor.",
+          "reveal": 1
+        },
+        {
+          "say": "In Python you just pass a function. A dict of functions is a registry.",
+          "reveal": 2
+        },
+        {
+          "say": "JavaScript and TypeScript pass a function argument, or an object of functions.",
+          "reveal": 3
+        },
+        {
+          "say": "Kotlin and Scala take a function-typed constructor parameter, often with a default.",
+          "reveal": 4
+        },
+        {
+          "say": "Go uses a one-method interface or a func field. Recap: one line, lambda. Configured, record.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s042",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Configured, named in logs: lambda or record?",
+      "bullets": [
+        "A. A lambda",
+        "B. A record or class",
+        "C. A switch in the client"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. A strategy needs a base delay and max attempts, and must show up in logs by name. Lambda, record, or a switch in the client?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s043",
+      "layout": "section",
+      "kicker": "Concept 9 of 15",
+      "title": "Template Method: fixed order, fill the blanks",
+      "steps": [
+        {
+          "say": "Answer: a record or class. It has configuration and needs a name. A switch in the client is the problem Strategy removes.",
+          "reveal": 0
+        },
+        {
+          "say": "Concept nine, Template Method. Hook: a recipe card with blanks. Boil water, brew blank, pour, add blank if wanted. Tea and coffee fill the blanks differently. The order never changes.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Chapter 11 · 11.4 Template Method"
+    },
+    {
+      "id": "s044",
+      "layout": "bullets",
+      "kicker": "Concept 9 of 15",
+      "title": "Template Method in plain words",
+      "bullets": [
+        "Base class owns the algorithm's outline",
+        "The template method is final",
+        "Abstract steps: subclass must supply",
+        "Hooks: default body, subclass may override",
+        "Private shared steps: written once"
+      ],
+      "steps": [
+        {
+          "say": "Template Method puts an algorithm's outline in one base class method. Our example: an import job that reads, parses, validates and saves.",
+          "reveal": 1
+        },
+        {
+          "say": "That method is final, so no subclass can reorder, skip or insert a step. The order is guaranteed.",
+          "reveal": 2
+        },
+        {
+          "say": "Some steps are abstract. Every subclass must write them, and the compiler enforces it. For the import job: name, read rows, and parse row.",
+          "reveal": 3
+        },
+        {
+          "say": "Some steps are hooks: they have a default, and a subclass may override them. Should validate defaults to true. After save defaults to doing nothing.",
+          "reveal": 4
+        },
+        {
+          "say": "And some steps are private: validate and save. Written once, and nobody can change them.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s045",
+      "layout": "diagram",
+      "kicker": "Concept 9 of 15",
+      "title": "The import job's fixed flow",
+      "mermaid": "flowchart LR\n  R[\"readRows<br/>required\"] --> P[\"parseRow<br/>required\"]\n  P --> V[\"validate<br/>if hook says yes\"]\n  V --> S[\"save<br/>private\"]\n  S --> A[\"afterSave<br/>hook\"]",
+      "caption": "the base class calls you, never the other way round",
+      "steps": [
+        {
+          "say": "Here's the flow inside run. Read rows, then parse each row: both required. Then the should validate hook decides whether the private validate step runs.",
+          "reveal": 0
+        },
+        {
+          "say": "Then the private save, and finally the after save hook. This is the Hollywood principle: don't call us, we'll call you. The base class decides when your code runs. That inversion of control is how most frameworks work.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s046",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: CSV versus JSON import",
+      "table": {
+        "head": [
+          "Step",
+          "CSV job",
+          "JSON job"
+        ],
+        "rows": [
+          [
+            "readRows",
+            "split lines, skip header",
+            "toy regex"
+          ],
+          [
+            "parseRow",
+            "first column: u1, u2, u3",
+            "id: p9, p7"
+          ],
+          [
+            "shouldValidate",
+            "default true: 3 ok",
+            "false: upstream did it"
+          ],
+          [
+            "save",
+            "3 records + audit entry",
+            "2 records + audit entry"
+          ],
+          [
+            "afterSave",
+            "default: nothing",
+            "notify upstream: 2 ids"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's run both. Read rows: CSV splits lines and skips the header. JSON uses a toy regex.",
+          "reveal": 1
+        },
+        {
+          "say": "Parse row: CSV takes the first column, giving u one, u two, u three. JSON pulls out the ids p nine and p seven.",
+          "reveal": 2
+        },
+        {
+          "say": "Should validate: CSV keeps the default, true, and validates three records, zero blank. JSON overrides it to false, because the source is validated upstream.",
+          "reveal": 3
+        },
+        {
+          "say": "Save is shared and private. Both save their records plus an audit entry. And here's the win: when saving had to start writing that audit record, we changed one file, not three.",
+          "reveal": 4
+        },
+        {
+          "say": "After save: CSV keeps the empty default. JSON overrides the hook to notify upstream that two ids were consumed. Each subclass wrote only what differs.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s047",
+      "layout": "bullets",
+      "kicker": "Concept 9 of 15",
+      "title": "Template Method: mistakes and when not to",
+      "bullets": [
+        "Too many abstract steps: make most of them hooks",
+        "Calling a step from the base constructor",
+        "Forgetting final on the template method",
+        "Public steps: callers run step 3 alone",
+        "Variants must combine: use composition"
+      ],
+      "steps": [
+        {
+          "say": "Mistake one, too many required steps. A subclass should write two or three methods. Give the rest defaults.",
+          "reveal": 1
+        },
+        {
+          "say": "Mistake two, the constructor trap. If the base constructor calls an overridable step, it runs before the subclass fields are set, so in Java the step sees null, zero or false.",
+          "reveal": 2
+        },
+        {
+          "say": "Mistake three, forgetting final. Then a subclass can reorder or skip steps, and the pattern is just a gentleman's agreement.",
+          "reveal": 3
+        },
+        {
+          "say": "Mistake four, public steps. A caller could run save without parse. Keep them protected.",
+          "reveal": 4
+        },
+        {
+          "say": "When not to use it: when variants must combine. An encrypted CSV import needs two parents, and Java allows one. Use composition. Recap: the parent runs the show.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s048",
+      "layout": "section",
+      "kicker": "Concept 10 of 15",
+      "title": "Template Method versus Strategy",
+      "steps": [
+        {
+          "say": "Concept ten. Both let one part of an algorithm vary. So which do you pick? Let's compare them on our import job.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Chapter 11 · Template Method vs Strategy"
+    },
+    {
+      "id": "s049",
+      "layout": "table",
+      "kicker": "Concept 10 of 15",
+      "title": "Template Method versus Strategy",
+      "table": {
+        "head": [
+          "",
+          "Template Method",
+          "Strategy"
+        ],
+        "rows": [
+          [
+            "What varies",
+            "one step",
+            "the whole algorithm"
+          ],
+          [
+            "Mechanism",
+            "inheritance",
+            "composition"
+          ],
+          [
+            "When chosen",
+            "at creation, fixed",
+            "run time, even per call"
+          ],
+          [
+            "Axes that can vary",
+            "one: one parent",
+            "several strategies"
+          ],
+          [
+            "One file shows",
+            "only the varying pieces",
+            "the complete algorithm"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "What varies? Template Method varies one step inside a fixed algorithm. Strategy swaps the entire algorithm.",
+          "reveal": 1
+        },
+        {
+          "say": "Mechanism. Template Method uses inheritance: the subclass supplies the step. Strategy uses composition: the caller passes an object in.",
+          "reveal": 2
+        },
+        {
+          "say": "When is it chosen? Template Method, when you create the object, by picking the subclass, and then it's fixed. Strategy, at run time, even per call.",
+          "reveal": 3
+        },
+        {
+          "say": "How many axes can vary? Template Method, one, because a class has one parent. Strategy, several: hold a parser strategy and an encryption strategy at once.",
+          "reveal": 4
+        },
+        {
+          "say": "What does one file show? A template subclass shows only the pieces, so you need the parent to see the order. A strategy class shows a complete algorithm.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s050",
+      "layout": "bullets",
+      "kicker": "Concept 10 of 15",
+      "title": "Best of both: template plus callback",
+      "bullets": [
+        "Base fixes the order, steps are passed in",
+        "JdbcTemplate: connect, run, map, close",
+        "You supply a RowMapper, not a subclass",
+        "Prefer Strategy when both fit"
+      ],
+      "steps": [
+        {
+          "say": "They combine well. The base fixes the sequence, but each step is a strategy or lambda passed in. Order enforced, no single-parent limit.",
+          "reveal": 1
+        },
+        {
+          "say": "Spring's J-D-B-C template is the famous example. It owns the fixed flow: get a connection, create a statement, execute, handle exceptions, close everything.",
+          "reveal": 2
+        },
+        {
+          "say": "You hand it a row mapper, a callback that turns one row into one object. No subclass.",
+          "reveal": 3
+        },
+        {
+          "say": "Strategy is usually more flexible, so prefer it when both fit. Choose Template Method when most of the flow is shared and you want the order enforced. Recap: one step by inheritance, versus a whole algorithm by composition.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s051",
+      "layout": "section",
+      "kicker": "Concept 11 of 15",
+      "title": "Template Method in other languages",
+      "steps": [
+        {
+          "say": "Concept eleven. Not every language has final methods, or even inheritance.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Chapter 11 · Template Method in other languages"
+    },
+    {
+      "id": "s052",
+      "layout": "table",
+      "kicker": "Concept 11 of 15",
+      "title": "The same skeleton, five languages",
+      "table": {
+        "head": [
+          "Language",
+          "How",
+          "Order enforced?"
+        ],
+        "rows": [
+          [
+            "Java",
+            "final run, protected abstract steps",
+            "yes, final"
+          ],
+          [
+            "Python",
+            "abc.ABC + @abstractmethod",
+            "no: typing.final hint"
+          ],
+          [
+            "TypeScript",
+            "abstract class",
+            "compile time only"
+          ],
+          [
+            "C++",
+            "NVI: non-virtual public run",
+            "yes, non-virtual"
+          ],
+          [
+            "Go, Rust",
+            "function taking interface/trait",
+            "Strategy shape"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Java: a final run method, protected abstract steps, and protected hooks. Gotcha: an interface default method can't be final, so anyone may override it.",
+          "reveal": 1
+        },
+        {
+          "say": "Python: an abstract base class with abstract methods. There's no run-time final, so a type-checker hint or a comment is your only guard.",
+          "reveal": 2
+        },
+        {
+          "say": "TypeScript: abstract classes give a compile-time check. Plain JavaScript uses base methods that throw, not implemented.",
+          "reveal": 3
+        },
+        {
+          "say": "C plus plus: a non-virtual public method calling protected virtual steps. That idiom is called the non-virtual interface, or N-V-I.",
+          "reveal": 4
+        },
+        {
+          "say": "Go and Rust have no inheritance, so a function takes an interface or trait with the varying steps, which is the Strategy shape. Recap: where there's no final, review is your guard. You already use this pattern, by the way: J-Unit's setup, test, teardown, and Android's on create and on resume.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s053",
+      "layout": "section",
+      "kicker": "Concept 12 of 15",
+      "title": "Visitor: new operations, untouched classes",
+      "steps": [
+        {
+          "say": "Concept twelve, Visitor. Hook: a tax inspector visits a restaurant, a shop and a factory, bringing rules for each. Next year a fire-safety inspector visits with different rules. The businesses don't change at all.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Chapter 11 · 11.5 Visitor"
+    },
+    {
+      "id": "s054",
+      "layout": "bullets",
+      "kicker": "Concept 12 of 15",
+      "title": "Visitor in plain words",
+      "bullets": [
+        "Elements: a stable set of classes",
+        "Each element: accept(visitor) calls visit(this)",
+        "Visitor: one visit method per element type",
+        "One visitor class per operation",
+        "New operation = new visitor; elements untouched"
+      ],
+      "steps": [
+        {
+          "say": "Our running example: an infrastructure plan with three resource kinds, server, database and load balancer. That list is stable.",
+          "reveal": 1
+        },
+        {
+          "say": "Each element has one tiny method, accept, whose body is always visitor dot visit, passing this.",
+          "reveal": 2
+        },
+        {
+          "say": "The visitor interface has one visit method per element type: visit server, visit database, visit load balancer.",
+          "reveal": 3
+        },
+        {
+          "say": "Each operation becomes its own visitor class. Monthly cost is one. Security audit is another.",
+          "reveal": 4
+        },
+        {
+          "say": "And operations keep arriving: a tag report, a diagram export. Each is a new visitor. No resource class changes.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s055",
+      "layout": "twocol",
+      "kicker": "Concept 12 of 15",
+      "title": "The problem: where do operations live?",
+      "left": {
+        "heading": "Inside the classes",
+        "bullets": [
+          "Server holds pricing, security, drawing",
+          "Unrelated teams edit one file"
+        ]
+      },
+      "right": {
+        "heading": "Outside, with instanceof",
+        "bullets": [
+          "An instanceof chain per operation",
+          "New type: find every chain yourself"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Option one, inside the classes. Server holds pricing, security and drawing code.",
+          "reveal": 1
+        },
+        {
+          "say": "And the billing team and the security team keep editing the same file.",
+          "reveal": 2
+        },
+        {
+          "say": "Option two, put them outside with type checks: if it's a server do this, else if it's a database do that. One chain per operation.",
+          "reveal": 3
+        },
+        {
+          "say": "Add a new resource kind, and you must find every chain, and the compiler won't tell you which you missed. Visitor fixes both, using double dispatch, our next concept.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s056",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: monthly cost over a plan",
+      "table": {
+        "head": [
+          "Resource",
+          "Rule",
+          "Cost"
+        ],
+        "rows": [
+          [
+            "web-1 server, 4 vCPU",
+            "24.00 per vCPU",
+            "96.00"
+          ],
+          [
+            "worker-1 server, 2 vCPU",
+            "24.00 per vCPU",
+            "48.00"
+          ],
+          [
+            "orders-db, 200 GB",
+            "40.00 + 0.25 per GB",
+            "90.00"
+          ],
+          [
+            "edge-lb, 4 rules",
+            "18.00 + 1.50 per rule",
+            "24.00"
+          ],
+          [
+            "staging group, empty",
+            "groups are free",
+            "0.00"
+          ],
+          [
+            "Total",
+            "",
+            "258.00"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's run the monthly cost visitor over a production plan. Web one is a server with four virtual C-P-Us at twenty four dollars each: ninety six.",
+          "reveal": 1
+        },
+        {
+          "say": "Worker one, two v-C-P-Us: forty eight.",
+          "reveal": 2
+        },
+        {
+          "say": "Orders D-B, two hundred gigabytes: a forty dollar base plus twenty five cents a gigabyte, so ninety.",
+          "reveal": 3
+        },
+        {
+          "say": "Edge L-B with four rules: eighteen plus one fifty a rule, so twenty four.",
+          "reveal": 4
+        },
+        {
+          "say": "The staging group is empty, and groups are free. It's a composite: its accept visits itself, then passes the visitor to each child.",
+          "reveal": 5
+        },
+        {
+          "say": "Total: two hundred fifty eight. Then the security audit walks the same plan and finds a public I-P on web one, an unencrypted orders D-B, and an empty staging group. Zero changes to any resource class.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s057",
+      "layout": "section",
+      "kicker": "Concept 13 of 15",
+      "title": "Double dispatch",
+      "steps": [
+        {
+          "say": "Concept thirteen. Why can't we just write visitor dot visit of resource? Because of how Java picks methods.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Chapter 11 · How it works: double dispatch"
+    },
+    {
+      "id": "s058",
+      "layout": "bullets",
+      "kicker": "Concept 13 of 15",
+      "title": "Two rules Java uses to pick a method",
+      "bullets": [
+        "Override: picked at run time, from the receiver",
+        "Overload: picked at compile time, from static type",
+        "Holding a Resource r, visit(r) can't compile"
+      ],
+      "steps": [
+        {
+          "say": "Rule one. Which override runs is decided at run time, from the actual type of the object before the dot. That's single dispatch.",
+          "reveal": 1
+        },
+        {
+          "say": "Rule two. Which overload, meaning same-named methods with different parameter types, like visit server versus visit database, is chosen at compile time, from the declared static type of the argument.",
+          "reveal": 2
+        },
+        {
+          "say": "So if you hold a variable typed resource, visit of r doesn't compile. The compiler only knows it's a resource, and there's no visit resource method.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s059",
+      "layout": "diagram",
+      "kicker": "Concept 13 of 15",
+      "title": "Two calls pick the right code",
+      "mermaid": "flowchart LR\n  L[\"Loop holds Resource r\"] -->|\"1. r.accept(v)\"| S[\"Server.accept runs\"]\n  S -->|\"2. v.visit(this)\"| O[\"visit(Server) overload\"]\n  O --> M[\"MonthlyCost.visit(Server)\"]\n  O --> A[\"SecurityAudit.visit(Server)\"]",
+      "caption": "the method depends on two types: element and visitor",
+      "steps": [
+        {
+          "say": "Call one: r dot accept. That dispatches on the resource's real type, so server's accept runs.",
+          "reveal": 0
+        },
+        {
+          "say": "Call two: inside server's accept, visitor dot visit of this. Here this has static type server, so the compiler picks the visit server overload. Then that call dispatches on the visitor's real type, monthly cost or security audit. Two types decide the method: double dispatch.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s060",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: tracing web-1 through the audit",
+      "table": {
+        "head": [
+          "Call",
+          "Decided by",
+          "Runs"
+        ],
+        "rows": [
+          [
+            "r.accept(audit)",
+            "r is really a Server",
+            "Server.accept"
+          ],
+          [
+            "visit(this)",
+            "this is a Server",
+            "visit(Server) overload"
+          ],
+          [
+            "visit(Server)",
+            "visitor is SecurityAudit",
+            "public IP check"
+          ],
+          [
+            "Result",
+            "",
+            "finding: web-1 public IP"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's trace web one through the security audit. The loop holds it as a plain resource and calls accept. Its run-time type is server, so server's accept runs.",
+          "reveal": 1
+        },
+        {
+          "say": "Inside, visit of this. Static type server, so the compiler already chose the visit server overload.",
+          "reveal": 2
+        },
+        {
+          "say": "At run time, the visitor is a security audit, so security audit's visit server runs, which checks for a public I-P.",
+          "reveal": 3
+        },
+        {
+          "say": "Result: finding, web one has a public I-P. No instanceof anywhere. In the interview, say: accept dispatches on the element, visit dispatches on the visitor. Recap: two calls, two types.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s061",
+      "layout": "section",
+      "kicker": "Concept 14 of 15",
+      "title": "The expression problem",
+      "steps": [
+        {
+          "say": "Concept fourteen, the one question that decides whether Visitor fits. Which changes more often in your system: the types, or the operations?",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 11 · The expression problem"
+    },
+    {
+      "id": "s062",
+      "layout": "table",
+      "kicker": "Concept 14 of 15",
+      "title": "Which change is cheap?",
+      "table": {
+        "head": [
+          "Design",
+          "New operation",
+          "New type"
+        ],
+        "rows": [
+          [
+            "Methods on the classes",
+            "edit every class",
+            "one new class"
+          ],
+          [
+            "Visitor or sealed + switch",
+            "one new visitor",
+            "edit every visitor"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "With plain object-oriented methods, adding an operation, say a tag report, means editing server, database and load balancer. But adding a type, say a cache, is one new class.",
+          "reveal": 1
+        },
+        {
+          "say": "With Visitor it flips. A tag report is one new visitor. But a cache means adding visit cache to the interface, and fixing every visitor. At least the compiler finds them. No ordinary design makes both cheap. That's the expression problem.",
+          "reveal": 2
+        }
+      ]
+    },
+    {
+      "id": "s063",
+      "layout": "bullets",
+      "kicker": "Concept 14 of 15",
+      "title": "The modern Java alternative",
+      "bullets": [
+        "sealed interface Infra permits Vm, Sql, Lb",
+        "switch with no default: compiler checks coverage",
+        "Record patterns and guards: case Sql(...) when !enc",
+        "A default branch turns the check off",
+        "Classic Visitor: hierarchy you can't seal"
+      ],
+      "steps": [
+        {
+          "say": "Modern Java gives you Visitor's main advantage with less code. Declare a sealed interface permitting V-M, S-Q-L and L-B records.",
+          "reveal": 1
+        },
+        {
+          "say": "Monthly cost becomes a switch with no default. Add a cache record, and every switch that forgot it stops compiling.",
+          "reveal": 2
+        },
+        {
+          "say": "The audit uses record patterns and guards: case S-Q-L when not encrypted. Guarded cases don't count toward coverage, so you still need plain cases after them.",
+          "reveal": 3
+        },
+        {
+          "say": "Big mistake: adding a default branch. It silently turns off the exhaustiveness check you wanted.",
+          "reveal": 4
+        },
+        {
+          "say": "So when is classic Visitor still right? When the hierarchy isn't yours and can't be sealed, like the javac tree A-P-I. Recap: stable types and growing operations means Visitor, or sealed plus switch.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s064",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "New types every sprint, two operations: Visitor?",
+      "bullets": [
+        "A. Yes, Visitor",
+        "B. No, methods on the classes",
+        "C. Sealed interface with a default branch"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Your app adds a new shape type every sprint, but has only two operations. Visitor or not?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s065",
+      "layout": "section",
+      "kicker": "Concept 15 of 15",
+      "title": "GoF behavioral patterns: quick reference",
+      "steps": [
+        {
+          "say": "Answer: no. Types change often, so each new shape would edit every visitor. Put the methods on the classes. And a default branch would just hide missing cases.",
+          "reveal": 0
+        },
+        {
+          "say": "Concept fifteen. That's all eleven Gang of Four behavioral patterns across two episodes. Let's lock them in with one table each, apply when plus an example.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 11 · 11.6 GoF behavioral patterns: quick reference"
+    },
+    {
+      "id": "s066",
+      "layout": "table",
+      "kicker": "Concept 15 of 15",
+      "title": "Episode ten's six, in one line each",
+      "table": {
+        "head": [
+          "Pattern",
+          "Apply when",
+          "Example"
+        ],
+        "rows": [
+          [
+            "Chain of Responsibility",
+            "handler unknown in advance",
+            "HTTP middleware"
+          ],
+          [
+            "Command",
+            "queue, log, retry or undo",
+            "GUI actions, job queues"
+          ],
+          [
+            "Interpreter",
+            "evaluate a small language",
+            "rule DSLs, regex"
+          ],
+          [
+            "Iterator",
+            "traverse without exposing",
+            "browsing a playlist"
+          ],
+          [
+            "Mediator",
+            "many peers, tangled talk",
+            "chat app, air traffic"
+          ],
+          [
+            "Memento",
+            "undo, checkpoint, rollback",
+            "editor undo, save games"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Chain of Responsibility: the handler isn't known in advance. H-T-T-P middleware.",
+          "reveal": 1
+        },
+        {
+          "say": "Command: actions to queue, log, retry or undo.",
+          "reveal": 2
+        },
+        {
+          "say": "Interpreter: evaluate a small language, like discount rules.",
+          "reveal": 3
+        },
+        {
+          "say": "Iterator: walk any collection, like a playlist.",
+          "reveal": 4
+        },
+        {
+          "say": "Mediator: tangled peers, like a chat app. Risk: a god object.",
+          "reveal": 5
+        },
+        {
+          "say": "Memento: undo and checkpoints, like save games.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s067",
+      "layout": "table",
+      "kicker": "Concept 15 of 15",
+      "title": "Today's five, in one line each",
+      "table": {
+        "head": [
+          "Pattern",
+          "Apply when",
+          "Watch out for"
+        ],
+        "rows": [
+          [
+            "Observer",
+            "a change must reach others",
+            "leaks, no ordering"
+          ],
+          [
+            "State",
+            "behaviour depends on state",
+            "more classes, spread graph"
+          ],
+          [
+            "Strategy",
+            "several ways, chosen at run time",
+            "someone must choose"
+          ],
+          [
+            "Template Method",
+            "fixed structure, some steps vary",
+            "inheritance rigidity"
+          ],
+          [
+            "Visitor",
+            "many ops, stable types",
+            "new types are hard"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Observer: when a change in one object must reach others, like a live stock feed. Loose coupling. Watch for leaks, surprise performance costs, and no ordering.",
+          "reveal": 1
+        },
+        {
+          "say": "State: when behaviour depends on a state that changes at run time, like order lifecycles or game modes. Behaviour is localised, but the graph spreads across files.",
+          "reveal": 2
+        },
+        {
+          "say": "Strategy: several ways to do one task, chosen dynamically, like compression algorithms or retry policies. Someone still has to choose.",
+          "reveal": 3
+        },
+        {
+          "say": "Template Method: the structure is fixed but some steps vary, like framework lifecycles. Reuse and enforced order, but inheritance is rigid.",
+          "reveal": 4
+        },
+        {
+          "say": "Visitor: many operations over a stable set of types, like compiler passes over a syntax tree. Easy new operations, hard new types.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s068",
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Example: pick the pattern",
+      "bullets": [
+        "Order: placed, preparing, delivered, cancel rules",
+        "Checkout: card, UPI, wallet, chosen by user",
+        "Price drop must alert watchers, email, analytics",
+        "All importers: read, parse, validate, save",
+        "Linter: fixed AST nodes, new rules monthly"
+      ],
+      "steps": [
+        {
+          "say": "Quick-fire, using a food delivery app. An order goes placed, preparing, out for delivery, delivered, and you can cancel while placed but not once it's out. State, because the stage decides which actions are legal.",
+          "reveal": 1
+        },
+        {
+          "say": "Checkout pays by card, U-P-I, which is India's instant bank payment, or wallet, chosen by the user. Strategy, chosen from outside.",
+          "reveal": 2
+        },
+        {
+          "say": "A price drop must alert watchers, send email and update analytics. Observer. If it must survive crashes, a broker.",
+          "reveal": 3
+        },
+        {
+          "say": "Every importer reads, parses, validates and saves, in that order. Template Method, or a template with callbacks.",
+          "reveal": 4
+        },
+        {
+          "say": "A linter with fixed syntax tree node kinds and new rules every month. Visitor, or sealed types with a switch. Recap: name the thing that varies, and the pattern follows.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s069",
+      "layout": "recap",
+      "title": "TL;DR: if and switch become objects",
+      "bullets": [
+        "Observer: copy list, catch per listener, unsubscribe",
+        "State: class per state; states pick successors",
+        "Strategy: chosen outside; never name each other",
+        "Template Method: final skeleton, hooks, Hollywood",
+        "Visitor: double dispatch; ops cheap, types costly",
+        "Next: Ep 12, Beyond GoF and Architectural Patterns"
+      ],
+      "steps": [
+        {
+          "say": "Observer: one subject, a list of listeners, one-way. Iterate a copy, catch per listener, always unsubscribe.",
+          "reveal": 1
+        },
+        {
+          "say": "State: one class per state, and each state picks what follows. Enums for small machines.",
+          "reveal": 2
+        },
+        {
+          "say": "Strategy: interchangeable algorithms, chosen from outside. States know each other, strategies never do.",
+          "reveal": 3
+        },
+        {
+          "say": "Template Method: a final skeleton, subclasses fill steps, hooks are optional. Hollywood principle.",
+          "reveal": 4
+        },
+        {
+          "say": "Visitor: double dispatch picks the method. Cheap operations, expensive types. In modern Java, prefer sealed interfaces with exhaustive switches.",
+          "reveal": 5
+        },
+        {
+          "say": "Next time, episode twelve: Beyond the Gang of Four and architectural patterns, with Null Object, dependency injection, Repository, M-V-C and hexagonal architecture.",
+          "reveal": 6
+        }
+      ]
+    }
+  ]
+}

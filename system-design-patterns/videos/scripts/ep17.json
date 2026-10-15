@@ -1,0 +1,1784 @@
+{
+  "series": "System Design Workshop",
+  "episode": 17,
+  "title": "Algorithms I: Consensus to Percentiles",
+  "subtitle": "Agreement, time, placement and streaming sketches, opened up step by step",
+  "scenes": [
+    {
+      "layout": "title",
+      "title": "Algorithms I: Consensus to Percentiles",
+      "subtitle": "Agreement, time, placement and streaming sketches, opened up step by step",
+      "steps": [
+        {
+          "say": "Welcome to episode seventeen of the System Design Workshop: Algorithms one, consensus to percentiles. Earlier episodes said things like use consistent hashing or a HyperLogLog counts users. Today we open those boxes.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll be able to walk Paxos at a whiteboard, explain why three-phase commit isn't shipped, pick a failure detector, reason about clocks, choose a hashing scheme, and size a sketch for counting, top-k, sampling and p ninety-nine.",
+          "reveal": 0
+        },
+        {
+          "say": "Keep the Module nineteen notes open beside the video. Every algorithm gets a small worked example with real numbers, so pause and check the math whenever you like.",
+          "reveal": 0
+        }
+      ],
+      "id": "s001"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Episode map",
+      "title": "Five families today",
+      "bullets": [
+        "Agreement: Paxos, Raft, ZAB, commit protocols, leases",
+        "Health and replication: detectors, chains",
+        "Time: hybrid clocks, TrueTime, version vectors",
+        "Placement: jump, rendezvous, Maglev, bounded loads",
+        "Streams: HyperLogLog, count-min, top-k, sampling, t-digest"
+      ],
+      "steps": [
+        {
+          "say": "First, agreement. How do machines agree on one value, commit one transaction, or pick one leader, while some of them crash?",
+          "reveal": 1
+        },
+        {
+          "say": "Second, health and replication. How do you guess a node is dead, and how do you copy writes efficiently?",
+          "reveal": 2
+        },
+        {
+          "say": "Third, time. Clocks disagree, so how do you order events and detect conflicts?",
+          "reveal": 3
+        },
+        {
+          "say": "Fourth, placement. Which server owns this key, with the least reshuffling when servers change?",
+          "reveal": 4
+        },
+        {
+          "say": "And fifth, streams. Counting distinct users, frequent items, random samples and percentiles, in kilobytes instead of gigabytes.",
+          "reveal": 5
+        }
+      ],
+      "id": "s002"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 1 of 25",
+      "title": "Paxos and Multi-Paxos",
+      "steps": [
+        {
+          "say": "Concept one. Three replicas must agree which transaction is entry forty-two in the log. If two pick different ones, their data diverges forever. Messages get lost, machines crash mid-step. How do they agree?",
+          "reveal": 0
+        }
+      ],
+      "id": "s003",
+      "caption": "Book: Module 19 · Paxos and Multi-Paxos (compared with Raft and ZAB)"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 1 of 25",
+      "title": "Roles and the golden rule",
+      "bullets": [
+        "Proposer suggests a value; acceptors vote; learners hear",
+        "Majority, or quorum: 2 of 3, 3 of 5",
+        "Ballot number: unique and ordered, like 2.3",
+        "Acceptor persists: highest promise, last accepted",
+        "Golden rule: reuse the highest accepted value you hear"
+      ],
+      "steps": [
+        {
+          "say": "Paxos is a consensus algorithm: rules that let a group agree on one value despite crashes. Three roles, often in one process. A proposer suggests a value, acceptors vote, learners find out what won.",
+          "reveal": 1
+        },
+        {
+          "say": "A quorum is a majority, more than half. Two of three, or three of five. Any two majorities overlap in at least one machine, and that overlap is the whole trick.",
+          "reveal": 2
+        },
+        {
+          "say": "Every proposal carries a ballot number, unique and ordered, like round two from server three.",
+          "reveal": 3
+        },
+        {
+          "say": "Each acceptor writes to disk, before replying, the highest ballot it promised and the last proposal it accepted.",
+          "reveal": 4
+        },
+        {
+          "say": "And the golden rule: if any promise reports an accepted value, the proposer must propose the highest-numbered one, not its own.",
+          "reveal": 5
+        }
+      ],
+      "id": "s004"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 1 of 25",
+      "title": "Two phases: prepare, then accept",
+      "mermaid": "flowchart LR\n  P[\"Proposer\"] -->|\"1 Prepare n\"| A[\"Acceptors\"]\n  A -->|\"2 Promise plus any accepted value\"| P\n  P -->|\"3 Accept n, value\"| A\n  A -->|\"4 Accepted\"| L[\"Learners\"]\n  L --> C[\"Majority accepted: chosen forever\"]",
+      "caption": "Phase one reserves the ballot, phase two writes the value",
+      "steps": [
+        {
+          "say": "Phase one, prepare: the proposer picks a ballot higher than any it used and asks acceptors to promise to ignore anything lower. They reply with any value they already accepted.",
+          "reveal": 0
+        },
+        {
+          "say": "Phase two, accept: with a majority of promises, it sends accept with that ballot and value. Once a majority accepts the same pair, the value is chosen and never changes.",
+          "reveal": 0
+        }
+      ],
+      "id": "s005"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: a crash mid-proposal",
+      "table": {
+        "head": [
+          "Event",
+          "Result"
+        ],
+        "rows": [
+          [
+            "P1: Accept(1, X) reaches only A1, P1 crashes",
+            "Nothing chosen, 1 of 3"
+          ],
+          [
+            "P2: Prepare(2), hears A1 and A2",
+            "A1 reports accepted (1, X)"
+          ],
+          [
+            "P2 must propose X, not its own Y",
+            "A1, A2 accept (2, X): chosen"
+          ],
+          [
+            "Late Accept(1, X) reaches A3",
+            "Harmless: same value"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Acceptors A one, A two, A three. Proposer one gets promises for ballot one, sends accept X, but only A one receives it before P one crashes. One of three, nothing chosen yet.",
+          "reveal": 1
+        },
+        {
+          "say": "Proposer two prepares ballot two and hears from A one and A two. A one says, I accepted ballot one, value X.",
+          "reveal": 2
+        },
+        {
+          "say": "So P two must propose X, even though it wanted Y. A one and A two accept, and X is chosen. If P two had pushed Y, a value that might already be chosen could be overwritten.",
+          "reveal": 3
+        },
+        {
+          "say": "The delayed accept from P one finally reaches A three. It never saw ballot two, so it accepts. Harmless, same value.",
+          "reveal": 4
+        }
+      ],
+      "id": "s006"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 1 of 25",
+      "title": "Multi-Paxos and duelling proposers",
+      "bullets": [
+        "Classic: two round trips per decision",
+        "Multi-Paxos: leader runs phase one once for all slots",
+        "Then one round trip per log slot",
+        "Duelling proposers: livelock, safe but stuck",
+        "Fix: one leader plus random back-off"
+      ],
+      "steps": [
+        {
+          "say": "Classic Paxos costs two round trips per decision. Too slow for a log with thousands of entries.",
+          "reveal": 1
+        },
+        {
+          "say": "Notice phase one doesn't depend on the value. So Multi-Paxos lets one proposer win phase one for all slots from here on. It becomes the leader.",
+          "reveal": 2
+        },
+        {
+          "say": "Now each log slot costs only phase two: one round trip to a majority. If the leader dies, another runs phase one with a higher ballot, learns half-finished slots, and continues.",
+          "reveal": 3
+        },
+        {
+          "say": "Danger: two proposers keep pre-empting each other, ballot three, four, five, forever. Paxos stays safe, but nothing is decided. That's livelock.",
+          "reveal": 4
+        },
+        {
+          "say": "The fix is the same as Raft's: one leader at a time plus randomised back-off. With five acceptors you tolerate two crashes, two F plus one tolerates F.",
+          "reveal": 5
+        }
+      ],
+      "id": "s007"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 2 of 25",
+      "title": "Paxos versus Raft versus ZAB",
+      "table": {
+        "head": [
+          "",
+          "Multi-Paxos",
+          "Raft",
+          "ZAB"
+        ],
+        "rows": [
+          [
+            "Leader",
+            "Optional optimisation",
+            "Built in, one per term",
+            "One primary per epoch"
+          ],
+          [
+            "Era counter",
+            "Ballot number",
+            "Term",
+            "Epoch in the zxid"
+          ],
+          [
+            "Log holes",
+            "Allowed",
+            "Not allowed",
+            "Not allowed"
+          ],
+          [
+            "Who can lead",
+            "Anyone, recovers via phase one",
+            "Most up-to-date log",
+            "Latest epoch, highest zxid"
+          ],
+          [
+            "Spec",
+            "Many gaps left open",
+            "Complete, with membership",
+            "Fit to ZooKeeper"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept two: how Raft and ZAB compare. ZAB is ZooKeeper Atomic Broadcast. In Multi-Paxos the leader is just an optimisation. In Raft and ZAB it's built in.",
+          "reveal": 1
+        },
+        {
+          "say": "Each has an era counter: Paxos ballots, Raft terms, ZAB epochs stored in the top bits of a sixty-four bit transaction ID called the zxid.",
+          "reveal": 2
+        },
+        {
+          "say": "Paxos allows holes: slot seven can be decided before slot six. Raft and ZAB keep a contiguous, strictly ordered log.",
+          "reveal": 3
+        },
+        {
+          "say": "In Paxos anyone can lead and recovers values through phase one. Raft only elects a node whose log is at least as current, and ZAB picks the node with the latest epoch and highest zxid.",
+          "reveal": 4
+        },
+        {
+          "say": "In the normal case all three do the same thing: the leader sends each entry and commits on a majority ack. They differ in cleanup after a leader dies. In the interview, say: use a tested library like etcd or ZooKeeper, and if choosing, Raft for its complete spec.",
+          "reveal": 5
+        }
+      ],
+      "id": "s008"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 3 of 25",
+      "title": "Two-phase versus three-phase commit",
+      "steps": [
+        {
+          "say": "Concept three. A bank transfer debits account seventeen on shard A and credits ninety-nine on shard B. If A commits and B aborts, money vanishes. Neither shard can decide alone. We need an atomic commit protocol.",
+          "reveal": 0
+        }
+      ],
+      "id": "s009",
+      "caption": "Book: Module 19 · Two-phase commit vs three-phase commit"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 3 of 25",
+      "title": "Two-phase commit, step by step",
+      "bullets": [
+        "1 Prepare: coordinator asks every participant",
+        "2 Vote: log 'prepared', keep locks, answer YES or NO",
+        "3 Decide: coordinator logs commit, the commit point",
+        "4 Finish: apply, release locks, acknowledge",
+        "Blocking: coordinator dies after YES votes"
+      ],
+      "steps": [
+        {
+          "say": "Step one, prepare. The coordinator sends prepare to shards A and B.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, vote. Shard A checks the balance, writes the change plus a prepared record to its durable log, keeps its row locks, and votes yes. After yes, it can no longer decide alone.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, decide. All yes, so the coordinator writes commit to its own log. That write is the real commit point. Any no or timeout means abort.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, finish. Shards apply, release locks, acknowledge. Cost: four messages per participant and two forced disk writes.",
+          "reveal": 4
+        },
+        {
+          "say": "Now the flaw. Both voted yes, then the coordinator crashes. They're in doubt and must hold locks on rows seventeen and ninety-nine until it returns, maybe minutes. That's the blocking problem.",
+          "reveal": 5
+        }
+      ],
+      "id": "s010"
+    },
+    {
+      "layout": "twocol",
+      "kicker": "Concept 3 of 25",
+      "title": "3PC adds pre-commit, and fails",
+      "left": {
+        "heading": "Three-phase commit",
+        "bullets": [
+          "CanCommit: vote, not locked in",
+          "PreCommit: everyone voted YES",
+          "DoCommit: then commit"
+        ]
+      },
+      "right": {
+        "heading": "Why nobody ships it",
+        "bullets": [
+          "Assumes no reply means crashed",
+          "Partition: one side commits, one aborts",
+          "Extra round trip, every transaction"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Three-phase commit inserts a step. First, can-commit: participants vote.",
+          "reveal": 1
+        },
+        {
+          "say": "Second, pre-commit: the coordinator tells everyone that everyone voted yes.",
+          "reveal": 2
+        },
+        {
+          "say": "Third, do-commit. If the coordinator vanishes, survivors confer. Anyone pre-committed? Then nobody aborted, so commit. Nobody? Then abort. Example: five participants, coordinator crashes after pre-committing only P one. The others elect P two as recovery coordinator, see P one pre-committed, and commit all.",
+          "reveal": 3
+        },
+        {
+          "say": "But the rule assumes a missing reply means a crash. Real networks don't promise that.",
+          "reveal": 4
+        },
+        {
+          "say": "If a partition cuts P one off from the rest, P one times out and commits while the others see nobody pre-committed and abort. Worse than blocking.",
+          "reveal": 5
+        },
+        {
+          "say": "And it adds a round trip even when nothing fails. The real fix: run plain two-phase commit where the coordinator and each participant are Paxos or Raft groups. That's Spanner and CockroachDB. In the interview, say: two-phase commit over consensus groups, and keep most transactions on one shard.",
+          "reveal": 6
+        }
+      ],
+      "id": "s011"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 4 of 25",
+      "title": "Leases and leader election",
+      "steps": [
+        {
+          "say": "Concept four. A plain lock held by a crashed node is never released, and you can't tell crashed from slow. A lease is a lock with an expiry. Hold it for ten seconds, renew before it runs out.",
+          "reveal": 0
+        }
+      ],
+      "id": "s012",
+      "caption": "Book: Module 19 · Leases and lease-based leader election"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 4 of 25",
+      "title": "Electing a leader with etcd",
+      "bullets": [
+        "1 Create /service/leader with a 15 second TTL",
+        "2 Winner renews every 2 to 5 seconds",
+        "3 Losers watch; key expires, they race",
+        "4 New revision number becomes a fencing token",
+        "5 Can't renew in time? Stop leading now"
+      ],
+      "steps": [
+        {
+          "say": "Imagine three copies of a billing scheduler; only one may run. Step one: each tries to create the key slash service slash leader with a time to live, or T-T-L, of fifteen seconds. Only one create succeeds.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: the winner leads and sends keep-alives every two to five seconds.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: losers watch the key. If the leader dies, renewals stop, the key expires, and watchers race to create it.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: each create gets a larger revision number, say forty-one, then fifty-seven. The leader attaches it to every write as a fencing token, so storage rejects an old leader's writes.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five: a leader that can't renew before its deadline must stop acting immediately, even if unsure.",
+          "reveal": 5
+        }
+      ],
+      "id": "s013"
+    },
+    {
+      "layout": "number",
+      "kicker": "Concept 4 of 25",
+      "title": "Holder stops early, granter waits late",
+      "big": "stop at 9.5 s · re-grant at 10.5 s",
+      "caption": "10 s lease, drift 0.1% is at most 10 ms: holder early, granter late",
+      "steps": [
+        {
+          "say": "Clocks drift, so the rule is: the holder believes its lease ends earlier than the granter does. Ten second lease, drift up to point one percent, so ten milliseconds of error. The holder counts from when it sent the request and quits at nine point five seconds. The granter won't re-grant until ten point five. The windows never overlap.",
+          "reveal": 0
+        },
+        {
+          "say": "But a twenty second garbage-collection pause can still make an old leader act late, so keep fencing tokens. Kubernetes defaults: fifteen second lease, renew deadline ten, retry every two, so failover is about fifteen seconds. Short leases fail over fast but flap on hiccups; long leases mean longer outages.",
+          "reveal": 0
+        }
+      ],
+      "id": "s014"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Your lease is 15 seconds. What is your worst-case failover?",
+      "bullets": [
+        "About 15 seconds plus election time",
+        "About 2 seconds, the renew interval",
+        "Zero, leases are instant"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. If the leader crashes right after renewing, how long until someone else may lead?",
+          "reveal": 0
+        }
+      ],
+      "id": "s015"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 5 of 25",
+      "title": "Failure detection",
+      "steps": [
+        {
+          "say": "Answer: about fifteen seconds, the full lease, plus a bit of election time. Lease length is your failover target. Now concepts five, six and seven: how do you decide a node is probably dead? You can only guess. A crashed node, a slow node and a broken link look identical.",
+          "reveal": 0
+        }
+      ],
+      "id": "s016",
+      "caption": "Book: Module 19 · Failure detection: heartbeats, phi-accrual and SWIM"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 5 of 25",
+      "title": "Heartbeats with a fixed timeout",
+      "bullets": [
+        "Node says 'I'm alive' every 1 second",
+        "No heartbeat for 5 seconds means dead",
+        "Too slow in a rack, too twitchy over a WAN",
+        "All-to-all at 1,000 nodes: a million messages"
+      ],
+      "steps": [
+        {
+          "say": "Concept five, heartbeats. Every node sends I'm alive each second. The monitor records the last arrival.",
+          "reveal": 1
+        },
+        {
+          "say": "No heartbeat for five seconds, declare it dead. Simple and predictable. Raft and ZooKeeper work this way.",
+          "reveal": 2
+        },
+        {
+          "say": "But one number fits no network. Five seconds is far too slow inside a rack and too twitchy over a congested wide-area link, so you get flapping, a node declared dead and alive over and over.",
+          "reveal": 3
+        },
+        {
+          "say": "And if every node heartbeats every other, a thousand nodes means about a million messages per interval.",
+          "reveal": 4
+        }
+      ],
+      "id": "s017"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 6 of 25",
+      "title": "Phi accrual: suspicion that adapts",
+      "table": {
+        "head": [
+          "Gap since heartbeat",
+          "z",
+          "Chance it's just late",
+          "phi"
+        ],
+        "rows": [
+          [
+            "1,100 ms",
+            "1",
+            "0.159",
+            "0.8"
+          ],
+          [
+            "1,300 ms",
+            "3",
+            "0.0013",
+            "2.9"
+          ],
+          [
+            "1,500 ms",
+            "5",
+            "0.0000003",
+            "6.5"
+          ],
+          [
+            "1,560 ms",
+            "5.6",
+            "1 in 100 million",
+            "8.0, convict"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept six, the phi accrual detector, used by Cassandra and Akka. Instead of yes or no, it outputs phi, a suspicion level. It keeps recent gaps between heartbeats; here the mean is one second and the standard deviation a hundred milliseconds. Phi is minus log base ten of the chance a healthy node is this late. At eleven hundred milliseconds, a sixteen percent chance, phi point eight.",
+          "reveal": 1
+        },
+        {
+          "say": "At thirteen hundred, a one in a thousand chance, phi about three.",
+          "reveal": 2
+        },
+        {
+          "say": "At fifteen hundred, phi six point five.",
+          "reveal": 3
+        },
+        {
+          "say": "At fifteen sixty, phi hits eight, Cassandra's default threshold: one in a hundred million. Convicted. If the network gets jittery and the deviation grows to three hundred, phi eight arrives only at two point seven seconds. The detector adapted on its own. The catch: it needs warm-up history.",
+          "reveal": 4
+        }
+      ],
+      "id": "s018"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 7 of 25",
+      "title": "SWIM: probe one, ask for help",
+      "mermaid": "flowchart LR\n  A[\"Member A\"] -->|\"1 ping\"| M[\"Member M\"]\n  A -->|\"2 no ack: ping-req\"| B[\"Helper B\"]\n  A -->|\"2 ping-req\"| C[\"Helper C\"]\n  B -->|\"3 ping\"| M\n  C -->|\"3 ping\"| M\n  A --> S[\"4 suspect M, gossip it\"]\n  S --> X[\"5 no refutation: dead\"]",
+      "caption": "Constant work per node, news spreads in about log N rounds",
+      "steps": [
+        {
+          "say": "Concept seven, SWIM, used by HashiCorp's Consul and Nomad. Every second, member A pings one random member, M. An ack ends it.",
+          "reveal": 0
+        },
+        {
+          "say": "No ack? A asks three random helpers to ping M on its behalf. That indirect probe avoids blaming M for one bad link.",
+          "reveal": 0
+        },
+        {
+          "say": "Still nothing? M is marked suspect, not dead, and that's gossiped. M can refute by gossiping alive with a higher incarnation number, a counter only M may bump. If no refutation arrives in time, M is declared dead.",
+          "reveal": 0
+        },
+        {
+          "say": "All this news rides piggyback on pings and acks. Each node does constant work per period, total traffic grows with N, not N squared, and a thousand-node cluster hears the news in roughly ten rounds. In the interview, say: no detector is perfect, so pair it with fencing.",
+          "reveal": 0
+        }
+      ],
+      "id": "s019"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 8 of 25",
+      "title": "Chain replication and CRAQ",
+      "steps": [
+        {
+          "say": "Concepts eight and nine. In primary-backup, one primary sends every write to every backup and serves every read. Its network card becomes the bottleneck. What if replicas formed a line?",
+          "reveal": 0
+        }
+      ],
+      "id": "s020",
+      "caption": "Book: Module 19 · Chain replication and CRAQ"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 8 of 25",
+      "title": "Writes flow head to tail",
+      "mermaid": "flowchart LR\n  C[\"Client\"] -->|\"1 write x=5\"| H[\"Head\"]\n  H -->|\"2 forward\"| M[\"Middle\"]\n  M -->|\"3 forward\"| T[\"Tail\"]\n  T -->|\"4 ack\"| C\n  R[\"Reader\"] -->|\"5 read x\"| T",
+      "caption": "The tail holds only committed writes, so reads there are linearizable",
+      "steps": [
+        {
+          "say": "Chain replication. A write of x equals five enters at the head, which applies it and forwards to the middle, which forwards to the tail.",
+          "reveal": 0
+        },
+        {
+          "say": "When the tail applies it, every replica has it, so it's committed and the tail acks. Reads go to the tail, which holds only committed data, so every read sees the latest completed write.",
+          "reveal": 0
+        },
+        {
+          "say": "Failures: the head dies, the middle becomes head, and unforwarded writes were never acked, so clients retry. The tail dies, the middle becomes tail with everything committed. A separate consensus-backed manager decides membership.",
+          "reveal": 0
+        }
+      ],
+      "id": "s021"
+    },
+    {
+      "layout": "number",
+      "kicker": "Concept 8 of 25",
+      "title": "Bandwidth, not latency, is the win",
+      "big": "chain head 10 MB/s · primary 40 MB/s",
+      "caption": "10,000 writes a second of 1 KB; the primary has 4 backups",
+      "steps": [
+        {
+          "say": "Worked example. At ten thousand one-kilobyte writes a second, a chain node sends each write once, ten megabytes a second. A primary with four backups sends four copies, forty megabytes a second.",
+          "reveal": 0
+        },
+        {
+          "say": "The price: latency grows with chain length. At half a millisecond per hop, three nodes take four hops, about two milliseconds, and one slow node slows every write. A majority quorum, by contrast, commits after the fastest majority.",
+          "reveal": 0
+        }
+      ],
+      "id": "s022"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 9 of 25",
+      "title": "CRAQ: read from any node",
+      "table": {
+        "head": [
+          "Moment",
+          "Read at Middle returns"
+        ],
+        "rows": [
+          [
+            "x version 7 clean everywhere",
+            "7, no query"
+          ],
+          [
+            "Write 8 at Head and Middle, dirty",
+            "Asks tail: committed is 7, returns 7"
+          ],
+          [
+            "Tail applies 8, ack flows back",
+            "Middle marks 8 clean, drops 7"
+          ],
+          [
+            "Next read",
+            "8, no query"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept nine, CRAQ, chain replication with apportioned queries. The tail serving every read is a hot spot. CRAQ lets any node answer. Each node keeps versions marked clean, known committed, or dirty. Start: x is version seven, clean everywhere.",
+          "reveal": 1
+        },
+        {
+          "say": "Write eight reaches the head and middle as dirty. A reader at the middle sees dirty, sends the tail a tiny version query, hears seven, and returns its local seven.",
+          "reveal": 2
+        },
+        {
+          "say": "A millisecond later the tail applies eight. The ack flows back up, and each node marks eight clean and deletes older versions.",
+          "reveal": 3
+        },
+        {
+          "say": "The next read at the middle returns eight with no query. In read-mostly workloads almost everything is clean, so read throughput scales with the number of nodes.",
+          "reveal": 4
+        }
+      ],
+      "id": "s023"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 10 of 25",
+      "title": "Hybrid logical clocks",
+      "steps": [
+        {
+          "say": "Concept ten. A database wants timestamps that never break cause and effect, fit in sixty-four bits, and stay near real time. Wall clocks break causality, Lamport counters ignore real time, vector clocks grow with nodes. A hybrid logical clock, H-L-C, gets all three.",
+          "reveal": 0
+        }
+      ],
+      "id": "s024",
+      "caption": "Book: Module 19 · Hybrid logical clocks"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Example: B's clock is 8 ms slow",
+      "table": {
+        "head": [
+          "Step",
+          "Stamp (l, c)"
+        ],
+        "rows": [
+          [
+            "A writes at its clock 100",
+            "(100, 0)"
+          ],
+          [
+            "A sends to B, still 100",
+            "(100, 1)"
+          ],
+          [
+            "B receives, its clock reads 92",
+            "(100, 2), not 92"
+          ],
+          [
+            "B writes locally at 95",
+            "(100, 3)"
+          ],
+          [
+            "B's clock reaches 101",
+            "(101, 0)"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Each stamp has two parts: l, the largest physical time heard so far, and c, a small counter for ties. Compare by l, then c. Node A writes at its clock one hundred: stamp one hundred, zero.",
+          "reveal": 1
+        },
+        {
+          "say": "A sends a message at the same millisecond. l is unchanged, so the counter bumps: one hundred, one.",
+          "reveal": 2
+        },
+        {
+          "say": "B receives. B's clock is eight milliseconds slow and reads ninety-two. Plain wall time would stamp ninety-two, before the send. HLC takes the max, one hundred, and sets the counter one past the message's: one hundred, two. Causality kept.",
+          "reveal": 3
+        },
+        {
+          "say": "B writes locally at ninety-five. l stays a hundred, counter three.",
+          "reveal": 4
+        },
+        {
+          "say": "When B's own clock passes one hundred, at a hundred and one, l catches up and the counter resets to zero.",
+          "reveal": 5
+        }
+      ],
+      "id": "s025"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 10 of 25",
+      "title": "What HLC gives and doesn't",
+      "bullets": [
+        "Causal: a send always stamps below its receive",
+        "Within clock skew of real time; 48 + 16 bits",
+        "Can't detect concurrency: every pair is ordered",
+        "Needs a max skew: CockroachDB uses 500 ms"
+      ],
+      "steps": [
+        {
+          "say": "It's causal like Lamport clocks: if e could influence f, e's stamp is smaller.",
+          "reveal": 1
+        },
+        {
+          "say": "It stays within the clock skew of real time and packs into sixty-four bits, forty-eight for time, sixteen for the counter. That makes it ideal for M-V-C-C timestamps and snapshot reads.",
+          "reveal": 2
+        },
+        {
+          "say": "But every two stamps are ordered, even for concurrent events, so it's not a conflict detector.",
+          "reveal": 3
+        },
+        {
+          "say": "And a node whose clock jumps far ahead drags everyone, so set a maximum offset. CockroachDB uses five hundred milliseconds: values stamped within that window above a read's timestamp are uncertain, so the read restarts higher. MongoDB and YugabyteDB use HLC too.",
+          "reveal": 4
+        }
+      ],
+      "id": "s026"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 11 of 25",
+      "title": "Google TrueTime and commit-wait",
+      "steps": [
+        {
+          "say": "Concept eleven. Spanner promises external consistency: if transaction one commits before transaction two starts, in real time, two gets the bigger timestamp. With clocks off by milliseconds, how?",
+          "reveal": 0
+        }
+      ],
+      "id": "s027",
+      "caption": "Book: Module 19 · Google TrueTime and commit-wait"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 11 of 25",
+      "title": "Commit-wait, step by step",
+      "bullets": [
+        "TT.now() returns [earliest, latest]; epsilon 1 to 7 ms",
+        "1 Acquire locks",
+        "2 Pick s = TT.now().latest",
+        "3 Replicate commit record through Paxos",
+        "4 Wait until TT.after(s): s is surely past",
+        "5 Release locks, reply 'committed'"
+      ],
+      "steps": [
+        {
+          "say": "TrueTime returns an interval, earliest to latest, guaranteed to contain true time. GPS and atomic clocks in each data centre keep the half-width, epsilon, between one and seven milliseconds, about four on average.",
+          "reveal": 1
+        },
+        {
+          "say": "Step one: a read-write transaction acquires its locks.",
+          "reveal": 2
+        },
+        {
+          "say": "Step two: the leader picks commit timestamp s as the latest end of now. Never in the past.",
+          "reveal": 3
+        },
+        {
+          "say": "Step three: it replicates the commit record through Paxos.",
+          "reveal": 4
+        },
+        {
+          "say": "Step four, commit-wait: wait until s is definitely in the past.",
+          "reveal": 5
+        },
+        {
+          "say": "Step five: release locks and reply committed.",
+          "reveal": 6
+        }
+      ],
+      "id": "s028"
+    },
+    {
+      "layout": "number",
+      "kicker": "Concept 11 of 25",
+      "title": "The wait is about two epsilon",
+      "big": "ε = 4 ms: now = [999.996, 1000.004], wait ≈ 8 ms",
+      "caption": "Paxos replication runs during the wait and hides most of it",
+      "steps": [
+        {
+          "say": "Worked example, epsilon four milliseconds. At true time one thousand seconds, TrueTime says nine ninety-nine point nine nine six to one thousand point zero zero four. So s is one thousand point zero zero four.",
+          "reveal": 0
+        },
+        {
+          "say": "It waits until even the earliest bound passes s, at about true time one thousand point zero zero eight: eight milliseconds, two epsilon. Any later transaction gets a timestamp above s. The payoff: snapshot reads need no locks, on any caught-up replica. Without special hardware, use HLC plus uncertainty restarts, or AWS ClockBound.",
+          "reveal": 0
+        }
+      ],
+      "id": "s029"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 12 of 25",
+      "title": "Version vectors, vector clocks, dots",
+      "steps": [
+        {
+          "say": "Concepts twelve and thirteen. In a Dynamo-style store, two clients update the same shopping cart on different replicas. Is the second a newer edit, or independent? Timestamps can't tell. Vectors of counters can.",
+          "reveal": 0
+        }
+      ],
+      "id": "s030",
+      "caption": "Book: Module 19 · Version vectors vs vector clocks"
+    },
+    {
+      "layout": "twocol",
+      "kicker": "Concept 12 of 25",
+      "title": "Same comparison, different jobs",
+      "left": {
+        "heading": "Vector clock",
+        "bullets": [
+          "Orders events between processes",
+          "Ticks on every event, send, receive",
+          "Grows with processes"
+        ]
+      },
+      "right": {
+        "heading": "Version vector",
+        "bullets": [
+          "Orders versions of a data item",
+          "Ticks only on writes and merges",
+          "One entry per replica, usually 3 to 5"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Compare two vectors entry by entry. A two, B one versus A three, B one: the first is older. A two, B one versus A one, B two: neither dominates, so they're concurrent, a conflict. Both kinds use this rule. A vector clock orders events between processes.",
+          "reveal": 1
+        },
+        {
+          "say": "It ticks on every local event, send and receive. Great for debugging and causal messaging.",
+          "reveal": 2
+        },
+        {
+          "say": "But it grows with the number of processes.",
+          "reveal": 3
+        },
+        {
+          "say": "A version vector orders versions of data.",
+          "reveal": 4
+        },
+        {
+          "say": "It ticks only when a replica coordinates a write or a merge.",
+          "reveal": 5
+        },
+        {
+          "say": "So it stays tiny, one entry per replica. People often say vector clock for both, as the Dynamo paper does.",
+          "reveal": 6
+        }
+      ],
+      "id": "s031"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 13 of 25",
+      "title": "Sibling explosion, then the dot fix",
+      "table": {
+        "head": [
+          "Step",
+          "Plain version vector",
+          "Dotted version vector"
+        ],
+        "rows": [
+          [
+            "C1 writes v1, no context",
+            "v1 at {A:1}",
+            "v1 at dot (A,1)"
+          ],
+          [
+            "C2 writes v2, no context",
+            "v1, v2 both at {A:2}",
+            "v1 (A,1), v2 (A,2)"
+          ],
+          [
+            "C1 writes v3, context {A:1}",
+            "Can't tell: keep v1, v2, v3",
+            "Drop v1, keep v2, add v3 (A,3)"
+          ],
+          [
+            "Result",
+            "Siblings pile up",
+            "Exactly v2 and v3"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept thirteen, dotted version vectors, which Riak adopted. Replica A coordinates every write to the cart. Client one writes v one without reading first. Plain vector: A one. With dots, v one also gets a dot, A comma one, naming the exact write that created it.",
+          "reveal": 1
+        },
+        {
+          "say": "Client two writes v two, also blind. A can't tell if v two replaces v one, so it keeps both. In the plain scheme both now share A two. With dots, v two gets its own dot, A two.",
+          "reveal": 2
+        },
+        {
+          "say": "Client one writes v three, carrying the context A one from its earlier read. Plain scheme: which sibling does A one cover? Unknown, so all three stay. With dots: A one covers dot A one, so drop v one, but not dot A two, so keep v two.",
+          "reveal": 3
+        },
+        {
+          "say": "Plain vectors pile up false conflicts, called sibling explosion. Dots leave exactly the two truly concurrent values. In the interview, say: vectors only detect conflicts; the app, a C-R-D-T, or last-write-wins must resolve them.",
+          "reveal": 4
+        }
+      ],
+      "id": "s032"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 14 of 25",
+      "title": "Consistent hashing variants",
+      "steps": [
+        {
+          "say": "Concepts fourteen through seventeen. The hash ring with virtual nodes costs memory, a thousand servers times two hundred points, balances only key counts, and can't stop a hot key. Four alternatives each fix one weakness. The ideal: going from N to N plus one servers moves only one over N plus one of keys.",
+          "reveal": 0
+        }
+      ],
+      "id": "s033",
+      "caption": "Book: Module 19 · Consistent hashing variants"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 14 of 25",
+      "title": "Jump consistent hash",
+      "bullets": [
+        "Each key moves to a new bucket with chance 1/(b+1)",
+        "Seeded random generator jumps ahead: about ln N steps",
+        "Key 99999: bucket 0, then 1, then 7, never sideways",
+        "10 to 11 buckets: 9.04% moved, ideal 9.09%",
+        "Catch: only the last bucket can be removed"
+      ],
+      "steps": [
+        {
+          "say": "Concept fourteen, jump consistent hash, from Google. Picture growing the cluster one bucket at a time. Going from b to b plus one buckets, each key should move to the new bucket with chance one over b plus one.",
+          "reveal": 1
+        },
+        {
+          "say": "Simulating every step is slow, so a random generator seeded by the key jumps straight to the next bucket count where this key moves. About seven jumps for a thousand buckets, no memory at all.",
+          "reveal": 2
+        },
+        {
+          "say": "Example: key ninety-nine thousand nine ninety-nine sits in bucket zero, moves to bucket one at size two, then to bucket seven when the eighth appears. Always into the new bucket, never sideways.",
+          "reveal": 3
+        },
+        {
+          "say": "With a hundred thousand keys going from ten to eleven buckets, nine point zero four percent moved. The minimum is nine point zero nine.",
+          "reveal": 4
+        },
+        {
+          "say": "The catch: buckets are numbered zero to N minus one. If bucket three of ten dies, you can't delete three. So it suits sharded storage with a stable numbering layer, not a memcached fleet.",
+          "reveal": 5
+        }
+      ],
+      "id": "s034"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 15 of 25",
+      "title": "Rendezvous hashing: highest bid wins",
+      "table": {
+        "head": [
+          "Server",
+          "score for photo:7"
+        ],
+        "rows": [
+          [
+            "S1",
+            "0.62"
+          ],
+          [
+            "S2",
+            "0.91, winner"
+          ],
+          [
+            "S3",
+            "0.17"
+          ],
+          [
+            "S2 dies",
+            "S1 wins with 0.62; others untouched"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept fifteen, rendezvous hashing, also called highest random weight. For each key, hash the key with every server and pick the highest score. For photo seven, S one scores point six two.",
+          "reveal": 1
+        },
+        {
+          "say": "S two scores point nine one, the winner.",
+          "reveal": 2
+        },
+        {
+          "say": "S three scores point one seven.",
+          "reveal": 3
+        },
+        {
+          "say": "If S two dies, only its keys move, each to its runner-up, spread evenly. Sort the scores and the top three are your three replicas, in an order every client computes alone. The cost: one hash per server per lookup. Fine for ten servers, too slow for ten thousand.",
+          "reveal": 4
+        }
+      ],
+      "id": "s035"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 16 of 25",
+      "title": "Maglev: one array read per packet",
+      "table": {
+        "head": [
+          "Backend",
+          "Preference list, table size 7"
+        ],
+        "rows": [
+          [
+            "B0",
+            "3, 0, 4, 1, 5, 2, 6"
+          ],
+          [
+            "B1",
+            "0, 2, 4, 6, 1, 3, 5"
+          ],
+          [
+            "B2",
+            "3, 4, 5, 6, 0, 1, 2"
+          ],
+          [
+            "Filled table",
+            "B1 B0 B1 B0 B2 B2 B0"
+          ],
+          [
+            "Remove B1",
+            "B0 B0 B0 B0 B2 B2 B2"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept sixteen, Maglev, Google's software load balancer. Every packet of a connection must hit the same backend at line rate, so lookup is one array read into a table of prime size, sixty-five thousand five hundred thirty-seven in production. Toy size seven here. Each backend gets a preference list of slots from two hashes. B zero prefers three, then zero, then four.",
+          "reveal": 1
+        },
+        {
+          "say": "B one prefers zero, two, four.",
+          "reveal": 2
+        },
+        {
+          "say": "B two prefers three, four, five.",
+          "reveal": 3
+        },
+        {
+          "say": "Fill in rounds, each backend taking its next free favourite. B zero takes slot three, B one slot zero, B two wants three, taken, so slot four. Then B zero slot one, B one slot two, B two slot five, B zero slot six. Three, two, two slots: as even as seven allows.",
+          "reveal": 4
+        },
+        {
+          "say": "Remove B one and refill. Slots zero and two had to move, but slot six also moved, unnecessarily. That's the trade: near-perfect balance and constant lookup for a little extra churn, hidden by connection tracking.",
+          "reveal": 5
+        }
+      ],
+      "id": "s036"
+    },
+    {
+      "layout": "number",
+      "kicker": "Concept 17 of 25",
+      "title": "Bounded loads: cap every server",
+      "big": "cap = ceil(1.25 × 12 / 4) = 4",
+      "caption": "12 keys, 4 servers: A 6, B 3, C 2, D 1 becomes 4, 4, 3, 1",
+      "steps": [
+        {
+          "say": "Concept seventeen, consistent hashing with bounded loads. More virtual nodes balance key counts, not heat. So set a cap: no server holds more than one plus epsilon times the average. With twelve keys, four servers and epsilon point two five, the cap is four.",
+          "reveal": 0
+        },
+        {
+          "say": "The plain ring gives A six, B three, C two, D one. A keeps four; the extra two walk clockwise to the next server with room, giving four, four, three, one. The hottest server drops from two times average to one point three. Vimeo did this in HAProxy and cut cache bandwidth almost eight times.",
+          "reveal": 0
+        }
+      ],
+      "id": "s037"
+    },
+    {
+      "layout": "table",
+      "title": "Which hashing scheme?",
+      "caption": "Each variant fixes one weakness of the ring",
+      "steps": [
+        {
+          "say": "In the interview, walk this decision. Stable numbering that grows only at the end: jump hash.",
+          "reveal": 1
+        },
+        {
+          "say": "A layer-four load balancer at millions of packets a second: Maglev.",
+          "reveal": 2
+        },
+        {
+          "say": "A few servers and you want replica order: rendezvous.",
+          "reveal": 3
+        },
+        {
+          "say": "Otherwise a ring, and add bounded loads when a celebrity key melts one cache node.",
+          "reveal": 4
+        }
+      ],
+      "id": "s038",
+      "table": {
+        "head": [
+          "If you need",
+          "Pick"
+        ],
+        "rows": [
+          [
+            "Numbered servers that change only at the end",
+            "Jump hash"
+          ],
+          [
+            "One array read per packet, line rate",
+            "Maglev"
+          ],
+          [
+            "Few servers, replicas in a fixed order",
+            "Rendezvous"
+          ],
+          [
+            "Anything else; add a cap if keys run hot",
+            "Ring, plus bounded loads"
+          ]
+        ]
+      }
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 18 of 25",
+      "title": "HyperLogLog internals",
+      "steps": [
+        {
+          "say": "Concept eighteen. Daily unique visitors for ten million pages. Exact counting stores every ID: a hundred million users at eight bytes is eight hundred megabytes per counter. HyperLogLog does it in twelve kilobytes, with under one percent error.",
+          "reveal": 0
+        }
+      ],
+      "id": "s039",
+      "caption": "Book: Module 19 · HyperLogLog internals"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 18 of 25",
+      "title": "Add an item in four steps",
+      "bullets": [
+        "1 Hash the item to 64 bits",
+        "2 First p bits pick the register",
+        "3 rho = leading zeros in the rest, plus 1",
+        "4 register = max(register, rho)"
+      ],
+      "steps": [
+        {
+          "say": "The intuition: in random hashes, a run of k leading zeros shows up about once in two to the k. Seeing ten zeros hints at about a thousand distinct items. Duplicates hash the same, so they don't count twice. Step one: hash user forty-two to sixty-four bits.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: the first p bits choose a register. With p equals two, four registers. Hash bits one zero pick register two.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: in the remaining bits, rho is the position of the first one bit. Bits zero zero zero one give rho four.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: the register keeps the max. Register two goes from two to four. A later hash with rho one changes nothing. Registers only grow.",
+          "reveal": 4
+        }
+      ],
+      "id": "s040"
+    },
+    {
+      "layout": "number",
+      "kicker": "Concept 18 of 25",
+      "title": "Why a harmonic mean",
+      "big": "registers 2,2,2,20: arithmetic ≈ 262,000, harmonic ≈ 5.3",
+      "caption": "Error ≈ 1.04 / √m: 16,384 registers gives 0.81% in 12 KB",
+      "steps": [
+        {
+          "say": "To estimate, HLL combines registers with a harmonic mean, which small values dominate. Registers two, two, two and one freak twenty: averaging two to the R gives about two hundred sixty-two thousand, ruined. The harmonic mean gives five point three, barely moved. When most registers are still zero, it switches to linear counting.",
+          "reveal": 0
+        },
+        {
+          "say": "Error is about one point zero four over the square root of the register count. Redis uses sixteen thousand three hundred eighty-four six-bit registers: twelve kilobytes, point eight one percent. Four times the memory halves the error. Fresh sketches are stored sparse, in a few bytes. And merging is register-wise max, so twenty-four hourly sketches give an exact daily sketch. You can't add distinct counts, users overlap. No deletes, and intersections are poor.",
+          "reveal": 0
+        }
+      ],
+      "id": "s041"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 19 of 25",
+      "title": "Count-min sketch, conservative update",
+      "steps": [
+        {
+          "say": "Concept nineteen. Requests per IP address, for rate limiting, across hundreds of millions of IPs. A hash map grows with keys. A count-min sketch is a fixed grid: d rows by w columns, one hash per row.",
+          "reveal": 0
+        }
+      ],
+      "id": "s042",
+      "caption": "Book: Module 19 · Count-min sketch with conservative update"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 19 of 25",
+      "title": "Standard versus conservative update",
+      "table": {
+        "head": [
+          "Query",
+          "Standard",
+          "Conservative"
+        ],
+        "rows": [
+          [
+            "dog, true 5",
+            "min(5, 8, 5) = 5",
+            "5"
+          ],
+          [
+            "cat, true 3",
+            "min(5, 8, 3) = 3",
+            "3"
+          ],
+          [
+            "owl, never seen",
+            "min(5, 8, 5) = 5",
+            "min(3, 5, 5) = 3"
+          ],
+          [
+            "Sizing: 0.1% error, 99% sure",
+            "w 2,719, d 5",
+            "about 54 KB"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "To add an item, bump one counter per row. To query, take the minimum of its counters, since collisions only add. Three rows, five columns. Stream: dog five times, cat three, fox two. Dog reads min of five, eight, five: five, exact.",
+          "reveal": 1
+        },
+        {
+          "say": "Cat: five, eight, three, so three, exact. The eight is where dog and cat collided.",
+          "reveal": 2
+        },
+        {
+          "say": "But owl, never seen, hashes into polluted cells: estimate five. Never too low, sometimes too high. Conservative update fixes much of this. Before adding, read the current minimum e. The true count is at most e plus one, so raise each counter only up to e plus one, never past it. Cat's arrivals leave the shared cell at five instead of eight. Now owl reads three.",
+          "reveal": 3
+        },
+        {
+          "say": "Sizing: for error at most point one percent of total traffic with ninety-nine percent confidence, width two thousand seven hundred nineteen, depth five, about fifty-four kilobytes. The trade: conservative sketches lose clean merging and can't take deletes. And error is relative to all traffic, so rare items are noise.",
+          "reveal": 4
+        }
+      ],
+      "id": "s043"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 20 of 25",
+      "title": "Heavy hitters and top-k",
+      "steps": [
+        {
+          "say": "Concepts twenty to twenty-two. Top ten hashtags right now. A count-min sketch can't list which items are heavy. These algorithms keep k counters that hold the items themselves. One stream for both: A B A C D A B A E A. True counts: A five, B two, others one. k is three.",
+          "reveal": 0
+        }
+      ],
+      "id": "s044",
+      "caption": "Book: Module 19 · Heavy hitters: Misra-Gries, Space-Saving, top-k"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 20 of 25",
+      "title": "Misra-Gries: when full, decrement all",
+      "table": {
+        "head": [
+          "Arrival",
+          "Counters after"
+        ],
+        "rows": [
+          [
+            "A, B, A, C",
+            "A:2, B:1, C:1"
+          ],
+          [
+            "D, table full",
+            "decrement all: A:1"
+          ],
+          [
+            "A, B, A",
+            "A:3, B:1"
+          ],
+          [
+            "E, then A",
+            "A:4, B:1, E:1"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept twenty, Misra-Gries. If tracked, add one. If there's a free slot, add with one. Otherwise decrement every counter and drop zeros. After A, B, A, C we have A two, B one, C one.",
+          "reveal": 1
+        },
+        {
+          "say": "D arrives, table full. Decrement everyone: B and C drop to zero and vanish, A falls to one. D isn't stored.",
+          "reveal": 2
+        },
+        {
+          "say": "A, B, A: A three, B one.",
+          "reveal": 3
+        },
+        {
+          "say": "E takes the free slot, then A: A four. The truth is five. Not a bug: it under-counts by at most n over k plus one, here two point five, and any item above that is guaranteed to be present.",
+          "reveal": 4
+        }
+      ],
+      "id": "s045"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 21 of 25",
+      "title": "Space-Saving: evict the minimum",
+      "table": {
+        "head": [
+          "Arrival",
+          "Counters after (count, error)"
+        ],
+        "rows": [
+          [
+            "A, B, A, C",
+            "A:2, B:1, C:1"
+          ],
+          [
+            "D: evict B",
+            "A:2, C:1, D:2 (err 1)"
+          ],
+          [
+            "A, then B: evict C",
+            "A:3, D:2, B:2 (err 1)"
+          ],
+          [
+            "A, then E: evict D",
+            "A:4, B:2, E:3 (err 2)"
+          ],
+          [
+            "A",
+            "A:5 exact, B:2, E:3"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept twenty-one, Space-Saving. When full, evict the smallest item and let the newcomer inherit its count plus one, recording that inherited amount as error. Same start: A two, B one, C one.",
+          "reveal": 1
+        },
+        {
+          "say": "D arrives. Evict B, count one. D gets two, error one.",
+          "reveal": 2
+        },
+        {
+          "say": "A bumps to three. B returns, evicts C, gets two, error one.",
+          "reveal": 3
+        },
+        {
+          "say": "A to four. E evicts D at two, so E gets three, error two.",
+          "reveal": 4
+        },
+        {
+          "say": "A to five, exact. Space-Saving over-counts by at most n over k, and count minus error is a guaranteed floor. E is really between one and three. It's usually more accurate than Misra-Gries on skewed data.",
+          "reveal": 5
+        }
+      ],
+      "id": "s046"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 22 of 25",
+      "title": "Streaming top-k across shards",
+      "bullets": [
+        "Sketch plus heap: CMS estimate, size-k min-heap",
+        "Redis TOPK: HeavyKeeper decays small colliders",
+        "Wrong: merge every shard's local top 10",
+        "Right: partition by item, merge exact lists",
+        "Or merge Space-Saving summaries; window by minute"
+      ],
+      "steps": [
+        {
+          "say": "Concept twenty-two, streaming top-k. A common build: a count-min sketch for frequencies plus a min-heap of size k. On each arrival, update the sketch; if the estimate beats the heap's minimum, swap it in.",
+          "reveal": 1
+        },
+        {
+          "say": "Redis TOPK uses HeavyKeeper, which decays counters of small colliding items so big flows keep their place.",
+          "reveal": 2
+        },
+        {
+          "say": "Now the trap. Fifty shards each send their top ten. A hashtag eleventh everywhere could be first globally, and you'd miss it.",
+          "reveal": 3
+        },
+        {
+          "say": "Right answer: hash each hashtag to one aggregator partition so it's counted in one place. Local lists from disjoint partitions merge exactly.",
+          "reveal": 4
+        },
+        {
+          "say": "Or ship mergeable summaries. For the last hour at a hundred thousand queries a second, keep one Space-Saving summary per minute, ten thousand entries, merge the last sixty every few seconds, and publish the top hundred.",
+          "reveal": 5
+        }
+      ],
+      "id": "s047"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "50 shards each send their top 10. Is the merge right?",
+      "bullets": [
+        "Yes, top items are top everywhere",
+        "No, an item 11th everywhere can be 1st overall",
+        "Only if shards are equal size"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think before the next slide.",
+          "reveal": 0
+        }
+      ],
+      "id": "s048"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 23 of 25",
+      "title": "Reservoir sampling",
+      "steps": [
+        {
+          "say": "Answer: no. Partition by item, or merge real summaries. Concepts twenty-three and twenty-four. Keep exactly a thousand representative log lines from today, in one pass, without knowing how many lines will come. Keeping each with one percent chance blows up on busy days.",
+          "reveal": 0
+        }
+      ],
+      "id": "s049",
+      "caption": "Book: Module 19 · Reservoir sampling: Algorithm R, weighted variant"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 23 of 25",
+      "title": "Algorithm R, k = 2, stream a b c d e",
+      "table": {
+        "head": [
+          "Item i",
+          "Draw j in 1..i",
+          "Reservoir"
+        ],
+        "rows": [
+          [
+            "a, b",
+            "fill",
+            "[a, b]"
+          ],
+          [
+            "c, i = 3",
+            "j = 1, keep",
+            "[c, b]"
+          ],
+          [
+            "d, i = 4",
+            "j = 4 > 2, discard",
+            "[c, b]"
+          ],
+          [
+            "e, i = 5",
+            "j = 2, keep",
+            "[c, e]"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept twenty-three, Algorithm R. Put the first k items in the reservoir. Here k is two, so a and b.",
+          "reveal": 1
+        },
+        {
+          "say": "For item number i after that, draw j uniformly from one to i. If j is at most k, item i replaces slot j. Item c, i three, draws one: c replaces a.",
+          "reveal": 2
+        },
+        {
+          "say": "Item d draws four, bigger than two: discard.",
+          "reveal": 3
+        },
+        {
+          "say": "Item e draws two: e replaces b. Is it fair? Each item should end up with chance two fifths. Item c gets in with two thirds, survives d with three quarters, survives e with four fifths. Two thirds times three quarters times four fifths: two fifths. Exactly k items, constant memory per item.",
+          "reveal": 4
+        }
+      ],
+      "id": "s050"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 24 of 25",
+      "title": "Weighted reservoir: key = u^(1/w), keep top k",
+      "table": {
+        "head": [
+          "Item",
+          "weight",
+          "u",
+          "key"
+        ],
+        "rows": [
+          [
+            "A",
+            "1",
+            "0.50",
+            "0.500"
+          ],
+          [
+            "B",
+            "4",
+            "0.30",
+            "0.740"
+          ],
+          [
+            "C",
+            "2",
+            "0.80",
+            "0.894, kept"
+          ],
+          [
+            "D",
+            "1",
+            "0.90",
+            "0.900, kept"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept twenty-four, weighted reservoir sampling. Uniform samples miss rare important events like slow requests. So give each item a weight w, draw a random u between zero and one, and compute the key u to the power one over w. Keep the k largest keys in a min-heap. A, weight one, key point five.",
+          "reveal": 1
+        },
+        {
+          "say": "B has weight four, which pushes its key toward one, but it drew a small u: point seven four.",
+          "reveal": 2
+        },
+        {
+          "say": "C, weight two, key point eight nine four.",
+          "reveal": 3
+        },
+        {
+          "say": "D, weight one, lucky draw, point nine. With k two, we keep D and C. Heavier items win more often, but luck still plays its part. Bonus: random key, keep top k merges across shards. Each shard keeps its top k keys; the coordinator keeps the top k of the union.",
+          "reveal": 4
+        }
+      ],
+      "id": "s051"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 25 of 25",
+      "title": "t-digest and percentiles",
+      "steps": [
+        {
+          "say": "Concept twenty-five, our last. Your dashboard shows p ninety-nine latency across two hundred hosts by averaging each host's p ninety-nine. Is that right?",
+          "reveal": 0
+        }
+      ],
+      "id": "s052",
+      "caption": "Book: Module 19 · t-digest and percentile estimation"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Averaging percentiles is wrong",
+      "table": {
+        "head": [
+          "",
+          "Requests",
+          "p99"
+        ],
+        "rows": [
+          [
+            "Server A",
+            "9,800 at 20 ms, 100 at 50 ms",
+            "50 ms"
+          ],
+          [
+            "Server B",
+            "100 at 1,000 ms",
+            "1,000 ms"
+          ],
+          [
+            "Average of p99s",
+            "",
+            "525 ms"
+          ],
+          [
+            "True p99 of all 10,000",
+            "the 9,900th value",
+            "50 ms"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Server A handled nine thousand nine hundred requests: nine thousand eight hundred at twenty milliseconds, a hundred at fifty. Its p ninety-nine is fifty.",
+          "reveal": 1
+        },
+        {
+          "say": "Server B handled a hundred requests, all at one second. Its p ninety-nine is a thousand milliseconds.",
+          "reveal": 2
+        },
+        {
+          "say": "Average them: five hundred twenty-five milliseconds.",
+          "reveal": 3
+        },
+        {
+          "say": "But across all ten thousand requests, p ninety-nine is the nine thousand nine hundredth value: fifty milliseconds. The slow hundred are exactly the slowest one percent. Ten times off. Percentiles can't be averaged. Merge summaries first, then query.",
+          "reveal": 4
+        }
+      ],
+      "id": "s053"
+    },
+    {
+      "layout": "table",
+      "kicker": "Concept 25 of 25",
+      "title": "Centroids: tiny at the tails",
+      "table": {
+        "head": [
+          "Quantile q",
+          "Max points per centroid"
+        ],
+        "rows": [
+          [
+            "0.5, median",
+            "100"
+          ],
+          [
+            "0.1",
+            "36"
+          ],
+          [
+            "0.01",
+            "about 4"
+          ],
+          [
+            "0.001",
+            "single points"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "A t-digest is a sorted list of centroids, each a mean and a count standing for nearby values. The rule: big centroids in the middle, tiny ones at the tails. With ten thousand points and compression one hundred, a median centroid may hold a hundred points.",
+          "reveal": 1
+        },
+        {
+          "say": "At the tenth percentile, thirty-six.",
+          "reveal": 2
+        },
+        {
+          "say": "At the first percentile, about four.",
+          "reveal": 3
+        },
+        {
+          "say": "At one in a thousand, single points. So p ninety-nine point nine is nearly exact, while the median is summarised coarsely. Precision goes where tail questions are asked.",
+          "reveal": 4
+        }
+      ],
+      "id": "s054"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Concept 25 of 25",
+      "title": "Merge digests, then query",
+      "mermaid": "flowchart LR\n  S1[\"Host 1 digest\"] --> M[\"Sort all centroids, re-compress\"]\n  S2[\"Host 2 digest\"] --> M\n  S3[\"Host 3 digest\"] --> M\n  M --> D[\"Global digest, hundreds of centroids\"]\n  D --> Q[\"Walk counts to rank, interpolate p99\"]",
+      "caption": "The size rule depends only on quantile, so merges keep accuracy",
+      "steps": [
+        {
+          "say": "To add points, buffer them, sort with existing centroids, and greedily merge neighbours while the size limit allows. To query p ninety-nine, walk centroids accumulating counts to rank point nine nine times N, then interpolate between neighbouring means.",
+          "reveal": 0
+        },
+        {
+          "say": "To merge hosts, concatenate all centroids, sort, and run the same compression. Because the size limit depends only on quantile position, the merged digest keeps its accuracy. Elasticsearch percentiles use it by default. Alternatives: H-D-R Histogram and Datadog's DDSketch use log-scale buckets with hard relative-error bounds. In the interview, say: ship mergeable sketches, merge, then compute p ninety-nine once. Weekly p ninety-nine? Merge seven daily digests.",
+          "reveal": 0
+        }
+      ],
+      "id": "s055"
+    },
+    {
+      "layout": "recap",
+      "title": "Recap",
+      "bullets": [
+        "Paxos: promise, accept, reuse; Raft and ZAB add a leader",
+        "2PC blocks; 3PC unsafe; 2PC over consensus. Leases expire",
+        "Heartbeats, phi accrual, SWIM; chains and CRAQ",
+        "HLC, TrueTime commit-wait, dotted version vectors",
+        "Hashing variants; HLL, count-min, top-k, reservoirs, t-digest",
+        "Next: Ep 18, Algorithms II: Storage, Search, Ranking"
+      ],
+      "steps": [
+        {
+          "say": "Let's recap. Paxos agrees in two phases with one golden rule: reuse the highest accepted value you hear. Multi-Paxos, Raft and ZAB add a stable leader so each entry costs one round trip.",
+          "reveal": 1
+        },
+        {
+          "say": "Two-phase commit blocks if the coordinator dies, three-phase commit breaks under partitions, so run two-phase commit over consensus groups. Leases are locks that expire: holder stops early, granter waits late, fencing covers pauses.",
+          "reveal": 2
+        },
+        {
+          "say": "Failure is only suspected: fixed heartbeats, adaptive phi, or SWIM at constant cost. Chains pipe writes head to tail; CRAQ reads anywhere using clean and dirty versions.",
+          "reveal": 3
+        },
+        {
+          "say": "Hybrid clocks are causal and near real time. TrueTime waits out its uncertainty. Version vectors detect conflicts; dots stop sibling explosion.",
+          "reveal": 4
+        },
+        {
+          "say": "Jump hash for stable numbering, rendezvous for ordered replicas, Maglev for packets, bounded loads for hot keys.",
+          "reveal": 5
+        },
+        {
+          "say": "And streams: HyperLogLog merges by max, count-min never under-counts, Space-Saving finds heavy hitters, reservoirs keep exactly k, and t-digests merge before you query. Never average percentiles.",
+          "reveal": 5
+        },
+        {
+          "say": "Thanks for watching. Next up, Episode eighteen: Algorithms two, storage, search and ranking.",
+          "reveal": 6
+        }
+      ],
+      "id": "s056"
+    }
+  ]
+}

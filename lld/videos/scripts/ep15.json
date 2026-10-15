@@ -1,0 +1,1968 @@
+{
+ "series": "LLD Workshop",
+ "episode": 15,
+ "title": "Case Studies: Parking Lot, Vending, Coffee",
+ "subtitle": "Resource allocation, state machines and atomic inventory",
+ "scenes": [
+  {
+   "id": "s001",
+   "layout": "title",
+   "title": "Case Studies: Parking Lot, Vending, Coffee",
+   "subtitle": "Resource allocation, state machines and atomic inventory",
+   "steps": [
+    {
+     "say": "Welcome to the L-L-D Workshop, episode fifteen: Case Studies, Parking Lot, Vending, Coffee. Up to now we collected tools. Today we finally use them on real interview questions.",
+     "reveal": 0
+    },
+    {
+     "say": "We'll design three machines you've used a hundred times. A multi-floor parking lot. A snack vending machine. And a coffee machine that brews lattes from shared milk and beans.",
+     "reveal": 0
+    },
+    {
+     "say": "By the end you'll be able to scope each one, draw its classes, name the patterns, and defend the one tricky method under concurrency. Keep the chapter fourteen PDF open. Every demo I quote is there with its real output.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s002",
+   "layout": "section",
+   "kicker": "Part 1 of 4 - The setup",
+   "title": "What everyday-object problems test",
+   "steps": [
+    {
+     "say": "Why do interviewers love boring machines? Because you already know how they behave. So all your attention goes to the design, not the domain.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s003",
+   "layout": "bullets",
+   "kicker": "What these problems test",
+   "title": "Three skills behind every machine",
+   "bullets": [
+    "State machines: which action is legal right now",
+    "Resource allocation: never twice, never below zero",
+    "Concurrency: many actors touching one object at once"
+   ],
+   "steps": [
+    {
+     "say": "Skill one, state machines. A state machine is a fixed set of situations plus rules for moving between them. Example: a vending machine must never drop a snack before you've paid. The order of actions is the whole question.",
+     "reveal": 1
+    },
+    {
+     "say": "Skill two, resource allocation. You hand out a limited set of things. Parking spots, coins for change, millilitres of milk. Each one must go out exactly once, and stock must never go negative.",
+     "reveal": 2
+    },
+    {
+     "say": "Skill three, concurrency. Imagine four entrance gates at a mall car park, all printing tickets at the same instant. A thread is one independent line of work inside a program. Your design must stay correct when those threads overlap.",
+     "reveal": 3
+    }
+   ]
+  },
+  {
+   "id": "s004",
+   "layout": "number",
+   "kicker": "Key insight",
+   "title": "Find the one hard method",
+   "big": "1 method decides the grade",
+   "caption": "pick a spot / make change / deduct ingredients",
+   "steps": [
+    {
+     "say": "Here's the key insight. In each problem the truly hard part is tiny. It's one method.",
+     "reveal": 0
+    },
+    {
+     "say": "For the parking lot, it's the method that picks a spot. For the vending machine, it's the one that makes change. For the coffee machine, it's the one that deducts ingredients. Find it early, name it out loud, and spend your time there.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s005",
+   "layout": "table",
+   "kicker": "Layout",
+   "title": "How each case study is laid out",
+   "table": {
+    "head": [
+     "#",
+     "Section",
+     "Parking lot example"
+    ],
+    "rows": [
+     [
+      "1",
+      "Clarifying questions",
+      "One lot or a chain? Answer: one lot"
+     ],
+     [
+      "2",
+      "Requirements",
+      "12 functional + concurrency, latency"
+     ],
+     [
+      "3",
+      "Use cases",
+      "Take ticket, pay, exit, admin edits"
+     ],
+     [
+      "4",
+      "Core entities",
+      "Vehicle, Spot, Floor, Ticket, Lot"
+     ],
+     [
+      "5",
+      "Class diagram",
+      "Built in 5 stages"
+     ],
+     [
+      "6",
+      "Key flows",
+      "Entry and exit sequences"
+     ],
+     [
+      "7",
+      "Design decisions",
+      "Strategy, Factory, Observer"
+     ],
+     [
+      "8",
+      "Code + concurrency",
+      "Atomic spot handout"
+     ],
+     [
+      "9",
+      "Extensions + interview",
+      "Reservations, 30-second answer"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Every case study follows the same order, and it's also a great order to speak in during the interview. Let's walk it with the parking lot. Step one, clarifying questions: one lot or a whole chain? We assume one lot with many floors.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two, requirements. Write the functional ones, like multiple floors and pay at exit, and the non-functional ones, like never giving two cars one spot.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three, use cases. Who uses the system and for what? A customer takes a ticket and pays. An admin adds floors.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four, core entities: the nouns that become classes. Vehicle, spot, floor, ticket, lot.",
+     "reveal": 4
+    },
+    {
+     "say": "Step five, the class diagram, which we'll build in five small stages so it always works if time runs out.",
+     "reveal": 5
+    },
+    {
+     "say": "Step six, key flows: the step-by-step messages for entry and for exit.",
+     "reveal": 6
+    },
+    {
+     "say": "Step seven, design decisions and patterns, each with the alternative you rejected.",
+     "reveal": 7
+    },
+    {
+     "say": "Step eight, the code, then the concurrency and edge cases. For the lot, that's making spot handout atomic.",
+     "reveal": 8
+    },
+    {
+     "say": "Step nine, extensions and the interview script. What if they add reservations? And what's your thirty-second answer?",
+     "reveal": 9
+    }
+   ]
+  },
+  {
+   "id": "s006",
+   "layout": "table",
+   "kicker": "Diagram legend",
+   "title": "Reading the course diagrams",
+   "table": {
+    "head": [
+     "Symbol",
+     "Meaning",
+     "Parking lot example"
+    ],
+    "rows": [
+     [
+      "Hollow triangle",
+      "Inheritance, is a",
+      "Admin is an Account"
+     ],
+     [
+      "Dashed + triangle",
+      "Implements an interface",
+      "DisplayBoard implements Listener"
+     ],
+     [
+      "Filled diamond",
+      "Composition, dies with whole",
+      "Floor owns its spots"
+     ],
+     [
+      "Hollow diamond",
+      "Aggregation, can live alone",
+      "Lot holds tickets"
+     ],
+     [
+      "Plain arrow",
+      "Association, refers to",
+      "Ticket points at its spot"
+     ],
+     [
+      "Dashed arrow",
+      "Uses or creates",
+      "SpotFactory creates spots"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "The course grows each class diagram in stages. Classes from earlier stages are grey, new ones are coloured. So at any moment you can see what just got added. Here's the arrow legend, with a parking lot example for each.",
+     "reveal": 0
+    },
+    {
+     "say": "A hollow triangle means inheritance, an is-a link. Admin is an Account.",
+     "reveal": 1
+    },
+    {
+     "say": "A dashed line with a hollow triangle means implements an interface. An interface lists methods a class promises, without saying how. The display board implements the availability listener.",
+     "reveal": 2
+    },
+    {
+     "say": "A filled diamond is composition. The part dies with the whole. Delete a floor, and its spots go with it.",
+     "reveal": 3
+    },
+    {
+     "say": "A hollow diamond is aggregation, a looser has-a. The lot holds tickets, but a ticket record can outlive it.",
+     "reveal": 4
+    },
+    {
+     "say": "A plain arrow is association: it refers to, without owning. A ticket points at its exact spot.",
+     "reveal": 5
+    },
+    {
+     "say": "And a dashed arrow means uses or creates. The spot factory creates spots. That's the whole legend.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s007",
+   "layout": "section",
+   "kicker": "Part 2 of 4 - Case study 14.1",
+   "title": "Design a Parking Lot",
+   "steps": [
+    {
+     "say": "Case study one, the parking lot. It's the most-asked L-L-D question. L-L-D, low-level design, means the classes, their jobs and how they talk.",
+     "reveal": 0
+    },
+    {
+     "say": "It looks easy, which is why it's useful. The interviewer watches three things: how you scope it, how you model which vehicle fits which spot, and whether you notice two gates can hand out the same spot.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s008",
+   "layout": "table",
+   "kicker": "Parking lot - step 1",
+   "title": "Clarifying questions",
+   "table": {
+    "head": [
+     "Question",
+     "Assumed answer"
+    ],
+    "rows": [
+     [
+      "How many entrances?",
+      "Several, all working at once"
+     ],
+     [
+      "Vehicle types?",
+      "Car, truck, van, motorcycle, EV"
+     ],
+     [
+      "Spot types?",
+      "Compact, large, handicapped, moto, electric"
+     ],
+     [
+      "Fee?",
+      "$4, then $3.50 for hours 2-3, then $2.50"
+     ],
+     [
+      "Pay where?",
+      "Exit panel, attendant, or floor portal"
+     ],
+     [
+      "When full?",
+      "Show FULL at entrance and ground board"
+     ],
+     [
+      "Out of scope?",
+      "Reservations, passes, plate cameras"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Ask before you draw. Several entrances, all running at the same time. That one answer is why concurrency matters.",
+     "reveal": 1
+    },
+    {
+     "say": "Vehicle types: car, truck, van, motorcycle and electric car.",
+     "reveal": 2
+    },
+    {
+     "say": "Spot types: compact, large, handicapped, motorcycle and electric.",
+     "reveal": 3
+    },
+    {
+     "say": "The fee is tiered per hour. Four dollars for hour one, three fifty for hours two and three, then two fifty per hour. A started hour counts as a full hour.",
+     "reveal": 4
+    },
+    {
+     "say": "You can pay at the exit panel, to an attendant who also takes cash, or early at an info portal on each floor.",
+     "reveal": 5
+    },
+    {
+     "say": "When the lot is full, the entrance panel and the ground floor board say so, and nobody else gets in.",
+     "reveal": 6
+    },
+    {
+     "say": "And name what's out of scope: reservations, monthly passes, number plate cameras. Saying this out loud shows you control the scope.",
+     "reveal": 7
+    }
+   ]
+  },
+  {
+   "id": "s009",
+   "layout": "bullets",
+   "kicker": "Parking lot - use cases",
+   "title": "Actors and use cases",
+   "bullets": [
+    "Admin: edits floors, spots, panels, the rate",
+    "Customer: takes ticket, pays, leaves",
+    "Attendant: does it for the customer, takes cash",
+    "System: assigns spots, updates boards"
+   ],
+   "steps": [
+    {
+     "say": "An actor is anyone or anything outside the system that uses it. Admin adds a third floor, changes spot counts, and sets the hourly rate.",
+     "reveal": 1
+    },
+    {
+     "say": "The customer takes a ticket at the entrance, pays, and drives out.",
+     "reveal": 2
+    },
+    {
+     "say": "The attendant can do everything the customer can, on their behalf, and can accept cash. Think of them as a customer proxy.",
+     "reveal": 3
+    },
+    {
+     "say": "And the system itself assigns a spot and updates every floor's display board. The top use cases: take ticket, scan ticket, pay by card or cash, and change the rate.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s010",
+   "layout": "table",
+   "kicker": "Parking lot - entities",
+   "title": "Core entities",
+   "table": {
+    "head": [
+     "Class",
+     "Job"
+    ],
+    "rows": [
+     [
+      "VehicleType (enum)",
+      "Spot types it fits, best fit first"
+     ],
+     [
+      "ParkingSpot",
+      "One spot; occupant is atomic"
+     ],
+     [
+      "ParkingFloor",
+      "Sorted set of FREE spots per type"
+     ],
+     [
+      "Ticket",
+      "Vehicle, exact spot, entry time, status"
+     ],
+     [
+      "2 Strategies",
+      "How to pick a spot; how much to charge"
+     ],
+     [
+      "ParkingLot",
+      "Admit, price, pay, exit"
+     ],
+     [
+      "Panels",
+      "No rules - they just call the lot"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Now the classes. An enum is a type with a fixed list of named values. The vehicle type enum knows which spot types it fits, best fit first.",
+     "reveal": 1
+    },
+    {
+     "say": "A parking spot is one physical bay. Who's parked there is stored atomically, so only one car can ever claim it.",
+     "reveal": 2
+    },
+    {
+     "say": "A floor keeps only its free spots, sorted, one set per spot type.",
+     "reveal": 3
+    },
+    {
+     "say": "A ticket stores the vehicle, the exact spot, the entry time, and a status.",
+     "reveal": 4
+    },
+    {
+     "say": "Two strategies: one decides which spot, one decides the price.",
+     "reveal": 5
+    },
+    {
+     "say": "The parking lot ties it together: admit, price, pay, exit.",
+     "reveal": 6
+    },
+    {
+     "say": "And the entrance panel, exit panel and floor portal hold no rules at all. They just call the lot. So every rule lives in one place.",
+     "reveal": 7
+    }
+   ]
+  },
+  {
+   "id": "s011",
+   "layout": "table",
+   "kicker": "Parking lot - class diagram",
+   "title": "Five stages of the class diagram",
+   "table": {
+    "head": [
+     "Stage",
+     "Adds",
+     "What works after it"
+    ],
+    "rows": [
+     [
+      "1",
+      "Vehicle and spot types",
+      "May this car use this spot?"
+     ],
+     [
+      "2",
+      "Floors and display boards",
+      "Hand out a spot, count free ones"
+     ],
+     [
+      "3",
+      "Ticket, rate, payment",
+      "Turn a stay into a price"
+     ],
+     [
+      "4",
+      "The ParkingLot",
+      "Enter, park, pay, leave"
+     ],
+     [
+      "5",
+      "Panels, portal, EV panel",
+      "Drivers use real devices"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "The course builds the diagram in five stages, and each one leaves something that runs. Stage one: vehicles and spots. Now you can answer, may a van use a compact spot? No, only large.",
+     "reveal": 1
+    },
+    {
+     "say": "Stage two: floors that own their spots and display board. That's composition. The board stores how many spots are free per type, not a pointer to a sample free spot, which would go stale the moment someone parks there.",
+     "reveal": 2
+    },
+    {
+     "say": "Stage three: ticket, rate and payment. The key decision is the ticket stores a reference to the exact spot. At the exit, that's how you know which spot to free.",
+     "reveal": 3
+    },
+    {
+     "say": "Stage four: the lot, which owns floors and the rate card. Now a full visit works: enter, park, pay, leave.",
+     "reveal": 4
+    },
+    {
+     "say": "Stage five: the panels. Thin devices that forward to the lot, plus the electric panel owned by each electric spot. If the clock stops you at stage three, what you've drawn still works. That's the point.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s012",
+   "layout": "diagram",
+   "title": "Parking lot classes",
+   "mermaid": "flowchart LR\n  L[\"ParkingLot\"] --> F[\"ParkingFloor\"]\n  F --> S[\"ParkingSpot\"]\n  S --> C[\"ChargingPanel (EV only)\"]\n  L --> T[\"Ticket\"]\n  T --> S\n  L --> A[\"SpotAllocationStrategy\"]\n  L --> P[\"PricingStrategy\"]\n  F -.->|\"notifies\"| B[\"DisplayBoard\"]",
+   "caption": "Lot owns floors, floors own spots; ticket points at the exact spot",
+   "steps": [
+    {
+     "say": "Here's the finished shape from our Java code. The lot owns floors. Each floor owns its spots. An electric spot owns its charging panel.",
+     "reveal": 0
+    },
+    {
+     "say": "The lot keeps the tickets, and each ticket points straight at its spot. The lot also holds two strategy objects, one for choosing spots and one for pricing.",
+     "reveal": 0
+    },
+    {
+     "say": "And floors notify display boards whenever a count changes. Three patterns are hiding in this picture. Let's open them one at a time.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s013",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: the fit rule lives on the vehicle",
+   "table": {
+    "head": [
+     "Vehicle",
+     "Spot types tried, in order"
+    ],
+    "rows": [
+     [
+      "Motorcycle",
+      "Motorcycle"
+     ],
+     [
+      "Car",
+      "Compact, then Large"
+     ],
+     [
+      "Electric car",
+      "Electric, then Compact, then Large"
+     ],
+     [
+      "Van or Truck",
+      "Large only"
+     ],
+     [
+      "Car with permit",
+      "Handicapped first, then Compact, Large"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "First, where does the rule which vehicle fits which spot live? On the vehicle type. A motorcycle only uses motorcycle spots.",
+     "reveal": 1
+    },
+    {
+     "say": "A car tries compact first, then large.",
+     "reveal": 2
+    },
+    {
+     "say": "An electric car tries electric, then compact, then large.",
+     "reveal": 3
+    },
+    {
+     "say": "Vans and trucks only fit large spots.",
+     "reveal": 4
+    },
+    {
+     "say": "And a car with an accessibility permit gets handicapped spots first. Nobody else gets them. Why put this on the vehicle? Add a scooter tomorrow, and you add one enum value. The lot never changes. That's the open-closed principle: extend without editing.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s014",
+   "layout": "twocol",
+   "kicker": "Pattern - Strategy",
+   "title": "Spot allocation Strategy",
+   "left": {
+    "heading": "Nearest floor first",
+    "bullets": [
+     "For each preferred type, try floor 1, 2, 3",
+     "Fills the lowest floor first"
+    ]
+   },
+   "right": {
+    "heading": "Least busy floor first",
+    "bullets": [
+     "Sort floors by free count, most first",
+     "Spreads cars out; lost race? next floor"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Strategy means an object holds a swappable rule behind an interface. Here the rule is which spot. Nearest floor first loops over the car's preferred spot types, and for each type tries floor one, then two, then three.",
+     "reveal": 1
+    },
+    {
+     "say": "Example: a car arrives. Compact on floor one is free, so it gets spot F one, C zero one. The lowest floor fills up first.",
+     "reveal": 2
+    },
+    {
+     "say": "Least busy floor first does the same loop, but sorts floors by how many spots of that type are free.",
+     "reveal": 3
+    },
+    {
+     "say": "So if floor two has three free compacts and floor one has one, the car goes to floor two. If another gate grabs that spot first, it simply tries the next floor. Swapping strategies never touches the lot class.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s015",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: pricing Strategy, a 4 h 50 min stay",
+   "table": {
+    "head": [
+     "Hour",
+     "Rate",
+     "Running total"
+    ],
+    "rows": [
+     [
+      "1",
+      "$4.00",
+      "$4.00"
+     ],
+     [
+      "2",
+      "$3.50",
+      "$7.50"
+     ],
+     [
+      "3",
+      "$3.50",
+      "$11.00"
+     ],
+     [
+      "4",
+      "$2.50",
+      "$13.50"
+     ],
+     [
+      "5 (started)",
+      "$2.50",
+      "$16.00"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "The second strategy is pricing. Let's run the real demo. An electric car stays four hours fifty minutes. A started hour counts in full, so that's five hours. Hour one costs four dollars.",
+     "reveal": 1
+    },
+    {
+     "say": "Hour two, three fifty. Seven fifty so far.",
+     "reveal": 2
+    },
+    {
+     "say": "Hour three, three fifty again. Eleven dollars.",
+     "reveal": 3
+    },
+    {
+     "say": "Hour four, two fifty. Thirteen fifty.",
+     "reveal": 4
+    },
+    {
+     "say": "Hour five, also started, so two fifty more. Sixteen dollars total. Notice the code uses cents in a long integer, sixteen hundred cents, because floating point can't store ten cents exactly and sums drift.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s016",
+   "layout": "number",
+   "kicker": "Pattern - Strategy",
+   "title": "Swap the price at run time",
+   "big": "flat $5/h x 5 h = $25",
+   "caption": "admin calls setPricing; no other class changes",
+   "steps": [
+    {
+     "say": "Now the follow-up every interviewer asks: what if pricing changes? The admin calls set pricing with a flat five dollars an hour.",
+     "reveal": 0
+    },
+    {
+     "say": "In the demo the motorcycle then leaves after five hours and pays twenty-five dollars. A weekend rate or a monthly pass is just another pricing strategy. That's genuine Strategy, because the lot holds the behaviour and swaps it.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s017",
+   "layout": "twocol",
+   "kicker": "Patterns - Factory and Observer",
+   "title": "Factory and Observer",
+   "left": {
+    "heading": "Factory: SpotFactory",
+    "bullets": [
+     "Only place that knows: electric means panel",
+     "EV: 20 kWh x 30 cents = $6.00"
+    ]
+   },
+   "right": {
+    "heading": "Observer: display boards",
+    "bullets": [
+     "Floor keeps a list of listeners",
+     "Spot taken: board shows COMPACT=1"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Factory means one place creates objects, so callers don't need to know how they're built. The spot factory is the only code that knows an electric spot needs a charging panel. Nobody can forget to attach one.",
+     "reveal": 1
+    },
+    {
+     "say": "Example from the demo: the electric car charges twenty kilowatt hours at thirty cents each, and pays six dollars at the spot's panel.",
+     "reveal": 2
+    },
+    {
+     "say": "Observer means an object keeps a list of listeners and tells each one when something changes. Every floor keeps a list of availability listeners. The display board is one of them.",
+     "reveal": 3
+    },
+    {
+     "say": "So when a car takes a compact spot on floor one, the board flips to compact equals one. When the count hits zero it shows full. Tomorrow, a phone app can subscribe too, and the floor never knows.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s018",
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "Two gates, one last spot, same instant: who gets it?",
+   "bullets": [
+    "A) Both, then one is moved later",
+    "B) Exactly one; the other tries the next spot or sees FULL",
+    "C) Neither, both are rejected"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. Two entrance gates, one compact spot left, same instant. What should happen, and how would your code guarantee it?",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s019",
+   "layout": "diagram",
+   "title": "Entry flow: atomic spot handout",
+   "mermaid": "flowchart LR\n  G[\"Gate: admit\"] --> S[\"Lot asks Strategy\"]\n  S --> F[\"Floor: pollFirst\"]\n  F --> X[\"Spot: CAS\"]\n  X --> OK[\"Ticket printed\"]\n  F -.->|\"none left\"| N[\"LOT FULL\"]",
+   "caption": "pollFirst removes one spot for exactly one caller",
+   "steps": [
+    {
+     "say": "The answer is B: exactly one gate wins. Here's how. The gate calls admit. The lot asks the strategy, which asks each floor to try to park.",
+     "reveal": 0
+    },
+    {
+     "say": "The floor's free spots sit in a concurrent skip list set. That's a thread-safe sorted set. Its poll first method removes the lowest spot ID atomically, meaning as one step nobody can interrupt. Two threads can never both receive it.",
+     "reveal": 0
+    },
+    {
+     "say": "As a second safety net, the spot uses C-A-S, compare and set: set the occupant to this car only if it's still empty. One atomic step, no lock. If nothing's left, the gate shows lot full.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s020",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: 20 cars race for 5 spots",
+   "table": {
+    "head": [
+     "Mechanism",
+     "Guards against",
+     "Demo result"
+    ],
+    "rows": [
+     [
+      "pollFirst + CAS",
+      "Two gates, one spot",
+      "20 cars, 5 admitted, 5 distinct"
+     ],
+     [
+      "Lock on one ticket",
+      "Portal and exit both charge",
+      "T2 paid $16 once"
+     ],
+     [
+      "putIfAbsent on plate",
+      "Same car enters twice",
+      "Second entry refused"
+     ],
+     [
+      "Pay before markPaid",
+      "Card declined, ticket PAID",
+      "Ticket stays ACTIVE"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "The demo releases twenty threads at once, using a countdown latch, to race for the last five car spots. Result: five cars admitted, five distinct spots, and the late car sees full. Taking a spot from the sorted set costs O of log n. Even ten thousand spots need about fourteen steps.",
+     "reveal": 1
+    },
+    {
+     "say": "Second race: the customer pays at the floor portal while also inserting the ticket at the exit. Payment locks just that one ticket, so it's charged sixteen dollars once, and the exit then charges zero. Different tickets still pay in parallel, because there's no global lock.",
+     "reveal": 2
+    },
+    {
+     "say": "Third: the same plate tries to enter twice, maybe a sensor glitch. Put if absent on a plate map adds the plate only if it's not already there, atomically. The second entry fails.",
+     "reveal": 3
+    },
+    {
+     "say": "Fourth: the card is declined. The code charges first and marks the ticket paid only after, so a failed card leaves it active and the barrier stays closed.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s021",
+   "layout": "diagram",
+   "title": "Ticket life cycle",
+   "mermaid": "flowchart LR\n  A[\"ACTIVE\"] -->|\"paid at exit, attendant or portal\"| P[\"PAID\"]\n  P -->|\"barrier opens, spot freed\"| E[\"EXITED\"]\n  A -.->|\"exit attempt\"| X[\"Barrier stays closed\"]",
+   "caption": "Only a PAID ticket opens the barrier",
+   "steps": [
+    {
+     "say": "The ticket itself is a tiny state machine. Active when you enter. Paid once any payment succeeds. Exited when the barrier opens and the spot goes back into the free set.",
+     "reveal": 0
+    },
+    {
+     "say": "Try to exit while still active, and the barrier stays shut. In the demo, the unpaid exit attempt prints barrier opens: false.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s022",
+   "layout": "bullets",
+   "kicker": "Parking lot - edge cases",
+   "title": "Edge cases and the Singleton question",
+   "bullets": [
+    "Pay at portal, then stay 3 hours: grace period",
+    "Lost ticket: daily max, or look up the plate",
+    "Zero-minute stay: minimum one hour",
+    "Board slightly stale: fine, pollFirst is truth",
+    "Not a Singleton: create one lot, inject it"
+   ],
+   "steps": [
+    {
+     "say": "A few edge cases. Pay at the portal, then stay three more hours? Real lots give a grace period, say fifteen minutes, then re-price.",
+     "reveal": 1
+    },
+    {
+     "say": "Lost ticket? Charge a daily maximum, or look up the plate in the map we already keep.",
+     "reveal": 2
+    },
+    {
+     "say": "A zero-minute stay still costs one hour, the minimum.",
+     "reveal": 3
+    },
+    {
+     "say": "The board shows a number that's a moment old? That's fine for a display. Poll first is the source of truth, never the board count.",
+     "reveal": 4
+    },
+    {
+     "say": "And the course makes the lot a Singleton, a class with only one instance. We don't. It's a hidden global, and tests can't build two lots. We create one lot in main and pass it to the panels. That's dependency injection.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s023",
+   "layout": "table",
+   "kicker": "Parking lot - extensions",
+   "title": "Extensions, walked through",
+   "table": {
+    "head": [
+     "Follow-up",
+     "Your answer"
+    ],
+    "rows": [
+     [
+      "Weekend or surge pricing?",
+      "New PricingStrategy, call setPricing"
+     ],
+     [
+      "Reservations?",
+      "Reserved set per floor, 30-min hold"
+     ],
+     [
+      "Monthly passes?",
+      "Pricing that returns 0 for pass plates"
+     ],
+     [
+      "Plate cameras?",
+      "Another entrance panel calling admit"
+     ],
+     [
+      "Database?",
+      "UPDATE spot WHERE occupied_by IS NULL"
+     ],
+     [
+      "Many lots in a city?",
+      "ParkingNetwork routes drivers"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Now the follow-ups. Weekend pricing? Write a new pricing strategy and swap it in. No other class changes.",
+     "reveal": 1
+    },
+    {
+     "say": "Reservations? Add a reserved set per floor that the allocation strategy checks first, and release the hold if the car doesn't show within thirty minutes.",
+     "reveal": 2
+    },
+    {
+     "say": "Monthly passes? A pricing strategy, or a wrapper around one, that returns zero for plates with a valid pass.",
+     "reveal": 3
+    },
+    {
+     "say": "Number plate cameras? The camera is just another entrance panel calling the same admit method.",
+     "reveal": 4
+    },
+    {
+     "say": "Store it in a database? Claim a spot with an update that only succeeds where occupied by is null. That's the database's version of compare and set.",
+     "reveal": 5
+    },
+    {
+     "say": "Many lots in a city? A parking network routes drivers to a lot with space. One more reason the lot shouldn't be a Singleton.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s024",
+   "layout": "bullets",
+   "kicker": "Parking lot - interview",
+   "title": "In the interview, say this",
+   "bullets": [
+    "Fit rule on the vehicle; spot type is an enum",
+    "Free spots per type in a concurrent sorted set",
+    "Ticket points at the real spot",
+    "Strategy for pricing and spot finding",
+    "pollFirst + CAS; lock one ticket to pay"
+   ],
+   "steps": [
+    {
+     "say": "Your thirty-second answer. I'll model vehicle and spot types as enums, with the fit rule on the vehicle.",
+     "reveal": 1
+    },
+    {
+     "say": "Each floor keeps a concurrent sorted set of free spots per type, so finding one is fast.",
+     "reveal": 2
+    },
+    {
+     "say": "Tickets point at the real spot, so the exit can free it.",
+     "reveal": 3
+    },
+    {
+     "say": "Pricing and spot finding are strategies, so they change without touching the lot.",
+     "reveal": 4
+    },
+    {
+     "say": "And spot handout is atomic, poll first plus a C-A-S, so two gates never share a spot. Payment locks only the one ticket. Recap: allocation done atomically, rules swappable.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s025",
+   "layout": "section",
+   "kicker": "Part 3 of 4 - Case study 14.2",
+   "title": "Design a Vending Machine",
+   "steps": [
+    {
+     "say": "Case study two, the vending machine. Key in a code, pay, pull your item from the tray.",
+     "reveal": 0
+    },
+    {
+     "say": "The interviewer skips the domain and looks at one thing: which actions are legal at which moment. Taking a coin when nothing's chosen is a bug. Two items for one payment is a bug. Tidy code elsewhere doesn't make up for getting that order wrong.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s026",
+   "layout": "table",
+   "kicker": "Vending - step 1",
+   "title": "Clarifying questions",
+   "table": {
+    "head": [
+     "Question",
+     "Assumed answer"
+    ],
+    "rows": [
+     [
+      "Select or pay first?",
+      "Select a slot code, then pay"
+     ],
+     [
+      "Which money?",
+      "5c, 10c, 25c, $1, $5; anything else returned"
+     ],
+     [
+      "Can it give change?",
+      "Yes - exact, or refuse the sale"
+     ],
+     [
+      "Cancel?",
+      "Any time before dispense, full refund"
+     ],
+     [
+      "Who restocks?",
+      "Operator: items, change float, takings"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Order of use: choose a slot like A one first, then pay.",
+     "reveal": 1
+    },
+    {
+     "say": "Money: nickel, dime, quarter, one dollar, five dollars. Anything else, like a three cent token, comes straight back.",
+     "reveal": 2
+    },
+    {
+     "say": "Change: yes, but it must be exact. If the machine can't make exact change, it refuses the sale and returns everything.",
+     "reveal": 3
+    },
+    {
+     "say": "Cancel: allowed any time before the item drops, with a full refund.",
+     "reveal": 4
+    },
+    {
+     "say": "And an operator restocks slots, loads coins for change, and collects the takings.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s027",
+   "layout": "table",
+   "kicker": "Vending - entities",
+   "title": "Core entities",
+   "table": {
+    "head": [
+     "Class",
+     "Job"
+    ],
+    "rows": [
+     [
+      "Product (record)",
+      "Name and price in cents"
+     ],
+     [
+      "Slot",
+      "Code, one product, COUNT left"
+     ],
+     [
+      "CashBox",
+      "Count per coin; plans exact change"
+     ],
+     [
+      "VendingState",
+      "One method per button"
+     ],
+     [
+      "5 state classes",
+      "Idle, Selected, HasMoney, Dispensing, OutOfStock"
+     ],
+     [
+      "VendingMachine",
+      "Holds state, choice, balance; forwards"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "A product is a record, a small class that only carries values: Cola, one twenty-five.",
+     "reveal": 1
+    },
+    {
+     "say": "A slot is the physical column. Here's the first real decision: the count lives on the slot, not the product. Cola can sit in A one and A two. Emptying A one must leave A two alone.",
+     "reveal": 2
+    },
+    {
+     "say": "The cash box stores a count per coin value. It doesn't care which physical quarter comes back. It plans exact change or says impossible.",
+     "reveal": 3
+    },
+    {
+     "say": "The vending state interface has one method per customer button: select, insert, cancel, take.",
+     "reveal": 4
+    },
+    {
+     "say": "Five state classes implement it. Idle, Selected, HasMoney meaning some money in but not enough, Dispensing, and OutOfStock.",
+     "reveal": 5
+    },
+    {
+     "say": "And the machine holds the current state, the chosen slot and the balance, and forwards every button to its state. It never has an if checking which state it's in.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s028",
+   "layout": "diagram",
+   "title": "The state machine is the design",
+   "mermaid": "flowchart LR\n  I[\"Idle\"] -->|\"select in-stock slot\"| S[\"Selected\"]\n  S -->|\"insert, not enough\"| H[\"HasMoney\"]\n  H -->|\"insert, enough + change ok\"| D[\"Dispensing\"]\n  S -->|\"insert, enough + change ok\"| D\n  H -->|\"cancel or no exact change\"| I\n  D -->|\"take, stock left\"| I\n  D -->|\"take, all empty\"| O[\"OutOfStock\"]\n  O -->|\"operator restocks\"| I",
+   "caption": "Draw this before writing any code",
+   "steps": [
+    {
+     "say": "This diagram is the design. Draw it before any code. Start in Idle. Select a slot that has stock, and you're in Selected.",
+     "reveal": 0
+    },
+    {
+     "say": "Insert some money but not enough, and you move to HasMoney. Keep inserting. Once the balance covers the price and change is possible, you go to Dispensing. You can jump straight there from Selected if the first coin is enough.",
+     "reveal": 0
+    },
+    {
+     "say": "Cancel, or no exact change, returns you to Idle with a full refund. Take the item, and you're back in Idle, or in OutOfStock if every slot is empty. Only an operator restock leaves OutOfStock.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s029",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: every button, every state",
+   "table": {
+    "head": [
+     "Button",
+     "Idle",
+     "Selected",
+     "HasMoney",
+     "Dispensing"
+    ],
+    "rows": [
+     [
+      "select",
+      "choose slot",
+      "change choice",
+      "cancel first",
+      "take item first"
+     ],
+     [
+      "insert",
+      "return coin",
+      "accept, check",
+      "accept, check",
+      "return coin"
+     ],
+     [
+      "cancel",
+      "nothing to cancel",
+      "clear, Idle",
+      "refund all",
+      "too late"
+     ],
+     [
+      "take",
+      "tray empty",
+      "pay first",
+      "pay the rest",
+      "give item, Idle"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Picture a grid: buttons down, states across. The design is finished when every cell has an answer. Row one, select. In Idle it chooses a slot, rejecting empty or unknown codes. In HasMoney it says cancel first, so you can't swap a fifty cent chip for a cola after paying.",
+     "reveal": 1
+    },
+    {
+     "say": "Row two, insert. In Idle, the demo inserts a quarter and gets: quarter returned, select a product first. In Dispensing, extra coins come back too.",
+     "reveal": 2
+    },
+    {
+     "say": "Row three, cancel. With money in, it refunds everything. After dispensing, it says too late.",
+     "reveal": 3
+    },
+    {
+     "say": "Row four, take. Only Dispensing hands over the item and change. OutOfStock, not shown, refuses every button. With the State pattern, each state is a class, and the interface lists every button. So a state that forgets a button doesn't even compile.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s030",
+   "layout": "twocol",
+   "kicker": "Pattern - State",
+   "title": "State pattern with stateless singleton states",
+   "left": {
+    "heading": "How a state looks",
+    "bullets": [
+     "No fields at all",
+     "static final INSTANCE shared by all",
+     "m.setState(SelectedState.INSTANCE)"
+    ]
+   },
+   "right": {
+    "heading": "Why",
+    "bullets": [
+     "No data, so one copy serves everyone",
+     "new IdleState() each move is waste",
+     "New MaintenanceState: no edits elsewhere"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Now, how do the state classes look? They have no fields. The selection and the balance live on the machine, which is passed in as a parameter.",
+     "reveal": 1
+    },
+    {
+     "say": "So each state is a stateless singleton: one shared instance called INSTANCE.",
+     "reveal": 2
+    },
+    {
+     "say": "Example: Idle's select method finds slot A one, stores it on the machine, shows Cola costs one twenty-five, and calls set state with SelectedState dot INSTANCE.",
+     "reveal": 3
+    },
+    {
+     "say": "Why share? A state holds no data, so one copy serves every machine and every sale. That's flyweight-style sharing.",
+     "reveal": 4
+    },
+    {
+     "say": "Creating a new Idle state object on every transition is readable, but wasteful garbage.",
+     "reveal": 5
+    },
+    {
+     "say": "And adding a maintenance state later is one new class. The other five aren't touched. Compare that with an enum and switch, where every new state means editing every switch.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s031",
+   "layout": "twocol",
+   "kicker": "Exact change",
+   "title": "Exact change: greedy versus DP",
+   "left": {
+    "heading": "Greedy: biggest coin first",
+    "bullets": [
+     "Need 30c from 1 quarter + 3 dimes",
+     "Take quarter, 5c left, no nickel: FAIL"
+    ]
+   },
+   "right": {
+    "heading": "DP: bounded coin change",
+    "bullets": [
+     "Builds answers from smaller amounts",
+     "Returns three dimes: 30c"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Now the hard method: making change. Greedy means take the largest coin first and never look back. Example from the demo: you owe thirty cents, and the box holds one quarter and three dimes.",
+     "reveal": 1
+    },
+    {
+     "say": "Greedy grabs the quarter, needs five more cents, has no nickel, and fails. It would wrongly refuse the sale.",
+     "reveal": 2
+    },
+    {
+     "say": "The fix is dynamic programming, D-P, the coin change with limited coins problem. You build the best answer for each amount from the answers for smaller amounts, using each coin only as many times as you hold it.",
+     "reveal": 3
+    },
+    {
+     "say": "D-P finds three dimes. Greedy only works for a well-stocked standard coin set. With limited coins, say: I'll use bounded coin change D-P.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s032",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: refuse rather than short-change",
+   "table": {
+    "head": [
+     "Step",
+     "What happens"
+    ],
+    "rows": [
+     [
+      "1",
+      "Select B1 Chips, 50c"
+     ],
+     [
+      "2",
+      "Insert a $5 note; box now holds it"
+     ],
+     [
+      "3",
+      "Plan 450c change: impossible"
+     ],
+     [
+      "4",
+      "refundAll: plan 500c, the $5 comes back"
+     ],
+     [
+      "5",
+      "State back to Idle, counts exact"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Let's walk the demo where change fails. Step one, select chips at fifty cents.",
+     "reveal": 1
+    },
+    {
+     "say": "Step two, insert a five dollar note. Design choice: inserted money goes straight into the cash box, not a holding area.",
+     "reveal": 2
+    },
+    {
+     "say": "Step three, plan four fifty in change. The box can't make it, so the sale is refused. Never give close enough change.",
+     "reveal": 3
+    },
+    {
+     "say": "Step four, refund all. Because the note is already in the box, a refund is just make exact change for the balance. That always succeeds, since the pieces you inserted are right there. The five dollar note comes back.",
+     "reveal": 4
+    },
+    {
+     "say": "Step five, back to Idle, with item and cash counts exactly right. And cancel uses this same refund method. One refund path, not two.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s033",
+   "layout": "bullets",
+   "kicker": "Vending - inventory and threads",
+   "title": "Inventory, operator and concurrency",
+   "bullets": [
+    "Slot.dispenseOne: count minus one, never below 0",
+    "Last item taken: move to OutOfStock",
+    "Operator actions NOT on the state interface",
+    "Public methods synchronized",
+    "Bank of machines sharing stock: needs atomics"
+   ],
+   "steps": [
+    {
+     "say": "Inventory. Dispense one decrements the slot's count and throws if it's already zero, so a sold-out slot can't drop anything.",
+     "reveal": 1
+    },
+    {
+     "say": "In the demo, chips and the last cola sell out, the state becomes OutOfStock, and select A one shows machine is out of stock.",
+     "reveal": 2
+    },
+    {
+     "say": "Restock, load change and collect takings are allowed in any state, so they're not on the state interface. Otherwise five classes would have to answer them. That's interface segregation. The operator restocks C one, and the machine moves back to Idle.",
+     "reveal": 3
+    },
+    {
+     "say": "Concurrency. One machine has one customer, but a networked controller, like a remote price change, could interleave. So every public method is synchronized, the built-in Java lock, and states run under the machine's lock.",
+     "reveal": 4
+    },
+    {
+     "say": "If a bank of machines shared one stock count, the slot count would then need a lock or an atomic decrement. The course points that out honestly.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s034",
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "Why not just an enum with a switch for the states?",
+   "bullets": [
+    "A) Enums can't hold methods",
+    "B) Every new state edits every switch; State classes don't",
+    "C) Switch is slower"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. A colleague says: why five classes? Just use an enum and a switch. What's your answer?",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s035",
+   "layout": "table",
+   "kicker": "Vending - extensions",
+   "title": "Extensions, walked through",
+   "table": {
+    "head": [
+     "Follow-up",
+     "Your answer"
+    ],
+    "rows": [
+     [
+      "Card payment?",
+      "New input device, same machine calls"
+     ],
+     [
+      "Maintenance mode?",
+      "New MaintenanceState class"
+     ],
+     [
+      "Price per slot?",
+      "Move price from Product to Slot"
+     ],
+     [
+      "Report empty slots?",
+      "Inventory notifies an observer"
+     ],
+     [
+      "Customer walks away?",
+      "60-second timer calls cancel()"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Answer: B. A switch works for tiny machines, but every new state means editing every switch. A new State class is one file, and the compiler forces it to answer every button. Now the follow-ups. Card payment? A new input device beside the coin slot that calls the same machine. No state class changes.",
+     "reveal": 1
+    },
+    {
+     "say": "Maintenance mode? A new maintenance state class. The existing five are untouched.",
+     "reveal": 2
+    },
+    {
+     "say": "Different price per slot for the same product? Move the price onto the slot, which already owns the count.",
+     "reveal": 3
+    },
+    {
+     "say": "Report empty slots to headquarters? Inventory notifies an observer when a slot hits zero.",
+     "reveal": 4
+    },
+    {
+     "say": "Customer walks away with money in? A timer calls cancel after sixty seconds, through the same state machine.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s036",
+   "layout": "bullets",
+   "kicker": "Vending - interview",
+   "title": "In the interview, say this",
+   "bullets": [
+    "State pattern: 5 classes, 1 interface of buttons",
+    "Machine forwards; no if on state",
+    "Money in the box at once; one refund path",
+    "Exact change by DP, or refuse the sale",
+    "Integer cents everywhere"
+   ],
+   "steps": [
+    {
+     "say": "Thirty seconds. The whole question is the order of events, so I'll use the State pattern, five classes behind one interface listing every button.",
+     "reveal": 1
+    },
+    {
+     "say": "The machine just forwards each button to its current state.",
+     "reveal": 2
+    },
+    {
+     "say": "Money goes into the cash box as it's inserted, so a refund is make exact change for the balance.",
+     "reveal": 3
+    },
+    {
+     "say": "If exact change is impossible, the sale is refused and everything's returned. I'll plan change with D-P, not greedy.",
+     "reveal": 4
+    },
+    {
+     "say": "And all amounts are integer cents. Recap: the vending machine is a state machine with one hard method, make change.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s037",
+   "layout": "section",
+   "kicker": "Part 4 of 4 - Case study 14.3",
+   "title": "Design a Coffee Vending Machine",
+   "steps": [
+    {
+     "say": "Case study three, the coffee machine. It looks like the snack machine, but the hard part is different.",
+     "reveal": 0
+    },
+    {
+     "say": "A snack machine drops a finished item from a slot. A coffee machine consumes several ingredients at once from shared containers. And many drinks draw on the same milk.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s038",
+   "layout": "bullets",
+   "kicker": "Coffee - what it tests",
+   "title": "Three things the interviewer wants",
+   "bullets": [
+    "Recipes as data: a new drink is a data change",
+    "Atomic, all-or-nothing deduction",
+    "Low-stock alerts before it runs out"
+   ],
+   "steps": [
+    {
+     "say": "One: recipes as data. Adding a flat white should be a new line in a menu file, not a new class.",
+     "reveal": 1
+    },
+    {
+     "say": "Two: atomic, all-or-nothing deduction. A latte takes its beans, water and milk together, or takes nothing. Stock never goes negative, even when ten people tap latte at once.",
+     "reveal": 2
+    },
+    {
+     "say": "Three: low-stock alerts. The operator hears that milk is low before it runs out. The clarifying questions set it up: six drinks, an extra shot for fifty cents, sugar in grams, several touch screens so orders overlap, and one alert per threshold crossing.",
+     "reveal": 3
+    }
+   ]
+  },
+  {
+   "id": "s039",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: recipes as data",
+   "table": {
+    "head": [
+     "Menu line",
+     "Price",
+     "Ingredients"
+    ],
+    "rows": [
+     [
+      "Espresso",
+      "250c",
+      "beans + water"
+     ],
+     [
+      "Latte",
+      "400c",
+      "beans 18 g, water 40 ml, milk 180 ml"
+     ],
+     [
+      "Latte + extra shot",
+      "450c",
+      "beans 36 g, water 40, milk 180"
+     ],
+     [
+      "Flat White (new)",
+      "one new line",
+      "no code change"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "A recipe is a record: a name, a price in cents, and a map from ingredient to amount. The recipe book parses a text menu, one drink per line. Espresso, two hundred and fifty cents, beans and water.",
+     "reveal": 1
+    },
+    {
+     "say": "Latte, four hundred cents: eighteen grams of beans, forty millilitres of water, a hundred and eighty of milk.",
+     "reveal": 2
+    },
+    {
+     "say": "Now customise. An extra shot calls recipe dot with: add eighteen grams of beans and fifty cents. It returns a new recipe at four fifty. The menu recipe is immutable, meaning it can't change after creation, so one order can never corrupt it.",
+     "reveal": 3
+    },
+    {
+     "say": "And a new drink is one new menu line. No new class, no recompile.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s040",
+   "layout": "twocol",
+   "kicker": "Design choice",
+   "title": "Decorator or data?",
+   "left": {
+    "heading": "Decorator",
+    "bullets": [
+     "new Whip(new Mocha(new DarkRoast()))",
+     "Good when add-ons have behaviour"
+    ]
+   },
+   "right": {
+    "heading": "Data: recipe.with(...)",
+    "bullets": [
+     "Add-ons only change amounts and price",
+     "Simpler; no class explosion"
+    ]
+   },
+   "steps": [
+    {
+     "say": "A classic textbook models add-ons with the Decorator pattern. Each wrapper, like whip around mocha around dark roast, adds cost and a description.",
+     "reveal": 1
+    },
+    {
+     "say": "That's great when each add-on has real behaviour.",
+     "reveal": 2
+    },
+    {
+     "say": "Here, add-ons only change quantities and price. So a data change, recipe dot with, is simpler.",
+     "reveal": 3
+    },
+    {
+     "say": "And one class per drink would explode with every size and add-on. In the interview, mention both and pick one for a reason.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s041",
+   "layout": "diagram",
+   "title": "Ordering a drink: one lock",
+   "mermaid": "flowchart LR\n  C[\"order(Latte, paid 500)\"] --> R[\"find recipe, apply extras\"]\n  R -->|\"underpaid\"| X[\"Rejected, refund all\"]\n  R --> L[\"lock: check EVERY ingredient\"]\n  L -->|\"any short\"| X\n  L -->|\"all present\"| D[\"deduct all, note crossings\"]\n  D --> U[\"unlock\"]\n  U --> A[\"alert listeners\"]\n  U --> S[\"Served, change\"]",
+   "caption": "Check and deduct inside one critical section; alert after unlock",
+   "steps": [
+    {
+     "say": "Here's the order flow. Find the recipe and apply extras. If the customer underpaid, reject and refund everything before touching stock.",
+     "reveal": 0
+    },
+    {
+     "say": "Then take one lock. A critical section is code only one thread may run at a time. Inside it, check every ingredient. If any is short, return the shortages and deduct nothing.",
+     "reveal": 0
+    },
+    {
+     "say": "If all are present, deduct them all and note which ones crossed their threshold. Unlock. Only then call the alert listeners, and return Served with the change.",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s042",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: 10 lattes, milk for exactly 4",
+   "table": {
+    "head": [
+     "Thread",
+     "Inside the lock",
+     "Result"
+    ],
+    "rows": [
+     [
+      "1 to 4",
+      "milk enough, deduct 180 ml each",
+      "Served"
+     ],
+     [
+      "5 to 10",
+      "milk short, deduct nothing",
+      "Rejected, full refund"
+     ],
+     [
+      "after",
+      "milk = 80 ml",
+      "never negative, 1 alert"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Why one lock? Without it you get a check-then-act race: two orders both check there's enough milk, then both deduct, and stock goes negative. The demo releases ten threads at once, each ordering a latte, with milk for exactly four. Threads one to four each find enough milk and take a hundred and eighty millilitres.",
+     "reveal": 1
+    },
+    {
+     "say": "Threads five to ten find milk short, and deduct nothing at all. Each gets a full refund.",
+     "reveal": 2
+    },
+    {
+     "say": "Final count: four served, six rejected, eighty millilitres left. Never negative. And exactly one low milk alert.",
+     "reveal": 3
+    }
+   ]
+  },
+  {
+   "id": "s043",
+   "layout": "twocol",
+   "kicker": "Coffee - atomicity",
+   "title": "All-or-nothing, and why not atomics",
+   "left": {
+    "heading": "All-or-nothing demo",
+    "bullets": [
+     "Latte with no milk left: Rejected",
+     "Beans stay at 410 g, untouched"
+    ]
+   },
+   "right": {
+    "heading": "Why not AtomicInteger each?",
+    "bullets": [
+     "Each one safe alone",
+     "Recipe needs beans + water + milk together"
+    ]
+   },
+   "steps": [
+    {
+     "say": "All-or-nothing in action. Later in the demo, milk runs out and someone orders a latte. Rejected, out of milk.",
+     "reveal": 1
+    },
+    {
+     "say": "And the beans stay at four hundred and ten grams. Nothing was deducted, because shortages are found before any deduction. That's transaction semantics: every step takes effect, or none does.",
+     "reveal": 2
+    },
+    {
+     "say": "Follow-up: why not an atomic integer per ingredient? Each atomic is safe on its own.",
+     "reveal": 3
+    },
+    {
+     "say": "But a recipe changes three at once. Without a common lock, one order could take beans and water, then fail on milk, leaving a half-deducted recipe. One lock is fine here, because the critical section is just a few map operations.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s044",
+   "layout": "table",
+   "kicker": "Example",
+   "title": "Example: Observer, once per crossing",
+   "table": {
+    "head": [
+     "Event",
+     "Milk left",
+     "Alert?"
+    ],
+    "rows": [
+     [
+      "Orders above threshold",
+      "above threshold",
+      "no"
+     ],
+     [
+      "Mocha crosses threshold",
+      "170 ml",
+      "YES - marked alerted"
+     ],
+     [
+      "More orders below threshold",
+      "less",
+      "no (already alerted)"
+     ],
+     [
+      "Operator refills",
+      "above threshold",
+      "re-armed"
+     ],
+     [
+      "Next crossing",
+      "80 ml",
+      "YES, once"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Now the alerts. The store keeps a list of low stock listeners, the Observer pattern. An operator app, a dashboard, or a telemetry client can each subscribe. While milk stays above its threshold, no alert.",
+     "reveal": 1
+    },
+    {
+     "say": "An order drops milk to a hundred and seventy millilitres, below the threshold. The store adds milk to an alerted set and queues one alert: milk low, a hundred and seventy left.",
+     "reveal": 2
+    },
+    {
+     "say": "More orders below the threshold? No more alerts, because milk is already in the alerted set. That prevents an alert storm of one message per drink.",
+     "reveal": 3
+    },
+    {
+     "say": "The operator refills. Milk goes back above the threshold, so it's removed from the alerted set. The alert is re-armed.",
+     "reveal": 4
+    },
+    {
+     "say": "In the ten-thread race, milk crosses again and lands at eighty, and the operator gets exactly one alert. And remember: listeners run after unlock. A slow text message must never block every order, and a listener calling back into the store can't deadlock.",
+     "reveal": 5
+    }
+   ]
+  },
+  {
+   "id": "s045",
+   "layout": "twocol",
+   "kicker": "Pattern - sealed types",
+   "title": "Sealed result types",
+   "left": {
+    "heading": "OrderResult (sealed)",
+    "bullets": [
+     "Served(drink, price, change)",
+     "Rejected(reason, refund)"
+    ]
+   },
+   "right": {
+    "heading": "Real demo outputs",
+    "bullets": [
+     "SERVED Espresso for 250c, change 50c",
+     "REJECTED no such drink: Flat White, 400c"
+    ]
+   },
+   "steps": [
+    {
+     "say": "Last idea: what does order return? A sealed interface, a Java type whose variants form a fixed, known list. Here, Served, with the drink, price and change.",
+     "reveal": 1
+    },
+    {
+     "say": "Or Rejected, with a reason and a full refund. A refusal is a normal outcome, so we don't return null or throw.",
+     "reveal": 2
+    },
+    {
+     "say": "From the demo: served espresso for two fifty, paid three hundred, change fifty.",
+     "reveal": 3
+    },
+    {
+     "say": "And rejected, no such drink, flat white, refund four hundred. Because the type is sealed, a Java twenty-one pattern switch must handle both cases, or the compiler complains.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s046",
+   "layout": "quiz",
+   "kicker": "Pause and think",
+   "title": "Ingredients deducted, then the brewer fails. Now what?",
+   "bullets": [
+    "A) Keep the money, it's rare",
+    "B) Refund and put the ingredients back",
+    "C) Retry forever"
+   ],
+   "steps": [
+    {
+     "say": "Pause and think. Ingredients are deducted, then the hardware jams. The customer paid and got nothing. What should the design do?",
+     "reveal": 0
+    }
+   ]
+  },
+  {
+   "id": "s047",
+   "layout": "table",
+   "kicker": "Coffee - extensions",
+   "title": "Extensions, walked through",
+   "table": {
+    "head": [
+     "Follow-up",
+     "Your answer"
+    ],
+    "rows": [
+     [
+      "Brewer fails after deduction?",
+      "Refund + refill back (compensation)"
+     ],
+     [
+      "Sizes S, M, L?",
+      "Size enum; recipe.scaled(size)"
+     ],
+     [
+      "Several brewing units?",
+      "BlockingQueue of orders, N workers"
+     ],
+     [
+      "Remote monitoring?",
+      "Another LowStockListener"
+     ],
+     [
+      "Different brew steps?",
+      "Template Method or Step list"
+     ],
+     [
+      "Card payments?",
+      "Reuse CashBox; card is one more device"
+     ]
+    ]
+   },
+   "steps": [
+    {
+     "say": "Answer: B. Refund, and refill the reserved amounts back. That's compensation, an action that undoes an earlier step.",
+     "reveal": 1
+    },
+    {
+     "say": "Next, sizes small, medium and large? A size enum with a multiplier, and recipe dot scaled returns a new recipe with scaled amounts and price.",
+     "reveal": 2
+    },
+    {
+     "say": "Several brewing units? A blocking queue of orders consumed by N worker threads. Inventory stays in the one store.",
+     "reveal": 3
+    },
+    {
+     "say": "Remote monitoring? Just another low stock listener posting to a telemetry server. The store doesn't change.",
+     "reveal": 4
+    },
+    {
+     "say": "Brewing steps differ per drink, like grind, tamp, steam milk? Template Method, a base class fixing the order of steps, or a list of step objects in the recipe data.",
+     "reveal": 5
+    },
+    {
+     "say": "Card payments? Reuse the cash box from the vending machine, plus a card device. And like before, no Singleton. We inject the machine so tests can build fresh ones.",
+     "reveal": 6
+    }
+   ]
+  },
+  {
+   "id": "s048",
+   "layout": "bullets",
+   "kicker": "Coffee - interview",
+   "title": "In the interview, say this",
+   "bullets": [
+    "Recipes are data: ingredient to amount map",
+    "One lock: check all, then deduct all",
+    "Alert once per crossing, outside the lock",
+    "Sealed Served or Rejected; full refund"
+   ],
+   "steps": [
+    {
+     "say": "Thirty seconds. Recipes are data, a map from ingredient to amount loaded from a menu, so a new drink is a new row.",
+     "reveal": 1
+    },
+    {
+     "say": "The store checks and deducts every ingredient under one lock, so an order is all-or-nothing and stock never goes negative.",
+     "reveal": 2
+    },
+    {
+     "say": "When an ingredient crosses its threshold, the store notes it, and after unlocking, notifies observers once.",
+     "reveal": 3
+    },
+    {
+     "say": "Orders return a sealed Served or Rejected result, and a rejection is refunded in full. Recap: atomic shared inventory, with recipes kept as data.",
+     "reveal": 4
+    }
+   ]
+  },
+  {
+   "id": "s049",
+   "layout": "recap",
+   "title": "Recap",
+   "bullets": [
+    "Test: state, allocation, concurrency",
+    "Parking: pollFirst + CAS, Strategy, Observer",
+    "Vending: State pattern, exact change by DP",
+    "Coffee: recipes as data, one lock, sealed results",
+    "Next: Episode 16, ATM, Elevator, Traffic, Locker"
+   ],
+   "steps": [
+    {
+     "say": "Let's recap. Every everyday-object problem tests state machines, resource allocation, and concurrency. Find the one hard method early.",
+     "reveal": 1
+    },
+    {
+     "say": "Parking lot: fit rule on the vehicle, free spots in a concurrent sorted set, poll first plus C-A-S. Strategy for spot finding and pricing, Factory for electric spots, Observer for boards, and a lock on one ticket for payment.",
+     "reveal": 2
+    },
+    {
+     "say": "Vending machine: the State pattern with stateless singleton states, money straight into the box, exact change by D-P or refuse, and one refund path.",
+     "reveal": 3
+    },
+    {
+     "say": "Coffee machine: recipes as data, one lock for all-or-nothing deduction, alerts once per crossing outside the lock, and sealed result types.",
+     "reveal": 4
+    },
+    {
+     "say": "Do the chapter fourteen exercises in the PDF and run all three demos. Next up, episode sixteen: Case Studies, A-T-M, Elevator, Traffic, Locker. See you there.",
+     "reveal": 5
+    }
+   ]
+  }
+ ]
+}

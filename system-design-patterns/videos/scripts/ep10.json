@@ -1,0 +1,1979 @@
+{
+  "series": "System Design Workshop",
+  "episode": 10,
+  "title": "Surviving Failure: Reliability Patterns",
+  "subtitle": "Timeouts, retries, keys, breakers, bulkheads, DLQs and fallbacks",
+  "scenes": [
+    {
+      "layout": "title",
+      "title": "Surviving Failure: Reliability Patterns",
+      "subtitle": "Timeouts, retries, keys, breakers, bulkheads, DLQs and fallbacks",
+      "steps": [
+        {
+          "say": "Welcome to episode ten of the System Design Workshop: Surviving Failure, the reliability patterns.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll be able to look at any arrow in a design and say exactly what happens when it breaks: how long you wait, when you retry, how you avoid a double charge, when you stop calling, how you stop one feature hogging everything, where bad messages go, and what the user sees.",
+          "reveal": 0
+        },
+        {
+          "say": "Keep the module five notes PDF open beside the video. When I say pause and think, pause, and answer before I do.",
+          "reveal": 0
+        }
+      ],
+      "id": "s001"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Module introduction",
+      "title": "Four ways an arrow breaks",
+      "bullets": [
+        "B never replies: a hang",
+        "B replies with an error",
+        "B does only part of the job",
+        "B replies too late to be useful"
+      ],
+      "steps": [
+        {
+          "say": "Draw an arrow from service A to service B. In production that arrow can break in four ways. First, B never replies at all. That's a hang.",
+          "reveal": 1
+        },
+        {
+          "say": "Second, B replies with an error, like a server error.",
+          "reveal": 2
+        },
+        {
+          "say": "Third, B does only part of the job. Say the card got charged, but the order row never got written.",
+          "reveal": 3
+        },
+        {
+          "say": "Fourth, B replies, but too late. The user already gave up. This episode is seven patterns for handling them on purpose.",
+          "reveal": 4
+        }
+      ],
+      "id": "s002"
+    },
+    {
+      "layout": "number",
+      "kicker": "Module introduction",
+      "title": "Why rare failures are not rare",
+      "big": "100,000 x 1/200 = 500 a day",
+      "caption": "Book: Module 5 Reliability · Module Introduction",
+      "steps": [
+        {
+          "say": "Imagine a checkout that processes a hundred thousand orders a day.",
+          "reveal": 0
+        },
+        {
+          "say": "Say only one call in two hundred fails. That sounds rare. But a hundred thousand divided by two hundred is five hundred failures, every single day.",
+          "reveal": 0
+        },
+        {
+          "say": "So reliable designs plan for that measured number. And that's why interviewers keep asking, of every arrow you draw: and what if B doesn't answer?",
+          "reveal": 0
+        }
+      ],
+      "id": "s003"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Pattern picker: name the failure first",
+      "table": {
+        "head": [
+          "What the failure looks like",
+          "Pattern"
+        ],
+        "rows": [
+          [
+            "Silence; waiting callers pile up",
+            "Timeout"
+          ],
+          [
+            "Breaks now, works seconds later",
+            "Retry with backoff"
+          ],
+          [
+            "Did the payment go through or not?",
+            "Idempotency"
+          ],
+          [
+            "Stays broken for minutes",
+            "Circuit breaker"
+          ],
+          [
+            "No errors, one workload eats capacity",
+            "Bulkhead"
+          ],
+          [
+            "One bad message blocks the line",
+            "Dead letter queue"
+          ],
+          [
+            "Everything worked, user sees error page",
+            "Graceful degradation"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's the picker. Name the failure, then choose the tool. If you see silence, with callers stacking up waiting, that's a timeout problem.",
+          "reveal": 1
+        },
+        {
+          "say": "If it breaks right now but works a few seconds later, that's retry with backoff.",
+          "reveal": 2
+        },
+        {
+          "say": "If you can't tell whether the payment actually went through, that's idempotency.",
+          "reveal": 3
+        },
+        {
+          "say": "If it stays broken for minutes, not moments, that's a circuit breaker.",
+          "reveal": 4
+        },
+        {
+          "say": "If there are no errors anywhere, yet one workload swallows all the capacity, that's a bulkhead.",
+          "reveal": 5
+        },
+        {
+          "say": "If a single bad message holds up every message behind it, that's a dead letter queue.",
+          "reveal": 6
+        },
+        {
+          "say": "And if every mechanism did its job, but the user still landed on an error page, that's graceful degradation.",
+          "reveal": 7
+        }
+      ],
+      "id": "s004"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Module introduction",
+      "title": "Four terms used everywhere",
+      "bullets": [
+        "Transient: clears in seconds. Sustained: stays down",
+        "Fail open: proceed. Fail closed: block",
+        "At-least-once: never lost, may repeat",
+        "Little's law: in flight = rate x time"
+      ],
+      "steps": [
+        {
+          "say": "Four terms before we start. A transient failure clears on its own in seconds, like a lost network packet. A sustained failure persists because the service is really down. Retries fit transient, breakers fit sustained.",
+          "reveal": 1
+        },
+        {
+          "say": "Fail open means that when a check can't run, you let the operation proceed. Fail closed means you block it. Security and money always fail closed.",
+          "reveal": 2
+        },
+        {
+          "say": "At-least-once delivery means queues and retry loops never lose work, but may deliver it twice. So receivers must handle repeats.",
+          "reveal": 3
+        },
+        {
+          "say": "And Little's law: work in progress equals arrival rate times time per item. Three hundred requests a second times two seconds each is six hundred in flight, so six hundred threads. A thread is the worker handling one request.",
+          "reveal": 4
+        }
+      ],
+      "id": "s005"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 1 of 7",
+      "title": "Pattern 1: Timeout",
+      "steps": [
+        {
+          "say": "Pattern one, the timeout. A timeout is a deadline on every network call. If no reply arrives by then, the caller stops waiting, marks the call failed, and releases what it held.",
+          "reveal": 0
+        },
+        {
+          "say": "After ten unanswered rings, you hang up and call another restaurant.",
+          "reveal": 0
+        }
+      ],
+      "id": "s006",
+      "caption": "Book: Module 5 Reliability · Timeout"
+    },
+    {
+      "layout": "number",
+      "kicker": "Example",
+      "title": "Waiting is not free",
+      "big": "300/s x 30 s = 9,000 threads",
+      "caption": "A normal service has a few hundred, so it freezes in about a second",
+      "steps": [
+        {
+          "say": "Python's popular requests library waits forever by default.",
+          "reveal": 0
+        },
+        {
+          "say": "Now, a waiting call holds a thread, a connection, maybe a lock. At three hundred requests a second, with a thirty second hang, Little's law says you need nine thousand threads.",
+          "reveal": 0
+        },
+        {
+          "say": "A normal service has a few hundred. So it freezes in about one second. Waiting killed it, not errors. And a hung call is invisible: no error, no metric. A timed-out call is an event that retries and breakers can react to. That's why timeouts come first.",
+          "reveal": 0
+        }
+      ],
+      "id": "s007"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "How it works",
+      "title": "Timeout: three rules",
+      "bullets": [
+        "1. Measure; don't copy-paste 30 seconds",
+        "2. Connection timeout much tighter",
+        "3. Pass the leftover time down the chain"
+      ],
+      "steps": [
+        {
+          "say": "Three rules. Rule one: measure, don't copy. The most common timeout is whatever was copied, usually thirty seconds, and no user is still waiting at second twenty-nine. Take the dependency's healthy p ninety-nine, the latency that ninety-nine in a hundred calls beat. For our payment provider that's a hundred and twenty milliseconds. Set the timeout at two to three times that, about three hundred to four hundred milliseconds. And one value per dependency.",
+          "reveal": 1
+        },
+        {
+          "say": "Rule two: the connection timeout should be much tighter than the request timeout. Reaching a host takes milliseconds. Answering takes real work.",
+          "reveal": 2
+        },
+        {
+          "say": "Rule three: pass the leftover time down the chain. That's called deadline propagation, and it needs its own example.",
+          "reveal": 3
+        }
+      ],
+      "id": "s008"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Deadline budget: one 2-second request",
+      "table": {
+        "head": [
+          "Hop",
+          "Spends",
+          "Left for the next hop"
+        ],
+        "rows": [
+          [
+            "API gateway starts",
+            "0 ms",
+            "2,000 ms"
+          ],
+          [
+            "Auth check",
+            "100 ms",
+            "1,900 ms"
+          ],
+          [
+            "Database",
+            "400 ms",
+            "1,500 ms"
+          ],
+          [
+            "Search",
+            "min(own limit, 1,500)",
+            "fails by 2 s total"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Imagine an API that promises two seconds and makes three calls in a row, each with its own fresh two second timeout. Worst case: three times two, six seconds. Users see six second errors. So instead, the gateway, the front door server, starts a budget of two thousand milliseconds.",
+          "reveal": 1
+        },
+        {
+          "say": "Auth, which checks who the user is, spends a hundred. Nineteen hundred remain.",
+          "reveal": 2
+        },
+        {
+          "say": "The database spends four hundred. Fifteen hundred remain.",
+          "reveal": 3
+        },
+        {
+          "say": "So search's timeout is the smaller of its own limit and fifteen hundred milliseconds. The request always fails by two seconds. G-R-P-C, a popular remote call framework, carries the deadline automatically. Plain H-T-T-P mostly doesn't.",
+          "reveal": 4
+        }
+      ],
+      "id": "s009"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Concept 1 recap",
+      "title": "Timeout: trade-offs and the interview",
+      "bullets": [
+        "False alarms: the write may have happened",
+        "Ongoing tuning as latency drifts",
+        "Server keeps working on abandoned calls",
+        "Long jobs go async, not a 10-minute timeout",
+        "Say: 2 to 3x healthy p99, budget passed down"
+      ],
+      "steps": [
+        {
+          "say": "The costs. First, false alarms. Sometimes the timer fires on a call that was about to succeed. For a write, you're left wondering, did it happen? Hold that thought for idempotency.",
+          "reveal": 1
+        },
+        {
+          "say": "Second, tuning.",
+          "reveal": 2
+        },
+        {
+          "say": "Third, a timeout ends your waiting, not the server's working. The database may keep crunching an abandoned query.",
+          "reveal": 3
+        },
+        {
+          "say": "When is a timeout wrong? Never. Only the value can be wrong. Genuinely long jobs, like video transcoding, should go async: accept, reply right away, and deliver the result later.",
+          "reveal": 4
+        },
+        {
+          "say": "In the interview say: every call gets a deadline at two to three times the measured healthy p ninety-nine, connection timeouts tighter, and the remaining budget passed down the chain. Recap: timeouts turn silent hangs into countable failures.",
+          "reveal": 5
+        }
+      ],
+      "id": "s010"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 2 of 7",
+      "title": "Pattern 2: Retry with backoff",
+      "steps": [
+        {
+          "say": "Pattern two, retry with exponential backoff. When a call fails for a self-correcting reason, try again, waiting longer after each failure, with randomness, a cap on attempts, and only for errors that could change.",
+          "reveal": 0
+        },
+        {
+          "say": "Our running example: a checkout calling a healthy payment provider. About one call in two hundred still fails from dropped packets or resets. That's five hundred customers a day getting an error on a request that would likely have worked a hundred milliseconds later.",
+          "reveal": 0
+        }
+      ],
+      "id": "s011",
+      "caption": "Book: Module 5 Reliability · Retry with Exponential Backoff"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "The problem",
+      "title": "Why 'retry immediately, 3 times' fails",
+      "bullets": [
+        "Wrong moment: still overloaded a moment later",
+        "20,000/s x 3 = 60,000/s retry storm",
+        "Everyone retries together: thundering herd",
+        "If the charge landed, a retry charges twice"
+      ],
+      "steps": [
+        {
+          "say": "The obvious fix is retry immediately, up to three times. It goes wrong in three ways. First, wrong moment. An overloaded provider is still overloaded a microsecond later.",
+          "reveal": 1
+        },
+        {
+          "say": "At twenty thousand requests a second, a one second failure with three immediate attempts can throw sixty thousand requests a second at the provider when it has the least room. That's a retry storm.",
+          "reveal": 2
+        },
+        {
+          "say": "Second, requests that failed together retry together. That synchronized spike is called a thundering herd, and it can knock a recovering service back down.",
+          "reveal": 3
+        },
+        {
+          "say": "Third, if the payment succeeded but the reply was lost, a retry charges twice. That's next pattern's job.",
+          "reveal": 4
+        }
+      ],
+      "id": "s012"
+    },
+    {
+      "layout": "number",
+      "kicker": "How it works",
+      "title": "Full jitter formula",
+      "big": "wait = random(0, min(cap, base x 2^n))",
+      "caption": "base 100 ms, windows 100, 200, 400, 800 ms, cap 5 s",
+      "steps": [
+        {
+          "say": "Here's the formula, called full jitter. The window is a base delay times two to the power of the attempt number. You wait a random time inside it, up to a cap.",
+          "reveal": 0
+        },
+        {
+          "say": "With a base of a hundred milliseconds, the windows are zero to a hundred, zero to two hundred, zero to four hundred, zero to eight hundred, capped at five seconds.",
+          "reveal": 0
+        }
+      ],
+      "id": "s013"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Retry: each part has one job",
+      "bullets": [
+        "1. Base delay ~100 ms lets blips clear",
+        "2. Doubling: more failures, back off harder",
+        "3. Jitter: scatter the herd, not optional",
+        "4. Caps: 3 to 5 attempts, 10% retry budget",
+        "5. Retry 500, 503, 429, timeouts; never 400, 401, 404"
+      ],
+      "steps": [
+        {
+          "say": "Let's walk each part with our checkout. Part one, the base delay of about a hundred milliseconds. Enough for a lost packet to clear.",
+          "reveal": 1
+        },
+        {
+          "say": "Part two, doubling. Each extra failure suggests a bigger problem, so back off harder.",
+          "reveal": 2
+        },
+        {
+          "say": "Part three, jitter, meaning randomness. Without it, backoff just moves the same synchronized wave to a hundred, two hundred, four hundred milliseconds. Randomness scatters it.",
+          "reveal": 3
+        },
+        {
+          "say": "Part four, caps. A maximum wait, a maximum of three to five attempts for anything a user waits on, and ideally a service-wide retry budget, like retries may add at most ten percent extra traffic. Once spent, stop.",
+          "reveal": 4
+        },
+        {
+          "say": "Part five, retry only errors that can change: timeouts, connection failures, 500 server errors, 503 unavailable, and 429 too many requests, obeying its Retry-After header. Never retry 400, 401 or 404. They fail the same way every time.",
+          "reveal": 5
+        }
+      ],
+      "id": "s014"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Walkthrough: one request, then the fleet",
+      "table": {
+        "head": [
+          "Moment",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "Attempt 1",
+            "Fails in a 200 ms network blip"
+          ],
+          [
+            "Wait ~60 ms, attempt 2",
+            "Fails again"
+          ],
+          [
+            "Wait ~150 ms, attempt 3",
+            "Succeeds: ~400 ms slower, order done"
+          ],
+          [
+            "Fleet, no backoff",
+            "~3x normal load at the weakest moment"
+          ],
+          [
+            "Fleet, backoff + jitter",
+            "A small bump a few percent above normal"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "One request. A two hundred millisecond network blip. Attempt one fails.",
+          "reveal": 1
+        },
+        {
+          "say": "Random wait about sixty milliseconds. Attempt two fails.",
+          "reveal": 2
+        },
+        {
+          "say": "Random wait about a hundred and fifty. Attempt three succeeds. Checkout took about four hundred milliseconds longer, but completed.",
+          "reveal": 3
+        },
+        {
+          "say": "Now the fleet. The provider struggles for one second at twenty thousand requests a second. With immediate retries, the whole backlog lands the instant it recovers: about three times normal load.",
+          "reveal": 4
+        },
+        {
+          "say": "With backoff and jitter, retries spread out, and the provider sees a small bump a few percent above normal.",
+          "reveal": 5
+        }
+      ],
+      "id": "s015"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Trade-offs",
+      "title": "Retry: costs to name",
+      "bullets": [
+        "Slower worst cases",
+        "Extra load in real outages",
+        "Layers multiply: 3 x 3 x 3 = 27 per tap",
+        "Hides a chronic 5% failure: count retries",
+        "Writes need idempotency first"
+      ],
+      "steps": [
+        {
+          "say": "Costs. Your slowest requests now contain your retry waits.",
+          "reveal": 1
+        },
+        {
+          "say": "Against a truly dead dependency, retries are waste. Only a breaker or budget stops that.",
+          "reveal": 2
+        },
+        {
+          "say": "Layers multiply. App retries three times, gateway three, service three. That's twenty-seven requests per tap at the bottom. Retry in one chosen layer, usually nearest the failure.",
+          "reveal": 3
+        },
+        {
+          "say": "Silent retries can make a five percent failing dependency look healthy. Record retry counts. A rising rate is an early warning.",
+          "reveal": 4
+        },
+        {
+          "say": "And retrying a write is safe only if doing it twice is harmless. Until then, don't retry it.",
+          "reveal": 5
+        }
+      ],
+      "id": "s016"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Retry now versus queue for later",
+      "table": {
+        "head": [
+          "Situation",
+          "Reach for"
+        ],
+        "rows": [
+          [
+            "Need the answer in this request (payment auth)",
+            "Sync retry with backoff"
+          ],
+          [
+            "Need it done, not now (send receipt)",
+            "Queue; consumer retries for hours"
+          ],
+          [
+            "Must survive a crash or long outage",
+            "Queue plus dead letter queue"
+          ],
+          [
+            "Whole retry window fits the timeout",
+            "Sync retry"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Retry isn't the only answer to this call failed. A queue is the other. If the caller needs the answer during this request, like authorizing a payment while the user waits, use a synchronous retry with backoff.",
+          "reveal": 1
+        },
+        {
+          "say": "If the work must happen but nobody needs the answer right now, like sending a receipt, put it on a queue. The consumer can retry over minutes or hours.",
+          "reveal": 2
+        },
+        {
+          "say": "If the retry has to survive a process crash or a long outage, use a queue, with a dead letter queue as the final safety net.",
+          "reveal": 3
+        },
+        {
+          "say": "And if the whole retry window fits inside one request's timeout, sync retry is fine. Ask aloud: does anyone need this result right now?",
+          "reveal": 4
+        }
+      ],
+      "id": "s017"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "App, gateway, service each retry 3x. Calls per tap?",
+      "bullets": [
+        "A. 3",
+        "B. 9",
+        "C. 27",
+        "D. It depends on jitter"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. App three, gateway three, backend three, and the database has a ten second brownout. How many attempts can one user tap create? I'll answer on the next slide.",
+          "reveal": 0
+        }
+      ],
+      "id": "s018"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 3 of 7",
+      "title": "Pattern 3: Idempotency",
+      "steps": [
+        {
+          "say": "The answer was C, twenty-seven. Retries multiply across layers, so keep them in one layer. Now, pattern three: idempotency.",
+          "reveal": 0
+        },
+        {
+          "say": "An operation is idempotent if running it many times has exactly the effect of running it once. For operations that aren't naturally like that, like charge this card, we add an idempotency key.",
+          "reveal": 0
+        }
+      ],
+      "id": "s019",
+      "caption": "Book: Module 5 Reliability · Idempotency"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "The $998 incident",
+      "table": {
+        "head": [
+          "Step",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "1. Click Pay",
+            "Charge $499 sent to the provider"
+          ],
+          [
+            "2. Provider charges",
+            "Card is charged"
+          ],
+          [
+            "3. Reply is lost",
+            "Checkout sees a timeout"
+          ],
+          [
+            "4. Retry ~100 ms later",
+            "Looks new, charged again: $998"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Imagine a customer clicks Pay on a four hundred ninety-nine dollar course bundle.",
+          "reveal": 1
+        },
+        {
+          "say": "The provider charges the card.",
+          "reveal": 2
+        },
+        {
+          "say": "But the success reply is lost on the way back. Checkout just sees a timeout. A timeout means no response came back, not that the operation failed.",
+          "reveal": 3
+        },
+        {
+          "say": "A hundred milliseconds later the retry sends an identical request. The provider treats it as new and charges again. The customer sees nine hundred ninety-eight dollars. With five hundred uncertain timeouts a day and a third of them already charged, that's about a hundred sixty-five double charges a day. At a fifteen dollar chargeback fee plus refunds and support, around four thousand dollars a day.",
+          "reveal": 4
+        }
+      ],
+      "id": "s020"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "The problem",
+      "title": "Why the obvious fixes fail",
+      "bullets": [
+        "Check before write: two retries race",
+        "Don't retry writes: 500 failed checkouts again",
+        "Match by similarity: blocks real gift orders",
+        "Only the client knows it's one click"
+      ],
+      "steps": [
+        {
+          "say": "Obvious fix one: check before you write. Is there already a charge for this order? But two concurrent retries can both check, both find nothing, and both charge. That's a race condition.",
+          "reveal": 1
+        },
+        {
+          "say": "Fix two: never retry writes. That brings back five hundred failed checkouts a day.",
+          "reveal": 2
+        },
+        {
+          "say": "Fix three: detect duplicates by similarity. That blocks someone buying two gifts on purpose.",
+          "reveal": 3
+        },
+        {
+          "say": "To the server, a retry and a new order look the same. Only the client knows it was one click, so the client must send that identity.",
+          "reveal": 4
+        }
+      ],
+      "id": "s021"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "How it works",
+      "title": "Idempotency key: the replay",
+      "mermaid": "flowchart LR\n  C[\"Checkout: key ord_7f3a\"] --> P[\"Provider: claim key\"]\n  P --> K[\"Key store: first time\"]\n  K --> X[\"Charge $499 once\"]\n  X --> S[\"Save result under key\"]\n  R[\"Retry with same key\"] --> P2[\"Claim finds key taken\"]\n  P2 --> O[\"Return saved 200 OK\"]",
+      "caption": "Same key, saved result, no second charge",
+      "steps": [
+        {
+          "say": "Replay the incident with a key. Checkout sends charge four ninety-nine, with idempotency key ord underscore 7f3a.",
+          "reveal": 0
+        },
+        {
+          "say": "The provider atomically claims the key, sees it's the first time, charges, and stores the result under that key.",
+          "reveal": 0
+        },
+        {
+          "say": "The reply is lost. The retry carries the same key. The claim finds it taken, and the stored result comes back: two hundred OK. No second charge.",
+          "reveal": 0
+        }
+      ],
+      "id": "s022"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Idempotency keys: four steps",
+      "bullets": [
+        "1. Client makes the key at the Pay click",
+        "2. Claim atomically: insert if missing",
+        "3. Save the result, not just the key",
+        "4. Keys expire: TTL, e.g. 24 hours"
+      ],
+      "steps": [
+        {
+          "say": "Step one. The client creates the key before the first attempt, one per logical operation, and stores it with the pending order. So even if the app crashes and reloads, the retry carries the same key.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two. Claiming is atomic, one indivisible step. Insert the key under a uniqueness rule: insert if missing, fail if present. The database guarantees exactly one winner, which closes the race.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three. Save the result, like the charge ID and status, so a retrying caller gets the original answer. A duplicate arriving mid-execution gets in progress, wait, or a 409 conflict.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four. Keys expire. That timer is a T-T-L, time to live. Stripe keeps them twenty-four hours. The cost: about a millisecond per write and about a hundred megabytes a day. Double charges: zero, by design.",
+          "reveal": 4
+        }
+      ],
+      "id": "s023"
+    },
+    {
+      "layout": "twocol",
+      "kicker": "Example",
+      "title": "Cheaper first: naturally idempotent",
+      "left": {
+        "heading": "Safe to repeat",
+        "bullets": [
+          "Set status = shipped",
+          "Set balance = 90",
+          "Update if version is 6",
+          "Upsert: insert or update"
+        ]
+      },
+      "right": {
+        "heading": "Not safe to repeat",
+        "bullets": [
+          "Increment login count",
+          "Subtract 10 from balance",
+          "Append a row",
+          "Charge this card"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Before building a key store, ask if the operation can be naturally idempotent. Set status to shipped can run ten times. Same result.",
+          "reveal": 1
+        },
+        {
+          "say": "Set balance to ninety. Run it twice, balance is still ninety.",
+          "reveal": 2
+        },
+        {
+          "say": "A conditional write: update only if the version is still six. The second run finds version seven and does nothing.",
+          "reveal": 3
+        },
+        {
+          "say": "And an upsert: insert if missing, else update.",
+          "reveal": 4
+        },
+        {
+          "say": "Compare: increment login count. Run twice, it's off by one.",
+          "reveal": 5
+        },
+        {
+          "say": "Subtract ten from the balance. Twice, and you've taken twenty.",
+          "reveal": 6
+        },
+        {
+          "say": "Appending a row twice gives a duplicate row.",
+          "reveal": 7
+        },
+        {
+          "say": "And charge this card is the classic. Prefer set semantics wherever you can. The best key is the one you never need.",
+          "reveal": 8
+        }
+      ],
+      "id": "s024"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Idempotency versus exactly-once delivery",
+      "table": {
+        "head": [
+          "You need",
+          "Build"
+        ],
+        "rows": [
+          [
+            "No lost work",
+            "At-least-once delivery"
+          ],
+          [
+            "No doubled effects",
+            "An idempotent consumer"
+          ],
+          [
+            "\"Exactly once\"",
+            "Both rows above, nothing else"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Interviewers raise this on purpose. Exactly-once delivery is impossible over an unreliable network. Any acknowledgment can be lost, so the sender either resends and risks a duplicate, that's at-least-once, or doesn't and risks loss, at-most-once. There's no third option. So for no lost work, you build at-least-once delivery with retries and acknowledgments.",
+          "reveal": 1
+        },
+        {
+          "say": "For no doubled effects, you build an idempotent consumer, with keys or natural idempotency.",
+          "reveal": 2
+        },
+        {
+          "say": "And exactly-once processing is just both together. In the interview, I'd use exactly-once delivery names the problem. At-least-once plus an idempotent consumer solves it. Side effects like the confirmation email need their own key. Recap: the client makes one key per intent, and the server claims, executes once, and replays.",
+          "reveal": 3
+        }
+      ],
+      "id": "s025"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 4 of 7",
+      "title": "Pattern 4: Circuit breaker",
+      "steps": [
+        {
+          "say": "Pattern four, the circuit breaker. It wraps every call to a dependency, tallies recent failures, and past a threshold it trips: it rejects calls instantly without trying. After a cooldown it lets a few test calls through.",
+          "reveal": 0
+        },
+        {
+          "say": "Like your home's breaker panel cutting power before a wire catches fire.",
+          "reveal": 0
+        }
+      ],
+      "id": "s026",
+      "caption": "Book: Module 5 Reliability · Circuit Breaker"
+    },
+    {
+      "layout": "number",
+      "kicker": "Example",
+      "title": "Black Friday, 2:15 PM",
+      "big": "300/s x 2 s = 600 threads > 200",
+      "caption": "Even a short timeout can't save checkout from an optional widget",
+      "steps": [
+        {
+          "say": "Black Friday, two fifteen PM. Checkout calls a recommendations service for an optional customers also bought widget. Its database starts failing. Twenty millisecond queries now take thirty seconds.",
+          "reveal": 0
+        },
+        {
+          "say": "Checkout has two hundred threads and three hundred requests a second. Even a two second timeout needs six hundred threads, three times the pool. And retries triple the calls into the dying database.",
+          "reveal": 0
+        },
+        {
+          "say": "The deeper issue: timeouts and retries both assume a later call might work. During a sustained outage, the struggling dependency needs zero new calls. A human flipping a flag takes eleven minutes. A breaker takes a second.",
+          "reveal": 0
+        }
+      ],
+      "id": "s027"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "How it works",
+      "title": "Circuit breaker: three states",
+      "mermaid": "flowchart TD\n  C[\"Closed: count failures\"] -->|\"over 50% of last 20 fail\"| O[\"Open: reject in 1 ms\"]\n  O -->|\"30 s cooldown ends\"| H[\"Half-open: 5 test calls\"]\n  H -->|\"all succeed\"| C\n  H -->|\"any fails\"| O",
+      "caption": "Open never jumps straight to closed: recovery must be proved",
+      "steps": [
+        {
+          "say": "Here's the state machine. Closed means normal. Calls pass, and failures, including timeouts, are counted over a recent window, like the last twenty calls.",
+          "reveal": 0
+        },
+        {
+          "say": "If more than half of those fail, it trips to open. Now every call is rejected in about one millisecond, without touching the dependency.",
+          "reveal": 0
+        },
+        {
+          "say": "After a thirty second cooldown it goes half-open and lets five test calls through. All succeed, it closes. Any fails, it reopens for another cooldown. Open never jumps straight to closed.",
+          "reveal": 0
+        }
+      ],
+      "id": "s028"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Breaker: the three states, step by step",
+      "bullets": [
+        "1. Closed: pass calls, count errors and timeouts",
+        "2. Open: reject fast, use a fallback",
+        "3. Half-open: probe with a few calls"
+      ],
+      "steps": [
+        {
+          "say": "Let's apply each state to our recommendations widget. Closed: checkout calls recommendations normally and counts failures. Without timeouts, hung calls never count, which is why timeout came first.",
+          "reveal": 1
+        },
+        {
+          "say": "Open: the widget call is never sent. Checkout gets a fast failure, or a fallback like a cached list, in a millisecond. The failing database gets a break.",
+          "reveal": 2
+        },
+        {
+          "say": "Half-open: after the cooldown, a few trial calls test recovery, without dumping full traffic on a service that just came back. It swaps slow, costly failures for fast, cheap ones.",
+          "reveal": 3
+        }
+      ],
+      "id": "s029"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Walkthrough: the breaker in action",
+      "table": {
+        "head": [
+          "Time",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "2:15:00",
+            "Recs DB fails; calls time out at 2 s"
+          ],
+          [
+            "2:15:01",
+            "10 of last 20 failed: breaker trips"
+          ],
+          [
+            "After trip",
+            "300/s x 1 ms = 0.3 threads busy"
+          ],
+          [
+            "2:15:31",
+            "Cooldown ends; 5 tests fail; reopens"
+          ],
+          [
+            "2:19:31",
+            "Tests succeed; closes automatically"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Two fifteen and zero seconds. The recommendations database fails. Calls time out at two seconds.",
+          "reveal": 1
+        },
+        {
+          "say": "One second later, ten of the last twenty calls failed. The breaker trips.",
+          "reveal": 2
+        },
+        {
+          "say": "From then on, three hundred requests a second get an instant breaker open in a millisecond. That's point three threads busy on average, versus nine thousand unprotected. The page renders without the widget.",
+          "reveal": 3
+        },
+        {
+          "say": "At two fifteen thirty-one the cooldown ends. Five test calls fail. It reopens.",
+          "reveal": 4
+        },
+        {
+          "say": "At two nineteen thirty-one, tests succeed and it closes. Four minutes of dependency failure, zero change in checkout availability.",
+          "reveal": 5
+        }
+      ],
+      "id": "s030"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Circuit breaker versus retry",
+      "table": {
+        "head": [
+          "Situation",
+          "Reach for"
+        ],
+        "rows": [
+          [
+            "Transient: dropped packet, brief failover",
+            "Retry with backoff"
+          ],
+          [
+            "Sustained: dependency down or overloaded",
+            "Circuit breaker"
+          ],
+          [
+            "Breaker outside, retries inside",
+            "Count final outcome after retries"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "These are opposite diagnoses. Transient failures, a dropped packet, a brief failover: another try probably succeeds. Retry.",
+          "reveal": 1
+        },
+        {
+          "say": "Sustained failures, the dependency is down or overloaded: another try just piles on load. Circuit breaker.",
+          "reveal": 2
+        },
+        {
+          "say": "In production, combine them with the breaker outside the retries, counting each request's final outcome. Retries absorb blips, and the breaker cuts their extra load once failure persists. Costs: false trips on short blips, and settings to tune. And an open breaker without a fallback is just a faster error page. Skip it for local calls and very low traffic paths. In the interview say: a slow dependency is more dangerous than a dead one.",
+          "reveal": 3
+        }
+      ],
+      "id": "s031"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 5 of 7",
+      "title": "Pattern 5: Bulkhead",
+      "steps": [
+        {
+          "say": "Pattern five, the bulkhead. You split a shared resource, like threads, connections or machines, into walled pools, one per feature, dependency, or tenant, so one full pool can't starve the rest.",
+          "reveal": 0
+        },
+        {
+          "say": "Like a ship's watertight compartments: a hole floods one, not the ship.",
+          "reveal": 0
+        }
+      ],
+      "id": "s032",
+      "caption": "Book: Module 5 Reliability · Bulkhead"
+    },
+    {
+      "layout": "number",
+      "kicker": "Example",
+      "title": "The flood with green dashboards",
+      "big": "1,500/s x 0.5 s = 750 threads",
+      "caption": "200 shared threads; error rate 0.0%; checkout stops selling",
+      "steps": [
+        {
+          "say": "One A-P-I serves checkout, search and order history, sharing two hundred threads. Marketing emails two million people a link to order history. Traffic leaps from fifty to fifteen hundred requests a second, on a five hundred millisecond query.",
+          "reveal": 0
+        },
+        {
+          "say": "Little's law: fifteen hundred times half a second is seven hundred fifty threads wanted. Two hundred exist. Order history takes all of them in a fifth of a second, and checkout stops selling.",
+          "reveal": 0
+        },
+        {
+          "say": "Yet nothing fails. Error rate zero. Dashboards green. The breaker stays closed, because there are no failures to count. The problem is occupancy: how much capacity one workload holds.",
+          "reveal": 0
+        }
+      ],
+      "id": "s033"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "How it works",
+      "title": "Three levels of wall",
+      "bullets": [
+        "1. Counters (semaphores): max N at once",
+        "2. Separate thread or connection pools",
+        "3. Physical: own processes, containers, machines"
+      ],
+      "steps": [
+        {
+          "say": "Three levels, each costlier. Level one, a counter, called a semaphore. At most forty order history requests at once. The forty-first is rejected immediately.",
+          "reveal": 1
+        },
+        {
+          "say": "Level two, separate pools. Order history gets its own forty threads. Even if all forty get stuck, they can't touch checkout's threads.",
+          "reveal": 2
+        },
+        {
+          "say": "Level three, physical separation: different processes, containers or machines per workload. Heaviest, and the only level that also isolates CPU, memory and crashes. At every level, a full compartment rejects new work quickly and never borrows from a neighbor.",
+          "reveal": 3
+        }
+      ],
+      "id": "s034"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Sizing: rate x duration + headroom",
+      "table": {
+        "head": [
+          "Pool",
+          "Rate x duration",
+          "Size"
+        ],
+        "rows": [
+          [
+            "Checkout",
+            "300/s x 0.25 s = 75",
+            "80"
+          ],
+          [
+            "Search",
+            "measured the same way",
+            "60"
+          ],
+          [
+            "Order history",
+            "40 / 0.5 s = 80 req/s max",
+            "40"
+          ],
+          [
+            "Reserve",
+            "burst room",
+            "20"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "To size a compartment, run the incident math backwards. Needed equals rate times duration, plus headroom for bursts. Checkout: three hundred a second times a quarter second is seventy-five. Round up to eighty.",
+          "reveal": 1
+        },
+        {
+          "say": "Search gets sixty, measured the same way.",
+          "reveal": 2
+        },
+        {
+          "say": "Order history gets forty. During the flood, forty threads at half a second serve eighty requests a second. The other fourteen hundred twenty get busy, try again shortly, in a millisecond. Meanwhile checkout uses seventy-five of its eighty and doesn't notice. The database is protected too: at most forty order history queries at once.",
+          "reveal": 3
+        },
+        {
+          "say": "And twenty in reserve. The promise shifts from survives if total demand fits, to each feature survives if its own demand fits.",
+          "reveal": 4
+        }
+      ],
+      "id": "s035"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Bulkhead versus circuit breaker",
+      "table": {
+        "head": [
+          "",
+          "Circuit breaker",
+          "Bulkhead"
+        ],
+        "rows": [
+          [
+            "Watches",
+            "Failures",
+            "Occupancy"
+          ],
+          [
+            "Triggers when",
+            "Dependency is failing",
+            "Something hogs capacity"
+          ],
+          [
+            "Action",
+            "Stop calling; check later",
+            "Cap the share; reject overflow"
+          ],
+          [
+            "Sees slow success everywhere?",
+            "No",
+            "Yes"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Compare them. A breaker watches failures: errors and timeouts. A bulkhead watches occupancy: who is holding how much.",
+          "reveal": 1
+        },
+        {
+          "say": "A breaker triggers when the dependency is failing. A bulkhead triggers when something is hogging capacity.",
+          "reveal": 2
+        },
+        {
+          "say": "A breaker stops calling completely. A bulkhead limits the share and rejects the overflow.",
+          "reveal": 3
+        },
+        {
+          "say": "And only the bulkhead sees everything succeeding, slowly, everywhere. Stack them: the bulkhead limits stuck threads while the breaker gathers evidence. Costs: idle capacity you can't lend, sizing that goes stale, and more pools to watch. Alert on per-compartment fullness. Skip it for single-purpose services or tiny pools.",
+          "reveal": 4
+        }
+      ],
+      "id": "s036"
+    },
+    {
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Zero errors, all slow, one noisy tenant. Which pattern?",
+      "bullets": [
+        "A. Circuit breaker",
+        "B. Retry with backoff",
+        "C. Bulkhead plus per-tenant limits",
+        "D. Longer timeouts"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. A software-as-a-service product with five hundred customers. One ships a buggy integration that opens two thousand concurrent requests. Everyone slows down. Error rate near zero. What do you reach for? Answer next.",
+          "reveal": 0
+        }
+      ],
+      "id": "s037"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 6 of 7",
+      "title": "Pattern 6: Dead letter queue",
+      "steps": [
+        {
+          "say": "The answer was C. It's success-shaped hogging, so a breaker sees nothing. Per-tenant rate limits at the front door, and bulkheads by tenant tier inside. Now, pattern six: the dead letter queue, or D-L-Q.",
+          "reveal": 0
+        },
+        {
+          "say": "A D-L-Q is a separate queue for messages that keep failing. After a set number of attempts, the queue system moves the message aside with notes on how it failed. The main line keeps flowing, and the message is kept safe to fix and replay.",
+          "reveal": 0
+        }
+      ],
+      "id": "s038",
+      "caption": "Book: Module 5 Reliability · Dead Letter Queue"
+    },
+    {
+      "layout": "number",
+      "kicker": "Example",
+      "title": "One null field, a stuck pipeline",
+      "big": "200 msg/s x 3,600 s = 720,000/hour",
+      "caption": "A poison message fails the same way every time",
+      "steps": [
+        {
+          "say": "Quick terms. A consumer acknowledges each message, an ack, and the broker, the queue system, deletes it. Unacked messages get redelivered.",
+          "reveal": 0
+        },
+        {
+          "say": "Our example: an order fulfillment consumer handles two hundred messages a second. At two forty-seven AM a partner sends an order with a null shipping address. The consumer throws, doesn't ack, and the broker redelivers it forever. Attempt four thousand fails like attempt one. That's a poison message.",
+          "reveal": 0
+        },
+        {
+          "say": "With ordered processing, everything waits behind it: seven hundred twenty thousand stuck orders an hour. And the emergency fix, catch, ack and move on, silently deleted forty paid orders the next weekend. The D-L-Q is the third option.",
+          "reveal": 0
+        }
+      ],
+      "id": "s039"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "How it works",
+      "title": "Dead letter queue flow",
+      "mermaid": "flowchart LR\n  P[\"Producer\"] --> Q[\"Main queue\"]\n  Q --> C[\"Consumer\"]\n  C -->|\"fail, attempts under 5\"| Q\n  C -->|\"5th failure\"| D[\"Dead letter queue\"]\n  D --> A[\"Alarm: depth over 0\"]\n  A --> E[\"Engineer fixes\"]\n  E -->|\"redrive\"| Q",
+      "caption": "Healthy messages keep moving; strange ones wait for a human",
+      "steps": [
+        {
+          "say": "The producer writes to the main queue and the consumer processes. Success, it acks.",
+          "reveal": 0
+        },
+        {
+          "say": "Failure with fewer than five attempts, the message goes back for redelivery. On the fifth failure, it goes to the dead letter queue.",
+          "reveal": 0
+        },
+        {
+          "say": "The D-L-Q being non-empty fires an alarm. An engineer inspects the payload and error, ships a fix, and redrives the message back into the main queue.",
+          "reveal": 0
+        }
+      ],
+      "id": "s040"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "DLQ: four pieces, only one is code",
+      "bullets": [
+        "1. Broker-enforced attempt limit, 3 to 5",
+        "2. Failure notes travel with the message",
+        "3. An alarm when the DLQ is non-empty",
+        "4. Redrive back after the fix"
+      ],
+      "steps": [
+        {
+          "say": "Piece one, a broker-enforced attempt limit, usually three to five. It must be the broker, because the consumer may be the thing crashing on this very message.",
+          "reveal": 1
+        },
+        {
+          "say": "Piece two, failure notes travel with it: source queue, exception, attempt count, first and last failure times.",
+          "reveal": 2
+        },
+        {
+          "say": "Piece three, an alarm. S-Q-S keeps messages fourteen days, then deletes them. So an unwatched D-L-Q only postpones data loss. A D-L-Q nobody watches is data loss on a timer.",
+          "reveal": 3
+        },
+        {
+          "say": "Piece four, redrive. After the fix ships, push the messages back for real processing. A redrive is a redelivery, so consumers must be idempotent.",
+          "reveal": 4
+        }
+      ],
+      "id": "s041"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Walkthrough: the null address, handled",
+      "table": {
+        "head": [
+          "Time",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "2:47:00",
+            "Attempt 1 fails; 2 to 5 fail over ~30 s"
+          ],
+          [
+            "2:47:30",
+            "Broker moves it to the DLQ with history"
+          ],
+          [
+            "Backlog",
+            "30 s x 200/s = 6,000 msgs, clear in < 1 min"
+          ],
+          [
+            "2:47:31",
+            "Alarm; on-call reads payload, finds null"
+          ],
+          [
+            "9:15 AM",
+            "Fix ships; one-click redrive; order ships"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Two forty-seven. The null address event fails attempt one, and attempts two to five fail over about thirty seconds.",
+          "reveal": 1
+        },
+        {
+          "say": "At two forty-seven thirty, the broker moves it to the D-L-Q with the exception and history. The consumer moves on.",
+          "reveal": 2
+        },
+        {
+          "say": "Backlog math: thirty seconds times two hundred a second is about six thousand messages, cleared in under a minute. Versus seven hundred twenty thousand an hour, forever.",
+          "reveal": 3
+        },
+        {
+          "say": "The alarm fires. On-call reads the payload and the stack trace, and finds the partner's null field.",
+          "reveal": 4
+        },
+        {
+          "say": "At nine fifteen the fix ships, one click redrives, and the order ships hours late instead of never. One order delayed, zero lost.",
+          "reveal": 5
+        }
+      ],
+      "id": "s042"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "DLQ versus retry-queue tiers",
+      "table": {
+        "head": [
+          "Situation",
+          "Reach for"
+        ],
+        "rows": [
+          [
+            "Clears within seconds",
+            "Redeliver with backoff, then DLQ"
+          ],
+          [
+            "Needs minutes to hours",
+            "Tiers: retry-5m, retry-1h, then DLQ"
+          ],
+          [
+            "Deterministic: bad payload, bug",
+            "Straight to the DLQ"
+          ],
+          [
+            "Per-key ordering must hold",
+            "Neither: pause that stream"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Failures that clear in seconds: redeliver in place with backoff, then D-L-Q.",
+          "reveal": 1
+        },
+        {
+          "say": "Failures that need minutes or hours, like a downstream outage: retry tiers. The message goes to a retry five minute queue, then a retry one hour queue, and only then the D-L-Q. Otherwise a ten minute outage dumps thousands of healthy messages into the D-L-Q.",
+          "reveal": 2
+        },
+        {
+          "say": "Deterministic failures, like a malformed payload: straight to the D-L-Q. Waiting won't help.",
+          "reveal": 3
+        },
+        {
+          "say": "And if ordering per key must hold, like an account ledger, neither can skip safely. Pause that stream, alert, and fix forward. In the interview, say poison message, and say who watches the D-L-Q.",
+          "reveal": 4
+        }
+      ],
+      "id": "s043"
+    },
+    {
+      "layout": "section",
+      "kicker": "Concept 7 of 7",
+      "title": "Pattern 7: Graceful degradation",
+      "steps": [
+        {
+          "say": "Pattern seven, graceful degradation. When part of a system fails, return a lesser answer instead of an error. Optional features disappear or show older data, while critical operations refuse honestly.",
+          "reveal": 0
+        },
+        {
+          "say": "When the grill breaks, a kitchen pulls grilled dishes but keeps serving the rest.",
+          "reveal": 0
+        }
+      ],
+      "id": "s044",
+      "caption": "Book: Module 5 Reliability · Graceful Degradation"
+    },
+    {
+      "layout": "number",
+      "kicker": "Example",
+      "title": "Twelve calls, one page",
+      "big": "0.999^12 = 98.8% = ~104 h/year down",
+      "caption": "Every dependency without a fallback becomes a required one",
+      "steps": [
+        {
+          "say": "Imagine a homepage making twelve service calls: catalog, cart badge, recommendations, reviews and so on. Each has a timeout, retries and a breaker. Recommendations fails. Its breaker opens in a second, as designed. And the homepage still errors, because nobody wrote code for what to do with an open breaker.",
+          "reveal": 0
+        },
+        {
+          "say": "The math. Each dependency is ninety-nine point nine percent available. But the page needs all twelve, so you multiply: about ninety-eight point eight percent. That's roughly a hundred and four hours of homepage downtime a year, mostly from optional widgets.",
+          "reveal": 0
+        },
+        {
+          "say": "What's needed is a decision, made with product, before the incident.",
+          "reveal": 0
+        }
+      ],
+      "id": "s045"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Fallback ladder: recommendations widget",
+      "bullets": [
+        "1. Fresh, full quality: personalized list",
+        "2. Cached copy, seconds to minutes old",
+        "3. Static default: popular this week",
+        "4. Hide the feature",
+        "5. Critical only: refuse clearly and loudly"
+      ],
+      "steps": [
+        {
+          "say": "First, criticality tiers, decided in a meeting with product. Critical: catalog, checkout, login. Important: pricing detail. Optional: recommendations. Then each feature gets a ladder. Step one for our recommendations widget: the fresh, personalized list.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: a cached copy of the list, seconds to minutes old.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: a static default, the hourly popular this week list.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: hide the row. Optional features may fall this far.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five is only for critical features: refuse clearly. Nothing was charged, nothing was faked. Pricing, for example, goes live price, then a cached price within an approved staleness limit, then fail. A wrong price isn't cosmetic.",
+          "reveal": 5
+        }
+      ],
+      "id": "s046"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "How it works",
+      "title": "Degradation ladder",
+      "mermaid": "flowchart LR\n  F[\"Fresh\"] --> C[\"Cached\"]\n  C --> S[\"Static default\"]\n  S --> H[\"Hide feature\"]\n  H --> R[\"Refuse loudly: critical only\"]",
+      "caption": "How far each feature may drop is agreed with product beforehand",
+      "steps": [
+        {
+          "say": "Here's the ladder as a picture. Each step is a lesser but still useful answer.",
+          "reveal": 0
+        },
+        {
+          "say": "Optional features may go all the way to hidden. Important ones stop at a default. Critical ones, like checkout, login and payment capture, skip straight to an honest refusal.",
+          "reveal": 0
+        }
+      ],
+      "id": "s047"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "How it works",
+      "title": "Whole-system versions and two rules",
+      "bullets": [
+        "Read-only mode: browse works, writes on hold",
+        "Queue writes for later, confirm by email",
+        "Priority shedding: drop optional traffic first",
+        "Rule: alarm inside, degrade smoothly outside",
+        "Rule: fallbacks rot unless exercised"
+      ],
+      "steps": [
+        {
+          "say": "The same idea at whole-system scale. Read-only mode: browsing works, writes are on hold.",
+          "reveal": 1
+        },
+        {
+          "say": "Queue writes for later: accept the order, queue it durably with its idempotency key, and confirm by email once done.",
+          "reveal": 2
+        },
+        {
+          "say": "Priority shedding: under overload, drop optional traffic first so critical traffic survives.",
+          "reveal": 3
+        },
+        {
+          "say": "Two operating rules. One: alarm inside, degrade smoothly outside. Degraded mode must page on-call, or the temporary fallback becomes permanent.",
+          "reveal": 4
+        },
+        {
+          "say": "Two: fallbacks rot unless exercised. An else branch that never runs is already broken. Netflix's Chaos Monkey and game days force them to run.",
+          "reveal": 5
+        }
+      ],
+      "id": "s048"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Walkthrough: availability rebuilt",
+      "table": {
+        "head": [
+          "Scenario",
+          "Result"
+        ],
+        "rows": [
+          [
+            "Recs outage, with fallback",
+            "Popular list in ~2 ms; conversion -1%"
+          ],
+          [
+            "Page availability",
+            "Only catalog: 99.95% = ~4.4 h/year"
+          ],
+          [
+            "20-min payments DB incident",
+            "Queue writes; orders confirmed by email"
+          ],
+          [
+            "Must fail closed",
+            "Payment capture, auth, compliance"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Replay the recommendations outage. The breaker opens, the fallback serves popular this week in about two milliseconds, a degraded mode metric alerts on-call, and conversion drops about one percent instead of to zero.",
+          "reveal": 1
+        },
+        {
+          "say": "Availability rebuilt: now the page hard-fails only if the catalog fails. At ninety-nine point nine five percent, that's about four point four hours a year, down from a hundred and four. Eleven dependencies just lost the power to take the page down.",
+          "reveal": 2
+        },
+        {
+          "say": "On the write side, a twenty minute payments database incident: checkout queues writes, and revenue keeps flowing.",
+          "reveal": 3
+        },
+        {
+          "say": "But some things must fail closed. Payment capture, authentication, compliance. If auth is slow, we can skip the check has ended interviews. Auth only degrades toward refusing.",
+          "reveal": 4
+        }
+      ],
+      "id": "s049"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Degradation versus failover",
+      "table": {
+        "head": [
+          "",
+          "Failover",
+          "Graceful degradation"
+        ],
+        "rows": [
+          [
+            "The move",
+            "Swap the dependency",
+            "Swap the answer"
+          ],
+          [
+            "Quality after",
+            "Full",
+            "Lower, on purpose"
+          ],
+          [
+            "Paid in advance",
+            "Idle standby capacity",
+            "Fallback code and decisions"
+          ],
+          [
+            "Fails when",
+            "Whole class is down",
+            "No sensible lesser answer"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Failover swaps out the dependency, for a replica, a standby or another region. Degradation swaps out the answer, for cached, default or hidden.",
+          "reveal": 1
+        },
+        {
+          "say": "After failover, quality is full. After degradation, it's lower, on purpose.",
+          "reveal": 2
+        },
+        {
+          "say": "Failover costs idle standby capacity. Degradation costs fallback code and product decisions.",
+          "reveal": 3
+        },
+        {
+          "say": "Failover fails when the whole class is down, like a bug in every replica. Degradation fails when no sensible lesser answer exists. They're one sequence: fail over first, so users never notice, then degrade, so users barely notice. In the interview, ask: which parts of my design are allowed to fail?",
+          "reveal": 4
+        }
+      ],
+      "id": "s050"
+    },
+    {
+      "layout": "section",
+      "kicker": "Capstone",
+      "title": "Capstone: hardening a payment flow",
+      "steps": [
+        {
+          "say": "Now the capstone. Seven patterns, one payment system, seven incidents, each fix uncovering the next.",
+          "reveal": 0
+        },
+        {
+          "say": "The brief. You inherit checkout a week before Black Friday. The Checkout A-P-I has two hundred threads. When the user clicks Pay it calls the payment provider, with a healthy p ninety-nine of four hundred milliseconds, then the orders database, the email service and the warehouse. A hundred thousand orders a day, peaking at three hundred a second. The promise: answer within two seconds, ninety-nine point nine percent of the time. Reliability tooling: none.",
+          "reveal": 0
+        }
+      ],
+      "id": "s051",
+      "caption": "Book: Module 5 Reliability · Capstone: Hardening a Payment Flow"
+    },
+    {
+      "layout": "diagram",
+      "kicker": "Capstone",
+      "title": "The payment flow, before",
+      "mermaid": "flowchart LR\n  U[\"User clicks Pay\"] --> A[\"Checkout API, 200 threads\"]\n  A --> P[\"Payment provider, p99 400 ms\"]\n  A --> D[\"Orders DB, 100 conns\"]\n  A --> E[\"Email service\"]\n  A --> W[\"Warehouse API\"]",
+      "caption": "All four calls are synchronous, with library defaults",
+      "steps": [
+        {
+          "say": "Here's the starting picture. Every call is synchronous, while the user waits, and every call uses its H-T-T-P client's defaults. Pause on each stage and decide first.",
+          "reveal": 0
+        }
+      ],
+      "id": "s052"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Stages 1 and 2: hang, then blips",
+      "table": {
+        "head": [
+          "Stage",
+          "Incident",
+          "Decision"
+        ],
+        "rows": [
+          [
+            "1 Hang",
+            "Provider returns nothing; 200 threads gone in 90 s",
+            "Timeout: 1,200 ms, connect 200 ms"
+          ],
+          [
+            "1 Budget",
+            "1,200 + 250 + 500 + 500 = 2,450 ms",
+            "Cut email and warehouse to 300 ms"
+          ],
+          [
+            "2 Blips",
+            "~500 checkouts a day fail",
+            "Retry 3x, 100 ms doubling, jitter"
+          ],
+          [
+            "2 Layers",
+            "App and gateway could multiply",
+            "Retry in exactly one layer"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Stage one, the hang. A bad deploy on one provider server returns nothing. Within ninety seconds all two hundred threads are stuck. A point four percent provider problem became a total outage. Decision: timeouts. The provider gets twelve hundred milliseconds, three times its healthy p ninety-nine, with a two hundred millisecond connection timeout.",
+          "reveal": 1
+        },
+        {
+          "say": "Budget check: with two fifty for the database and five hundred each for email and warehouse, that's twenty-four fifty. Over the two second promise. So email and warehouse don't belong in the synchronous path. For now, cut them to three hundred each.",
+          "reveal": 2
+        },
+        {
+          "say": "Stage two, the blips. Now about five hundred checkouts a day fail transiently. Decision: retry up to three times, doubling from a hundred milliseconds, with jitter, only for changeable errors. A declined card is an answer, never retried.",
+          "reveal": 3
+        },
+        {
+          "say": "And retries live in exactly one layer, the Checkout A-P-I, so we avoid three times three times three. But a timeout is uncertain. Three days later: a customer charged twice.",
+          "reveal": 4
+        }
+      ],
+      "id": "s053"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Stages 3 and 4: double charge, then outage",
+      "table": {
+        "head": [
+          "Stage",
+          "Incident",
+          "Decision"
+        ],
+        "rows": [
+          [
+            "3 Double charge",
+            "A third of timeouts already charged",
+            "Key made at Pay click, sent every try"
+          ],
+          [
+            "3 Own writes",
+            "Redelivered work could duplicate rows",
+            "Order insert is keyed too"
+          ],
+          [
+            "4 Brownout",
+            "Each thread spends ~4 s failing",
+            "Breaker: 20 calls, 50%, 30 s, 5 tests"
+          ],
+          [
+            "4 Result",
+            "Opens at ~90 s; 1 ms not 4 s",
+            "Counts final outcome after retries"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Stage three, the double charge. About a third of payment timeouts happen after the provider took the money. Decision: the Checkout A-P-I creates one idempotency key when the user clicks Pay, stored with the pending order, sent on every attempt. The provider claims it and charges once.",
+          "reveal": 1
+        },
+        {
+          "say": "Our own order insert is keyed too, so redelivered work can't create duplicate rows. Idempotency is the rare fix that adds no new failure mode.",
+          "reveal": 2
+        },
+        {
+          "say": "Stage four, Black Friday, two fifteen. The provider browns out. With timeouts and retries, each thread spends about four seconds failing. Decision: a breaker with a window of twenty calls, a fifty percent threshold, a thirty second cooldown, and five half-open tests.",
+          "reveal": 3
+        },
+        {
+          "say": "It counts only final outcomes after retries. About ninety seconds in it opens. Calls fail in one millisecond instead of four seconds, and about ten minutes later it closes by itself. But everything slowed, because all features shared pools.",
+          "reveal": 4
+        }
+      ],
+      "id": "s054"
+    },
+    {
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Stages 5 and 6: flood, then poison",
+      "table": {
+        "head": [
+          "Stage",
+          "Incident",
+          "Decision"
+        ],
+        "rows": [
+          [
+            "5 Flood",
+            "Refunds batch 800/s x 0.6 s = 480 threads",
+            "Checkout 100, refunds 40, status 40, spare 20"
+          ],
+          [
+            "5 Trade",
+            "Batch capped at ~65 req/s",
+            "3 hours not 1, agreed with finance"
+          ],
+          [
+            "6 Async",
+            "Email and warehouse move off the path",
+            "Publish order.paid to consumers"
+          ],
+          [
+            "6 Poison",
+            "Null shipping address blocks fulfillment",
+            "5 tries, DLQ, alarm, runbook"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Stage five, Cyber Monday. Finance's reconciliation batch hits the refunds endpoint at eight hundred requests a second, six hundred milliseconds each, all succeeding. That wants four hundred eighty threads from two hundred shared, with green dashboards. Decision: bulkheads. Checkout a hundred, which is seventy-five plus headroom. Refunds forty, order status forty, reserve twenty.",
+          "reveal": 1
+        },
+        {
+          "say": "Refunds is capped at about sixty-five a second, so the batch takes three hours instead of one. That's a trade agreed with finance, not discovered by them. New alert: per-compartment fullness.",
+          "reveal": 2
+        },
+        {
+          "say": "Stage six. Slow work goes async. After the charge and order insert, the A-P-I publishes order dot paid. The synchronous path shrinks to charge plus insert.",
+          "reveal": 3
+        },
+        {
+          "say": "Three weeks later, a null shipping address. The warehouse consumer throws forever. Decision: five attempts with backoff, then the D-L-Q, so the line unblocks in thirty seconds. The non-code part makes it real: an alarm to the owning team, with a runbook. And consumers are idempotent.",
+          "reveal": 4
+        }
+      ],
+      "id": "s055"
+    },
+    {
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "Stage 7: the question nobody answered",
+      "bullets": [
+        "Provider down 20 min; every mechanism works",
+        "Still an instant error page: $40,000 lost",
+        "Payment capture stays fail-closed",
+        "Site stays up; cart saved; email when back",
+        "Trusted customers: authorize now, capture later",
+        "Result: ~70% convert within the hour"
+      ],
+      "steps": [
+        {
+          "say": "Stage seven. The provider is down twenty minutes. Timeouts expire, retries stop, the breaker opens, bulkheads hold, queues drain. Every mechanism works perfectly.",
+          "reveal": 1
+        },
+        {
+          "say": "And yet every Pay click returns an instant error page. Forty thousand dollars of purchase intent lost. Nobody had decided what users should see.",
+          "reveal": 2
+        },
+        {
+          "say": "Decision, made with product. Payment capture is fail closed. Never fake a charge. But failing closed needn't be rude or total.",
+          "reveal": 3
+        },
+        {
+          "say": "The site stays up, and Pay becomes: payments are briefly delayed, your cart is saved, and we'll email you when we're back.",
+          "reveal": 4
+        },
+        {
+          "say": "And where finance accepted the risk in advance, trusted repeat customers under a spending limit get authorize later. Captured when the breaker closes. And degraded mode pages on-call.",
+          "reveal": 5
+        },
+        {
+          "say": "Result: in the next twenty minute outage, about seventy percent of would-be buyers convert within the hour.",
+          "reveal": 6
+        }
+      ],
+      "id": "s056"
+    },
+    {
+      "layout": "table",
+      "kicker": "Capstone",
+      "title": "Debrief: the chain, named",
+      "table": {
+        "head": [
+          "Stage",
+          "Pattern",
+          "What mattered"
+        ],
+        "rows": [
+          [
+            "1 Hangs eat threads",
+            "Timeout",
+            "3x healthy p99, budgeted"
+          ],
+          [
+            "2 Blips kill checkouts",
+            "Retry + backoff",
+            "Jitter, retryable errors, one layer"
+          ],
+          [
+            "3 Retries charge twice",
+            "Idempotency",
+            "Client key before attempt one"
+          ],
+          [
+            "4 Sustained outage",
+            "Circuit breaker",
+            "Counts outcome after retries"
+          ],
+          [
+            "5 Green dashboards, starving",
+            "Bulkhead",
+            "Rate x duration; fullness alerts"
+          ],
+          [
+            "6 Poison halts fulfillment",
+            "Dead letter queue",
+            "Alarm and runbook with an owner"
+          ],
+          [
+            "7 Error page anyway",
+            "Graceful degradation",
+            "Fail-closed capture; product tiers"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's the chain. Timeouts made hangs visible failures.",
+          "reveal": 1
+        },
+        {
+          "say": "Visible failures needed retries.",
+          "reveal": 2
+        },
+        {
+          "say": "Retries created duplicates, so idempotency made them safe.",
+          "reveal": 3
+        },
+        {
+          "say": "Sustained failure beat retries, so the breaker.",
+          "reveal": 4
+        },
+        {
+          "say": "The breaker couldn't see a success-shaped flood, so the bulkhead.",
+          "reveal": 5
+        },
+        {
+          "say": "The bulkhead pushed slow work onto queues, and queues brought poison, so the D-L-Q.",
+          "reveal": 6
+        },
+        {
+          "say": "And with every mechanism working, one human question remained: what should the user see? Don't stop at what happens when it fails. Ask what happens instead.",
+          "reveal": 7
+        }
+      ],
+      "id": "s057"
+    },
+    {
+      "layout": "recap",
+      "kicker": "Episode 10 complete",
+      "title": "Episode 10 recap",
+      "bullets": [
+        "Timeout: 2 to 3x healthy p99, pass the budget down",
+        "Retry: backoff, jitter, caps, one layer",
+        "Idempotency: client key, atomic claim, saved result",
+        "Breaker: closed, open, half-open; bulkhead: walls",
+        "DLQ: attempt limit, alarm, runbook, redrive",
+        "Degradation: ladders agreed with product"
+      ],
+      "steps": [
+        {
+          "say": "Let's recap. Timeouts: measured deadlines at two to three times healthy p ninety-nine, connection timeouts tighter, and the remaining budget passed down the chain.",
+          "reveal": 1
+        },
+        {
+          "say": "Retries: exponential backoff with jitter, capped attempts, only changeable errors, in one layer.",
+          "reveal": 2
+        },
+        {
+          "say": "Idempotency: one client key per intent, an atomic claim, a saved result. Exactly-once is at-least-once plus an idempotent consumer.",
+          "reveal": 3
+        },
+        {
+          "say": "Circuit breakers stop calling a sustained failure. Bulkheads wall off capacity, sized by rate times duration, against success-shaped floods.",
+          "reveal": 4
+        },
+        {
+          "say": "Dead letter queues park poison messages, with an alarm, a runbook and a redrive.",
+          "reveal": 5
+        },
+        {
+          "say": "And graceful degradation decides what users see, with money and auth failing closed. Next time, in episode eleven: Growing Under Load, scaling patterns. See you there.",
+          "reveal": 6
+        }
+      ],
+      "id": "s058"
+    }
+  ]
+}

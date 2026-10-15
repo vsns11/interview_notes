@@ -1,0 +1,1644 @@
+{
+  "series": "LLD Workshop",
+  "episode": 12,
+  "title": "Beyond GoF and Architectural Patterns",
+  "subtitle": "Null Object, DI, Repository, Specification, MVC, Event Sourcing, and system styles",
+  "scenes": [
+    {
+      "id": "s001",
+      "layout": "title",
+      "title": "Beyond GoF and Architectural Patterns",
+      "steps": [
+        {
+          "say": "Welcome to the L-L-D Workshop, episode twelve: Beyond the Gang of Four, and Architectural Patterns. The Gang of Four, or G-o-F, are the four authors of the classic nineteen ninety-four design patterns book.",
+          "reveal": 0
+        },
+        {
+          "say": "First, six patterns that aren't in that book but show up in almost every low-level design interview: Null Object, Dependency Injection, Repository, Specification, M-V-C, and Event Sourcing.",
+          "reveal": 0
+        },
+        {
+          "say": "Then we zoom out to architecture: layered, client-server, monoliths and microservices, event-driven, pipe-and-filter, and hexagonal. We finish with one program that combines three of those styles.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end, you'll be able to pick the right pattern from a symptom, and answer \"what architecture would you use?\" with a trade-off, not just a name. Keep the chapter eleven PDF open. Pause on any table and read along.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s002",
+      "layout": "section",
+      "kicker": "Part 1",
+      "title": "Patterns every LLD interview expects",
+      "steps": [
+        {
+          "say": "The Gang of Four book isn't the whole story. Later books, like Martin Fowler's enterprise patterns book and Eric Evans's Domain-Driven Design, added patterns that are now the everyday glue of real code. Domain-Driven Design, or D-D-D, means shaping your code around the business and its vocabulary. Let's take them one by one.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 11 · 11.7 Beyond GoF: patterns every LLD interview expects"
+    },
+    {
+      "id": "s003",
+      "layout": "section",
+      "kicker": "Concept 1 of 18",
+      "title": "Null Object",
+      "steps": [
+        {
+          "say": "Here's a question. Your shop looks up a customer by ID, and the customer isn't found. What do you return? If you say null, every caller now has to remember a null check. Forget one, and you get a null pointer exception in production.",
+          "reveal": 0
+        },
+        {
+          "say": "A Null Object is a real object that implements the same interface, but with neutral, do-nothing behaviour. Think of a guest badge. It walks the lobby like anyone else, but it opens no special doors.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 11 · 11.7.1 Null Object"
+    },
+    {
+      "id": "s004",
+      "layout": "bullets",
+      "kicker": "Null Object",
+      "title": "Null Object: how it works",
+      "bullets": [
+        "1. An interface: Customer",
+        "2. Real class RegisteredCustomer, null class GuestCustomer",
+        "3. Return the null object where you'd return null",
+        "4. Offer isGuest() only for the rare caller that must know"
+      ],
+      "steps": [
+        {
+          "say": "Step one, an interface. Our running example is a checkout. The interface is Customer, with a display name, a discount percent, and a notify method.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, two implementations. RegisteredCustomer is the real one. GuestCustomer is the null object: its discount is zero percent and its notify method does nothing, on purpose.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, wherever you'd return null, return the guest instead. Because the guest has no state, one shared instance is enough. In Java that's an enum with a single constant, a singleton.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, if some caller truly needs to know, give it an isGuest method. Use it sparingly, or the if statements creep back in.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s005",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Checkout with no null checks",
+      "table": {
+        "head": [
+          "Customer",
+          "Discount",
+          "Price",
+          "Pays",
+          "Notify"
+        ],
+        "rows": [
+          [
+            "Asha (registered)",
+            "10%",
+            "100.00",
+            "90.00",
+            "email sent"
+          ],
+          [
+            "unknown ID: guest",
+            "0%",
+            "100.00",
+            "100.00",
+            "does nothing"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Imagine an item priced at one hundred. Asha is registered with a ten percent discount, so she pays ninety, and she gets a thank-you email.",
+          "reveal": 1
+        },
+        {
+          "say": "Now an unknown ID comes in. The directory returns the guest. The same checkout code runs: zero percent discount, so the guest pays a hundred, and notify silently does nothing. Not one null check in checkout.",
+          "reveal": 2
+        }
+      ]
+    },
+    {
+      "id": "s006",
+      "layout": "twocol",
+      "kicker": "Trade-offs",
+      "title": "Null Object versus Optional",
+      "left": {
+        "heading": "Null Object",
+        "bullets": [
+          "Hides absence behind neutral behaviour",
+          "For optional collaborators: logger, listener",
+          "Risk: hides a real bug"
+        ]
+      },
+      "right": {
+        "heading": "Optional",
+        "bullets": [
+          "Absence visible in the method's type",
+          "For lookups: caller picks orElse or throw",
+          "Throw when absence is a bug"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Null Object hides the absence. The caller never knows nothing was there.",
+          "reveal": 1
+        },
+        {
+          "say": "So use it for collaborators that are legitimately optional, like a logger, a listener, or a discount policy.",
+          "reveal": 2
+        },
+        {
+          "say": "The danger: if the object really should exist, a null object hides the bug. It fails silently.",
+          "reveal": 3
+        },
+        {
+          "say": "Optional, a Java container holding a value or nothing, makes absence visible in the signature.",
+          "reveal": 4
+        },
+        {
+          "say": "So use it for lookups, and let each caller choose a fallback or throw.",
+          "reveal": 5
+        },
+        {
+          "say": "And if absence is simply an error, throw an exception. In the interview, say this: \"Null Object for optional collaborators, Optional for lookups, throw when absence is a bug.\" Real examples: Collections dot emptyList, and the no-op logger in S-L-F-four-J, a common Java logging library.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s007",
+      "layout": "section",
+      "kicker": "Concept 2 of 18",
+      "title": "Dependency Injection",
+      "steps": [
+        {
+          "say": "Look at this. An OrderService that does new EmailSender inside its own field. Three problems. It can never send S-M-S. You can't unit test it without really sending email. And its dependencies are hidden inside.",
+          "reveal": 0
+        },
+        {
+          "say": "Dependency Injection, or D-I, fixes all three. A class receives its collaborators from outside instead of creating them. Like a kitchen that's supplied with vegetables instead of growing them. Change the supplier, and the recipes don't change.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 11 · 11.7.2 Dependency Injection (DI)"
+    },
+    {
+      "id": "s008",
+      "layout": "bullets",
+      "kicker": "Dependency Injection",
+      "title": "Dependency Injection: how it works",
+      "bullets": [
+        "1. Declare deps as constructor params typed by interfaces",
+        "2. A composition root builds and passes concrete objects",
+        "3. Tests pass fakes"
+      ],
+      "steps": [
+        {
+          "say": "Step one. OrderService takes a MessageSender interface and a Clock in its constructor, and stores them in final fields. It never calls new on a collaborator.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two. One place, called the composition root, usually main, or a container like Spring at start-up, creates EmailSender or SmsSender and hands it in. That's Inversion of Control, I-O-C: something outside builds and wires the objects. D-I is the most common way to do I-O-C.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three. A unit test passes a fake, a RecordingSender that just adds each message to a list. That's only possible because the dependency is injected.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s009",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "One service, three wirings",
+      "table": {
+        "head": [
+          "Wiring",
+          "Sender",
+          "Clock",
+          "Result"
+        ],
+        "rows": [
+          [
+            "Production",
+            "EmailSender",
+            "fixed 09:30",
+            "[smtp] order A-1 placed at 09:30"
+          ],
+          [
+            "Production, India",
+            "SmsSender",
+            "fixed 09:30",
+            "[sms] order A-2 placed at 09:30"
+          ],
+          [
+            "Unit test",
+            "RecordingSender",
+            "fixed 09:30",
+            "recorded: ben | order T-9 at 09:30"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Same OrderService class, zero edits. Wired with the email sender, order A-1 goes out as an email.",
+          "reveal": 1
+        },
+        {
+          "say": "Wired with the S-M-S sender, order A-2 goes out as a text message.",
+          "reveal": 2
+        },
+        {
+          "say": "In a test, the fake records the message, and we can assert on it. Notice the clock. We inject a fixed clock at nine thirty, so time-dependent code gives the same answer every run.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s010",
+      "layout": "table",
+      "kicker": "Trade-offs",
+      "title": "Injection styles",
+      "table": {
+        "head": [
+          "Style",
+          "How",
+          "Use for"
+        ],
+        "rows": [
+          [
+            "Constructor",
+            "params stored in final fields",
+            "Required deps: the default"
+          ],
+          [
+            "Setter",
+            "setX(...) after construction",
+            "Optional or changeable deps"
+          ],
+          [
+            "Field",
+            "framework writes @Autowired fields",
+            "Avoid: hides deps"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Constructor injection is the default. Every required dependency is visible in one place.",
+          "reveal": 1
+        },
+        {
+          "say": "Setter injection fits optional dependencies, or ones you change later.",
+          "reveal": 2
+        },
+        {
+          "say": "Field injection, where the framework writes straight into a field, hides dependencies and makes tests harder. Avoid it. Two more mistakes: the Service Locator, where a class calls container dot get itself, hiding its dependencies again, and a constructor with eight or more parameters, which tells you the class does too much. In the interview, say: \"I use constructor injection with interfaces, wired at a composition root. I even inject the clock.\"",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s011",
+      "layout": "section",
+      "kicker": "Concept 3 of 18",
+      "title": "Repository",
+      "steps": [
+        {
+          "say": "If S-Q-L, connection handling and mapping code are scattered through your business classes, the rules are hard to read, you can't test without a database, and you're stuck with one storage technology.",
+          "reveal": 0
+        },
+        {
+          "say": "A Repository is a collection-like interface for loading and saving domain objects, in business language, like findByEmail or findActive. It hides how and where data is stored. Like a library front desk: you ask for books by an author, and never mind which shelf.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 11 · 11.7.3 Repository"
+    },
+    {
+      "id": "s012",
+      "layout": "bullets",
+      "kicker": "Repository",
+      "title": "Repository: how it works",
+      "bullets": [
+        "1. Interface in the domain layer: UserRepository",
+        "2. Implementations in infrastructure: in-memory, JDBC",
+        "3. Services depend on the interface (injected)"
+      ],
+      "steps": [
+        {
+          "say": "Step one. In the domain layer, the code holding business rules, define UserRepository: save, findById, findByEmail, findActive, deleteById. Lookups return Optional, never null.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two. In the infrastructure layer, the code that talks to databases and files, implement it. An in-memory version backed by a hash map for tests, and a database version for production.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three. SignupService receives the interface through its constructor. That's D-I from the last concept working together with Repository.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s013",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Sign-up against an in-memory repository",
+      "table": {
+        "head": [
+          "Call",
+          "Repository does",
+          "Result"
+        ],
+        "rows": [
+          [
+            "signUp(u1, asha@example.com)",
+            "findByEmail: empty, save",
+            "created u1"
+          ],
+          [
+            "signUp(u2, ben@example.com)",
+            "findByEmail: empty, save",
+            "created u2"
+          ],
+          [
+            "signUp(u3, ASHA@example.com)",
+            "findByEmail matches, ignoring case",
+            "rejected"
+          ],
+          [
+            "findById(u9)",
+            "nothing stored",
+            "Optional.empty"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Asha signs up as u1. findByEmail finds nothing, so the service saves her.",
+          "reveal": 1
+        },
+        {
+          "say": "Ben signs up as u2. Same story.",
+          "reveal": 2
+        },
+        {
+          "say": "Now u3 tries Asha's email in capitals. The repository compares ignoring case, finds Asha, and the service rejects it. There's no S-Q-L anywhere in this business logic.",
+          "reveal": 3
+        },
+        {
+          "say": "And finding u9 returns an empty Optional, not null. One catch to mention: find, then save, is check-then-act. Two sign-ups at the same moment could both pass. A real system adds a database unique constraint on email.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s014",
+      "layout": "bullets",
+      "kicker": "Trade-offs",
+      "title": "Repository: trade-offs and interview line",
+      "bullets": [
+        "One repository per aggregate root, not per table",
+        "Repository = domain-oriented; DAO = table-oriented",
+        "Mistakes: returning null, leaking SQL types",
+        "Too many findByXAndY methods? Use Specification"
+      ],
+      "steps": [
+        {
+          "say": "Make one repository per aggregate root. An aggregate root is the entry object of a cluster, like an Order with its order lines.",
+          "reveal": 1
+        },
+        {
+          "say": "Versus a D-A-O, a Data Access Object: that's table and record oriented. A repository behaves like a collection of business objects.",
+          "reveal": 2
+        },
+        {
+          "say": "Classic mistakes: returning null, exposing database types like a result set, or putting business rules in the repository.",
+          "reveal": 3
+        },
+        {
+          "say": "And when you see dozens of finder methods, reach for the next pattern. Interview line: \"In machine coding, I always put an in-memory repository behind an interface, so a database can slot in later.\"",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s015",
+      "layout": "section",
+      "kicker": "Concept 4 of 18",
+      "title": "Specification",
+      "steps": [
+        {
+          "say": "Imagine the rule \"bargain electronics\": category is electronics, price under fifty, and in stock. It gets copied into queries, validations and screen filters. Or you end up with a monster method name like findByCategoryAndPriceLessThanAndStockGreaterThan.",
+          "reveal": 0
+        },
+        {
+          "say": "A Specification packages one business rule as an object with one question: is this candidate satisfied? And rules combine with and, or, and not. Like the tick boxes on a shopping site's filter panel.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 11 · 11.7.4 Specification"
+    },
+    {
+      "id": "s016",
+      "layout": "bullets",
+      "kicker": "Specification",
+      "title": "Specification: how it works",
+      "bullets": [
+        "1. Specification<T> with isSatisfiedBy(T)",
+        "2. Small named factories: inStock(), cheaperThan(...)",
+        "3. Combine with and / or / not; pass to a filter"
+      ],
+      "steps": [
+        {
+          "say": "Step one, an interface with isSatisfiedBy, plus default methods and, or, and not that each return a new combined specification. That's the Composite pattern in action.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, tiny named rules in business language: inCategory, cheaperThan, inStock, ratedAtLeast. Each one is testable on its own.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, combine them where you need them, and hand the result to a stream filter or a repository.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s017",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Rules built from small pieces",
+      "table": {
+        "head": [
+          "Specification",
+          "Built from",
+          "Matches"
+        ],
+        "rows": [
+          [
+            "bargainElectronics",
+            "electronics AND under 50.00 AND in stock",
+            "usb-cable, keyboard"
+          ],
+          [
+            "recommendable",
+            "rated 4.5+ AND in stock",
+            "keyboard, novel"
+          ],
+          [
+            "needsRestock",
+            "NOT in stock",
+            "headphones, cookbook"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Bargain electronics chains three small rules. Over our catalogue it picks the U-S-B cable and the keyboard.",
+          "reveal": 1
+        },
+        {
+          "say": "Recommendable is rating at least four point five and in stock: the keyboard and a novel.",
+          "reveal": 2
+        },
+        {
+          "say": "Needs restock is just in stock, negated: the headphones and a cookbook. And the same recommendable object can also validate a single product: is the novel recommendable? Yes. In Java, Predicate already gives you and, or, and negate. Spring Data's Specification goes further and translates rules into S-Q-L, which matters, because filtering millions of rows in memory is a classic mistake.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s018",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Service calls new StripeClient(). What fixes testing?",
+      "bullets": [
+        "A. Null Object",
+        "B. Dependency Injection",
+        "C. Specification",
+        "D. Repository"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. The service builds its own payment client, so a unit test would charge a real card. Which pattern fixes that?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s019",
+      "layout": "section",
+      "kicker": "Concept 5 of 18",
+      "title": "MVC: a compound pattern",
+      "steps": [
+        {
+          "say": "The answer was B, dependency injection: receive a PaymentGateway interface in the constructor and pass a fake in tests.",
+          "reveal": 0
+        },
+        {
+          "say": "Now, M-V-C, Model View Controller. The model holds data and business rules, and knows nothing about screens. The view displays the model and receives input. The controller interprets input and tells the model what to change. Think of a restaurant: the kitchen is the model, the menu and plates are the view, and the waiter is the controller.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 11 · 11.7.5 MVC (the compound pattern)"
+    },
+    {
+      "id": "s020",
+      "layout": "table",
+      "kicker": "MVC",
+      "title": "Three GoF patterns inside MVC",
+      "table": {
+        "head": [
+          "Pattern",
+          "Where it lives"
+        ],
+        "rows": [
+          [
+            "Observer",
+            "Model notifies views when its state changes"
+          ],
+          [
+            "Strategy",
+            "View delegates input to a swappable controller"
+          ],
+          [
+            "Composite",
+            "View is a tree of panels, labels, buttons"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Head First Design Patterns calls M-V-C a compound pattern, several patterns working together. First, Observer: the model notifies its listeners, and the views re-render.",
+          "reveal": 1
+        },
+        {
+          "say": "Second, Strategy: the view hands each input to a controller object. Swap the controller, and behaviour changes, for example a read-only mode.",
+          "reveal": 2
+        },
+        {
+          "say": "Third, Composite: the view is a tree of nested widgets, and the whole tree renders the same way.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s021",
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "MVC flow: a console to-do app",
+      "bullets": [
+        "1. User types into the view: add write chapter 11",
+        "2. View hands input to its controller",
+        "3. Controller calls model.add(); it redraws nothing",
+        "4. Model changes and notifies its listeners",
+        "5. View re-renders its widget tree: 1 open"
+      ],
+      "steps": [
+        {
+          "say": "Step one, the user acts on the view. In our to-do app, they type: add write chapter eleven.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, the view doesn't interpret it. It passes the text to its controller, the strategy.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, the editing controller calls model dot add. Notice, it does not redraw anything.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, the model adds task one and fires a change to every listener. That's the observer.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, the view re-renders its panel tree, and the summary says one open. Later, done forty-two shows an error, and if we swap in the read-only controller, add sneaky task is simply ignored, without touching the view or the model.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s022",
+      "layout": "diagram",
+      "kicker": "MVC",
+      "title": "MVC wiring",
+      "mermaid": "flowchart LR\n    U[\"User\"] -->|\"types\"| V[\"TaskView: composite\"]\n    V -->|\"handle input\"| C[\"TaskController: strategy\"]\n    C -->|\"add, complete\"| M[\"TaskModel\"]\n    M -->|\"modelChanged\"| V",
+      "caption": "Controller updates the model; the model's notification redraws the view",
+      "steps": [
+        {
+          "say": "Follow the loop. The user types into the view. The view forwards to the controller. The controller updates the model. The model notifies the view, and the view redraws.",
+          "reveal": 0
+        },
+        {
+          "say": "Web M-V-C is different. In Spring M-V-C, a front controller routes each H-T-T-P request to a controller method, which fills a model and returns a view name. The view renders once per request, and doesn't observe the model.",
+          "reveal": 0
+        },
+        {
+          "say": "The biggest mistake is a fat controller, with business logic leaking into it. In the interview, say: \"M-V-C is Observer, Strategy and Composite working together.\"",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s023",
+      "layout": "section",
+      "kicker": "Concept 6 of 18",
+      "title": "Event Sourcing (lite)",
+      "steps": [
+        {
+          "say": "Normally you update in place: the cart row is overwritten, and the history is gone. So you can't answer, what did the cart look like before checkout?",
+          "reveal": 0
+        },
+        {
+          "say": "Event Sourcing stores every change as an immutable event, in past tense, like ItemAdded or CheckedOut, in an append-only log. Current state is derived by replaying the events. Like a bank passbook: the list of transactions is the truth, and the balance can always be recomputed.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 11 · 11.7.6 Event Sourcing (lite)"
+    },
+    {
+      "id": "s024",
+      "layout": "bullets",
+      "kicker": "Event Sourcing",
+      "title": "Event Sourcing: how it works",
+      "bullets": [
+        "1. Command side: replay, validate, emit an event",
+        "2. Append to the store; never update or delete",
+        "3. Apply: a pure function folds the event into state",
+        "4. Read side: replay to any point; feed read models",
+        "5. Snapshots for long streams"
+      ],
+      "steps": [
+        {
+          "say": "Step one. A command arrives, say remove pen. We rebuild the cart by replaying its events, check the command against that state, and if it's valid, emit the fact: ItemRemoved pen.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two. Append that event to the log. Events are never edited or deleted.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three. Apply is a pure function: it just updates state from the event. No validation in apply, because events are facts that already happened.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four. To see the past, replay the first few events. Other parts of the system observe the log and build read models, copies shaped for fast queries. Splitting writes from reads like this is called C-Q-R-S.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five. For very long streams, save periodic snapshots, which is Memento, and replay only the events after the snapshot.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s025",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Replay is time travel",
+      "table": {
+        "head": [
+          "After event",
+          "Event",
+          "Cart",
+          "Total"
+        ],
+        "rows": [
+          [
+            "1",
+            "ItemAdded book x2 @ 12.99",
+            "book",
+            "25.98"
+          ],
+          [
+            "2",
+            "ItemAdded pen x5 @ 0.99",
+            "book, pen",
+            "30.93"
+          ],
+          [
+            "3",
+            "ItemRemoved pen",
+            "book",
+            "25.98"
+          ],
+          [
+            "4",
+            "CheckedOut",
+            "book (checked out)",
+            "25.98"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Event one, two books at twelve ninety-nine: the total is twenty-five ninety-eight.",
+          "reveal": 1
+        },
+        {
+          "say": "Event two, five pens at ninety-nine cents adds four ninety-five: thirty ninety-three.",
+          "reveal": 2
+        },
+        {
+          "say": "Event three, the pen is removed: back to twenty-five ninety-eight.",
+          "reveal": 3
+        },
+        {
+          "say": "Event four, checked out. Now try another remove command. Replay shows the cart is checked out, so the command is rejected, and no event is written. You can replay to any row in this table and see the cart exactly as it was.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s026",
+      "layout": "diagram",
+      "kicker": "Event Sourcing",
+      "title": "Command to event to store",
+      "mermaid": "flowchart LR\n    CMD[\"Command: remove pen\"] --> AGG[\"Cart rebuilt from events\"]\n    AGG -->|\"valid\"| EV[\"Event: ItemRemoved pen\"]\n    AGG -->|\"invalid\"| REJ[\"Reject\"]\n    EV --> STORE[(\"Append-only event store\")]\n    STORE -->|\"replay\"| AGG\n    STORE -->|\"publish\"| RM[\"Read models\"]",
+      "caption": "Validate commands, never events",
+      "steps": [
+        {
+          "say": "The command goes to the cart rebuilt from the store. Valid commands become events, invalid ones are rejected. The store feeds replay and read models.",
+          "reveal": 0
+        },
+        {
+          "say": "Costs: it's more complex than plain create, read, update, delete. Old event formats are hard to evolve. Reads are eventually consistent, meaning the read side catches up after a short delay. And two writers can append on the same stale state, so real stores check an expected version.",
+          "reveal": 0
+        },
+        {
+          "say": "Mistakes: validation inside apply, and events named as commands, like RemoveItem instead of ItemRemoved. Interview line: \"Store facts, not state. Rebuild by replay. Snapshot long streams.\"",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s027",
+      "layout": "section",
+      "kicker": "Concept 7 of 18",
+      "title": "Choosing the right behavioral pattern",
+      "steps": [
+        {
+          "say": "You now know a lot of patterns. The trick in an interview is to start from the symptom in the requirement, not from a pattern name.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 11 · 11.8 Choose the right behavioral pattern"
+    },
+    {
+      "id": "s028",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Symptom first, pattern second",
+      "table": {
+        "head": [
+          "If you see...",
+          "Use"
+        ],
+        "rows": [
+          [
+            "A request passes checks; any may reject it",
+            "Chain of Responsibility"
+          ],
+          [
+            "Undo, redo, queue or retry requested actions",
+            "Command"
+          ],
+          [
+            "Same switch on status in 3+ methods",
+            "State"
+          ],
+          [
+            "Interchangeable algorithms chosen at run time",
+            "Strategy"
+          ],
+          [
+            "One change, open-ended set of listeners",
+            "Observer"
+          ],
+          [
+            "null checks / new collaborators / SQL in logic",
+            "Null Object / DI / Repository"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "A food delivery order request must pass a coupon check, then a fraud check, and any one can reject it. That's Chain of Responsibility.",
+          "reveal": 1
+        },
+        {
+          "say": "A text editor needs undo and redo. Record each action as a Command object.",
+          "reveal": 2
+        },
+        {
+          "say": "Order status: placed, accepted, delivered, and three methods all switch on status to decide what's legal. That's State.",
+          "reveal": 3
+        },
+        {
+          "say": "Checkout supports card, U-P-I and wallet, chosen per user. That's Strategy.",
+          "reveal": 4
+        },
+        {
+          "say": "After an order is placed, send email, update analytics, notify the restaurant, and more reactions will come. That's Observer.",
+          "reveal": 5
+        },
+        {
+          "say": "And the beyond-GoF ones: null checks everywhere means Null Object, classes building their own collaborators means D-I, and S-Q-L mixed into logic means Repository. Need full history? Event Sourcing. The full table in the PDF adds the rest: a long fixed flow with a few varying steps is Template Method, many new operations over stable types is Visitor, ordered coordination is Mediator, and rolling back to a saved state is Memento.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s029",
+      "layout": "bullets",
+      "kicker": "Choosing",
+      "title": "Three questions for the look-alikes",
+      "bullets": [
+        "1. Do the alternatives reference each other? State",
+        "2. Can one participant stop the flow? Chain",
+        "3. Does a central object decide what's next? Mediator"
+      ],
+      "steps": [
+        {
+          "say": "Question one. Do the alternatives know about each other? An order state moves itself to the next state: that's State. Payment strategies are picked from outside and never reference each other: Strategy.",
+          "reveal": 1
+        },
+        {
+          "say": "Question two. Can one participant stop the flow? A fraud check can stop it: Chain of Responsibility. If every layer always runs, it's Decorator or a pipeline. If everyone is told and nobody stops anyone, it's Observer.",
+          "reveal": 2
+        },
+        {
+          "say": "Question three. Does a central object decide what happens next? Then it's Mediator. If each listener decides for itself, it's Observer.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s030",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Placed, accepted, delivered; cancel only early?",
+      "bullets": [
+        "A. Strategy",
+        "B. Observer",
+        "C. State",
+        "D. Template Method"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Which actions are legal depends on the current status, and each status knows the next one.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s031",
+      "layout": "section",
+      "kicker": "Concept 8 of 18",
+      "title": "Architectural versus design patterns",
+      "steps": [
+        {
+          "say": "The answer was C, State, because states know each other and advance themselves.",
+          "reveal": 0
+        },
+        {
+          "say": "Now we zoom out. A design pattern arranges a handful of classes to solve one problem inside a program. An architectural pattern, also called an architectural style, fixes the shape of the whole system: its big parts, which part may depend on which, and how they talk.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 11 · 11.9 Architectural vs design patterns"
+    },
+    {
+      "id": "s032",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Two different zoom levels",
+      "table": {
+        "head": [
+          "",
+          "Design pattern",
+          "Architectural pattern"
+        ],
+        "rows": [
+          [
+            "Scope",
+            "A few classes",
+            "A whole system"
+          ],
+          [
+            "Unit",
+            "Class, interface",
+            "Layer, module, service"
+          ],
+          [
+            "Concern",
+            "Who does what",
+            "Dependency direction, deployment"
+          ],
+          [
+            "Cost to change",
+            "Refactor a few files",
+            "Months of re-architecture"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Scope. Strategy touches a few classes. Microservices shape the whole system.",
+          "reveal": 1
+        },
+        {
+          "say": "Unit. Design patterns talk about classes and interfaces. Architecture talks about layers, modules, services and processes.",
+          "reveal": 2
+        },
+        {
+          "say": "Concern. Design patterns decide responsibilities between objects. Architecture decides dependency direction, deployment, communication, and who owns which data.",
+          "reveal": 3
+        },
+        {
+          "say": "Cost. Changing a design pattern is a refactor of a few files. Changing architecture can take months. And they nest: a hexagonal service uses Repository and D-I inside it. Even in L-L-D, a follow-up like \"would you split this into microservices?\" is an architecture question.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s033",
+      "layout": "table",
+      "kicker": "Concept 9 of 18",
+      "title": "The styles at a glance",
+      "table": {
+        "head": [
+          "Style",
+          "Core idea",
+          "Main cost"
+        ],
+        "rows": [
+          [
+            "Layered",
+            "Each layer uses only those below",
+            "Domain shaped by storage"
+          ],
+          [
+            "Client-server",
+            "Server owns data and rules",
+            "Bottleneck until scaled"
+          ],
+          [
+            "Modular monolith",
+            "One deploy, enforced modules",
+            "One release, shared fate"
+          ],
+          [
+            "Microservices",
+            "Independent services, own data",
+            "Network, distributed data"
+          ],
+          [
+            "Event-driven",
+            "React to published events",
+            "Hard to trace, duplicates"
+          ],
+          [
+            "Pipe-and-filter",
+            "Data flows through steps",
+            "Shared state is awkward"
+          ],
+          [
+            "Hexagonal / clean",
+            "Core in middle, I/O at ports",
+            "More interfaces, mapping"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's the map for the rest of the episode. Layered: horizontal layers, but the domain ends up shaped by the database.",
+          "reveal": 1
+        },
+        {
+          "say": "Client-server: a central server owns the data and the rules, and it's a bottleneck until you scale it out.",
+          "reveal": 2
+        },
+        {
+          "say": "Modular monolith: one deployable, split into modules with real boundaries. The cost is one release train and one shared failure fate.",
+          "reveal": 3
+        },
+        {
+          "say": "Microservices: independently deployed services, each owning its data. The cost is network failures and distributed data.",
+          "reveal": 4
+        },
+        {
+          "say": "Event-driven: components react to events instead of calling each other. Hard to trace, and you get duplicates.",
+          "reveal": 5
+        },
+        {
+          "say": "Pipe-and-filter: data flows through independent steps. Shared state between steps is awkward.",
+          "reveal": 6
+        },
+        {
+          "say": "Hexagonal or clean: the domain core in the middle, all input and output behind ports. More interfaces. And M-V-C and its cousins only cover the U-I edge. Let's walk each one.",
+          "reveal": 7
+        }
+      ],
+      "caption": "Book: Ch 11 · 11.9.1 The styles at a glance"
+    },
+    {
+      "id": "s034",
+      "layout": "bullets",
+      "kicker": "Concept 10 of 18",
+      "title": "Layered (n-tier)",
+      "bullets": [
+        "Presentation: OrderController",
+        "Application: OrderService (use cases)",
+        "Domain: Order, OrderLine (rules)",
+        "Persistence: JdbcOrderRepository"
+      ],
+      "steps": [
+        {
+          "say": "Concept ten, layered architecture. Code is split into horizontal layers, and each layer depends only on layers below. Running example, an order system. On top, presentation: the H-T-T-P controller that receives place order.",
+          "reveal": 1
+        },
+        {
+          "say": "Below it, the application or service layer: OrderService runs the use case and the transaction.",
+          "reveal": 2
+        },
+        {
+          "say": "Then the domain: Order and OrderLine hold the business rules, like an order needs at least one line.",
+          "reveal": 3
+        },
+        {
+          "say": "At the bottom, persistence: the repository that writes S-Q-L to the database.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Ch 11 · 11.9.2 Layered (n-tier)"
+    },
+    {
+      "id": "s035",
+      "layout": "diagram",
+      "kicker": "Layered",
+      "title": "Layered: arrows point down",
+      "mermaid": "flowchart TD\n    P[\"Presentation: OrderController\"] --> A[\"Application: OrderService\"]\n    A --> D[\"Domain: Order, OrderLine\"]\n    A --> R[\"Persistence: JdbcOrderRepository\"]\n    R --> DB[(\"Database\")]",
+      "caption": "A layer is logical; a tier is physical",
+      "steps": [
+        {
+          "say": "Two terms. A layer is a logical split in code. A tier is a physical one, a separate process or machine. Three-tier usually means browser, app server, database.",
+          "reveal": 0
+        },
+        {
+          "say": "Strict layering lets you call only the layer directly below. Relaxed layering lets you skip, like this service calling both domain and repository. Convenient, but it erodes structure.",
+          "reveal": 0
+        },
+        {
+          "say": "Trade-offs. Everyone understands it. But the arrow points down to the database, so the domain gets shaped by tables, and adding a discount touches every layer. Layers that only forward calls are called sinkholes. In the interview, this is your default machine-coding layout: controller, service, repository with in-memory implementations, and model, with rules never in the controller.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s036",
+      "layout": "diagram",
+      "kicker": "Concept 11 of 18",
+      "title": "Client-server",
+      "mermaid": "flowchart LR\n    W[\"Web client\"] -->|\"HTTP request\"| S[\"Server: API + rules\"]\n    M[\"Mobile client\"] -->|\"HTTP request\"| S\n    S -->|\"response\"| W\n    S -->|\"response\"| M\n    S --> DB[(\"Database\")]",
+      "caption": "Book: Ch 11 · 11.9.3 Client-server (and peer-to-peer)",
+      "steps": [
+        {
+          "say": "Concept eleven, client-server. The server owns a resource and waits for requests. Clients start requests and show results, over a protocol like H-T-T-P or g-R-P-C.",
+          "reveal": 0
+        },
+        {
+          "say": "Example: a movie booking app. The client sends book seat, show forty-two, seat A-seven. Even if the app already greyed out taken seats, the server re-checks availability under a lock, because two phones can tap the same seat. Never trust validation done only on the client.",
+          "reveal": 0
+        },
+        {
+          "say": "Trade-offs. Central control makes rules, security and backups simple. The server is a bottleneck until you run several copies behind a load balancer, and stateless servers, which keep no per-client memory between requests, are far easier to scale that way.",
+          "reveal": 0
+        },
+        {
+          "say": "The contrast is peer-to-peer, P-2-P, where every node is both client and server, like BitTorrent or a blockchain. No central bottleneck, but consistency, discovery and trust get much harder. In the interview, state which side owns the truth and which side validates.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s037",
+      "layout": "bullets",
+      "kicker": "Concept 12 of 18",
+      "title": "Monolith, modular monolith, microservices",
+      "bullets": [
+        "Monolith: one deployable, all features",
+        "Modular monolith: one deploy, modules by capability",
+        "Microservices: own process and own database each"
+      ],
+      "steps": [
+        {
+          "say": "Concept twelve. A monolith is one deployable unit, one process, containing every feature of our shop.",
+          "reveal": 1
+        },
+        {
+          "say": "A modular monolith is still one deployable, but split into modules by business capability: orders, payments, catalogue. Each exposes a small interface and hides the rest, and the boundaries are enforced by packages or build rules.",
+          "reveal": 2
+        },
+        {
+          "say": "Microservices split the system into independently deployable services. Each runs in its own process, owns its own database, and talks over the network. The split usually follows a bounded context, a part of the business where words have one consistent meaning.",
+          "reveal": 3
+        }
+      ],
+      "caption": "Book: Ch 11 · 11.9.4 Monolith, modular monolith, microservices"
+    },
+    {
+      "id": "s038",
+      "layout": "diagram",
+      "title": "Same shop, two shapes",
+      "mermaid": "flowchart LR\n    O1[\"Monolith: orders module\"] -->|\"Java call\"| P1[\"Monolith: payments module\"]\n    O2[\"order-service\"] -->|\"HTTP or message\"| P2[\"payment-service\"]\n    O2 --- DB1[(\"orders DB\")]\n    P2 --- DB2[(\"payments DB\")]",
+      "caption": "A Java call cannot time out; a network call can",
+      "steps": [
+        {
+          "say": "On the left, inside one modular monolith process, orders calls payments with a plain Java interface call. On the right, the same call crosses the network between two services, and each service has its own database.",
+          "reveal": 0
+        },
+        {
+          "say": "That network hop is where the costs come from. Every call can be slow or fail, so you need timeouts, retries, and idempotency, meaning repeating a request has no extra effect.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s039",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "When to split out a service",
+      "table": {
+        "head": [
+          "Reason",
+          "Example"
+        ],
+        "rows": [
+          [
+            "Separate team, own releases",
+            "Payments team ships daily"
+          ],
+          [
+            "Very different scaling",
+            "Search needs 50 instances, rest needs 2"
+          ],
+          [
+            "Different technology",
+            "Recommendations in Python"
+          ],
+          [
+            "Fault isolation",
+            "A crash in search can't stop checkout"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The default is a modular monolith: most of the structure, none of the network cost. Split a module out only for a concrete reason. One: a separate team that needs to release on its own schedule.",
+          "reveal": 1
+        },
+        {
+          "say": "Two: very different scaling. Imagine search needs fifty instances while everything else needs two.",
+          "reveal": 2
+        },
+        {
+          "say": "Three: a different technology stack.",
+          "reveal": 3
+        },
+        {
+          "say": "Four: fault isolation, so a crash in one part can't take down checkout. Remember the extra costs: no cross-service transactions, so a multi-step action needs a saga, a series of local steps each with an undo step. And the worst case is a distributed monolith, services that must deploy together because they share a database. In the interview, say: \"each of my interfaces, like PaymentGateway, could become a network client later, with timeouts, retries and idempotency keys.\"",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s040",
+      "layout": "section",
+      "kicker": "Concept 13 of 18",
+      "title": "Event-driven: broker versus mediator",
+      "steps": [
+        {
+          "say": "In event-driven architecture, components produce and consume events, immutable facts like OrderPaid, instead of calling each other. The producer doesn't know who listens, so you add reactions without touching it. It's Observer at system level, and between processes a message broker like Kafka or RabbitMQ stores and delivers the events.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 11 · 11.9.5 Event-driven: broker vs mediator"
+    },
+    {
+      "id": "s041",
+      "layout": "diagram",
+      "title": "Two topologies for one paid order",
+      "mermaid": "flowchart LR\n    OS1[\"Order\"] -->|\"OrderPaid\"| T1([\"Broker topic\"])\n    T1 --> W1[\"Warehouse\"]\n    T1 --> E1[\"Email\"]\n    OS2[\"Order\"] -->|\"OrderPaid\"| MED[\"Fulfilment mediator\"]\n    MED -->|\"1 reserve\"| W2[\"Warehouse\"]\n    MED -->|\"2 ship\"| SH2[\"Shipping\"]",
+      "caption": "Broker for independent reactions, mediator for ordered processes",
+      "steps": [
+        {
+          "say": "On the left, the broker topology, also called choreography. No coordinator. Order publishes OrderPaid to a topic. Warehouse and email each subscribe and react. Warehouse may then publish StockReserved, and shipping reacts to that. The flow emerges as a chain.",
+          "reveal": 0
+        },
+        {
+          "say": "It's very decoupled and scales well, but no single place knows the whole flow, and error handling is spread out.",
+          "reveal": 0
+        },
+        {
+          "say": "On the right, the mediator topology, also called orchestration. A central fulfilment mediator receives OrderPaid and sends ordered commands: one, reserve stock. Two, ship. Three, notify. It also handles failures and undo steps. Easy to see and control, but it couples to every step.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s042",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Which topology?",
+      "table": {
+        "head": [
+          "Scenario",
+          "Pick",
+          "Why"
+        ],
+        "rows": [
+          [
+            "After payment: email, analytics, search index",
+            "Broker",
+            "Independent reactions"
+          ],
+          [
+            "Loan: credit, then fraud, then manual approval",
+            "Mediator",
+            "Order plus undo on reject"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Scenario one. After payment, send email, update analytics, re-index search. None depends on another. Broker.",
+          "reveal": 1
+        },
+        {
+          "say": "Scenario two. A loan goes through a credit check, then a fraud check, then manual approval, and a rejection must undo earlier steps. Ordering plus compensation means mediator. Either way, most brokers deliver at least once, so consumers must be idempotent, for example by keeping processed event I-Ds. Ordering is only guaranteed per partition, and messages that keep failing go to a dead-letter queue.",
+          "reveal": 2
+        }
+      ]
+    },
+    {
+      "id": "s043",
+      "layout": "bullets",
+      "kicker": "Concept 14 of 18",
+      "title": "Pipe-and-filter: a CSV order importer",
+      "bullets": [
+        "1. dropBlankAndComments: rejects '#' lines",
+        "2. normalise: strip, lower-case, remove spaces",
+        "3. splitFields: needs a customer and 1+ items",
+        "4. toCommand: parse sku:qty into PlaceOrderCommand"
+      ],
+      "steps": [
+        {
+          "say": "Concept fourteen, pipe-and-filter. Processing is split into filters, independent steps that each take an input and emit an output, connected by pipes. A filter knows only its input and output format, never its neighbours. Running example: importing orders from a C-S-V file. Filter one drops blank lines and comments.",
+          "reveal": 1
+        },
+        {
+          "say": "Filter two normalises. The line \"space space C-1, Book colon 2, pen colon 3\" becomes c-1, book colon two, pen colon three.",
+          "reveal": 2
+        },
+        {
+          "say": "Filter three splits fields. The line c-5, with a customer but no items, is rejected here.",
+          "reveal": 3
+        },
+        {
+          "say": "Filter four turns each item into a typed PlaceOrderCommand. The line pen colon zero is rejected, because the quantity must be a positive number. Notice the type changes along the way: string, then a list of strings, then a command.",
+          "reveal": 4
+        }
+      ],
+      "caption": "Book: Ch 11 · 11.9.6 Pipe-and-filter"
+    },
+    {
+      "id": "s044",
+      "layout": "diagram",
+      "kicker": "Pipe-and-filter",
+      "title": "Filters joined by pipes",
+      "mermaid": "flowchart LR\n    IN[\"CSV lines\"] --> F1[\"dropBlankAndComments\"]\n    F1 -->|\"pipe\"| F2[\"normalise\"]\n    F2 -->|\"pipe\"| F3[\"splitFields\"]\n    F3 -->|\"pipe\"| F4[\"toCommand\"]\n    F4 --> OUT[\"PlaceOrderCommand\"]\n    F1 -.->|\"rejected\"| REJ[\"report\"]\n    F3 -.->|\"rejected\"| REJ\n    F4 -.->|\"rejected\"| REJ",
+      "caption": "Every filter runs and transforms; a rejection is just one output",
+      "steps": [
+        {
+          "say": "Here's the whole pipeline. Three of the four filters can send a line to the reject report: blank and comment lines, lines with no items, and bad items. Pipes can be plain function composition, or bounded queues between threads, where a full queue slows the producer down. That's called backpressure. Unix pipes like grep into sort, and Java streams, are this style.",
+          "reveal": 0
+        },
+        {
+          "say": "Versus Chain of Responsibility: in a chain, a handler may stop the request, and usually one handles it. In a pipeline, every filter normally runs and transforms. Versus Decorator: a decorator keeps the same interface, while filters can change the data type.",
+          "reveal": 0
+        },
+        {
+          "say": "Costs: a rule like reject duplicate lines needs shared state, which is awkward, and request-reply flows fit poorly. In the interview, model it as a Filter interface from I to O with a then method.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s045",
+      "layout": "section",
+      "kicker": "Concept 15 of 18",
+      "title": "Hexagonal: ports and adapters",
+      "steps": [
+        {
+          "say": "Hexagonal architecture, from Alistair Cockburn, puts the application core, the domain plus use cases, in the middle, and pushes all input and output to the edge. The core talks to the outside only through ports, interfaces owned by the core. Adapters implement or call those ports for one specific technology.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 11 · 11.9.7 Hexagonal and clean architecture"
+    },
+    {
+      "id": "s046",
+      "layout": "bullets",
+      "kicker": "Hexagonal",
+      "title": "Driving side and driven side",
+      "bullets": [
+        "Driving port: OrderingUseCase (what you may ask)",
+        "Driving adapters: CSV importer, REST controller, test",
+        "Driven ports: OrderRepository, PaymentGateway",
+        "Driven adapters: in-memory repo, payment client",
+        "Dependencies point inward; core imports no adapter"
+      ],
+      "steps": [
+        {
+          "say": "The driving, or inbound, side is something outside that drives the app. The core declares a driving port, the use case interface OrderingUseCase, with place and find.",
+          "reveal": 1
+        },
+        {
+          "say": "Driving adapters call it. Our C-S-V importer is one. A REST controller is another. A unit test is a third.",
+          "reveal": 2
+        },
+        {
+          "say": "The driven, or outbound, side is what the app needs from outside. The core declares driven ports: OrderRepository, ProductCatalog, PaymentGateway, and EventPublisher.",
+          "reveal": 3
+        },
+        {
+          "say": "Driven adapters implement them: an in-memory repository, a payment client with a limit, an in-memory event bus.",
+          "reveal": 4
+        },
+        {
+          "say": "The rule: all source dependencies point inward. The core imports no adapter, framework or I-O class. That's the Dependency Inversion Principle at whole-app scale, and a composition root, main, wires adapters to the core.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s047",
+      "layout": "diagram",
+      "kicker": "Hexagonal",
+      "title": "The hexagonal order service",
+      "mermaid": "flowchart LR\n    CSV[\"CsvOrderImporter: driving adapter\"] -->|\"calls\"| UC\n    subgraph CORE[\"Core: no framework imports\"]\n        UC[\"OrderingUseCase port\"]\n        SVC[\"OrderService + Order\"]\n        SVC -.->|\"implements\"| UC\n        SVC -->|\"uses\"| REPO[\"OrderRepository port\"]\n        SVC -->|\"uses\"| PAY[\"PaymentGateway port\"]\n    end\n    MEM[\"InMemoryOrderRepository\"] -.->|\"implements\"| REPO",
+      "caption": "Clean and onion architecture: the same rule, drawn as circles",
+      "steps": [
+        {
+          "say": "Read it left to right. The importer calls the driving port. OrderService implements it, and uses the driven ports. The in-memory repository implements the repository port from outside the core.",
+          "reveal": 0
+        },
+        {
+          "say": "Clean architecture, from Robert Martin, and onion architecture draw the same thing as circles: entities, use cases, adapters, frameworks. One dependency rule: code may only depend on circles further in.",
+          "reveal": 0
+        },
+        {
+          "say": "Versus layered: in layered, the domain depends down on persistence. In hexagonal, persistence depends in on the domain's port. The bottom arrow is turned around.",
+          "reveal": 0
+        },
+        {
+          "say": "Costs: more interfaces and mapping code, little gain for a trivial create-read-update-delete app, and ports shaped around one vendor's A-P-I bring coupling back. In the interview, say the name and the dependency rule out loud. That shows you know why your interfaces exist.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s048",
+      "layout": "twocol",
+      "kicker": "Concept 16 of 18",
+      "title": "Where MVC, MVP and MVVM fit",
+      "left": {
+        "heading": "Presentation patterns",
+        "bullets": [
+          "MVC: controller interprets input",
+          "MVP: presenter updates a passive view",
+          "MVVM: view binds to a view-model"
+        ]
+      },
+      "right": {
+        "heading": "Inside an architecture",
+        "bullets": [
+          "Layered: MVC is the presentation layer",
+          "Hexagonal: controller = driving adapter"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Concept sixteen. M-V-C you already know: the controller interprets input.",
+          "reveal": 1
+        },
+        {
+          "say": "M-V-P, Model View Presenter: the view is passive, and the presenter pushes updates into it.",
+          "reveal": 2
+        },
+        {
+          "say": "M-V-V-M, Model View ViewModel: the view binds to observable properties on a view-model, as in Android Jetpack.",
+          "reveal": 3
+        },
+        {
+          "say": "These are presentation patterns. They organise the U-I edge, not the whole system. In a layered system, M-V-C is simply the presentation layer.",
+          "reveal": 4
+        },
+        {
+          "say": "In hexagonal terms, a controller, presenter or view-model is a driving adapter that turns taps and clicks into calls on a driving port. So M-V-C versus hexagonal is not a choice. M-V-C at the edge, hexagonal for the core.",
+          "reveal": 5
+        }
+      ],
+      "caption": "Book: Ch 11 · 11.9.8 Where MVC, MVP and MVVM fit"
+    },
+    {
+      "id": "s049",
+      "layout": "section",
+      "kicker": "Concept 17 of 18",
+      "title": "Example: hexagonal core, pipe-and-filter importer",
+      "steps": [
+        {
+          "say": "Now one program combining three styles. Hexagonal: an order core with ports. Pipe-and-filter: the C-S-V importer as a driving adapter. And event-driven, broker style: the core publishes OrderPaid or PaymentFailed to an in-memory bus, where warehouse, email and audit handlers subscribe. The catalogue prices a book at twelve ninety-nine, a pen at ninety-nine cents, a lamp at eighty-nine, and the payment gateway approves charges up to one hundred.",
+          "reveal": 0
+        }
+      ],
+      "caption": "Book: Ch 11 · 11.9.9 Hexagonal service + pipe-and-filter"
+    },
+    {
+      "id": "s050",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Seven CSV lines, traced",
+      "table": {
+        "head": [
+          "Line",
+          "Input",
+          "Outcome"
+        ],
+        "rows": [
+          [
+            "1",
+            "# customer, sku:qty",
+            "filter: comment"
+          ],
+          [
+            "2",
+            "C-1, Book:2, pen:3",
+            "paid 28.95; warehouse, email, audit"
+          ],
+          [
+            "4",
+            "c-2, lamp:2",
+            "178.00 declined; PaymentFailed"
+          ],
+          [
+            "5",
+            "c-3, pen:zero",
+            "filter: bad item"
+          ],
+          [
+            "6",
+            "c-4, kettle:1",
+            "core: unknown product"
+          ],
+          [
+            "7",
+            "c-5",
+            "filter: no items"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Line one is a comment. The first filter drops it. Line three, a blank line, is dropped the same way.",
+          "reveal": 1
+        },
+        {
+          "say": "Line two is normalised to c-1, book two, pen three. The core prices it from the catalogue: two books is twenty-five ninety-eight, three pens is two ninety-seven, total twenty-eight ninety-five. Payment approves, the order is marked paid, saved, and OrderPaid is published. Three handlers react: warehouse reserves stock, email confirms, audit logs it.",
+          "reveal": 2
+        },
+        {
+          "say": "Line four: two lamps is one hundred seventy-eight. That's over the hundred limit, so the payment is declined, the order is saved as payment failed, and only the audit handler reacts, because it subscribed to all events.",
+          "reveal": 3
+        },
+        {
+          "say": "Line five: pen colon zero is a syntax error, so a filter rejects it. It never reaches the core.",
+          "reveal": 4
+        },
+        {
+          "say": "Line six: kettle is perfectly good syntax, but only the catalogue knows which products exist, so the core rejects it. Syntax checks live in the adapter, business rules live in the core.",
+          "reveal": 5
+        },
+        {
+          "say": "Line seven: c-5 has no items, so the split filter rejects it.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s051",
+      "layout": "bullets",
+      "kicker": "Example",
+      "title": "What to notice",
+      "bullets": [
+        "Another driving adapter: a test calls find(o-1)",
+        "Swap a driven adapter: lambda declines every payment",
+        "Adding SMS = one subscribe call in Main",
+        "Production gaps: idempotency key, outbox"
+      ],
+      "steps": [
+        {
+          "say": "Part two. A test is just another driving adapter. find o-1 returns the paid receipt, and find o-9 returns empty.",
+          "reveal": 1
+        },
+        {
+          "say": "Part three. We build the same core with a one-line lambda that declines every payment. The core doesn't change at all. That's how unit tests run without a payment provider.",
+          "reveal": 2
+        },
+        {
+          "say": "The bus is the broker topology. OrderService publishes one event, and three handlers react. Adding an S-M-S handler is one subscribe line in main.",
+          "reveal": 3
+        },
+        {
+          "say": "And be honest about the gaps. Place charges, then saves, then publishes, so a crash after the charge loses the order. Production code saves the order as pending first, charges with an idempotency key, the order I-D, so a retry can't charge twice, and publishes through an outbox: events written in the same database transaction as the order, then relayed to the broker.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s052",
+      "layout": "recap",
+      "kicker": "Concept 18 of 18",
+      "title": "Chapter TL;DR",
+      "bullets": [
+        "Null Object, DI, Repository, Specification",
+        "MVC = Observer + Strategy + Composite",
+        "Event Sourcing: store facts, replay for state",
+        "Layered, client-server; modular monolith first",
+        "Broker for reactions, mediator for processes",
+        "Hexagonal: ports, adapters, deps point inward"
+      ],
+      "steps": [
+        {
+          "say": "Concept eighteen, the chapter in six lines. A harmless nothing object instead of null. Receive your collaborators, don't new them. A domain-language collection over storage. Rules as small combinable objects.",
+          "reveal": 1
+        },
+        {
+          "say": "M-V-C is Observer, Strategy and Composite working together.",
+          "reveal": 2
+        },
+        {
+          "say": "Event sourcing stores facts, not state. Validate commands, never events, and snapshot long streams.",
+          "reveal": 3
+        },
+        {
+          "say": "Design patterns arrange classes, architecture arranges the system. Layered is simple but storage-shaped. The server owns the truth. Start with a modular monolith, and split only for team, scaling or isolation reasons.",
+          "reveal": 4
+        },
+        {
+          "say": "Event-driven: a broker for independent reactions, a mediator for ordered processes, and consumers must be idempotent. Pipe-and-filter runs every step, while a chain may stop.",
+          "reveal": 5
+        },
+        {
+          "say": "Hexagonal, clean, and onion: a core with ports, technology in adapters, and dependencies pointing inward. Your best thirty-second answer: \"A modular monolith with a hexagonal core, side effects off domain events on a bus, and module boundaries that can become service boundaries later.\"",
+          "reveal": 6
+        }
+      ],
+      "caption": "Book: Ch 11 · 11.9 TL;DR"
+    },
+    {
+      "id": "s053",
+      "layout": "recap",
+      "title": "Up next",
+      "bullets": [
+        "Re-do the chapter 11 self-checks",
+        "Next: Episode 13, Concurrency and Multithreading Concepts"
+      ],
+      "steps": [
+        {
+          "say": "That's episode twelve. Re-run the self-check questions in the PDF, and try tracing the seven C-S-V lines yourself.",
+          "reveal": 1
+        },
+        {
+          "say": "Next up, episode thirteen: Concurrency and Multithreading Concepts. See you there.",
+          "reveal": 2
+        }
+      ]
+    }
+  ]
+}
