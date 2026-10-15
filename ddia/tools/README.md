@@ -5,7 +5,7 @@ Run everything from the repo root. Needs Node 18+ and Google Chrome. `regen_pdfs
 | Script | Purpose | Example |
 |---|---|---|
 | `md2pdf.mjs` | Render one or more `README.md` files → styled PDF (headless Chrome, Monaco font, Mermaid → SVG, course images embedded). Given several inputs, it adds a cover and a table of contents. Reports Mermaid errors and broken images. | `node tools/md2pdf.mjs modules/05-reliability/Module05-Notes.pdf modules/05-reliability/README.md` |
-| `regen_pdfs.sh` | Regenerate every chapter's `ChapterNN-Notes.pdf`, the combined book as `DDIA-Notes-Vol1.pdf` and `DDIA-Notes-Vol2.pdf` (each under 600 pages), the Interview Edition and the Capstones PDF. | `bash tools/regen_pdfs.sh` |
+| `regen_pdfs.sh` | Regenerate every chapter's `ChapterNN-Notes.pdf`, the combined book as `DDIA-Notes-Vol1.pdf` and `DDIA-Notes-Vol2.pdf` (each under 350 pages), the Interview Edition and the Capstones PDF. | `bash tools/regen_pdfs.sh` |
 
 ## Notes
 - `md2pdf.mjs` hardcodes the Chrome path (`/Applications/Google Chrome.app/...`). Update it if Chrome moves.

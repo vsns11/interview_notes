@@ -8,7 +8,7 @@ Beginner-friendly notes for Martin Kleppmann's *Designing Data-Intensive Applica
 
 | Path | Purpose |
 |---|---|
-| `DDIA-Notes-Vol1.pdf`, `DDIA-Notes-Vol2.pdf` | **The whole book in two PDFs** (each under 600 pages), with cover and clickable contents. Vol 1: preface, System Design Fundamentals and Ch 1–3. Vol 2: Ch 4–14 (glossary and interview question bank included). |
+| `DDIA-Notes-Vol1.pdf`, `DDIA-Notes-Vol2.pdf` | **The whole book in two PDFs** (each under 350 pages), with cover and clickable contents. Vol 1: preface, a condensed System Design Fundamentals primer (the full module lives in the System Design Patterns book) and Ch 1–6. Vol 2: Ch 7–14 (glossary and interview question bank included). |
 | `interview/DDIA-Interview-Edition.pdf` | **Interview Edition** (~18k words, 38 pages): every chapter's must-know terms, comparison tables, top questions and gotchas for fast revision. Source: `interview/INTERVIEW.md`. |
 | `chapters/NN-name/README.md` | One chapter's notes (Markdown). |
 | `chapters/NN-name/ChapterNN-Notes.pdf` | That chapter as a standalone PDF. |
