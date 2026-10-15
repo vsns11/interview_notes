@@ -1,39 +1,17 @@
 # Chapter 10 — Performance
 
-Most React apps are fast enough without any special effort. When one is not, the cause is almost always one of a small number of things: components rendering far more often than they need to, one expensive calculation repeated on every render, too many DOM nodes, or too much JavaScript downloaded up front. This chapter teaches you to **see** each problem first (with render counters, the `<Profiler>` API and React DevTools — the browser extension for inspecting React components) and then fix it with the right tool: `memo`, `useMemo`, `useCallback` (all forms of **memoization** — remembering a previous result and reusing it when the inputs are unchanged), React Compiler, code splitting with `lazy` + `<Suspense>`, and list virtualization (each explained in its own section).
+Most React apps are fast enough without special effort. When one isn't, the cause is almost always one of: components rendering far more often than needed, an expensive calculation repeated every render, too many DOM nodes, or too much JavaScript downloaded up front. This chapter teaches you to **see** each problem (render counters, the `<Profiler>` API, React DevTools — the browser extension for inspecting components) and fix it with the right tool: `memo`, `useMemo`, `useCallback` (all **memoization** — reusing a previous result when inputs are unchanged), React Compiler, code splitting with `lazy` + `<Suspense>`, and list virtualization. Every demo prints **numbers** (render counts, DOM nodes, milliseconds) so you watch a fix work.
 
-Every demo in this chapter prints **numbers** — how many times a component rendered, how many DOM nodes exist, how many milliseconds React spent — so you can watch a fix work instead of taking it on trust.
-
-**What you'll learn**
-
-| # | Topic | You will be able to… |
-|---|---|---|
-| 10.1 | The render cycle: trigger → render → commit | explain what "render" means in React and why a re-render is not a DOM update |
-| 10.2 | When components re-render | predict which components re-render after a state, prop or context change |
-| 10.3 | Measure first: DevTools Profiler and `<Profiler>` | find slow components with tools, not guesses |
-| 10.4 | `memo` — skipping a child's re-render | wrap a component and know exactly when it helps |
-| 10.5 | `useCallback` and `useMemo` for stable props | stop new functions and objects from defeating `memo` |
-| 10.6 | `useMemo` for expensive calculations | cache a slow computation between renders |
-| 10.7 | React Compiler | let the build step add memoization automatically |
-| 10.8 | Code splitting with `lazy` and `<Suspense>` | load a component's code only when it is needed |
-| 10.9 | List virtualization | render 10,000 rows with ~16 DOM nodes |
-| 10.10 | Common performance bugs | recognise and fix the four mistakes that cause most slow React apps |
-| 10.11 | A performance checklist | a step-by-step routine for a slow screen |
-
-Code: [`code/`](code/) — React 19.3 in jsdom (a browser-like DOM for Node), driven with `@testing-library/react`. Timings from jsdom are only indicative (there is no real **layout** — the browser working out sizes and positions — or **paint** — drawing the pixels), so the demos focus on **counts**, which are exact and repeatable. Background you may want first: state and batching ([Chapter 3](../03-state-and-events/README.md)), Effects ([Chapter 5](../05-effects-and-refs/README.md)), Context ([Chapter 6](../06-state-management/README.md)), `useTransition`/`useDeferredValue` ([Chapter 7](../07-custom-hooks-and-hook-rules/README.md)).
+Code: [`code/`](code/) — React 19.3 in jsdom (a browser-like DOM for Node), driven with `@testing-library/react`. jsdom timings are only indicative (no real **layout** — computing sizes/positions — or **paint**), so demos focus on exact, repeatable **counts**. Background: state and batching ([Chapter 3](../03-state-and-events/README.md)), Effects ([Chapter 5](../05-effects-and-refs/README.md)), Context ([Chapter 6](../06-state-management/README.md)), `useTransition`/`useDeferredValue` ([Chapter 7](../07-custom-hooks-and-hook-rules/README.md)).
 
 ---
 
 ## 10.1 The render cycle: trigger → render → commit
 
 ### What it is
-Every screen update in React goes through three steps:
-
-1. **Trigger** — something asks for an update: the first `root.render(...)` call, or a state setter (`setCount(...)`) somewhere in the tree.
-2. **Render** — React **calls your component functions** to find out what the UI should look like now. The result is a tree of React elements (plain JavaScript objects). Nothing on the screen changes yet.
-3. **Commit** — React compares the new element tree with the previous one (this comparison is called **reconciliation**, introduced in [Chapter 1](../01-why-react-and-setup/README.md)) and applies **only the differences** to the real DOM. Then it runs layout effects (`useLayoutEffect` — code that runs after DOM changes but before the screen is drawn), the browser paints, and after that React runs ordinary Effects (`useEffect` — code that runs after the screen is drawn, to sync with things outside React).
-
-Analogy: a restaurant. The *trigger* is a customer's order. The *render* is the chef writing down the plate on a ticket. The *commit* is the waiter changing only what differs on the table — if the new ticket matches what is already served, the waiter does nothing.
+1. **Trigger** — the first `root.render(...)`, or a state setter somewhere in the tree.
+2. **Render** — React **calls your component functions** to get a tree of React elements (plain objects). The screen doesn't change yet.
+3. **Commit** — React compares the new tree with the previous one (**reconciliation**, [Chapter 1](../01-why-react-and-setup/README.md)) and applies **only the differences** to the DOM, runs layout effects (`useLayoutEffect`, after DOM changes but before paint), the browser paints, then ordinary Effects (`useEffect`) run.
 
 ```mermaid
 flowchart LR
@@ -45,35 +23,20 @@ flowchart LR
 ```
 
 ### Why it matters
-Two consequences drive the rest of this chapter:
-
-- **"Re-render" does not mean "DOM update".** A re-render is just a function call. If the output is the same, the commit changes nothing in the DOM. Re-renders are cheap *unless* a component does heavy work while rendering or renders a huge subtree.
-- **Render must be pure** ([Chapter 2](../02-components-and-props/README.md)). Because React may call your component many times (and twice in development under StrictMode, a development-only checking mode), render must not have **side effects** (changes outside the function, such as network calls or mutating shared variables). That purity is what lets React skip, repeat or interrupt renders safely.
+- **"Re-render" ≠ "DOM update".** A re-render is a function call; identical output changes nothing in the DOM. Re-renders are cheap *unless* a component does heavy work or renders a huge subtree.
+- **Render must be pure** ([Chapter 2](../02-components-and-props/README.md)). React may call components many times (twice in development under StrictMode), so render must not have **side effects** (network calls, mutating shared variables). Purity lets React skip, repeat or interrupt renders safely.
 
 ### Seeing it
-`code/01_render_cycle.jsx` logs from the render body, from a layout effect and from an effect, and counts real DOM changes with a `MutationObserver` (a browser API that reports every change to the DOM).
+`code/01_render_cycle.jsx` logs from render, a layout effect and an effect, and counts DOM changes with a `MutationObserver` (browser API reporting every DOM change):
 
 ```jsx
 function Clock({ label }) {
-  log(`  render  <Clock label="${label}">`);               // runs during the RENDER phase
+  log(`  render  <Clock label="${label}">`);               // RENDER phase
   useLayoutEffect(() => log('  commit  React applied changes, then ran layout effects'));
   useEffect(() => log('  after   passive effects run (after paint)'));
   return <p>{label}</p>;
 }
-
-function App() {
-  const [label, setLabel] = useState('hello');
-  const [clicks, setClicks] = useState(0);
-  return (
-    <>
-      <Clock label={label} />
-      <button onClick={() => setLabel('world')}>change label</button>
-      <button onClick={() => setClicks(c => c + 1)}>count {clicks}</button>
-      <button onClick={() => setLabel(label)}>set same label</button>
-    </>
-  );
-}
-// ... a MutationObserver counts DOM mutations after each click ...
+// App: <Clock label={label} /> + buttons: setLabel('world') | setClicks(c => c + 1) | setLabel(label)
 ```
 
 Output:
@@ -100,75 +63,51 @@ TRIGGER 4: setState with the SAME value (Object.is equal)
   DOM mutations: 0  (React bailed out: nothing rendered)
 ```
 
-What to notice:
-- Trigger 3: clicking **count** re-rendered `Clock` (its function ran) even though its props did not change — but the DOM received only one change, the button's text. React's diff protected the DOM.
-- Trigger 4: setting state to a value that is `Object.is`-equal (JavaScript's "same value / same object" check) to the current one lets React **bail out** — it skips rendering that component and its children. (React may occasionally still call the component once before bailing out; that is harmless and its result is thrown away.)
-- The effects ran on every commit here only because they have no dependency array ([Chapter 5](../05-effects-and-refs/README.md)).
+- Trigger 3: `Clock` re-rendered with unchanged props, but the DOM got one change (the button text) — the diff protected the DOM.
+- Trigger 4: an `Object.is`-equal value (JavaScript's "same value/same object" check) lets React **bail out**, skipping the component and its children. (React may occasionally call the component once before bailing out; the result is discarded.)
+- Effects ran every commit only because they have no dependency array.
 
 ### Common mistakes
-- Treating every re-render as a bug. A re-render that takes 0.1 ms is not worth optimizing. Measure (§10.3) before changing code.
-- Putting side effects (logging to a server, mutating globals) in the render body — they will run more often than you expect.
-
-### TL;DR
-Trigger → render (call components, build elements) → commit (apply only the differences to the DOM, then effects). Re-rendering is calling a function; it touches the DOM only when the output changed.
+- Treating every re-render as a bug — a 0.1 ms re-render isn't worth optimizing. Measure first (§10.3).
+- Side effects (server logging, mutating globals) in the render body — they run more often than you expect.
 
 ---
 
 ## 10.2 When components re-render
 
 ### What it is
-A component re-renders in exactly these situations:
-
 | Cause | Example | Notes |
 |---|---|---|
-| **Its own state changed** | `setOpen(true)` inside it | Unless the new value is `Object.is`-equal to the old one |
-| **Its parent re-rendered** | parent's state changed | The default: *all* children re-render, whether or not their props changed |
-| **A context it reads changed** | `useContext(ThemeCtx)` and the provider's `value` changed | Happens even if the parent did not re-render and even through `memo` |
-| **An external store it subscribes to changed** (state kept outside React) | Redux/Zustand selector (a function picking part of the store) result changed | Via `useSyncExternalStore` ([Chapter 7](../07-custom-hooks-and-hook-rules/README.md)) |
+| **Its own state changed** | `setOpen(true)` inside it | Unless the new value is `Object.is`-equal |
+| **Its parent re-rendered** | parent's state changed | Default: *all* children re-render, props changed or not |
+| **A context it reads changed** | provider `value` changed | Even if the parent didn't re-render, and through `memo` |
+| **A subscribed external store changed** (state outside React) | Redux/Zustand selector result changed | Via `useSyncExternalStore` ([Chapter 7](../07-custom-hooks-and-hook-rules/README.md)) |
 
-What does **not** cause a re-render: a prop object being mutated in place, a `ref.current` change, or a plain variable changing. (That is why you never mutate state — React would not notice.)
-
-A common myth is "a component re-renders when its props change". The more accurate rule: **a component re-renders when its parent re-renders**; props are not even checked unless you wrap the child in `memo` (§10.4).
+**Not** causes: mutating a prop object in place, changing `ref.current`, changing a plain variable (why you never mutate state — React wouldn't notice). Myth: "re-renders when props change". Accurate: **re-renders when its parent re-renders**; props aren't even checked without `memo` (§10.4).
 
 ### Seeing it
-`code/02_when_rerenders.jsx` gives each component a render counter.
+`code/02_when_rerenders.jsx` gives each component a render counter:
 
 ```jsx
 // Case A: a parent's state change re-renders ALL of its children (props or not)
-function Child({ name }) { count(name); return <li>{name}</li>; }
-function Static() { count('StaticNoProps'); return <li>static</li>; }
 function Parent() {
   count('Parent');
   const [n, setN] = useState(0);
-  return (<div>
-      <button onClick={() => setN(n + 1)}>parent clicks {n}</button>
-      <ul><Child name="ChildWithProps" /><Static /></ul>
-    </div>);
+  return <div><button onClick={() => setN(n + 1)}>parent clicks {n}</button><ul><Child name="ChildWithProps" /><Static /></ul></div>;
 }
-
 // Case B: the same children passed in as JSX from ABOVE do NOT re-render
 function Wrapper({ children }) {
   count('Wrapper');
   const [n, setN] = useState(0);
   return <div><button onClick={() => setN(n + 1)}>wrapper clicks {n}</button>{children}</div>;
 }
-
 // Case C: a context change re-renders every consumer, wherever it is
-const ThemeCtx = createContext('light');
-function Consumer() { count('ContextConsumer'); return <i>{useContext(ThemeCtx)}</i>; }
-function NotConsumer() { count('NotAConsumer'); return <i>plain</i>; }
 function ThemeProvider({ children }) {         // state lives here; children come from above
   const [theme, setTheme] = useState('light');
-  return (<ThemeCtx value={theme}>
-      <button onClick={() => setTheme(t => (t === 'light' ? 'dark' : 'light'))}>toggle theme</button>
-      {children}
-    </ThemeCtx>);
+  return <ThemeCtx value={theme}><button onClick={() => setTheme(t => (t === 'light' ? 'dark' : 'light'))}>toggle theme</button>{children}</ThemeCtx>;
 }
-function Middle() { count('Middle'); return <><Consumer /><NotConsumer /></>; }
-const ThemeApp = () => <ThemeProvider><Middle /></ThemeProvider>;
-
-render(<><Parent /><Wrapper><Child name="ChildAsChildren" /></Wrapper><ThemeApp /></>);
-// ... click each button and print the counters ...
+function Middle() { count('Middle'); return <><Consumer /><NotConsumer /></>; }   // Consumer reads ThemeCtx
+render(<><Parent /><Wrapper><Child name="ChildAsChildren" /></Wrapper><ThemeProvider><Middle /></ThemeProvider></>);
 ```
 
 Output:
@@ -180,9 +119,9 @@ theme change      {"ContextConsumer":1}
 ```
 
 ### How it works
-1. **Case A.** `Parent`'s state changed, so React called `Parent` again. Its JSX created **new** element objects for `<Child>` and `<Static>`, so React rendered both — even `Static`, which has no props at all.
-2. **Case B.** `Wrapper`'s state changed, but `<Child name="ChildAsChildren">` was created by *Wrapper's parent*, which did not re-render. React received the **same element object** as last time in `children` and skipped it. This "pass JSX as children" trick is the cheapest optimization in React — no `memo` needed.
-3. **Case C.** The provider changed `value`. React found every component that reads that context and re-rendered **only** those: `Middle` and `NotConsumer` were skipped (they came in as `children`), `Consumer` re-rendered.
+1. **A.** Re-running `Parent` created **new** elements for `<Child>` and `<Static>`, so both rendered — even prop-less `Static`.
+2. **B.** `<Child name="ChildAsChildren">` was created by *Wrapper's parent*, which didn't re-render; React got the **same element object** in `children` and skipped it. "Pass JSX as children" is the cheapest optimization in React — no `memo` needed.
+3. **C.** React re-rendered **only** context readers: `Consumer` yes; `Middle` and `NotConsumer` (came in as `children`) no.
 
 ```mermaid
 flowchart TD
@@ -196,72 +135,57 @@ flowchart TD
 ```
 
 ### Real-world examples
-- A layout component that owns a "sidebar open" state and receives the page as `children` does not re-render the page when the sidebar toggles.
-- Libraries such as Redux and Zustand (global state libraries, Chapter 6) let a component subscribe to a *slice* (one part) of state with a selector, so it re-renders only when that slice changes — this is why they scale better than one big context ([Chapter 6](../06-state-management/README.md)).
+- A layout owning "sidebar open" state that receives the page as `children` doesn't re-render the page on toggle.
+- Redux/Zustand let a component subscribe to a *slice* via a selector, re-rendering only when that slice changes — why they scale better than one big context ([Chapter 6](../06-state-management/README.md)).
 
 ### In the interview
-**30-second answer:** "A component re-renders when its own state changes, when its parent re-renders, when a context it reads changes, or when a subscribed external store changes. Props being 'unchanged' does not stop a re-render by default — only `memo` checks props. Setting state to an identical value bails out. Elements passed as `children` from above keep their identity, so they are skipped when the wrapper re-renders."
+**30-second answer:** "A component re-renders when its own state changes, its parent re-renders, a context it reads changes, or a subscribed external store changes. Unchanged props don't stop a re-render by default — only `memo` checks props. Setting state to an identical value bails out. Elements passed as `children` from above keep their identity, so they're skipped when the wrapper re-renders."
 
-- *Does changing a ref cause a re-render?* — No. Refs are deliberately invisible to rendering.
-- *Does `memo` stop context updates?* — No. A memoized component that reads a changed context still re-renders.
-
-### Self-check
-1. `Parent` re-renders; `Child` has no props. Does `Child` re-render? → Yes, unless it is wrapped in `memo` or passed in from above as `children`.
-2. Why did `ChildAsChildren` not re-render in Case B? → It is the same element object, created by a component that did not re-render.
-3. Which components re-render when a context value changes? → Those that read that context (plus whatever they render).
-
-### TL;DR
-Re-render triggers: own state, parent re-render, context, external store. Props are not compared unless you use `memo`. "Children from above" and state kept low are free optimizations.
+- *Does changing a ref cause a re-render?* — No; refs are invisible to rendering.
+- *Does `memo` stop context updates?* — No.
+- *Parent re-renders; `Child` has no props — does it re-render?* — Yes, unless wrapped in `memo` or passed from above as `children`.
 
 ---
 
 ## 10.3 Measure first: DevTools Profiler and `<Profiler>`
 
 ### Why it matters
-Optimizing without measuring usually fixes the wrong thing and adds complexity. React offers three measuring tools:
+Optimizing without measuring usually fixes the wrong thing and adds complexity.
 
 | Tool | Where | What it shows |
 |---|---|---|
-| **React DevTools → Profiler tab** | browser extension (Chrome, Firefox, Edge) | Records commits; a *flamegraph* (the tree, bar width = render time) and a *ranked* chart (slowest first); "why did this render?" |
-| **React Performance Tracks** (React 19.2+) | Chrome DevTools → Performance panel | React's **scheduler** work (the part of React that decides which update to work on next; blocking vs transition — low-priority, interruptible — updates) and a component flamegraph on the same timeline as network and JavaScript |
-| **`<Profiler>` component** | in your code | A callback with timings for every commit of a subtree — for tests, logging, or monitoring |
+| **React DevTools → Profiler tab** | browser extension | Recorded commits; *flamegraph* (bar width = render time), *ranked* chart (slowest first); "why did this render?" |
+| **React Performance Tracks** (React 19.2+) | Chrome DevTools → Performance panel | React's **scheduler** work (blocking vs transition — low-priority, interruptible — updates) and a component flamegraph on the same timeline as network and JS |
+| **`<Profiler>` component** | your code | Timings for every commit of a subtree — for tests, logging, monitoring |
 
 ### Using React DevTools (step by step)
-1. Install **React Developer Tools** for your browser and open your app **in development mode** (DevTools shows production apps too, but profiling needs a development or profiling build).
-2. In React DevTools settings (the gear icon) → **General**, turn on **"Highlight updates when components render"**. Now every re-render flashes an outline — you *see* what re-renders as you type or click.
-3. In the settings → **Profiler** section, enable **"Record why each component rendered while profiling"**.
-4. Press **Record**, perform the slow interaction once, press **Stop**.
-5. Pick the tallest commit bar at the top (the slowest commit). Read the **flamegraph**: grey bars did not render in this commit; coloured bars did, and warmer colours took longer. Click a bar to see *why* it rendered ("Props changed: onAdd", "Hook 2 changed", "The parent component rendered").
-6. Switch to **Ranked** to list the slowest components first. Fix the top one, record again, compare.
+1. Install **React Developer Tools**; open the app in **development mode** (profiling needs a development or profiling build).
+2. Settings (gear) → **General** → **"Highlight updates when components render"**: every re-render flashes an outline.
+3. Settings → **Profiler** → **"Record why each component rendered while profiling"**.
+4. **Record**, do the slow interaction once, **Stop**.
+5. Pick the tallest commit bar. In the **flamegraph**, grey = didn't render this commit; coloured = rendered, warmer = slower. Click a bar for *why* ("Props changed: onAdd", "Hook 2 changed", "The parent component rendered").
+6. **Ranked** lists the slowest first. Fix the top one, record again, compare.
 
-Tip: to measure what users actually experience, profile a **production build** too (add the profiling build, see below) and **throttle** the CPU (deliberately slow it down: Chrome Performance panel → CPU 4× slowdown) so your fast laptop behaves like an average phone.
+Also profile a **production build** (profiling build, below) with **CPU throttling** (Performance panel → 4× slowdown) so your laptop behaves like an average phone.
 
 ### The `<Profiler>` API
-Wrap any subtree in `<Profiler id="..." onRender={fn}>`. After each commit that involves that subtree, React calls:
-
+`<Profiler id="..." onRender={fn}>` calls, after each commit involving the subtree:
 ```js
 onRender(id, phase, actualDuration, baseDuration, startTime, commitTime)
 ```
 
 | Parameter | Meaning |
 |---|---|
-| `id` | the `id` prop, to tell several profilers apart |
-| `phase` | `"mount"` (first render), `"update"` (re-render), or `"nested-update"` (an update scheduled during a layout effect) |
-| `actualDuration` | ms spent rendering this subtree **in this commit** — falls when memoization works |
-| `baseDuration` | ms an estimated *full* re-render of the subtree would take (the sum of each component's latest render time) — the worst case |
-| `startTime`, `commitTime` | timestamps; all profilers in one commit share `commitTime` |
+| `id` | the `id` prop |
+| `phase` | `"mount"`, `"update"`, or `"nested-update"` (update scheduled during a layout effect) |
+| `actualDuration` | ms rendering this subtree **in this commit** — falls when memoization works |
+| `baseDuration` | estimated ms for a *full* re-render (sum of each component's latest render time) — the worst case |
+| `startTime`, `commitTime` | timestamps; profilers in one commit share `commitTime` |
 
-`code/09_profiler_api.jsx`:
+`code/09_profiler_api.jsx` (abridged):
 ```jsx
-const samples = [];
-function onRender(id, phase, actualDuration, baseDuration, startTime, commitTime) {
-  samples.push({ id, phase, actual: actualDuration, base: baseDuration, commitTime });
-}
-const busy = ms => { const t = performance.now(); while (performance.now() - t < ms) {} };
-
 const Sidebar = memo(function Sidebar() { busy(3); return <nav>links</nav>; });   // memoized, 3 ms
 function Feed({ posts }) { busy(5); return <section>{posts} posts</section>; }    // 5 ms every render
-
 function App() {
   const [posts, setPosts] = useState(10);
   return (
@@ -272,13 +196,10 @@ function App() {
     </Profiler>
   );
 }
-render(<App />);
-fireEvent.click(screen.getByText('load more'));
-fireEvent.click(screen.getByText('load more'));
-// ... print the samples, rounded to whole ms ...
+// render, click "load more" twice, print samples
 ```
 
-Output (exact milliseconds vary from run to run):
+Output (ms vary per run):
 ```
 id       phase    actual  base  (ms)
 sidebar  mount         3     3
@@ -294,29 +215,26 @@ app      update        5     8
 9 onRender calls in 3 commits (profilers in one commit share commitTime)
 ```
 
-How to read it: on updates, `sidebar` has `actual 0` but `base 3` — memoization saved its full 3 ms. `feed` has `actual = base = 5` — it re-renders completely every time, so it is the thing to look at next. `app`'s `actual` (5) is well below its `base` (8): the tree as a whole is being partly skipped.
+On updates `sidebar` has `actual 0`, `base 3` — memoization saved 3 ms. `feed` has `actual = base = 5` — it fully re-renders each time, so look there next. `app`'s actual (5) < base (8): the tree is partly skipped.
 
 ### Profiling in production
-Profiling adds overhead, so the normal production build of React **disables** it (`onRender` is not called there). To profile production code, use React's profiling build by **aliasing** (telling the bundler to substitute one import path for another) `react-dom/client` to `react-dom/profiling` in your **bundler** (the build tool that packs your code into files for the browser) — some frameworks have a flag for this. Never ship the profiling build to all users without a reason.
+The normal production build **disables** profiling (`onRender` not called). To profile production code, **alias** (have the bundler substitute one import path for another) `react-dom/client` to `react-dom/profiling`; some frameworks have a flag. Don't ship it to all users without reason.
 
 ### Real-world examples
-- Teams send `<Profiler>` samples from a small share of sessions (profiling build) to their metrics system to catch **regressions** (things that used to be fast — or working — getting worse after a change).
-- Test suites assert render counts for critical components, as this chapter's demos do, so an accidental "everything re-renders" change fails **CI** (continuous integration — the server that runs your tests on every code push).
-- Web Vitals (Google's standard user-experience speed metrics) such as **INP** (Interaction to Next Paint: how long the page takes to respond visually to a click or key press) are what users feel; React profiling explains *why* an interaction is slow.
+- Teams send `<Profiler>` samples from a small share of sessions to metrics to catch **regressions**.
+- Tests assert render counts for critical components so an "everything re-renders" change fails **CI** (the server running tests on every push).
+- Web Vitals such as **INP** (Interaction to Next Paint: how fast the page visually responds to input) are what users feel; React profiling explains *why* an interaction is slow.
 
 ### Common mistakes
-- Profiling only a development build on a fast laptop — development React is much slower than production, and your users' phones are slower than your laptop.
-- Wrapping everything in `<Profiler>` permanently. Each one has a cost; add them where you are investigating.
-
-### TL;DR
-Highlight updates to *see* re-renders, record with the DevTools Profiler to find the slowest commit and the reason, and use `<Profiler onRender>` when you need numbers in code. Compare `actualDuration` with `baseDuration` to see what memoization saves.
+- Profiling only a dev build on a fast laptop — dev React is much slower than production, and users' phones are slower than your laptop.
+- Leaving `<Profiler>` everywhere permanently — each has a cost.
 
 ---
 
 ## 10.4 `memo` — skipping a child's re-render
 
 ### What it is
-`memo(Component)` returns a new component that React **skips re-rendering** when its parent re-renders and every prop is the same as last time. "The same" means a **shallow** comparison: each prop compared with `Object.is` (like `===`, except `NaN` equals `NaN` and `+0` differs from `-0`).
+`memo(Component)` returns a component React **skips re-rendering** when its parent re-renders and every prop is **shallow**-equal to last time (each prop compared with `Object.is` — like `===` except `NaN` equals `NaN` and `+0` differs from `-0`).
 
 ```js
 import { memo } from 'react';
@@ -324,21 +242,18 @@ const Row = memo(function Row({ product, onAdd }) { /* ... */ });
 // optional second argument: arePropsEqual(prevProps, nextProps) => true to skip
 ```
 
-Analogy: a receptionist who, if a request is identical to the last one, hands back the previous answer instead of interrupting a busy colleague.
-
 ### How it works
-1. The parent re-renders and produces `<Row product={p} onAdd={fn} />`.
-2. React compares the new props with the previous ones, one key at a time, with `Object.is`.
-3. All equal → React reuses the previous result and does not call `Row` (nor its children).
-4. Any prop different → `Row` renders normally.
+1. Parent re-renders, producing `<Row product={p} onAdd={fn} />`.
+2. React compares new vs previous props key by key with `Object.is`.
+3. All equal → reuse the previous result; `Row` (and its children) aren't called. Any different → normal render.
 
-A memoized component **still** re-renders when its own state changes or a context it reads changes — `memo` only filters re-renders caused by the parent.
+`memo` only filters parent-caused re-renders: own state and read contexts still re-render it.
 
 ### The catch: primitives compare by value, objects by identity
-`Object.is(3, 3)` is `true`, but `Object.is({}, {})` and `Object.is(() => {}, () => {})` are `false`. Every render of the parent creates **new** objects, arrays and functions for inline props (`style={{ padding: 0 }}`, `onAdd={id => ...}`), so a memoized child receiving them re-renders every time and `memo` does nothing except add a comparison. §10.5 fixes that.
+`Object.is(3, 3)` is `true`; `Object.is({}, {})` and `Object.is(() => {}, () => {})` are `false`. Inline props (`style={{ padding: 0 }}`, `onAdd={id => ...}`) are new every parent render, so a memoized child re-renders anyway and `memo` only adds a comparison. §10.5 fixes that.
 
 ### Measuring it: before and after
-`code/03_memo_before_after.jsx` builds a page with a search box and 300 product rows, and types five characters into the box. Typing has nothing to do with the list, so ideally the rows should not render at all. A `<Profiler>` wraps the list and each `Row` increments a counter.
+`code/03_memo_before_after.jsx`: a search box plus 300 product rows; type five characters (irrelevant to the list, so ideally zero row renders). A `<Profiler>` wraps the list; each `Row` counts renders.
 
 ```jsx
 function Row({ product, onAdd }) {
@@ -347,25 +262,9 @@ function Row({ product, onAdd }) {
   return <li>{product.name} ${product.price} <button onClick={() => onAdd(product.id)}>add</button></li>;
 }
 const MemoRow = memo(Row);
-function List({ items, onAdd, RowComponent, style }) {
-  return <ul style={style}>{items.map(p => <RowComponent key={p.id} product={p} onAdd={onAdd} />)}</ul>;
-}
-const MemoList = memo(List);
-
-// V1 - no memoization at all
-function PageV1() {
-  const [query, setQuery] = useState('');
-  const [cart, setCart] = useState([]);
-  const onAdd = id => setCart(c => [...c, id]);
-  return (<>
-      <input aria-label="search" value={query} onChange={e => setQuery(e.target.value)} />
-      <Profiler id="list" onRender={onRender}>
-        <List items={PRODUCTS} onAdd={onAdd} RowComponent={Row} style={{ padding: 0 }} />
-      </Profiler>
-      <p>cart: {cart.length}</p>
-    </>);
-}
-// V2 - same, but <MemoList ... RowComponent={MemoRow} ...>: new onAdd and new style each render
+const MemoList = memo(List);   // List renders <RowComponent key product onAdd /> for each item
+// V1 - no memo: <List items={PRODUCTS} onAdd={id => setCart(c => [...c, id])} RowComponent={Row} style={{ padding: 0 }} />
+// V2 - <MemoList ... RowComponent={MemoRow} ...> but new onAdd and new style each render
 // V3 - memo + stable props:
 //   const onAdd = useCallback(id => setCart(c => [...c, id]), []);
 //   const style = useMemo(() => ({ padding: 0 }), []);
@@ -380,109 +279,80 @@ V3 memo + useCallback/useMemo      typing 5 chars -> Row renders:    0, list pro
 actualDuration while typing (ms, varies per run): V1 32.6, V2 26.5, V3 0.0
 ```
 
-Reading the numbers:
-- **V1:** 5 keystrokes × 300 rows = 1,500 row renders for nothing.
-- **V2:** adding `memo` changed **nothing** — `onAdd` and `style` were new every render, so the shallow comparison failed every time. This is the most common way `memo` is misused.
-- **V3:** with stable props, typing renders **zero** rows and the list's `actualDuration` drops to 0. Clicking **add** changes `cart`, which the list does not receive, so again zero rows render.
-- The profiler still reports 5 commits in V3: `onRender` fires whenever the surrounding tree commits, even when the subtree was skipped (with `actualDuration` near 0).
+- **V1:** 5 keystrokes × 300 rows = 1,500 wasted row renders.
+- **V2:** `memo` changed **nothing** — new `onAdd`/`style` each render fail the shallow compare. The most common misuse.
+- **V3:** zero rows render while typing or on **add** (the list doesn't receive `cart`). The profiler still reports 5 commits: `onRender` fires whenever the surrounding tree commits, even if the subtree was skipped (`actualDuration` ≈ 0).
 
-### When `memo` is worth it
-- The component renders often with the **same props**, and
-- its render is noticeably expensive (large subtree, heavy calculation), and
-- you can keep its props stable (primitives, or memoized objects/functions).
-
-### When not to use it
-- Cheap components (a button, a label), or props that change on nearly every render anyway.
-- When moving state down or passing JSX as `children` (§10.10) removes the re-render entirely.
-- In a project using **React Compiler** (§10.7), which memoizes for you.
+### When `memo` is worth it — and when not
+| Use `memo` when… | Skip it when… |
+|---|---|
+| The component often re-renders with the **same props** | It's cheap (button, label), or props change nearly every render |
+| Its render is noticeably expensive (large subtree, heavy calculation) | Moving state down or passing JSX as `children` (§10.10) removes the re-render |
+| You can keep props stable (primitives, memoized objects/functions) | The project uses **React Compiler** (§10.7) |
 
 ### Custom comparison
-`memo(Chart, (prev, next) => prev.data.version === next.data.version)` lets you define equality yourself. Be careful: if you return `true` while a callback prop changed, the child keeps calling a **stale** function (one that captured old state — a *stale closure*). Compare every prop, or prefer making props stable.
+`memo(Chart, (prev, next) => prev.data.version === next.data.version)` defines equality yourself. Returning `true` while a callback prop changed leaves the child calling a **stale closure** (a function that captured old state). Compare every prop, or make props stable.
 
 ### Common mistakes
-- Wrapping a component in `memo` and passing inline objects/functions/JSX — see V2.
-- Passing `children` to a memoized component: `<MemoCard><p>hi</p></MemoCard>` creates a new `children` element every render, so `MemoCard` always re-renders.
-- Deep-equality comparisons in `arePropsEqual` on big data — they can cost more than the render.
+- `memo` plus inline objects/functions/JSX — see V2.
+- `<MemoCard><p>hi</p></MemoCard>` — `children` is a new element every render, so `MemoCard` always re-renders.
+- Deep-equality in `arePropsEqual` on big data — can cost more than the render.
 
 ### In the interview
-**30-second answer:** "`memo` makes a component skip re-rendering when its parent re-renders with shallow-equal props, compared with `Object.is`. It does not stop re-renders from the component's own state or from context. It only helps if props are stable, so it usually goes with `useCallback`/`useMemo`. I'd use it for expensive components that re-render often with the same props, after profiling — and with React Compiler I mostly don't need it."
+**30-second answer:** "`memo` makes a component skip re-rendering when its parent re-renders with shallow-equal props (`Object.is`). It doesn't stop re-renders from its own state or context. It only helps with stable props, so it goes with `useCallback`/`useMemo`. I use it for expensive components that re-render often with the same props, after profiling — and with React Compiler I mostly don't need it."
 
-- *Why can `memo` make things slower?* — It adds a props comparison on every parent render; if props always differ, you pay for the comparison and the render.
-- *Is `memo` a guarantee?* — No; React treats it as a performance hint, not a semantic guarantee, so code must still be correct if the component re-renders.
-
-### TL;DR
-`memo` = skip the re-render if props are shallow-equal. Objects and functions created during render are never equal, so stabilise them — or use React Compiler.
+- *Why can `memo` make things slower?* — A props comparison on every parent render; if props always differ you pay for both.
+- *Is `memo` a guarantee?* — No, a performance hint; code must be correct if the component re-renders.
 
 ---
 
 ## 10.5 `useCallback` and `useMemo` for stable props
 
 ### What it is
-Both Hooks **cache a value between renders** and hand back the *same* reference until a dependency changes:
+Both **cache a value between renders** and return the *same* reference until a dependency changes:
 
 ```js
 const onAdd = useCallback(id => setCart(c => [...c, id]), []);   // caches the FUNCTION
 const style = useMemo(() => ({ padding: 0 }), []);                 // caches the RESULT of calling the function
 ```
 
-`useCallback(fn, deps)` is exactly `useMemo(() => fn, deps)`. React compares each dependency with `Object.is` against the previous render; if all are equal it returns the cached value, otherwise it stores and returns the new one.
-
-### How it works
-1. First render: React stores `[value, deps]` in the component's Hook slot (the per-component storage position React keeps for each Hook call) ([Chapter 7](../07-custom-hooks-and-hook-rules/README.md)).
-2. Next render: React compares new deps with stored deps.
-3. Equal → return the stored value (same reference, so a memoized child sees an unchanged prop).
-4. Different → use the new value and store it.
+`useCallback(fn, deps)` is exactly `useMemo(() => fn, deps)`. On first render React stores `[value, deps]` in the component's Hook slot ([Chapter 7](../07-custom-hooks-and-hook-rules/README.md)); on later renders it compares each dep with `Object.is` — all equal → stored value (same reference, so a memoized child sees an unchanged prop); else store and return the new one.
 
 ### Keeping dependencies small
-- Use an **updater function** (`setCart(c => [...c, id])`) instead of reading `cart` directly; then the callback needs no `cart` dependency and stays stable ([Chapter 3](../03-state-and-events/README.md)).
-- Move objects that do not depend on props or state **out of the component** (`const STYLE = { padding: 0 }` at module level) — no Hook needed.
-- Pass **primitives** (`userId`) instead of objects (`user`) when the child only needs one field.
+- Use an **updater function** (`setCart(c => [...c, id])`) so the callback needn't depend on `cart` ([Chapter 3](../03-state-and-events/README.md)).
+- Move constants **out of the component** (`const STYLE = { padding: 0 }` at module level) — no Hook needed.
+- Pass **primitives** (`userId`) rather than objects (`user`) when the child needs one field.
 
 ### When they help — and when they don't
 | Situation | Worth it? |
 |---|---|
-| Passing a function/object to a `memo` child | Yes — otherwise `memo` is useless (V2 above) |
-| The value is a dependency of `useEffect` and must not re-trigger it every render | Yes (or restructure the Effect, [Chapter 5](../05-effects-and-refs/README.md)) |
-| A custom Hook returns functions that callers may put in dependency arrays | Yes — callers expect stable functions |
-| Passing a callback to a plain DOM element (`<button onClick>`) | No — DOM elements are not memoized |
-| Passing to a child that is not wrapped in `memo` | No — the child re-renders anyway |
-| Everything, "just in case" | No — adds noise and memory; hides real problems |
+| Passing a function/object to a `memo` child | Yes — else `memo` is useless (V2) |
+| Value is a `useEffect` dependency that mustn't re-trigger every render | Yes (or restructure the Effect, [Chapter 5](../05-effects-and-refs/README.md)) |
+| A custom Hook returns functions callers may put in dependency arrays | Yes |
+| Callback on a plain DOM element (`<button onClick>`) | No — DOM elements aren't memoized |
+| Child not wrapped in `memo` | No — it re-renders anyway |
+| Everything, "just in case" | No — noise and memory; hides real problems |
 
 ### Common mistakes
-- **Missing dependencies.** `useCallback(() => save(draft), [])` keeps the first `draft` forever (a *stale closure*). Let `eslint-plugin-react-hooks` (a linter plugin — a tool that flags likely bugs as you type) check the list.
-- **Unstable dependencies.** `useMemo(() => filter(items, opts), [items, opts])` where `opts` is a new object every render — the cache never hits.
-- Thinking `useMemo` guarantees the cache survives. React may discard cached values (for example, during development file edits), so the code must still be correct without the cache.
-
-### TL;DR
-`useCallback` caches a function, `useMemo` caches a computed value; both keep the same reference until deps change. They matter when the reference is compared — by `memo`, by an Effect's dependencies, or by a caller.
+- **Missing dependencies**: `useCallback(() => save(draft), [])` keeps the first `draft` forever (stale closure). Let `eslint-plugin-react-hooks` check.
+- **Unstable dependencies**: `useMemo(() => filter(items, opts), [items, opts])` with a new `opts` each render never hits the cache.
+- Assuming the cache survives — React may discard cached values (e.g. during dev file edits); code must be correct without it.
 
 ---
 
 ## 10.6 `useMemo` for expensive calculations
 
 ### What it is
-The second job of `useMemo`: avoid **re-doing a slow calculation** on renders where its inputs did not change.
-
+`useMemo`'s second job: skip **re-doing a slow calculation** when its inputs didn't change.
 ```js
 const visible = useMemo(() => filterTodos(todos, tab), [todos, tab]);
 ```
 
 ### Seeing it
-`code/04_usememo_expensive.jsx` filters 5,000 todos with a function that takes ~2 ms, then causes 4 unrelated re-renders (theme toggles) and 1 relevant one (tab change).
-
+`code/04_usememo_expensive.jsx` filters 5,000 todos (~2 ms) with 4 unrelated re-renders (theme toggles) and 1 relevant one (tab change):
 ```jsx
-function Plain() {
-  const [tab, setTab] = useState('all');
-  const [dark, setDark] = useState(false);              // unrelated state
-  const visible = filterTodos(TODOS, tab);              // recomputed on EVERY render
-  return <View {...{ visible, dark, setDark, setTab }} />;
-}
-function Memoized() {
-  const [tab, setTab] = useState('all');
-  const [dark, setDark] = useState(false);
-  const visible = useMemo(() => filterTodos(TODOS, tab), [tab]);  // cached until `tab` changes
-  return <View {...{ visible, dark, setDark, setTab }} />;
-}
+const visible = filterTodos(TODOS, tab);                          // Plain: recomputed on EVERY render
+const visible = useMemo(() => filterTodos(TODOS, tab), [tab]);   // Memoized: cached until `tab` changes
 ```
 
 Output:
@@ -491,40 +361,33 @@ without useMemo: 6 renders, filterTodos ran 6x, shows "1667 visible"
 with useMemo   : 6 renders, filterTodos ran 2x, shows "1667 visible"
 ```
 
-The memoized version ran the calculation only on mount and when `tab` changed.
-
 ### How do I know a calculation is "expensive"?
-Time it with `console.time('filter')` / `console.timeEnd('filter')`, ideally with CPU throttling (§10.3). React's docs suggest memoizing when a calculation takes around **1 ms or more**. Sorting or filtering thousands of items, building chart data and parsing large text qualify; `a + b` or mapping 20 items does not.
+Time it with `console.time`/`console.timeEnd`, ideally CPU-throttled. React's docs suggest memoizing at around **1 ms or more** — sorting/filtering thousands of items, building chart data, parsing large text; not `a + b` or mapping 20 items.
 
 ### Alternatives to consider first
-- **Do it outside render**: compute once when data arrives (in the fetch handler, the reducer, or on the server).
-- **Keep less state**: derived values ([Chapter 3](../03-state-and-events/README.md)) are fine to recompute when cheap.
-- **Don't block typing**: if the slow part is rendering results while the user types, `useDeferredValue` or `useTransition` (Hooks that mark some rendering as low-priority so typing stays instant; [Chapter 7](../07-custom-hooks-and-hook-rules/README.md)) keep input responsive; combine them with `memo` on the slow list.
+- **Do it outside render**: once when data arrives (fetch handler, reducer, server).
+- **Keep less state**: cheap derived values ([Chapter 3](../03-state-and-events/README.md)) can just be recomputed.
+- **Don't block typing**: `useDeferredValue`/`useTransition` mark rendering as low-priority so input stays instant ([Chapter 7](../07-custom-hooks-and-hook-rules/README.md)); combine with `memo` on the slow list.
 
 ### Common mistakes
-- Side effects inside the `useMemo` function (fetching, setting state). The function must be pure; in development StrictMode React calls it twice to help you notice.
-- Expecting `useMemo` to make the **first** render faster — it only helps later renders.
-
-### TL;DR
-`useMemo(() => slow(a, b), [a, b])` skips the slow work until `a` or `b` changes. Measure first; ~1 ms or more is the rough threshold.
+- Side effects in the `useMemo` function — it must be pure (StrictMode calls it twice in dev to surface this).
+- Expecting a faster **first** render — it only helps later renders.
 
 ---
 
 ## 10.7 React Compiler
 
 ### What it is
-**React Compiler** is a build-time tool (a Babel plugin, `babel-plugin-react-compiler` — Babel is a tool that transforms JavaScript source code, and plugins add transformations) that reads your components and Hooks and **automatically adds memoization** — the equivalent of well-placed `useMemo`, `useCallback` and `memo` — without you writing any of them. Version **1.0** was released as stable on **7 October 2025**. It works best with React 19 and also supports React 17 and 18 (those need the extra `react-compiler-runtime` package and a `target` option).
-
-Analogy: a spell-checker for performance that also fixes the spelling for you, but only in sentences it fully understands.
+**React Compiler** is a build-time Babel plugin (`babel-plugin-react-compiler`; Babel transforms JS source) that **automatically adds memoization** — the equivalent of well-placed `useMemo`, `useCallback` and `memo`. **v1.0** went stable on **7 October 2025**. Best with React 19; also supports React 17 and 18 (via the extra `react-compiler-runtime` package and a `target` option).
 
 ### How it works
-1. At build time the compiler analyses each component and Hook: which values depend on which props and state.
-2. It rewrites the function to keep a small **cache array** per component instance (via `useMemoCache`, imported from `react/compiler-runtime`).
-3. Each computed value and each JSX element is recomputed only when its specific inputs changed; otherwise the cached one is reused. Returning the *same* JSX element object lets React skip that child entirely (the same effect as "children from above" in §10.2) — which is why `memo` is typically unnecessary.
-4. If a component breaks the Rules of React (React's purity rules for components and Hooks: mutating props, reading refs during render, side effects in render), the compiler **skips** that component rather than risk changing its behaviour. Your code still runs, just unoptimised.
+1. At build time it analyses which values in each component/Hook depend on which props and state.
+2. It rewrites the function to keep a per-instance **cache array** (`useMemoCache`, from `react/compiler-runtime`).
+3. Each computed value and JSX element is recomputed only when its inputs changed. Returning the *same* JSX element object lets React skip that child (as with "children from above", §10.2) — so `memo` is typically unnecessary.
+4. Components that break the Rules of React (mutating props, reading refs during render, side effects in render) are **skipped**, not risked — they still run, unoptimised.
 
 ### Seeing it — what the compiler produces (by hand)
-We don't run the Babel plugin in this book's toolchain, so `code/05_compiler_output.jsx` contains a **hand-simplified** version of the kind of code the compiler generates, using the real `c` function from `react/compiler-runtime`. Real output differs in naming and detail.
+This book's toolchain doesn't run the plugin, so `code/05_compiler_output.jsx` has a **hand-simplified** version of compiler-style output using the real `c` from `react/compiler-runtime` (real output differs in naming and detail):
 
 ```jsx
 // ---- what you write ----
@@ -558,29 +421,24 @@ function ProductPageCompiled({ products, theme }) {
 ```
 
 `ProductList` is **not** wrapped in `memo`. Changing `theme` three times:
-
-Output:
 ```
 hand-written code  : 4 renders of the page -> filter ran 4x, ProductList rendered 4x
 compiler-style code: 4 renders of the page -> filter ran 1x, ProductList rendered 1x
 ```
-
-You can see the real output for any component in the online **React Compiler Playground** (linked from react.dev).
+The online **React Compiler Playground** (linked from react.dev) shows real output for any component.
 
 ### Setting it up (not run here)
-Install the plugin with an exact version, and make sure it runs **first** among Babel plugins:
+Install with an exact version; it must run **first** among Babel plugins:
 
 ```bash
 npm install --save-dev --save-exact babel-plugin-react-compiler@latest
 ```
-
 ```js
 // babel.config.js
 module.exports = {
   plugins: ['babel-plugin-react-compiler'],   // must be first
 };
 ```
-
 ```js
 // vite.config.js — @vitejs/plugin-react v6 and later (also: npm install -D @rolldown/plugin-babel)
 import { defineConfig } from 'vite';
@@ -594,38 +452,33 @@ export default defineConfig({
 //   plugins: [react({ babel: { plugins: ['babel-plugin-react-compiler'] } })]
 ```
 
-- **Next.js** and **Vite** project templates offer it at creation time (`create-next-app`, `create-vite`); **Expo SDK 54+** enables it by default.
-- The compiler's lint rules now ship in **`eslint-plugin-react-hooks`** (its `recommended` config), replacing the older separate `eslint-plugin-react-compiler`. They flag code the compiler cannot optimise, such as setting state during render or reading `ref.current` during render.
-- **Verify**: in React DevTools, compiled components show a **"Memo ✨"** badge.
-- **Opt out** of one component or file temporarily with the **directive** (a special string statement that tools read) `"use no memo"` at the top of its body; fix the underlying issue and remove it later.
-- Adopt **incrementally** on large codebases (react.dev has a guide: compile one directory first, or gate it behind a flag), and pin the exact version if your **test coverage** (how much of your code the tests exercise) is thin, because a new compiler version can memoize differently.
+- **Next.js** and **Vite** templates offer it at creation (`create-next-app`, `create-vite`); **Expo SDK 54+** enables it by default.
+- Its lint rules ship in **`eslint-plugin-react-hooks`** (`recommended`), replacing `eslint-plugin-react-compiler`; they flag code it can't optimise (setting state or reading `ref.current` during render).
+- **Verify**: compiled components show a **"Memo ✨"** badge in React DevTools.
+- **Opt out** one component/file temporarily with the **directive** (a special string statement tools read) `"use no memo"`; fix the issue and remove it.
+- Adopt **incrementally** in large codebases (one directory first, or behind a flag — react.dev has a guide), and pin the exact version if test coverage is thin, since new versions can memoize differently.
 
 ### What happens to `useMemo`, `useCallback` and `memo`?
-- They still work and the compiler respects them. You don't need to delete them.
-- For **new** code in a compiled project, rely on the compiler and use `useMemo`/`useCallback` only as **escape hatches** — for example, to guarantee that a value used as an Effect dependency keeps its identity.
-- The compiler can memoize things the Hooks cannot, such as values computed **after an early return**.
-- The compiler does not fix algorithmic problems (an O(n²) loop — work that grows with the square of the input size — is still slow), huge DOM trees (use virtualization), or large bundles (use code splitting).
+- They still work and are respected; no need to delete them.
+- In new compiled code, use them only as **escape hatches** — e.g. to guarantee an Effect dependency keeps its identity.
+- The compiler can memoize things Hooks can't, such as values computed **after an early return**.
+- It doesn't fix slow algorithms (an O(n²) loop is still slow), huge DOM trees (virtualize) or large bundles (split).
 
 ### Real-world examples
-The React Compiler 1.0 announcement (react.dev blog, October 2025) cites the Meta Quest Store: initial loads and cross-page navigations up to 12% faster, some interactions more than 2.5× faster, memory unchanged. Treat such numbers as examples, not a promise for your app — measure.
+The v1.0 announcement (react.dev, October 2025) cites the Meta Quest Store: initial loads and cross-page navigations up to 12% faster, some interactions over 2.5× faster, memory unchanged. Examples, not a promise — measure.
 
 ### In the interview
-**30-second answer:** "React Compiler is a build-time Babel plugin, stable since v1.0 in October 2025, that automatically memoizes components and Hooks — values, callbacks and JSX — based on a static analysis of their dependencies. It relies on components following the Rules of React and skips ones that don't. With it, manual `memo`/`useMemo`/`useCallback` become mostly unnecessary escape hatches. It doesn't solve slow algorithms, big DOM or bundle size."
+**30-second answer:** "React Compiler is a build-time Babel plugin, stable since v1.0 in October 2025, that automatically memoizes components and Hooks — values, callbacks and JSX — from static analysis of their dependencies. It relies on the Rules of React and skips components that break them. With it, manual `memo`/`useMemo`/`useCallback` become mostly escape hatches. It doesn't solve slow algorithms, big DOM or bundle size."
 
-- *How do you check it's working?* — The "Memo ✨" badge in React DevTools; the playground shows the transformed code.
-- *What if a component misbehaves after compiling?* — Add `"use no memo"` to it, find the Rules-of-React violation (the lint rules help), fix, remove the directive.
-
-### TL;DR
-React Compiler adds memoization at build time using a per-component cache. Enable it for new projects, follow the Rules of React, and keep manual memo Hooks as escape hatches.
+- *How do you check it's working?* — "Memo ✨" badge in DevTools; the playground shows transformed code.
+- *A component misbehaves after compiling?* — Add `"use no memo"`, find the Rules-of-React violation (lint helps), fix, remove the directive.
 
 ---
 
 ## 10.8 Code splitting with `lazy` and `<Suspense>`
 
 ### What it is
-By default a bundler puts all your code into one JavaScript file. The browser must download, **parse** (read and convert into an internal form) and run **all** of it before the first screen works — including the chart library for a page the user may never open. **Code splitting** breaks the bundle into chunks that load **on demand**.
-
-The building block is the JavaScript **dynamic import**, `import('./chart.jsx')`, which returns a **Promise** (an object standing for a value that will arrive later) of the **module** (one JavaScript file and its exports). Bundlers (Vite, webpack, esbuild, Rollup) turn each dynamic import into a separate file. React's `lazy` turns that Promise into a component:
+By default the bundler emits one JS file the browser must download, **parse** and run before the first screen works — including a chart library for a page the user may never open. **Code splitting** breaks it into chunks loaded **on demand**. The building block is the **dynamic import** `import('./chart.jsx')`, which returns a **Promise** of the **module**; bundlers (Vite, webpack, esbuild, Rollup) emit each as a separate file. `lazy` turns that Promise into a component:
 
 ```js
 import { lazy, Suspense } from 'react';
@@ -637,36 +490,30 @@ const HeavyChart = lazy(() => import('./heavy_chart.jsx'));   // at MODULE level
 ```
 
 ### How it works
-1. `lazy(load)` returns a placeholder component. Nothing is downloaded yet.
-2. The first time React tries to render it, React calls `load()`. The Promise is pending, so the component **suspends**.
-3. React shows the `fallback` of the **nearest `<Suspense>` boundary** above it.
-4. When the Promise resolves to a module, React uses its **`default` export** as the component and renders it in place of the fallback. React caches the result — `load` runs only once.
-5. If the Promise rejects (the network failed), the error is thrown during rendering and caught by the nearest **error boundary** (a component that catches errors from its children and shows a fallback UI).
+1. `lazy(load)` returns a placeholder component; nothing downloads yet.
+2. On first render React calls `load()`; the Promise is pending, so the component **suspends** and the **nearest `<Suspense>`** shows its `fallback`.
+3. On resolve, React renders the module's **`default` export** in its place and caches it — `load` runs once.
+4. On reject (network failure), the error is thrown during render and caught by the nearest **error boundary** (a component that catches children's render errors and shows fallback UI).
 
 ### Seeing it — real chunk files
-Bundling a two-route app with esbuild's code splitting enabled (`--splitting --format=esm --minify`; a large data array lives in `chart.jsx`):
-
+esbuild with code splitting (`--splitting --format=esm --minify`; a large data array lives in `chart.jsx`):
 ```js
 // main.jsx
 import { lazy } from 'react';
 export const HeavyChart = lazy(() => import('./chart.jsx'));
 export const Settings = lazy(() => import('./settings.jsx'));
 ```
-
-Output (sizes and hashes depend on the input files):
+Output (sizes/hashes depend on input):
 ```
   dist/chart-GX2X5FGR.js     22.9kb
   dist/main.js                153b 
   dist/settings-7FL34NKO.js   114b 
 ```
-and `dist/main.js` now contains `import("./chart-GX2X5FGR.js")` — the 22.9 kB chunk is fetched only when `HeavyChart` first renders. (The **hash** in the name — a short fingerprint computed from the content — changes when the file's content changes, so browsers can cache chunks forever.)
+`dist/main.js` contains `import("./chart-GX2X5FGR.js")` — the 22.9 kB chunk is fetched only when `HeavyChart` first renders. The **hash** (content fingerprint) changes with content, so chunks can be cached forever.
 
 ### Seeing it — loading states and failures
-`code/06_lazy_suspense.jsx` (the chunk load is delayed by 100 ms to imitate the network):
-
+`code/06_lazy_suspense.jsx` (chunk load delayed 100 ms to imitate the network):
 ```jsx
-const delay = ms => new Promise(r => setTimeout(r, ms));
-
 // 1. Declare lazy components at MODULE level (never inside a component).
 const HeavyChart = lazy(() => delay(100).then(() => import('./heavy_chart.jsx')));
 // lazy() needs a default export; for a named export, map it to { default }.
@@ -674,23 +521,16 @@ const Legend = lazy(() => import('./heavy_chart.jsx').then(m => ({ default: m.Le
 // A chunk that fails to load (e.g. a deploy replaced the file, or the user went offline).
 const Broken = lazy(() => delay(10).then(() => { throw new Error('Failed to fetch dynamically imported module'); }));
 
-class ChunkErrorBoundary extends Component {                   // error boundaries are still classes
-  state = { error: null };
-  static getDerivedStateFromError(error) { return { error }; }
-  render() { return this.state.error ? <p role="alert">Could not load: {this.state.error.message}</p> : this.props.children; }
-}
-
 function Dashboard() {
   const [tab, setTab] = useState('summary');
   return (
     <main>
-      <button onClick={() => setTab('chart')}>chart tab</button>
-      <button onClick={() => setTab('broken')}>broken tab</button>
+      {/* buttons: chart tab, broken tab */}
       {tab === 'summary' && <p>summary text</p>}
       <Suspense fallback={<p>Loading chart...</p>}>
         {tab === 'chart' && <><HeavyChart points={[1, 2, 3]} /><Legend /></>}
       </Suspense>
-      <ChunkErrorBoundary>
+      <ChunkErrorBoundary>   {/* class with getDerivedStateFromError, renders "Could not load: …" */}
         <Suspense fallback={<p>Loading...</p>}>{tab === 'broken' && <Broken />}</Suspense>
       </ChunkErrorBoundary>
     </main>
@@ -698,7 +538,7 @@ function Dashboard() {
 }
 ```
 
-`heavy_chart.jsx` prints a line when its code is evaluated. Output:
+Output (`heavy_chart.jsx` prints when evaluated):
 ```
 first render             -> summary text
 clicked chart tab        -> Loading chart...
@@ -706,76 +546,65 @@ clicked chart tab        -> Loading chart...
 after the chunk loaded   -> chart with 3 points | legend
 broken tab               -> Could not load: Failed to fetch dynamically imported module
 ```
-
-The module did not run until the chart tab was opened. One `<Suspense>` boundary covered both lazy components, so the user saw one loading message, not two.
+The module didn't run until the tab opened; one boundary covered both lazy components, so one loading message.
 
 ### Where to split
 | Split point | Why |
 |---|---|
-| **Routes / pages** | The natural boundary: users view one page at a time. React Router supports a `lazy` property on routes, and frameworks such as Next.js split per route automatically ([Chapter 9](../09-routing-and-data-fetching/README.md), [Chapter 13](../13-server-rendering-and-frameworks/README.md)) |
+| **Routes / pages** | Users view one page at a time; React Router's route `lazy`, frameworks split per route automatically ([Chapter 9](../09-routing-and-data-fetching/README.md), [Chapter 13](../13-server-rendering-and-frameworks/README.md)) |
 | **Heavy, rarely used widgets** | Rich-text editors, charts, maps, PDF viewers, admin panels |
-| **Below-the-fold** (not visible until the user scrolls) **or behind-a-click UI** | Modals (dialogs over the page), settings drawers (panels that slide in), "advanced" tabs |
-| **Not worth it** | Small components; things on the first screen (splitting them just adds a request and a spinner) |
+| **Below-the-fold** (not visible until the user scrolls) **or behind-a-click UI** | Modals, settings drawers, "advanced" tabs |
+| **Not worth it** | Small components; anything on the first screen (adds a request and a spinner) |
 
 ### Making it feel fast
-- **Preload on intent**: start the download when the user hovers or focuses the link, before the click. Calling the same `import()` early is enough — the module system caches it:
+- **Preload on intent** — calling the same `import()` early is enough; the module system caches it:
   ```js
   const loadChart = () => import('./heavy_chart.jsx');
   const HeavyChart = lazy(loadChart);
   <button onMouseEnter={loadChart} onFocus={loadChart} onClick={() => setTab('chart')}>Chart</button>
   ```
-- **Place `<Suspense>` boundaries deliberately**: one around the whole page replaces everything with a spinner; one around each widget keeps the rest usable. Skeletons (grey shapes of the final layout) avoid layout jumps.
-- **Don't hide already-visible content**: if switching tabs would replace visible content with a fallback, wrap the state update in `startTransition` — React then keeps showing the old tab until the new one is ready ([Chapter 7](../07-custom-hooks-and-hook-rules/README.md)).
-- **Handle chunk failures**: after a new **deployment** (publishing a new version of the app to the server), old chunk files may be gone. An error boundary with a "Reload" button is the common fix.
+- **Place boundaries deliberately**: one around the page blanks everything; one per widget keeps the rest usable. Skeletons avoid layout jumps.
+- **Don't hide visible content**: wrap the update in `startTransition` so React keeps the old tab until the new one is ready ([Chapter 7](../07-custom-hooks-and-hook-rules/README.md)).
+- **Handle chunk failures**: after a new deployment old chunk files may be gone — an error boundary with "Reload" is the usual fix.
 
 ### Common mistakes
-- **Declaring `lazy` inside a component.** Each render creates a new lazy component type, so React remounts it and state is lost. Always declare at module level.
-- **Named export without mapping** — `lazy(() => import('./x'))` needs a `default` export; otherwise map as shown above.
-- **No `<Suspense>` above a lazy component** — React needs a boundary to show something while it loads.
-- **Splitting everything** — dozens of tiny chunks mean many requests and waterfalls.
+- **`lazy` inside a component** — a new component type each render, so it remounts and loses state. Declare at module level.
+- **Named export without mapping** — `lazy` needs `default`.
+- **No `<Suspense>` above a lazy component**.
+- **Splitting everything** — many tiny chunks mean many requests and waterfalls.
 
 ### How to find what to split
-Use a bundle analyser (a tool that draws a map of what is inside your bundle: `rollup-plugin-visualizer` for Vite/Rollup, `webpack-bundle-analyzer`, or `source-map-explorer`) to see which libraries take space, and Chrome DevTools' **Coverage** tab to see how much downloaded JavaScript never ran.
+A bundle analyser (`rollup-plugin-visualizer`, `webpack-bundle-analyzer`, `source-map-explorer`) shows what takes space; Chrome DevTools' **Coverage** tab shows downloaded JS that never ran.
 
 ### In the interview
-**30-second answer:** "Code splitting moves code that isn't needed immediately into separate chunks loaded on demand. In React you write `const Page = lazy(() => import('./Page'))` at module level and render it inside `<Suspense fallback>`; the component suspends until the chunk loads. Split at routes and heavy widgets, preload on hover, use an error boundary for failed loads, and use `startTransition` so navigation doesn't flash a spinner over existing content."
+**30-second answer:** "Code splitting moves code not needed immediately into chunks loaded on demand. `const Page = lazy(() => import('./Page'))` at module level, rendered inside `<Suspense fallback>`; it suspends until the chunk loads. Split at routes and heavy widgets, preload on hover, catch failed loads with an error boundary, and use `startTransition` so navigation doesn't flash a spinner over existing content."
 
-- *Why must the module have a default export?* — `lazy` reads the resolved module's `default` property; map named exports to `{ default }`.
-
-### TL;DR
-`lazy(() => import(...))` at module level + `<Suspense fallback>` + an error boundary = on-demand chunks. Split by route and heavy widget; preload on intent.
+- *Why must the module have a default export?* — `lazy` reads the resolved module's `default`; map named exports to `{ default }`.
 
 ---
 
 ## 10.9 List virtualization
 
 ### What it is
-**Virtualization** (also called **windowing**) renders only the list rows that are currently visible in a scrollable area (plus a few extra), instead of all of them. As the user scrolls, rows leaving the window are removed and rows entering it are added. A tall empty spacer keeps the scrollbar the correct size, so the list *looks* complete.
-
-Analogy: a train window. The landscape is kilometres long, but you only ever see the part framed by the window — and no one builds the whole landscape in front of you.
+**Virtualization** (**windowing**) renders only the rows visible in a scrollable area (plus a few extra); rows leaving the window are removed and entering rows added. A tall spacer keeps the scrollbar correct so the list *looks* complete.
 
 ### Why it matters
-Every row costs DOM nodes, memory, style and layout work; 10,000 rows means tens of thousands of nodes, and rendering, scrolling and even typing slow down. Memoization cannot help — the problem is the number of nodes, not re-renders.
+Every row costs DOM nodes, memory, style and layout; 10,000 rows mean tens of thousands of nodes and slow rendering, scrolling, even typing. Memoization can't help — the problem is node count, not re-renders.
 
 ### How it works (fixed-height rows)
-1. Know the row height (`rowHeight`), the **viewport** height (`height` — the visible scrolling box), and the current `scrollTop` (how many pixels the user has scrolled).
-2. First visible row = `floor(scrollTop / rowHeight)`; number of visible rows = `ceil(height / rowHeight)`.
-3. Add an **overscan** of a few rows above and below, so fast scrolling doesn't show blank gaps.
-4. Render a container of `items.length × rowHeight` pixels (the spacer), and inside it only the rows in range, each **absolutely positioned** (placed at exact coordinates inside the container with CSS `position: absolute`) at `top = index × rowHeight`.
-5. On every `scroll` event, store the new `scrollTop` in state → re-render → a different slice.
+1. Inputs: `rowHeight`, **viewport** `height` (the visible scrolling box), current `scrollTop`.
+2. First visible row = `floor(scrollTop / rowHeight)`; visible count = `ceil(height / rowHeight)`.
+3. Add **overscan** rows above/below so fast scrolling shows no gaps.
+4. Render a spacer of `items.length × rowHeight` px with only in-range rows, **absolutely positioned** at `top = index × rowHeight`.
+5. Each `scroll` event stores `scrollTop` → re-render → new slice.
 
 `code/virtual_list.jsx`:
 ```jsx
 export function VirtualList({ items, rowHeight, height, overscan = 3, renderRow }) {
   const [scrollTop, setScrollTop] = useState(0);
-
-  // 1. Which rows are visible? Pure arithmetic - every row has the same height.
   const first = Math.max(0, Math.floor(scrollTop / rowHeight) - overscan);
   const visibleCount = Math.ceil(height / rowHeight) + 2 * overscan;
   const last = Math.min(items.length - 1, first + visibleCount - 1);
-
-  // 2. Render only those rows, absolutely positioned inside a spacer as tall as the WHOLE list,
-  //    so the scrollbar looks and behaves as if all rows were there.
   const rows = [];
   for (let i = first; i <= last; i++) {
     rows.push(
@@ -795,20 +624,7 @@ export function VirtualList({ items, rowHeight, height, overscan = 3, renderRow 
 }
 ```
 
-`code/07_virtualization.jsx` renders 10,000 customers both ways, then simulates scrolling (jsdom has no layout, so the test sets `scrollTop` itself and fires a `scroll` event):
-
-```jsx
-render(<NaiveList items={ITEMS} />);                      // every row is a DOM node
-// ...
-render(<VirtualList items={ITEMS} rowHeight={30} height={300} overscan={3} renderRow={it => it.name} />);
-for (const y of [3000, 150_000, 299_700]) {
-  viewport.scrollTop = y;
-  fireEvent.scroll(viewport);
-  // print which rows are in the DOM
-}
-```
-
-Output:
+`code/07_virtualization.jsx` renders 10,000 customers both ways, then simulates scrolling (jsdom has no layout, so the test sets `scrollTop` and fires `scroll`):
 ```
 naive list    : 10000 row nodes, 10006 elements in document
 virtual list  : 16 row nodes, 23 elements in document
@@ -820,7 +636,7 @@ virtual list  : 16 row nodes, 23 elements in document
 mount time (varies per run): naive 130 ms, virtual 6 ms
 ```
 
-At `scrollTop = 3000` the first visible row is 3000 / 30 = 100; minus the overscan of 3 gives 97. The window is always 300 / 30 = 10 rows + 2 × 3 overscan = 16 rows, however long the list is. At the very end it shrinks to 13 because there are no rows after #9999.
+At `scrollTop = 3000`: 3000 / 30 = 100, minus overscan 3 = 97. The window is always 300 / 30 = 10 + 2 × 3 = 16 rows, however long the list; at the end it shrinks to 13 (no rows after #9999).
 
 In Chrome (`code/virtual.html`, scrolled half-way; rows 32 px, viewport 320 px):
 
@@ -828,56 +644,47 @@ In Chrome (`code/virtual.html`, scrolled half-way; rows 32 px, viewport 320 px):
 *Figure 10.1 — The hand-rolled `VirtualList` in Chrome. Ten rows are visible; only sixteen exist in the DOM.*
 
 ### Use a library in real projects
-Production lists need more than the hand-rolled version: **variable or unknown row heights** (measured after render), grids, sticky headers, stable scroll position when items are prepended (chat), infinite loading. Well-known libraries:
+Production needs **variable/unknown row heights** (measured after render), grids, sticky headers, stable scroll when prepending (chat), infinite loading:
 
 | Library | Notes |
 |---|---|
-| **TanStack Virtual** | Headless (logic only, no built-in UI — you write the markup); lists, grids, variable sizes |
-| **react-window** | Small and simple; fixed and variable-size lists and grids |
+| **TanStack Virtual** | Headless (logic only — you write the markup); lists, grids, variable sizes |
+| **react-window** | Small and simple; fixed/variable lists and grids |
 | **react-virtuoso** | Automatic variable heights, grouped lists, chat-style reverse scrolling |
 
-A CSS-only alternative for moderately long pages is `content-visibility: auto`, which lets the browser skip layout and painting for off-screen sections while keeping them in the DOM (so browser find-in-page still works). It reduces rendering cost but not the number of React components.
+CSS-only alternative for moderately long pages: `content-visibility: auto` lets the browser skip layout/paint for off-screen sections while keeping them in the DOM (find-in-page still works) — cuts rendering cost, not React component count.
 
 ### Trade-offs
 | | Plain list | Virtualized list |
 |---|---|---|
 | DOM size | grows with data | constant (~visible rows) |
-| Browser find (Ctrl+F) | finds any row | finds only rendered rows |
-| Accessibility | screen readers (software that reads the page aloud) see all rows | need `aria-setsize` / `aria-posinset` (ARIA attributes giving "item 5 of 10,000") on rows to announce totals |
+| Browser find (Ctrl+F) | finds any row | only rendered rows |
+| Accessibility | screen readers see all rows | need `aria-setsize`/`aria-posinset` ("item 5 of 10,000") on rows |
 | Complexity | none | scroll math, measuring, focus management |
 | Good for | < a few hundred rows | thousands of rows, feeds, logs, tables |
 
-### When not to use it
-- Short lists (under a few hundred simple rows). Pagination or "load more" is often a better user experience anyway.
-- Content that must be printable or fully searchable on the page.
+Don't virtualize short lists (pagination/"load more" is often better UX) or content that must be printable/fully searchable.
 
 ### Common mistakes
-- Using the array index as the row `key` when items can be inserted or removed — rows then show the wrong state. Use a stable ID (in the demo the list never changes, so index keys are safe).
-- Forgetting the overscan, which leaves blank flashes during fast scrolling.
-- Giving the viewport no fixed height — then it never scrolls, and everything "fits".
+- Index `key`s when items are inserted/removed — rows show wrong state; use stable IDs (the demo list never changes, so index keys are safe there).
+- No overscan → blank flashes when scrolling fast.
+- No fixed viewport height → it never scrolls.
 
 ### In the interview
-**30-second answer:** "Virtualization renders only the visible rows plus some overscan inside a spacer the height of the full list, and recomputes the slice on scroll, so the DOM stays small for thousands of rows. Fixed heights need only `floor(scrollTop / rowHeight)`; variable heights need measuring, so in production I'd use TanStack Virtual or react-window. Downsides: browser find and screen-reader counts need extra care."
+**30-second answer:** "Virtualization renders only visible rows plus overscan inside a spacer the height of the full list, recomputing the slice on scroll, so the DOM stays small. Fixed heights need only `floor(scrollTop / rowHeight)`; variable heights need measuring, so in production I'd use TanStack Virtual or react-window. Downsides: browser find and screen-reader counts need care."
 
-- *Why doesn't `memo` fix a 10,000-row list?* — The cost is the number of DOM nodes and the initial render, not repeated re-renders.
-- *How would you do infinite scroll?* — Virtualize, and when the last rendered index nears the end, fetch the next page (an `IntersectionObserver` — a browser API that reports when an element becomes visible — on a **sentinel** row, an invisible marker row at the end of the list, or the library's range callback).
-
-### TL;DR
-Render only what's visible: `first = floor(scrollTop / rowHeight) − overscan`, a full-height spacer, absolutely positioned rows. 10,000 items → ~16 DOM rows. Use a library for real apps.
+- *Why doesn't `memo` fix a 10,000-row list?* — The cost is DOM node count and initial render, not re-renders.
+- *Infinite scroll?* — Virtualize; when the last rendered index nears the end, fetch the next page (an `IntersectionObserver` — reports when an element becomes visible — on a **sentinel** row at the end, or the library's range callback).
 
 ---
 
 ## 10.10 Common performance bugs
 
 ### What it is
-Four mistakes cause a large share of slow React screens. `code/08_perf_bugs.jsx` measures each one before and after the fix, counting **renders** (the function ran) and **mounts** (a brand-new instance: new DOM, state reset, effects re-run — much more expensive).
+Four mistakes cause a large share of slow screens. `code/08_perf_bugs.jsx` measures each before/after, counting **renders** (function ran) and **mounts** (brand-new instance: new DOM, state reset, effects re-run — far costlier).
 
 ```jsx
-function Tracked({ label }) {                 // counts renders AND mounts
-  renders++;
-  useEffect(() => { mounts++; }, []);
-  return <span>{label}</span>;
-}
+function Tracked({ label }) { renders++; useEffect(() => { mounts++; }, []); return <span>{label}</span>; }
 
 // BUG 1: a component defined INSIDE another component
 function Bad1() {
@@ -885,31 +692,17 @@ function Bad1() {
   function Inner() { return <Tracked label="inner" />; }        // new type every render!
   return <><button onClick={() => setN(n + 1)}>bump</button><Inner /></>;
 }
-
 // BUG 2: unstable keys
 <ul>{ITEMS.map(it => <li key={Math.random()}><Tracked label={it} /></li>)}</ul>
-
-// BUG 3: a new context object every render
-const Consumer = memo(function Consumer() { renders++; const { user } = useContext(Ctx); return <b>{user}</b>; });
-function Provider({ stable }) {
-  const [user] = useState('ada');
-  const [, setTick] = useState(0);                                       // unrelated state
-  const fresh = { user };                                                // new object each render
-  const cached = useMemo(() => ({ user }), [user]);                      // same object until user changes
-  return <Ctx value={stable ? cached : fresh}>
-    <button onClick={() => setTick(t => t + 1)}>bump</button><Consumer /></Ctx>;
-}
-
+// BUG 3: a new context object every render (Consumer is memo'd and reads Ctx)
+const fresh = { user };                                  // new object each render
+const cached = useMemo(() => ({ user }), [user]);        // same object until user changes
 // BUG 4: state kept too high
 function AppHigh() {
   const [q, setQ] = useState('');
   return <><input aria-label="q" value={q} onChange={e => setQ(e.target.value)} /><Expensive /><Expensive /></>;
 }
-function SearchBox() {                                                    // state moved DOWN
-  const [q, setQ] = useState('');
-  return <input aria-label="q" value={q} onChange={e => setQ(e.target.value)} />;
-}
-const AppLow = () => <><SearchBox /><Expensive /><Expensive /></>;
+const AppLow = () => <><SearchBox /><Expensive /><Expensive /></>;   // SearchBox owns q: state moved DOWN
 ```
 
 Output:
@@ -931,44 +724,36 @@ Output:
 ### The four bugs explained
 | # | Bug | Why it's slow | Fix |
 |---|---|---|---|
-| 1 | Component declared inside another component | Each render creates a **new component type**; React unmounts the old subtree and mounts a new one — DOM rebuilt, state (e.g. text in an input) lost, effects re-run | Declare every component at module top level; pass data as props |
-| 2 | `key={Math.random()}` or keys that change | React thinks every item is new → unmount + mount every render | Stable IDs from the data ([Chapter 2](../02-components-and-props/README.md)) |
-| 3 | `value={{ user, setUser }}` on a provider | New object each render → **every** consumer re-renders, `memo` can't stop it | `useMemo` the value, split contexts (state vs setters), or use a store with selectors |
-| 4 | State owned higher than needed | Every keystroke re-renders the whole page under that owner | **Colocate** state: move it into the smallest component that uses it; or pass expensive parts as `children` |
+| 1 | Component declared inside another | Each render makes a **new component type** (a different function): old subtree unmounted, new one mounted — DOM rebuilt, state lost, effects re-run | Declare components at module top level; pass data as props |
+| 2 | `key={Math.random()}` / changing keys | Every item looks new → unmount + mount every render | Stable IDs from the data ([Chapter 2](../02-components-and-props/README.md)) |
+| 3 | `value={{ user, setUser }}` on a provider | New object each render → **every** consumer re-renders; `memo` can't stop it | `useMemo` the value, split contexts (state vs setters), or a store with selectors |
+| 4 | State owned higher than needed | Each keystroke re-renders everything under the owner | **Colocate** state in the smallest component that uses it; or pass expensive parts as `children` |
 
 ### More perf traps worth knowing
-- **Effects that set state on every render** ("render → effect → setState → render") — often a derived value that should be computed during render ([Chapter 5](../05-effects-and-refs/README.md), "You might not need an Effect").
-- **Fetch waterfalls**: a parent fetches, then renders a child that fetches, and so on. Fetch in parallel, in route loaders, or with TanStack Query ([Chapter 9](../09-routing-and-data-fetching/README.md)).
-- **Huge images and heavy libraries** (a whole date library for one format call) — use modern image formats and `Intl.DateTimeFormat`/**tree-shakable** imports (imports the bundler can trim so unused code is not shipped).
-- **Expensive work in event handlers** blocks the next paint — split it, use `startTransition`, or move it to a **Web Worker** (a background thread that runs JavaScript without blocking the page).
-- **Development build in production** — always deploy the production build (`vite build`, `next build`).
+- **Effects that set state every render** (render → effect → setState → render) — usually a derived value to compute during render ([Chapter 5](../05-effects-and-refs/README.md)).
+- **Fetch waterfalls** (parent fetches, then child fetches…) — fetch in parallel, in route loaders or with TanStack Query ([Chapter 9](../09-routing-and-data-fetching/README.md)).
+- **Huge images, heavy libraries** (a whole date library for one format) — modern image formats, `Intl.DateTimeFormat`, **tree-shakable** imports (unused code trimmed by the bundler).
+- **Expensive event handlers** block the next paint — split the work, `startTransition`, or a **Web Worker** (background JS thread).
+- **Development build in production** — deploy `vite build`/`next build` output.
 
 ### In the interview
-**30-second answer:** "Components defined inside components (remount every render), unstable keys, context values recreated each render, state kept too high, and effect-driven render loops. Fix the structure first — colocate state, pass JSX as children, stable keys, memoized or split context — then `memo`/`useMemo`."
-
-### Self-check
-1. Why does declaring `Inner` inside `Bad1` reset its state? → Each render produces a different function, i.e. a different component type, so React mounts a fresh instance.
-2. What is "colocating state"? → Keeping state in the lowest component that needs it, so updates re-render as little as possible.
-3. A memoized consumer re-renders when an unrelated provider state changes. Why? → The provider's `value` is a new object each render; context changes bypass `memo`.
-
-### TL;DR
-Top-level components, stable keys, memoized (or split) context values, colocated state. These structural fixes beat any amount of `memo`.
+**30-second answer:** "Components defined inside components (remount every render), unstable keys, context values recreated each render, state kept too high, and effect-driven render loops. Fix structure first — colocate state, pass JSX as children, stable keys, memoized or split context — then `memo`/`useMemo`."
 
 ---
 
 ## 10.11 A performance checklist
 
-When a screen feels slow, work through this in order and stop when it's fast enough:
+Work through in order; stop when it's fast enough:
 
-1. **Reproduce with a production build**, CPU throttled, on realistic data.
-2. **Find the slow interaction** (Chrome Performance panel with React tracks, or the DevTools Profiler). Is it the initial load, or a specific interaction?
-3. **Slow initial load?** Check bundle size (analyser), split routes and heavy widgets with `lazy` (§10.8), optimise images, consider server rendering ([Chapter 13](../13-server-rendering-and-frameworks/README.md)).
-4. **Slow interaction?** Turn on "highlight updates" and look at what re-renders.
-   - Too much re-renders → colocate state, pass `children`, split context (§10.10); then `memo` + stable props (§10.4–10.5), or enable React Compiler (§10.7).
-   - One component is slow on its own → `useMemo` the heavy calculation (§10.6), or improve the algorithm.
+1. **Reproduce with a production build**, CPU throttled, realistic data.
+2. **Find the slow interaction** (Performance panel with React tracks, or the DevTools Profiler): initial load or a specific interaction?
+3. **Slow load?** Bundle analyser, `lazy` routes/heavy widgets (§10.8), images, server rendering ([Chapter 13](../13-server-rendering-and-frameworks/README.md)).
+4. **Slow interaction?** "Highlight updates" and see what re-renders:
+   - Too much re-renders → colocate state, `children`, split context (§10.10); then `memo` + stable props (§10.4–10.5) or React Compiler (§10.7).
+   - One component slow on its own → `useMemo` (§10.6) or a better algorithm.
    - Too many DOM nodes → virtualize (§10.9) or paginate.
-   - Typing feels laggy while results render → `useDeferredValue`/`useTransition` ([Chapter 7](../07-custom-hooks-and-hook-rules/README.md)).
-5. **Measure again** and keep the change only if it made a measurable difference.
+   - Typing lags while results render → `useDeferredValue`/`useTransition`.
+5. **Measure again**; keep the change only if it measurably helped.
 
 ```mermaid
 flowchart TD
@@ -989,13 +774,18 @@ flowchart TD
 ```
 
 ### In the interview — putting it together
-**"How would you speed up a slow React page?"** — "Measure first: production build, CPU throttling, the React Profiler to find the slowest commit and why things rendered. For load time, check bundle size and split routes and heavy widgets with `lazy` + `Suspense`. For interactions, reduce re-renders structurally (colocate state, pass children, stable context values), then `memo` with stable props or React Compiler. Virtualize long lists, memoize expensive calculations, mark non-urgent updates as transitions — and measure again."
+**"How would you speed up a slow React page?"** — "Measure first: production build, CPU throttling, the Profiler to find the slowest commit and why things rendered. For load time, check bundle size and split routes and heavy widgets with `lazy` + `Suspense`. For interactions, reduce re-renders structurally (colocate state, pass children, stable context values), then `memo` with stable props or React Compiler. Virtualize long lists, memoize expensive calculations, mark non-urgent updates as transitions — and measure again."
 
 ### Self-check (whole chapter)
-1. What is the difference between render and commit? → Render calls components to compute the UI; commit applies the differences to the DOM.
-2. Why did V2 (memo with inline props) render as much as V1? → New function and object props each render fail the shallow comparison.
-3. What does `baseDuration` tell you? → An estimate of how long a full re-render of the subtree would take — compare with `actualDuration`.
-4. How many DOM rows does a 300 px viewport with 30 px rows and overscan 3 render? → 10 + 6 = 16.
+1. Render vs commit? → Render calls components to compute UI; commit applies differences to the DOM.
+2. Why didn't `ChildAsChildren` re-render (§10.2 B)? → Same element object, created by a component that didn't re-render.
+3. Which components re-render on a context change? → Those reading it (plus what they render).
+4. Why did V2 render as much as V1? → New function/object props fail the shallow comparison.
+5. What does `baseDuration` tell you? → Estimated full re-render time of the subtree — compare with `actualDuration`.
+6. DOM rows for a 300 px viewport, 30 px rows, overscan 3? → 10 + 6 = 16.
+7. Why does declaring `Inner` inside `Bad1` reset its state? → Each render yields a different function = different type, so React mounts a fresh instance.
+8. "Colocating state"? → Keeping state in the lowest component that needs it.
+9. A memoized consumer re-renders on unrelated provider state — why? → The provider's `value` is a new object each render; context changes bypass `memo`.
 
 ---
 
@@ -1005,12 +795,12 @@ flowchart TD
 |---|---|
 | Render cycle | Trigger → render (call components) → commit (DOM diff) → effects; a re-render is not a DOM update |
 | Re-render causes | Own state, parent render, context, external store — props aren't compared without `memo` |
-| Measure | DevTools highlight + Profiler ("why did this render?"), Performance tracks (19.2+), `<Profiler onRender>`; production profiling needs the profiling build |
+| Measure | DevTools highlight + Profiler ("why did this render?"), Performance tracks (19.2+), `<Profiler onRender>` (`actualDuration` vs `baseDuration`); production profiling needs the profiling build |
 | `memo` | Skip re-render on shallow-equal props; useless with new objects/functions as props |
 | `useCallback` / `useMemo` | Stable references for `memo` children and effect deps; cache calculations ≥ ~1 ms |
 | React Compiler | v1.0 (Oct 2025); build-time auto-memoization; follow the Rules of React; `"use no memo"` escape hatch |
 | Code splitting | `lazy(() => import())` at module level + `<Suspense>` + error boundary; split by route/heavy widget; preload on intent |
-| Virtualization | Render only visible rows + overscan in a full-height spacer; use TanStack Virtual / react-window in production |
+| Virtualization | Visible rows + overscan in a full-height spacer; TanStack Virtual / react-window in production |
 | Perf bugs | Nested component definitions, unstable keys, new context objects, state too high, effect loops |
 | Order of fixes | Structure first (colocate, children, keys) → memoization → specialised tools |
 

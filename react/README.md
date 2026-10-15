@@ -56,7 +56,7 @@ flowchart LR
 ## What's in here
 | Path | Purpose |
 |---|---|
-| `React-Handbook.pdf` | The whole book as one PDF, with a cover and a table of contents. |
+| `React-Handbook-Vol1.pdf`, `React-Handbook-Vol2.pdf` | The whole book in two PDFs (each under 350 pages), with cover and clickable contents. Vol 1: core React — components, state, forms, effects, state management, hooks, styling, routing, performance (Ch 1–10). Vol 2: TypeScript, testing, server rendering, patterns, interview and machine coding, cheat sheet, question bank (Ch 11–17). |
 | `interview/React-Interview-Edition.pdf` (source `interview/INTERVIEW.md`) | Small night-before revision book (~15k words, 34 pages): every chapter as must-know facts, tables, top questions and gotchas, the 8 machine-coding builds as requirements → state → key idea → edge cases, a Top 25 list and a last-minute checklist. |
 | `chapters/NN-name/README.md` + `ChapterNN-Notes.pdf` | One chapter (Markdown source and its PDF). |
 | `chapters/NN-name/code/` | Runnable examples (`.jsx`, `.tsx`, `.mjs`, `*.test.jsx`), the component modules they import, and for UI chapters a small `.html` page with its esbuild browser bundle. |
@@ -158,7 +158,7 @@ Next.js and React Router framework-mode snippets in Chapter 13 (and a few config
 Requires Node 18+ and Google Chrome (the path is set in `tools/md2pdf.mjs`). The script installs `tools/node_modules` on its first run.
 
 ```bash
-bash tools/regen_pdfs.sh      # every ChapterNN-Notes.pdf + React-Handbook.pdf (cover title "React Handbook")
+bash tools/regen_pdfs.sh      # every ChapterNN-Notes.pdf + React-Handbook-Vol1.pdf + React-Handbook-Vol2.pdf (cover title "React Handbook")
 
 # one chapter only
 node tools/md2pdf.mjs chapters/05-effects-and-refs/Chapter05-Notes.pdf chapters/05-effects-and-refs/README.md

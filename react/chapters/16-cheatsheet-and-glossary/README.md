@@ -2,11 +2,11 @@
 
 This last chapter squeezes Chapters 1–15 into pages you can scan in a minute. There is one **cheat sheet** per area (JSX, components, every Hook, state, the render/commit lifecycle, Effects, refs, forms, state management, routing and data, performance, styling, TypeScript, testing, server rendering, patterns, accessibility), a **"common errors and fixes"** table built from the real messages React printed in earlier chapters, an **index of the 53 interview questions** in Chapter 15, a **"where to go next"** plan, and an alphabetical **glossary** of 532 terms, each linked to the section that explains it properly.
 
-Nothing here is new. If a line doesn't make sense, follow its link back to the full explanation. Every technical term on these sheets — including acronyms such as SSR, RSC, CI or ARIA — has a one-line plain-English definition in the glossary at the end ([§16.21](#1621-glossary-az)). References look like **§9.5** — Chapter 9, section 5.
+Nothing here is new: follow a line's link for the full explanation. Every technical term — including acronyms such as SSR, RSC, CI or ARIA — is defined once, in the glossary ([§16.21](#1621-glossary-az)); the sheets don't repeat definitions. **§9.5** means Chapter 9, section 5.
 
-**What you'll learn:** how to use this chapter as a revision tool. Read a sheet, cover the right-hand column, and say the answer before you look. The glossary is a good last check before an interview: if you can't define a term in one sentence, follow its link.
+**How to use it:** read a sheet, cover the right-hand column, say the answer, then look. Before an interview, if you can't define a glossary term in one sentence, follow its link.
 
-**How the facts were checked.** Every concrete behaviour quoted on these sheets — batching, updater queues, key resets, StrictMode double calls, Effect order, default values, error messages — is asserted by [`code/01_cheatsheet_checks.jsx`](code/01_cheatsheet_checks.jsx). It runs React 19.3 in jsdom (a simulated browser DOM that runs in Node.js; plus React Router 8.4 and TanStack Query 5.104) and fails loudly if React behaves differently from what a sheet says. Run it with `bash tools_run_js.sh react` from the repository root (the project's top folder). Real output:
+**How the facts were checked.** Every concrete behaviour quoted on these sheets — batching, updater queues, key resets, StrictMode double calls, Effect order, default values, error messages — is asserted by [`code/01_cheatsheet_checks.jsx`](code/01_cheatsheet_checks.jsx). It runs React 19.3 in jsdom (plus React Router 8.4 and TanStack Query 5.104) and fails loudly if React behaves differently from a sheet. Run it with `bash tools_run_js.sh react` from the repository root. Real output (abridged):
 
 ```text
 OK   16.1 JSX rules
@@ -25,30 +25,9 @@ OK   16.15 server rendering: markers, no effects on the server, suspended bounda
 OK   16.16 patterns: portals bubble through React, boundaries catch render errors only, HOC in render remounts
 OK   16.18 common errors: the exact messages React 19.3 produces
 all 15 cheat-sheet checks passed (React 19.3.0)
-
-messages seen in 16.18:
-  Too many re-renders.
-  Objects are not valid as a React child (found: object with keys {name}).
-  Rendered more hooks than during the previous render.
-  Rendered fewer hooks than expected. This may be caused by an accidental early return statement.
-  Invalid hook call. Hooks can only be called inside of the body of a function component.
-  The result of getSnapshot should be cached to avoid an infinite loop
-  Maximum update depth exceeded.
-  Element type is invalid. Received a promise that resolves to: undefined. Lazy element type must resolve to a class or function.
-  Each child in a list should have a unique "key" prop.
-  Encountered two children with the same key, `1`.
-  A component is changing an uncontrolled input to be controlled.
-  You provided a `value` prop to a form field without an `onChange` handler.
-  Invalid DOM property `class`.
-  The tag <profile> is unrecognized in this browser.
-  Unsupported style property @media (max-width: 600px).
-  A component was suspended by an uncached promise.
-  React has blocked a javascript: URL as a security precaution.
-  An update to T inside a test was not wrapped in act(...).
-  Hydration failed because the server rendered text didn't match the client.
 ```
 
-(§16.12 Styling, §16.13 TypeScript and §16.17 Accessibility summarise results that Chapters 8, 11 and 14 already verified with a real browser, the TypeScript compiler and role queries, so they have no separate check here.)
+(It also prints every error message quoted in §16.18. §16.12 Styling, §16.13 TypeScript and §16.17 Accessibility summarise results Chapters 8, 11 and 14 verified with a real browser, `tsc` and role queries, so they have no separate check.)
 
 ---
 
@@ -77,9 +56,9 @@ messages seen in 16.18:
 | a plain object | throws *"Objects are not valid as a React child"* |
 
 **Remember**
-- JSX compiles to `jsx(type, props)` / `createElement(type, props, ...children)` and returns an **immutable element object** (never changed after it is created) `{ type, props, key }`. Since React 17 (automatic runtime — the compiler adds the JSX import itself) you don't `import React`. [§1.8](../01-why-react-and-setup/README.md#18-jsx)
+- JSX compiles to `jsx(type, props)` / `createElement(type, props, ...children)` and returns an **immutable element object** `{ type, props, key }`. Since React 17 (automatic runtime) you don't `import React`. [§1.8](../01-why-react-and-setup/README.md#18-jsx)
 - Capitalised tag = your component (`<Profile />`); lowercase = HTML tag (`<profile>` is just an unknown element, and React warns). [§1.7](../01-why-react-and-setup/README.md#17-your-first-component), [§2.1](../02-components-and-props/README.md#21-function-components)
-- Raw HTML only through `dangerouslySetInnerHTML={{ __html: sanitised }}` (sanitised = cleaned of scripts and other dangerous parts first). React 19 replaces a `javascript:` URL in `href` with one that throws. [§1.8](../01-why-react-and-setup/README.md#18-jsx)
+- Raw HTML only through `dangerouslySetInnerHTML={{ __html: sanitised }}`. React 19 replaces a `javascript:` URL in `href` with one that throws. [§1.8](../01-why-react-and-setup/README.md#18-jsx)
 - Conditional rendering: `if` + early `return` for big branches, `? :` for either/or, `&&` with a **boolean** on the left, `null` for nothing. [§2.7](../02-components-and-props/README.md#27-conditional-rendering)
 
 ---
@@ -255,7 +234,7 @@ Go down the list and stop at the first "yes":
 | Initialise the app once | Module-level code or a `didInit` flag |
 | Subscribe to an external store | `useSyncExternalStore` |
 
-**What legitimately needs an Effect:** sockets and connections, browser events (`resize`, `online`, key shortcuts), timers while visible, non-React widgets (maps, video, `dialog.showModal()`), `document.title`, logging an impression (an analytics record that something was seen) because something was shown, fetching (with cleanup).
+**What legitimately needs an Effect:** sockets and connections, browser events (`resize`, `online`, key shortcuts), timers while visible, non-React widgets (maps, video, `dialog.showModal()`), `document.title`, logging an impression because something was shown, fetching (with cleanup).
 
 **Dependencies** [§5.5](../05-effects-and-refs/README.md#55-dependencies-in-depth)
 
@@ -377,7 +356,7 @@ Go down the list and stop at the first "yes":
 
 ## 16.10 Routing (React Router v8) and TanStack Query
 
-**React Router v8** — one package (`npm i react-router`; `react-router-dom` is gone), requires React 19.2.7+ and Node 22.22+, ESM-only (ships only `import`/`export` modules), middleware (functions that run before loaders and actions) on by default. `RouterProvider` comes from `react-router/dom`. [§9.2](../09-routing-and-data-fetching/README.md#92-react-router-v8-and-its-three-modes)
+**React Router v8** — one package (`npm i react-router`; `react-router-dom` is gone), requires React 19.2.7+ and Node 22.22+, ESM-only, middleware on by default. `RouterProvider` comes from `react-router/dom`. [§9.2](../09-routing-and-data-fetching/README.md#92-react-router-v8-and-its-three-modes)
 
 | Mode | You write | You get |
 |---|---|---|
@@ -425,9 +404,9 @@ Go down the list and stop at the first "yes":
 ## 16.11 Performance: checklist, memo and the React Compiler
 
 **Checklist — in this order, stop when fast enough** [§10.11](../10-performance/README.md#1011-a-performance-checklist)
-1. Reproduce with a **production build** (the optimised build real users get), CPU throttled (DevTools slowing the computer to mimic a slow phone), realistic data.
+1. Reproduce with a **production build**, CPU throttled, realistic data.
 2. Find the slow interaction: React DevTools **Profiler** (enable "why did this render"), "Highlight updates", Chrome Performance panel with React tracks (19.2+).
-3. Slow **load**: bundle analyser (a map of what makes the bundle big) → `lazy` routes and heavy widgets, images, SSR/SSG.
+3. Slow **load**: bundle analyser → `lazy` routes and heavy widgets, images, SSR/SSG.
 4. Slow **interaction**, too much re-renders → **structure first**: colocate state, pass JSX as `children`, stable keys, split/memoise context; then `memo` + stable props, or the React Compiler.
 5. One slow component → `useMemo` the calculation (≥ ~1 ms) or fix the algorithm.
 6. Too many DOM nodes → virtualize (TanStack Virtual, react-window) or paginate.
@@ -454,7 +433,7 @@ Go down the list and stop at the first "yes":
 
 **Code splitting** [§10.8](../10-performance/README.md#108-code-splitting-with-lazy-and-suspense): `const Chart = lazy(() => import('./Chart.jsx'))` at **module level**, rendered inside `<Suspense fallback>` with an error boundary for failed chunks; `lazy` needs a **default export** (map named ones: `.then(m => ({ default: m.Chart }))`); preload on hover/focus by calling the same `import()`.
 
-**Virtualization math** (fixed rows; overscan = extra rows rendered just outside the visible area) [§10.9](../10-performance/README.md#109-list-virtualization): `first = floor(scrollTop / rowHeight) − overscan`, `count = ceil(height / rowHeight) + 2 × overscan`, absolutely positioned rows inside a spacer `items.length × rowHeight` tall — 300 px / 30 px rows / overscan 3 → **16 DOM rows** for 10,000 items.
+**Virtualization math** (fixed rows) [§10.9](../10-performance/README.md#109-list-virtualization): `first = floor(scrollTop / rowHeight) − overscan`, `count = ceil(height / rowHeight) + 2 × overscan`, absolutely positioned rows inside a spacer `items.length × rowHeight` tall — 300 px / 30 px rows / overscan 3 → **16 DOM rows** for 10,000 items.
 
 ---
 
@@ -480,7 +459,7 @@ Go down the list and stop at the first "yes":
 
 ## 16.13 TypeScript + React types
 
-Bundlers (Oxc, esbuild, SWC) only **strip** types; `tsc --noEmit` **checks** them — run it in CI (continuous integration, the server that checks every push). Use `strict: true` and `"jsx": "react-jsx"`. [§11.1](../11-typescript-with-react/README.md#111-setup-and-how-type-checking-fits-in)
+Bundlers (Oxc, esbuild, SWC) only **strip** types; `tsc --noEmit` **checks** them — run it in CI. Use `strict: true` and `"jsx": "react-jsx"`. [§11.1](../11-typescript-with-react/README.md#111-setup-and-how-type-checking-fits-in)
 
 | Need | Type / pattern |
 |---|---|
@@ -576,7 +555,7 @@ Read type errors bottom-up: *"Type A is not assignable to type B"*, then the las
 | Can | be `async`, `await` a database, use secrets and files | use state, Effects, event handlers, browser APIs, context |
 | Can't | use state, Effects, handlers, `createContext`/`useContext`/`use(Ctx)` — but since 19.3 it may **render** a context provider imported from a `'use client'` module | import a Server Component (but can render one passed as `children`) |
 
-**Crossing the boundary** — props from server to client must be serializable (convertible to text that can be sent over the network): primitives (strings, numbers, booleans, `null`, `undefined`, bigint), plain objects/arrays, `Date`, `Map`, `Set`, typed arrays, JSX, **promises** (read with `use`), **Server Functions**. Not: ordinary functions, class instances, null-prototype objects, local symbols.
+**Crossing the boundary** — props from server to client must be serializable: primitives (strings, numbers, booleans, `null`, `undefined`, bigint), plain objects/arrays, `Date`, `Map`, `Set`, typed arrays, JSX, **promises** (read with `use`), **Server Functions**. Not: ordinary functions, class instances, null-prototype objects, local symbols.
 
 **Directives** [§13.8](../13-server-rendering-and-frameworks/README.md#138-directives-use-client-and-use-server)
 
@@ -729,36 +708,36 @@ The 53 questions of Chapter 15, grouped as there. Each link opens the section th
 
 ## 16.21 Glossary (A–Z)
 
-Each term links to the section that explains it (the first link is the main one).
+Each term links to the section that explains it.
 
 **A**
 
-- **AbortController** — Browser object whose `signal` is passed to `fetch`; calling `abort()` cancels the request — the usual cleanup for fetches in Effects. [§5.7](../05-effects-and-refs/README.md#57-fetching-data-in-effects-and-race-conditions), [§15.11](../15-react-interview-and-machine-coding/README.md#1511-build-2--autocomplete-debounce-abort-keyboard)
-- **Accessibility (a11y)** — Making a UI usable by everyone, including people using screen readers, only a keyboard, zoom or voice control; "a11y" counts the 11 letters between a and y. [§14.10](../14-patterns-and-architecture/README.md#1410-accessibility-in-react), [HTML & CSS Ch 3](../../../html-css/chapters/03-semantic-html-and-accessibility/README.md)
-- **Accessibility tree** — The simplified version of the page the browser gives to assistive technology: each element's role, name and state. [§15.14](../15-react-interview-and-machine-coding/README.md#1514-build-5--accessible-tabs), [§12.3](../12-testing-react/README.md#123-queries-and-their-priority)
+- **AbortController** — Browser object whose `signal` is passed to `fetch`; calling `abort()` cancels the request — the usual cleanup for fetches in Effects. [§5.7](../05-effects-and-refs/README.md#57-fetching-data-in-effects-and-race-conditions)
+- **Accessibility (a11y)** — Making a UI usable by everyone, including people using screen readers, only a keyboard, zoom or voice control; "a11y" counts the 11 letters between a and y. [§14.10](../14-patterns-and-architecture/README.md#1410-accessibility-in-react)
+- **Accessibility tree** — The simplified version of the page the browser gives to assistive technology: each element's role, name and state. [§15.14](../15-react-interview-and-machine-coding/README.md#1514-build-5--accessible-tabs)
 - **Accessible description** — Extra text a screen reader reads after an element's name, usually linked with `aria-describedby` (e.g. a field's error). [§14.10](../14-patterns-and-architecture/README.md#1410-accessibility-in-react)
-- **Accessible name** — What assistive technology announces for an element — a button's text, an input's label, `aria-label`/`aria-labelledby`, an image's `alt`; what `getByRole(role, { name })` matches. [§12.3](../12-testing-react/README.md#123-queries-and-their-priority), [§14.10](../14-patterns-and-architecture/README.md#1410-accessibility-in-react)
-- **`act()`** — Test helper that makes React finish every pending render and Effect before the next line runs; RTL wraps its helpers in it, so you call it only for direct updates (e.g. `renderHook` calls, fake timers). [§12.2](../12-testing-react/README.md#122-your-first-component-test), [§12.7](../12-testing-react/README.md#127-testing-custom-hooks)
-- **Action** — In React 19, a function run inside a Transition — passed to `<form action>`, `formAction`, or `startTransition(async …)`; React tracks its pending state. [§4.4](../04-forms-and-actions/README.md#44-form-actions--form-actionfn), [§7.10](../07-custom-hooks-and-hook-rules/README.md#710-usetransition--non-urgent-updates)
+- **Accessible name** — What assistive technology announces for an element — a button's text, an input's label, `aria-label`/`aria-labelledby`, an image's `alt`; what `getByRole(role, { name })` matches. [§12.3](../12-testing-react/README.md#123-queries-and-their-priority)
+- **`act()`** — Test helper that makes React finish every pending render and Effect before the next line runs; RTL wraps its helpers in it, so you call it only for direct updates (e.g. `renderHook` calls, fake timers). [§12.2](../12-testing-react/README.md#122-your-first-component-test)
+- **Action** — In React 19, a function run inside a Transition — passed to `<form action>`, `formAction`, or `startTransition(async …)`; React tracks its pending state. [§4.4](../04-forms-and-actions/README.md#44-form-actions--form-actionfn)
 - **Action (React Router)** — A route's function for writes; `<Form method="post">` calls it, then the router re-runs loaders (revalidation). [§9.6](../09-routing-and-data-fetching/README.md#96-actions-form-and-fetchers)
 - **Action (reducer)** — A plain object describing what happened, e.g. `{ type: 'added', text }`, sent to a reducer with `dispatch`. [§6.2](../06-state-management/README.md#62-usereducer--consolidate-update-logic)
 - **Action creator** — A function returning an action object; Redux Toolkit's `createSlice` generates them (`added('p1')` → `{ type: 'cart/added', payload: 'p1' }`). [§6.7](../06-state-management/README.md#67-redux-toolkit)
 - **`<Activity>`** — React 19.2 component that hides a subtree while keeping its state; one of the real remounts StrictMode's double run prepares you for. [§5.4](../05-effects-and-refs/README.md#54-strictmodes-double-run-development-only)
-- **Alt text** — The `alt` attribute: a text alternative read instead of an image (empty `alt=""` for decorative images). [§14.10](../14-patterns-and-architecture/README.md#1410-accessibility-in-react), [§12.3](../12-testing-react/README.md#123-queries-and-their-priority)
-- **`any`** — TypeScript type meaning "don't check this"; it switches checking off for everything it touches — prefer `unknown`. [§11.1](../11-typescript-with-react/README.md#111-setup-and-how-type-checking-fits-in), [§11.9](../11-typescript-with-react/README.md#119-discriminated-unions-for-props)
-- **API** — Application Programming Interface: the functions, props or URLs a library, component or server offers to the code that uses it. [§11.2](../11-typescript-with-react/README.md#112-typing-props), [§13.8](../13-server-rendering-and-frameworks/README.md#138-directives-use-client-and-use-server)
+- **Alt text** — The `alt` attribute: a text alternative read instead of an image (empty `alt=""` for decorative images). [§14.10](../14-patterns-and-architecture/README.md#1410-accessibility-in-react)
+- **`any`** — TypeScript type meaning "don't check this"; it switches checking off for everything it touches — prefer `unknown`. [§11.1](../11-typescript-with-react/README.md#111-setup-and-how-type-checking-fits-in)
+- **API** — Application Programming Interface: the functions, props or URLs a library, component or server offers to the code that uses it. [§11.2](../11-typescript-with-react/README.md#112-typing-props)
 - **App Router** — Next.js's routing system in the `app/` folder (since Next.js 13), built on Server Components, streaming and Server Functions. [§13.9](../13-server-rendering-and-frameworks/README.md#139-nextjs-app-router-overview)
-- **ARIA** — Accessible Rich Internet Applications: HTML attributes (`role`, `aria-*`) that tell assistive technology what an element is and its state; use only when native HTML can't say it. [§14.10](../14-patterns-and-architecture/README.md#1410-accessibility-in-react), [§12.3](../12-testing-react/README.md#123-queries-and-their-priority)
+- **ARIA** — Accessible Rich Internet Applications: HTML attributes (`role`, `aria-*`) that tell assistive technology what an element is and its state; use only when native HTML can't say it. [§14.10](../14-patterns-and-architecture/README.md#1410-accessibility-in-react)
 - **`aria-activedescendant`** — Attribute on a focused input naming the id of the highlighted option, so focus stays in the input while screen readers announce the option (combobox pattern). [§15.11](../15-react-interview-and-machine-coding/README.md#1511-build-2--autocomplete-debounce-abort-keyboard)
-- **`aria-describedby`** — Links an element to text that describes it (e.g. a field's error message), making that text its accessible description. [§4.3](../04-forms-and-actions/README.md#43-validation), [§14.10](../14-patterns-and-architecture/README.md#1410-accessibility-in-react)
-- **`aria-invalid`** — Attribute set to `true` on a field whose value failed validation, so screen readers announce it. [§4.3](../04-forms-and-actions/README.md#43-validation), [§14.10](../14-patterns-and-architecture/README.md#1410-accessibility-in-react)
+- **`aria-describedby`** — Links an element to text that describes it (e.g. a field's error message), making that text its accessible description. [§4.3](../04-forms-and-actions/README.md#43-validation)
+- **`aria-invalid`** — Attribute set to `true` on a field whose value failed validation, so screen readers announce it. [§4.3](../04-forms-and-actions/README.md#43-validation)
 - **`aria-live` / live region** — An element (`role="status"` or `role="alert"`) whose text changes are announced; it must already exist before the text changes. [§14.10](../14-patterns-and-architecture/README.md#1410-accessibility-in-react)
-- **`as const`** — TypeScript suffix that keeps literal values and makes arrays readonly tuples, e.g. a Hook returning `[on, toggle] as const`. [§11.7](../11-typescript-with-react/README.md#117-typing-custom-hooks-and-context), [§11.8](../11-typescript-with-react/README.md#118-generic-components)
-- **Assertion** — A check in a test that fails it if a condition is false, e.g. `assert.equal(a, b)` or `expect(el).toBeDisabled()`. [§12.2](../12-testing-react/README.md#122-your-first-component-test), [§12.1](../12-testing-react/README.md#121-what-to-test-and-the-testing-library-philosophy)
-- **Assistive technology** — Software or hardware that helps disabled people use computers — screen readers, voice control, switch devices. [§12.3](../12-testing-react/README.md#123-queries-and-their-priority), [§14.10](../14-patterns-and-architecture/README.md#1410-accessibility-in-react)
+- **`as const`** — TypeScript suffix that keeps literal values and makes arrays readonly tuples, e.g. a Hook returning `[on, toggle] as const`. [§11.7](../11-typescript-with-react/README.md#117-typing-custom-hooks-and-context)
+- **Assertion** — A check in a test that fails it if a condition is false, e.g. `assert.equal(a, b)` or `expect(el).toBeDisabled()`. [§12.2](../12-testing-react/README.md#122-your-first-component-test)
+- **Assistive technology** — Software or hardware that helps disabled people use computers — screen readers, voice control, switch devices. [§12.3](../12-testing-react/README.md#123-queries-and-their-priority)
 - **Astro** — Content-site framework that ships static HTML with small interactive "islands" (which can be React components). [§13.11](../13-server-rendering-and-frameworks/README.md#1311-choosing-a-framework)
-- **async / await** — JavaScript syntax for promises: an `async` function returns a promise, and `await` pauses it until a promise settles. [§12.5](../12-testing-react/README.md#125-async-tests), [JavaScript Ch 12](../../../javascript/chapters/12-asynchronous-javascript/README.md)
-- **Auth guard** — A wrapper (component, HOC, loader or middleware) that shows its content only to signed-in or allowed users. [§14.6](../14-patterns-and-architecture/README.md#146-higher-order-components-hocs), [§9.7](../09-routing-and-data-fetching/README.md#97-middleware-lazy-routes-and-framework-mode)
+- **async / await** — JavaScript syntax for promises: an `async` function returns a promise, and `await` pauses it until a promise settles. [§12.5](../12-testing-react/README.md#125-async-tests)
+- **Auth guard** — A wrapper (component, HOC, loader or middleware) that shows its content only to signed-in or allowed users. [§14.6](../14-patterns-and-architecture/README.md#146-higher-order-components-hocs)
 - **Authentication / authorisation** — Authentication checks *who* the user is (sign-in); authorisation checks *what* they may do. Server Functions must do both. [§13.8](../13-server-rendering-and-frameworks/README.md#138-directives-use-client-and-use-server)
 - **Automatic batching** — Since React 18, all state updates from one event — including in timeouts, promises and native listeners — are combined into one re-render. [§3.4](../03-state-and-events/README.md#34-batching)
 - **Automatic JSX runtime** — The React 17+ compile mode that imports `jsx` from `react/jsx-runtime` for you, so files don't need `import React`. [§1.8](../01-why-react-and-setup/README.md#18-jsx)
@@ -767,36 +746,36 @@ Each term links to the section that explains it (the first link is the main one)
 
 **B**
 
-- **Babel** — JavaScript compiler that translates JSX, TypeScript and modern syntax into plain JavaScript; the React Compiler is a Babel plugin. [§12.9](../12-testing-react/README.md#129-setting-up-vitest-or-jest-in-a-real-project), [§10.7](../10-performance/README.md#107-react-compiler)
-- **Bail-out** — When a setter receives a value `Object.is`-equal to the current state, React skips re-rendering that component and its children. [§3.2](../03-state-and-events/README.md#32-state-a-components-memory--usestate), [§10.1](../10-performance/README.md#101-the-render-cycle-trigger--render--commit)
+- **Babel** — JavaScript compiler that translates JSX, TypeScript and modern syntax into plain JavaScript; the React Compiler is a Babel plugin. [§12.9](../12-testing-react/README.md#129-setting-up-vitest-or-jest-in-a-real-project)
+- **Bail-out** — When a setter receives a value `Object.is`-equal to the current state, React skips re-rendering that component and its children. [§3.2](../03-state-and-events/README.md#32-state-a-components-memory--usestate)
 - **Barrel file** — An `index.js` that re-exports a module's contents; one per feature is fine, giant ones slow tools and hurt tree-shaking. [§14.11](../14-patterns-and-architecture/README.md#1411-folder-structure)
 - **`baseDuration`** — `<Profiler>` value: estimated time for a full re-render of the subtree — compare with `actualDuration` to see what memoization saves. [§10.3](../10-performance/README.md#103-measure-first-devtools-profiler-and-profiler)
 - **BEM** — Block__Element--Modifier CSS naming convention that avoids clashes in global stylesheets. [§8.2](../08-styling/README.md#82-plain-css-files)
-- **Big-O notation** — Shorthand for how work grows with input size: O(n) grows in step with n, O(n³) with its cube. [§1.3](../01-why-react-and-setup/README.md#13-rendering-the-virtual-dom-and-reconciliation-brief), [§15.2](../15-react-interview-and-machine-coding/README.md#152-interview-questions-rendering-reconciliation-and-keys)
-- **Blur** — The event fired when an element loses focus (the opposite of `focus`). [§15.10](../15-react-interview-and-machine-coding/README.md#1510-build-1--todo-list-with-filters), [§4.3](../04-forms-and-actions/README.md#43-validation)
-- **Boilerplate** — Repetitive set-up code that must be written but adds little meaning. [§6.7](../06-state-management/README.md#67-redux-toolkit), [§14.13](../14-patterns-and-architecture/README.md#1413-client-architecture-patterns-mvc-mvp-mvvm-viper--and-where-react-fits)
+- **Big-O notation** — Shorthand for how work grows with input size: O(n) grows in step with n, O(n³) with its cube. [§1.3](../01-why-react-and-setup/README.md#13-rendering-the-virtual-dom-and-reconciliation-brief)
+- **Blur** — The event fired when an element loses focus (the opposite of `focus`). [§15.10](../15-react-interview-and-machine-coding/README.md#1510-build-1--todo-list-with-filters)
+- **Boilerplate** — Repetitive set-up code that must be written but adds little meaning. [§6.7](../06-state-management/README.md#67-redux-toolkit)
 - **Brittle test** — A test that breaks on harmless changes (renamed state, new class name) even though the feature still works. [§12.10](../12-testing-react/README.md#1210-good-tests-bad-tests-and-the-bigger-picture)
 - **`browser()`** — React 19.3 `react-dom` function for `use(browser())`: suspends only on the server, so the nearest `<Suspense>` fallback is sent and the client renders the real content — no hydration mismatch. [§13.5](../13-server-rendering-and-frameworks/README.md#135-hydration-mismatches)
-- **Build (build time)** — The step before publishing that bundles, compiles and optimises your code; "build time" means it happens then, not when a user requests a page. [§1.5](../01-why-react-and-setup/README.md#15-setting-up-a-react-project), [§13.1](../13-server-rendering-and-frameworks/README.md#131-rendering-strategies-csr-ssr-ssg-isr-streaming-ppr)
-- **Bundle / chunk** — The JavaScript file(s) a bundler produces for the browser; a chunk is one piece of a split bundle, loaded on demand. [§10.8](../10-performance/README.md#108-code-splitting-with-lazy-and-suspense), [§13.4](../13-server-rendering-and-frameworks/README.md#134-hydration-end-to-end)
-- **Bundle analyser** — A tool that draws a map of what is inside your bundle (e.g. `rollup-plugin-visualizer`) so you can see which libraries take space. [§10.8](../10-performance/README.md#108-code-splitting-with-lazy-and-suspense), [§10.11](../10-performance/README.md#1011-a-performance-checklist)
-- **Bundler** — Tool (Vite, which bundles with Rolldown since Vite 8; esbuild; webpack; Turbopack) that combines modules into files for the browser and splits chunks for `import()`. [§10.8](../10-performance/README.md#108-code-splitting-with-lazy-and-suspense), [§1.5](../01-why-react-and-setup/README.md#15-setting-up-a-react-project)
+- **Build (build time)** — The step before publishing that bundles, compiles and optimises your code; "build time" means it happens then, not when a user requests a page. [§1.5](../01-why-react-and-setup/README.md#15-setting-up-a-react-project)
+- **Bundle / chunk** — The JavaScript file(s) a bundler produces for the browser; a chunk is one piece of a split bundle, loaded on demand. [§10.8](../10-performance/README.md#108-code-splitting-with-lazy-and-suspense)
+- **Bundle analyser** — A tool that draws a map of what is inside your bundle (e.g. `rollup-plugin-visualizer`) so you can see which libraries take space. [§10.8](../10-performance/README.md#108-code-splitting-with-lazy-and-suspense)
+- **Bundler** — Tool (Vite, which bundles with Rolldown since Vite 8; esbuild; webpack; Turbopack) that combines modules into files for the browser and splits chunks for `import()`. [§10.8](../10-performance/README.md#108-code-splitting-with-lazy-and-suspense)
 - **Business logic** — The rules of the product itself (prices, permissions, validation) as opposed to UI code. [§14.13](../14-patterns-and-architecture/README.md#1413-client-architecture-patterns-mvc-mvp-mvvm-viper--and-where-react-fits)
 
 **C**
 
-- **Cache** — A stored copy of a result kept so it can be reused instead of fetched or computed again. [§6.9](../06-state-management/README.md#69-tanstack-query--server-state), [§13.1](../13-server-rendering-and-frameworks/README.md#131-rendering-strategies-csr-ssr-ssg-isr-streaming-ppr), [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)
+- **Cache** — A stored copy of a result kept so it can be reused instead of fetched or computed again. [§6.9](../06-state-management/README.md#69-tanstack-query--server-state)
 - **Cache Components** — Next.js 16 opt-in model: everything is dynamic unless cached with `'use cache'`; the build prerenders a static shell (PPR). [§13.9](../13-server-rendering-and-frameworks/README.md#139-nextjs-app-router-overview)
-- **Callback** — A function you pass to other code to be called later (`onClick`, `renderItem`, `.then(fn)`). [§11.2](../11-typescript-with-react/README.md#112-typing-props), [§3.1](../03-state-and-events/README.md#31-responding-to-events)
+- **Callback** — A function you pass to other code to be called later (`onClick`, `renderItem`, `.then(fn)`). [§11.2](../11-typescript-with-react/README.md#112-typing-props)
 - **camelCase** — Writing compound names with capitals inside (`onClick`, `className`); JSX attributes and style properties use it. [§1.8](../01-why-react-and-setup/README.md#18-jsx)
 - **Canary (release)** — React's pre-release channel where new APIs appear before they are stable. [§4.5](../04-forms-and-actions/README.md#45-useactionstate--the-result-of-the-last-submission)
 - **Capture phase** — The first half of DOM event propagation, from the root down to the target; React handlers ending in `Capture` (`onClickCapture`) run then. [§3.1](../03-state-and-events/README.md#31-responding-to-events)
 - **Cascade (CSS)** — CSS's rules for deciding which declaration wins when several match: origin, layer, specificity, then source order. [§8.1](../08-styling/README.md#81-the-styling-landscape)
 - **Cascade layers (`@layer`)** — A CSS feature for deciding which group of rules wins regardless of specificity. [§8.1](../08-styling/README.md#81-the-styling-landscape)
-- **CDN** — Content Delivery Network: caching servers around the world that serve files from a location near the user. [§13.1](../13-server-rendering-and-frameworks/README.md#131-rendering-strategies-csr-ssr-ssg-isr-streaming-ppr), [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)
+- **CDN** — Content Delivery Network: caching servers around the world that serve files from a location near the user. [§13.1](../13-server-rendering-and-frameworks/README.md#131-rendering-strategies-csr-ssr-ssg-isr-streaming-ppr)
 - **Children (`children` prop)** — Whatever is nested between a component's tags; render it with `{children}` to build wrappers. [§2.3](../02-components-and-props/README.md#23-the-children-prop)
-- **CI** — Continuous integration: a server that automatically runs type checks, linters and tests on every push or pull request. [§11.1](../11-typescript-with-react/README.md#111-setup-and-how-type-checking-fits-in), [§12.5](../12-testing-react/README.md#125-async-tests)
-- **Class component** — Legacy component style (`class X extends Component` with `render()`); still required for error boundaries. [§2.1](../02-components-and-props/README.md#21-function-components), [§14.9](../14-patterns-and-architecture/README.md#149-error-boundaries)
+- **CI** — Continuous integration: a server that automatically runs type checks, linters and tests on every push or pull request. [§11.1](../11-typescript-with-react/README.md#111-setup-and-how-type-checking-fits-in)
+- **Class component** — Legacy component style (`class X extends Component` with `render()`); still required for error boundaries. [§2.1](../02-components-and-props/README.md#21-function-components)
 - **Clean Architecture** — A layering style where business rules don't depend on the UI, database or frameworks; VIPER applies it to iOS screens. [§14.13](../14-patterns-and-architecture/README.md#1413-client-architecture-patterns-mvc-mvp-mvvm-viper--and-where-react-fits)
 - **Cleanup function** — The function an Effect's setup returns; it undoes the setup and runs before the next setup and on unmount. [§5.3](../05-effects-and-refs/README.md#53-cleanup--undo-what-setup-did)
 - **Client Component** — A component whose code ships to the browser (marked by a `'use client'` entry point); may use state, Effects and events. [§13.7](../13-server-rendering-and-frameworks/README.md#137-react-server-components)
@@ -807,242 +786,237 @@ Each term links to the section that explains it (the first link is the main one)
 - **Code splitting** — Splitting the bundle into chunks loaded on demand, e.g. `lazy(() => import('./Chart'))`. [§10.8](../10-performance/README.md#108-code-splitting-with-lazy-and-suspense)
 - **Codebase** — All the source code of a project. [§14.1](../14-patterns-and-architecture/README.md#141-composition-first)
 - **Codemod** — An automated script that rewrites code for you, e.g. to migrate from `forwardRef` to `ref` as a prop. [§5.10](../05-effects-and-refs/README.md#510-passing-refs-to-your-own-components)
-- **Colocation** — Keeping state, files and tests next to where they are used, so changes stay local and re-renders small. [§14.11](../14-patterns-and-architecture/README.md#1411-folder-structure), [§10.10](../10-performance/README.md#1010-common-performance-bugs)
-- **Combobox** — A text input paired with a popup list of options (autocomplete); has its own ARIA keyboard pattern. [§15.11](../15-react-interview-and-machine-coding/README.md#1511-build-2--autocomplete-debounce-abort-keyboard), [§12.3](../12-testing-react/README.md#123-queries-and-their-priority)
-- **Commit phase** — The step where React applies DOM changes, sets refs and runs layout effects; runs once per committed update. [§10.1](../10-performance/README.md#101-the-render-cycle-trigger--render--commit), [§1.3](../01-why-react-and-setup/README.md#13-rendering-the-virtual-dom-and-reconciliation-brief)
-- **Compiler** — A program that reads code and checks and/or translates it (e.g. `tsc`, Babel, the React Compiler). [§11.1](../11-typescript-with-react/README.md#111-setup-and-how-type-checking-fits-in), [§10.7](../10-performance/README.md#107-react-compiler)
-- **Component** — A capitalised JavaScript function that takes props and returns JSX (or `null`). [§1.7](../01-why-react-and-setup/README.md#17-your-first-component), [§2.1](../02-components-and-props/README.md#21-function-components)
-- **Component instance** — One rendered use of a component at a position in the tree, with its own state. [§3.10](../03-state-and-events/README.md#310-state-is-tied-to-a-position-in-the-tree), [§15.2](../15-react-interview-and-machine-coding/README.md#152-interview-questions-rendering-reconciliation-and-keys)
-- **Component library** — A package of ready-made components (styled kits like MUI, headless ones like Radix, or copy-in ones like shadcn/ui). [§8.9](../08-styling/README.md#89-component-libraries), [§14.12](../14-patterns-and-architecture/README.md#1412-design-systems)
+- **Colocation** — Keeping state, files and tests next to where they are used, so changes stay local and re-renders small. [§14.11](../14-patterns-and-architecture/README.md#1411-folder-structure)
+- **Combobox** — A text input paired with a popup list of options (autocomplete); has its own ARIA keyboard pattern. [§15.11](../15-react-interview-and-machine-coding/README.md#1511-build-2--autocomplete-debounce-abort-keyboard)
+- **Commit phase** — The step where React applies DOM changes, sets refs and runs layout effects; runs once per committed update. [§10.1](../10-performance/README.md#101-the-render-cycle-trigger--render--commit)
+- **Compiler** — A program that reads code and checks and/or translates it (e.g. `tsc`, Babel, the React Compiler). [§11.1](../11-typescript-with-react/README.md#111-setup-and-how-type-checking-fits-in)
+- **Component** — A capitalised JavaScript function that takes props and returns JSX (or `null`). [§1.7](../01-why-react-and-setup/README.md#17-your-first-component)
+- **Component instance** — One rendered use of a component at a position in the tree, with its own state. [§3.10](../03-state-and-events/README.md#310-state-is-tied-to-a-position-in-the-tree)
+- **Component library** — A package of ready-made components (styled kits like MUI, headless ones like Radix, or copy-in ones like shadcn/ui). [§8.9](../08-styling/README.md#89-component-libraries)
 - **Component tree** — The hierarchy of components React renders; visible in React DevTools, not in the DOM. [§1.7](../01-why-react-and-setup/README.md#17-your-first-component)
 - **`ComponentProps<'button'>`** — TypeScript helper giving every prop a native element (or `typeof MyComponent`) accepts, including `ref`. [§11.3](../11-typescript-with-react/README.md#113-typing-children-and-extending-native-elements)
-- **Composite widget** — One control made of several focusable items (tabs, toolbar, radio group, menu); usually uses a roving tabindex. [§15.14](../15-react-interview-and-machine-coding/README.md#1514-build-5--accessible-tabs), [§14.4](../14-patterns-and-architecture/README.md#144-compound-components)
-- **Composition** — Building UIs by nesting components and passing JSX (`children`, slots) instead of inheritance or many boolean props. [§2.4](../02-components-and-props/README.md#24-composition), [§14.1](../14-patterns-and-architecture/README.md#141-composition-first)
+- **Composite widget** — One control made of several focusable items (tabs, toolbar, radio group, menu); usually uses a roving tabindex. [§15.14](../15-react-interview-and-machine-coding/README.md#1514-build-5--accessible-tabs)
+- **Composition** — Building UIs by nesting components and passing JSX (`children`, slots) instead of inheritance or many boolean props. [§2.4](../02-components-and-props/README.md#24-composition)
 - **Compound components** — A family like `Tabs`/`Tabs.Tab`/`Tabs.Panel` that shares state through a private context. [§14.4](../14-patterns-and-architecture/README.md#144-compound-components)
-- **Concurrent rendering** — React 18+ ability to prepare UI in the background, pause it for urgent work, and discard stale work. [§7.10](../07-custom-hooks-and-hook-rules/README.md#710-usetransition--non-urgent-updates), [§1.3](../01-why-react-and-setup/README.md#13-rendering-the-virtual-dom-and-reconciliation-brief)
+- **Concurrent rendering** — React 18+ ability to prepare UI in the background, pause it for urgent work, and discard stale work. [§7.10](../07-custom-hooks-and-hook-rules/README.md#710-usetransition--non-urgent-updates)
 - **Container / presentational** — Splitting "where data comes from" (container, Hook or Server Component) from "how it looks" (props-only view). [§14.2](../14-patterns-and-architecture/README.md#142-container--presentational)
 - **Context** — `createContext` + `<Ctx value>` + `useContext`/`use`: passes a value to any depth without prop drilling; a transport, not a store. [§6.3](../06-state-management/README.md#63-context--pass-data-deeply-without-props)
 - **Contextual typing** — TypeScript inferring a value's type from where it is used, e.g. an inline `onChange={e => …}` handler. [§11.4](../11-typescript-with-react/README.md#114-typing-events)
-- **Controlled component** — A component whose value comes from props/state (`value` + `onChange`, or `value`/`onValueChange` in design systems). [§3.9](../03-state-and-events/README.md#39-controlled-inputs-basics), [§4.2](../04-forms-and-actions/README.md#42-controlled-vs-uncontrolled-inputs), [§14.4](../14-patterns-and-architecture/README.md#144-compound-components)
-- **Controlled input** — A form field whose displayed value is React state: `value={state}` plus `onChange`. [§3.9](../03-state-and-events/README.md#39-controlled-inputs-basics), [§4.2](../04-forms-and-actions/README.md#42-controlled-vs-uncontrolled-inputs)
+- **Controlled component / controlled input** — A component or form field whose value comes from props/state: `value={state}` + `onChange` (or `value`/`onValueChange` in design systems). [§3.9](../03-state-and-events/README.md#39-controlled-inputs-basics)
 - **Cookie** — A small named value the browser stores and sends to the server with every request to that site. [§13.5](../13-server-rendering-and-frameworks/README.md#135-hydration-mismatches)
 - **Coverage** — Which lines of code ran during the tests; a guide to untested code, not a goal in itself. [§12.9](../12-testing-react/README.md#129-setting-up-vitest-or-jest-in-a-real-project)
-- **CPU throttling** — A DevTools setting that slows the computer down on purpose to mimic a slow phone while you measure performance. [§10.3](../10-performance/README.md#103-measure-first-devtools-profiler-and-profiler), [§10.11](../10-performance/README.md#1011-a-performance-checklist)
-- **Crawler** — A search-engine or link-preview bot that downloads pages to read them; it may not run your JavaScript. [§13.3](../13-server-rendering-and-frameworks/README.md#133-streaming-ssr-with-suspense), [§13.11](../13-server-rendering-and-frameworks/README.md#1311-choosing-a-framework)
+- **CPU throttling** — A DevTools setting that slows the computer down on purpose to mimic a slow phone while you measure performance. [§10.3](../10-performance/README.md#103-measure-first-devtools-profiler-and-profiler)
+- **Crawler** — A search-engine or link-preview bot that downloads pages to read them; it may not run your JavaScript. [§13.3](../13-server-rendering-and-frameworks/README.md#133-streaming-ssr-with-suspense)
 - **Create React App (CRA)** — The old official starter tool (2016); deprecated for new apps in February 2025 in favour of frameworks or Vite. [§1.5](../01-why-react-and-setup/README.md#15-setting-up-a-react-project)
-- **`createPortal`** — `react-dom` API that renders children into another DOM node while keeping them in the same React tree. [§14.8](../14-patterns-and-architecture/README.md#148-portals)
 - **`createRoot`** — `react-dom/client` API that creates a React root for a DOM element; `root.render(<App />)` starts rendering. [§1.6](../01-why-react-and-setup/README.md#16-project-structure)
 - **`createSlice`** — Redux Toolkit function that generates a reducer and action creators; its reducers use Immer. [§6.7](../06-state-management/README.md#67-redux-toolkit)
 - **Cross-cutting concern** — A need that touches many unrelated parts of an app — auth, logging, analytics. [§14.6](../14-patterns-and-architecture/README.md#146-higher-order-components-hocs)
-- **CSR** — Client-side rendering: the server sends a near-empty page and JavaScript builds the UI in the browser (an SPA). [§1.4](../01-why-react-and-setup/README.md#14-spa-vs-mpa-vs-ssr-and-ssg), [§13.1](../13-server-rendering-and-frameworks/README.md#131-rendering-strategies-csr-ssr-ssg-isr-streaming-ppr)
-- **CSS custom property** — A CSS variable (`--accent: #36c`, read with `var(--accent)`); the usual home for design tokens and themes. [§8.8](../08-styling/README.md#88-theming-and-dark-mode), [§14.12](../14-patterns-and-architecture/README.md#1412-design-systems)
+- **CSR / SPA** — Client-side rendering in a single-page application: one near-empty HTML page; JavaScript renders every screen and handles navigation in the browser. [§1.4](../01-why-react-and-setup/README.md#14-spa-vs-mpa-vs-ssr-and-ssg)
+- **CSS custom property** — A CSS variable (`--accent: #36c`, read with `var(--accent)`); the usual home for design tokens and themes. [§8.8](../08-styling/README.md#88-theming-and-dark-mode)
 - **CSS Modules** — `*.module.css` files whose class names are renamed per file, so `styles.card` can't clash. [§8.4](../08-styling/README.md#84-css-modules)
 - **CSS-in-JS** — Writing styles in JavaScript; runtime libraries (styled-components, Emotion) inject styles while rendering, zero-runtime ones extract CSS at build. [§8.7](../08-styling/README.md#87-css-in-js)
-- **Cursor (pagination)** — A marker for "the last item I saw" used to request the next page (`?after=<id>`); stable when items are inserted. [§15.12](../15-react-interview-and-machine-coding/README.md#1512-build-3--infinite-scroll), [§15.16](../15-react-interview-and-machine-coding/README.md#1516-build-7--pagination)
-- **Custom Hook** — A function named `useSomething` that calls other Hooks; shares logic, never state. [§7.3](../07-custom-hooks-and-hook-rules/README.md#73-custom-hooks--reusing-stateful-logic), [§14.3](../14-patterns-and-architecture/README.md#143-extracting-custom-hooks)
+- **Cursor (pagination)** — A marker for "the last item I saw" used to request the next page (`?after=<id>`); stable when items are inserted. [§15.12](../15-react-interview-and-machine-coding/README.md#1512-build-3--infinite-scroll)
+- **Custom Hook** — A function named `useSomething` that calls other Hooks; shares logic, never state. [§7.3](../07-custom-hooks-and-hook-rules/README.md#73-custom-hooks--reusing-stateful-logic)
 
 **D**
 
 - **`dangerouslySetInnerHTML`** — The only way to insert a raw HTML string in React; bypasses escaping, so sanitise the HTML first. [§1.8](../01-why-react-and-setup/README.md#18-jsx)
 - **Dark mode** — A light-on-dark colour theme, usually driven by CSS custom properties and the user's OS setting. [§8.8](../08-styling/README.md#88-theming-and-dark-mode)
 - **Data binding** — Connecting UI to data so one updates when the other changes; one-way (state → view, React) or two-way (both directions). [§14.13](../14-patterns-and-architecture/README.md#1413-client-architecture-patterns-mvc-mvp-mvvm-viper--and-where-react-fits)
-- **Data router** — React Router set-up (`createBrowserRouter` + `<RouterProvider>`) that enables loaders, actions and fetchers. [§9.2](../09-routing-and-data-fetching/README.md#92-react-router-v8-and-its-three-modes), [§9.5](../09-routing-and-data-fetching/README.md#95-loaders--data-before-render-data-mode)
+- **Data router** — React Router set-up (`createBrowserRouter` + `<RouterProvider>`) that enables loaders, actions and fetchers. [§9.2](../09-routing-and-data-fetching/README.md#92-react-router-v8-and-its-three-modes)
 - **Debounce** — Wait until input has been quiet for N ms before acting (e.g. searching). [§7.5](../07-custom-hooks-and-hook-rules/README.md#75-usedebounce--wait-until-the-user-stops)
 - **Declarative UI** — Describing *what* the screen should look like for the current state and letting React work out the DOM changes — the opposite of imperative step-by-step DOM code. [§1.2](../01-why-react-and-setup/README.md#12-declarative-ui)
 - **Decorator pattern** — Wrapping an object or function to add behaviour without changing it; HOCs are decorators for components. [§14.6](../14-patterns-and-architecture/README.md#146-higher-order-components-hocs)
-- **Deduplication** — Merging identical simultaneous requests into one (TanStack Query, router loaders). [§6.9](../06-state-management/README.md#69-tanstack-query--server-state), [§15.4](../15-react-interview-and-machine-coding/README.md#154-interview-questions-effects-and-refs)
+- **Deduplication** — Merging identical simultaneous requests into one (TanStack Query, router loaders). [§6.9](../06-state-management/README.md#69-tanstack-query--server-state)
 - **`defaultValue`** — Starting value of an uncontrolled input; the DOM owns the value afterwards. [§4.2](../04-forms-and-actions/README.md#42-controlled-vs-uncontrolled-inputs)
 - **Deno / Bun** — JavaScript runtimes that are alternatives to Node.js. [§13.2](../13-server-rendering-and-frameworks/README.md#132-the-server-rendering-apis)
 - **Dependency (package)** — A library your project relies on, listed in `package.json` and installed into `node_modules`. [§1.5](../01-why-react-and-setup/README.md#15-setting-up-a-react-project)
-- **Dependency array** — The second argument of `useEffect`/`useMemo`/`useCallback`: every reactive value the callback reads; compared with `Object.is`. [§5.5](../05-effects-and-refs/README.md#55-dependencies-in-depth), [§10.5](../10-performance/README.md#105-usecallback-and-usememo-for-stable-props)
+- **Dependency array** — The second argument of `useEffect`/`useMemo`/`useCallback`: every reactive value the callback reads; compared with `Object.is`. [§5.5](../05-effects-and-refs/README.md#55-dependencies-in-depth)
 - **Dependency injection** — Passing the things code relies on (a `search` function, an API client) in as parameters, so tests can hand in fakes. [§14.3](../14-patterns-and-architecture/README.md#143-extracting-custom-hooks)
 - **Deploy** — Publishing a new version of an app to the servers or CDN that real users reach. [§13.1](../13-server-rendering-and-frameworks/README.md#131-rendering-strategies-csr-ssr-ssg-isr-streaming-ppr)
 - **Deployment adapter** — A small package that makes a framework app run on a particular hosting platform. [§13.10](../13-server-rendering-and-frameworks/README.md#1310-react-router-framework-mode)
-- **Deprecated** — Still works but marked as outdated and likely to be removed; avoid in new code. [§11.4](../11-typescript-with-react/README.md#114-typing-events), [§5.10](../05-effects-and-refs/README.md#510-passing-refs-to-your-own-components)
+- **Deprecated** — Still works but marked as outdated and likely to be removed; avoid in new code. [§11.4](../11-typescript-with-react/README.md#114-typing-events)
 - **Derived state** — A value computed from props/state during render instead of being stored; never kept in `useState`. [§3.8](../03-state-and-events/README.md#38-derived-state--choosing-the-minimal-state)
-- **Design pattern** — A named, reusable solution to a common design problem (decorator, observer, strategy…). [§14.6](../14-patterns-and-architecture/README.md#146-higher-order-components-hocs), [§14.13](../14-patterns-and-architecture/README.md#1413-client-architecture-patterns-mvc-mvp-mvvm-viper--and-where-react-fits)
+- **Design pattern** — A named, reusable solution to a common design problem (decorator, observer, strategy…). [§14.6](../14-patterns-and-architecture/README.md#146-higher-order-components-hocs)
 - **Design system** — Tokens + accessible primitives + usage docs shared across a product. [§14.12](../14-patterns-and-architecture/README.md#1412-design-systems)
-- **Design tokens** — Named design values (colours, spacing, radii) usually stored as CSS custom properties. [§8.8](../08-styling/README.md#88-theming-and-dark-mode), [§14.12](../14-patterns-and-architecture/README.md#1412-design-systems)
-- **Destructuring** — JavaScript syntax that unpacks properties or array items into variables: `function Card({ title })`, `const [a, b] = arr`. [§2.2](../02-components-and-props/README.md#22-props), [§3.2](../03-state-and-events/README.md#32-state-a-components-memory--usestate)
+- **Design tokens** — Named design values (colours, spacing, radii) usually stored as CSS custom properties. [§8.8](../08-styling/README.md#88-theming-and-dark-mode)
+- **Destructuring** — JavaScript syntax that unpacks properties or array items into variables: `function Card({ title })`, `const [a, b] = arr`. [§2.2](../02-components-and-props/README.md#22-props)
 - **Deterministic** — Giving the same result every run — a property good tests need (no real network, time or randomness). [§12.10](../12-testing-react/README.md#1210-good-tests-bad-tests-and-the-bigger-picture)
 - **Dev server** — The local server you run while developing (`npm run dev`); serves your code with instant updates (HMR). [§1.5](../01-why-react-and-setup/README.md#15-setting-up-a-react-project)
-- **`<dialog>`** — Native HTML modal element; `showModal()` puts it in the top layer, makes the page inert, closes on Escape and restores focus. [§14.8](../14-patterns-and-architecture/README.md#148-portals), [§15.13](../15-react-interview-and-machine-coding/README.md#1513-build-4--modal-dialog-portal-focus-trap-escape)
+- **`<dialog>`** — Native HTML modal element; `showModal()` puts it in the top layer, makes the page inert, closes on Escape and restores focus. [§14.8](../14-patterns-and-architecture/README.md#148-portals)
 - **Directive** — A string literal at the top of a file or function (`'use client'`, `'use server'`) that bundlers read. [§13.8](../13-server-rendering-and-frameworks/README.md#138-directives-use-client-and-use-server)
-- **Discriminated union** — A TypeScript union of object types sharing a literal field (e.g. `status`) that narrows to one member. [§11.9](../11-typescript-with-react/README.md#119-discriminated-unions-for-props), [§11.5](../11-typescript-with-react/README.md#115-typing-state-and-reducers)
+- **Discriminated union** — A TypeScript union of object types sharing a literal field (e.g. `status`) that narrows to one member. [§11.9](../11-typescript-with-react/README.md#119-discriminated-unions-for-props)
 - **Dispatch** — Sending an action to a reducer: `dispatch({ type: 'added' })`; stable identity. [§6.2](../06-state-management/README.md#62-usereducer--consolidate-update-logic)
 - **Docker** — A tool that packages an app with everything it needs into a portable container that runs the same anywhere. [§13.11](../13-server-rendering-and-frameworks/README.md#1311-choosing-a-framework)
 - **DOM** — Document Object Model: the browser's tree of objects representing the page, which React updates for you. [§1.3](../01-why-react-and-setup/README.md#13-rendering-the-virtual-dom-and-reconciliation-brief)
 - **Double fetch** — When the client refetches data the server already used for SSR; frameworks serialize data into the page instead. [§13.4](../13-server-rendering-and-frameworks/README.md#134-hydration-end-to-end)
-- **Dynamic segment** — Part of a route path that matches any value (`:id` in React Router, `[id]` in Next.js), read with `useParams()` / `params`. [§9.3](../09-routing-and-data-fetching/README.md#93-routes-links-and-url-parameters-declarative-mode), [§13.9](../13-server-rendering-and-frameworks/README.md#139-nextjs-app-router-overview)
+- **Dynamic segment** — Part of a route path that matches any value (`:id` in React Router, `[id]` in Next.js), read with `useParams()` / `params`. [§9.3](../09-routing-and-data-fetching/README.md#93-routes-links-and-url-parameters-declarative-mode)
 
 **E**
 
-- **E2E test** — End-to-end test: drives the whole app in a real browser (Playwright, Cypress); slow, so used for a few critical flows. [§12.1](../12-testing-react/README.md#121-what-to-test-and-the-testing-library-philosophy), [§12.10](../12-testing-react/README.md#1210-good-tests-bad-tests-and-the-bigger-picture)
+- **E2E test** — End-to-end test: drives the whole app in a real browser (Playwright, Cypress); slow, so used for a few critical flows. [§12.1](../12-testing-react/README.md#121-what-to-test-and-the-testing-library-philosophy)
 - **Edge case** — An unusual situation at the limits — empty data, errors, huge lists, very fast input — that interviewers probe. [§15.1](../15-react-interview-and-machine-coding/README.md#151-how-react-interviews-are-run)
-- **Edge runtime** — A lightweight JavaScript server environment running in many locations close to users (e.g. Cloudflare Workers). [§13.2](../13-server-rendering-and-frameworks/README.md#132-the-server-rendering-apis), [§1.4](../01-why-react-and-setup/README.md#14-spa-vs-mpa-vs-ssr-and-ssg)
+- **Edge runtime** — A lightweight JavaScript server environment running in many locations close to users (e.g. Cloudflare Workers). [§13.2](../13-server-rendering-and-frameworks/README.md#132-the-server-rendering-apis)
 - **Effect** — Code in `useEffect` that runs after commit to synchronise a component with an external system. [§5.2](../05-effects-and-refs/README.md#52-useeffect-basics)
-- **Effect Event** — A function created by `useEffectEvent`: called from Effects, always sees the latest props/state, and is not a dependency. [§5.5](../05-effects-and-refs/README.md#55-dependencies-in-depth), [§7.7](../07-custom-hooks-and-hook-rules/README.md#77-hooks-that-take-callbacks--useeffectevent)
+- **Effect Event** — A function created by `useEffectEvent`: called from Effects, always sees the latest props/state, and is not a dependency. [§5.5](../05-effects-and-refs/README.md#55-dependencies-in-depth)
 - **Encapsulation** — Hiding a component's internals and exposing only a chosen interface (e.g. `useImperativeHandle` instead of the raw DOM node). [§5.10](../05-effects-and-refs/README.md#510-passing-refs-to-your-own-components)
-- **Endpoint** — One URL on a server that performs one operation (e.g. `POST /api/reviews`); every Server Function is a public one. [§13.8](../13-server-rendering-and-frameworks/README.md#138-directives-use-client-and-use-server), [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)
-- **Entry point** — The file where a program or bundle starts (`main.jsx`), or a module where client code begins (`'use client'`). [§1.6](../01-why-react-and-setup/README.md#16-project-structure), [§13.8](../13-server-rendering-and-frameworks/README.md#138-directives-use-client-and-use-server)
+- **Endpoint** — One URL on a server that performs one operation (e.g. `POST /api/reviews`); every Server Function is a public one. [§13.8](../13-server-rendering-and-frameworks/README.md#138-directives-use-client-and-use-server)
+- **Entry point** — The file where a program or bundle starts (`main.jsx`), or a module where client code begins (`'use client'`). [§1.6](../01-why-react-and-setup/README.md#16-project-structure)
 - **Error boundary** — A class component with `getDerivedStateFromError`/`componentDidCatch` that shows a fallback when a descendant throws while rendering. [§14.9](../14-patterns-and-architecture/README.md#149-error-boundaries)
 - **esbuild / Oxc / SWC** — Very fast compilers (written in Go or Rust) that bundlers use to strip TypeScript types and transform JSX; they don't type-check. [§11.1](../11-typescript-with-react/README.md#111-setup-and-how-type-checking-fits-in)
-- **Escape hatch** — A lower-level tool for when the automatic way doesn't fit (refs, Effects, manual `useMemo` with the Compiler). [§15.6](../15-react-interview-and-machine-coding/README.md#156-interview-questions-performance-and-the-react-compiler), [§5.8](../05-effects-and-refs/README.md#58-useref-for-values)
+- **Escape hatch** — A lower-level tool for when the automatic way doesn't fit (refs, Effects, manual `useMemo` with the Compiler). [§15.6](../15-react-interview-and-machine-coding/README.md#156-interview-questions-performance-and-the-react-compiler)
 - **Escaping / sanitising** — Escaping turns `<` into text so it can't run (JSX does it for every string); sanitising strips dangerous parts from HTML you must insert raw. [§1.8](../01-why-react-and-setup/README.md#18-jsx)
-- **ESLint** — The standard JavaScript linter; `eslint-plugin-react-hooks` and `eslint-plugin-jsx-a11y` add React rules. [§7.2](../07-custom-hooks-and-hook-rules/README.md#72-the-rules-of-hooks), [§14.10](../14-patterns-and-architecture/README.md#1410-accessibility-in-react)
+- **ESLint** — The standard JavaScript linter; `eslint-plugin-react-hooks` and `eslint-plugin-jsx-a11y` add React rules. [§7.2](../07-custom-hooks-and-hook-rules/README.md#72-the-rules-of-hooks)
 - **ESM** — ES modules: JavaScript's standard `import`/`export` module format (as opposed to older CommonJS `require`). [§13.10](../13-server-rendering-and-frameworks/README.md#1310-react-router-framework-mode)
-- **Event bubbling** — An event travelling from the target element up through its ancestors; `stopPropagation()` ends it. React events bubble through the React tree, even out of portals. [§3.1](../03-state-and-events/README.md#31-responding-to-events), [§14.8](../14-patterns-and-architecture/README.md#148-portals)
+- **Event bubbling** — An event travelling from the target element up through its ancestors; `stopPropagation()` ends it. React events bubble through the React tree, even out of portals. [§3.1](../03-state-and-events/README.md#31-responding-to-events)
 - **Event delegation** — React attaches one listener per event type at the root container and dispatches to your handlers. [§3.1](../03-state-and-events/README.md#31-responding-to-events)
 - **Event handler** — A function passed as an `on…` prop; the right place for side effects caused by a user action. [§3.1](../03-state-and-events/README.md#31-responding-to-events)
-- **Event loop** — The JavaScript mechanism that runs one task at a time and then picks the next queued callback (timers, promises, events). [§15.1](../15-react-interview-and-machine-coding/README.md#151-how-react-interviews-are-run), [JavaScript Ch 12](../../../javascript/chapters/12-asynchronous-javascript/README.md)
-- **`exhaustive-deps`** — `eslint-plugin-react-hooks` rule that checks dependency arrays of Effects, `useMemo` and `useCallback`. [§5.5](../05-effects-and-refs/README.md#55-dependencies-in-depth), [§7.2](../07-custom-hooks-and-hook-rules/README.md#72-the-rules-of-hooks)
+- **Event loop** — The JavaScript mechanism that runs one task at a time and then picks the next queued callback (timers, promises, events). [§15.1](../15-react-interview-and-machine-coding/README.md#151-how-react-interviews-are-run)
+- **`exhaustive-deps`** — `eslint-plugin-react-hooks` rule that checks dependency arrays of Effects, `useMemo` and `useCallback`. [§5.5](../05-effects-and-refs/README.md#55-dependencies-in-depth)
 - **Exhaustiveness check** — Assigning a value to `never` in a `default` branch so an unhandled union case becomes a compile error. [§11.5](../11-typescript-with-react/README.md#115-typing-state-and-reducers)
 - **Expo** — React Native framework for building iOS, Android and web apps with React. [§13.11](../13-server-rendering-and-frameworks/README.md#1311-choosing-a-framework)
-- **Exponential backoff** — Retrying a failed request after waits that grow each time (1 s, 2 s, 4 s…); TanStack Query does this by default. [§6.9](../06-state-management/README.md#69-tanstack-query--server-state), [§9.8](../09-routing-and-data-fetching/README.md#98-tanstack-query-basics)
+- **Exponential backoff** — Retrying a failed request after waits that grow each time (1 s, 2 s, 4 s…); TanStack Query does this by default. [§6.9](../06-state-management/README.md#69-tanstack-query--server-state)
 - **Express** — A popular Node.js web-server library. [§13.2](../13-server-rendering-and-frameworks/README.md#132-the-server-rendering-apis)
 - **External store** — Data that lives outside React and changes on its own (browser APIs, Zustand, Redux); read it with `useSyncExternalStore`. [§7.9](../07-custom-hooks-and-hook-rules/README.md#79-usesyncexternalstore--subscribing-to-outside-data)
-- **External system** — Anything React doesn't control — network, timers, browser APIs, third-party widgets; what Effects synchronise with. [§5.1](../05-effects-and-refs/README.md#51-where-side-effects-belong), [§15.4](../15-react-interview-and-machine-coding/README.md#154-interview-questions-effects-and-refs)
+- **External system** — Anything React doesn't control — network, timers, browser APIs, third-party widgets; what Effects synchronise with. [§5.1](../05-effects-and-refs/README.md#51-where-side-effects-belong)
 
 **F**
 
 - **Fake timers** — Test replacements for `setTimeout`/`setInterval` that you advance by hand, so time-based code runs instantly. [§12.7](../12-testing-react/README.md#127-testing-custom-hooks)
-- **Fallback** — What `<Suspense>` (a spinner, a skeleton) or an error boundary (an error message) shows instead of its children. [§9.11](../09-routing-and-data-fetching/README.md#911-suspense-and-use), [§14.9](../14-patterns-and-architecture/README.md#149-error-boundaries)
-- **Falsy** — Values JavaScript treats as false: `false`, `0`, `''`, `null`, `undefined`, `NaN` — why `{0 && …}` renders 0. [§2.7](../02-components-and-props/README.md#27-conditional-rendering), [§15.2](../15-react-interview-and-machine-coding/README.md#152-interview-questions-rendering-reconciliation-and-keys)
-- **Fast refresh** — React's HMR flavour: edits to a component appear instantly while its state is kept where possible. [§1.5](../01-why-react-and-setup/README.md#15-setting-up-a-react-project), [§5.4](../05-effects-and-refs/README.md#54-strictmodes-double-run-development-only)
+- **Fallback** — What `<Suspense>` (a spinner, a skeleton) or an error boundary (an error message) shows instead of its children. [§9.11](../09-routing-and-data-fetching/README.md#911-suspense-and-use)
+- **Falsy** — Values JavaScript treats as false: `false`, `0`, `''`, `null`, `undefined`, `NaN` — why `{0 && …}` renders 0. [§2.7](../02-components-and-props/README.md#27-conditional-rendering)
+- **Fast refresh** — React's HMR flavour: edits to a component appear instantly while its state is kept where possible. [§1.5](../01-why-react-and-setup/README.md#15-setting-up-a-react-project)
 - **Feature flag** — A switch that turns a feature on or off for some users without deploying new code. [§14.6](../14-patterns-and-architecture/README.md#146-higher-order-components-hocs)
-- **`fetch`** — The browser's built-in function for HTTP requests; returns a promise of a `Response` and does **not** reject on 404/500 — check `res.ok`. [§5.7](../05-effects-and-refs/README.md#57-fetching-data-in-effects-and-race-conditions), [§12.6](../12-testing-react/README.md#126-mocking-fetch-and-when-to-use-msw)
+- **`fetch`** — The browser's built-in function for HTTP requests; returns a promise of a `Response` and does **not** reject on 404/500 — check `res.ok`. [§5.7](../05-effects-and-refs/README.md#57-fetching-data-in-effects-and-race-conditions)
 - **Fetcher** — React Router `useFetcher()`: submit or load without navigating (like buttons, inline edits). [§9.6](../09-routing-and-data-fetching/README.md#96-actions-form-and-fetchers)
-- **Fiber** — React's internal record for each component instance, holding its Hook slots; also the name of the reconciler since React 16. [§7.1](../07-custom-hooks-and-hook-rules/README.md#71-what-a-hook-really-is), [§1.3](../01-why-react-and-setup/README.md#13-rendering-the-virtual-dom-and-reconciliation-brief)
+- **Fiber** — React's internal record for each component instance, holding its Hook slots; also the name of the reconciler since React 16. [§7.1](../07-custom-hooks-and-hook-rules/README.md#71-what-a-hook-really-is)
 - **`findBy…` / `waitFor`** — Async Testing Library helpers: `findBy` retries a query until an element appears, `waitFor` retries any assertion (default 1000 ms). [§12.5](../12-testing-react/README.md#125-async-tests)
-- **`fireEvent`** — Testing Library helper that dispatches exactly one DOM event; prefer `user-event` for user actions. [§12.2](../12-testing-react/README.md#122-your-first-component-test), [§12.4](../12-testing-react/README.md#124-user-event--interacting-like-a-user)
-- **Flaky test** — A test that sometimes passes and sometimes fails without any code change — usually from real timers, network or shared state. [§12.5](../12-testing-react/README.md#125-async-tests), [§12.10](../12-testing-react/README.md#1210-good-tests-bad-tests-and-the-bigger-picture)
+- **`fireEvent`** — Testing Library helper that dispatches exactly one DOM event; prefer `user-event` for user actions. [§12.2](../12-testing-react/README.md#122-your-first-component-test)
+- **Flaky test** — A test that sometimes passes and sometimes fails without any code change — usually from real timers, network or shared state. [§12.5](../12-testing-react/README.md#125-async-tests)
 - **Flamegraph** — Profiler chart where each bar is a component and its width shows how long it took to render. [§10.3](../10-performance/README.md#103-measure-first-devtools-profiler-and-profiler)
-- **`flushSync`** — `react-dom` function that commits a state update synchronously, opting out of batching; use sparingly. [§3.4](../03-state-and-events/README.md#34-batching), [§5.9](../05-effects-and-refs/README.md#59-refs-to-dom-nodes)
+- **`flushSync`** — `react-dom` function that commits a state update synchronously, opting out of batching; use sparingly. [§3.4](../03-state-and-events/README.md#34-batching)
 - **Flux** — Facebook's 2014 one-way data-flow architecture (action → dispatcher → store → view) that inspired Redux. [§14.13](../14-patterns-and-architecture/README.md#1413-client-architecture-patterns-mvc-mvp-mvvm-viper--and-where-react-fits)
-- **Focus** — Which element currently receives keyboard input; moved with Tab or with `element.focus()`. [§14.10](../14-patterns-and-architecture/README.md#1410-accessibility-in-react), [§12.4](../12-testing-react/README.md#124-user-event--interacting-like-a-user)
-- **Focus management** — Moving keyboard focus in code when the UI changes — into a dialog, back to its trigger, to a new heading or the first invalid field. [§14.10](../14-patterns-and-architecture/README.md#1410-accessibility-in-react), [§15.17](../15-react-interview-and-machine-coding/README.md#1517-build-8--multi-step-form-wizard-with-validation)
-- **Focus trap** — Keeping Tab and Shift+Tab cycling inside an open modal so keyboard users can't wander behind it. [§15.13](../15-react-interview-and-machine-coding/README.md#1513-build-4--modal-dialog-portal-focus-trap-escape), [§14.8](../14-patterns-and-architecture/README.md#148-portals)
+- **Focus** — Which element currently receives keyboard input; moved with Tab or with `element.focus()`. [§14.10](../14-patterns-and-architecture/README.md#1410-accessibility-in-react)
+- **Focus management** — Moving keyboard focus in code when the UI changes — into a dialog, back to its trigger, to a new heading or the first invalid field. [§14.10](../14-patterns-and-architecture/README.md#1410-accessibility-in-react)
+- **Focus trap** — Keeping Tab and Shift+Tab cycling inside an open modal so keyboard users can't wander behind it. [§15.13](../15-react-interview-and-machine-coding/README.md#1513-build-4--modal-dialog-portal-focus-trap-escape)
 - **`:focus-visible`** — CSS selector for showing a focus ring only when it helps (e.g. keyboard use); never remove outlines without it. [§14.10](../14-patterns-and-architecture/README.md#1410-accessibility-in-react)
 - **`<Form>` (React Router)** — Router form that serialises fields, calls the route `action`, then revalidates loaders. [§9.6](../09-routing-and-data-fetching/README.md#96-actions-form-and-fetchers)
 - **Form Action** — React 19 `<form action={fn}>`: React prevents navigation, calls `fn(formData)` in a Transition, and resets uncontrolled fields after success. [§4.4](../04-forms-and-actions/README.md#44-form-actions--form-actionfn)
 - **`formAction`** — Prop on a submit button that overrides the form's action for that button. [§4.4](../04-forms-and-actions/README.md#44-form-actions--form-actionfn)
 - **`FormData`** — Browser object holding a form's name/value pairs; values are strings, unchecked boxes are missing, `getAll` for repeated names. [§4.1](../04-forms-and-actions/README.md#41-how-a-form-submission-works)
-- **Formik** — An older, controlled-input form library; React Hook Form is the common modern choice. [§4.9](../04-forms-and-actions/README.md#49-form-libraries--react-hook-form-and-zod-overview), [§14.5](../14-patterns-and-architecture/README.md#145-render-props)
+- **Formik** — An older, controlled-input form library; React Hook Form is the common modern choice. [§4.9](../04-forms-and-actions/README.md#49-form-libraries--react-hook-form-and-zod-overview)
 - **`forwardRef`** — Legacy API to pass a ref to a function component; React 19 passes `ref` as a normal prop instead. [§5.10](../05-effects-and-refs/README.md#510-passing-refs-to-your-own-components)
 - **Fragment** — `<>…</>` or `<Fragment key>`: groups children without adding a DOM node. [§1.8](../01-why-react-and-setup/README.md#18-jsx)
 - **Fragment ref** — React 19.3: a `ref` on `<Fragment>` gives an instance with `focus()`, `addEventListener`, `observeUsing` for its children. [§5.10](../05-effects-and-refs/README.md#510-passing-refs-to-your-own-components)
-- **Framework** — A library that also decides your project's structure and tooling — for React: Next.js, React Router framework mode, Expo. [§1.5](../01-why-react-and-setup/README.md#15-setting-up-a-react-project), [§13.11](../13-server-rendering-and-frameworks/README.md#1311-choosing-a-framework)
-- **Framework mode** — React Router's full-stack mode: route modules, SSR/prerendering, per-route code splitting, type generation. [§9.7](../09-routing-and-data-fetching/README.md#97-middleware-lazy-routes-and-framework-mode), [§13.10](../13-server-rendering-and-frameworks/README.md#1310-react-router-framework-mode)
-- **Front end / back end** — The front end is the code that runs in the browser (the UI); the back end is the server side — APIs, databases, business logic. [§15.5](../15-react-interview-and-machine-coding/README.md#155-interview-questions-hooks-context-and-state-management), [§13.7](../13-server-rendering-and-frameworks/README.md#137-react-server-components)
+- **Framework** — A library that also decides your project's structure and tooling — for React: Next.js, React Router framework mode, Expo. [§1.5](../01-why-react-and-setup/README.md#15-setting-up-a-react-project)
+- **Framework mode** — React Router's full-stack mode: route modules, SSR/prerendering, per-route code splitting, type generation. [§9.7](../09-routing-and-data-fetching/README.md#97-middleware-lazy-routes-and-framework-mode)
+- **Front end / back end** — The front end is the code that runs in the browser (the UI); the back end is the server side — APIs, databases, business logic. [§15.5](../15-react-interview-and-machine-coding/README.md#155-interview-questions-hooks-context-and-state-management)
 - **Full-stack** — Covering both the server (back end) and the browser (front end) parts of an app. [§13.11](../13-server-rendering-and-frameworks/README.md#1311-choosing-a-framework)
 
 **G**
 
-- **`gcTime`** — TanStack Query: how long unused cached data stays in memory (default 5 minutes). [§6.9](../06-state-management/README.md#69-tanstack-query--server-state), [§9.8](../09-routing-and-data-fetching/README.md#98-tanstack-query-basics)
+- **`gcTime`** — defined in the Routing and TanStack Query sheet, [§16.10](#1610-routing-react-router-v8-and-tanstack-query).
 - **Generic component** — A component with a type parameter, e.g. `List<T>`, whose `T` is inferred from props. [§11.8](../11-typescript-with-react/README.md#118-generic-components)
-- **Generics (TypeScript)** — Types with a placeholder parameter (`<T>`) filled in where they're used, so one function or component works for many types and stays checked. [§11.8](../11-typescript-with-react/README.md#118-generic-components), [§11.7](../11-typescript-with-react/README.md#117-typing-custom-hooks-and-context)
+- **Generics (TypeScript)** — Types with a placeholder parameter (`<T>`) filled in where they're used, so one function or component works for many types and stays checked. [§11.8](../11-typescript-with-react/README.md#118-generic-components)
 - **`getDerivedStateFromError`** — Static error-boundary method that returns state so the next render shows the fallback. [§14.9](../14-patterns-and-architecture/README.md#149-error-boundaries)
-- **`getServerSnapshot`** — Third argument of `useSyncExternalStore`: the value used on the server and during hydration. [§7.9](../07-custom-hooks-and-hook-rules/README.md#79-usesyncexternalstore--subscribing-to-outside-data), [§13.5](../13-server-rendering-and-frameworks/README.md#135-hydration-mismatches)
+- **`getServerSnapshot`** — Third argument of `useSyncExternalStore`: the value used on the server and during hydration. [§7.9](../07-custom-hooks-and-hook-rules/README.md#79-usesyncexternalstore--subscribing-to-outside-data)
 - **git / repository** — git is the version-control tool that records a project's history; a repository (repo) is the folder it tracks. [§1.5](../01-why-react-and-setup/README.md#15-setting-up-a-react-project)
 - **gzip** — A compression format servers use to shrink files in transit; bundle sizes are often quoted "gzipped". [§1.1](../01-why-react-and-setup/README.md#11-what-react-is)
 
 **H**
 
 - **Happy path** — The normal flow where everything goes right; build it first, then handle edge cases. [§15.1](../15-react-interview-and-machine-coding/README.md#151-how-react-interviews-are-run)
-- **Headless browser** — A real browser (e.g. Chrome) run without a window, controlled by a script, for tests and screenshots. [§13.4](../13-server-rendering-and-frameworks/README.md#134-hydration-end-to-end), [§12.9](../12-testing-react/README.md#129-setting-up-vitest-or-jest-in-a-real-project)
-- **Headless UI library** — Components that provide behaviour and accessibility but no styles (Radix, React Aria, Headless UI, Base UI). [§8.9](../08-styling/README.md#89-component-libraries), [§14.12](../14-patterns-and-architecture/README.md#1412-design-systems)
+- **Headless browser** — A real browser (e.g. Chrome) run without a window, controlled by a script, for tests and screenshots. [§13.4](../13-server-rendering-and-frameworks/README.md#134-hydration-end-to-end)
+- **Headless UI library** — Components that provide behaviour and accessibility but no styles (Radix, React Aria, Headless UI, Base UI). [§8.9](../08-styling/README.md#89-component-libraries)
 - **Higher-order component (HOC)** — A function that takes a component and returns a wrapped one (`withAuth(Page)`); must be created at module level. [§14.6](../14-patterns-and-architecture/README.md#146-higher-order-components-hocs)
 - **HMR** — Hot Module Replacement: the dev server swaps an edited module in the running page, keeping state. [§1.5](../01-why-react-and-setup/README.md#15-setting-up-a-react-project)
 - **Hook** — A function starting with `use` that lets a component use a React feature; called at the top level only. [§7.1](../07-custom-hooks-and-hook-rules/README.md#71-what-a-hook-really-is)
 - **Host element** — A built-in element such as `<div>` or `<button>` (lowercase in JSX), as opposed to your own components. [§2.1](../02-components-and-props/README.md#21-function-components)
-- **HTML** — HyperText Markup Language: the tags (`<button>`, `<p>`) that describe a page's structure; React produces it for you. [HTML & CSS Ch 1](../../../html-css/chapters/01-how-the-web-works/README.md), [§1.8](../01-why-react-and-setup/README.md#18-jsx)
-- **HTTP** — The request/response protocol browsers and servers use; each response has a status code (200 OK, 404 Not Found, 500 error). [HTML & CSS Ch 1](../../../html-css/chapters/01-how-the-web-works/README.md), [§13.3](../13-server-rendering-and-frameworks/README.md#133-streaming-ssr-with-suspense), [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)
+- **HTML** — HyperText Markup Language: the tags (`<button>`, `<p>`) that describe a page's structure; React produces it for you. [HTML & CSS Ch 1](../../../html-css/chapters/01-how-the-web-works/README.md)
+- **HTTP** — The request/response protocol browsers and servers use; each response has a status code (200 OK, 404 Not Found, 500 error). [HTML & CSS Ch 1](../../../html-css/chapters/01-how-the-web-works/README.md)
 - **HTTP headers** — Key–value information sent before a request's or response's body (content type, cookies, caching rules). [§13.3](../13-server-rendering-and-frameworks/README.md#133-streaming-ssr-with-suspense)
-- **HTTP methods (GET / POST)** — The verb of an HTTP request: GET reads data, POST submits data (forms, Server Function calls). [§4.1](../04-forms-and-actions/README.md#41-how-a-form-submission-works), [§13.8](../13-server-rendering-and-frameworks/README.md#138-directives-use-client-and-use-server)
-- **`hydrateRoot`** — `react-dom/client` API that hydrates existing server HTML instead of creating new DOM. [§13.2](../13-server-rendering-and-frameworks/README.md#132-the-server-rendering-apis), [§13.4](../13-server-rendering-and-frameworks/README.md#134-hydration-end-to-end)
-- **Hydration** — React in the browser adopting server-rendered HTML: it renders the same tree, reuses the DOM and attaches handlers. [§13.4](../13-server-rendering-and-frameworks/README.md#134-hydration-end-to-end), [§1.4](../01-why-react-and-setup/README.md#14-spa-vs-mpa-vs-ssr-and-ssg)
+- **HTTP methods (GET / POST)** — The verb of an HTTP request: GET reads data, POST submits data (forms, Server Function calls). [§4.1](../04-forms-and-actions/README.md#41-how-a-form-submission-works)
+- **Hydration / `hydrateRoot`** — React in the browser adopting server-rendered HTML: `hydrateRoot` (`react-dom/client`) renders the same tree, reuses the existing DOM instead of creating it, and attaches handlers. [§13.4](../13-server-rendering-and-frameworks/README.md#134-hydration-end-to-end)
 - **Hydration mismatch** — The client's first render differs from the server HTML; React client-renders that tree and reports a recoverable error. [§13.5](../13-server-rendering-and-frameworks/README.md#135-hydration-mismatches)
 
 **I**
 
 - **iframe** — An HTML element that embeds another page inside the current one. [§14.8](../14-patterns-and-architecture/README.md#148-portals)
-- **Immer** — Library that lets you "mutate" a draft and produces a new immutable state with structural sharing; used by Redux Toolkit. [§3.6](../03-state-and-events/README.md#36-updating-objects-and-arrays-immutably), [§6.7](../06-state-management/README.md#67-redux-toolkit)
-- **Immutability** — Never changing existing state objects/arrays; create new ones so `Object.is` sees the change. [§3.6](../03-state-and-events/README.md#36-updating-objects-and-arrays-immutably)
-- **Imperative code** — Code that gives step-by-step commands ("create this node, set this text") instead of describing the result. [§1.2](../01-why-react-and-setup/README.md#12-declarative-ui), [§14.13](../14-patterns-and-architecture/README.md#1413-client-architecture-patterns-mvc-mvp-mvvm-viper--and-where-react-fits)
+- **Immer** — Library that lets you "mutate" a draft and produces a new immutable state with structural sharing; used by Redux Toolkit. [§3.6](../03-state-and-events/README.md#36-updating-objects-and-arrays-immutably)
+- **Immutability / mutation** — Mutating changes a value in place; React state must be immutable — create new objects/arrays so `Object.is` sees the change (a mutated object is the same reference, so the change is hidden). [§3.6](../03-state-and-events/README.md#36-updating-objects-and-arrays-immutably)
+- **Imperative code** — Code that gives step-by-step commands ("create this node, set this text") instead of describing the result. [§1.2](../01-why-react-and-setup/README.md#12-declarative-ui)
 - **Implementation details** — How code works inside (state names, Hook calls, class names), as opposed to what users see; good tests ignore them. [§12.1](../12-testing-react/README.md#121-what-to-test-and-the-testing-library-philosophy)
 - **Import cycle** — Files importing each other in a loop (A → B → A); a sign of a misplaced shared piece. [§14.11](../14-patterns-and-architecture/README.md#1411-folder-structure)
 - **Impression** — An analytics record that something was shown to the user — one of the few things legitimately logged from an Effect. [§5.6](../05-effects-and-refs/README.md#56-you-might-not-need-an-effect)
-- **In flight** — A request that has been sent but not yet answered. [§15.4](../15-react-interview-and-machine-coding/README.md#154-interview-questions-effects-and-refs), [§15.12](../15-react-interview-and-machine-coding/README.md#1512-build-3--infinite-scroll)
+- **In flight** — A request that has been sent but not yet answered. [§15.4](../15-react-interview-and-machine-coding/README.md#154-interview-questions-effects-and-refs)
 - **Index route** — A child route with `index` that renders at the parent's exact URL. [§9.4](../09-routing-and-data-fetching/README.md#94-nested-routes-and-layouts)
 - **`index.html` / `main.jsx`** — In a Vite app, the HTML page with the root `<div>` and the script that calls `createRoot(...).render(<App />)`. [§1.6](../01-why-react-and-setup/README.md#16-project-structure)
-- **Inert** — State (the `inert` attribute, or a modal `<dialog>`) in which part of the page can't be clicked, focused or read by screen readers. [§14.8](../14-patterns-and-architecture/README.md#148-portals), [§15.13](../15-react-interview-and-machine-coding/README.md#1513-build-4--modal-dialog-portal-focus-trap-escape)
-- **Infinite scroll** — Loading the next page automatically as the user nears the bottom, usually with an `IntersectionObserver` sentinel; `useInfiniteQuery` manages the pages. [§15.12](../15-react-interview-and-machine-coding/README.md#1512-build-3--infinite-scroll), [§9.9](../09-routing-and-data-fetching/README.md#99-query-keys-pagination-and-dependent-queries)
+- **Inert** — State (the `inert` attribute, or a modal `<dialog>`) in which part of the page can't be clicked, focused or read by screen readers. [§14.8](../14-patterns-and-architecture/README.md#148-portals)
+- **Infinite scroll** — Loading the next page automatically as the user nears the bottom, usually with an `IntersectionObserver` sentinel; `useInfiniteQuery` manages the pages. [§15.12](../15-react-interview-and-machine-coding/README.md#1512-build-3--infinite-scroll)
 - **Integration test** — A test of several units working together — in React, usually a component tree rendered with RTL. [§12.1](../12-testing-react/README.md#121-what-to-test-and-the-testing-library-philosophy)
 - **`IntersectionObserver`** — Browser API that reports when an element enters or leaves a scroll area; used for infinite scroll and lazy-loading. [§15.12](../15-react-interview-and-machine-coding/README.md#1512-build-3--infinite-scroll)
-- **Invalidation** — Marking cached queries stale so they refetch: `queryClient.invalidateQueries({ queryKey })`. [§9.10](../09-routing-and-data-fetching/README.md#910-mutations-invalidation-and-optimistic-updates), [§6.9](../06-state-management/README.md#69-tanstack-query--server-state)
-- **`isFetching`** — TanStack Query flag: a request is in flight, including background refetches. [§9.8](../09-routing-and-data-fetching/README.md#98-tanstack-query-basics)
+- **Invalidation** — Marking cached queries stale so they refetch: `queryClient.invalidateQueries({ queryKey })`. [§9.10](../09-routing-and-data-fetching/README.md#910-mutations-invalidation-and-optimistic-updates)
+- **`isFetching`** — defined in the Routing and TanStack Query sheet, [§16.10](#1610-routing-react-router-v8-and-tanstack-query).
 - **Island** — A small interactive component inside an otherwise static HTML page (Astro's model). [§13.11](../13-server-rendering-and-frameworks/README.md#1311-choosing-a-framework)
-- **`isPending`** — TanStack Query: no data yet. `useTransition`/`useActionState`: the transition or Action is still running. [§9.8](../09-routing-and-data-fetching/README.md#98-tanstack-query-basics), [§7.10](../07-custom-hooks-and-hook-rules/README.md#710-usetransition--non-urgent-updates), [§4.5](../04-forms-and-actions/README.md#45-useactionstate--the-result-of-the-last-submission)
-- **ISR** — Incremental static regeneration: static pages re-built in the background after a revalidation window. [§13.1](../13-server-rendering-and-frameworks/README.md#131-rendering-strategies-csr-ssr-ssg-isr-streaming-ppr)
+- **`isPending`** — TanStack Query: no data yet. `useTransition`/`useActionState`: the transition or Action is still running. [§9.8](../09-routing-and-data-fetching/README.md#98-tanstack-query-basics)
+- **ISR** — defined in the rendering and directives sheet, [§16.15](#1615-rendering-strategies-and-directives).
 
 **J**
 
 - **`javascript:` URL** — A link whose `href` runs code; React 19 blocks it as a security precaution. [§1.8](../01-why-react-and-setup/README.md#18-jsx)
 - **Jest / Vitest** — JavaScript test runners that find test files, run them and report results; Vitest is the natural choice for Vite projects. [§12.9](../12-testing-react/README.md#129-setting-up-vitest-or-jest-in-a-real-project)
-- **jest-dom** — `@testing-library/jest-dom`: readable DOM matchers such as `toBeInTheDocument()` and `toBeDisabled()`. [§12.2](../12-testing-react/README.md#122-your-first-component-test), [§12.9](../12-testing-react/README.md#129-setting-up-vitest-or-jest-in-a-real-project)
-- **Jotai / MobX / Valtio / Recoil** — Other state libraries: Jotai (small independent "atoms"), MobX and Valtio (observable/proxy objects you mutate), Recoil (atoms; no longer maintained). [§6.10](../06-state-management/README.md#610-choosing--comparison-and-decision-flow), [§6.6](../06-state-management/README.md#66-when-to-reach-for-a-library)
-- **jsdom** — A JavaScript implementation of the DOM used to run component tests in Node; no layout or painting. [§12.9](../12-testing-react/README.md#129-setting-up-vitest-or-jest-in-a-real-project), [§1.5](../01-why-react-and-setup/README.md#15-setting-up-a-react-project)
-- **JSON** — JavaScript Object Notation: the text format for sending data (`{"id": 1}`); `JSON.stringify` and `JSON.parse` convert to and from it. [§5.7](../05-effects-and-refs/README.md#57-fetching-data-in-effects-and-race-conditions), [§13.4](../13-server-rendering-and-frameworks/README.md#134-hydration-end-to-end)
+- **jest-dom** — `@testing-library/jest-dom`: readable DOM matchers such as `toBeInTheDocument()` and `toBeDisabled()`. [§12.2](../12-testing-react/README.md#122-your-first-component-test)
+- **Jotai / MobX / Valtio / Recoil** — Other state libraries: Jotai (small independent "atoms"), MobX and Valtio (observable/proxy objects you mutate), Recoil (atoms; no longer maintained). [§6.10](../06-state-management/README.md#610-choosing--comparison-and-decision-flow)
+- **jsdom** — A JavaScript implementation of the DOM used to run component tests in Node; no layout or painting. [§12.9](../12-testing-react/README.md#129-setting-up-vitest-or-jest-in-a-real-project)
+- **JSON** — JavaScript Object Notation: the text format for sending data (`{"id": 1}`); `JSON.stringify` and `JSON.parse` convert to and from it. [§5.7](../05-effects-and-refs/README.md#57-fetching-data-in-effects-and-race-conditions)
 - **JSX** — HTML-like syntax in JavaScript that compiles to `jsx()`/`createElement` calls returning element objects. [§1.8](../01-why-react-and-setup/README.md#18-jsx)
 
 **K**
 
-- **Key** — A string/number that identifies an element among its siblings; also resets a component when it changes. [§2.8](../02-components-and-props/README.md#28-rendering-lists-and-keys), [§3.10](../03-state-and-events/README.md#310-state-is-tied-to-a-position-in-the-tree)
+- **Key** — A string/number that identifies an element among its siblings; also resets a component when it changes. [§2.8](../02-components-and-props/README.md#28-rendering-lists-and-keys)
 - **`keyof`** — TypeScript operator giving the union of an object type's property names, e.g. for a table's column keys. [§11.8](../11-typescript-with-react/README.md#118-generic-components)
 
 **L**
 
 - **Landmark** — A page region with a role (`<header>`, `<nav>`, `<main>`, `<footer>`) that screen-reader users can jump between. [§14.10](../14-patterns-and-architecture/README.md#1410-accessibility-in-react)
 - **Layout (route)** — A parent route that renders shared UI and an `<Outlet />` for the matching child. [§9.4](../09-routing-and-data-fetching/README.md#94-nested-routes-and-layouts)
-- **Layout shift** — Content jumping around as images, fonts or data load; measured by the CLS Core Web Vital. [§13.9](../13-server-rendering-and-frameworks/README.md#139-nextjs-app-router-overview), [§9.12](../09-routing-and-data-fetching/README.md#912-loading-and-error-states-that-users-like)
-- **`lazy`** — `lazy(() => import('./X'))`: a component whose code loads on first render; needs a default export and a `<Suspense>` above it. [§10.8](../10-performance/README.md#108-code-splitting-with-lazy-and-suspense)
-- **Lazy initialiser** — A function passed to `useState`/`useReducer` that React calls only on the first render to compute the starting state. [§3.2](../03-state-and-events/README.md#32-state-a-components-memory--usestate), [§15.10](../15-react-interview-and-machine-coding/README.md#1510-build-1--todo-list-with-filters)
-- **Lazy-loading** — Loading something (code, an image) only when it is about to be needed. [§10.8](../10-performance/README.md#108-code-splitting-with-lazy-and-suspense), [§13.9](../13-server-rendering-and-frameworks/README.md#139-nextjs-app-router-overview)
+- **Layout shift** — Content jumping around as images, fonts or data load; measured by the CLS Core Web Vital. [§13.9](../13-server-rendering-and-frameworks/README.md#139-nextjs-app-router-overview)
+- **`lazy` / lazy-loading** — Lazy-loading loads something (code, an image) only when about to be needed; `lazy(() => import('./X'))` is a component whose code loads on first render — needs a default export and a `<Suspense>` above it. [§10.8](../10-performance/README.md#108-code-splitting-with-lazy-and-suspense)
+- **Lazy initialiser** — A function passed to `useState`/`useReducer` that React calls only on the first render to compute the starting state. [§3.2](../03-state-and-events/README.md#32-state-a-components-memory--usestate)
 - **LCP / FCP** — Largest / First Contentful Paint: when the main content / anything at all first appears on screen — loading-speed metrics. [§13.1](../13-server-rendering-and-frameworks/README.md#131-rendering-strategies-csr-ssr-ssg-isr-streaming-ppr)
-- **Legacy** — Old but kept for compatibility (class components, `renderToString`, `forwardRef`); avoid in new code. [§13.2](../13-server-rendering-and-frameworks/README.md#132-the-server-rendering-apis), [§14.4](../14-patterns-and-architecture/README.md#144-compound-components)
+- **Legacy** — Old but kept for compatibility (class components, `renderToString`, `forwardRef`); avoid in new code. [§13.2](../13-server-rendering-and-frameworks/README.md#132-the-server-rendering-apis)
 - **Lifecycle methods** — Class-component methods React calls at set moments (`componentDidMount`, `componentDidCatch`…); Hooks replaced them except for error boundaries. [§14.9](../14-patterns-and-architecture/README.md#149-error-boundaries)
 - **Lifting state up** — Moving shared state to the closest common parent and passing it down with a callback. [§3.7](../03-state-and-events/README.md#37-lifting-state-up)
 - **Lighthouse** — Chrome's built-in audit that scores performance, accessibility, SEO and best practices. [§14.10](../14-patterns-and-architecture/README.md#1410-accessibility-in-react)
-- **Linter** — A tool that reads code without running it and flags likely bugs and bad patterns (ESLint). [§7.2](../07-custom-hooks-and-hook-rules/README.md#72-the-rules-of-hooks), [§12.1](../12-testing-react/README.md#121-what-to-test-and-the-testing-library-philosophy)
+- **Linter** — A tool that reads code without running it and flags likely bugs and bad patterns (ESLint). [§7.2](../07-custom-hooks-and-hook-rules/README.md#72-the-rules-of-hooks)
 - **Listbox** — An ARIA role for a list of selectable options, as in a combobox's popup. [§15.11](../15-react-interview-and-machine-coding/README.md#1511-build-2--autocomplete-debounce-abort-keyboard)
 - **Literal type** — A TypeScript type that is one exact value (`'info'`, `42`); unions of them describe allowed variants. [§11.2](../11-typescript-with-react/README.md#112-typing-props)
 - **Loader** — React Router data-mode function that loads a route's data before it renders; read with `useLoaderData()`. [§9.5](../09-routing-and-data-fetching/README.md#95-loaders--data-before-render-data-mode)
 - **Local mutation** — Mutating values created during the same render (a local array) — allowed inside a pure component. [§2.5](../02-components-and-props/README.md#25-pure-components)
 - **Locale** — Language and region settings (`en-US`, `de-DE`) that decide date, number and currency formats. [§13.5](../13-server-rendering-and-frameworks/README.md#135-hydration-mismatches)
-- **`localStorage` / `sessionStorage`** — Browser key-value string storage; `localStorage` survives reloads, `sessionStorage` is cleared when the tab closes. Not available on the server. [§7.4](../07-custom-hooks-and-hook-rules/README.md#74-uselocalstorage--state-that-survives-a-reload), [§15.10](../15-react-interview-and-machine-coding/README.md#1510-build-1--todo-list-with-filters)
+- **`localStorage` / `sessionStorage`** — Browser key-value string storage; `localStorage` survives reloads, `sessionStorage` is cleared when the tab closes. Not available on the server. [§7.4](../07-custom-hooks-and-hook-rules/README.md#74-uselocalstorage--state-that-survives-a-reload)
 - **Lockfile** — `package-lock.json` (or the pnpm/yarn equivalent): records exact installed versions so every machine gets the same ones; commit it. [§1.5](../01-why-react-and-setup/README.md#15-setting-up-a-react-project)
 - **LTS** — Long-Term Support: a Node.js release line that gets fixes for years; the recommended version to install. [§1.5](../01-why-react-and-setup/README.md#15-setting-up-a-react-project)
 
 **M**
 
-- **Main thread** — The single browser thread that runs JavaScript, layout and painting; long work there makes the page unresponsive. [§7.4](../07-custom-hooks-and-hook-rules/README.md#74-uselocalstorage--state-that-survives-a-reload), [§10.6](../10-performance/README.md#106-usememo-for-expensive-calculations)
+- **Main thread** — The single browser thread that runs JavaScript, layout and painting; long work there makes the page unresponsive. [§7.4](../07-custom-hooks-and-hook-rules/README.md#74-uselocalstorage--state-that-survives-a-reload)
 - **Matcher** — An assertion helper such as `toBeDisabled()` or `toHaveTextContent()` (jest-dom). [§12.2](../12-testing-react/README.md#122-your-first-component-test)
-- **Media query** — CSS rule that applies only under conditions such as screen width (`@media (max-width: 600px)`); not possible in the `style` prop. [§8.3](../08-styling/README.md#83-inline-styles--the-style-prop), [§12.9](../12-testing-react/README.md#129-setting-up-vitest-or-jest-in-a-real-project)
+- **Media query** — CSS rule that applies only under conditions such as screen width (`@media (max-width: 600px)`); not possible in the `style` prop. [§8.3](../08-styling/README.md#83-inline-styles--the-style-prop)
 - **`memo`** — Wraps a component so it skips re-rendering when its parent re-renders with shallow-equal props. [§10.4](../10-performance/README.md#104-memo--skipping-a-childs-re-render)
-- **Memoization** — Caching a function's result for given inputs so repeated calls reuse it; React does it with `memo`, `useMemo`, `useCallback` and the React Compiler. [§10.5](../10-performance/README.md#105-usecallback-and-usememo-for-stable-props), [§10.7](../10-performance/README.md#107-react-compiler)
+- **Memoization** — Caching a function's result for given inputs so repeated calls reuse it; React does it with `memo`, `useMemo`, `useCallback` and the React Compiler. [§10.5](../10-performance/README.md#105-usecallback-and-usememo-for-stable-props)
 - **`MemoryRouter`** — React Router router that keeps history in memory instead of the address bar — used in tests. [§12.8](../12-testing-react/README.md#128-providers-routers-and-custom-render)
 - **Middleware (React Router)** — Functions that run before a route's loaders/actions and can wrap them with `await next()`; on by default in v8. [§9.7](../09-routing-and-data-fetching/README.md#97-middleware-lazy-routes-and-framework-mode)
 - **Middleware (Redux)** — Code between `dispatch` and the reducer (thunks, logging). [§6.7](../06-state-management/README.md#67-redux-toolkit)
-- **Minification** — Shrinking code by removing spaces, comments and long names; part of a production build. [§13.5](../13-server-rendering-and-frameworks/README.md#135-hydration-mismatches), [§10.3](../10-performance/README.md#103-measure-first-devtools-profiler-and-profiler)
+- **Minification** — Shrinking code by removing spaces, comments and long names; part of a production build. [§13.5](../13-server-rendering-and-frameworks/README.md#135-hydration-mismatches)
 - **Mock** — A controllable fake that replaces a real dependency (network, timer, module) in a test and records how it was called. [§12.6](../12-testing-react/README.md#126-mocking-fetch-and-when-to-use-msw)
-- **Modal** — A dialog that sits on top of the page and blocks the rest until closed; needs a focus trap, Escape and focus restore. [§14.8](../14-patterns-and-architecture/README.md#148-portals), [§15.13](../15-react-interview-and-machine-coding/README.md#1513-build-4--modal-dialog-portal-focus-trap-escape)
-- **Module** — One JavaScript file with its own scope that shares values through `export` and `import`. [§13.7](../13-server-rendering-and-frameworks/README.md#137-react-server-components), [§14.11](../14-patterns-and-architecture/README.md#1411-folder-structure)
+- **Modal** — A dialog that sits on top of the page and blocks the rest until closed; needs a focus trap, Escape and focus restore. [§14.8](../14-patterns-and-architecture/README.md#148-portals)
+- **Module** — One JavaScript file with its own scope that shares values through `export` and `import`. [§13.7](../13-server-rendering-and-frameworks/README.md#137-react-server-components)
 - **Module graph** — The web of files importing one another; `'use client'` marks where the client part of it starts. [§13.8](../13-server-rendering-and-frameworks/README.md#138-directives-use-client-and-use-server)
 - **Monorepo** — One repository holding several apps or packages, with tools to build and enforce boundaries between them. [§14.11](../14-patterns-and-architecture/README.md#1411-folder-structure)
-- **Mount / unmount** — A component instance being created and inserted into the tree / removed from it (running every cleanup). [§5.2](../05-effects-and-refs/README.md#52-useeffect-basics)
+- **Mount / unmount / remount** — A component instance being created and inserted into the tree / removed from it (running every cleanup); a remount replaces it with a fresh instance, losing state — caused by a new `key` or component type. [§5.2](../05-effects-and-refs/README.md#52-useeffect-basics)
 - **MPA** — Multi-page application: every navigation loads a new HTML page from the server. [§1.4](../01-why-react-and-setup/README.md#14-spa-vs-mpa-vs-ssr-and-ssg)
 - **MSW** — Mock Service Worker: intercepts HTTP requests at the network level for tests and development. [§12.6](../12-testing-react/README.md#126-mocking-fetch-and-when-to-use-msw)
-- **Mutable / mutation** — Mutable values can be changed in place; mutating state objects hides the change from React — copy instead. [§3.6](../03-state-and-events/README.md#36-updating-objects-and-arrays-immutably), [§15.3](../15-react-interview-and-machine-coding/README.md#153-interview-questions-state-events-and-forms)
 - **Mutation (TanStack Query)** — A server write run with `useMutation`; not cached by key; followed by invalidation or a cache update. [§9.10](../09-routing-and-data-fetching/README.md#910-mutations-invalidation-and-optimistic-updates)
 - **MVC** — Model–View–Controller: a controller handles input and updates the model, and the view observes the model. [§14.13](../14-patterns-and-architecture/README.md#1413-client-architecture-patterns-mvc-mvp-mvvm-viper--and-where-react-fits)
 - **MVI** — Model–View–Intent (Android/Kotlin): MVVM with one immutable state object and reducer-style updates — Redux on mobile. [§14.13](../14-patterns-and-architecture/README.md#1413-client-architecture-patterns-mvc-mvp-mvvm-viper--and-where-react-fits)
@@ -1051,24 +1025,24 @@ Each term links to the section that explains it (the first link is the main one)
 
 **N**
 
-- **Narrowing** — TypeScript shrinking a broad type after a check — after `if (user)` or `switch (action.type)` it knows the specific type. [§11.5](../11-typescript-with-react/README.md#115-typing-state-and-reducers), [§11.9](../11-typescript-with-react/README.md#119-discriminated-unions-for-props)
-- **`never`** — TypeScript type with no possible values; used for exhaustiveness checks and `prop?: never` to forbid a prop. [§11.5](../11-typescript-with-react/README.md#115-typing-state-and-reducers), [§11.9](../11-typescript-with-react/README.md#119-discriminated-unions-for-props)
-- **Next.js** — Vercel's full-stack React framework; its App Router is the most complete Server Components implementation. [§13.9](../13-server-rendering-and-frameworks/README.md#139-nextjs-app-router-overview), [§13.11](../13-server-rendering-and-frameworks/README.md#1311-choosing-a-framework)
+- **Narrowing** — TypeScript shrinking a broad type after a check — after `if (user)` or `switch (action.type)` it knows the specific type. [§11.5](../11-typescript-with-react/README.md#115-typing-state-and-reducers)
+- **`never`** — TypeScript type with no possible values; used for exhaustiveness checks and `prop?: never` to forbid a prop. [§11.5](../11-typescript-with-react/README.md#115-typing-state-and-reducers)
+- **Next.js** — Vercel's full-stack React framework; its App Router is the most complete Server Components implementation. [§13.9](../13-server-rendering-and-frameworks/README.md#139-nextjs-app-router-overview)
 - **Node.js** — The program that runs JavaScript outside a browser — dev servers, build tools, tests and SSR run on it. [§1.5](../01-why-react-and-setup/README.md#15-setting-up-a-react-project)
 - **`node_modules`** — The folder where npm installs dependencies; never commit it (commit the lockfile instead). [§1.5](../01-why-react-and-setup/README.md#15-setting-up-a-react-project)
 - **Non-null assertion (`!`)** — TypeScript `value!` claims a value isn't `null`/`undefined` without checking; narrow instead. [§11.10](../11-typescript-with-react/README.md#1110-reading-type-errors-and-common-mistakes)
-- **Normalised state** — Storing each item once by ID and referring to it by ID elsewhere, like database tables, to avoid duplicated data. [§15.18](../15-react-interview-and-machine-coding/README.md#1518-other-common-prompts--which-techniques-they-need), [§3.8](../03-state-and-events/README.md#38-derived-state--choosing-the-minimal-state)
+- **Normalised state** — Storing each item once by ID and referring to it by ID elsewhere, like database tables, to avoid duplicated data. [§15.18](../15-react-interview-and-machine-coding/README.md#1518-other-common-prompts--which-techniques-they-need)
 - **`noValidate`** — Form attribute that turns off the browser's validation bubbles while keeping the `validity` API. [§4.3](../04-forms-and-actions/README.md#43-validation)
 - **npm** — Node's package manager: installs libraries listed in `package.json` (alternatives: pnpm, yarn, bun). [§1.5](../01-why-react-and-setup/README.md#15-setting-up-a-react-project)
 - **`npx`** — Runs a package's command (e.g. `npx create-next-app`) without installing it globally first. [§13.9](../13-server-rendering-and-frameworks/README.md#139-nextjs-app-router-overview)
 
 **O**
 
-- **`Object.is`** — The comparison React uses for state, dependencies and `memo` props: same value for primitives, same reference for objects. [§3.6](../03-state-and-events/README.md#36-updating-objects-and-arrays-immutably), [§10.4](../10-performance/README.md#104-memo--skipping-a-childs-re-render)
-- **Observer pattern** — Objects subscribe to a subject and are notified when it changes — the idea behind stores, `useSyncExternalStore` and MVC views. [§14.13](../14-patterns-and-architecture/README.md#1413-client-architecture-patterns-mvc-mvp-mvvm-viper--and-where-react-fits), [§7.9](../07-custom-hooks-and-hook-rules/README.md#79-usesyncexternalstore--subscribing-to-outside-data)
+- **`Object.is`** — The comparison React uses for state, dependencies and `memo` props: same value for primitives, same reference for objects. [§3.6](../03-state-and-events/README.md#36-updating-objects-and-arrays-immutably)
+- **Observer pattern** — Objects subscribe to a subject and are notified when it changes — the idea behind stores, `useSyncExternalStore` and MVC views. [§14.13](../14-patterns-and-architecture/README.md#1413-client-architecture-patterns-mvc-mvp-mvvm-viper--and-where-react-fits)
 - **Offset pagination** — Asking for "skip N, take M" items; allows jumping to page 17 but shifts when items are inserted (compare cursor pagination). [§15.16](../15-react-interview-and-machine-coding/README.md#1516-build-7--pagination)
 - **OOP** — Object-oriented programming: organising code as objects (classes) that combine data and behaviour. [§14.6](../14-patterns-and-architecture/README.md#146-higher-order-components-hocs)
-- **Optimistic update** — Showing the expected result before the server confirms it, rolling back on failure (`useOptimistic`, `onMutate`). [§4.7](../04-forms-and-actions/README.md#47-useoptimistic--instant-feedback-automatic-rollback), [§9.10](../09-routing-and-data-fetching/README.md#910-mutations-invalidation-and-optimistic-updates)
+- **Optimistic update** — Showing the expected result before the server confirms it, rolling back on failure (`useOptimistic`, `onMutate`). [§4.7](../04-forms-and-actions/README.md#47-useoptimistic--instant-feedback-automatic-rollback)
 - **Optional chaining (`?.`)** — JavaScript operator that stops and returns `undefined` if the value before it is `null`/`undefined`: `onSelect?.(id)`, `user?.name`. [§11.2](../11-typescript-with-react/README.md#112-typing-props)
 - **Origin** — Protocol + domain + port (`https://shop.example`); browser storage and many security rules are per origin. [§7.4](../07-custom-hooks-and-hook-rules/README.md#74-uselocalstorage--state-that-survives-a-reload)
 - **ORM** — Object-relational mapper: a library that maps database rows to objects in code. [§13.7](../13-server-rendering-and-frameworks/README.md#137-react-server-components)
@@ -1078,258 +1052,253 @@ Each term links to the section that explains it (the first link is the main one)
 
 **P**
 
-- **`package.json`** — The project file listing its name, scripts (`npm run dev`) and dependencies. [§1.6](../01-why-react-and-setup/README.md#16-project-structure), [§1.5](../01-why-react-and-setup/README.md#15-setting-up-a-react-project)
-- **Pagination** — Showing a long list one page at a time (page numbers, or a cursor for "next"); can be client-side or server-side. [§15.16](../15-react-interview-and-machine-coding/README.md#1516-build-7--pagination), [§9.9](../09-routing-and-data-fetching/README.md#99-query-keys-pagination-and-dependent-queries)
-- **Paint** — The browser drawing pixels on screen after layout; `useLayoutEffect` runs before it, `useEffect` usually after. [§5.11](../05-effects-and-refs/README.md#511-uselayouteffect--before-the-browser-paints), [§10.1](../10-performance/README.md#101-the-render-cycle-trigger--render--commit)
-- **Partial prerendering (PPR)** — Prerender a static shell at build time, save a `postponed` state, and `resume()` only the dynamic holes per request. [§13.6](../13-server-rendering-and-frameworks/README.md#136-static-generation-and-partial-prerendering)
+- **`package.json`** — The project file listing its name, scripts (`npm run dev`) and dependencies. [§1.6](../01-why-react-and-setup/README.md#16-project-structure)
+- **Pagination** — Showing a long list one page at a time (page numbers, or a cursor for "next"); can be client-side or server-side. [§15.16](../15-react-interview-and-machine-coding/README.md#1516-build-7--pagination)
+- **Paint** — The browser drawing pixels on screen after layout; `useLayoutEffect` runs before it, `useEffect` usually after. [§5.11](../05-effects-and-refs/README.md#511-uselayouteffect--before-the-browser-paints)
+- **Partial prerendering (PPR)** — defined in the rendering and directives sheet, [§16.15](#1615-rendering-strategies-and-directives).
 - **Path alias** — A short import name mapped to a folder (`@/features/cart` instead of `../../../features/cart`). [§14.11](../14-patterns-and-architecture/README.md#1411-folder-structure)
-- **Payload** — The data carried by a request, response or action (e.g. the JSON body of a POST). [§12.10](../12-testing-react/README.md#1210-good-tests-bad-tests-and-the-bigger-picture), [§6.7](../06-state-management/README.md#67-redux-toolkit)
+- **Payload** — The data carried by a request, response or action (e.g. the JSON body of a POST). [§12.10](../12-testing-react/README.md#1210-good-tests-bad-tests-and-the-bigger-picture)
 - **Pending UI** — What the user sees while something loads: old content + indicator, skeletons, or disabled buttons. [§9.12](../09-routing-and-data-fetching/README.md#912-loading-and-error-states-that-users-like)
 - **Performance panel** — Chrome DevTools tab that records everything the browser did over time; React 19.2+ adds React tracks to it. [§10.3](../10-performance/README.md#103-measure-first-devtools-profiler-and-profiler)
-- **Polling** — Asking the server again every few seconds to see if data changed. [§12.5](../12-testing-react/README.md#125-async-tests), [§12.7](../12-testing-react/README.md#127-testing-custom-hooks)
-- **Polymorphic component** — A component that can render as a different element (an `as="a"` prop, or Radix's `asChild`). [§14.12](../14-patterns-and-architecture/README.md#1412-design-systems), [§11.9](../11-typescript-with-react/README.md#119-discriminated-unions-for-props)
+- **Polling** — Asking the server again every few seconds to see if data changed. [§12.5](../12-testing-react/README.md#125-async-tests)
+- **Polymorphic component** — A component that can render as a different element (an `as="a"` prop, or Radix's `asChild`). [§14.12](../14-patterns-and-architecture/README.md#1412-design-systems)
 - **Popover** — A small floating panel anchored to an element (menus, tooltips); the native Popover API (`popover` attribute) is one way to build it. [§14.8](../14-patterns-and-architecture/README.md#148-portals)
-- **Portal** — Content rendered into another DOM node with `createPortal`; context and events still follow the React tree. [§14.8](../14-patterns-and-architecture/README.md#148-portals)
+- **Portal / `createPortal`** — `react-dom` API rendering children into another DOM node while keeping them in the same React tree, so context and events still follow the React tree. [§14.8](../14-patterns-and-architecture/README.md#148-portals)
 - **Position (in the tree)** — Where a component sits among its parent's children; React keys state to type + position + key. [§3.10](../03-state-and-events/README.md#310-state-is-tied-to-a-position-in-the-tree)
-- **Prefetch** — Loading code or data before the user asks for it (on hover, or when a link scrolls into view). [§13.9](../13-server-rendering-and-frameworks/README.md#139-nextjs-app-router-overview), [§10.8](../10-performance/README.md#108-code-splitting-with-lazy-and-suspense)
+- **Prefetch** — Loading code or data before the user asks for it (on hover, or when a link scrolls into view). [§13.9](../13-server-rendering-and-frameworks/README.md#139-nextjs-app-router-overview)
 - **Preflight** — Tailwind's CSS reset, which removes default styles such as heading sizes. [§8.6](../08-styling/README.md#86-tailwind-css)
-- **Prerender** — Rendering HTML ahead of time; `react-dom/static` `prerender*` waits for all Suspense data. [§13.6](../13-server-rendering-and-frameworks/README.md#136-static-generation-and-partial-prerendering), [§13.2](../13-server-rendering-and-frameworks/README.md#132-the-server-rendering-apis)
-- **`preventDefault()`** — Event method that stops the browser's built-in action — a form submit reloading the page, a link navigating, Home scrolling. [§3.1](../03-state-and-events/README.md#31-responding-to-events), [§4.1](../04-forms-and-actions/README.md#41-how-a-form-submission-works)
-- **Primitive (value)** — A simple value — string, number, boolean, `null`, `undefined`, bigint, symbol — compared by value, unlike objects compared by reference. [§5.5](../05-effects-and-refs/README.md#55-dependencies-in-depth), [§3.6](../03-state-and-events/README.md#36-updating-objects-and-arrays-immutably)
-- **Production build** — The optimised version of an app real users get: minified, without development checks; always measure performance on it. [§10.3](../10-performance/README.md#103-measure-first-devtools-profiler-and-profiler), [§10.11](../10-performance/README.md#1011-a-performance-checklist)
+- **Prerender** — Rendering HTML ahead of time; `react-dom/static` `prerender*` waits for all Suspense data. [§13.6](../13-server-rendering-and-frameworks/README.md#136-static-generation-and-partial-prerendering)
+- **`preventDefault()`** — Event method that stops the browser's built-in action — a form submit reloading the page, a link navigating, Home scrolling. [§3.1](../03-state-and-events/README.md#31-responding-to-events)
+- **Primitive (value)** — A simple value — string, number, boolean, `null`, `undefined`, bigint, symbol — compared by value, unlike objects compared by reference. [§5.5](../05-effects-and-refs/README.md#55-dependencies-in-depth)
+- **Production build** — The optimised version of an app real users get: minified, without development checks; always measure performance on it. [§10.3](../10-performance/README.md#103-measure-first-devtools-profiler-and-profiler)
 - **Profiler** — React DevTools tab (and `<Profiler onRender>` component) that records which components rendered, why, and how long. [§10.3](../10-performance/README.md#103-measure-first-devtools-profiler-and-profiler)
 - **Progressive enhancement** — The basic feature works with plain HTML; JavaScript makes it nicer (forms with Server Functions work before hydration). [§4.8](../04-forms-and-actions/README.md#48-server-functions-and-progressive-enhancement-overview)
-- **Promise** — An object standing for a result that arrives later; it resolves with a value or rejects with an error. [§9.11](../09-routing-and-data-fetching/README.md#911-suspense-and-use), [JavaScript Ch 12](../../../javascript/chapters/12-asynchronous-javascript/README.md)
-- **Prop drilling** — Passing a prop through components that don't use it, only to reach a deep child; fixed by composition or context. [§2.4](../02-components-and-props/README.md#24-composition), [§6.3](../06-state-management/README.md#63-context--pass-data-deeply-without-props)
+- **Promise** — An object standing for a result that arrives later; it resolves with a value or rejects with an error. [§9.11](../09-routing-and-data-fetching/README.md#911-suspense-and-use)
+- **Prop drilling** — Passing a prop through components that don't use it, only to reach a deep child; fixed by composition or context. [§2.4](../02-components-and-props/README.md#24-composition)
 - **Props** — The read-only object of inputs a parent passes to a component. [§2.2](../02-components-and-props/README.md#22-props)
 - **`PropsWithChildren<P>`** — TypeScript helper that adds `children?: ReactNode` to a props type. [§11.3](../11-typescript-with-react/README.md#113-typing-children-and-extending-native-elements)
 - **Provider** — The component that supplies a context value (`<Ctx value={…}>`) to everything inside it; consumers read the nearest one. [§6.3](../06-state-management/README.md#63-context--pass-data-deeply-without-props)
-- **Proxy** — A server in the middle that forwards (and may change) requests and responses; also Next.js 16's `proxy.js`, code that runs before routes. [§13.5](../13-server-rendering-and-frameworks/README.md#135-hydration-mismatches), [§13.9](../13-server-rendering-and-frameworks/README.md#139-nextjs-app-router-overview)
+- **Proxy** — A server in the middle that forwards (and may change) requests and responses; also Next.js 16's `proxy.js`, code that runs before routes. [§13.5](../13-server-rendering-and-frameworks/README.md#135-hydration-mismatches)
 - **Pseudo-class** — A CSS selector for a state, such as `:hover` or `:focus-visible`; not available in the `style` prop. [§8.3](../08-styling/README.md#83-inline-styles--the-style-prop)
-- **Pure component** — Given the same props, state and context, returns the same JSX and changes nothing outside itself during render. [§2.5](../02-components-and-props/README.md#25-pure-components)
-- **Pure function** — A function whose output depends only on its inputs and that changes nothing outside itself — reducers, validators, `getPageRange`. [§2.5](../02-components-and-props/README.md#25-pure-components), [§15.16](../15-react-interview-and-machine-coding/README.md#1516-build-7--pagination)
+- **Pure function / pure component** — Output depends only on inputs and nothing outside changes; a pure component returns the same JSX for the same props, state and context (reducers, validators and `getPageRange` are pure functions). [§2.5](../02-components-and-props/README.md#25-pure-components)
 
 **Q**
 
-- **Query function** — TanStack Query `queryFn`: async function that returns data or throws (check `res.ok`). [§6.9](../06-state-management/README.md#69-tanstack-query--server-state), [§9.8](../09-routing-and-data-fetching/README.md#98-tanstack-query-basics)
-- **Query key** — Array that identifies cached data, e.g. `['product', id]`; every input of the query function belongs in it. [§9.9](../09-routing-and-data-fetching/README.md#99-query-keys-pagination-and-dependent-queries), [§6.9](../06-state-management/README.md#69-tanstack-query--server-state)
-- **`QueryClient`** — TanStack Query's cache object; create one per app (and a fresh one per test) and provide it with `<QueryClientProvider>`. [§9.8](../09-routing-and-data-fetching/README.md#98-tanstack-query-basics), [§12.6](../12-testing-react/README.md#126-mocking-fetch-and-when-to-use-msw)
-- **`queryOptions`** — TanStack Query helper that bundles a key and function for reuse in `useQuery`, loaders and prefetching. [§9.9](../09-routing-and-data-fetching/README.md#99-query-keys-pagination-and-dependent-queries)
+- **Query function** — TanStack Query `queryFn`: async function that returns data or throws (check `res.ok`). [§6.9](../06-state-management/README.md#69-tanstack-query--server-state)
+- **Query key** — Array that identifies cached data, e.g. `['product', id]`; every input of the query function belongs in it. [§9.9](../09-routing-and-data-fetching/README.md#99-query-keys-pagination-and-dependent-queries)
+- **`QueryClient`** — defined in the Routing and TanStack Query sheet, [§16.10](#1610-routing-react-router-v8-and-tanstack-query).
+- **`queryOptions`** — defined in the Routing and TanStack Query sheet, [§16.10](#1610-routing-react-router-v8-and-tanstack-query).
 
 **R**
 
-- **Race condition (fetch)** — A slower, older response arriving last and overwriting newer data; fixed with an ignore flag or `AbortController` in cleanup. [§5.7](../05-effects-and-refs/README.md#57-fetching-data-in-effects-and-race-conditions), [§7.6](../07-custom-hooks-and-hook-rules/README.md#76-usefetch--loading-error-success-and-no-races)
-- **Radix UI / React Aria** — Headless component libraries (Radix by WorkOS, React Aria by Adobe) that supply keyboard, focus and ARIA behaviour without styles. [§14.12](../14-patterns-and-architecture/README.md#1412-design-systems), [§8.9](../08-styling/README.md#89-component-libraries)
-- **Rate limit** — A cap on how many requests a client may send per time window; debounce and caching help stay under it. [§15.11](../15-react-interview-and-machine-coding/README.md#1511-build-2--autocomplete-debounce-abort-keyboard), [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)
+- **Race condition (fetch)** — A slower, older response arriving last and overwriting newer data; fixed with an ignore flag or `AbortController` in cleanup. [§5.7](../05-effects-and-refs/README.md#57-fetching-data-in-effects-and-race-conditions)
+- **Radix UI / React Aria** — Headless component libraries (Radix by WorkOS, React Aria by Adobe) that supply keyboard, focus and ARIA behaviour without styles. [§14.12](../14-patterns-and-architecture/README.md#1412-design-systems)
+- **Rate limit** — A cap on how many requests a client may send per time window; debounce and caching help stay under it. [§15.11](../15-react-interview-and-machine-coding/README.md#1511-build-2--autocomplete-debounce-abort-keyboard)
 - **React Compiler** — Build-time Babel plugin (1.0 since October 2025) that inserts memoization automatically. [§10.7](../10-performance/README.md#107-react-compiler)
-- **React DevTools** — Browser extension to inspect the component tree, props, state and profile renders. [§10.3](../10-performance/README.md#103-measure-first-devtools-profiler-and-profiler), [§1.5](../01-why-react-and-setup/README.md#15-setting-up-a-react-project)
-- **React element** — A plain immutable object (`{ type, props, key }`) describing a piece of UI; what JSX creates. [§1.3](../01-why-react-and-setup/README.md#13-rendering-the-virtual-dom-and-reconciliation-brief), [§1.8](../01-why-react-and-setup/README.md#18-jsx)
+- **React DevTools** — Browser extension to inspect the component tree, props, state and profile renders. [§10.3](../10-performance/README.md#103-measure-first-devtools-profiler-and-profiler)
+- **React element** — A plain immutable object (`{ type, props, key }`) describing a piece of UI; what JSX creates. [§1.3](../01-why-react-and-setup/README.md#13-rendering-the-virtual-dom-and-reconciliation-brief)
 - **React Hook Form** — Form library that manages big forms with uncontrolled inputs and refs. [§4.9](../04-forms-and-actions/README.md#49-form-libraries--react-hook-form-and-zod-overview)
 - **React Native** — React for real iOS and Android apps, rendering native views instead of DOM elements. [§13.11](../13-server-rendering-and-frameworks/README.md#1311-choosing-a-framework)
 - **React Redux** — The bindings (`<Provider>`, `useSelector`, `useDispatch`) that connect a Redux store to React components. [§6.7](../06-state-management/README.md#67-redux-toolkit)
 - **React Router** — The most used React router; v8 has declarative, data and framework modes and ships as one `react-router` package. [§9.2](../09-routing-and-data-fetching/README.md#92-react-router-v8-and-its-three-modes)
-- **React Testing Library (RTL)** — Helpers to render components into jsdom, query them like a user (by role, label, text) and assert on the DOM. [§12.1](../12-testing-react/README.md#121-what-to-test-and-the-testing-library-philosophy), [§12.2](../12-testing-react/README.md#122-your-first-component-test)
-- **Reactive value** — Anything declared in the component body that can change between renders: props, state, and values computed from them. [§5.2](../05-effects-and-refs/README.md#52-useeffect-basics), [§5.5](../05-effects-and-refs/README.md#55-dependencies-in-depth)
+- **React Testing Library (RTL)** — Helpers to render components into jsdom, query them like a user (by role, label, text) and assert on the DOM. [§12.1](../12-testing-react/README.md#121-what-to-test-and-the-testing-library-philosophy)
+- **Reactive value** — Anything declared in the component body that can change between renders: props, state, and values computed from them. [§5.2](../05-effects-and-refs/README.md#52-useeffect-basics)
 - **`ReactNode`** — TypeScript type for anything React can render (elements, strings, numbers, `null`, arrays); the type for `children`. [§11.3](../11-typescript-with-react/README.md#113-typing-children-and-extending-native-elements)
-- **Read-your-own-writes** — Guarantee that after you save something, your next read shows it (Next.js `updateTag`). [§13.9](../13-server-rendering-and-frameworks/README.md#139-nextjs-app-router-overview), [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)
+- **Read-your-own-writes** — Guarantee that after you save something, your next read shows it (Next.js `updateTag`). [§13.9](../13-server-rendering-and-frameworks/README.md#139-nextjs-app-router-overview)
 - **Reconciliation** — Comparing the new element tree with the previous one to find the minimal DOM changes. [§1.3](../01-why-react-and-setup/README.md#13-rendering-the-virtual-dom-and-reconciliation-brief)
 - **Recursive component** — A component that renders itself for each nested level (file trees, comment threads). [§15.18](../15-react-interview-and-machine-coding/README.md#1518-other-common-prompts--which-techniques-they-need)
-- **Redirect** — Sending the user to another URL (`redirect('/list')` in a loader/action, `redirect()` in Next.js). [§9.6](../09-routing-and-data-fetching/README.md#96-actions-form-and-fetchers), [§13.9](../13-server-rendering-and-frameworks/README.md#139-nextjs-app-router-overview)
+- **Redirect** — Sending the user to another URL (`redirect('/list')` in a loader/action, `redirect()` in Next.js). [§9.6](../09-routing-and-data-fetching/README.md#96-actions-form-and-fetchers)
 - **Reducer** — A pure function `(state, action) => nextState`. [§6.2](../06-state-management/README.md#62-usereducer--consolidate-update-logic)
 - **Redux** — A state-management library with one central store changed by dispatching actions to reducers; write it with Redux Toolkit. [§6.7](../06-state-management/README.md#67-redux-toolkit)
 - **Redux Toolkit (RTK)** — The official way to write Redux: `createSlice`, `configureStore`, `createAsyncThunk`, RTK Query. [§6.7](../06-state-management/README.md#67-redux-toolkit)
 - **Ref** — A `{ current }` object from `useRef` that persists across renders; changing it doesn't re-render. [§5.8](../05-effects-and-refs/README.md#58-useref-for-values)
 - **Ref callback** — A function passed as `ref`; called with the node on attach; in React 19 may return a cleanup. [§5.9](../05-effects-and-refs/README.md#59-refs-to-dom-nodes)
-- **Refactor** — Restructuring code without changing what it does; good tests keep passing through it. [§12.1](../12-testing-react/README.md#121-what-to-test-and-the-testing-library-philosophy), [§14.3](../14-patterns-and-architecture/README.md#143-extracting-custom-hooks)
-- **Reference (identity)** — For objects, *which* object it is in memory; two equal-looking objects are different references, so `Object.is` says they differ. [§3.6](../03-state-and-events/README.md#36-updating-objects-and-arrays-immutably), [§10.5](../10-performance/README.md#105-usecallback-and-usememo-for-stable-props)
+- **Refactor** — Restructuring code without changing what it does; good tests keep passing through it. [§12.1](../12-testing-react/README.md#121-what-to-test-and-the-testing-library-philosophy)
+- **Reference (identity)** — For objects, *which* object it is in memory; two equal-looking objects are different references, so `Object.is` says they differ. [§3.6](../03-state-and-events/README.md#36-updating-objects-and-arrays-immutably)
 - **Regular expression (regex)** — A pattern for matching text, e.g. `/save/i` (case-insensitive "save"). [§12.3](../12-testing-react/README.md#123-queries-and-their-priority)
 - **Remix** — A React framework that merged into React Router; React Router framework mode is its successor. [§13.10](../13-server-rendering-and-frameworks/README.md#1310-react-router-framework-mode)
-- **Remount** — Unmounting a component and mounting a fresh instance, losing its state — caused by a new `key` or a new component type. [§15.2](../15-react-interview-and-machine-coding/README.md#152-interview-questions-rendering-reconciliation-and-keys), [§3.10](../03-state-and-events/README.md#310-state-is-tied-to-a-position-in-the-tree)
-- **Render (phase)** — React calling component functions to compute the next element tree; must be pure; may repeat or be discarded. [§10.1](../10-performance/README.md#101-the-render-cycle-trigger--render--commit), [§1.3](../01-why-react-and-setup/README.md#13-rendering-the-virtual-dom-and-reconciliation-brief)
+- **Render (phase)** — React calling component functions to compute the next element tree; must be pure; may repeat or be discarded. [§10.1](../10-performance/README.md#101-the-render-cycle-trigger--render--commit)
 - **Render prop** — A prop whose value is a function returning JSX, called by the component to decide what to render. [§14.5](../14-patterns-and-architecture/README.md#145-render-props)
 - **Renderer** — The package that turns React's element tree into a real output: `react-dom` for browsers, React Native for mobile. [§1.1](../01-why-react-and-setup/README.md#11-what-react-is)
 - **`renderHook`** — RTL helper that runs a Hook inside a hidden test component; read `result.current`. [§12.7](../12-testing-react/README.md#127-testing-custom-hooks)
 - **Rendering strategy** — Where and when a page's HTML is produced: CSR, SSR, SSG, ISR, streaming, PPR — chosen per route. [§13.1](../13-server-rendering-and-frameworks/README.md#131-rendering-strategies-csr-ssr-ssg-isr-streaming-ppr)
-- **`renderToPipeableStream`** — `react-dom/server` API for streaming SSR on Node; `onShellReady`, `onAllReady`, `abort()`. [§13.2](../13-server-rendering-and-frameworks/README.md#132-the-server-rendering-apis), [§13.3](../13-server-rendering-and-frameworks/README.md#133-streaming-ssr-with-suspense)
-- **`renderToString`** — Legacy SSR API returning an HTML string; can't wait for Suspense data. [§13.2](../13-server-rendering-and-frameworks/README.md#132-the-server-rendering-apis)
+- **`renderToPipeableStream`** — defined in the rendering and directives sheet, [§16.15](#1615-rendering-strategies-and-directives).
+- **`renderToString`** — defined in the rendering and directives sheet, [§16.15](#1615-rendering-strategies-and-directives).
 - **Reserved word** — A word the language keeps for itself (`class`, `for`), so JSX uses `className` and `htmlFor` instead. [§1.8](../01-why-react-and-setup/README.md#18-jsx)
 - **Reset keys** — Values that, when changed, clear an error boundary's error state. [§14.9](../14-patterns-and-architecture/README.md#149-error-boundaries)
 - **`ResizeObserver` / `matchMedia`** — Browser APIs that report an element's size changes / whether a CSS media query matches; missing in jsdom. [§12.9](../12-testing-react/README.md#129-setting-up-vitest-or-jest-in-a-real-project)
 - **`revalidatePath` / `revalidateTag`** — Next.js functions that mark cached server-rendered data stale after a mutation so the next request shows fresh data. [§13.9](../13-server-rendering-and-frameworks/README.md#139-nextjs-app-router-overview)
-- **Revalidation** — Re-running loaders (React Router) or refetching/regenerating cached data so the UI shows fresh data. [§9.5](../09-routing-and-data-fetching/README.md#95-loaders--data-before-render-data-mode), [§13.9](../13-server-rendering-and-frameworks/README.md#139-nextjs-app-router-overview)
-- **Role (ARIA)** — What kind of thing an element is to assistive technology — `button`, `link`, `dialog`, `tab`…; the first thing `getByRole` matches. [§12.3](../12-testing-react/README.md#123-queries-and-their-priority), [§14.10](../14-patterns-and-architecture/README.md#1410-accessibility-in-react)
-- **Route** — A URL pattern plus the screen (and data) shown for it. [§9.1](../09-routing-and-data-fetching/README.md#91-client-side-routing), [§9.3](../09-routing-and-data-fetching/README.md#93-routes-links-and-url-parameters-declarative-mode)
+- **Revalidation** — Re-running loaders (React Router) or refetching/regenerating cached data so the UI shows fresh data. [§9.5](../09-routing-and-data-fetching/README.md#95-loaders--data-before-render-data-mode)
+- **Role (ARIA)** — What kind of thing an element is to assistive technology — `button`, `link`, `dialog`, `tab`…; the first thing `getByRole` matches. [§12.3](../12-testing-react/README.md#123-queries-and-their-priority)
+- **Route** — A URL pattern plus the screen (and data) shown for it. [§9.1](../09-routing-and-data-fetching/README.md#91-client-side-routing)
 - **Route module** — In React Router framework mode, one file per route exporting `loader`, `action`, `meta`, `ErrorBoundary` and the component. [§13.10](../13-server-rendering-and-frameworks/README.md#1310-react-router-framework-mode)
-- **Router** — The library that maps URLs to screens and handles navigation (React Router, Next.js routing). [§9.1](../09-routing-and-data-fetching/README.md#91-client-side-routing), [§12.8](../12-testing-react/README.md#128-providers-routers-and-custom-render)
+- **Router** — The library that maps URLs to screens and handles navigation (React Router, Next.js routing). [§9.1](../09-routing-and-data-fetching/README.md#91-client-side-routing)
 - **Roving tabindex** — Only the active item in a group has `tabIndex=0`; arrow keys move focus within the group. [§14.4](../14-patterns-and-architecture/README.md#144-compound-components)
 - **RSC payload** — The serialized output of Server Components (rendered elements + client references + props) sent to the browser. [§13.7](../13-server-rendering-and-frameworks/README.md#137-react-server-components)
 - **RTK Query** — Redux Toolkit's data-fetching and caching layer, similar in purpose to TanStack Query. [§6.7](../06-state-management/README.md#67-redux-toolkit)
 - **Rules of Hooks** — Call Hooks only at the top level of components/custom Hooks, and only from React functions. [§7.2](../07-custom-hooks-and-hook-rules/README.md#72-the-rules-of-hooks)
-- **Rules of React** — Components and Hooks are pure, props/state are immutable, Hooks follow their rules — assumptions the React Compiler relies on. [§10.7](../10-performance/README.md#107-react-compiler), [§2.5](../02-components-and-props/README.md#25-pure-components)
-- **Runtime** — Two meanings: *when* the program is running (as opposed to compile/build time), and the environment that runs it (Node.js, a browser, an edge runtime). [§11.7](../11-typescript-with-react/README.md#117-typing-custom-hooks-and-context), [§13.2](../13-server-rendering-and-frameworks/README.md#132-the-server-rendering-apis)
+- **Rules of React** — Components and Hooks are pure, props/state are immutable, Hooks follow their rules — assumptions the React Compiler relies on. [§10.7](../10-performance/README.md#107-react-compiler)
+- **Runtime** — Two meanings: *when* the program is running (as opposed to compile/build time), and the environment that runs it (Node.js, a browser, an edge runtime). [§11.7](../11-typescript-with-react/README.md#117-typing-custom-hooks-and-context)
 
 **S**
 
 - **Sandbox (code)** — An online editor that runs your code in the browser, often used in interviews. [§15.1](../15-react-interview-and-machine-coding/README.md#151-how-react-interviews-are-run)
 - **Sass** — A CSS preprocessor that added variables and nesting before CSS had them; still common, no longer necessary. [§8.1](../08-styling/README.md#81-the-styling-landscape)
-- **Scheduler** — React's internal part that decides which pending work to run first (urgent updates before transitions). [§10.3](../10-performance/README.md#103-measure-first-devtools-profiler-and-profiler), [§7.10](../07-custom-hooks-and-hook-rules/README.md#710-usetransition--non-urgent-updates)
-- **Schema** — A description of the expected data shape that a library such as Zod checks real data against at runtime. [§4.9](../04-forms-and-actions/README.md#49-form-libraries--react-hook-form-and-zod-overview), [§11.7](../11-typescript-with-react/README.md#117-typing-custom-hooks-and-context)
-- **Scope (CSS)** — Limiting which elements a style rule can affect; plain CSS is global, CSS Modules and CSS-in-JS scope automatically. [§8.1](../08-styling/README.md#81-the-styling-landscape), [§8.4](../08-styling/README.md#84-css-modules)
-- **Screen reader** — Software that reads the page aloud and lets blind or low-vision users navigate it by headings, landmarks and controls. [§14.10](../14-patterns-and-architecture/README.md#1410-accessibility-in-react), [§12.3](../12-testing-react/README.md#123-queries-and-their-priority)
+- **Scheduler** — React's internal part that decides which pending work to run first (urgent updates before transitions). [§10.3](../10-performance/README.md#103-measure-first-devtools-profiler-and-profiler)
+- **Schema** — A description of the expected data shape that a library such as Zod checks real data against at runtime. [§4.9](../04-forms-and-actions/README.md#49-form-libraries--react-hook-form-and-zod-overview)
+- **Scope (CSS)** — Limiting which elements a style rule can affect; plain CSS is global, CSS Modules and CSS-in-JS scope automatically. [§8.1](../08-styling/README.md#81-the-styling-landscape)
+- **Screen reader** — Software that reads the page aloud and lets blind or low-vision users navigate it by headings, landmarks and controls. [§14.10](../14-patterns-and-architecture/README.md#1410-accessibility-in-react)
 - **Search params** — The `?key=value` part of a URL; read/write with `useSearchParams()` for shareable UI state. [§9.3](../09-routing-and-data-fetching/README.md#93-routes-links-and-url-parameters-declarative-mode)
 - **Secrets** — Values users must never see — API keys, database passwords; they may live only in server code. [§13.7](../13-server-rendering-and-frameworks/README.md#137-react-server-components)
 - **Selective hydration** — With streaming, React hydrates boundaries independently and prioritises one the user interacts with. [§13.4](../13-server-rendering-and-frameworks/README.md#134-hydration-end-to-end)
-- **Selector** — A function that reads part of a store (`state => state.cart.total`); components re-render only when its result changes. [§6.7](../06-state-management/README.md#67-redux-toolkit), [§6.8](../06-state-management/README.md#68-zustand)
-- **Semantic HTML** — Using the element that means what you show (`<button>`, `<nav>`, `<h1>`), which brings roles, focus and keyboard support for free. [§14.10](../14-patterns-and-architecture/README.md#1410-accessibility-in-react), [HTML & CSS Ch 3](../../../html-css/chapters/03-semantic-html-and-accessibility/README.md)
+- **Selector** — A function that reads part of a store (`state => state.cart.total`); components re-render only when its result changes. [§6.7](../06-state-management/README.md#67-redux-toolkit)
+- **Semantic HTML** — Using the element that means what you show (`<button>`, `<nav>`, `<h1>`), which brings roles, focus and keyboard support for free. [§14.10](../14-patterns-and-architecture/README.md#1410-accessibility-in-react)
 - **Semver** — Semantic versioning: MAJOR.MINOR.PATCH, where only a new major version may contain breaking changes. [§13.7](../13-server-rendering-and-frameworks/README.md#137-react-server-components)
 - **Sentinel** — An invisible element placed after the last list item; when it scrolls into view, the next page loads. [§15.12](../15-react-interview-and-machine-coding/README.md#1512-build-3--infinite-scroll)
-- **SEO** — Search engine optimisation: making pages rank and preview well in search results — a main reason to render HTML on the server. [§13.11](../13-server-rendering-and-frameworks/README.md#1311-choosing-a-framework), [§1.4](../01-why-react-and-setup/README.md#14-spa-vs-mpa-vs-ssr-and-ssg)
-- **Serialization** — Turning data into text (such as JSON) so it can be sent over the network or embedded in a page; functions and class instances can't be serialized. [§13.7](../13-server-rendering-and-frameworks/README.md#137-react-server-components), [§13.4](../13-server-rendering-and-frameworks/README.md#134-hydration-end-to-end)
-- **Server Action** — Older (and Next.js) name for a Server Function used as a form action or called in a transition. [§13.8](../13-server-rendering-and-frameworks/README.md#138-directives-use-client-and-use-server), [§4.8](../04-forms-and-actions/README.md#48-server-functions-and-progressive-enhancement-overview)
+- **SEO** — Search engine optimisation: making pages rank and preview well in search results — a main reason to render HTML on the server. [§13.11](../13-server-rendering-and-frameworks/README.md#1311-choosing-a-framework)
+- **Serialization** — Turning data into text (such as JSON) so it can be sent over the network or embedded in a page; functions and class instances can't be serialized. [§13.7](../13-server-rendering-and-frameworks/README.md#137-react-server-components)
 - **Server Component** — A component that runs only on the server, can be `async`, and ships no JavaScript; can't create or read context, but since 19.3 may render a provider imported from a `'use client'` module. [§13.7](../13-server-rendering-and-frameworks/README.md#137-react-server-components)
-- **Server Function** — An async function marked `'use server'` that runs on the server but can be called from the client; a public endpoint. [§13.8](../13-server-rendering-and-frameworks/README.md#138-directives-use-client-and-use-server), [§4.8](../04-forms-and-actions/README.md#48-server-functions-and-progressive-enhancement-overview)
-- **Server state** — A client-side cache of data owned by a server; needs fetching, caching, invalidation — a TanStack Query job. [§6.1](../06-state-management/README.md#61-kinds-of-state--and-where-each-belongs), [§6.9](../06-state-management/README.md#69-tanstack-query--server-state)
+- **Server Function / Server Action** — An async function marked `'use server'` that runs on the server but can be called from the client; a public endpoint. "Server Action" is the older (and Next.js) name, used for one passed as a form action or called in a transition. [§13.8](../13-server-rendering-and-frameworks/README.md#138-directives-use-client-and-use-server)
+- **Server state** — A client-side cache of data owned by a server; needs fetching, caching, invalidation — a TanStack Query job. [§6.1](../06-state-management/README.md#61-kinds-of-state--and-where-each-belongs)
 - **`server-only`** — Package you import at the top of a module so the build fails if Client Component code imports it. [§13.7](../13-server-rendering-and-frameworks/README.md#137-react-server-components)
 - **Serverless** — Hosting where your code runs on demand on the provider's machines, with no server for you to manage. [§13.11](../13-server-rendering-and-frameworks/README.md#1311-choosing-a-framework)
 - **Service Worker** — A background browser script that sits between the page and the network; MSW uses one to fake responses in the browser. [§12.6](../12-testing-react/README.md#126-mocking-fetch-and-when-to-use-msw)
-- **shadcn/ui** — Copy-in component collection: the source is copied into your repo (built on headless primitives + Tailwind) and you own it. [§14.12](../14-patterns-and-architecture/README.md#1412-design-systems), [§8.9](../08-styling/README.md#89-component-libraries)
+- **shadcn/ui** — Copy-in component collection: the source is copied into your repo (built on headless primitives + Tailwind) and you own it. [§14.12](../14-patterns-and-architecture/README.md#1412-design-systems)
 - **Shallow comparison** — Comparing each top-level property with `Object.is`, as `memo` does with props. [§10.4](../10-performance/README.md#104-memo--skipping-a-childs-re-render)
 - **Shell (streaming)** — Everything outside pending Suspense boundaries, sent first with fallbacks in place. [§13.3](../13-server-rendering-and-frameworks/README.md#133-streaming-ssr-with-suspense)
-- **Side effect** — Anything code does besides computing its return value: DOM changes, requests, timers, logging. [§5.1](../05-effects-and-refs/README.md#51-where-side-effects-belong), [§2.5](../02-components-and-props/README.md#25-pure-components)
-- **Single source of truth** — Each piece of data is owned (stored) in exactly one place; everything else reads it or derives from it. [§3.7](../03-state-and-events/README.md#37-lifting-state-up), [§3.8](../03-state-and-events/README.md#38-derived-state--choosing-the-minimal-state)
+- **Side effect** — Anything code does besides computing its return value: DOM changes, requests, timers, logging. [§5.1](../05-effects-and-refs/README.md#51-where-side-effects-belong)
+- **Single source of truth** — Each piece of data is owned (stored) in exactly one place; everything else reads it or derives from it. [§3.7](../03-state-and-events/README.md#37-lifting-state-up)
 - **Singleton** — Exactly one shared instance of something for the whole app (e.g. a Zustand store created at module level). [§6.8](../06-state-management/README.md#68-zustand)
 - **Skeleton** — Grey placeholder shapes in the final layout shown during a first load; avoids layout shift. [§9.12](../09-routing-and-data-fetching/README.md#912-loading-and-error-states-that-users-like)
-- **Slot** — A named prop that receives JSX (`header={…}`), next to `children`. [§2.4](../02-components-and-props/README.md#24-composition), [§14.1](../14-patterns-and-architecture/README.md#141-composition-first)
+- **Slot** — A named prop that receives JSX (`header={…}`), next to `children`. [§2.4](../02-components-and-props/README.md#24-composition)
 - **Snapshot (state)** — The fixed state values of one render; setters request a new render but never change the variable you hold. [§3.3](../03-state-and-events/README.md#33-state-as-a-snapshot)
 - **Snapshot test** — A test that saves rendered output to a file and fails when it changes; brittle when large — prefer explicit assertions. [§12.10](../12-testing-react/README.md#1210-good-tests-bad-tests-and-the-bigger-picture)
-- **SPA** — Single-page application: one HTML page; JavaScript renders screens and handles navigation. [§1.4](../01-why-react-and-setup/README.md#14-spa-vs-mpa-vs-ssr-and-ssg), [§9.1](../09-routing-and-data-fetching/README.md#91-client-side-routing)
 - **Specificity (CSS)** — The weight of a selector (ids > classes > elements) that decides which rule wins when several match. [§8.1](../08-styling/README.md#81-the-styling-landscape)
-- **Spread syntax (`...`)** — Copies all properties or items into a new object/array (`{ ...state, done: true }`) or onto JSX (`{...rest}`). [§3.6](../03-state-and-events/README.md#36-updating-objects-and-arrays-immutably), [§2.2](../02-components-and-props/README.md#22-props)
-- **SSG** — Static site generation: HTML produced once at build time and served from a CDN. [§1.4](../01-why-react-and-setup/README.md#14-spa-vs-mpa-vs-ssr-and-ssg), [§13.1](../13-server-rendering-and-frameworks/README.md#131-rendering-strategies-csr-ssr-ssg-isr-streaming-ppr)
-- **SSR** — Server-side rendering: HTML rendered per request on the server, then hydrated. [§1.4](../01-why-react-and-setup/README.md#14-spa-vs-mpa-vs-ssr-and-ssg), [§13.1](../13-server-rendering-and-frameworks/README.md#131-rendering-strategies-csr-ssr-ssg-isr-streaming-ppr)
+- **Spread syntax (`...`)** — Copies all properties or items into a new object/array (`{ ...state, done: true }`) or onto JSX (`{...rest}`). [§3.6](../03-state-and-events/README.md#36-updating-objects-and-arrays-immutably)
+- **SSG** — defined in the rendering and directives sheet, [§16.15](#1615-rendering-strategies-and-directives).
+- **SSR** — defined in the rendering and directives sheet, [§16.15](#1615-rendering-strategies-and-directives).
 - **Stacking context** — A CSS layering group (created by `z-index`, `transform` and similar); `z-index` only compares elements inside the same group — why modals use portals. [§14.8](../14-patterns-and-architecture/README.md#148-portals)
-- **Stale closure** — A function that keeps reading values from an old render (missing dependency, or a timer set up once). [§3.3](../03-state-and-events/README.md#33-state-as-a-snapshot), [§7.7](../07-custom-hooks-and-hook-rules/README.md#77-hooks-that-take-callbacks--useeffectevent)
-- **Stale-while-revalidate** — Serve cached data now and refresh it in the background (TanStack Query, ISR, HTTP caches). [§6.9](../06-state-management/README.md#69-tanstack-query--server-state), [§13.1](../13-server-rendering-and-frameworks/README.md#131-rendering-strategies-csr-ssr-ssg-isr-streaming-ppr)
-- **`staleTime`** — TanStack Query: how long fetched data counts as fresh (default 0). [§6.9](../06-state-management/README.md#69-tanstack-query--server-state), [§9.8](../09-routing-and-data-fetching/README.md#98-tanstack-query-basics)
+- **Stale closure** — A function that keeps reading values from an old render (missing dependency, or a timer set up once). [§3.3](../03-state-and-events/README.md#33-state-as-a-snapshot)
+- **Stale-while-revalidate** — Serve cached data now and refresh it in the background (TanStack Query, ISR, HTTP caches). [§6.9](../06-state-management/README.md#69-tanstack-query--server-state)
+- **`staleTime`** — defined in the Routing and TanStack Query sheet, [§16.10](#1610-routing-react-router-v8-and-tanstack-query).
 - **State** — Data a component remembers between renders that changes over time; setting it schedules a re-render. [§3.2](../03-state-and-events/README.md#32-state-a-components-memory--usestate)
 - **State machine** — A model with a fixed set of states and allowed transitions (idle → loading → success/error); XState is a library for it. [§6.6](../06-state-management/README.md#66-when-to-reach-for-a-library)
 - **State updater** — A function passed to a setter, `setN(n => n + 1)`, computed from the queued value. [§3.5](../03-state-and-events/README.md#35-updater-functions--queueing-updates)
-- **Static hosting** — Serving pre-built files (HTML, JS, CSS) with no code running per request — enough for SPAs and SSG. [§1.4](../01-why-react-and-setup/README.md#14-spa-vs-mpa-vs-ssr-and-ssg), [§13.1](../13-server-rendering-and-frameworks/README.md#131-rendering-strategies-csr-ssr-ssg-isr-streaming-ppr)
-- **Status code (HTTP)** — The number at the start of every HTTP response: 2xx success, 3xx redirect, 4xx client error (404), 5xx server error. [§13.3](../13-server-rendering-and-frameworks/README.md#133-streaming-ssr-with-suspense), [§12.6](../12-testing-react/README.md#126-mocking-fetch-and-when-to-use-msw)
-- **Store** — A central object that holds state outside components and notifies subscribers when it changes (Redux, Zustand). [§6.6](../06-state-management/README.md#66-when-to-reach-for-a-library), [§7.9](../07-custom-hooks-and-hook-rules/README.md#79-usesyncexternalstore--subscribing-to-outside-data)
-- **Storybook** — A workshop app that renders each component on its own in all its states, for development, docs and visual tests. [§14.12](../14-patterns-and-architecture/README.md#1412-design-systems), [§14.2](../14-patterns-and-architecture/README.md#142-container--presentational)
-- **Stream (Node / Web)** — Data delivered piece by piece instead of all at once; Node has its own stream type, browsers and edge runtimes use Web Streams. [§13.2](../13-server-rendering-and-frameworks/README.md#132-the-server-rendering-apis), [§13.3](../13-server-rendering-and-frameworks/README.md#133-streaming-ssr-with-suspense)
-- **Streaming SSR** — Sending HTML in chunks as each Suspense boundary resolves, with inline swap scripts. [§13.3](../13-server-rendering-and-frameworks/README.md#133-streaming-ssr-with-suspense)
+- **Static hosting** — Serving pre-built files (HTML, JS, CSS) with no code running per request — enough for SPAs and SSG. [§1.4](../01-why-react-and-setup/README.md#14-spa-vs-mpa-vs-ssr-and-ssg)
+- **Status code (HTTP)** — The number at the start of every HTTP response: 2xx success, 3xx redirect, 4xx client error (404), 5xx server error. [§13.3](../13-server-rendering-and-frameworks/README.md#133-streaming-ssr-with-suspense)
+- **Store** — A central object that holds state outside components and notifies subscribers when it changes (Redux, Zustand). [§6.6](../06-state-management/README.md#66-when-to-reach-for-a-library)
+- **Storybook** — A workshop app that renders each component on its own in all its states, for development, docs and visual tests. [§14.12](../14-patterns-and-architecture/README.md#1412-design-systems)
+- **Stream (Node / Web)** — Data delivered piece by piece instead of all at once; Node has its own stream type, browsers and edge runtimes use Web Streams. [§13.2](../13-server-rendering-and-frameworks/README.md#132-the-server-rendering-apis)
+- **Streaming SSR** — defined in the rendering and directives sheet, [§16.15](#1615-rendering-strategies-and-directives).
 - **Strict mode (TypeScript)** — `"strict": true` in `tsconfig.json`, turning on null checks and the other strict checks; always use it (not the same as React's `<StrictMode>`). [§11.1](../11-typescript-with-react/README.md#111-setup-and-how-type-checking-fits-in)
-- **`StrictMode`** — Development-only checks you opt into by wrapping the app (Vite and most templates do): renders twice, runs Effects setup→cleanup→setup on mount, re-runs ref callbacks. [§5.4](../05-effects-and-refs/README.md#54-strictmodes-double-run-development-only), [§2.5](../02-components-and-props/README.md#25-pure-components), [§1.6](../01-why-react-and-setup/README.md#16-project-structure)
+- **`StrictMode`** — Development-only checks you opt into by wrapping the app (Vite and most templates do): renders twice, runs Effects setup→cleanup→setup on mount, re-runs ref callbacks. [§5.4](../05-effects-and-refs/README.md#54-strictmodes-double-run-development-only)
 - **Structural sharing** — Reusing unchanged parts of an old object in a new version (Immer, TanStack Query). [§3.6](../03-state-and-events/README.md#36-updating-objects-and-arrays-immutably)
-- **Styled component kits (MUI, Chakra UI, Mantine, Ant Design)** — Full component libraries with their own look and theming system. [§8.9](../08-styling/README.md#89-component-libraries), [§14.12](../14-patterns-and-architecture/README.md#1412-design-systems)
-- **Subscription** — A registration to be told when something changes, undone by unsubscribing (in an Effect's cleanup). [§5.3](../05-effects-and-refs/README.md#53-cleanup--undo-what-setup-did), [§7.9](../07-custom-hooks-and-hook-rules/README.md#79-usesyncexternalstore--subscribing-to-outside-data)
-- **Subtree** — A component and everything rendered below it. [§3.10](../03-state-and-events/README.md#310-state-is-tied-to-a-position-in-the-tree), [§14.9](../14-patterns-and-architecture/README.md#149-error-boundaries)
+- **Styled component kits (MUI, Chakra UI, Mantine, Ant Design)** — Full component libraries with their own look and theming system. [§8.9](../08-styling/README.md#89-component-libraries)
+- **Subscription** — A registration to be told when something changes, undone by unsubscribing (in an Effect's cleanup). [§5.3](../05-effects-and-refs/README.md#53-cleanup--undo-what-setup-did)
+- **Subtree** — A component and everything rendered below it. [§3.10](../03-state-and-events/README.md#310-state-is-tied-to-a-position-in-the-tree)
 - **`suppressHydrationWarning`** — Silences a hydration mismatch warning for one element's own text/attributes; keeps the server value. [§13.5](../13-server-rendering-and-frameworks/README.md#135-hydration-mismatches)
-- **Suspense** — `<Suspense fallback>` shows a placeholder while something inside (lazy code, `use(promise)`, suspense-enabled data) isn't ready. [§9.11](../09-routing-and-data-fetching/README.md#911-suspense-and-use), [§10.8](../10-performance/README.md#108-code-splitting-with-lazy-and-suspense)
-- **Synchronous** — Happening immediately, in the same step, before the next line of code runs (the opposite of asynchronous). [§3.4](../03-state-and-events/README.md#34-batching), [§15.12](../15-react-interview-and-machine-coding/README.md#1512-build-3--infinite-scroll)
+- **Suspense** — `<Suspense fallback>` shows a placeholder while something inside (lazy code, `use(promise)`, suspense-enabled data) isn't ready. [§9.11](../09-routing-and-data-fetching/README.md#911-suspense-and-use)
+- **Synchronous** — Happening immediately, in the same step, before the next line of code runs (the opposite of asynchronous). [§3.4](../03-state-and-events/README.md#34-batching)
 - **Synthetic event** — React's cross-browser wrapper around a native event, with the same interface; `e.nativeEvent` gives the original. [§3.1](../03-state-and-events/README.md#31-responding-to-events)
 
 **T**
 
-- **Tabs (ARIA pattern)** — `tablist` > `tab` + `tabpanel` roles with `aria-selected`/`aria-controls`, arrow keys and a roving tabindex. [§15.14](../15-react-interview-and-machine-coding/README.md#1514-build-5--accessible-tabs), [§14.4](../14-patterns-and-architecture/README.md#144-compound-components)
+- **Tabs (ARIA pattern)** — `tablist` > `tab` + `tabpanel` roles with `aria-selected`/`aria-controls`, arrow keys and a roving tabindex. [§15.14](../15-react-interview-and-machine-coding/README.md#1514-build-5--accessible-tabs)
 - **Tagged template literal** — A template string passed to a function (`` styled.button`…` ``), used by runtime CSS-in-JS libraries. [§8.7](../08-styling/README.md#87-css-in-js)
 - **Tailwind CSS** — Utility-first CSS framework; generates only the classes it finds in your source; v4 configures with `@theme`. [§8.6](../08-styling/README.md#86-tailwind-css)
-- **`tailwind-merge`** — Helper that merges Tailwind class strings so the later conflicting class wins (`p-2` + `p-4` → `p-4`). [§8.6](../08-styling/README.md#86-tailwind-css), [§8.5](../08-styling/README.md#85-composing-class-names-from-props)
-- **TanStack Query** — Server-state library: caching, de-duplication, background refetch, retries, mutations and invalidation. [§6.9](../06-state-management/README.md#69-tanstack-query--server-state), [§9.8](../09-routing-and-data-fetching/README.md#98-tanstack-query-basics)
+- **`tailwind-merge`** — Helper that merges Tailwind class strings so the later conflicting class wins (`p-2` + `p-4` → `p-4`). [§8.6](../08-styling/README.md#86-tailwind-css)
+- **TanStack Query** — Server-state library: caching, de-duplication, background refetch, retries, mutations and invalidation. [§6.9](../06-state-management/README.md#69-tanstack-query--server-state)
 - **TanStack Router** — Type-safe router from the TanStack family; the base of TanStack Start. [§13.11](../13-server-rendering-and-frameworks/README.md#1311-choosing-a-framework)
 - **TanStack Start** — Full-stack React framework built on TanStack Router (type-safe routes, server functions, streaming); v1 release candidate, RSC experimental. [§13.11](../13-server-rendering-and-frameworks/README.md#1311-choosing-a-framework)
-- **TanStack Virtual / react-window** — Libraries that virtualize long lists, rendering only the visible rows. [§10.9](../10-performance/README.md#109-list-virtualization)
 - **Tearing** — Different parts of the UI showing different versions of the same external data in one render; prevented by `useSyncExternalStore`. [§7.9](../07-custom-hooks-and-hook-rules/README.md#79-usesyncexternalstore--subscribing-to-outside-data)
 - **Ternary** — The conditional expression `cond ? a : b`, used in JSX for either/or rendering. [§2.7](../02-components-and-props/README.md#27-conditional-rendering)
 - **Test double** — Any stand-in for a real dependency in a test — mock, stub, fake or spy. [§12.6](../12-testing-react/README.md#126-mocking-fetch-and-when-to-use-msw)
 - **Test suite** — A named group of related tests (`describe` block) or all of a project's tests. [§12.2](../12-testing-react/README.md#122-your-first-component-test)
 - **Theming** — Switching a whole app's look (light/dark, brands) by changing token values in one place. [§8.8](../08-styling/README.md#88-theming-and-dark-mode)
 - **Third-party library** — Code written by someone else that you install as a dependency. [§12.10](../12-testing-react/README.md#1210-good-tests-bad-tests-and-the-bigger-picture)
-- **Throttle** — Run a function at most once per time interval while events keep coming (scroll, resize) — compare debounce, which waits for a pause. [§15.11](../15-react-interview-and-machine-coding/README.md#1511-build-2--autocomplete-debounce-abort-keyboard), [JavaScript Ch 17](../../../javascript/chapters/17-javascript-for-interviews/README.md)
+- **Throttle** — Run a function at most once per time interval while events keep coming (scroll, resize) — compare debounce, which waits for a pause. [§15.11](../15-react-interview-and-machine-coding/README.md#1511-build-2--autocomplete-debounce-abort-keyboard)
 - **Thunk** — A function dispatched to a Redux store for async logic; `createAsyncThunk` dispatches pending/fulfilled/rejected. [§6.7](../06-state-management/README.md#67-redux-toolkit)
-- **Toast** — A brief pop-up message that disappears on its own; announced through a live region and often rendered in a portal. [§14.8](../14-patterns-and-architecture/README.md#148-portals), [§15.18](../15-react-interview-and-machine-coding/README.md#1518-other-common-prompts--which-techniques-they-need)
-- **Tooltip** — A small hint box shown on hover or focus, positioned with a layout effect and rendered in a portal. [§14.8](../14-patterns-and-architecture/README.md#148-portals), [§15.18](../15-react-interview-and-machine-coding/README.md#1518-other-common-prompts--which-techniques-they-need)
-- **Top layer** — Browser layer above all page content where modal `<dialog>`s and popovers render, so no `z-index` or `overflow` can clip them. [§14.8](../14-patterns-and-architecture/README.md#148-portals), [§15.13](../15-react-interview-and-machine-coding/README.md#1513-build-4--modal-dialog-portal-focus-trap-escape)
-- **Transition** — A non-urgent state update (`startTransition`) React can render in the background and interrupt; keeps old UI during suspense. [§7.10](../07-custom-hooks-and-hook-rules/README.md#710-usetransition--non-urgent-updates), [§9.11](../09-routing-and-data-fetching/README.md#911-suspense-and-use)
-- **Tree-shaking** — Removing unused exports from a bundle at build time. [§14.11](../14-patterns-and-architecture/README.md#1411-folder-structure), [§10.10](../10-performance/README.md#1010-common-performance-bugs)
+- **Toast** — A brief pop-up message that disappears on its own; announced through a live region and often rendered in a portal. [§14.8](../14-patterns-and-architecture/README.md#148-portals)
+- **Tooltip** — A small hint box shown on hover or focus, positioned with a layout effect and rendered in a portal. [§14.8](../14-patterns-and-architecture/README.md#148-portals)
+- **Top layer** — Browser layer above all page content where modal `<dialog>`s and popovers render, so no `z-index` or `overflow` can clip them. [§14.8](../14-patterns-and-architecture/README.md#148-portals)
+- **Transition** — A non-urgent state update (`startTransition`) React can render in the background and interrupt; keeps old UI during suspense. [§7.10](../07-custom-hooks-and-hook-rules/README.md#710-usetransition--non-urgent-updates)
+- **Tree-shaking** — Removing unused exports from a bundle at build time. [§14.11](../14-patterns-and-architecture/README.md#1411-folder-structure)
 - **Trust boundary** — A place where data from outside your code enters (network, storage, URL); validate it there. [§11.7](../11-typescript-with-react/README.md#117-typing-custom-hooks-and-context)
 - **`tsc`** — The TypeScript compiler; `tsc --noEmit` type-checks a project without writing files — run it in CI. [§11.1](../11-typescript-with-react/README.md#111-setup-and-how-type-checking-fits-in)
 - **Tuple** — A fixed-length array whose positions have their own types, e.g. `[boolean, () => void]` from `useToggle`. [§11.7](../11-typescript-with-react/README.md#117-typing-custom-hooks-and-context)
-- **Turbopack / webpack** — Bundlers: webpack is the long-standing standard; Turbopack is its Rust successor and Next.js 16's default. [§13.9](../13-server-rendering-and-frameworks/README.md#139-nextjs-app-router-overview), [§13.10](../13-server-rendering-and-frameworks/README.md#1310-react-router-framework-mode)
-- **Type assertion (`as`)** — Telling TypeScript "trust me, this is type T" without any check; not validation — use sparingly. [§11.10](../11-typescript-with-react/README.md#1110-reading-type-errors-and-common-mistakes), [§11.7](../11-typescript-with-react/README.md#117-typing-custom-hooks-and-context)
-- **Type inference** — TypeScript working out a type automatically from the value, e.g. `useState(0)` → `number`. [§11.5](../11-typescript-with-react/README.md#115-typing-state-and-reducers), [§11.4](../11-typescript-with-react/README.md#114-typing-events)
+- **Turbopack / webpack** — Bundlers: webpack is the long-standing standard; Turbopack is its Rust successor and Next.js 16's default. [§13.9](../13-server-rendering-and-frameworks/README.md#139-nextjs-app-router-overview)
+- **Type assertion (`as`)** — Telling TypeScript "trust me, this is type T" without any check; not validation — use sparingly. [§11.10](../11-typescript-with-react/README.md#1110-reading-type-errors-and-common-mistakes)
+- **Type inference** — TypeScript working out a type automatically from the value, e.g. `useState(0)` → `number`. [§11.5](../11-typescript-with-react/README.md#115-typing-state-and-reducers)
 - **TypeScript** — JavaScript plus static types checked before the code runs; files with JSX use the `.tsx` extension. [§11.1](../11-typescript-with-react/README.md#111-setup-and-how-type-checking-fits-in)
 
 **U**
 
 - **Uncontrolled input** — A form field whose value lives in the DOM (`defaultValue`), read with `FormData` or a ref. [§4.2](../04-forms-and-actions/README.md#42-controlled-vs-uncontrolled-inputs)
-- **Unidirectional data flow** — Data moves one way: state → view → action → new state (Flux, Redux, React's props-down/events-up). [§14.13](../14-patterns-and-architecture/README.md#1413-client-architecture-patterns-mvc-mvp-mvvm-viper--and-where-react-fits), [§3.7](../03-state-and-events/README.md#37-lifting-state-up)
-- **Union type** — A TypeScript type that is one of several options: `'info' | 'error'`, `User | null`. [§11.2](../11-typescript-with-react/README.md#112-typing-props), [§11.9](../11-typescript-with-react/README.md#119-discriminated-unions-for-props)
-- **Unit test** — A test of one small piece in isolation, such as a reducer or formatter; fastest kind of test. [§12.1](../12-testing-react/README.md#121-what-to-test-and-the-testing-library-philosophy), [§12.8](../12-testing-react/README.md#128-providers-routers-and-custom-render)
-- **`unknown`** — TypeScript's safe "some value" type: you must narrow it (`typeof`, `instanceof`, a schema) before using it. [§11.1](../11-typescript-with-react/README.md#111-setup-and-how-type-checking-fits-in), [§11.7](../11-typescript-with-react/README.md#117-typing-custom-hooks-and-context)
-- **URL** — A web address (`https://shop.example/products/3?sort=price`); its path picks the route and its search params can hold shareable state. [§9.1](../09-routing-and-data-fetching/README.md#91-client-side-routing), [§9.3](../09-routing-and-data-fetching/README.md#93-routes-links-and-url-parameters-declarative-mode)
-- **`use`** — React 19 API that reads a promise (suspending) or a context; may be called conditionally, not in `try/catch`. [§9.11](../09-routing-and-data-fetching/README.md#911-suspense-and-use), [§6.3](../06-state-management/README.md#63-context--pass-data-deeply-without-props)
-- **`'use cache'`** — Next.js directive (not React's) that caches a function or component's output under Cache Components. [§13.9](../13-server-rendering-and-frameworks/README.md#139-nextjs-app-router-overview)
-- **`'use client'`** — Directive marking the entry of client code: that module and its imports ship to the browser. [§13.8](../13-server-rendering-and-frameworks/README.md#138-directives-use-client-and-use-server)
-- **`'use no memo'`** — Directive that opts one component or file out of the React Compiler. [§10.7](../10-performance/README.md#107-react-compiler)
-- **`'use server'`** — Directive marking Server Functions (a file's exports, or one async function); not a marker for Server Components. [§13.8](../13-server-rendering-and-frameworks/README.md#138-directives-use-client-and-use-server)
-- **`useActionState`** — Hook returning `[state, formAction, isPending]`; the action gets `(prevState, payload)` and its return value becomes state. [§4.5](../04-forms-and-actions/README.md#45-useactionstate--the-result-of-the-last-submission)
-- **`useCallback`** — Caches a function between renders until a dependency changes; `useMemo(() => fn, deps)`. [§10.5](../10-performance/README.md#105-usecallback-and-usememo-for-stable-props)
-- **`useContext`** — Reads the nearest provider's value of a context (or the default); a Hook, top level only. [§6.3](../06-state-management/README.md#63-context--pass-data-deeply-without-props)
-- **`useDeferredValue`** — Returns a lagging copy of a value so a slow `memo` child renders in the background; React 19 adds `initialValue`. [§7.11](../07-custom-hooks-and-hook-rules/README.md#711-usedeferredvalue--let-part-of-the-ui-lag-behind)
-- **`useEffect`** — Runs setup after commit (normally after paint) and cleanup before the next run/unmount; for external systems. [§5.2](../05-effects-and-refs/README.md#52-useeffect-basics)
-- **`useEffectEvent`** — React 19.2 Hook creating an Effect Event: latest values inside Effects without re-running them. [§7.7](../07-custom-hooks-and-hook-rules/README.md#77-hooks-that-take-callbacks--useeffectevent), [§5.5](../05-effects-and-refs/README.md#55-dependencies-in-depth)
-- **`useFormStatus`** — `react-dom` Hook for a component inside a `<form>`: `{ pending, data, method, action }` of that form. [§4.6](../04-forms-and-actions/README.md#46-useformstatus--status-of-the-parent-form)
-- **`useId`** — Unique, SSR-stable ID per component instance for `htmlFor`/`aria-*`; never for keys. [§7.8](../07-custom-hooks-and-hook-rules/README.md#78-useid--ids-for-accessibility)
-- **`useImperativeHandle`** — Exposes a custom, limited object through a ref instead of the raw DOM node. [§5.10](../05-effects-and-refs/README.md#510-passing-refs-to-your-own-components)
-- **`useInsertionEffect`** — Runs before layout effects; for CSS-in-JS libraries to insert `<style>` tags. [§5.11](../05-effects-and-refs/README.md#511-uselayouteffect--before-the-browser-paints), [§8.7](../08-styling/README.md#87-css-in-js)
-- **`useLayoutEffect`** — Runs after DOM updates but before paint; for measuring and positioning without flicker; blocks paint. [§5.11](../05-effects-and-refs/README.md#511-uselayouteffect--before-the-browser-paints)
-- **`useLoaderData`** — React Router Hook that returns the current route's loader data. [§9.5](../09-routing-and-data-fetching/README.md#95-loaders--data-before-render-data-mode)
-- **`useMemo`** — Caches a computed value until a dependency changes; for expensive calculations (~1 ms+) and stable identities. [§10.6](../10-performance/README.md#106-usememo-for-expensive-calculations), [§10.5](../10-performance/README.md#105-usecallback-and-usememo-for-stable-props)
-- **`useMutation`** — TanStack Query Hook for writes: `mutate`, `isPending`, `onMutate`/`onError`/`onSettled`. [§9.10](../09-routing-and-data-fetching/README.md#910-mutations-invalidation-and-optimistic-updates)
-- **`useNavigate`** — React Router Hook returning a function to navigate in code (`navigate('/x')`, `navigate(-1)`). [§9.3](../09-routing-and-data-fetching/README.md#93-routes-links-and-url-parameters-declarative-mode)
-- **`useNavigation`** — React Router data-mode Hook: `state` is `'idle'`, `'loading'` or `'submitting'`. [§9.5](../09-routing-and-data-fetching/README.md#95-loaders--data-before-render-data-mode)
-- **`useOptimistic`** — Hook showing an optimistic value while an Action runs; falls back to the real value when it ends. [§4.7](../04-forms-and-actions/README.md#47-useoptimistic--instant-feedback-automatic-rollback)
-- **`useParams`** — React Router Hook returning the URL's dynamic segments as strings. [§9.3](../09-routing-and-data-fetching/README.md#93-routes-links-and-url-parameters-declarative-mode)
-- **`useQuery`** — TanStack Query Hook: `{ data, status, isPending, isFetching, error }` for a key + function. [§9.8](../09-routing-and-data-fetching/README.md#98-tanstack-query-basics), [§6.9](../06-state-management/README.md#69-tanstack-query--server-state)
+- **Unidirectional data flow** — Data moves one way: state → view → action → new state (Flux, Redux, React's props-down/events-up). [§14.13](../14-patterns-and-architecture/README.md#1413-client-architecture-patterns-mvc-mvp-mvvm-viper--and-where-react-fits)
+- **Union type** — A TypeScript type that is one of several options: `'info' | 'error'`, `User | null`. [§11.2](../11-typescript-with-react/README.md#112-typing-props)
+- **Unit test** — A test of one small piece in isolation, such as a reducer or formatter; fastest kind of test. [§12.1](../12-testing-react/README.md#121-what-to-test-and-the-testing-library-philosophy)
+- **`unknown`** — TypeScript's safe "some value" type: you must narrow it (`typeof`, `instanceof`, a schema) before using it. [§11.1](../11-typescript-with-react/README.md#111-setup-and-how-type-checking-fits-in)
+- **URL** — A web address (`https://shop.example/products/3?sort=price`); its path picks the route and its search params can hold shareable state. [§9.1](../09-routing-and-data-fetching/README.md#91-client-side-routing)
+- **`use`** — defined in the Hook table, [§16.3](#163-every-hook-in-one-table).
+- **`'use cache'`** — defined in the rendering and directives sheet, [§16.15](#1615-rendering-strategies-and-directives).
+- **`'use client'`** — defined in the rendering and directives sheet, [§16.15](#1615-rendering-strategies-and-directives).
+- **`'use no memo'`** — defined in the rendering and directives sheet, [§16.15](#1615-rendering-strategies-and-directives).
+- **`'use server'`** — defined in the rendering and directives sheet, [§16.15](#1615-rendering-strategies-and-directives).
+- **`useActionState`** — defined in the Hook table, [§16.3](#163-every-hook-in-one-table).
+- **`useCallback`** — defined in the Hook table, [§16.3](#163-every-hook-in-one-table).
+- **`useContext`** — defined in the Hook table, [§16.3](#163-every-hook-in-one-table).
+- **`useDeferredValue`** — defined in the Hook table, [§16.3](#163-every-hook-in-one-table).
+- **`useEffect`** — defined in the Hook table, [§16.3](#163-every-hook-in-one-table).
+- **`useEffectEvent`** — defined in the Hook table, [§16.3](#163-every-hook-in-one-table).
+- **`useFormStatus`** — defined in the Hook table, [§16.3](#163-every-hook-in-one-table).
+- **`useId`** — defined in the Hook table, [§16.3](#163-every-hook-in-one-table).
+- **`useImperativeHandle`** — defined in the Hook table, [§16.3](#163-every-hook-in-one-table).
+- **`useInsertionEffect`** — defined in the Hook table, [§16.3](#163-every-hook-in-one-table).
+- **`useLayoutEffect`** — defined in the Hook table, [§16.3](#163-every-hook-in-one-table).
+- **`useLoaderData`** — defined in the Routing and TanStack Query sheet, [§16.10](#1610-routing-react-router-v8-and-tanstack-query).
+- **`useMemo`** — defined in the Hook table, [§16.3](#163-every-hook-in-one-table).
+- **`useMutation`** — defined in the Routing and TanStack Query sheet, [§16.10](#1610-routing-react-router-v8-and-tanstack-query).
+- **`useNavigate`** — defined in the Routing and TanStack Query sheet, [§16.10](#1610-routing-react-router-v8-and-tanstack-query).
+- **`useNavigation`** — defined in the Routing and TanStack Query sheet, [§16.10](#1610-routing-react-router-v8-and-tanstack-query).
+- **`useOptimistic`** — defined in the Hook table, [§16.3](#163-every-hook-in-one-table).
+- **`useParams`** — defined in the Routing and TanStack Query sheet, [§16.10](#1610-routing-react-router-v8-and-tanstack-query).
+- **`useQuery`** — defined in the Routing and TanStack Query sheet, [§16.10](#1610-routing-react-router-v8-and-tanstack-query).
 - **user-event** — `@testing-library/user-event`: simulates full user interactions (focus, keys, pointer) — async, `await` each call. [§12.4](../12-testing-react/README.md#124-user-event--interacting-like-a-user)
-- **`useReducer`** — Hook returning `[state, dispatch]` for a pure reducer; for complex or related state updates. [§6.2](../06-state-management/README.md#62-usereducer--consolidate-update-logic)
-- **`useRef`** — Hook returning a persistent `{ current }` object; for DOM nodes and values that don't affect rendering. [§5.8](../05-effects-and-refs/README.md#58-useref-for-values)
-- **`useSearchParams`** — React Router Hook that reads and writes `?query` params like `useState`. [§9.3](../09-routing-and-data-fetching/README.md#93-routes-links-and-url-parameters-declarative-mode)
-- **`useState`** — Hook returning `[value, setValue]`; the initial value is used on the first render only. [§3.2](../03-state-and-events/README.md#32-state-a-components-memory--usestate)
+- **`useReducer`** — defined in the Hook table, [§16.3](#163-every-hook-in-one-table).
+- **`useRef`** — defined in the Hook table, [§16.3](#163-every-hook-in-one-table).
+- **`useSearchParams`** — defined in the Routing and TanStack Query sheet, [§16.10](#1610-routing-react-router-v8-and-tanstack-query).
+- **`useState`** — defined in the Hook table, [§16.3](#163-every-hook-in-one-table).
 - **`useSuspenseQuery`** — TanStack Query Hook that suspends instead of returning a pending state; `data` is always defined. [§9.11](../09-routing-and-data-fetching/README.md#911-suspense-and-use)
-- **`useSyncExternalStore`** — Subscribes to an external store: `(subscribe, getSnapshot, getServerSnapshot?)`; snapshot must be cached. [§7.9](../07-custom-hooks-and-hook-rules/README.md#79-usesyncexternalstore--subscribing-to-outside-data)
-- **`useTransition`** — Returns `[isPending, startTransition]`; marks updates as non-urgent; async callbacks are Actions in React 19. [§7.10](../07-custom-hooks-and-hook-rules/README.md#710-usetransition--non-urgent-updates)
+- **`useSyncExternalStore`** — defined in the Hook table, [§16.3](#163-every-hook-in-one-table).
+- **`useTransition`** — defined in the Hook table, [§16.3](#163-every-hook-in-one-table).
 - **Utility-first CSS** — Styling by composing single-purpose classes in markup (Tailwind). [§8.6](../08-styling/README.md#86-tailwind-css)
 
 **V**
 
-- **Variant** — A named visual option of a component (`variant="primary" | "danger"`), chosen from a small closed set. [§14.12](../14-patterns-and-architecture/README.md#1412-design-systems), [§8.5](../08-styling/README.md#85-composing-class-names-from-props)
+- **Variant** — A named visual option of a component (`variant="primary" | "danger"`), chosen from a small closed set. [§14.12](../14-patterns-and-architecture/README.md#1412-design-systems)
 - **Vendor prefix** — Browser-specific property prefixes such as `-webkit-`; in React's `style` object written as `WebkitLineClamp`. [§8.3](../08-styling/README.md#83-inline-styles--the-style-prop)
 - **Vercel** — The company that makes Next.js and a hosting platform for it. [§13.9](../13-server-rendering-and-frameworks/README.md#139-nextjs-app-router-overview)
-- **Viewport** — The visible area of the browser window (or of a scroll box). [§10.9](../10-performance/README.md#109-list-virtualization), [§15.12](../15-react-interview-and-machine-coding/README.md#1512-build-3--infinite-scroll)
+- **Viewport** — The visible area of the browser window (or of a scroll box). [§10.9](../10-performance/README.md#109-list-virtualization)
 - **VIPER** — View–Interactor–Presenter–Entity–Router: an iOS screen architecture that splits use-case logic, formatting and navigation. [§14.13](../14-patterns-and-architecture/README.md#1413-client-architecture-patterns-mvc-mvp-mvvm-viper--and-where-react-fits)
 - **Virtual DOM** — Informal name for React's in-memory element tree that is diffed against the previous one. [§1.3](../01-why-react-and-setup/README.md#13-rendering-the-virtual-dom-and-reconciliation-brief)
-- **Virtualization (windowing)** — Rendering only the visible rows of a long list plus overscan inside a full-height spacer. [§10.9](../10-performance/README.md#109-list-virtualization)
+- **Virtualization (windowing)** — Rendering only the visible rows of a long list plus overscan inside a full-height spacer; libraries: TanStack Virtual, react-window. [§10.9](../10-performance/README.md#109-list-virtualization)
 - **Visual-regression test** — Comparing screenshots before and after a change to catch unintended visual differences. [§14.12](../14-patterns-and-architecture/README.md#1412-design-systems)
 - **`visually-hidden`** — A standard CSS class that hides an element from sight but keeps it available to screen readers and keyboard focus. [§15.15](../15-react-interview-and-machine-coding/README.md#1515-build-6--star-rating)
-- **Vite** — Build tool and dev server with native-ES-module dev serving and HMR; common for React SPAs. Vite 8 strips types/JSX with Oxc (earlier versions: esbuild). [§1.5](../01-why-react-and-setup/README.md#15-setting-up-a-react-project), [§11.1](../11-typescript-with-react/README.md#111-setup-and-how-type-checking-fits-in)
+- **Vite** — Build tool and dev server with native-ES-module dev serving and HMR; common for React SPAs. Vite 8 strips types/JSX with Oxc (earlier versions: esbuild). [§1.5](../01-why-react-and-setup/README.md#15-setting-up-a-react-project)
 
 **W**
 
-- **WAI-ARIA Authoring Practices** — The W3C guide describing how accessible widgets (tabs, combobox, dialog, menu) should behave with the keyboard and ARIA. [§14.4](../14-patterns-and-architecture/README.md#144-compound-components), [§15.14](../15-react-interview-and-machine-coding/README.md#1514-build-5--accessible-tabs)
-- **Waterfall** — Requests that start one after another because each waits for the previous render (fetch-in-Effect chains). [§9.5](../09-routing-and-data-fetching/README.md#95-loaders--data-before-render-data-mode), [§5.7](../05-effects-and-refs/README.md#57-fetching-data-in-effects-and-race-conditions)
-- **WCAG** — Web Content Accessibility Guidelines: the standard accessibility checklist (e.g. text contrast ≥ 4.5:1); current version 2.2. [§14.10](../14-patterns-and-architecture/README.md#1410-accessibility-in-react), [HTML & CSS Ch 3](../../../html-css/chapters/03-semantic-html-and-accessibility/README.md)
-- **WebSocket** — A connection kept open so the server can push messages to the browser; opened in an Effect and closed in its cleanup. [§5.6](../05-effects-and-refs/README.md#56-you-might-not-need-an-effect), [§6.6](../06-state-management/README.md#66-when-to-reach-for-a-library)
+- **WAI-ARIA Authoring Practices** — The W3C guide describing how accessible widgets (tabs, combobox, dialog, menu) should behave with the keyboard and ARIA. [§14.4](../14-patterns-and-architecture/README.md#144-compound-components)
+- **Waterfall** — Requests that start one after another because each waits for the previous render (fetch-in-Effect chains). [§9.5](../09-routing-and-data-fetching/README.md#95-loaders--data-before-render-data-mode)
+- **WCAG** — Web Content Accessibility Guidelines: the standard accessibility checklist (e.g. text contrast ≥ 4.5:1); current version 2.2. [§14.10](../14-patterns-and-architecture/README.md#1410-accessibility-in-react)
+- **WebSocket** — A connection kept open so the server can push messages to the browser; opened in an Effect and closed in its cleanup. [§5.6](../05-effects-and-refs/README.md#56-you-might-not-need-an-effect)
 - **Widget** — A self-contained interactive piece of UI (tabs, autocomplete, date picker). [§15.1](../15-react-interview-and-machine-coding/README.md#151-how-react-interviews-are-run)
 - **`within`** — Testing Library helper that limits queries to one element's subtree. [§12.3](../12-testing-react/README.md#123-queries-and-their-priority)
 - **`wrapper` (test render option)** — RTL `render`/`renderHook` option that wraps the UI in providers (router, store, query client). [§12.8](../12-testing-react/README.md#128-providers-routers-and-custom-render)
 
 **X**
 
-- **XSS** — Cross-site scripting: an attack where text supplied by one user runs as code in another user's browser; JSX escapes text to prevent it, `dangerouslySetInnerHTML` bypasses that. [§1.8](../01-why-react-and-setup/README.md#18-jsx), [§15.11](../15-react-interview-and-machine-coding/README.md#1511-build-2--autocomplete-debounce-abort-keyboard)
+- **XSS** — Cross-site scripting: an attack where text supplied by one user runs as code in another user's browser; JSX escapes text to prevent it, `dangerouslySetInnerHTML` bypasses that. [§1.8](../01-why-react-and-setup/README.md#18-jsx)
 
 **Z**
 

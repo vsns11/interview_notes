@@ -1,48 +1,31 @@
 # Chapter 11 — TypeScript with React
 
-**TypeScript** is JavaScript plus a type system (a set of labels saying what kind of value each variable holds — a string, a number, an object of a certain shape — so mismatches can be caught) that is checked **before** your code runs. In a React project it turns a whole class of bugs — a missing prop, a misspelled variant, reading `user.name` while `user` can still be `null`, forgetting to handle one action in a reducer (a function that takes the current state plus an "action" describing what happened and returns the next state) — into red squiggles in your editor instead of broken screens in production (the live app that real users run). It also makes components self-documenting: the props type *is* the component's API (its public interface: what callers may pass in and get back).
+**TypeScript** is JavaScript plus a type system (labels saying what kind of value each variable holds — string, number, an object of a certain shape) checked **before** the code runs. In React it turns a class of bugs — a missing prop, a misspelled variant, reading `user.name` while `user` can still be `null`, forgetting to handle one action in a reducer — into editor squiggles instead of broken screens in production. It also makes components self-documenting: the props type *is* the component's API.
 
-This chapter assumes the TypeScript basics from the JavaScript Handbook ([Chapter 16 — types, narrowing, generics](../../../javascript/chapters/16-testing-and-typescript/README.md)) and shows how to apply them to React: props (the inputs a parent passes to a component), children, events, state, reducers, refs (boxes that hold a DOM element or a value across renders), Hooks (the `use...` functions such as `useState` that give components React features), context (a way to hand a value to deeply nested components without passing props through every level), generic components and discriminated-union props. For the "wrong" examples you will see the **real compiler errors** (messages from the TypeScript compiler, the program that reads and checks your code).
+This chapter assumes the TypeScript basics from the JavaScript Handbook ([Chapter 16 — types, narrowing, generics](../../../javascript/chapters/16-testing-and-typescript/README.md)) and applies them to props, children, events, state, reducers, refs, Hooks, context, generic components and discriminated-union props. "Wrong" examples show the **real compiler errors**.
 
-> **Key term — narrowing and generics:** *Narrowing* means TypeScript shrinks a broad type to a more specific one after a check — after `if (user !== null)`, `user` is known to be a `User`. *Generics* are types with a placeholder, written `<T>`, that gets filled in where they are used — `Array<string>` is an array whose items are strings — so one piece of code can work for many types and still be checked.
+> **Key term — narrowing and generics:** *Narrowing* means TypeScript shrinks a broad type after a check — after `if (user !== null)`, `user` is a `User`. *Generics* are types with a placeholder `<T>` filled in where used — `Array<string>` — so one piece of code works for many types and is still checked.
 
-**What you'll learn**
-
-| # | Topic | You will be able to… |
-|---|---|---|
-| 11.1 | Setup and how type-checking fits in | create a React + TS project and run `tsc --noEmit` |
-| 11.2 | Typing props | write props types with required, optional, union and callback props |
-| 11.3 | Typing children and extending native elements | choose between `ReactNode`, `ReactElement`, `PropsWithChildren`, `ComponentProps<'button'>` |
-| 11.4 | Typing events | type handlers with `ChangeEvent`, `SubmitEvent`, `MouseEvent`, `KeyboardEvent` |
-| 11.5 | Typing state and reducers | type `useState` (including `null` and `[]`) and `useReducer` with action unions |
-| 11.6 | Typing refs | type DOM refs, value refs, `ref` as a prop (React 19) and `useImperativeHandle` |
-| 11.7 | Typing custom Hooks and Context | return tuples `as const`, write generic Hooks, make context non-nullable |
-| 11.8 | Generic components | build `List<T>`, `Select<V>` and `Table<Row>` that infer their types |
-| 11.9 | Discriminated unions for props | make impossible prop combinations impossible to write |
-| 11.10 | Reading type errors, and common mistakes | decode the 12 errors beginners hit most |
-
-Code: [`code/`](code/). Each `.tsx` file **runs** (bundled with esbuild — a very fast bundler; React 19.3 running in jsdom, a JavaScript imitation of a browser's DOM, the Document Object Model tree of page elements, that runs in Node.js, the program that runs JavaScript outside a browser) **and** is type-checked with the TypeScript compiler (`tsc` 7.0.2, `@types/react` 19.3, `strict` mode — the setting that turns on all the stricter checks). The deliberately broken examples live in `code/bad_types.tsx`, which is only type-checked.
+Code: [`code/`](code/). Each `.tsx` file **runs** (bundled with esbuild; React 19.3 in jsdom under Node.js) **and** is type-checked with `tsc` 7.0.2, `@types/react` 19.3, `strict` mode (all stricter checks on). The deliberately broken examples in `code/bad_types.tsx` are only type-checked.
 
 ---
 
 ## 11.1 Setup and how type-checking fits in
 
 ### What it is
-A React + TypeScript project has three pieces:
-
 | Piece | Role |
 |---|---|
-| `.tsx` files | TypeScript files that may contain JSX (HTML-like tags in code; `.ts` for files without JSX) |
-| `@types/react`, `@types/react-dom` | the type definitions for React (React itself is written in JavaScript; these packages describe its API) |
-| `tsconfig.json` | compiler options: strictness, JSX mode, which files to check |
+| `.tsx` files | TypeScript files that may contain JSX (`.ts` for files without JSX) |
+| `@types/react`, `@types/react-dom` | Type definitions for React (React is written in JavaScript; these describe its API) |
+| `tsconfig.json` | Compiler options: strictness, JSX mode, which files to check |
 
-To start a new project: `npm create vite@latest my-app -- --template react-ts` (npm is Node's package manager, the tool that downloads libraries; Vite is a fast development server and build tool), or a framework (a library that also decides your project's structure) such as Next.js, a React framework with routing and server rendering built in, which asks whether you want TypeScript and configures it ([Chapter 1](../01-why-react-and-setup/README.md)).
+Start with `npm create vite@latest my-app -- --template react-ts`, or a framework such as Next.js, which asks whether you want TypeScript and configures it ([Chapter 1](../01-why-react-and-setup/README.md)).
 
 ### How it works — two separate jobs
-1. **Removing types.** Browsers can't run TypeScript, so the bundler (the tool that combines your source files and libraries into files a browser can load; Vite 8 uses Oxc, earlier Vite versions esbuild; Next.js uses SWC — Oxc and SWC are fast compilers written in Rust) strips the types and turns JSX into function calls. This is fast because it **does not check** anything.
-2. **Checking types.** The TypeScript compiler, `tsc`, reads all files and reports errors. With `--noEmit` it only checks and writes no files. Your editor runs the same checker continuously.
+1. **Removing types.** Browsers can't run TypeScript, so the bundler (Vite 8 uses Oxc, earlier Vite esbuild; Next.js uses SWC — Oxc and SWC are fast Rust compilers) strips types and turns JSX into function calls. Fast because it **does not check** anything.
+2. **Checking types.** `tsc` reads all files and reports errors; `--noEmit` checks without writing files. Your editor runs the same checker continuously.
 
-Because the bundler does not check types, **a project with type errors can still build and run**. Add `tsc --noEmit` to your CI (continuous integration: a server that automatically runs checks and tests on every push or pull request; and often to `npm run build`, e.g. `"build": "tsc --noEmit && vite build"`) so errors block merges (accepting a change into the main branch of the code).
+So **a project with type errors can still build and run**. Add `tsc --noEmit` to CI (the server that runs checks on every push/pull request) and often to the build (`"build": "tsc --noEmit && vite build"`) so errors block merges.
 
 ```mermaid
 flowchart LR
@@ -55,7 +38,7 @@ flowchart LR
 ```
 
 ### The tsconfig options that matter for React
-`code/tsconfig.check.json` (this book keeps npm packages in a shared folder, hence the `paths` line; a normal project doesn't need it and names the file `tsconfig.json`):
+`code/tsconfig.check.json` (the `paths` line exists only because this book keeps npm packages in a shared folder; a normal project names the file `tsconfig.json`):
 
 ```jsonc
 {
@@ -76,8 +59,6 @@ flowchart LR
   "exclude": ["bad_*.tsx"]
 }
 ```
-
-Checking every example in this chapter:
 ```bash
 $ tsc --noEmit -p tsconfig.check.json && echo "0 type errors"
 0 type errors
@@ -85,18 +66,15 @@ $ tsc --noEmit -p tsconfig.check.json && echo "0 type errors"
 
 ### Common mistakes
 - Turning `strict` off to "get it compiling" — you lose most of the value, especially null checks.
-- Using `any` (the type that means "anything, don't check") to silence an error. `any` switches checking off for that value *and everything it flows into*. Prefer `unknown` ("some value, type not known yet" — you must check it before using it) and narrow it, or fix the type.
-- Forgetting `@types/react`/`@types/react-dom` (or having versions that don't match your React major version — the first number in `19.3.0`, which changes when there are breaking changes).
-
-### TL;DR
-Bundlers strip types; `tsc --noEmit` checks them. Use `strict: true`, `jsx: "react-jsx"`, and run the checker in CI.
+- Using `any` ("anything, don't check") to silence an error — it switches checking off for that value *and everything it flows into*. Prefer `unknown` ("type not known yet; check before use") and narrow, or fix the type.
+- Missing `@types/react`/`@types/react-dom`, or versions not matching your React major version (the first number in `19.3.0`, bumped on breaking changes).
 
 ---
 
 ## 11.2 Typing props
 
 ### What it is
-A component's props are one object, so you describe that object with a `type` (or `interface`) and annotate the destructured parameter (write `: Props` after the `{ label, count }` pattern that unpacks the props object by name).
+Props are one object: describe it with a `type` (or `interface`) and annotate the destructured parameter.
 
 `code/01_props_and_children.tsx` (part 1):
 ```tsx
@@ -121,22 +99,19 @@ function Avatar({ user, size = 32, style, onSelect }: AvatarProps) {
 ```
 
 ### How it works
-1. At each `<Badge ...>` usage, TypeScript checks the JSX attributes against `BadgeProps`, exactly like checking an object literal.
-2. A `?` makes the prop optional; inside the component its type includes `undefined` until you give a **default value** in the destructuring (`count = 0` makes `count` a plain `number`).
-3. A **union of string literals** (`'info' | 'warning' | 'error'`) is the TypeScript way to say "one of these values" — editors autocomplete them, and typos are errors.
-4. A callback prop (a function the parent passes in for the child to call later) is a **function type**: `(name: string) => void` says "called with a string, return value ignored". Call optional callbacks with `onSelect?.(...)` (optional chaining: call it only if it is not `undefined`).
+1. Each `<Badge ...>` is checked against `BadgeProps` like an object literal.
+2. `?` makes a prop optional; inside, its type includes `undefined` until a **default value** in the destructuring (`count = 0` → plain `number`).
+3. A **union of string literals** (`'info' | 'warning' | 'error'`) means "one of these" — autocompleted, and typos are errors.
+4. A callback prop is a **function type**: `(name: string) => void` = "called with a string, return ignored". Call optional callbacks with `onSelect?.(...)` (optional chaining).
 
 ### `type` or `interface`?
-Both work for props. `interface` can be extended with `extends` and merged by re-declaring; `type` can express unions (`A | B`), which props often need (§11.9). Many teams simply use `type` everywhere for consistency; pick one convention per codebase.
+Both work. `interface` can `extends` and merge by re-declaring; `type` can express unions (`A | B`), which props often need (§11.9). Many teams use `type` everywhere; pick one convention per codebase.
 
 ### What about `React.FC`?
-`const Badge: React.FC<BadgeProps> = (props) => ...` also works. Since React 18's types, `FC` no longer adds an implicit `children` prop, so the old main objection is gone; still, annotating the props parameter directly (as above) is simpler, works with generics (§11.8) and is what most modern code does.
+`const Badge: React.FC<BadgeProps> = ...` works. Since React 18's types `FC` no longer adds an implicit `children`, so the main objection is gone; still, annotating the props parameter is simpler, works with generics (§11.8), and is what most modern code does.
 
 ### Real-world examples
-Design-system components (buttons, badges, alerts) use literal unions for `variant`/`size`/`tone` props, so the design tokens (the named, agreed values for colours, spacing and sizes in a design system — a company's shared set of UI components and rules) are enforced by the compiler.
-
-### TL;DR
-`function C({ a, b = 1 }: Props)`. `?` = optional, defaults remove `undefined`, literal unions restrict values, function types describe callbacks.
+Design-system components use literal unions for `variant`/`size`/`tone`, so design tokens (the agreed named values for colours, spacing, sizes) are enforced by the compiler.
 
 ---
 
@@ -145,10 +120,10 @@ Design-system components (buttons, badges, alerts) use literal unions for `varia
 ### Which type for `children`?
 | Type | Accepts | Use for |
 |---|---|---|
-| `ReactNode` | anything React can render: JSX, strings, numbers, `null`, `undefined`, booleans, arrays of these | **`children` and "slot" props** — the default choice |
+| `ReactNode` | anything renderable: JSX, strings, numbers, `null`, `undefined`, booleans, arrays of these | **`children` and "slot" props** — the default |
 | `ReactElement` | only a JSX element (`<Foo />`), not strings or `null` | a prop that must be one element (rare) |
-| `JSX.Element` | the type of a JSX expression (basically `ReactElement<any, any>`) | the return type of components, if you annotate it |
-| `PropsWithChildren<P>` | adds `children?: ReactNode` to `P` | a short way to accept optional children |
+| `JSX.Element` | type of a JSX expression (basically `ReactElement<any, any>`) | component return type, if you annotate it |
+| `PropsWithChildren<P>` | adds `children?: ReactNode` to `P` | short way to accept optional children |
 
 `code/01_props_and_children.tsx` (part 2):
 ```tsx
@@ -160,7 +135,7 @@ function Note({ children }: PropsWithChildren) { return <aside>{children}</aside
 ```
 
 ### Extending a native element's props
-A reusable `<Button>` should accept **everything** a `<button>` accepts — `type`, `disabled`, `aria-*` (accessibility attributes that screen readers announce), `onClick` — without you listing them. `ComponentProps<'button'>` is the full props type of the built-in element:
+A reusable `<Button>` should accept **everything** a `<button>` does — `type`, `disabled`, `aria-*` (accessibility attributes), `onClick` — without listing them. `ComponentProps<'button'>` is the built-in element's full props type:
 
 ```tsx
 type ButtonProps = ComponentProps<'button'> & { variant?: 'primary' | 'ghost' };
@@ -169,7 +144,6 @@ function Button({ variant = 'primary', className, ...rest }: ButtonProps) {
 }
 ```
 
-Usage and result:
 ```tsx
 <Card title="Inbox" footer={<small>updated now</small>}>
   <Badge label="unread" count={3} tone="warning" />
@@ -193,21 +167,18 @@ Output:
 </section>
 ```
 
-Related helpers: `ComponentProps<typeof MyComponent>` extracts the props type of **your** component (handy when wrapping a library component whose props type isn't exported); `ComponentPropsWithoutRef<'input'>` omits `ref`; `Omit<ComponentProps<'a'>, 'href'>` removes one prop so you can redefine it.
+Related: `ComponentProps<typeof MyComponent>` extracts **your** component's props (handy when a library doesn't export its props type); `ComponentPropsWithoutRef<'input'>` omits `ref`; `Omit<ComponentProps<'a'>, 'href'>` removes a prop so you can redefine it.
 
 ### Common mistakes
-- Typing `children` as `JSX.Element` — then `<Card>hello</Card>` (a string) or two children fail. Use `ReactNode`.
-- Spreading `{...rest}` (the spread syntax copies every remaining property onto the element) onto the element *before* your own props, so the caller's `className` overwrites yours. Merge deliberately, as above.
-
-### TL;DR
-`children: ReactNode`; extend native props with `ComponentProps<'button'> & {...}` and spread the rest.
+- `children: JSX.Element` — then `<Card>hello</Card>` or two children fail. Use `ReactNode`.
+- Spreading `{...rest}` *before* your own props, or carelessly, so the caller's `className` overwrites yours. Merge deliberately, as above.
 
 ---
 
 ## 11.4 Typing events
 
 ### What it is
-React passes your handlers its own event objects (synthetic events, [Chapter 3](../03-state-and-events/README.md)). Their types are generic over the **element** the handler is attached to, which is what makes `e.target.value` or `e.currentTarget.checked` type-safe (misuse is a compile error instead of a runtime crash).
+React's event objects (synthetic events, [Chapter 3](../03-state-and-events/README.md)) are generic over the **element** the handler is on, which makes `e.target.value` or `e.currentTarget.checked` type-safe.
 
 | Event | Type | Typical element | Common props |
 |---|---|---|---|
@@ -217,51 +188,36 @@ React passes your handlers its own event objects (synthetic events, [Chapter 3](
 | `onKeyDown` | `KeyboardEvent<HTMLInputElement>` | any focusable element | `e.key`, `e.ctrlKey` |
 | `onFocus` / `onBlur` | `FocusEvent<HTMLInputElement>` | | `e.relatedTarget` |
 
-Import them from `react`, **not** from the DOM (`MouseEvent` or `SubmitEvent` without an import refers to the browser's native event type, which is different).
+Import them from `react`, **not** the DOM (an unimported `MouseEvent`/`SubmitEvent` is the browser's native type, which differs).
 
-**Version note:** recent `@types/react` 19 releases (used here: 19.3) type `onSubmit` with `SubmitEvent` and mark `FormEvent` as **deprecated** (still works, but flagged as outdated and likely to be removed; React never had a real "form event"). `FormEvent<HTMLFormElement>` still compiles, so you'll see it in most existing code and tutorials; prefer `SubmitEvent` in new code if your `@types/react` has it.
+**Version note:** recent `@types/react` 19 releases (here 19.3) type `onSubmit` with `SubmitEvent` and mark `FormEvent` **deprecated** (still compiles, flagged for removal; React never had a real "form event"). Most existing code uses `FormEvent<HTMLFormElement>`; prefer `SubmitEvent` in new code if your types have it.
 
 ### How it works
-1. **Inline handlers need no annotation**: in `onChange={e => setEmail(e.target.value)}`, TypeScript already knows the `onChange` prop's type, so `e` is inferred (its type is worked out automatically) (this is called *contextual typing*).
-2. **Separately declared handlers need a type**, because TypeScript can't see where they'll be used. Either annotate the parameter (`e: ChangeEvent<HTMLInputElement>`) or the whole function (`const h: ChangeEventHandler<HTMLSelectElement> = e => ...`).
-3. Tip: not sure of the type? Write the handler inline first and hover `e` in your editor; it shows the exact type to copy.
+1. **Inline handlers need no annotation** — `onChange={e => setEmail(e.target.value)}` infers `e` from the prop's type (*contextual typing*).
+2. **Separately declared handlers need a type** — annotate the parameter (`e: ChangeEvent<HTMLInputElement>`) or the function (`const h: ChangeEventHandler<HTMLSelectElement> = e => ...`).
+3. Unsure? Write it inline and hover `e` to copy the exact type.
 
-`code/02_events.tsx`:
+`code/02_events.tsx` (abridged):
 ```tsx
-function SignupForm({ onSubmit }: { onSubmit: (data: { email: string; plan: string }) => void }) {
-  const [email, setEmail] = useState('');
-  const [plan, setPlan] = useState('free');
-
-  function handleEmail(e: ChangeEvent<HTMLInputElement>) {
-    setEmail(e.target.value);                       // e.target is an HTMLInputElement -> .value is a string
-  }
-  const handlePlan: ChangeEventHandler<HTMLSelectElement> = e => setPlan(e.target.value); // type the whole function
-  function handleSubmit(e: SubmitEvent<HTMLFormElement>) {   // older code: FormEvent (now deprecated)
-    e.preventDefault();
-    console.log('submitted by the button:', e.submitter?.textContent);
-    onSubmit({ email, plan });
-  }
-  function handleKey(e: KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'Escape') setEmail('');
-  }
-  function handleHelp(e: MouseEvent<HTMLButtonElement>) {
-    console.log(`help clicked at button "${e.currentTarget.textContent}" (shift: ${e.shiftKey})`);
-  }
-
-  return (
-    <form onSubmit={handleSubmit}>
-      <input aria-label="email" value={email} onChange={handleEmail} onKeyDown={handleKey} />
-      <select aria-label="plan" value={plan} onChange={handlePlan}>
-        <option value="free">Free</option><option value="pro">Pro</option>
-      </select>
-      <button type="button" onClick={handleHelp}>Help</button>
-      <button type="submit" onClick={e => console.log('inline handler, e is', e.type)}>Sign up</button>
-    </form>
-  );
+function handleEmail(e: ChangeEvent<HTMLInputElement>) {
+  setEmail(e.target.value);                       // e.target is an HTMLInputElement -> .value is a string
 }
+const handlePlan: ChangeEventHandler<HTMLSelectElement> = e => setPlan(e.target.value); // type the whole function
+function handleSubmit(e: SubmitEvent<HTMLFormElement>) {   // older code: FormEvent (now deprecated)
+  e.preventDefault();
+  console.log('submitted by the button:', e.submitter?.textContent);
+  onSubmit({ email, plan });
+}
+function handleKey(e: KeyboardEvent<HTMLInputElement>) { if (e.key === 'Escape') setEmail(''); }
+function handleHelp(e: MouseEvent<HTMLButtonElement>) {
+  console.log(`help clicked at button "${e.currentTarget.textContent}" (shift: ${e.shiftKey})`);
+}
+// <form onSubmit={handleSubmit}> <input onChange={handleEmail} onKeyDown={handleKey} /> <select onChange={handlePlan}>
+// <button type="button" onClick={handleHelp}>Help</button>
+// <button type="submit" onClick={e => console.log('inline handler, e is', e.type)}>Sign up</button>
 ```
 
-Output (after typing an email, choosing Pro, shift-clicking Help, submitting, then pressing Escape):
+Output (type an email, choose Pro, shift-click Help, submit, press Escape):
 ```
 help clicked at button "Help" (shift: true)
 inline handler, e is click
@@ -271,55 +227,43 @@ after Escape, email = ""
 ```
 
 ### `target` vs `currentTarget`
-`e.currentTarget` is the element the handler is attached to, and its type is the element type you gave (`HTMLButtonElement`). `e.target` is whatever element was actually clicked (maybe an `<svg>` inside the button), so for most events it is typed only as `EventTarget`. For **change** events React types `e.target` as the input itself, which is why `e.target.value` works there.
+`e.currentTarget` is the element the handler is on, typed as you declared (`HTMLButtonElement`). `e.target` is whatever was actually clicked (maybe an `<svg>` inside), so usually only `EventTarget`. For **change** events React types `e.target` as the input itself — why `e.target.value` works there.
 
 ### Form actions (React 19)
-With form actions ([Chapter 4](../04-forms-and-actions/README.md)) you don't handle an event at all: `<form action={fn}>` calls `fn(formData: FormData)` (`FormData` is the browser's object holding a form's field names and values). `formData.get('email')` returns `FormDataEntryValue | null` (a `string` or a `File`), so narrow it: `const email = String(formData.get('email') ?? '')`, or validate the whole object with a schema library such as Zod (a schema is a description of the expected data shape; Zod checks real data against it).
-
-### TL;DR
-Inline handlers are inferred; standalone ones use `XxxEvent<HTMLElementType>` or `XxxEventHandler<...>` from `react`. `currentTarget` has your element's type.
+With `<form action={fn}>` ([Chapter 4](../04-forms-and-actions/README.md)) there's no event: `fn(formData: FormData)` (the browser's field-name/value object). `formData.get('email')` returns `FormDataEntryValue | null` (a `string` or `File`), so narrow: `String(formData.get('email') ?? '')`, or validate the whole object with a schema library such as Zod (checks real data against a declared shape).
 
 ---
 
 ## 11.5 Typing state and reducers
 
 ### `useState`
-TypeScript **infers** the state type from the initial value, so most calls need nothing extra. Add a type argument when the initial value doesn't show the full picture:
+The type is **inferred** from the initial value; add a type argument when that value doesn't show the full picture:
 
-| Code | Inferred / declared type | Why |
+| Code | Type | Why |
 |---|---|---|
 | `useState(0)` | `number` | inferred |
-| `useState<User \| null>(null)` | `User \| null` | `null` alone would infer type `null` forever |
-| `useState<string[]>([])` | `string[]` | `[]` alone infers `never[]` — you could never add anything |
+| `useState<User \| null>(null)` | `User \| null` | `null` alone infers type `null` forever |
+| `useState<string[]>([])` | `string[]` | `[]` alone infers `never[]` — nothing could be added |
 | `useState<'idle' \| 'saving' \| 'saved'>('idle')` | the union | `'idle'` alone infers `string` |
-| `useState(() => loadDraft())` | return type of `loadDraft` | lazy initializer (a function run only on the first render) is inferred too |
+| `useState(() => loadDraft())` | return type of `loadDraft` | lazy initializer (run only on first render) is inferred too |
 
-`code/03_state_and_reducer.tsx` (part 1):
+`code/03_state_and_reducer.tsx` (part 1, abridged):
 ```tsx
 type User = { id: number; name: string };
-
 function Profile() {
   const [count, setCount] = useState(0);                      // inferred: number
   const [user, setUser] = useState<User | null>(null);        // explicit: starts null, later a User
   const [tags, setTags] = useState<string[]>([]);             // [] alone would be never[]
-  const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle');  // a union of literals
-
-  return (
-    <div>
-      <p>{user ? `${user.name} (#${user.id})` : 'signed out'} | {count} | {tags.join(',')} | {status}</p>
-      {/* user.name without the check would not compile: 'user' is possibly 'null' */}
-      <button onClick={() => { setUser({ id: 7, name: 'Ada' }); setCount(c => c + 1); setTags(t => [...t, 'admin']); setStatus('saved'); }}>
-        sign in
-      </button>
-    </div>
-  );
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  // <p>{user ? `${user.name} (#${user.id})` : 'signed out'} ...</p>
+  // user.name without the check would not compile: 'user' is possibly 'null'
 }
 ```
 
-The setter's type is `Dispatch<SetStateAction<T>>`: it accepts either a `T` or an updater `(prev: T) => T` (a function that computes the new state from the previous one). You need that name when passing a setter as a prop: `setUser: Dispatch<SetStateAction<User | null>>` (or simply `(u: User | null) => void` if the child never uses the updater form).
+The setter's type is `Dispatch<SetStateAction<T>>`: it accepts a `T` or an updater `(prev: T) => T`. Use that name when passing a setter as a prop (`setUser: Dispatch<SetStateAction<User | null>>`), or simply `(u: User | null) => void` if the child never uses the updater form.
 
 ### `useReducer` with a discriminated union of actions
-A **discriminated union** is a union of object types that share one literal-typed field (the *discriminant*, here `type`). Checking that field **narrows** the object to one member, so TypeScript knows which other fields exist.
+A **discriminated union** is a union of object types sharing one literal-typed field (the *discriminant*, here `type`). Checking it **narrows** the object to one member, so TypeScript knows which other fields exist.
 
 `code/03_state_and_reducer.tsx` (part 2):
 ```tsx
@@ -351,15 +295,11 @@ function cartReducer(state: CartState, action: CartAction): CartState {
     }
   }
 }
-
-function Cart() {
-  const [cart, dispatch] = useReducer(cartReducer, { items: [], coupon: null });
-  // dispatch accepts only CartAction objects: dispatch({ type: 'add', sku: 'MUG' })
-  // ...
-}
+// const [cart, dispatch] = useReducer(cartReducer, { items: [], coupon: null });
+// dispatch accepts only CartAction objects: dispatch({ type: 'add', sku: 'MUG' })
 ```
 
-Output (sign in, add mug twice, apply coupon, then clear):
+Output (sign in, add mug twice, apply coupon, clear):
 ```
 initial        signed out | 0 |  | idle  ||  empty coupon=none
 after clicks   Ada (#7) | 1 | admin | saved  ||  MUGx2 coupon=SAVE10
@@ -367,12 +307,9 @@ after clear    Ada (#7) | 1 | admin | saved  ||  empty coupon=none
 ```
 
 ### How the `never` check works
-In the `default` branch, TypeScript has removed every handled member from `action`'s type. If all cases are handled, nothing is left — the type is `never`, and assigning it to `never` is fine. Add a new action type to `CartAction` and forget its `case`, and `action` in `default` still has that type, so the assignment **fails to compile** (you'll see this error in §11.10). This is called an **exhaustiveness check**.
+In `default`, every handled member has been removed from `action`'s type; if all are handled, it's `never` and the assignment is fine. Add an action to `CartAction` and forget its `case`, and the assignment **fails to compile** (§11.10, error 9) — an **exhaustiveness check**.
 
-`useReducer` infers the state type from the reducer, and `dispatch` accepts only valid actions. (React 19's types also let you write `useReducer<CartState, [CartAction]>(...)`, but annotating the reducer function is simpler and usually enough.)
-
-### TL;DR
-Let `useState` infer; add `<T>` for `null`, `[]` and literal unions. Type reducer actions as a discriminated union and add a `never` check so missing cases are compile errors.
+`useReducer` infers state from the reducer, and `dispatch` accepts only valid actions. (React 19's types also allow `useReducer<CartState, [CartAction]>(...)`, but annotating the reducer is simpler.)
 
 ---
 
@@ -382,34 +319,21 @@ Let `useState` infer; add `<T>` for `null`, `[]` and literal unions. Type reduce
 | Purpose | Declaration | `.current` type |
 |---|---|---|
 | Point at a DOM element | `useRef<HTMLInputElement>(null)` | `HTMLInputElement \| null` |
-| Hold a mutable (changeable) value (timer ID, previous value) | `useRef<number \| null>(null)`, `useRef(0)` | what you declared |
+| Hold a mutable value (timer ID, previous value) | `useRef<number \| null>(null)`, `useRef(0)` | what you declared |
 
-In React 19's types, `useRef` **always requires an argument** and always returns a `RefObject<T>` whose `current` you can assign (older versions distinguished a read-only `RefObject` from a `MutableRefObject`; `MutableRefObject` is now deprecated). For DOM refs pass `null`, because the element doesn't exist until React attaches it after rendering — which is why you use `ref.current?.focus()`.
+In React 19's types `useRef` **always requires an argument** and returns a `RefObject<T>` with an assignable `current` (older types split read-only `RefObject` from `MutableRefObject`; `MutableRefObject` is now deprecated). DOM refs start `null` because the element doesn't exist until React attaches it after render — hence `ref.current?.focus()`.
 
 ### `ref` as a prop (React 19)
-Since React 19, function components receive `ref` as an **ordinary prop**; `forwardRef` is no longer needed for new code ([Chapter 5](../05-effects-and-refs/README.md)). `ComponentProps<'input'>` already includes `ref?: Ref<HTMLInputElement>`, so a wrapper that spreads its props forwards the ref automatically. For a custom handle (a small object of methods you choose to expose to the parent instead of the raw DOM node), type the prop as `Ref<YourHandle>` and fill it with `useImperativeHandle`.
+Function components receive `ref` as an **ordinary prop**; `forwardRef` isn't needed in new code ([Chapter 5](../05-effects-and-refs/README.md)). `ComponentProps<'input'>` already includes `ref?: Ref<HTMLInputElement>`, so a wrapper spreading its props forwards the ref. For a custom handle (an object of methods you expose instead of the DOM node), type the prop `Ref<YourHandle>` and fill it with `useImperativeHandle`.
 
-`code/04_refs.tsx`:
+`code/04_refs.tsx` (abridged):
 ```tsx
 // 1. A DOM ref
-function SearchBox() {
-  const inputRef = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    inputRef.current?.focus();                  // ?. because current is null until React attaches it
-  }, []);
-  return <input ref={inputRef} aria-label="search" />;
-}
+const inputRef = useRef<HTMLInputElement>(null);
+useEffect(() => { inputRef.current?.focus(); }, []);   // ?. because current is null until React attaches it
 
-// 2. A value ref (not attached to JSX)
-function Stopwatch() {
-  const intervalId = useRef<ReturnType<typeof setInterval> | null>(null);  // read/written only in handlers
-  const [running, setRunning] = useState(false);
-  function toggle() {
-    if (intervalId.current !== null) { clearInterval(intervalId.current); intervalId.current = null; setRunning(false); }
-    else { intervalId.current = setInterval(() => {}, 1000); setRunning(true); }
-  }
-  return <button onClick={toggle}>{running ? 'stop' : 'start'} timer</button>;
-}
+// 2. A value ref (not attached to JSX), read/written only in handlers
+const intervalId = useRef<ReturnType<typeof setInterval> | null>(null);
 
 // 3. ref as an ordinary prop - ComponentProps<'input'> includes `ref`
 function TextField({ label, ...inputProps }: { label: string } & ComponentProps<'input'>) {
@@ -423,14 +347,7 @@ function Video({ ref, src }: { ref?: Ref<VideoHandle>; src: string }) {
   useImperativeHandle(ref, () => ({ play: () => setState('playing'), pause: () => setState('paused') }), []);
   return <p>video {src}: {state}</p>;
 }
-
-function App() {
-  const nameRef = useRef<HTMLInputElement>(null);
-  const videoRef = useRef<VideoHandle>(null);
-  // ... <TextField label="Name" ref={nameRef} placeholder="Ada" />
-  //     <Video ref={videoRef} src="intro.mp4" />
-  //     <button onClick={() => { ...; videoRef.current?.play(); }}>go</button>
-}
+// App: <TextField label="Name" ref={nameRef} placeholder="Ada" />, <Video ref={videoRef} src="intro.mp4" />, videoRef.current?.play()
 ```
 
 Output:
@@ -441,22 +358,19 @@ nameRef.current is INPUT with placeholder Ada
 video intro.mp4: playing
 ```
 
-`ReturnType<typeof setInterval>` is a trick worth knowing: the timer ID is a `number` in browsers but an object in Node, and this expression gives whatever the current environment's `setInterval` returns.
+`ReturnType<typeof setInterval>` gives the timer ID type of the current environment (a `number` in browsers, an object in Node).
 
 ### Common mistakes
-- `useRef<HTMLInputElement>()` with no argument — an error with React 19 types (see §11.10).
-- Declaring the wrong element type: `useRef<HTMLDivElement>(null)` on an `<input>` is a type error at `ref={...}`.
-- Reading or writing `ref.current` **during render**. Refs are for event handlers and Effects (code inside `useEffect` that runs after React updates the screen, to sync with things outside React); React Compiler (a build tool that adds memoization — caching results so they are reused between renders — for you) and its lint rules (automatic checks that flag risky code patterns) flag render-time ref access ([Chapter 10](../10-performance/README.md)).
-
-### TL;DR
-`useRef<HTMLXxxElement>(null)` for DOM, `useRef<T>(initial)` for values. In React 19 `ref` is a normal prop typed `Ref<T>`; use `useImperativeHandle` to expose a custom handle.
+- `useRef<HTMLInputElement>()` with no argument — error with React 19 types (§11.10).
+- Wrong element type: `useRef<HTMLDivElement>(null)` on an `<input>` errors at `ref={...}`.
+- Reading/writing `ref.current` **during render** — refs are for handlers and Effects; React Compiler's lint rules flag render-time ref access ([Chapter 10](../10-performance/README.md)).
 
 ---
 
 ## 11.7 Typing custom Hooks and Context
 
 ### Returning a tuple: `as const`
-A Hook that returns `[on, toggle]` would be inferred as `(boolean | (() => void))[]` — an array where each element could be either, so `on` isn't known to be a boolean. `as const` makes it a **readonly tuple** `readonly [boolean, () => void]` (a tuple is a fixed-length array where each position has its own type; readonly means it can't be changed):
+Returning `[on, toggle]` infers `(boolean | (() => void))[]` — each element could be either. `as const` makes a **readonly tuple** `readonly [boolean, () => void]` (fixed length, a type per position, unchangeable):
 
 ```tsx
 function useToggle(initial = false) {
@@ -465,7 +379,7 @@ function useToggle(initial = false) {
   return [on, toggle] as const;
 }
 ```
-(Returning an **object** — `{ on, toggle }` — avoids the problem entirely and is easier to extend; prefer objects when a Hook returns more than two things.)
+Returning an **object** (`{ on, toggle }`) avoids the problem and is easier to extend — prefer it beyond two values.
 
 ### A generic Hook with a discriminated-union result
 `code/05_hooks_and_context.tsx`:
@@ -489,26 +403,20 @@ function useJson<T>(url: string): FetchState<T> {
   return state;
 }
 ```
-The caller picks `T` (`useJson<Todo>('/api/todos/1')`). Because the result is a union, the component *must* check `status` before touching `data`:
-
+The caller picks `T` and *must* check `status` before touching `data`:
 ```tsx
-function TodoTitle() {
-  const result = useJson<Todo>('/api/todos/1');
-  const [details, toggle] = useToggle();
-  const { user, logout } = useAuth();
-  if (result.status === 'loading') return <p>loading...</p>;
-  if (result.status === 'error') return <p>error: {result.error}</p>;
-  // Here TypeScript knows result.data is a Todo.
-  return (/* ... {user}: {result.data.title}{details && ` (#${result.data.id})`} ... */);
-}
+const result = useJson<Todo>('/api/todos/1');
+if (result.status === 'loading') return <p>loading...</p>;
+if (result.status === 'error') return <p>error: {result.error}</p>;
+// Here TypeScript knows result.data is a Todo.
 ```
 
-This is better than three separate fields (`data?`, `error?`, `loading`), which allow nonsense states such as "loading **and** has an error". Note `catch (e: unknown)`: in strict mode caught values are `unknown`, and you narrow with `instanceof Error` (a runtime check that the value was created from the `Error` class).
+Better than three fields (`data?`, `error?`, `loading`), which allow nonsense like "loading **and** error". In strict mode caught values are `unknown`; narrow with `instanceof Error`.
 
-**`as Promise<T>` is not validation.** It tells the compiler "trust me" — if the API returns a different shape, TypeScript cannot know. At trust boundaries (the places where data from outside your code enters: network, `localStorage` — the browser's small key-value store that survives page reloads — URL params), validate with a schema library such as Zod, which both checks the data at runtime (while the program is actually running) and produces the TypeScript type. Libraries like TanStack Query (a library that fetches, caches and refreshes server data) are generic in the same way (`useQuery<Todo>`), see [Chapter 9](../09-routing-and-data-fetching/README.md).
+**`as Promise<T>` is not validation** — it's "trust me"; a different API shape goes unnoticed. At trust boundaries (network, `localStorage`, URL params) validate with a schema library such as Zod, which checks at runtime and produces the TypeScript type. TanStack Query is generic the same way (`useQuery<Todo>`, [Chapter 9](../09-routing-and-data-fetching/README.md)).
 
 ### Context that is never `null` for consumers
-`createContext` needs a default value. When there's no sensible default, use `null` and a custom Hook that throws if the provider (the component that supplies the context value to everything inside it) is missing — callers then get the non-nullable type (a type that excludes `null`):
+With no sensible default, use `null` plus a custom Hook that throws when the provider is missing — callers get the non-nullable type:
 
 ```tsx
 type Auth = { user: string; logout: () => void };
@@ -526,33 +434,25 @@ function AuthProvider({ children }: { children: ReactNode }) {
 }
 ```
 
-Output (fetch is replaced by a local fake so the example runs offline; the second part renders `TodoTitle` without a provider):
+Output (fetch faked offline; second part renders `TodoTitle` without a provider):
 ```
 loading...
 guest: loaded from /api/todos/1 (#1)
 without provider -> useAuth must be used inside <AuthProvider>
 ```
 
-The alternative, `createContext<Auth>({} as Auth)`, compiles but lies: a component outside the provider would crash later with a confusing `undefined is not a function`.
-
-### TL;DR
-Tuples need `as const` (or return an object). Generic Hooks take `<T>`; return discriminated unions for async state. Context: `createContext<T | null>(null)` + a `useX()` that throws.
+`createContext<Auth>({} as Auth)` compiles but lies: outside the provider it crashes later with a confusing `undefined is not a function`.
 
 ---
 
 ## 11.8 Generic components
 
 ### What it is
-A **generic component** has a type parameter, like a generic function: `function List<T>(props: ListProps<T>)`. TypeScript **infers** `T` from the props you pass, then checks the other props against it. One `List` works for books, users or strings, and `renderItem` always receives the right item type.
+A **generic component** has a type parameter: `function List<T>(props: ListProps<T>)`. TypeScript **infers** `T` from the props and checks the rest against it — one `List` for books, users or strings, with `renderItem` always receiving the right type.
 
-`code/06_generic_components.tsx`:
+`code/06_generic_components.tsx` (abridged):
 ```tsx
-type ListProps<T> = {
-  items: T[];
-  getKey: (item: T) => Key;
-  renderItem: (item: T) => ReactNode;
-  emptyText?: string;
-};
+type ListProps<T> = { items: T[]; getKey: (item: T) => Key; renderItem: (item: T) => ReactNode; emptyText?: string };
 function List<T>({ items, getKey, renderItem, emptyText = 'Nothing here' }: ListProps<T>) {
   if (items.length === 0) return <p>{emptyText}</p>;
   return <ul>{items.map(item => <li key={getKey(item)}>{renderItem(item)}</li>)}</ul>;
@@ -561,45 +461,25 @@ function List<T>({ items, getKey, renderItem, emptyText = 'Nothing here' }: List
 const Count = <T,>({ items }: { items: T[] }) => <small>{items.length} items</small>;
 
 // A select whose value type is a union of string literals, inferred from `options`
-type SelectProps<V extends string> = {
-  label: string;
-  value: V;
-  options: readonly { value: V; label: string }[];
-  onChange: (value: V) => void;
-};
+type SelectProps<V extends string> = { label: string; value: V; options: readonly { value: V; label: string }[]; onChange: (value: V) => void };
 function Select<V extends string>({ label, value, options, onChange }: SelectProps<V>) {
-  return (
-    <label>{label}{' '}
-      <select value={value} onChange={e => onChange(e.target.value as V)}>
-        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-    </label>
-  );
+  return <label>{label}{' '}<select value={value} onChange={e => onChange(e.target.value as V)}>
+    {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>;
 }
 
 // A table whose columns may only name real keys of the row type
 type Column<Row> = { key: keyof Row & string; header: string };
-function Table<Row extends { id: number }>({ rows, columns }: { rows: Row[]; columns: Column<Row>[] }) {
-  // ... <th>{c.header}</th> ... <td>{String(r[c.key])}</td> ...
-}
+function Table<Row extends { id: number }>({ rows, columns }: { rows: Row[]; columns: Column<Row>[] }) { /* ... */ }
 
-type Book = { id: number; title: string; year: number };
 const SORTS = [{ value: 'title', label: 'Title' }, { value: 'year', label: 'Year' }] as const;
-
-function App() {
-  const [sort, setSort] = useState<'title' | 'year'>('title');
-  const sorted = [...books].sort((a, b) => (sort === 'year' ? a.year - b.year : a.title.localeCompare(b.title)));
-  return (<>
-      <Select label="Sort by" value={sort} options={SORTS} onChange={setSort} />
-      <List items={sorted} getKey={b => b.id} renderItem={b => `${b.title} (${b.year})`} />
-      <List items={[] as string[]} getKey={s => s} renderItem={s => s} emptyText="No tags" />
-      <Count items={books} />
-      <Table rows={books} columns={[{ key: 'title', header: 'Title' }, { key: 'year', header: 'Year' }]} />
-    </>);
-}
+// App: const [sort, setSort] = useState<'title' | 'year'>('title');
+<Select label="Sort by" value={sort} options={SORTS} onChange={setSort} />
+<List items={sorted} getKey={b => b.id} renderItem={b => `${b.title} (${b.year})`} />
+<List items={[] as string[]} getKey={s => s} renderItem={s => s} emptyText="No tags" />
+<Table rows={books} columns={[{ key: 'title', header: 'Title' }, { key: 'year', header: 'Year' }]} />
 ```
 
-Output (then changing the select to "year"):
+Output (then the select changes to "year"):
 ```
 list : Beloved (1987) | Dune (1965) | Neuromancer (1984)
 year : Dune (1965) | Neuromancer (1984) | Beloved (1987)
@@ -608,24 +488,20 @@ table: TitleYear | Dune1965 | Neuromancer1984 | Beloved1987
 ```
 
 ### How it works
-1. In `<List items={sorted} ...>`, TypeScript sees `items: Book[]`, so `T = Book`.
-2. `renderItem={b => ...}` is then checked as `(item: Book) => ReactNode` — `b.title` autocompletes, `b.author` would be an error.
-3. **Constraints** (`V extends string`, `Row extends { id: number }`) restrict what `T` may be, and let the component use those guarantees (`r.id` as a key).
-4. `keyof Row & string` is the union of `Row`'s property names (`'id' | 'title' | 'year'`), so a column for a missing field is a compile error (§11.10, error 8).
-5. `as const` on `SORTS` keeps the literal values `'title'` and `'year'`, so `Select` infers `V = 'title' | 'year'` and `onChange={setSort}` type-checks.
+1. `items={sorted}` is `Book[]`, so `T = Book`; `renderItem={b => ...}` is checked as `(item: Book) => ReactNode` — `b.title` autocompletes, `b.author` errors.
+2. **Constraints** (`V extends string`, `Row extends { id: number }`) restrict `T` and let the component rely on them (`r.id` as key).
+3. `keyof Row & string` is the union of `Row`'s property names (`'id' | 'title' | 'year'`), so a column for a missing field is a compile error (§11.10, error 8).
+4. `as const` on `SORTS` keeps literals `'title'`/`'year'`, so `V = 'title' | 'year'` and `onChange={setSort}` type-checks.
 
 ### When not to use generics
-If a component only ever handles one type, a plain props type is clearer. Generics pay off in reusable building blocks: lists, tables, selects, comboboxes (a text box with a dropdown of suggestions), form fields.
-
-### TL;DR
-`function List<T>(props: ListProps<T>)` — T is inferred from props and flows into callbacks. Constrain with `extends`, use `keyof` for field names, `<T,>` for arrow functions in `.tsx`.
+A component that only handles one type is clearer with a plain props type. Generics pay off in reusable blocks: lists, tables, selects, comboboxes (text box with suggestion dropdown), form fields.
 
 ---
 
 ## 11.9 Discriminated unions for props
 
 ### The problem it solves
-Props like `{ status: string; error?: string; count?: number; onRetry?: () => void }` allow nonsense: a "success" message with an error, an "error" without a retry handler. Every consumer must guess which combinations are valid, and the component needs defensive checks. A **union of props types**, one per case, makes the invalid combinations **impossible to write**.
+`{ status: string; error?: string; count?: number; onRetry?: () => void }` allows nonsense ("success" with an error, "error" without retry); consumers guess, components check defensively. A **union of props types**, one per case, makes invalid combinations **impossible to write**.
 
 `code/07_union_props.tsx`:
 ```tsx
@@ -666,7 +542,6 @@ function Thumb(props: ImageSource & { alt: string }) {
 }
 ```
 
-Usage and result:
 ```tsx
 <Status status="loading" />
 <Status status="error" error="Network down" onRetry={() => {}} />
@@ -691,32 +566,29 @@ Output:
 
 ### How it works
 1. The shared literal field (`status`, `as`) is the **discriminant**.
-2. At the call site, TypeScript picks the union member whose discriminant matches and checks the remaining props against it: `<Status status="success" />` without `count` fails (§11.10, error 6).
-3. Inside the component, checking the discriminant (`switch`, `if`) narrows `props`, so `props.error` is only accessible in the `'error'` branch.
-4. Don't destructure the props in the parameter list (`function Status({ status, error })`) — destructuring before narrowing loses the link between the fields. Narrow `props` first, then read fields. (Recent TypeScript versions can narrow destructured `const` variables in simple cases, but keeping `props` whole is the reliable pattern.)
-5. `prop?: never` means "this prop must not be passed" — the standard way to express "exactly one of these".
+2. At the call site TypeScript picks the member whose discriminant matches and checks the rest: `<Status status="success" />` without `count` fails (§11.10, error 6).
+3. Inside, checking the discriminant narrows `props`, so `props.error` exists only in the `'error'` branch.
+4. Don't destructure in the parameter list (`function Status({ status, error })`) — destructuring before narrowing loses the link between fields. (Recent TypeScript narrows destructured `const`s in simple cases, but keeping `props` whole is the reliable pattern.)
+5. `prop?: never` = "must not be passed" — the standard "exactly one of these".
 
 ### Real-world examples
-- Component libraries use `as`/`asChild` props or link-vs-button unions so a clickable thing renders correct, accessible HTML (markup that keyboard and screen-reader users can operate).
-- Alerts/toasts (small pop-up messages that disappear on their own) with `variant` unions, form fields where `type: 'select'` requires `options`, modals (dialog boxes that sit on top of the page until closed) where `dismissible: true` requires `onClose`.
+- Libraries use `as`/`asChild` or link-vs-button unions so clickable things render correct, accessible HTML.
+- Alert/toast `variant` unions; form fields where `type: 'select'` requires `options`; modals where `dismissible: true` requires `onClose`.
 
 ### In the interview
-**30-second answer:** "I type props with a type alias on the destructured parameter, `children` as `ReactNode`, and extend native elements with `ComponentProps<'button'>`. Handlers use React's event types such as `ChangeEvent<HTMLInputElement>`, though inline handlers are inferred. For state I let inference work and add generics for `null` or empty arrays. For variant props I use discriminated unions so invalid combinations don't compile, and reducers get action unions with a `never` exhaustiveness check. Reusable lists and tables are generic components."
+**30-second answer:** "I type props with a type alias on the destructured parameter, `children` as `ReactNode`, and extend native elements with `ComponentProps<'button'>`. Handlers use React's event types such as `ChangeEvent<HTMLInputElement>`, though inline handlers are inferred. For state I let inference work and add generics for `null` or empty arrays. Variant props use discriminated unions so invalid combinations don't compile; reducers get action unions with a `never` exhaustiveness check. Reusable lists and tables are generic components."
 
-- *`ReactNode` vs `ReactElement` vs `JSX.Element`?* — `ReactNode` is anything renderable (use for children); `ReactElement`/`JSX.Element` is only a JSX element.
-- *How do you type `ref` in React 19?* — As a normal prop: `ref?: Ref<HTMLInputElement>`, or get it for free from `ComponentProps<'input'>`; `forwardRef` isn't needed.
+- *`ReactNode` vs `ReactElement` vs `JSX.Element`?* — `ReactNode` is anything renderable (children); the others are only a JSX element.
+- *How do you type `ref` in React 19?* — A normal prop `ref?: Ref<HTMLInputElement>`, or free via `ComponentProps<'input'>`; no `forwardRef`.
 - *Why not `any`?* — It disables checking and spreads; use `unknown` and narrow, or a proper type.
-
-### TL;DR
-One union member per valid prop combination, sharing a literal discriminant; narrow `props` before reading fields; `?: never` forbids a prop.
 
 ---
 
 ## 11.10 Reading type errors, and common mistakes
 
-TypeScript error messages look intimidating, but they follow one pattern: *"Type **A** (what you gave) is not assignable to type **B** (what was expected)"* ("not assignable" means a value of type A can't be used where B is required), often followed by indented lines that zoom in on the exact property that differs. Read the **last** indented line first — it's usually the real reason.
+Errors follow one pattern: *"Type **A** (what you gave) is not assignable to type **B** (what was expected)"*, often followed by indented lines zooming in on the differing property. Read the **last** indented line first — usually the real reason.
 
-`code/bad_types.tsx` collects twelve common mistakes (it is excluded from the normal check and from the runner):
+`code/bad_types.tsx` collects twelve common mistakes (excluded from the normal check and runner):
 
 ```tsx
 const e1 = <Badge />;                                   // 1. required prop missing
@@ -780,31 +652,31 @@ bad_types.tsx(49,21): error TS2353: Object literal may only specify known proper
 |---|---|---|---|
 | 1 | `Property 'label' is missing` | required prop not passed | pass it, or make it optional with a default |
 | 2 | `"danger"` not assignable to the union | typo or unsupported variant | use an allowed value, or extend the union |
-| 3 | `'user' is possibly 'null'` | state can still be `null` | narrow first: `user ? ... : ...` or `user?.name` |
+| 3 | `'user' is possibly 'null'` | state can still be `null` | narrow: `user ? ... : ...` or `user?.name` |
 | 4 | `string` not assignable to `never` | `useState([])` inferred `never[]` | `useState<string[]>([])` |
-| 5 | handler for `HTMLInputElement` on a `<select>` | wrong element type in the event | `ChangeEvent<HTMLSelectElement>` (note: in `@types/react` 19 the event types have a second type parameter for `target`, which you normally leave out) |
-| 6 | `Property 'count' is missing ... required in type '{ status: "success"; count: number; }'` | the chosen union member needs `count` | pass `count` |
-| 7 | `string` not assignable to `"star" \| "user" \| undefined` on `icon` | with `src` given, TypeScript tried the members and none fits both props — the message points at one of them | pass only one of `src` / `icon` |
-| 8 | `"author"` not assignable to `"id" \| "title"` | column names a field the row type doesn't have | fix the key, or add the field to the data |
+| 5 | handler for `HTMLInputElement` on a `<select>` | wrong element type | `ChangeEvent<HTMLSelectElement>` (in `@types/react` 19 event types have a second type parameter for `target`, normally omitted) |
+| 6 | `Property 'count' is missing ... required in type '{ status: "success"; count: number; }'` | chosen union member needs `count` | pass `count` |
+| 7 | `string` not assignable to `"star" \| "user" \| undefined` on `icon` | with `src` given, no member fits both; the message points at one | pass only one of `src`/`icon` |
+| 8 | `"author"` not assignable to `"id" \| "title"` | column names a field the row lacks | fix the key or add the field |
 | 9 | `{ type: "clear" }` not assignable to `never` | exhaustiveness check caught an unhandled action | add `case 'clear'` |
-| 10 | `"remove"` not assignable to `"add" \| "clear"` | dispatching an action the reducer doesn't know | dispatch a valid action or add it to the union |
-| 11 | `Expected 1 arguments, but got 0` | React 19 types require an initial value for `useRef` | `useRef<HTMLInputElement>(null)` |
-| 12 | `'title' does not exist in type ... ReactNode ...` | rendering a plain object as a child (would also crash at runtime) | render a field: `{post.title}` |
+| 10 | `"remove"` not assignable to `"add" \| "clear"` | unknown action dispatched | dispatch a valid one or add it to the union |
+| 11 | `Expected 1 arguments, but got 0` | React 19 types require `useRef`'s initial value | `useRef<HTMLInputElement>(null)` |
+| 12 | `'title' does not exist in type ... ReactNode ...` | rendering a plain object (would also crash at runtime) | render a field: `{post.title}` |
 
 ### Other common mistakes
-- **`as` everywhere.** `as Something` silences the checker without checking. Use it only when you truly know more than the compiler (as in `e.target.value as V` above), never to hide a real mismatch.
-- **Non-null assertions** `user!.name` (the `!` tells TypeScript "trust me, this isn't null" without any check) — same risk as `as`; narrow instead.
-- **Duplicating types that already exist.** Use `ComponentProps<typeof X>`, `ReturnType<typeof fn>`, `Parameters<...>`, or export the props type from the component file.
-- **Typing API responses by hand and trusting them** — validate at the boundary (Zod or similar) and derive the type from the schema.
-- **Over-engineering generics** — a component used for one type doesn't need them.
+- **`as` everywhere** — silences the checker without checking. Only when you truly know more (`e.target.value as V` above), never to hide a mismatch.
+- **Non-null assertions** `user!.name` ("trust me, not null", unchecked) — same risk; narrow instead.
+- **Duplicating existing types** — use `ComponentProps<typeof X>`, `ReturnType<typeof fn>`, `Parameters<...>`, or export the props type.
+- **Hand-typed API responses trusted blindly** — validate at the boundary (Zod) and derive the type from the schema.
+- **Over-engineered generics** — a one-type component doesn't need them.
 
 ### Self-check
-1. Why does `useState([])` cause trouble? → The type is inferred as `never[]`, so nothing can be added.
-2. Which type do you use for `children`? → `ReactNode`.
-3. How do you get all the props of a native `<input>`? → `ComponentProps<'input'>`.
-4. How do you make a reducer fail to compile when an action isn't handled? → Assign `action` to a `never` variable in `default`.
-5. In React 19, how does a function component receive a ref? → As a regular `ref` prop typed `Ref<T>`.
-6. Does `tsc` run when Vite builds your app? → No; the bundler only strips types. Run `tsc --noEmit` separately (CI or build script).
+1. Why does `useState([])` cause trouble? → Inferred `never[]`, so nothing can be added.
+2. Type for `children`? → `ReactNode`.
+3. All props of a native `<input>`? → `ComponentProps<'input'>`.
+4. Make a reducer fail to compile on an unhandled action? → Assign `action` to a `never` variable in `default`.
+5. React 19: how does a function component receive a ref? → Regular `ref` prop typed `Ref<T>`.
+6. Does `tsc` run when Vite builds? → No; the bundler only strips types. Run `tsc --noEmit` in CI or the build script.
 
 ---
 
@@ -812,10 +684,10 @@ bad_types.tsx(49,21): error TS2353: Object literal may only specify known proper
 
 | Idea | Remember |
 |---|---|
-| Setup | `.tsx`, `@types/react(-dom)`, `strict: true`, `jsx: "react-jsx"`; bundler strips types, `tsc --noEmit` checks them |
-| Props | `function C({ a, b = 1 }: Props)`; `?` optional; literal unions for variants; function types for callbacks |
-| Children | `ReactNode`; `PropsWithChildren<P>`; native props via `ComponentProps<'button'>` |
-| Events | Inline = inferred; otherwise `ChangeEvent<HTMLInputElement>`, `SubmitEvent<HTMLFormElement>` (older: `FormEvent`), `MouseEvent<...>`, `KeyboardEvent<...>` from `react` |
+| Setup | `.tsx`, `@types/react(-dom)`, `strict: true`, `jsx: "react-jsx"`; bundler strips types, `tsc --noEmit` checks them (in CI) |
+| Props | `function C({ a, b = 1 }: Props)`; `?` optional, defaults remove `undefined`; literal unions for variants; function types for callbacks |
+| Children | `ReactNode`; `PropsWithChildren<P>`; native props via `ComponentProps<'button'>` & spread the rest |
+| Events | Inline = inferred; otherwise `ChangeEvent<HTMLInputElement>`, `SubmitEvent<HTMLFormElement>` (older: `FormEvent`), `MouseEvent<...>`, `KeyboardEvent<...>` from `react`; `currentTarget` has your element's type |
 | State | Infer; `useState<T \| null>(null)`, `useState<string[]>([])`, literal unions |
 | Reducers | Action = discriminated union; `never` exhaustiveness check |
 | Refs | `useRef<HTMLXxxElement>(null)`; argument required in React 19 types; `ref` is a prop typed `Ref<T>`; `useImperativeHandle` for custom handles |
