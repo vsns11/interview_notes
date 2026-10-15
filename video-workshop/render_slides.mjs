@@ -75,7 +75,7 @@ function body(sc, reveal) {
     case 'twocol': {
       const L = sc.left?.bullets || [];
       const R = sc.right?.bullets || [];
-      return `${kick}<h1>${fmt(sc.title)}</h1><div class="cols"><div class="col"><h2>${fmt(sc.left?.heading)}</h2><ul>${L.map((b, i) => li(b, i)).join('')}</ul></div><div class="col"><h2>${fmt(sc.right?.heading)}</h2><ul>${R.map((b, i) => li(b, i + L.length)).join('')}</ul></div></div>`;
+      return `${kick}<h1>${fmt(sc.title)}</h1><div class="cols"><div class="col"><h2>${fmt(sc.left?.heading)}</h2><ul>${L.map((b, i) => li(b, i)).join('')}</ul></div><div class="col"><h2>${fmt(sc.right?.heading)}</h2><ul>${R.map((b, i) => li(b, i + L.length)).join('')}</ul></div></div>${sc.caption ? `<div class="caption" style="margin-top:auto;text-align:left">${fmt(sc.caption)}</div>` : ''}`;
     }
     case 'table': {
       const t = sc.table || { head: [], rows: [] };
@@ -88,7 +88,7 @@ function body(sc, reveal) {
     case 'quiz':
       return `<div class="kicker">${fmt(sc.kicker || 'Pause and think')}</div><h1>${fmt(sc.title)}</h1><ul class="quiz">${(sc.bullets || []).map((b, i) => `<li>${fmt(b)}</li>`).join('')}</ul>`;
     default: // bullets, recap
-      return `${kick}<h1>${fmt(sc.title)}</h1><ul>${(sc.bullets || []).map((b, i) => li(b, i)).join('')}</ul>`;
+      return `${kick}<h1>${fmt(sc.title)}</h1><ul>${(sc.bullets || []).map((b, i) => li(b, i)).join('')}</ul>${sc.caption ? `<div class="caption" style="margin-top:auto;text-align:left">${fmt(sc.caption)}</div>` : ''}`;
   }
 }
 
