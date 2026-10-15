@@ -22,9 +22,9 @@ java -cp /tmp/lld_18 lld.ch18.stackoverflow.Main       # or cricinfo, cricketdas
 
 `javac` is the Java **compiler** (it turns `.java` source files into `.class` files the Java runtime can execute); `--release 21` says which Java version to target, and `-d` names the output folder. `java -cp` runs a program, where the **classpath** (`-cp`) is the list of folders in which Java looks for compiled classes. The **standard library** is the set of classes that ships with Java itself, so nothing extra has to be downloaded.
 
-All five `Main` classes compile with Java 21 (standard library only) and run. The output printed under each design is the real output of that program.
+All five `Main` classes compile with Java 21 (standard library only) and run. The output printed under each design is the real output of that program; the listings show only the essential lines, and the complete files are in `code/`.
 
-> **Code-style note.** To keep a whole design readable in one place, a file sometimes holds several small package-private types (for example `Posts.java` holds `Post`, `Question`, `Answer`, `Comment`, `Tag` and `Bounty`). That is legal Java. In a production codebase you would usually give each public top-level type its own file.
+> **Code-style note.** A file sometimes holds several small package-private types (e.g. `Posts.java` holds `Post`, `Question`, `Answer`, `Comment`, `Tag` and `Bounty`). That is legal Java; production code usually gives each public top-level type its own file.
 
 > **Key term — Java vocabulary used in this chapter:** A **package** is a named folder of related classes (`lld.ch18.stackoverflow`); a **package-private** type has no `public`/`private` keyword and can be used only by classes in the same package. A **top-level type** is a class, interface, enum or record not nested inside another one. An **interface** lists methods a class promises to provide, without the code; a class that provides them *implements* it. An **abstract class** can never be created directly — only its subclasses can. An **enum** is a type with a fixed list of named values (`OPEN`, `CLOSED`). A **record** is a short way to declare a class that just carries data that never changes. A **sealed** type names exactly which subclasses are allowed, so the compiler knows every possible kind.
 
@@ -212,37 +212,18 @@ Our Java code follows the same order: `ask()` resolves each tag, creating it onl
 
 ### Class diagram
 
-The course builds the class diagram in **five stages**, each adding a few classes for a few requirements. Classes from earlier stages are drawn in grey, so the picture fills in step by step.
+The course builds the class diagram in **five stages**, each adding a few classes for a few requirements:
 
-![Stage 1: the small pieces](../../assets/O-design-stack-overflow-5.svg)
-*Figure — Stage 1: `Badge`, `Tag` (with daily and weekly usage counters and `record_use`) and abstract `Notification` with its `EmailNotification` subclass (course diagram)*
-
-Stage 1 covers requirements 8, 10 and 13. None of these classes depends on anything yet. The key idea is in `Tag`: it counts its own uses when attached to a question, so "most used tags" becomes a quick read rather than a scan of every question. `Notification` is abstract with one subclass per delivery method — an email notification genuinely is a notification that can be sent, so the inheritance passes the substitution test (the Liskov Substitution Principle: a subclass object must work correctly anywhere its parent class is expected).
+- **Stage 1 (requirements 8, 10, 13): `Badge`, `Tag`, `Notification`.** `Tag` counts its own uses (daily and weekly counters, `record_use`) when attached to a question, so "most used tags" is a quick read, not a scan. `Notification` is abstract with one subclass per delivery method (`EmailNotification`); an email notification genuinely is a notification, so the inheritance passes the substitution test (the Liskov Substitution Principle: a subclass object must work anywhere its parent is expected).
+- **Stage 2 (requirement 7): `Photo` (attachments on questions and answers) and `Bounty`.** The bounty holds the staked amount itself, so the value has one owner until settled; the course's reason is that it can go back to the sponsor if nobody earns it. Careful: on the real site a bounty is *not* refundable, so our code deducts the points when the bounty starts and never returns them.
+- **Stage 3 — the heart: abstract `Post` over `Question`, `Answer`, `Comment`.** Upvoting and flagging (requirements 5, 6) work the *same way* on all three, so that behaviour is written once in `Post`; what each contains differs, so they stay three classes rather than one plus a "kind" field. `Post` remembers **who** voted, or one member could vote ten times. Filled diamonds are **composition**: deleting a question deletes its answers, comments, photos and bounty. `Tag` is a plain **association**: many questions share it and it outlives each. `Post` keeps only the author's id, so there is no arrow from a post to a member.
+- **Stage 4 (search, requirement 13): the `Search` interface and `QuestionIndex`.** A static (class-level) `Question.search` would force `Question` to know every question. The index *realizes* `Search` and only associates with questions and tags: deleting it deletes no question.
+- **Stage 5 (requirement 1): `Account`, `Guest`, `Member`, `Moderator`, `Admin`.** Guest methods sit on `Guest`; `Member` extends it and adds posting and voting, so a guest simply has no `createQuestion` and no check can be forgotten. `Moderator` and `Admin` extend `Member` (substitution holds). `Member` owns its badges (composition); its link to `Account` is a plain association because the account is created elsewhere.
 
 ![UML legend](../../assets/O-design-stack-overflow-6.svg)
 *Figure — The UML legend used in these diagrams: class, interface, realization, generalization, dependency, association, aggregation and composition arrows (course diagram)*
 
-**UML** (Unified Modeling Language) is the standard notation for drawing classes and their links. In short: **generalization** is the inheritance arrow ("is a kind of"); **realization** means a class implements an interface; **dependency** means one class merely uses another for a moment; **aggregation** (hollow diamond) means "has, but does not own"; **composition** (filled diamond) and **association** are explained in Stage 3 below.
-
-![Stage 2: photos and bounties](../../assets/O-design-stack-overflow-7.svg)
-*Figure — Stage 2 adds `Photo` (attachments on questions and answers) and `Bounty` (reputation held until awarded or expired) (course diagram)*
-
-Stage 2 covers requirement 7. The bounty keeps the staked amount itself rather than on the question, so the money-like value has one owner until it is settled. The course's reason for this is that the amount can then go back to the sponsor if nobody earns it. Be careful in an interview: on the real site a bounty is *not* refundable, so our code deducts the points when the bounty starts and never returns them.
-
-![Stage 3: the posts](../../assets/O-design-stack-overflow-8.svg)
-*Figure — Stage 3: abstract `Post` with `Question`, `Answer` and `Comment` below it; filled diamonds from `Question` to its answers, comments, photos and bounty; a plain association from `Question` to `Tag` (course diagram)*
-
-Stage 3 is the heart of the design. Requirements 5 and 6 say that upvoting and flagging work the *same way* on three classes, so that behaviour is written once in `Post`. What *differs* is what each one contains, so they remain three separate classes instead of a single class plus a "kind" field. `Post` also remembers **who** voted — otherwise one member could vote ten times. The filled diamonds are **composition**: deleting a question also deletes its answers, comments, photos and bounty. `Tag` is linked by a plain **association** instead: many questions use the same tag, and the tag lives on after any one of them is deleted. Because `Post` keeps only the author's id, the diagram has no arrow from a post to a member.
-
-![Stage 4: finding a question](../../assets/O-design-stack-overflow-9.svg)
-*Figure — Stage 4: the `Search` interface and `QuestionIndex`, which holds (but does not own) questions and tags (course diagram)*
-
-Stage 4 covers search and requirement 13. A tempting first attempt makes search a static method (a method that belongs to the class itself rather than to any one object) on `Question`, which forces `Question` to know every question in existence — not its job. The index implements `Search` (dashed line with hollow head = realization). Its arrows are plain associations: deleting the index deletes no question.
-
-![Stage 5: who is allowed to do what](../../assets/O-design-stack-overflow-10.svg)
-*Figure — Stage 5: `Account`, `Guest`, `Member` (extends Guest), `Moderator` and `Admin` (extend Member); `Member` owns its badges (course diagram)*
-
-Stage 5 covers requirement 1 by the *shape* of the classes: the methods a guest may call sit on `Guest`, and `Member` inherits them and adds posting and voting. A guest simply has no `createQuestion` method, so no check can be forgotten. `Moderator` and `Admin` inherit from `Member` since each of them may do anything a member may (the substitution test passes). `Member` owns its badges (filled diamond): a badge is awarded to that one member. The link from a member to its `Account` is a plain association, because the account is created elsewhere and handed to the member.
+**UML** (Unified Modeling Language) is the standard notation for classes and their links: **generalization** is the inheritance arrow ("is a kind of"); **realization** means a class implements an interface; **dependency** means one class merely uses another for a moment; **aggregation** (hollow diamond) means "has, but does not own"; **composition** (filled diamond) means the part dies with the whole; **association** (plain arrow) means one class refers to another.
 
 ![The finished class diagram](../../assets/O-design-stack-overflow-11.svg)
 *Figure — The finished Stack Overflow class diagram: enums (QuestionStatus, QuestionClosingRemark, AccountStatus), Constants, the posts, tags, badges, bounty, photo, notification, search index and the account hierarchy (course diagram)*
@@ -407,156 +388,37 @@ stateDiagram-v2
 
 ### Java implementation
 
-Package `lld.ch18.stackoverflow`. Read the files in this order: the enums and privilege table (`Types.java`), accounts, posts, reputation Strategy/Observer, the search index, then the facade and the demo.
+Package `lld.ch18.stackoverflow`. Full runnable code is in `code/lld/ch18/stackoverflow/`; read it in this order: `Types.java` (enums and the privilege table), `Accounts.java`, `Posts.java`, `Reputation.java` (Strategy/Observer, notifications), `QuestionIndex.java`, `StackOverflow.java` (the facade) and `Main.java`. The essential lines (`/* ... */` and `//` summary comments stand for code left out):
 
 ```java
-// File: lld/ch18/stackoverflow/Types.java
-package lld.ch18.stackoverflow;
-
-/** Lifecycle of a question. ON_HOLD is the older name Stack Overflow used for a freshly closed question. */
-enum QuestionStatus { OPEN, ON_HOLD, CLOSED, DELETED }
-
-/** Why a question was closed. */
-enum ClosingRemark {
-    DUPLICATE, OFF_TOPIC, TOO_BROAD, NOT_CONSTRUCTIVE, NOT_A_REAL_QUESTION, PRIMARILY_OPINION_BASED
-}
-
+enum QuestionStatus { OPEN, ON_HOLD, CLOSED, DELETED }      // ON_HOLD: the older name for a freshly closed question
+enum ClosingRemark { DUPLICATE, OFF_TOPIC, TOO_BROAD, NOT_CONSTRUCTIVE, NOT_A_REAL_QUESTION, PRIMARILY_OPINION_BASED }
 enum AccountStatus { ACTIVE, CLOSED, CANCELED, BLACKLISTED, BLOCKED }
 
-enum VoteType { UP, DOWN }
-
-/**
- * Reputation needed to unlock an action. The numbers follow the public
- * privileges page of stackoverflow.com, so "reputation unlocks privileges"
- * is data here, not if-statements spread over the code.
- */
+/** Reputation needed to unlock an action (stackoverflow.com's public privileges page): data, not scattered ifs. */
 enum Privilege {
-    ASK_OR_ANSWER(1),
-    VOTE_UP(15),
-    FLAG(15),
-    COMMENT_EVERYWHERE(50),
-    SET_BOUNTY(75),
-    VOTE_DOWN(125),
-    CREATE_TAG(1500),
-    EDIT_ANY_POST(2000),
-    CAST_CLOSE_VOTE(3000),
-    CAST_DELETE_VOTE(10000);
-
+    ASK_OR_ANSWER(1), VOTE_UP(15), FLAG(15), COMMENT_EVERYWHERE(50), SET_BOUNTY(75), VOTE_DOWN(125),
+    CREATE_TAG(1500), EDIT_ANY_POST(2000), CAST_CLOSE_VOTE(3000), CAST_DELETE_VOTE(10000);
     final int minReputation;
-
     Privilege(int minReputation) { this.minReputation = minReputation; }
 }
 
-/** A badge is just a name and a description; members own the badges they earn. */
-record Badge(String name, String description) {}
-```
-
-```java
-// File: lld/ch18/stackoverflow/Accounts.java
-package lld.ch18.stackoverflow;
-
-import java.util.Collections;
-import java.util.LinkedHashSet;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-
-/**
- * A registered member. A guest has no Member object at all: every write
- * operation on the StackOverflow facade takes a Member, so "guests can only
- * search and view" is enforced by the method signatures.
- */
+/** A guest has no Member object: every write on the facade takes a Member, so the signatures enforce requirement 1. */
 class Member {
-    private static final AtomicLong IDS = new AtomicLong();
-
-    private final long id = IDS.incrementAndGet();
-    private final String name;
-    private final String email;
     private final AtomicInteger reputation = new AtomicInteger(1);   // every account starts at 1
-    private final Set<Badge> badges = Collections.synchronizedSet(new LinkedHashSet<>());
     private volatile AccountStatus status = AccountStatus.ACTIVE;
-
-    Member(String name, String email) {
-        this.name = name;
-        this.email = email;
-    }
-
-    long id() { return id; }
-    String name() { return name; }
-    String email() { return email; }
-    int reputation() { return reputation.get(); }
-    AccountStatus status() { return status; }
-    void setStatus(AccountStatus status) { this.status = status; }
-
-    /** Applies a delta atomically; reputation never drops below 1 (the site's floor). Returns the new value. */
-    int changeReputation(int delta) {
-        return reputation.updateAndGet(r -> Math.max(1, r + delta));
-    }
-
-    /** Demo helper: pretend the member earned reputation before the demo started. */
-    void seedReputation(int value) { reputation.set(value); }
-
+    /** Applies a delta atomically; reputation never drops below 1 (the site's floor). */
+    int changeReputation(int delta) { return reputation.updateAndGet(r -> Math.max(1, r + delta)); }
     boolean hasPrivilege(Privilege p) { return reputation() >= p.minReputation; }
-
-    boolean addBadge(Badge b) { return badges.add(b); }
-    Set<Badge> badges() { synchronized (badges) { return Set.copyOf(badges); } }
-
-    @Override public String toString() { return name + "(" + reputation() + ")"; }
 }
-
-/** Moderators can do everything a member can, whatever their reputation, plus close/reopen/delete/undelete any question. */
-class Moderator extends Member {
-    Moderator(String name, String email) { super(name, email); }
-    @Override boolean hasPrivilege(Privilege p) { return true; }
-}
-
-/** Admins block and unblock members. */
-class Admin extends Member {
-    Admin(String name, String email) { super(name, email); }
-    @Override boolean hasPrivilege(Privilege p) { return true; }
-}
+class Moderator extends Member { @Override boolean hasPrivilege(Privilege p) { return true; } }   // Admin: same
 ```
 
 ```java
-// File: lld/ch18/stackoverflow/Posts.java
-package lld.ch18.stackoverflow;
-
-import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-
-/**
- * Behaviour shared by questions, answers and comments: votes, flags and comments.
- * Votes are stored per voter (not as a bare counter) so one member cannot vote twice
- * and a vote can be changed or reversed.
- */
+/** Votes are stored per voter (not a bare counter): no double votes, and a vote can be changed or reversed. */
 abstract sealed class Post permits Question, Answer, Comment {
-    private static final AtomicLong IDS = new AtomicLong(100);
-
-    private final long id = IDS.incrementAndGet();
-    private final Member author;
-    private volatile String body;
     private final Map<Long, VoteType> votes = new HashMap<>();
     private final Set<Long> flaggers = new HashSet<>();
-    private final List<Comment> comments = new ArrayList<>();
-
-    Post(Member author, String body) {
-        this.author = author;
-        this.body = body;
-    }
-
-    long id() { return id; }
-    Member author() { return author; }
-    String body() { return body; }
-    void edit(String newBody) { this.body = newBody; }
 
     /** Records or changes a vote and returns the voter's previous vote, if any. */
     synchronized Optional<VoteType> castVote(Member voter, VoteType type) {
@@ -565,71 +427,22 @@ abstract sealed class Post permits Question, Answer, Comment {
         if (previous == type) throw new IllegalStateException(voter.name() + " already voted " + type + " on this post");
         return Optional.ofNullable(previous);
     }
-
-    synchronized int score() {
-        return votes.values().stream().mapToInt(v -> v == VoteType.UP ? 1 : -1).sum();
-    }
-
+    synchronized int score() { return votes.values().stream().mapToInt(v -> v == VoteType.UP ? 1 : -1).sum(); }
     /** Returns the number of distinct flaggers after this flag. */
-    synchronized int flag(Member by) {
-        if (!flaggers.add(by.id())) throw new IllegalStateException(by.name() + " already flagged this post");
-        return flaggers.size();
-    }
-
-    synchronized void addComment(Comment c) { comments.add(c); }
-    synchronized List<Comment> comments() { return List.copyOf(comments); }
-
-    abstract String label();
+    synchronized int flag(Member by) { /* flaggers.add or "already flagged" */ }
 }
 
 final class Question extends Post {
-    private final String title;
-    private final Set<Tag> tags;
-    private final List<Answer> answers = new ArrayList<>();
-    private final Set<Long> closeVoters = new HashSet<>();
-    private final Set<Long> deleteVoters = new HashSet<>();
-    private final AtomicInteger views = new AtomicInteger();
-    private QuestionStatus status = QuestionStatus.OPEN;
-    private ClosingRemark closingRemark;
-    private Bounty bounty;
-
     Question(Member author, String title, String body, Set<Tag> tags) {
         super(author, body);
-        this.title = title;
-        this.tags = new LinkedHashSet<>(tags);
         tags.forEach(Tag::recordUse);            // a tag counts its own uses: "top tags" becomes a read
     }
-
-    String title() { return title; }
-    Set<Tag> tags() { return Set.copyOf(tags); }
-    int view() { return views.incrementAndGet(); }
-    int views() { return views.get(); }
-
-    synchronized QuestionStatus status() { return status; }
-    synchronized Optional<ClosingRemark> closingRemark() { return Optional.ofNullable(closingRemark); }
-    synchronized List<Answer> answers() { return List.copyOf(answers); }
-    synchronized Optional<Bounty> bounty() { return Optional.ofNullable(bounty); }
-
     synchronized void addAnswer(Answer a) {
         if (status != QuestionStatus.OPEN) throw new IllegalStateException("question is " + status + ", no new answers");
         answers.add(a);
     }
-
     /** Marks one answer accepted and returns the previously accepted one (only one answer can win). */
-    synchronized Optional<Answer> accept(Answer chosen) {
-        if (!answers.contains(chosen)) throw new IllegalArgumentException("answer does not belong to this question");
-        Optional<Answer> previous = answers.stream().filter(Answer::isAccepted).findFirst();
-        previous.ifPresent(p -> p.setAccepted(false));
-        chosen.setAccepted(true);
-        return previous;
-    }
-
-    synchronized void attachBounty(Bounty b) {
-        if (status != QuestionStatus.OPEN) throw new IllegalStateException("bounties need an open question");
-        if (bounty != null && !bounty.isSettled()) throw new IllegalStateException("question already has an active bounty");
-        bounty = b;
-    }
-
+    synchronized Optional<Answer> accept(Answer chosen) { /* ... */ }
     /** One close vote per member; returns true when this vote closed the question. */
     synchronized boolean voteToClose(Member voter, ClosingRemark remark, int threshold) {
         if (status != QuestionStatus.OPEN) throw new IllegalStateException("question is already " + status);
@@ -637,353 +450,66 @@ final class Question extends Post {
         if (closeVoters.size() >= threshold) { close(remark); return true; }
         return false;
     }
-
-    synchronized boolean voteToDelete(Member voter, int threshold) {
-        if (status != QuestionStatus.CLOSED) throw new IllegalStateException("only closed questions can be deleted by vote");
-        if (!deleteVoters.add(voter.id())) throw new IllegalStateException(voter.name() + " already voted to delete");
-        if (deleteVoters.size() >= threshold) { status = QuestionStatus.DELETED; return true; }
-        return false;
-    }
-
-    synchronized void close(ClosingRemark remark) { status = QuestionStatus.CLOSED; closingRemark = remark; }
-    synchronized void reopen() { status = QuestionStatus.OPEN; closingRemark = null; closeVoters.clear(); }
-    synchronized void delete() { status = QuestionStatus.DELETED; }
-    synchronized void undelete() { status = QuestionStatus.CLOSED; deleteVoters.clear(); }
-
-    @Override String label() { return "question #" + id() + " \"" + title + "\""; }
+    // voteToDelete: only CLOSED questions; close/reopen/delete/undelete (undelete -> CLOSED); attachBounty needs OPEN.
 }
-
-final class Answer extends Post {
-    private final Question question;
-    private volatile boolean accepted;
-
-    Answer(Member author, Question question, String body) {
-        super(author, body);
-        this.question = question;
-    }
-
-    Question question() { return question; }
-    boolean isAccepted() { return accepted; }
-    void setAccepted(boolean accepted) { this.accepted = accepted; }
-
-    @Override String label() { return "answer #" + id() + " by " + author().name(); }
-}
-
-final class Comment extends Post {
-    private final Post parent;
-
-    Comment(Member author, Post parent, String body) {
-        super(author, body);
-        this.parent = parent;
-    }
-
-    Post parent() { return parent; }
-    @Override String label() { return "comment #" + id(); }
-}
-
-/** A tag is shared by many questions and outlives each of them (association, not composition). */
-final class Tag {
-    private final String name;
-    private final String description;
-    private final AtomicInteger uses = new AtomicInteger();
-
-    Tag(String name, String description) { this.name = name; this.description = description; }
-
-    String name() { return name; }
-    String description() { return description; }
-    void recordUse() { uses.incrementAndGet(); }
-    int uses() { return uses.get(); }
-    @Override public String toString() { return "[" + name + "]"; }
-}
-
-/** Reputation the asker has staked; it leaves the asker's account when the bounty starts. */
-final class Bounty {
-    private final Member sponsor;
-    private final int reputation;
-    private final LocalDate expiresOn;
-    private Member awardedTo;
-    private boolean expired;
-
-    Bounty(Member sponsor, int reputation, LocalDate expiresOn) {
-        this.sponsor = sponsor;
-        this.reputation = reputation;
-        this.expiresOn = expiresOn;
-    }
-
-    Member sponsor() { return sponsor; }
-    int reputation() { return reputation; }
-    LocalDate expiresOn() { return expiresOn; }
-    synchronized boolean isSettled() { return awardedTo != null || expired; }
-
-    synchronized void awardTo(Member winner, LocalDate today) {
-        if (isSettled()) throw new IllegalStateException("bounty already settled");
-        if (today.isAfter(expiresOn)) throw new IllegalStateException("bounty expired on " + expiresOn);
-        awardedTo = winner;
-    }
-
-    synchronized void expire() { expired = true; }
-}
+// Answer (belongs to one question; accepted flag), Comment (parent post), Tag (shared by many questions and
+// outlives each: association, not composition), Bounty (sponsor, staked reputation, expiresOn; awardTo refuses
+// after expiry or when already settled).
 ```
 
 ```java
-// File: lld/ch18/stackoverflow/Reputation.java
-package lld.ch18.stackoverflow;
-
-import java.util.List;
-
-/**
- * Strategy: the scoring rules live behind an interface, so voting code does not
- * know the numbers. Changing a rule (e.g. the 2019 move of question upvotes
- * from +5 to +10) is a new
- * policy, not an edit to the voting code (Open/Closed Principle).
- */
+/** Strategy: the scoring rules live behind an interface, so voting code does not know the numbers. */
 interface ReputationPolicy {
     int authorDeltaForVote(Post post, VoteType type);
     int voterDeltaForVote(Post post, VoteType type);
     int acceptedAnswerBonus();
     int acceptorBonus();
 }
-
-/** Today's stackoverflow.com rules: +10 for any upvote, -2 to the author per downvote, -1 to whoever downvotes an answer. */
+/** Today's rules: +10 for any upvote, -2 to the author per downvote, -1 to whoever downvotes an answer. */
 final class DefaultReputationPolicy implements ReputationPolicy {
     @Override public int authorDeltaForVote(Post post, VoteType type) {
         return switch (post) {
             case Question q -> type == VoteType.UP ? 10 : -2;   // +5 before November 2019
             case Answer a -> type == VoteType.UP ? 10 : -2;
-            case Comment c -> 0;                       // comment votes earn no reputation
+            case Comment c -> 0;                               // comment votes earn no reputation
         };
     }
-    @Override public int voterDeltaForVote(Post post, VoteType type) {
-        return post instanceof Answer && type == VoteType.DOWN ? -1 : 0;
-    }
+    @Override public int voterDeltaForVote(Post post, VoteType type) { return post instanceof Answer && type == VoteType.DOWN ? -1 : 0; }
     @Override public int acceptedAnswerBonus() { return 15; }
     @Override public int acceptorBonus() { return 2; }
 }
-
 /** Observer: anything that wants to react to a reputation change. */
-interface ReputationListener {
-    void onReputationChanged(Member member, int oldValue, int newValue, String reason);
-}
+interface ReputationListener { void onReputationChanged(Member member, int oldValue, int newValue, String reason); }
+// BadgeAwarder awards Contributor / Helpful / Trusted when reputation crosses 15 / 50 / 125 (course thresholds).
+// Notifier (the "System" actor) sends through every NotificationChannel (Strategy: EmailChannel today, push tomorrow).
 
-/** Awards reputation-level badges (course thresholds: 15, 50, 125). */
-final class BadgeAwarder implements ReputationListener {
-    private record Level(int reputation, Badge badge) {}
-
-    private final List<Level> levels = List.of(
-            new Level(15, new Badge("Contributor", "reached 15 reputation")),
-            new Level(50, new Badge("Helpful", "reached 50 reputation")),
-            new Level(125, new Badge("Trusted", "reached 125 reputation")));
-    private final Notifier notifier;
-
-    BadgeAwarder(Notifier notifier) { this.notifier = notifier; }
-
-    @Override public void onReputationChanged(Member m, int oldValue, int newValue, String reason) {
-        for (Level level : levels) {
-            if (oldValue < level.reputation() && newValue >= level.reputation() && m.addBadge(level.badge())) {
-                notifier.send(m, "You earned the '" + level.badge().name() + "' badge");
-            }
-        }
-    }
-}
-
-/** Delivery channel for notifications (Strategy: email today, push tomorrow). */
-interface NotificationChannel {
-    void deliver(Member to, String text);
-}
-
-final class EmailChannel implements NotificationChannel {
-    @Override public void deliver(Member to, String text) {
-        System.out.println("    [email to " + to.email() + "] " + text);
-    }
-}
-
-/** The "System" actor: sends notifications through every configured channel. */
-final class Notifier {
-    private final List<NotificationChannel> channels;
-    Notifier(List<NotificationChannel> channels) { this.channels = List.copyOf(channels); }
-    void send(Member to, String text) { channels.forEach(c -> c.deliver(to, text)); }
-}
-```
-
-```java
-// File: lld/ch18/stackoverflow/QuestionIndex.java
-package lld.ch18.stackoverflow;
-
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-
-/** Search contract, kept separate so a full-text engine could replace the in-memory index. */
-interface Search {
-    List<Question> search(String query);
-    List<Question> searchByTag(String tagName);
-}
-
-/**
- * An inverted index: word -> questions containing it. It refers to questions
- * but does not own them (throwing the index away deletes no question).
- */
+/** An inverted index: word -> questions containing it. It refers to questions but does not own them. */
 final class QuestionIndex implements Search {
     private final Map<String, Set<Question>> byWord = new ConcurrentHashMap<>();
     private final Map<String, Set<Question>> byTag = new ConcurrentHashMap<>();
-
-    void add(Question q) {
-        for (String word : words(q.title() + " " + q.body())) {
-            byWord.computeIfAbsent(word, k -> ConcurrentHashMap.newKeySet()).add(q);
-        }
-        for (Tag t : q.tags()) {
-            byTag.computeIfAbsent(t.name(), k -> ConcurrentHashMap.newKeySet()).add(q);
-        }
-    }
-
     /** Questions containing every word of the query, best score first; deleted questions are hidden. */
-    @Override public List<Question> search(String query) {
-        List<String> terms = words(query);
-        if (terms.isEmpty()) return List.of();
-        Set<Question> result = new HashSet<>(byWord.getOrDefault(terms.get(0), Set.of()));
-        for (String t : terms.subList(1, terms.size())) result.retainAll(byWord.getOrDefault(t, Set.of()));
-        return rank(result);
-    }
-
-    @Override public List<Question> searchByTag(String tagName) {
-        return rank(byTag.getOrDefault(tagName.toLowerCase(Locale.ROOT), Set.of()));
-    }
-
-    private static List<Question> rank(Set<Question> qs) {
-        return qs.stream()
-                .filter(q -> q.status() != QuestionStatus.DELETED)
-                .sorted(Comparator.comparingInt(Question::score).reversed().thenComparingLong(Question::id))
-                .toList();
-    }
-
-    private static List<String> words(String text) {
-        return Arrays.stream(text.toLowerCase(Locale.ROOT).split("[^a-z0-9#+]+"))
-                .filter(w -> w.length() > 2)
-                .distinct()
-                .toList();
-    }
+    @Override public List<Question> search(String query) { /* intersect byWord sets, then rank */ }
 }
 ```
 
 ```java
-// File: lld/ch18/stackoverflow/StackOverflow.java
-package lld.ch18.stackoverflow;
-
-import java.time.LocalDate;
-import java.util.Comparator;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-
-/**
- * Facade: the one entry point the UI/controllers call. It checks who may do
- * what (account status + privilege), delegates state changes to the posts,
- * applies reputation through the policy, and tells listeners.
- */
+/** Facade: checks account status + privilege, delegates state changes to the posts, applies reputation, tells listeners. */
 public final class StackOverflow {
-    static final int VOTES_TO_CLOSE = 3;
-    static final int VOTES_TO_DELETE = 3;
-    static final int FLAGS_FOR_MODERATOR_REVIEW = 3;
-    static final int MIN_BOUNTY = 50;
-    static final int MAX_BOUNTY = 500;
-    static final int BOUNTY_DAYS = 7;
+    static final int VOTES_TO_CLOSE = 3, VOTES_TO_DELETE = 3, FLAGS_FOR_MODERATOR_REVIEW = 3;
+    static final int MIN_BOUNTY = 50, MAX_BOUNTY = 500, BOUNTY_DAYS = 7;
 
-    private final Map<String, Tag> tags = new ConcurrentHashMap<>();
-    private final Map<Long, Member> members = new ConcurrentHashMap<>();
-    private final QuestionIndex index = new QuestionIndex();
-    private final ReputationPolicy policy;
-    private final Notifier notifier;
-    private final List<ReputationListener> listeners = new CopyOnWriteArrayList<>();
-    private final List<Moderator> moderators = new CopyOnWriteArrayList<>();
-
-    StackOverflow(ReputationPolicy policy, Notifier notifier) {
-        this.policy = policy;
-        this.notifier = notifier;
-    }
-
-    void addReputationListener(ReputationListener l) { listeners.add(l); }
-
-    // ---------- accounts ----------
-    <M extends Member> M register(M member) {
-        members.put(member.id(), member);
-        if (member instanceof Moderator mod) moderators.add(mod);
-        return member;
-    }
-
-    void block(Admin admin, Member target) { target.setStatus(AccountStatus.BLOCKED); log(admin.name() + " blocked " + target.name()); }
-    void unblock(Admin admin, Member target) { target.setStatus(AccountStatus.ACTIVE); log(admin.name() + " unblocked " + target.name()); }
-
-    // ---------- guest operations (no Member needed) ----------
-    List<Question> search(String query) { return index.search(query); }
-    List<Question> searchByTag(String tag) { return index.searchByTag(tag); }
-    int view(Question q) { return q.view(); }
-
-    /** Requirement 13: the most used tags; each tag counted itself, so this is a sort, not a scan of all questions. */
-    List<Tag> topTags(int n) {
-        return tags.values().stream()
-                .sorted(Comparator.comparingInt(Tag::uses).reversed().thenComparing(Tag::name))
-                .limit(n).toList();
-    }
-
-    // ---------- tags ----------
-    Tag createTag(Member by, String name, String description) {
-        require(by, Privilege.CREATE_TAG);
-        return tags.computeIfAbsent(name.toLowerCase(Locale.ROOT), k -> new Tag(k, description));
-    }
-
-    // ---------- posting ----------
     Question ask(Member asker, String title, String body, List<String> tagNames) {
         require(asker, Privilege.ASK_OR_ANSWER);
-        Set<Tag> resolved = new LinkedHashSet<>();
-        for (String raw : tagNames) {
-            String name = raw.toLowerCase(Locale.ROOT);
-            Tag tag = tags.get(name);
-            if (tag == null) tag = createTag(asker, name, "");    // throws if the asker may not create tags
-            resolved.add(tag);
-        }
+        Set<Tag> resolved = /* each name: the existing tag, or createTag(asker, ...), which throws without CREATE_TAG */;
         Question q = new Question(asker, title, body, resolved);
         index.add(q);
-        log(asker.name() + " asked " + q.label() + " " + resolved);
         return q;
     }
 
-    Answer answer(Member author, Question q, String body) {
-        require(author, Privilege.ASK_OR_ANSWER);
-        Answer a = new Answer(author, q, body);
-        q.addAnswer(a);                                          // throws unless the question is OPEN
-        log(author.name() + " posted " + a.label() + " on question #" + q.id());
-        notifier.send(q.author(), author.name() + " answered \"" + q.title() + "\"");
-        return a;
-    }
-
-    Comment comment(Member author, Post target, String body) {
-        requireActive(author);
-        boolean ownThread = target.author().id() == author.id()
-                || (target instanceof Answer a && a.question().author().id() == author.id());
-        if (!ownThread) require(author, Privilege.COMMENT_EVERYWHERE);
-        Comment c = new Comment(author, target, body);
-        target.addComment(c);
-        log(author.name() + " commented on " + target.label() + ": \"" + body + "\"");
-        if (target.author().id() != author.id()) notifier.send(target.author(), author.name() + " commented on your " + target.label());
-        return c;
-    }
-
-    // ---------- voting & reputation ----------
     void vote(Member voter, Post post, VoteType type) {
         require(voter, type == VoteType.UP ? Privilege.VOTE_UP : Privilege.VOTE_DOWN);
         if (post instanceof Comment && type == VoteType.DOWN) throw new IllegalStateException("comments can only be upvoted");
         Optional<VoteType> previous = post.castVote(voter, type);
-        log(voter.name() + " voted " + type + " on " + post.label() + " -> score " + post.score());
         previous.ifPresent(p -> {                                  // undo the old vote's effect first
             adjust(post.author(), -policy.authorDeltaForVote(post, p), "vote changed on " + post.label());
             adjust(voter, -policy.voterDeltaForVote(post, p), "vote changed");
@@ -992,18 +518,6 @@ public final class StackOverflow {
         adjust(voter, policy.voterDeltaForVote(post, type), "downvoted an answer");
     }
 
-    void acceptAnswer(Member asker, Answer answer) {
-        requireActive(asker);
-        Question q = answer.question();
-        if (q.author().id() != asker.id()) throw new IllegalStateException("only the asker can accept an answer");
-        Optional<Answer> previous = q.accept(answer);
-        log(asker.name() + " accepted " + answer.label());
-        previous.ifPresent(p -> adjust(p.author(), -policy.acceptedAnswerBonus(), "acceptance moved away"));
-        adjust(answer.author(), policy.acceptedAnswerBonus(), "answer accepted");
-        if (previous.isEmpty() && answer.author().id() != asker.id()) adjust(asker, policy.acceptorBonus(), "accepted an answer");
-    }
-
-    // ---------- bounties ----------
     Bounty offerBounty(Member sponsor, Question q, int amount, LocalDate today) {
         require(sponsor, Privilege.SET_BOUNTY);
         if (amount < MIN_BOUNTY || amount > MAX_BOUNTY) throw new IllegalArgumentException("bounty must be " + MIN_BOUNTY + ".." + MAX_BOUNTY);
@@ -1011,163 +525,31 @@ public final class StackOverflow {
         Bounty b = new Bounty(sponsor, amount, today.plusDays(BOUNTY_DAYS));
         q.attachBounty(b);
         adjust(sponsor, -amount, "bounty staked");          // staked reputation leaves the sponsor now
-        log(sponsor.name() + " offered a +" + amount + " bounty on question #" + q.id() + " (expires " + b.expiresOn() + ")");
         return b;
     }
-
-    void awardBounty(Member sponsor, Answer winner, LocalDate today) {
-        Bounty b = winner.question().bounty().orElseThrow(() -> new IllegalStateException("no bounty on this question"));
-        if (b.sponsor().id() != sponsor.id()) throw new IllegalStateException("only the sponsor awards the bounty");
-        if (winner.author().id() == sponsor.id()) throw new IllegalStateException("you cannot award your own answer");
-        b.awardTo(winner.author(), today);
-        adjust(winner.author(), b.reputation(), "bounty awarded");
-        log(sponsor.name() + " awarded the bounty to " + winner.label());
-    }
-
-    // ---------- moderation ----------
-    void flag(Member by, Post post, String reason) {
-        require(by, Privilege.FLAG);
-        int count = post.flag(by);
-        log(by.name() + " flagged " + post.label() + " (" + reason + "), flags=" + count);
-        if (count == FLAGS_FOR_MODERATOR_REVIEW) {
-            moderators.forEach(m -> notifier.send(m, post.label() + " needs moderator attention"));
-        }
-    }
-
-    void voteToClose(Member voter, Question q, ClosingRemark remark) {
-        require(voter, Privilege.CAST_CLOSE_VOTE);
-        boolean closed = q.voteToClose(voter, remark, VOTES_TO_CLOSE);
-        log(voter.name() + " voted to close question #" + q.id() + " as " + remark + (closed ? " -> CLOSED" : ""));
-    }
-
-    void voteToDelete(Member voter, Question q) {
-        require(voter, Privilege.CAST_DELETE_VOTE);
-        boolean deleted = q.voteToDelete(voter, VOTES_TO_DELETE);
-        log(voter.name() + " voted to delete question #" + q.id() + (deleted ? " -> DELETED" : ""));
-    }
+    // awardBounty: sponsor only, not to their own answer, before expiry. comment: own thread free, else COMMENT_EVERYWHERE.
+    // acceptAnswer: asker only; moves +15 from a previously accepted answer; +2 to the asker the first time.
+    // flag: the 3rd flag notifies every moderator. topTags(n): sort tags by their own use counts.
 
     // Moderator-only operations: the parameter type is the permission check.
-    void close(Moderator m, Question q, ClosingRemark remark) { q.close(remark); log(m.name() + " (mod) closed question #" + q.id() + " as " + remark); }
-    void reopen(Moderator m, Question q) { q.reopen(); log(m.name() + " (mod) reopened question #" + q.id()); }
-    void delete(Moderator m, Question q) { q.delete(); log(m.name() + " (mod) deleted question #" + q.id()); }
-    void undelete(Moderator m, Question q) { q.undelete(); log(m.name() + " (mod) undeleted question #" + q.id() + " -> " + q.status()); }
+    void close(Moderator m, Question q, ClosingRemark remark) { q.close(remark); }
+    void block(Admin admin, Member target) { target.setStatus(AccountStatus.BLOCKED); }
 
-    // ---------- helpers ----------
     private void adjust(Member m, int delta, String reason) {
         if (delta == 0) return;
         int before = m.reputation();
         int after = m.changeReputation(delta);
-        log(String.format("    rep %-6s %+d -> %d (%s)", m.name(), delta, after, reason));
         listeners.forEach(l -> l.onReputationChanged(m, before, after, reason));
     }
-
-    private static void requireActive(Member m) {
-        if (m.status() != AccountStatus.ACTIVE) throw new IllegalStateException(m.name() + " is " + m.status());
-    }
-
     private static void require(Member m, Privilege p) {
-        requireActive(m);
-        if (!m.hasPrivilege(p)) {
+        requireActive(m);                                   // blocked accounts can do nothing
+        if (!m.hasPrivilege(p))
             throw new IllegalStateException(m.name() + " needs " + p.minReputation + " reputation for " + p + " (has " + m.reputation() + ")");
-        }
-    }
-
-    private static void log(String s) { System.out.println(s); }
-}
-```
-
-```java
-// File: lld/ch18/stackoverflow/Main.java
-package lld.ch18.stackoverflow;
-
-import java.time.LocalDate;
-import java.util.List;
-
-public class Main {
-    public static void main(String[] args) {
-        Notifier notifier = new Notifier(List.of(new EmailChannel()));
-        StackOverflow so = new StackOverflow(new DefaultReputationPolicy(), notifier);
-        so.addReputationListener(new BadgeAwarder(notifier));
-
-        Member alice = so.register(new Member("alice", "alice@example.com"));
-        Member bob = so.register(new Member("bob", "bob@example.com"));
-        Member carol = so.register(new Member("carol", "carol@example.com"));
-        Member erin = so.register(new Member("erin", "erin@example.com"));
-        Member dave = so.register(new Member("dave", "dave@example.com"));
-        Moderator mia = so.register(new Moderator("mia", "mia@example.com"));
-        Admin root = so.register(new Admin("root", "root@example.com"));
-        alice.seedReputation(200);
-        bob.seedReputation(3500);
-        carol.seedReputation(3200);
-        erin.seedReputation(3100);
-        LocalDate today = LocalDate.of(2026, 9, 28);
-
-        section("1. Tags and asking");
-        so.createTag(bob, "java", "The Java language");
-        so.createTag(bob, "collections", "java.util collections");
-        attempt(() -> so.ask(alice, "How does HashMap handle collisions?", "What happens when two keys land in the same bucket?",
-                List.of("java", "hashmap")));
-        Question q1 = so.ask(alice, "How does HashMap handle collisions?", "What happens when two keys land in the same bucket?",
-                List.of("java", "collections"));
-
-        section("2. Answers, votes, reputation");
-        Answer bobs = so.answer(bob, q1, "Entries share a bucket as a linked list, turned into a tree when the bin grows past 8.");
-        Answer carols = so.answer(carol, q1, "It uses open addressing.");
-        attempt(() -> so.vote(dave, q1, VoteType.UP));               // dave has 1 rep
-        attempt(() -> so.vote(alice, q1, VoteType.UP));              // own post
-        so.vote(bob, q1, VoteType.UP);
-        so.vote(carol, bobs, VoteType.UP);
-        so.vote(erin, carols, VoteType.DOWN);
-        attempt(() -> so.vote(erin, carols, VoteType.DOWN));         // double vote
-        so.vote(erin, carols, VoteType.UP);                          // changing a vote reverses the old effect
-        so.comment(erin, carols, "HashMap uses chaining, not open addressing.");
-        attempt(() -> so.comment(dave, carols, "+1"));               // needs 50 rep to comment everywhere
-        so.acceptAnswer(alice, bobs);
-
-        section("3. Bounty");
-        Question q2 = so.ask(alice, "Why is ConcurrentHashMap faster than synchronizedMap?", "Under many threads.", List.of("java"));
-        so.offerBounty(alice, q2, 50, today);
-        Answer carolsQ2 = so.answer(carol, q2, "Reads take no lock and writes lock only one bin.");
-        so.awardBounty(alice, carolsQ2, today.plusDays(3));
-
-        section("4. Badges for a new member");
-        Question q3 = so.ask(dave, "Is Java pass-by-value?", "Objects seem to be passed by reference.", List.of("java"));
-        so.vote(bob, q3, VoteType.UP);
-        so.vote(carol, q3, VoteType.UP);
-        so.vote(erin, q3, VoteType.UP);
-        System.out.println("dave's badges: " + dave.badges().stream().map(Badge::name).toList());
-
-        section("5. Moderation");
-        so.voteToClose(bob, q3, ClosingRemark.DUPLICATE);
-        so.voteToClose(carol, q3, ClosingRemark.DUPLICATE);
-        so.voteToClose(erin, q3, ClosingRemark.DUPLICATE);
-        attempt(() -> so.answer(bob, q3, "Yes, always by value."));
-        so.reopen(mia, q3);
-        Comment rude = so.comment(dave, q3, "you all are wrong!!!");
-        so.flag(bob, rude, "rude");
-        so.flag(carol, rude, "rude");
-        so.flag(erin, rude, "rude");
-        so.delete(mia, q3);
-        so.undelete(mia, q3);
-        so.block(root, dave);
-        attempt(() -> so.ask(dave, "Another one", "text", List.of("java")));
-
-        section("6. Guest search and top tags");
-        so.search("hashmap collisions").forEach(q -> System.out.println("found: " + q.label() + " score=" + q.score()
-                + " answers=" + q.answers().size() + " status=" + q.status()));
-        so.searchByTag("java").forEach(q -> System.out.println("[java] " + q.label()));
-        System.out.println("top tags: " + so.topTags(2).stream().map(t -> t.name() + "x" + t.uses()).toList());
-        System.out.println("final reputation: " + List.of(alice, bob, carol, erin, dave));
-    }
-
-    private static void section(String title) { System.out.println("\n== " + title + " =="); }
-
-    private static void attempt(Runnable action) {
-        try { action.run(); }
-        catch (RuntimeException e) { System.out.println("  REJECTED: " + e.getMessage()); }
     }
 }
 ```
+
+`Main.java` registers alice (seeded to 200 reputation), bob (3,500), carol (3,200), erin (3,100), dave (1), moderator mia and admin root, then walks through tags and asking, answers and votes, a bounty, badges for a new member, moderation, and guest search.
 
 **Output:**
 
@@ -1411,40 +793,17 @@ In the figure above, "Add match" is *extended* by the three formats, and "Add ba
 
 The course builds this design in **six stages**.
 
-![Stage 1: the people](../../assets/O-design-cricinfo-4.svg)
-*Figure — Stage 1: `Person`, `MatchOfficial` with `Umpire`, `Referee` and `Commentator`, `Admin`, and `Player` holding a `Person` (course diagram)*
+**Stage 1 — the people** (`Person`, `Player`, `MatchOfficial` → `Umpire`/`Referee`/`Commentator`, `Admin`). A player *holds* a person instead of extending one: one real human can play today and commentate after retiring, and composition lets them take both roles without copying. Umpires, referees and commentators all do one thing in common — get assigned to matches — so that lives once in `MatchOfficial`.
 
-**Stage 1 — the people.** A player *holds* a person instead of extending one: one real human can play today and commentate after retiring, and composition lets them take both roles without copying. Umpires, referees and commentators all do one thing in common — get assigned to matches — so that lives once in `MatchOfficial`.
+**Stage 2 — teams, squads and the eleven.** Requirements 4 and 5 look like one idea but are three nested sets: the team (everyone ever picked) ⊇ the squad (one tournament) ⊇ the eleven (one match). `Playing11` keeps a reference to its squad, which lets it reject anyone outside the squad, and it also rejects a twelfth pick. Requirement 5 thus lives in code rather than in a comment. Only the tournament owns anything (its squads).
 
-![UML legend](../../assets/O-design-cricinfo-5.svg)
-*Figure — UML legend for reading the arrows in these diagrams (course diagram)*
-
-![Stage 2: teams, squads and the eleven](../../assets/O-design-cricinfo-6.svg)
-*Figure — Stage 2: `Team`, `TournamentSquad`, `Playing11` and `Tournament`; only the tournament owns anything (its squads) (course diagram)*
-
-**Stage 2 — teams, squads and the eleven.** Requirements 4 and 5 look like one idea but are three nested sets: the team (everyone ever picked) ⊇ the squad (one tournament) ⊇ the eleven (one match). `Playing11` keeps a reference to its squad, which lets it reject anyone outside the squad, and it also rejects a twelfth pick. Requirement 5 thus lives in code rather than in a comment.
-
-![Stage 3: the delivery](../../assets/O-design-cricinfo-7.svg)
-*Figure — Stage 3: enums `WicketType`, `BallType`, `RunType`, and classes `Run`, `Wicket`, `Commentary`, `Ball` (owning its runs, wicket and commentary) and `Over` (course diagram)*
-
-**Stage 3 — the delivery.** This stage decides whether the design understands cricket. Three rules hide in it: (1) an over is six *legal* deliveries, so `Over.isComplete` counts only legal balls, and an over with two wides takes eight deliveries; (2) a run out is credited to the fielding side, *not the bowler* — get this wrong and "highest wicket taker" is silently wrong for years; (3) byes and leg byes belong to the team, not the batter, so each run carries a type that says who gets the credit. `Ball` owns its runs, wicket and commentary (composition); it only *refers* to the bowler and batter.
-
-![Stage 4: the innings](../../assets/O-design-cricinfo-8.svg)
-*Figure — Stage 4: `Innings` owns its overs and prints the score (course diagram)*
+**Stage 3 — the delivery** (enums `WicketType`, `BallType`, `RunType`; classes `Run`, `Wicket`, `Commentary`, `Ball`, `Over`). This stage decides whether the design understands cricket. Three rules hide in it: (1) an over is six *legal* deliveries, so `Over.isComplete` counts only legal balls, and an over with two wides takes eight deliveries; (2) a run out is credited to the fielding side, *not the bowler* — get this wrong and "highest wicket taker" is silently wrong for years; (3) byes and leg byes belong to the team, not the batter, so each run carries a type that says who gets the credit. `Ball` owns its runs, wicket and commentary (composition); it only *refers* to the bowler and batter.
 
 **Stage 4 — the innings.** Because the innings owns the overs, it alone decides when an over is finished and a new one starts; if that rule lived anywhere else, it would soon exist in two slightly different copies. Its `score` uses scorecard notation: runs/wickets, then full overs and the legal balls of the over in progress.
 
-![Stage 5: the match, and the three formats](../../assets/O-design-cricinfo-9.svg)
-*Figure — Stage 5: `Stadium`, abstract `Match` owning its innings, and the `ODI`, `T20` and `Test` subclasses (course diagram)*
+**Stage 5 — the match and the formats** (`Stadium`, abstract `Match` owning its innings, `ODI`, `T20`, `Test`). Before creating three classes, check what really changes between the formats. Starting an innings, recording a ball and deciding the winner are the same. Only two numbers differ: overs per innings and innings per match. So `Match` is abstract and holds everything; each format overrides two short methods. A Test returns zero overs (meaning "no limit") and four innings in total.
 
-**Stage 5 — the match and the formats.** Before creating three classes, check what really changes between the formats. Starting an innings, recording a ball and deciding the winner are the same. Only two numbers differ: overs per innings and innings per match. So `Match` is abstract and holds everything; each format overrides two short methods. A Test returns zero overs (meaning "no limit") and four innings in total.
-
-![Stage 6: stats](../../assets/O-design-cricinfo-10.svg)
-*Figure — Stage 6: `PlayerStats`, `StatsService` and the `StatQuery` hierarchy (course diagram)*
-
-> **Key term — Template Method:** a design pattern where a base class writes the fixed outline of an algorithm in one method and leaves one or more steps as abstract methods for subclasses to fill in. Every subclass reuses the outline and changes only its own step. In this design `StatQuery.answer()` is the outline (loop over players, keep the best) and each subclass supplies only `valueOf()` — "runs", "wickets" and so on.
-
-**Stage 6 — stats.** Stats are **worked out from the balls**, not stored beside them. Keep a separate counter and it will drift from the ball record as soon as a scorer fixes a mistake, and after that nobody can say which number is correct. Fifties and hundreds are per-innings milestones, so they are counted after each innings (`countInnings`) next to the per-ball counting (`countBall`). Each global question is one small `StatQuery` subclass.
+**Stage 6 — stats** (`PlayerStats`, `StatsService`, the `StatQuery` hierarchy). **Template Method** ([§11.4](../11-patterns-behavioral-2/README.md#114-template-method)): a base class fixes an algorithm's outline and subclasses fill in one step — here `StatQuery.answer()` loops over players keeping the best, and each subclass supplies only `valueOf()` ("runs", "wickets"…). Stats are **worked out from the balls**, not stored beside them. Keep a separate counter and it will drift from the ball record as soon as a scorer fixes a mistake, and after that nobody can say which number is correct. Fifties and hundreds are per-innings milestones, so they are counted after each innings (`countInnings`) next to the per-ball counting (`countBall`). Each global question is one small `StatQuery` subclass.
 
 ![The finished class diagram](../../assets/O-design-cricinfo-11.svg)
 *Figure — The finished Cricinfo class diagram, with every class from the six stages in full colour (course diagram)*
@@ -1638,338 +997,59 @@ stateDiagram-v2
 
 ### Java implementation
 
-Package `lld.ch18.cricinfo`. The demo builds two teams, a tournament, squads and elevens (showing both refusals), then plays a scripted first over (a wide and a no ball make it **eight deliveries**; a bowled that counts for the bowler; a run out that does not), and simulates the rest with a fixed random seed (the starting number for the random generator; the same seed always gives the same "random" sequence) so the output is repeatable. An ODI is simulated too, so the global stat queries have data from two formats.
+Package `lld.ch18.cricinfo`. The demo builds two teams, a tournament, squads and elevens (showing both refusals), then plays a scripted first over (a wide and a no ball make it **eight deliveries**; a bowled that counts for the bowler; a run out that does not), and simulates the rest with a fixed random **seed** (the same seed always gives the same "random" sequence) so the output is repeatable. An ODI is simulated too, so the global stat queries have data from two formats.
+
+Full runnable code is in `code/lld/ch18/cricinfo/`: `People.java` (`Person`, `Player`, `MatchOfficial` → `Umpire`/`Referee`/`Commentator`), `Teams.java` (`Team`, `TournamentSquad`, `Playing11`, `Tournament`), `Delivery.java`, `Innings.java`, `Match.java`, `Observers.java` (`CommentaryFeed`, `LiveScorecard`, `Scorecard`), `Stats.java` and `Main.java`. The essential lines (`/* ... */` and `//` summary comments stand for code left out):
 
 ```java
-// File: lld/ch18/cricinfo/People.java
-package lld.ch18.cricinfo;
-
-import java.util.ArrayList;
-import java.util.List;
-
-/** A human being. Roles (player, umpire, commentator) HOLD a person instead of extending it. */
-record Person(String name, String country) {}
-
-final class Player {
-    private final Person person;
-    Player(Person person) { this.person = person; }
-    String name() { return person.name(); }
-    Person person() { return person; }
-    @Override public String toString() { return name(); }
-}
-
-enum UmpireType { FIELD, RESERVED, TV }
-
-/** Umpires, referees and commentators share one behaviour: being assigned to matches. */
-abstract class MatchOfficial {
-    private final Person person;
-    private final List<Match> assignedMatches = new ArrayList<>();
-
-    MatchOfficial(Person person) { this.person = person; }
-
-    String name() { return person.name(); }
-    synchronized boolean assign(Match m) { return !assignedMatches.contains(m) && assignedMatches.add(m); }
-    synchronized List<Match> assignedMatches() { return List.copyOf(assignedMatches); }
-    abstract String role();
-    @Override public String toString() { return role() + " " + name(); }
-}
-
-final class Umpire extends MatchOfficial {
-    private final UmpireType type;
-    Umpire(Person p, UmpireType type) { super(p); this.type = type; }
-    @Override String role() { return type + " umpire"; }
-}
-
-final class Referee extends MatchOfficial {
-    Referee(Person p) { super(p); }
-    @Override String role() { return "referee"; }
-}
-
-final class Commentator extends MatchOfficial {
-    Commentator(Person p) { super(p); }
-    @Override String role() { return "commentator"; }
-}
-```
-
-```java
-// File: lld/ch18/cricinfo/Teams.java
-package lld.ch18.cricinfo;
-
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
-/** Everyone the team has ever picked. */
-final class Team {
-    private final String name;
-    private final Set<Player> players = new LinkedHashSet<>();
-
-    Team(String name) { this.name = name; }
-    String name() { return name; }
-    void addPlayer(Player p) { players.add(p); }
-    List<Player> players() { return List.copyOf(players); }   // keeps insertion order
-    @Override public String toString() { return name; }
-}
-
-/** Who a team may use in ONE tournament: a subset of the team. */
-final class TournamentSquad {
-    private final Team team;
-    private final Set<Player> players = new LinkedHashSet<>();
-
-    TournamentSquad(Team team) { this.team = team; }
-    Team team() { return team; }
-    void add(Player p) {
-        if (!team.players().contains(p)) throw new IllegalArgumentException(p + " does not play for " + team);
-        players.add(p);
-    }
-    boolean contains(Player p) { return players.contains(p); }
-}
-
-/** Who takes the field in ONE match: exactly eleven, all from the squad. The class enforces the rule. */
-final class Playing11 {
-    static final int SIZE = 11;
-    private final TournamentSquad squad;
-    private final List<Player> players = new ArrayList<>();   // batting order
-
-    Playing11(TournamentSquad squad) { this.squad = squad; }
-
-    void add(Player p) {
-        if (!squad.contains(p)) throw new IllegalArgumentException(p + " is not in the " + squad.team() + " squad");
-        if (players.size() == SIZE) throw new IllegalStateException("a playing eleven cannot have a twelfth player (" + p + ")");
-        if (players.contains(p)) throw new IllegalArgumentException(p + " already picked");
-        players.add(p);
-    }
-
-    Team team() { return squad.team(); }
-    List<Player> battingOrder() { return List.copyOf(players); }
-    boolean isComplete() { return players.size() == SIZE; }
-    boolean contains(Player p) { return players.contains(p); }
-}
-
-/** A tournament owns its squads and keeps a points table (2 for a win, 1 each for a tie or no result). */
-final class Tournament {
-    private final String name;
-    private final Map<Team, TournamentSquad> squads = new LinkedHashMap<>();
-    private final Map<Team, Integer> points = new LinkedHashMap<>();
-    private final List<Match> matches = new ArrayList<>();
-
-    Tournament(String name) { this.name = name; }
-    String name() { return name; }
-
-    TournamentSquad announceSquad(Team team) {
-        TournamentSquad s = new TournamentSquad(team);
-        squads.put(team, s);
-        points.putIfAbsent(team, 0);
-        return s;
-    }
-
-    void addMatch(Match m) { matches.add(m); }
-    List<Match> matches() { return List.copyOf(matches); }
-
-    void recordResult(Match m) {
-        Result r = m.result().orElseThrow(() -> new IllegalStateException("match not finished"));
-        switch (r) {
-            case Result.Win w -> points.merge(w.winner(), 2, Integer::sum);
-            case Result.Tie t -> { points.merge(m.teamA().team(), 1, Integer::sum); points.merge(m.teamB().team(), 1, Integer::sum); }
-            case Result.Draw d -> { }                     // Tests are not part of a points table here
-        }
-    }
-
-    List<Map.Entry<Team, Integer>> pointsTable() {
-        return points.entrySet().stream()
-                .sorted(Map.Entry.<Team, Integer>comparingByValue(Comparator.reverseOrder()))
-                .toList();
-    }
-}
-```
-
-```java
-// File: lld/ch18/cricinfo/Delivery.java
-package lld.ch18.cricinfo;
-
-import java.util.ArrayList;
-import java.util.List;
-
-enum Extra { NONE, WIDE, NO_BALL, BYE, LEG_BYE }
-
 enum WicketType {
     BOWLED, CAUGHT, LBW, STUMPED, HIT_WICKET, RUN_OUT, OBSTRUCTING_THE_FIELD;
-
     /** A run out (or obstructing the field) is a wicket for the fielding side, NOT for the bowler. */
     boolean creditedToBowler() { return this != RUN_OUT && this != OBSTRUCTING_THE_FIELD; }
 }
 
-/**
- * What happened on one delivery, as typed by the scorer. Who bowled and who
- * faced is filled in by the Innings, which knows the state of play.
- *
- * @param batRuns    runs off the bat (credited to the batter)
- * @param extra      kind of extra, if any
- * @param extraRuns  runs credited to the team as extras (a wide or no ball is at least 1)
- * @param boundary   true when batRuns came from a 4 or 6 hit to the rope (batters do not cross)
- * @param wicket     type of dismissal, or null
- * @param nonStrikerOut for a run out: true when the batter at the bowler's end is out
- */
+/** What happened on one delivery, as typed by the scorer. Validates the laws in its constructor. */
 record BallOutcome(int batRuns, Extra extra, int extraRuns, boolean boundary,
-                   WicketType wicket, boolean nonStrikerOut, String commentary) {
-
+                   WicketType wicket, boolean nonStrikerOut, String commentary) {   // Extra: NONE, WIDE, NO_BALL, BYE, LEG_BYE
     BallOutcome {
-        if (batRuns < 0 || extraRuns < 0) throw new IllegalArgumentException("runs cannot be negative");
         if ((extra == Extra.WIDE || extra == Extra.NO_BALL) && extraRuns < 1)
             throw new IllegalArgumentException(extra + " carries at least one penalty run");
         // Laws of cricket: off a no ball the bowler cannot take a wicket; off a wide only stumped/hit wicket/run out.
         if (wicket != null && extra == Extra.NO_BALL && wicket.creditedToBowler())
             throw new IllegalArgumentException(wicket + " is not possible off a no ball");
-        if (wicket != null && extra == Extra.WIDE && !(wicket == WicketType.STUMPED || wicket == WicketType.HIT_WICKET
-                || !wicket.creditedToBowler()))
-            throw new IllegalArgumentException(wicket + " is not possible off a wide");
+        /* ... same check for a wide ... */
     }
-
-    static BallOutcome dot(String c) { return new BallOutcome(0, Extra.NONE, 0, false, null, false, c); }
-    static BallOutcome runs(int n, String c) { return new BallOutcome(n, Extra.NONE, 0, false, null, false, c); }
-    static BallOutcome four(String c) { return new BallOutcome(4, Extra.NONE, 0, true, null, false, c); }
-    static BallOutcome six(String c) { return new BallOutcome(6, Extra.NONE, 0, true, null, false, c); }
-    static BallOutcome wide(String c) { return new BallOutcome(0, Extra.WIDE, 1, false, null, false, c); }
-    static BallOutcome noBall(int batRuns, String c) { return new BallOutcome(batRuns, Extra.NO_BALL, 1, batRuns >= 4, null, false, c); }
-    static BallOutcome legBye(int n, String c) { return new BallOutcome(0, Extra.LEG_BYE, n, false, null, false, c); }
-    static BallOutcome bye(int n, String c) { return new BallOutcome(0, Extra.BYE, n, false, null, false, c); }
-    static BallOutcome out(WicketType w, String c) { return new BallOutcome(0, Extra.NONE, 0, false, w, false, c); }
-    static BallOutcome runOut(int completedRuns, boolean nonStrikerOut, String c) {
-        return new BallOutcome(completedRuns, Extra.NONE, 0, false, WicketType.RUN_OUT, nonStrikerOut, c);
-    }
-
     /** A wide or a no ball is not one of the six balls of an over. */
     boolean isLegal() { return extra != Extra.WIDE && extra != Extra.NO_BALL; }
-    boolean countsAsBallFaced() { return extra != Extra.WIDE; }
-    int totalRuns() { return batRuns + extraRuns; }
     /** Byes and leg byes are not the bowler's fault; wides and no balls are. */
     int runsChargedToBowler() { return batRuns + (isLegal() ? 0 : extraRuns); }
-
-    /** Runs physically run between the wickets: an odd number means the batters swapped ends. */
-    int runsRun() {
-        if (boundary) return 0;
-        return switch (extra) {
-            case NONE -> batRuns;
-            case WIDE -> extraRuns - 1;
-            case NO_BALL -> batRuns;
-            case BYE, LEG_BYE -> extraRuns;
-        };
-    }
-}
-
-record Wicket(WicketType type, Player batter, Player bowler) {
-    boolean creditedToBowler() { return type.creditedToBowler(); }
-}
-
-/** One delivery as recorded: owns its outcome, its wicket and its commentary (composition). */
-record Ball(int overNumber, int deliveryInOver, Player bowler, Player striker, BallOutcome outcome, Wicket wicket) {
-    /** Scorecard style: over 1, ball 3 is "0.3" (completed overs . ball); an extra shows the number of the ball it replaces. */
-    String label() { return (overNumber - 1) + "." + deliveryInOver; }
+    /** Runs physically run between the wickets: an odd number means the batters swapped ends (0 for a boundary). */
+    int runsRun() { /* ... */ }
 }
 
 /** An over is SIX LEGAL deliveries, not six balls. */
 final class Over {
     static final int LEGAL_BALLS = 6;
-    private final int number;
-    private final Player bowler;
-    private final List<Ball> balls = new ArrayList<>();
-
-    Over(int number, Player bowler) { this.number = number; this.bowler = bowler; }
-
-    int number() { return number; }
-    Player bowler() { return bowler; }
-    void add(Ball b) {
-        if (isComplete()) throw new IllegalStateException("over " + number + " is complete");
-        balls.add(b);
-    }
-    List<Ball> balls() { return List.copyOf(balls); }
     int legalBalls() { return (int) balls.stream().filter(b -> b.outcome().isLegal()).count(); }
     boolean isComplete() { return legalBalls() == LEGAL_BALLS; }
-    int runsConceded() { return balls.stream().mapToInt(b -> b.outcome().runsChargedToBowler()).sum(); }
     boolean isMaiden() { return isComplete() && runsConceded() == 0; }
 }
 ```
 
 ```java
-// File: lld/ch18/cricinfo/Innings.java
-package lld.ch18.cricinfo;
-
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-
-/**
- * One side's turn to bat. The innings owns its overs, so it is the ONE place
- * that decides when an over ends, who is on strike, and when the innings is over.
- */
+/** One side's turn to bat. It owns its overs, so it is the ONE place that decides over end, strike and innings end. */
 final class Innings {
-    private final int number;
-    private final Playing11 batting;
-    private final Playing11 bowling;
-    private final int maxOvers;              // 0 = no limit (Test)
-    private final int maxOversPerBowler;     // 0 = no limit
-    private final Integer target;            // runs needed to win, only for the final innings
-    private final List<Over> overs = new ArrayList<>();
-    private final List<Ball> balls = new ArrayList<>();
-    private final Map<Player, Integer> oversByBowler = new HashMap<>();
-    private Player striker;
-    private Player nonStriker;
-    private int nextBatter = 2;
-    private int runs;
-    private int wickets;
-    private boolean closed;
-
-    Innings(int number, Playing11 batting, Playing11 bowling, int maxOvers, int maxOversPerBowler, Integer target) {
-        if (!batting.isComplete() || !bowling.isComplete()) throw new IllegalStateException("both sides need eleven players");
-        this.number = number;
-        this.batting = batting;
-        this.bowling = bowling;
-        this.maxOvers = maxOvers;
-        this.maxOversPerBowler = maxOversPerBowler;
-        this.target = target;
-        this.striker = batting.battingOrder().get(0);
-        this.nonStriker = batting.battingOrder().get(1);
-    }
-
-    int number() { return number; }
-    Team battingTeam() { return batting.team(); }
-    Team bowlingTeam() { return bowling.team(); }
-    Playing11 battingSide() { return batting; }
-    int runs() { return runs; }
-    int wickets() { return wickets; }
-    Optional<Integer> target() { return Optional.ofNullable(target); }
-    List<Ball> balls() { return List.copyOf(balls); }
-    List<Over> overs() { return List.copyOf(overs); }
-    Player striker() { return striker; }
-    Player nonStriker() { return nonStriker; }
-
     Over startOver(Player bowler) {
-        if (isComplete()) throw new IllegalStateException("innings is complete");
-        Over current = currentOver();
-        if (current != null && !current.isComplete()) throw new IllegalStateException("over " + current.number() + " is still in progress");
-        if (!bowling.contains(bowler)) throw new IllegalArgumentException(bowler + " is not in the fielding eleven");
+        // ... innings not complete, previous over finished, bowler in the fielding eleven
         if (current != null && current.bowler().equals(bowler))
             throw new IllegalStateException(bowler + " cannot bowl two overs in a row");
-        int bowled = oversByBowler.getOrDefault(bowler, 0);
         if (maxOversPerBowler > 0 && bowled >= maxOversPerBowler)
             throw new IllegalStateException(bowler + " has used all " + maxOversPerBowler + " overs");
-        oversByBowler.put(bowler, bowled + 1);
-        Over over = new Over(overs.size() + 1, bowler);
-        overs.add(over);
-        return over;
+        /* ... add the new Over ... */
     }
 
     Ball record(BallOutcome o) {
         Over over = currentOver();
-        if (over == null || over.isComplete()) throw new IllegalStateException("start a new over first");
-        if (isComplete()) throw new IllegalStateException("innings is complete");
-
         int deliveryNo = over.legalBalls() + 1;          // a wide or no ball is re-bowled, so it shares the next number
         Wicket wicket = null;
         if (o.wicket() != null) wicket = new Wicket(o.wicket(), o.nonStrikerOut() ? nonStriker : striker, over.bowler());
@@ -1977,571 +1057,73 @@ final class Innings {
         over.add(ball);
         balls.add(ball);
         runs += o.totalRuns();
-
         if (o.runsRun() % 2 == 1) swapEnds();              // odd runs: batters crossed
-        if (wicket != null) {
-            wickets++;
-            if (!allOut()) {
-                Player newBatter = batting.battingOrder().get(nextBatter++);
-                if (wicket.batter().equals(striker)) striker = newBatter; else nonStriker = newBatter;
-            }
-        }
+        if (wicket != null) { wickets++; /* next batter in the order replaces whoever was out */ }
         if (over.isComplete()) swapEnds();                  // ends change after every over
         return ball;
     }
 
     boolean isComplete() {
-        if (closed || allOut()) return true;
+        if (closed || allOut()) return true;               // closed = declared (a Test captain may declare)
         if (target != null && runs >= target) return true;
         Over current = currentOver();
         return maxOvers > 0 && overs.size() == maxOvers && current != null && current.isComplete();
     }
-
-    /** A Test captain may declare; the demo also uses it to stop an unlimited innings. */
-    void declare() { closed = true; }
-
-    int wicketsInHand() { return batting.battingOrder().size() - 1 - wickets; }
-
-    /** Scorecard style: runs/wickets (completed overs.legal balls). */
-    String score() {
-        return battingTeam() + " " + runs + "/" + wickets + " (" + oversText() + " ov)";
-    }
-
-    String oversText() {
-        Over current = currentOver();
-        if (current == null) return "0";
-        int full = current.isComplete() ? overs.size() : overs.size() - 1;
-        int part = current.isComplete() ? 0 : current.legalBalls();
-        return part == 0 ? String.valueOf(full) : full + "." + part;
-    }
-
-    private boolean allOut() { return wickets == batting.battingOrder().size() - 1; }
-    private Over currentOver() { return overs.isEmpty() ? null : overs.get(overs.size() - 1); }
-    private void swapEnds() { Player t = striker; striker = nonStriker; nonStriker = t; }
-}
-```
-
-```java
-// File: lld/ch18/cricinfo/Match.java
-package lld.ch18.cricinfo;
-
-import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.concurrent.CopyOnWriteArrayList;
-
-enum MatchFormat { ODI, T20, TEST }
-
-enum MatchStatus { SCHEDULED, LIVE, FINISHED, DRAWN, CANCELED }
-
-record Stadium(String name, String city, int capacity) {}
-
-/** Outcome of a finished match. A sealed hierarchy lets callers switch over it exhaustively. */
-sealed interface Result {
-    record Win(Team winner, String margin) implements Result {
-        @Override public String toString() { return winner + " won by " + margin; }
-    }
-    record Tie() implements Result {
-        @Override public String toString() { return "Match tied"; }
-    }
-    record Draw() implements Result {
-        @Override public String toString() { return "Match drawn"; }
-    }
 }
 
-/**
- * Everything that is the same in every format lives here. The formats only
- * answer two questions: how many overs per innings, how many innings per side.
- * Observers (live scorecard, commentary feed, push alerts) subscribe to events.
- */
+/** Everything the same in every format lives here; formats answer only two questions. */
 abstract class Match {
-    private final Playing11 teamA;
-    private final Playing11 teamB;
-    private final Stadium stadium;
-    private final LocalDate date;
-    private final List<MatchOfficial> officials = new ArrayList<>();
-    private final List<Innings> innings = new ArrayList<>();
-    private final List<MatchObserver> observers = new CopyOnWriteArrayList<>();
-    private MatchStatus status = MatchStatus.SCHEDULED;
-    private Result result;
-
-    Match(Playing11 teamA, Playing11 teamB, Stadium stadium, LocalDate date) {
-        this.teamA = teamA;
-        this.teamB = teamB;
-        this.stadium = stadium;
-        this.date = date;
-    }
-
-    abstract MatchFormat format();
     abstract int oversPerInnings();       // 0 means no limit
     abstract int inningsPerSide();
     /** ODIs allow 10 overs per bowler and T20s 4, i.e. one fifth of the innings. */
     int maxOversPerBowler() { return oversPerInnings() / 5; }
 
-    Playing11 teamA() { return teamA; }
-    Playing11 teamB() { return teamB; }
-    Stadium stadium() { return stadium; }
-    LocalDate date() { return date; }
-    synchronized MatchStatus status() { return status; }
-    synchronized Optional<Result> result() { return Optional.ofNullable(result); }
-    synchronized List<Innings> innings() { return List.copyOf(innings); }
-
-    void addObserver(MatchObserver o) { observers.add(o); }
-
-    void assign(MatchOfficial official) {
-        official.assign(this);
-        officials.add(official);
-    }
-
-    synchronized Innings startInnings(Playing11 batting) {
-        if (status == MatchStatus.FINISHED || status == MatchStatus.DRAWN) throw new IllegalStateException("match is over");
-        Innings current = currentInnings();
-        if (current != null && !current.isComplete()) throw new IllegalStateException("current innings still in progress");
-        if (innings.size() == 2 * inningsPerSide()) throw new IllegalStateException("all innings played");
-        Playing11 bowling = batting == teamA ? teamB : teamA;
-        boolean finalInnings = innings.size() == 2 * inningsPerSide() - 1;
-        Integer target = finalInnings ? totalFor(bowling.team()) - totalFor(batting.team()) + 1 : null;
-        Innings in = new Innings(innings.size() + 1, batting, bowling, oversPerInnings(), maxOversPerBowler(), target);
-        innings.add(in);
-        status = MatchStatus.LIVE;
-        return in;
-    }
-
-    synchronized Over startOver(Player bowler) { return requireCurrent().startOver(bowler); }
-
-    /** Records one delivery and fires the events; thread-safe so two scorers cannot interleave balls. */
+    /** Records one delivery and fires the events; synchronized so two scorers cannot interleave balls. */
     synchronized Ball bowl(BallOutcome outcome) {
         Innings in = requireCurrent();
         Ball ball = in.record(outcome);
         observers.forEach(o -> o.onBall(this, in, ball));
-        Over over = in.overs().get(in.overs().size() - 1);
-        if (over.isComplete() || in.isComplete()) observers.forEach(o -> o.onOverEnd(this, in, over));
-        if (in.isComplete()) {
-            observers.forEach(o -> o.onInningsEnd(this, in));
-            boolean chased = in.target().map(t -> in.runs() >= t).orElse(false);
-            if (innings.size() == 2 * inningsPerSide() || chased) finish(in);
-        }
+        // onOverEnd when the over or innings completes; onInningsEnd, then finish() -> Result.Win/Tie and onMatchEnd
         return ball;
     }
-
-    synchronized void declareDraw() {
-        status = MatchStatus.DRAWN;
-        result = new Result.Draw();
-        observers.forEach(o -> o.onMatchEnd(this, result));
-    }
-
-    private void finish(Innings last) {
-        Team chasing = last.battingTeam();
-        Team other = last.bowlingTeam();
-        int chasingRuns = totalFor(chasing);
-        int otherRuns = totalFor(other);
-        if (chasingRuns > otherRuns) result = new Result.Win(chasing, last.wicketsInHand() + " wickets");
-        else if (chasingRuns < otherRuns) result = new Result.Win(other, (otherRuns - chasingRuns) + " runs");
-        else result = new Result.Tie();
-        status = MatchStatus.FINISHED;
-        observers.forEach(o -> o.onMatchEnd(this, result));
-    }
-
-    private int totalFor(Team t) {
-        return innings.stream().filter(i -> i.battingTeam() == t).mapToInt(Innings::runs).sum();
-    }
-
-    private Innings currentInnings() { return innings.isEmpty() ? null : innings.get(innings.size() - 1); }
-
-    private Innings requireCurrent() {
-        Innings in = currentInnings();
-        if (in == null) throw new IllegalStateException("no innings started");
-        return in;
-    }
-
-    @Override public String toString() { return format() + " " + teamA.team() + " v " + teamB.team() + " at " + stadium.name(); }
 }
+final class T20 extends Match { @Override int oversPerInnings() { return 20; } @Override int inningsPerSide() { return 1; } }
+final class ODI extends Match { @Override int oversPerInnings() { return 50; } @Override int inningsPerSide() { return 1; } }
+final class Test extends Match { @Override int oversPerInnings() { return 0; }  @Override int inningsPerSide() { return 2; } }
 
-final class ODI extends Match {
-    ODI(Playing11 a, Playing11 b, Stadium s, LocalDate d) { super(a, b, s, d); }
-    @Override MatchFormat format() { return MatchFormat.ODI; }
-    @Override int oversPerInnings() { return 50; }
-    @Override int inningsPerSide() { return 1; }
-}
-
-final class T20 extends Match {
-    T20(Playing11 a, Playing11 b, Stadium s, LocalDate d) { super(a, b, s, d); }
-    @Override MatchFormat format() { return MatchFormat.T20; }
-    @Override int oversPerInnings() { return 20; }
-    @Override int inningsPerSide() { return 1; }
-}
-
-final class Test extends Match {
-    Test(Playing11 a, Playing11 b, Stadium s, LocalDate d) { super(a, b, s, d); }
-    @Override MatchFormat format() { return MatchFormat.TEST; }
-    @Override int oversPerInnings() { return 0; }    // no limit
-    @Override int inningsPerSide() { return 2; }
-}
-```
-
-```java
-// File: lld/ch18/cricinfo/Observers.java
-package lld.ch18.cricinfo;
-
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-
-/** Observer: the match publishes events; screens, feeds and alerts subscribe. */
-interface MatchObserver {
+sealed interface Result { record Win(Team winner, String margin) implements Result {} record Tie() implements Result {} record Draw() implements Result {} }
+interface MatchObserver {   // default no-op methods: subscribers override only what they need
     default void onBall(Match m, Innings in, Ball b) {}
     default void onOverEnd(Match m, Innings in, Over o) {}
     default void onInningsEnd(Match m, Innings in) {}
     default void onMatchEnd(Match m, Result r) {}
 }
-
-/** Ball-by-ball commentary written by a commentator (prints only the first few overs of each innings in the demo). */
-final class CommentaryFeed implements MatchObserver {
-    private final Commentator commentator;
-    private final int oversToShow;
-
-    CommentaryFeed(Commentator commentator, int oversToShow) {
-        this.commentator = commentator;
-        this.oversToShow = oversToShow;
-    }
-
-    @Override public void onBall(Match m, Innings in, Ball b) {
-        if (b.overNumber() > oversToShow) return;
-        String what = describe(b);
-        String text = b.outcome().commentary() == null ? "" : "  [" + commentator.name() + ": " + b.outcome().commentary() + "]";
-        System.out.printf("  %-4s %s to %s, %s%s%n", b.label(), b.bowler(), b.striker(), what, text);
-    }
-
-    private static String describe(Ball b) {
-        BallOutcome o = b.outcome();
-        if (b.wicket() != null) return "OUT " + b.wicket().type() + " (" + b.wicket().batter() + ")"
-                + (b.wicket().creditedToBowler() ? "" : " - not the bowler's wicket");
-        return switch (o.extra()) {
-            case WIDE -> "wide";
-            case NO_BALL -> "no ball" + (o.batRuns() > 0 ? " + " + o.batRuns() : "");
-            case BYE -> o.extraRuns() + " bye(s)";
-            case LEG_BYE -> o.extraRuns() + " leg bye(s)";
-            case NONE -> o.batRuns() == 0 ? "no run" : o.boundary() ? o.batRuns() == 4 ? "FOUR" : "SIX" : o.batRuns() + " run(s)";
-        };
-    }
-}
-
-/** Live score line at the end of an over (every n overs, to keep the demo short). */
-final class LiveScorecard implements MatchObserver {
-    private final int everyNOvers;
-    LiveScorecard(int everyNOvers) { this.everyNOvers = everyNOvers; }
-
-    @Override public void onOverEnd(Match m, Innings in, Over o) {
-        if (o.number() % everyNOvers == 0 || in.isComplete()) {
-            String chase = in.target().filter(t -> in.runs() < t).map(t -> "  need " + (t - in.runs()) + " to win").orElse("");
-            System.out.println("  [live] " + in.score() + chase);
-        }
-    }
-
-    @Override public void onInningsEnd(Match m, Innings in) {
-        System.out.println("  [innings " + in.number() + " over] " + in.score());
-    }
-
-    @Override public void onMatchEnd(Match m, Result r) {
-        System.out.println("  [result] " + r);
-    }
-}
-
-/** Builds batting and bowling cards from the recorded balls (nothing is stored twice). */
-final class Scorecard {
-    static void print(Innings in) {
-        System.out.println("Batting - " + in.battingTeam());
-        Map<Player, int[]> bat = new LinkedHashMap<>();   // runs, balls, 4s, 6s
-        Map<Player, String> howOut = new LinkedHashMap<>();
-        for (Ball b : in.balls()) {
-            int[] s = bat.computeIfAbsent(b.striker(), k -> new int[4]);
-            BallOutcome o = b.outcome();
-            s[0] += o.batRuns();
-            if (o.countsAsBallFaced()) s[1]++;
-            if (o.boundary() && o.batRuns() == 4) s[2]++;
-            if (o.boundary() && o.batRuns() == 6) s[3]++;
-            if (b.wicket() != null) {
-                bat.computeIfAbsent(b.wicket().batter(), k -> new int[4]);
-                howOut.put(b.wicket().batter(), b.wicket().creditedToBowler()
-                        ? (b.wicket().type() == WicketType.BOWLED ? "" : b.wicket().type().name().toLowerCase().replace('_', ' ') + " ")
-                                + "b " + b.bowler()
-                        : "run out");
-            }
-        }
-        bat.computeIfAbsent(in.striker(), k -> new int[4]);        // the two batters at the crease are listed
-        bat.computeIfAbsent(in.nonStriker(), k -> new int[4]);     // even if one has not faced a ball yet
-        List<Player> order = in.battingSide().battingOrder();
-        for (Player p : order) {
-            int[] s = bat.get(p);
-            if (s == null) continue;
-            System.out.printf("  %-10s %-22s %3d (%d)  4s:%d 6s:%d%n", p, howOut.getOrDefault(p, "not out"), s[0], s[1], s[2], s[3]);
-        }
-        int extras = in.balls().stream().mapToInt(b -> b.outcome().extraRuns()).sum();
-        System.out.println("  Extras " + extras + "   Total " + in.runs() + "/" + in.wickets() + " (" + in.oversText() + " ov)");
-
-        System.out.println("Bowling - " + in.bowlingTeam());
-        Map<Player, int[]> bowl = new LinkedHashMap<>();  // legal balls, maidens, runs, wickets
-        for (Over o : in.overs()) {
-            int[] s = bowl.computeIfAbsent(o.bowler(), k -> new int[4]);
-            s[0] += o.legalBalls();
-            if (o.isMaiden()) s[1]++;
-            s[2] += o.runsConceded();
-            s[3] += (int) o.balls().stream().filter(b -> b.wicket() != null && b.wicket().creditedToBowler()).count();
-        }
-        bowl.forEach((p, s) -> System.out.printf("  %-10s %d.%d-%d-%d-%d%n", p, s[0] / 6, s[0] % 6, s[1], s[2], s[3]));
-    }
-}
+// Playing11.add rejects anyone outside the squad and a twelfth player; TournamentSquad.add rejects non-team players.
+// Tournament.recordResult switches exhaustively over Result: 2 points for a win, 1 each for a tie.
 ```
 
 ```java
-// File: lld/ch18/cricinfo/Stats.java
-package lld.ch18.cricinfo;
-
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-
-/** Career numbers for one player, always DERIVED from balls, never typed in by hand. */
-final class PlayerStats {
-    final Player player;
-    int runs, ballsFaced, fours, sixes, fifties, hundreds, highest;
-    int wickets, ballsBowled, runsConceded;
-
-    PlayerStats(Player player) { this.player = player; }
-
-    /** Per-ball numbers. */
-    void countBall(Ball b, boolean asBatter) {
-        BallOutcome o = b.outcome();
-        if (asBatter) {
-            runs += o.batRuns();
-            if (o.countsAsBallFaced()) ballsFaced++;
-            if (o.boundary() && o.batRuns() == 4) fours++;
-            if (o.boundary() && o.batRuns() == 6) sixes++;
-        } else {
-            if (o.isLegal()) ballsBowled++;
-            runsConceded += o.runsChargedToBowler();
-            if (b.wicket() != null && b.wicket().creditedToBowler()) wickets++;
-        }
-    }
-
-    /** Milestones are per innings, so they are counted once the innings score is known. */
-    void countInnings(int inningsRuns) {
-        if (inningsRuns >= 100) hundreds++;
-        else if (inningsRuns >= 50) fifties++;
-        highest = Math.max(highest, inningsRuns);
-    }
-}
-
 /** Recomputes stats from the recorded balls of the given matches, optionally for one format. */
 final class StatsService {
     Map<Player, PlayerStats> compute(Collection<Match> matches, MatchFormat formatOrNull) {
-        Map<Player, PlayerStats> stats = new HashMap<>();
-        for (Match m : matches) {
-            if (formatOrNull != null && m.format() != formatOrNull) continue;
-            for (Innings in : m.innings()) {
-                Map<Player, Integer> inningsRuns = new HashMap<>();
-                for (Ball b : in.balls()) {
-                    stats.computeIfAbsent(b.striker(), PlayerStats::new).countBall(b, true);
-                    stats.computeIfAbsent(b.bowler(), PlayerStats::new).countBall(b, false);
-                    inningsRuns.merge(b.striker(), b.outcome().batRuns(), Integer::sum);
-                }
-                inningsRuns.forEach((p, r) -> stats.get(p).countInnings(r));
-            }
-        }
-        return stats;
+        /* for every ball: striker.countBall(b, true), bowler.countBall(b, false);
+           after each innings: countInnings(runs) for the 50/100 milestones */
     }
 }
+// PlayerStats.countBall credits a wicket to the bowler only if wicket.creditedToBowler(); byes are not his runs.
 
-/**
- * Template Method: answer() is the fixed algorithm (walk all players, keep the best);
- * each question fills in one step, valueOf(). A new statistic = one new subclass.
- */
+/** Template Method: answer() is the fixed algorithm (walk all players, keep the best); valueOf() is the step. */
 abstract class StatQuery {
     record Leader(Player player, int value) {}
-
     abstract String question();
     abstract int valueOf(PlayerStats s);
-
-    final Optional<Leader> answer(Map<Player, PlayerStats> stats) {
-        Leader best = null;
-        for (PlayerStats s : stats.values()) {
-            int v = valueOf(s);
-            if (v > 0 && (best == null || v > best.value()
-                    || (v == best.value() && s.player.name().compareTo(best.player().name()) < 0))) {
-                best = new Leader(s.player, v);
-            }
-        }
-        return Optional.ofNullable(best);
-    }
+    final Optional<Leader> answer(Map<Player, PlayerStats> stats) { /* max of valueOf, ties broken by name */ }
 }
-
-final class MostRuns extends StatQuery {
-    @Override String question() { return "Most runs"; }
-    @Override int valueOf(PlayerStats s) { return s.runs; }
-}
-
-final class MostHundreds extends StatQuery {
-    @Override String question() { return "Most hundreds"; }
-    @Override int valueOf(PlayerStats s) { return s.hundreds; }
-}
-
 final class MostWickets extends StatQuery {
     @Override String question() { return "Highest wicket taker"; }
     @Override int valueOf(PlayerStats s) { return s.wickets; }
 }
-
-final class MostSixes extends StatQuery {
-    @Override String question() { return "Most sixes"; }
-    @Override int valueOf(PlayerStats s) { return s.sixes; }
-}
-
-final class StatQueries {
-    static final List<StatQuery> ALL = List.of(new MostRuns(), new MostHundreds(), new MostWickets(), new MostSixes());
-    private StatQueries() {}
-}
-```
-
-```java
-// File: lld/ch18/cricinfo/Main.java
-package lld.ch18.cricinfo;
-
-import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
-
-public class Main {
-    public static void main(String[] args) {
-        // ---- teams, squads, tournament ----
-        Team lions = team("Lions", "Arun", "Bala", "Chetan", "Dev", "Eshan", "Farhan", "Gopal", "Hari", "Imran", "Jai", "Kiran", "Lokesh", "Manav");
-        Team tigers = team("Tigers", "Nabil", "Omar", "Pranav", "Qasim", "Rahul", "Sameer", "Tarun", "Uday", "Varun", "Wasim", "Yash", "Zubin", "Ajay");
-        Tournament cup = new Tournament("Demo Cup");
-        TournamentSquad lionsSquad = cup.announceSquad(lions);
-        TournamentSquad tigersSquad = cup.announceSquad(tigers);
-        lions.players().stream().limit(12).forEach(lionsSquad::add);      // Manav is not in the squad
-        tigers.players().stream().limit(12).forEach(tigersSquad::add);
-
-        System.out.println("== Picking the elevens ==");
-        Playing11 lionsXI = new Playing11(lionsSquad);
-        Playing11 tigersXI = new Playing11(tigersSquad);
-        lions.players().stream().limit(11).forEach(lionsXI::add);
-        tigers.players().stream().limit(11).forEach(tigersXI::add);
-        attempt(() -> new Playing11(lionsSquad).add(find(lions, "Manav")));
-        attempt(() -> lionsXI.add(find(lions, "Lokesh")));
-
-        // ---- the match ----
-        Stadium stadium = new Stadium("Riverside Oval", "Pune", 40000);
-        T20 match = new T20(lionsXI, tigersXI, stadium, LocalDate.of(2026, 9, 28));
-        cup.addMatch(match);
-        Commentator ravi = new Commentator(new Person("Ravi", "IN"));
-        match.assign(new Umpire(new Person("Ken", "NZ"), UmpireType.FIELD));
-        match.assign(new Umpire(new Person("Paul", "AU"), UmpireType.FIELD));
-        match.assign(new Referee(new Person("Chris", "UK")));
-        match.assign(ravi);
-        match.addObserver(new CommentaryFeed(ravi, 1));
-        match.addObserver(new LiveScorecard(5));
-
-        System.out.println("\n== " + match + " ==");
-        match.startInnings(lionsXI);
-        List<Player> tigersBowlers = bowlers(tigersXI);
-        match.startOver(tigersBowlers.get(0));
-        match.bowl(BallOutcome.four("driven through cover"));
-        match.bowl(BallOutcome.wide("sprayed down leg"));
-        match.bowl(BallOutcome.runs(1, "pushed to mid-on"));
-        match.bowl(BallOutcome.noBall(0, "overstepped, free hit next"));
-        match.bowl(BallOutcome.out(WicketType.BOWLED, "through the gate!"));
-        match.bowl(BallOutcome.runOut(1, false, "a second run was never there"));
-        match.bowl(BallOutcome.dot("defended"));
-        match.bowl(BallOutcome.six("launched over long-on"));
-        attempt(() -> match.startOver(tigersBowlers.get(0)));             // same bowler twice in a row
-        Random rnd = new Random(23);
-        simulate(match, rnd, tigersBowlers);
-
-        match.startInnings(tigersXI);
-        simulate(match, rnd, bowlers(lionsXI));
-
-        System.out.println("\n== Scorecards ==");
-        match.innings().forEach(Scorecard::print);
-        cup.recordResult(match);
-        System.out.println("Points table: " + cup.pointsTable());
-
-        // ---- a second match (ODI) so the global stats have more data ----
-        ODI odi = new ODI(tigersXI, lionsXI, stadium, LocalDate.of(2026, 10, 2));
-        odi.addObserver(new LiveScorecard(25));
-        System.out.println("\n== " + odi + " ==");
-        odi.startInnings(tigersXI);
-        simulate(odi, rnd, bowlers(lionsXI));
-        odi.startInnings(lionsXI);
-        simulate(odi, rnd, bowlers(tigersXI));
-
-        // ---- stats, derived from balls ----
-        StatsService statsService = new StatsService();
-        List<Match> all = List.of(match, odi);
-        Map<Player, PlayerStats> career = statsService.compute(all, null);
-        System.out.println("\n== Global stat queries (all formats) ==");
-        for (StatQuery q : StatQueries.ALL) {
-            System.out.println("  " + q.question() + ": " + q.answer(career)
-                    .map(l -> l.player() + " (" + l.value() + ")").orElse("nobody yet"));
-        }
-        Map<Player, PlayerStats> odiOnly = statsService.compute(all, MatchFormat.ODI);
-        System.out.println("  Most runs in ODIs: " + new MostRuns().answer(odiOnly).map(l -> l.player() + " (" + l.value() + ")").orElse("-"));
-        System.out.println("  Ravi is assigned to " + ravi.assignedMatches().size() + " match(es)");
-    }
-
-    /** Plays the rest of the current innings with random but legal deliveries. */
-    static void simulate(Match m, Random rnd, List<Player> bowlers) {
-        Innings in = m.innings().get(m.innings().size() - 1);
-        int over = in.overs().size();
-        while (!in.isComplete()) {
-            m.startOver(bowlers.get(over % bowlers.size()));
-            over++;
-            while (!in.isComplete() && in.overs().get(in.overs().size() - 1).legalBalls() < Over.LEGAL_BALLS) {
-                m.bowl(randomBall(rnd));
-            }
-        }
-    }
-
-    static BallOutcome randomBall(Random rnd) {
-        int r = rnd.nextInt(1000);
-        if (r < 330) return BallOutcome.dot(null);
-        if (r < 640) return BallOutcome.runs(1, null);
-        if (r < 720) return BallOutcome.runs(2, null);
-        if (r < 730) return BallOutcome.runs(3, null);
-        if (r < 810) return BallOutcome.four(null);                     // about 1 ball in 12 is a four
-        if (r < 840) return BallOutcome.six(null);                      // and 1 in 33 a six: roughly 6.5 runs an over
-        if (r < 870) return BallOutcome.wide(null);
-        if (r < 880) return BallOutcome.noBall(0, null);
-        if (r < 895) return BallOutcome.legBye(1, null);
-        if (r < 905) return BallOutcome.out(WicketType.BOWLED, null);
-        if (r < 920) return BallOutcome.out(WicketType.CAUGHT, null);
-        if (r < 927) return BallOutcome.out(WicketType.LBW, null);
-        if (r < 930) return BallOutcome.runOut(0, rnd.nextBoolean(), null);
-        return BallOutcome.dot(null);
-    }
-
-    static List<Player> bowlers(Playing11 xi) {
-        List<Player> order = xi.battingOrder();
-        return new ArrayList<>(order.subList(order.size() - 5, order.size()));   // the last five are the bowlers
-    }
-
-    static Team team(String name, String... players) {
-        Team t = new Team(name);
-        for (String p : players) t.addPlayer(new Player(new Person(p, "IN")));
-        return t;
-    }
-
-    static Player find(Team t, String name) {
-        return t.players().stream().filter(p -> p.name().equals(name)).findFirst().orElseThrow();
-    }
-
-    static void attempt(Runnable r) {
-        try { r.run(); } catch (RuntimeException e) { System.out.println("  REJECTED: " + e.getMessage()); }
-    }
-}
+// MostRuns, MostHundreds, MostSixes: one line each.
 ```
 
 **Output:**
@@ -2710,15 +1292,9 @@ classDiagram
 
 #### Code
 
-Package `lld.ch18.cricketdashboard`. `Main` feeds the problem's sample input as a text block.
+Package `lld.ch18.cricketdashboard`; full runnable code is in `code/lld/ch18/cricketdashboard/` (`Model.java`: `BallEvent`, `Batter`, `TeamInnings`; `Main.java`: `ScorecardPrinter`, `MatchRunner`, `Main`). `Main` feeds the problem's sample input as a text block: 5 players, 2 overs, batting orders P1–P5 and P6–P10, team 1's balls `1 1 1 1 1 2` then `W 4 4 Wd W 1 6`, team 2's `4 6 W W 1 1` then `6 1 W W`. The essential lines:
 
 ```java
-// File: lld/ch18/cricketdashboard/Model.java
-package lld.ch18.cricketdashboard;
-
-import java.util.ArrayList;
-import java.util.List;
-
 /** One input token, parsed once. Factory method: BallEvent.parse("Wd") etc. */
 sealed interface BallEvent {
     record Runs(int runs) implements BallEvent {}
@@ -2735,45 +1311,11 @@ sealed interface BallEvent {
         if (runs < 0 || runs > 6) throw new IllegalArgumentException("bad runs: " + t);
         return new Runs(runs);
     }
-
     default boolean isLegal() { return !(this instanceof Wide || this instanceof NoBall); }
-}
-
-/** A batter's line on the scorecard. */
-final class Batter {
-    final String name;
-    int runs, balls, fours, sixes;
-    boolean out;
-
-    Batter(String name) { this.name = name; }
-
-    void faced(int batRuns) {
-        runs += batRuns;
-        balls++;
-        if (batRuns == 4) fours++;
-        if (batRuns == 6) sixes++;
-    }
-
-    String strikeRate() { return balls == 0 ? "-" : String.format("%.1f", 100.0 * runs / balls); }
 }
 
 /** One team's batting innings: owns strike rotation, extras, and the "is it over?" rule. */
 final class TeamInnings {
-    private final String team;
-    private final List<Batter> order = new ArrayList<>();
-    private final int maxOvers;
-    private final Integer target;           // null for the first innings
-    private int striker = 0, nonStriker = 1, next = 2;
-    private int total, wickets, legalBalls, extras;
-
-    TeamInnings(String team, List<String> battingOrder, int maxOvers, Integer target) {
-        if (battingOrder.size() < 2) throw new IllegalArgumentException("need at least two batters");
-        this.team = team;
-        battingOrder.forEach(n -> order.add(new Batter(n)));
-        this.maxOvers = maxOvers;
-        this.target = target;
-    }
-
     void play(BallEvent e) {
         if (isOver()) throw new IllegalStateException("innings already finished");
         Batter s = order.get(striker);
@@ -2800,141 +1342,17 @@ final class TeamInnings {
         }
         if (e.isLegal() && legalBalls % 6 == 0 && !isOver()) swap();  // end of over
     }
-
-    boolean isOver() {
-        return allOut() || legalBalls == maxOvers * 6 || (target != null && total >= target);
-    }
-
-    private boolean allOut() { return wickets == order.size() - 1; }
-    private void swap() { int t = striker; striker = nonStriker; nonStriker = t; }
-
-    String team() { return team; }
-    int total() { return total; }
-    int wickets() { return wickets; }
-    int legalBalls() { return legalBalls; }
-    int extras() { return extras; }
-    int wicketsInHand() { return order.size() - 1 - wickets; }
-    List<Batter> batters() { return List.copyOf(order); }
-    boolean isAtCrease(Batter b) { return !b.out && (order.get(striker) == b || order.get(nonStriker) == b); }
-
-    String overs() { return legalBalls / 6 + (legalBalls % 6 == 0 ? "" : "." + legalBalls % 6); }
+    boolean isOver() { return allOut() || legalBalls == maxOvers * 6 || (target != null && total >= target); }
 }
-```
+// Batter: runs, balls, fours, sixes, out, strikeRate(). ScorecardPrinter is separate (Single Responsibility)
+// so a web or JSON view could replace it.
 
-```java
-// File: lld/ch18/cricketdashboard/Main.java
-package lld.ch18.cricketdashboard;
-
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Deque;
-import java.util.List;
-
-/** Prints the scorecard; kept apart so a web or JSON view could replace it (Single Responsibility). */
-final class ScorecardPrinter {
-    void print(TeamInnings in) {
-        System.out.println("Scorecard for " + in.team() + ":");
-        System.out.printf("%-8s %5s %3s %3s %5s %6s%n", "Player", "Score", "4s", "6s", "Balls", "SR");
-        for (Batter b : in.batters()) {
-            String name = b.name + (in.isAtCrease(b) ? "*" : "");
-            System.out.printf("%-8s %5d %3d %3d %5d %6s%n", name, b.runs, b.fours, b.sixes, b.balls, b.strikeRate());
-        }
-        System.out.println("Total: " + in.total() + "/" + in.wickets() + "   Extras: " + in.extras());
-        System.out.println("Overs: " + in.overs());
-    }
-}
-
-/** Drives the whole match from the text input (input format of the Udaan machine-coding round). */
-final class MatchRunner {
-    private final ScorecardPrinter printer = new ScorecardPrinter();
-
-    void run(String input) {
-        Deque<String> lines = new ArrayDeque<>();
-        Arrays.stream(input.split("\\R")).map(String::trim).filter(l -> !l.isEmpty()).forEach(lines::add);
-        int players = Integer.parseInt(after(lines.poll()));
-        int overs = Integer.parseInt(after(lines.poll()));
-
-        TeamInnings first = playInnings("Team 1", players, overs, null, lines);
-        TeamInnings second = playInnings("Team 2", players, overs, first.total() + 1, lines);
-
-        if (second.total() > first.total()) System.out.println("Result: Team 2 won the match by " + second.wicketsInHand() + " wickets");
-        else if (second.total() < first.total()) System.out.println("Result: Team 1 won the match by " + (first.total() - second.total()) + " runs");
-        else System.out.println("Result: Match tied");
-    }
-
-    private TeamInnings playInnings(String team, int players, int overs, Integer target, Deque<String> lines) {
-        lines.poll();                                            // "Batting Order for team N:"
-        List<String> order = new ArrayList<>();
-        for (int i = 0; i < players; i++) order.add(lines.poll());
-        TeamInnings in = new TeamInnings(team, order, overs, target);
-        System.out.println("Batting order for " + team + ": " + order);
-        while (!in.isOver() && !lines.isEmpty() && lines.peek().startsWith("Over")) {
-            System.out.println(lines.poll());
-            int legalThisOver = 0;
-            while (legalThisOver < 6 && !in.isOver()) {          // an over = 6 LEGAL balls
-                BallEvent e = BallEvent.parse(lines.poll());
-                in.play(e);
-                if (e.isLegal()) legalThisOver++;
-            }
-            printer.print(in);
-        }
-        // skip any balls left in the input after the innings ended (e.g. target reached mid-over)
-        while (!lines.isEmpty() && !lines.peek().startsWith("Batting Order")) lines.poll();
-        return in;
-    }
-
-    private static String after(String line) { return line.substring(line.indexOf(':') + 1).trim(); }
-}
-
-public class Main {
-    static final String SAMPLE = """
-            No. of players for each team: 5
-            No. of overs: 2
-            Batting Order for team 1:
-            P1
-            P2
-            P3
-            P4
-            P5
-            Over 1:
-            1
-            1
-            1
-            1
-            1
-            2
-            Over 2:
-            W
-            4
-            4
-            Wd
-            W
-            1
-            6
-            Batting Order for team 2:
-            P6
-            P7
-            P8
-            P9
-            P10
-            Over 1:
-            4
-            6
-            W
-            W
-            1
-            1
-            Over 2:
-            6
-            1
-            W
-            W
-            """;
-
-    public static void main(String[] args) {
-        new MatchRunner().run(SAMPLE);
-    }
+// MatchRunner.playInnings: for each "Over N:" line, read tokens until 6 LEGAL balls or the innings ends,
+// then print the card; skip input left over after the innings ended. run() declares the winner by runs or wickets.
+while (legalThisOver < 6 && !in.isOver()) {          // an over = 6 LEGAL balls
+    BallEvent e = BallEvent.parse(lines.poll());
+    in.play(e);
+    if (e.isLegal()) legalThisOver++;
 }
 ```
 
@@ -3136,38 +1554,17 @@ Top use cases: add/update profile; search members, companies or jobs and send co
 
 The course builds LinkedIn in **six stages**.
 
-![Stage 1: the profile](../../assets/O-design-linkedin-5.svg)
-*Figure — Stage 1: `Profile` owning `Experience`, `Education`, `Skill`, `Accomplishment`, `Recommendation` and `ProfileStats` (course diagram)*
-
-**Stage 1 — the profile.** Each of requirement 1's five parts is a small class, not a line of text, because other code uses them (search looks up the current employer; endorsements are counted on the skill). Two details matter. You cannot pass text when creating a `Recommendation`: requirement 4 is about *asking* for one, so the object is born empty and the author fills it in later. And the profile never updates `ProfileStats` itself: whoever witnesses the event bumps the counter — the code that shows a profile, the code that accepts an invitation, the code that returns search results — because an object cannot count events it never sees. All arrows out of `Profile` are composition: delete the profile and its parts go with it.
-
-![UML legend](../../assets/O-design-linkedin-6.svg)
-*Figure — UML conventions: interface, class, abstract class, realization, generalization, dependency, association, aggregation and composition (course diagram)*
-
-![Stage 2: posts, comments and messages](../../assets/O-design-linkedin-7.svg)
-*Figure — Stage 2: `SocialContent` with `Post` and `Comment`; `Post` owns its comments; `Message` stands apart (course diagram)*
+**Stage 1 — the profile** (`Profile` owning `Experience`, `Education`, `Skill`, `Accomplishment`, `Recommendation`, `ProfileStats`). Each of requirement 1's five parts is a small class, not a line of text, because other code uses them (search looks up the current employer; endorsements are counted on the skill). Two details matter. You cannot pass text when creating a `Recommendation`: requirement 4 is about *asking* for one, so the object is born empty and the author fills it in later. And the profile never updates `ProfileStats` itself: whoever witnesses the event bumps the counter — the code that shows a profile, the code that accepts an invitation, the code that returns search results — because an object cannot count events it never sees. All arrows out of `Profile` are composition: delete the profile and its parts go with it.
 
 **Stage 2 — posts, comments and messages.** Requirement 7 hides a detail: *comments get likes as well.* Put likes only on `Post` and part of the requirement has no home. So both classes extend one parent, `SocialContent`, which holds the author, the text and the likes. The likes are kept as the **ids of the members who liked**, not as a number, which makes a second like by the same person impossible and lets a like be taken back. `Message` is not part of this family: it is delivered to people rather than published, and no one likes a message.
 
-![Stage 3: invitations and notifications](../../assets/O-design-linkedin-8.svg)
-*Figure — Stage 3: `ConnectionInvitation` (with a status) and `Notification` (with a type) (course diagram)*
-
-**Stage 3 — invitations and notifications.** An invitation to connect starts pending and later becomes accepted or rejected. Because it **changes state as time passes**, it deserves its own object (this is the idea behind the **State** pattern: an object's allowed actions depend on which state it is in, and only certain moves between states are legal) rather than a true/false field on a member, and that object can still record, afterwards, that the answer was no. Requirement 9 lists three notification events, but *delivering* them is identical, so the kind is a **field**, not three subclasses. The general rule: **subclass when behaviour differs; use a field when only data differs.**
-
-![Stage 4: companies, jobs and groups](../../assets/O-design-linkedin-9.svg)
-*Figure — Stage 4: `Company` owning its `JobPosting`s, with followers as ids; `Group` with members and an owner (course diagram)*
+**Stage 3 — invitations and notifications** (`ConnectionInvitation` with a status, `Notification` with a type). An invitation to connect starts pending and later becomes accepted or rejected. Because it **changes state as time passes**, it deserves its own object (this is the idea behind the **State** pattern: an object's allowed actions depend on which state it is in, and only certain moves between states are legal) rather than a true/false field on a member, and that object can still record, afterwards, that the answer was no. Requirement 9 lists three notification events, but *delivering* them is identical, so the kind is a **field**, not three subclasses. The general rule: **subclass when behaviour differs; use a field when only data differs.**
 
 **Stage 4 — companies, jobs and groups.** A company page owns its job postings (a posting means nothing once the page is gone) and keeps followers as a set of ids. A group records who created it, and that creator is never allowed to leave or be removed.
 
-![Stage 5: the actors, and the one operation that belongs to neither](../../assets/O-design-linkedin-10.svg)
-*Figure — Stage 5: `Account`, `Person`, `Member`, `Admin` and `ConnectionService`, which points at both invitations and members (course diagram)*
+**Stage 5 — the actors, and an operation that fits neither of them** (`Account`, `Person`, `Member`, `Admin`, `ConnectionService`). Nearly every requirement becomes a method on `Member`. **Accepting an invitation does not**: it edits two members together. If the sender's class did it, the receiver's connection list would be changed by a different object; if each side did half, a bug would one day update only one half, leaving a one-way link. So the operation goes into a small `ConnectionService`, and that single class is responsible for keeping connections **symmetric** (A lists B exactly when B lists A). Following is different: it is one-sided and needs no agreement, so it is just a set on the follower, no service needed.
 
-**Stage 5 — the actors, and an operation that fits neither of them.** Nearly every requirement becomes a method on `Member`. **Accepting an invitation does not**: it edits two members together. If the sender's class did it, the receiver's connection list would be changed by a different object; if each side did half, a bug would one day update only one half, leaving a one-way link. So the operation goes into a small `ConnectionService`, and that single class is responsible for keeping connections **symmetric** (A lists B exactly when B lists A). Following is different: it is one-sided and needs no agreement, so it is just a set on the follower, no service needed.
-
-![Stage 6: search](../../assets/O-design-linkedin-11.svg)
-*Figure — Stage 6: the `Search` interface and `SearchIndex` with three maps from key to list (members, companies, job postings) (course diagram)*
-
-**Stage 6 — search.** The course shows a real bug from an earlier version: on the first occurrence of a name the index saved *one* member object, and on the next occurrence it tried to "add" to that object — fine for the first Sharma, broken for the second. The cure is a rule: **an index value is always a collection, even when it holds one item.** Keys are single lowercase words, so first and last names both work.
+**Stage 6 — search** (`Search` interface; `SearchIndex` with three maps from key to list: members, companies, job postings). The course shows a real bug from an earlier version: on the first occurrence of a name the index saved *one* member object, and on the next occurrence it tried to "add" to that object — fine for the first Sharma, broken for the second. The cure is a rule: **an index value is always a collection, even when it holds one item.** Keys are single lowercase words, so first and last names both work.
 
 ![The finished class diagram](../../assets/O-design-linkedin-12.svg)
 *Figure — The finished LinkedIn class diagram, with all six stages in full colour (course diagram)*
@@ -3350,269 +1747,44 @@ flowchart LR
 
 ### Java implementation
 
-Package `lld.ch18.linkedin`.
+Package `lld.ch18.linkedin`. Full runnable code is in `code/lld/ch18/linkedin/`: `Profile.java` (`Tick` — a deterministic logical clock so output repeats; a real system uses `Instant.now()` — `Experience`, `Education`, `Accomplishment`, `Skill`, `Recommendation`, `ProfileStats`, `Profile`), `Content.java` (`SocialContent`, `Post`, `Comment`, `Message`), `Network.java` (`Member`, `Admin`, `ConnectionInvitation`, `ConnectionService`), `Pages.java` (`Company`, `JobPosting`, `JobApplication`, `Group`), `Services.java` (notifications, `SearchIndex`, feed ranking and `FeedService`), `LinkedIn.java` (the facade) and `Main.java`. The essential lines (`/* ... */` and `//` summary comments stand for code left out):
 
 ```java
-// File: lld/ch18/linkedin/Profile.java
-package lld.ch18.linkedin;
-
-import java.time.YearMonth;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-
-enum EmploymentType { FULL_TIME, PART_TIME, CONTRACT, INTERNSHIP }
-
-/** A deterministic logical clock so the demo output is repeatable (a real system uses Instant.now()). */
-final class Tick {
-    private static final AtomicLong NOW = new AtomicLong();
-    static long next() { return NOW.incrementAndGet(); }
-    static long now() { return NOW.get(); }
-    private Tick() {}
-}
-
-record Experience(String title, String company, String location, YearMonth from, YearMonth to, EmploymentType type) {
-    boolean isCurrent() { return to == null; }
-}
-
-record Education(String school, String degree, int fromYear, int toYear) {}
-
-record Accomplishment(String title, String description) {}
-
 /** A skill keeps the set of members who endorsed it, so nobody endorses twice. */
-final class Skill {
-    private final String name;
-    private final Set<Long> endorsers = new LinkedHashSet<>();
-    Skill(String name) { this.name = name; }
-    String name() { return name; }
-    synchronized boolean endorse(long memberId) { return endorsers.add(memberId); }
-    synchronized int endorsements() { return endorsers.size(); }
-}
-
-enum RecommendationStatus { REQUESTED, WRITTEN, DECLINED }
+final class Skill { synchronized boolean endorse(long memberId) { return endorsers.add(memberId); } }
 
 /** Created EMPTY when requested; only the named author may fill it in, once. */
 final class Recommendation {
-    private final long authorId;
-    private final String authorName;
-    private RecommendationStatus status = RecommendationStatus.REQUESTED;
-    private String text;
-
-    Recommendation(long authorId, String authorName) { this.authorId = authorId; this.authorName = authorName; }
-
     synchronized void write(long byMemberId, String text) {
         if (byMemberId != authorId) throw new IllegalStateException("only " + authorName + " can write this recommendation");
         if (status != RecommendationStatus.REQUESTED) throw new IllegalStateException("recommendation is " + status);
         this.text = text;
         this.status = RecommendationStatus.WRITTEN;
     }
-
-    long authorId() { return authorId; }
-    String authorName() { return authorName; }
-    synchronized RecommendationStatus status() { return status; }
-    synchronized Optional<String> text() { return Optional.ofNullable(text); }
 }
-
-/**
- * Counters that are pushed in by whoever sees the event (a profile cannot
- * observe its own views or search appearances). The connection count is NOT
- * stored here: it is the size of the connection set, so it can never disagree.
- */
-final class ProfileStats {
-    private final AtomicInteger profileViews = new AtomicInteger();
-    private final AtomicInteger searchAppearances = new AtomicInteger();
-    void recordView() { profileViews.incrementAndGet(); }
-    void recordSearchAppearance() { searchAppearances.incrementAndGet(); }
-    int profileViews() { return profileViews.get(); }
-    int searchAppearances() { return searchAppearances.get(); }
-}
-
-/** The profile owns all its parts (composition): delete the profile and they go too. */
-final class Profile {
-    private volatile String headline = "";
-    private volatile String summary = "";
-    private final List<Experience> experiences = new ArrayList<>();
-    private final List<Education> educations = new ArrayList<>();
-    private final Map<String, Skill> skills = new LinkedHashMap<>();
-    private final List<Accomplishment> accomplishments = new ArrayList<>();
-    private final List<Recommendation> recommendations = new ArrayList<>();
-    private final ProfileStats stats = new ProfileStats();
-
-    void setHeadline(String h) { headline = h; }
-    void setSummary(String s) { summary = s; }
-    String headline() { return headline; }
-    String summary() { return summary; }
-
-    synchronized void addExperience(Experience e) {
-        if (e.to() != null && e.to().isBefore(e.from())) throw new IllegalArgumentException("experience ends before it starts");
-        experiences.add(e);
-    }
-    synchronized void addEducation(Education e) { educations.add(e); }
-    synchronized void addAccomplishment(Accomplishment a) { accomplishments.add(a); }
-    synchronized Skill addSkill(String name) { return skills.computeIfAbsent(name, Skill::new); }
-    synchronized Optional<Skill> skill(String name) { return Optional.ofNullable(skills.get(name)); }
-    synchronized void addRecommendation(Recommendation r) { recommendations.add(r); }
-
-    synchronized List<Experience> experiences() { return List.copyOf(experiences); }
-    synchronized List<Education> educations() { return List.copyOf(educations); }
-    synchronized List<Skill> skills() { return List.copyOf(skills.values()); }
-    synchronized List<Recommendation> recommendations() { return List.copyOf(recommendations); }
-    ProfileStats stats() { return stats; }
-
-    synchronized Optional<Experience> currentPosition() {
-        return experiences.stream().filter(Experience::isCurrent).findFirst();
-    }
-}
-```
-
-```java
-// File: lld/ch18/linkedin/Content.java
-package lld.ch18.linkedin;
-
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
+// ProfileStats: views and search appearances are pushed in by whoever sees the event (a profile cannot observe
+// its own views); the connection count is NOT stored — it is the size of the connection set.
+// Profile owns all its parts (composition) and rejects an experience that ends before it starts.
 
 /** Posts AND comments can be liked, so likes live in a shared base class, as a set of member ids. */
 abstract class SocialContent {
-    private static final AtomicLong IDS = new AtomicLong(1000);
-    private final long id = IDS.incrementAndGet();
-    private final Member author;
-    private final String text;
-    private final long createdAt = Tick.next();
     private final Set<Long> likes = new LinkedHashSet<>();
-
-    SocialContent(Member author, String text) {
-        if (text == null || text.isBlank()) throw new IllegalArgumentException("text cannot be empty");
-        this.author = author;
-        this.text = text;
-    }
-
-    long id() { return id; }
-    Member author() { return author; }
-    String text() { return text; }
-    long createdAt() { return createdAt; }
     synchronized boolean like(long memberId) { return likes.add(memberId); }
     synchronized boolean unlike(long memberId) { return likes.remove(memberId); }
     synchronized int likeCount() { return likes.size(); }
 }
-
-final class Post extends SocialContent {
-    private final List<Comment> comments = new ArrayList<>();
-    private final Post sharedFrom;                  // null for an original post
-    private final AtomicInteger shares = new AtomicInteger();
-
-    Post(Member author, String text, Post sharedFrom) {
-        super(author, text);
-        this.sharedFrom = sharedFrom;
-    }
-
-    synchronized Comment addComment(Member by, String text) {
-        Comment c = new Comment(by, text, this);
-        comments.add(c);
-        return c;
-    }
-    synchronized List<Comment> comments() { return List.copyOf(comments); }
-    Optional<Post> sharedFrom() { return Optional.ofNullable(sharedFrom); }
-    void recordShare() { shares.incrementAndGet(); }
-    int shares() { return shares.get(); }
-
-    @Override public String toString() {
-        return "\"" + text() + "\" by " + author().name()
-                + sharedFrom().map(p -> " (shared from " + p.author().name() + ")").orElse("");
-    }
-}
-
-final class Comment extends SocialContent {
-    private final Post post;
-    Comment(Member author, String text, Post post) { super(author, text); this.post = post; }
-    Post post() { return post; }
-}
-
+// Post adds comments, sharedFrom (null for an original) and a share counter.
 /** Sent to people, never posted; nobody likes a message, so it is not SocialContent. */
 record Message(long id, Member sender, List<Member> recipients, String text, long sentAt) {}
 ```
 
 ```java
-// File: lld/ch18/linkedin/Network.java
-package lld.ch18.linkedin;
-
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.Deque;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.OptionalInt;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.LongFunction;
-
-enum AccountStatus { ACTIVE, BLOCKED, BANNED, COMPROMISED, ARCHIVED, UNKNOWN }
-
 class Member {
-    private static final AtomicLong IDS = new AtomicLong();
-    private final long id = IDS.incrementAndGet();
-    private volatile String name;
-    private final String email;
-    private final Profile profile = new Profile();
-    private volatile AccountStatus status = AccountStatus.ACTIVE;
     // Connections change only through ConnectionService, which keeps both sides symmetric.
     private final Set<Long> connections = ConcurrentHashMap.newKeySet();
     // Following is one-sided: nobody has to agree, so it is just a set on the follower.
     private final Set<Long> followingMembers = ConcurrentHashMap.newKeySet();
-    private final Set<Long> followingCompanies = ConcurrentHashMap.newKeySet();
-    private final List<Post> posts = new CopyOnWriteArrayList<>();
-    private final List<Message> inbox = new CopyOnWriteArrayList<>();
-    private final List<Notification> notifications = new CopyOnWriteArrayList<>();
-
-    Member(String name, String email) { this.name = name; this.email = email; }
-
-    long id() { return id; }
-    String name() { return name; }
-    void rename(String newName) { this.name = newName; }
-    String email() { return email; }
-    Profile profile() { return profile; }
-    AccountStatus status() { return status; }
-    void setStatus(AccountStatus s) { status = s; }
-
-    Set<Long> connections() { return Set.copyOf(connections); }
-    boolean isConnectedTo(Member other) { return connections.contains(other.id()); }
     void addConnection(long otherId) { connections.add(otherId); }         // package-private: only the service calls it
-    void removeConnection(long otherId) { connections.remove(otherId); }
-
-    boolean follow(Member m) { return m.id != id && followingMembers.add(m.id()); }
-    boolean unfollow(Member m) { return followingMembers.remove(m.id()); }
-    boolean followCompany(Company c) { return followingCompanies.add(c.id()); }
-    Set<Long> followingMembers() { return Set.copyOf(followingMembers); }
-    Set<Long> followingCompanies() { return Set.copyOf(followingCompanies); }
-
-    void addPost(Post p) { posts.add(p); }
-    List<Post> posts() { return List.copyOf(posts); }
-    void receive(Message m) { inbox.add(m); }
-    List<Message> inbox() { return List.copyOf(inbox); }
-    void notify(Notification n) { notifications.add(n); }
-    List<Notification> notifications() { return List.copyOf(notifications); }
-
-    @Override public String toString() { return name; }
-}
-
-final class Admin extends Member {
-    Admin(String name, String email) { super(name, email); }
 }
 
 enum InvitationStatus {
@@ -3620,51 +1792,13 @@ enum InvitationStatus {
     boolean canMoveTo(InvitationStatus next) { return this == PENDING && next != PENDING; }
 }
 
-/** A connection request is an object with a state over time: it can remember that it was rejected. */
-final class ConnectionInvitation {
-    private static final AtomicLong IDS = new AtomicLong();
-    private final long id = IDS.incrementAndGet();
-    private final Member from;
-    private final Member to;
-    private final String note;
-    private InvitationStatus status = InvitationStatus.PENDING;
-
-    ConnectionInvitation(Member from, Member to, String note) { this.from = from; this.to = to; this.note = note; }
-
-    long id() { return id; }
-    Member from() { return from; }
-    Member to() { return to; }
-    String note() { return note; }
-    synchronized InvitationStatus status() { return status; }
-
-    synchronized void moveTo(InvitationStatus next) {
-        if (!status.canMoveTo(next)) throw new IllegalStateException("invitation is already " + status);
-        status = next;
-    }
-}
-
-/**
- * Accepting an invitation changes TWO members, so it belongs to neither: it lives here.
- * This service is the only code that must be right for connections to stay symmetric.
- */
+/** Accepting an invitation changes TWO members, so it belongs to neither: it lives here. */
 final class ConnectionService {
-    private final Map<Long, ConnectionInvitation> invitations = new ConcurrentHashMap<>();
-    private final NotificationService notifications;
-    private final LongFunction<Member> lookup;
-
-    ConnectionService(NotificationService notifications, LongFunction<Member> lookup) {
-        this.notifications = notifications;
-        this.lookup = lookup;
-    }
-
     synchronized ConnectionInvitation invite(Member from, Member to, String note) {
         if (from.id() == to.id()) throw new IllegalArgumentException("cannot connect to yourself");
         if (from.isConnectedTo(to)) throw new IllegalStateException(from + " and " + to + " are already connected");
         if (pendingBetween(from, to)) throw new IllegalStateException("an invitation between " + from + " and " + to + " is already pending");
-        ConnectionInvitation inv = new ConnectionInvitation(from, to, note);
-        invitations.put(inv.id(), inv);
-        notifications.send(to, NotificationType.CONNECTION_INVITATION, from + " wants to connect: \"" + note + "\"");
-        return inv;
+        /* ... store it, notify the invitee ... */
     }
 
     /** One lock for the whole graph change: both sides are updated together or not at all. */
@@ -3674,26 +1808,7 @@ final class ConnectionService {
         inv.from().addConnection(inv.to().id());
         inv.to().addConnection(inv.from().id());
     }
-
-    synchronized void reject(ConnectionInvitation inv, Member by) {
-        if (by.id() != inv.to().id()) throw new IllegalStateException("only " + inv.to() + " can reject");
-        inv.moveTo(InvitationStatus.REJECTED);
-    }
-
-    synchronized void withdraw(ConnectionInvitation inv, Member by) {
-        if (by.id() != inv.from().id()) throw new IllegalStateException("only " + inv.from() + " can withdraw");
-        inv.moveTo(InvitationStatus.CANCELED);
-    }
-
-    synchronized void removeConnection(Member a, Member b) {
-        a.removeConnection(b.id());
-        b.removeConnection(a.id());
-    }
-
-    boolean pendingBetween(Member a, Member b) {
-        return invitations.values().stream().anyMatch(i -> i.status() == InvitationStatus.PENDING
-                && ((i.from() == a && i.to() == b) || (i.from() == b && i.to() == a)));
-    }
+    // reject (invitee only), withdraw (sender only -> CANCELED), removeConnection (both sides)
 
     /** Degree of connection (1st, 2nd, 3rd) by breadth-first search; empty means "out of network". */
     OptionalInt degree(Member from, Member to) {
@@ -3711,234 +1826,24 @@ final class ConnectionService {
         }
         return OptionalInt.empty();
     }
-
-    Set<Long> mutualConnections(Member a, Member b) {
-        Set<Long> mutual = new HashSet<>(a.connections());
-        mutual.retainAll(b.connections());
-        return mutual;
-    }
-
     /** "People you may know": 2nd-degree members ranked by mutual connections, then name. */
-    List<Member> peopleYouMayKnow(Member me, int limit) {
-        Map<Long, Integer> mutualCount = new HashMap<>();
-        for (long friend : me.connections()) {
-            for (long candidate : lookup.apply(friend).connections()) {
-                if (candidate != me.id() && !me.connections().contains(candidate)) mutualCount.merge(candidate, 1, Integer::sum);
-            }
-        }
-        List<Member> result = new ArrayList<>();
-        mutualCount.keySet().stream().map(lookup::apply)
-                .filter(m -> !pendingBetween(me, m))
-                .sorted(Comparator.comparing((Member m) -> -mutualCount.get(m.id())).thenComparing(Member::name))
-                .limit(limit).forEach(result::add);
-        return result;
-    }
+    List<Member> peopleYouMayKnow(Member me, int limit) { /* count mutuals via friends of friends; skip pending */ }
 }
 ```
 
 ```java
-// File: lld/ch18/linkedin/Pages.java
-package lld.ch18.linkedin;
-
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicLong;
-
-final class Company {
-    private static final AtomicLong IDS = new AtomicLong(500);
-    private final long id = IDS.incrementAndGet();
-    private final String name;
-    private final Member createdBy;
-    private final Set<Long> followers = ConcurrentHashMap.newKeySet();
-    private final List<JobPosting> jobs = new CopyOnWriteArrayList<>();     // owned: gone with the page
-
-    Company(String name, Member createdBy) { this.name = name; this.createdBy = createdBy; }
-
-    long id() { return id; }
-    String name() { return name; }
-    Member createdBy() { return createdBy; }
-    void addFollower(long memberId) { followers.add(memberId); }
-    Set<Long> followers() { return Set.copyOf(followers); }
-    int followerCount() { return followers.size(); }          // counted, never stored
-
-    JobPosting postJob(Member by, String title, String location, EmploymentType type) {
-        if (by.id() != createdBy.id()) throw new IllegalStateException(by + " is not an admin of " + name);
-        JobPosting job = new JobPosting(this, title, location, type);
-        jobs.add(job);
-        return job;
-    }
-    List<JobPosting> jobs() { return List.copyOf(jobs); }
-    @Override public String toString() { return name; }
-}
-
-enum ApplicationStatus { APPLIED, IN_REVIEW, REJECTED, HIRED }
-
-record JobApplication(Member applicant, long appliedAt, ApplicationStatus status) {}
-
-final class JobPosting {
-    private static final AtomicLong IDS = new AtomicLong(700);
-    private final long id = IDS.incrementAndGet();
-    private final Company company;
-    private final String title;
-    private final String location;
-    private final EmploymentType type;
-    private final Map<Long, JobApplication> applications = new LinkedHashMap<>();
-    private volatile boolean open = true;
-
-    JobPosting(Company company, String title, String location, EmploymentType type) {
-        this.company = company; this.title = title; this.location = location; this.type = type;
-    }
-
-    long id() { return id; }
-    Company company() { return company; }
-    String title() { return title; }
-    String location() { return location; }
-    EmploymentType type() { return type; }
-    boolean isOpen() { return open; }
-    void close() { open = false; }
-
-    synchronized JobApplication apply(Member m) {
-        if (!open) throw new IllegalStateException("job " + title + " is closed");
-        if (applications.containsKey(m.id())) throw new IllegalStateException(m + " already applied to " + title);
-        JobApplication a = new JobApplication(m, Tick.next(), ApplicationStatus.APPLIED);
-        applications.put(m.id(), a);
-        return a;
-    }
-    synchronized int applicantCount() { return applications.size(); }
-    @Override public String toString() { return title + " @ " + company + " (" + location + ", " + type + ")"; }
-}
-
-final class Group {
-    private static final AtomicLong IDS = new AtomicLong(900);
-    private final long id = IDS.incrementAndGet();
-    private final String name;
-    private final long ownerId;
-    private final Set<Long> members = ConcurrentHashMap.newKeySet();
-
-    Group(String name, Member owner) {
-        this.name = name;
-        this.ownerId = owner.id();
-        members.add(owner.id());
-    }
-
-    long id() { return id; }
-    String name() { return name; }
-    boolean join(Member m) { return members.add(m.id()); }
-    boolean leave(Member m) {
-        if (m.id() == ownerId) throw new IllegalStateException("the owner cannot leave their own group");
-        return members.remove(m.id());
-    }
-    int memberCount() { return members.size(); }
-}
-```
-
-```java
-// File: lld/ch18/linkedin/Services.java
-package lld.ch18.linkedin;
-
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.stream.Stream;
-
-enum NotificationType { NEW_MESSAGE, CONNECTION_INVITATION, NEW_COMMENT, RECOMMENDATION_REQUEST }
-
-/** Only the data differs between notification kinds, so the kind is a field, not a subclass. */
-record Notification(NotificationType type, String text, long at) {}
-
-/** Strategy for delivery: in-app, email, push... */
-interface NotificationChannel { void deliver(Member to, Notification n); }
-
-final class InAppChannel implements NotificationChannel {
-    @Override public void deliver(Member to, Notification n) { to.notify(n); }
-}
-
-final class EmailChannel implements NotificationChannel {
-    @Override public void deliver(Member to, Notification n) {
-        System.out.println("    [email to " + to.email() + "] " + n.type() + ": " + n.text());
-    }
-}
-
-final class NotificationService {
-    private final List<NotificationChannel> channels = new CopyOnWriteArrayList<>();
-    NotificationService(List<NotificationChannel> channels) { this.channels.addAll(channels); }
-    void send(Member to, NotificationType type, String text) {
-        Notification n = new Notification(type, text, Tick.next());
-        channels.forEach(c -> c.deliver(to, n));
-    }
-}
-
-interface Search {
-    List<Member> searchMembers(String name);
-    List<Company> searchCompanies(String name);
-    List<JobPosting> searchJobs(String title);
-}
-
-/**
- * Inverted indexes. RULE: every key maps to a LIST, even for one match,
- * so the second "Sharma" never breaks the index.
- */
+/** Inverted indexes. RULE: every key maps to a collection, even for one match, so the second "Sharma" never breaks it. */
 final class SearchIndex implements Search {
-    private final Map<String, Set<Member>> members = new ConcurrentHashMap<>();
-    private final Map<String, Set<Company>> companies = new ConcurrentHashMap<>();
-    private final Map<String, Set<JobPosting>> jobs = new ConcurrentHashMap<>();
-
-    void addMember(Member m) { words(m.name()).forEach(w -> members.computeIfAbsent(w, k -> ConcurrentHashMap.newKeySet()).add(m)); }
-    void removeMember(Member m, String oldName) { words(oldName).forEach(w -> members.getOrDefault(w, Set.of()).remove(m)); }
-    void addCompany(Company c) { words(c.name()).forEach(w -> companies.computeIfAbsent(w, k -> ConcurrentHashMap.newKeySet()).add(c)); }
-    void addJob(JobPosting j) { words(j.title()).forEach(w -> jobs.computeIfAbsent(w, k -> ConcurrentHashMap.newKeySet()).add(j)); }
-
-    @Override public List<Member> searchMembers(String q) {
-        return match(members, q).sorted(Comparator.comparing(Member::name)).toList();
-    }
-    @Override public List<Company> searchCompanies(String q) {
-        return match(companies, q).sorted(Comparator.comparing(Company::name)).toList();
-    }
-    @Override public List<JobPosting> searchJobs(String q) {
-        return match(jobs, q).filter(JobPosting::isOpen).sorted(Comparator.comparingLong(JobPosting::id)).toList();
-    }
-
+    private final Map<String, Set<Member>> members = new ConcurrentHashMap<>();   // also companies, jobs (open only)
     /** Items matching ALL words of the query. */
-    private static <T> Stream<T> match(Map<String, Set<T>> index, String query) {
-        List<String> ws = words(query);
-        if (ws.isEmpty()) return Stream.empty();
-        return index.getOrDefault(ws.get(0), Set.of()).stream()
-                .filter(item -> ws.stream().allMatch(w -> index.getOrDefault(w, Set.of()).contains(item)));
-    }
-
-    private static List<String> words(String s) {
-        return Arrays.stream(s.toLowerCase(Locale.ROOT).split("\\W+")).filter(w -> !w.isEmpty()).toList();
-    }
+    private static <T> Stream<T> match(Map<String, Set<T>> index, String query) { /* ... */ }
 }
 
-/** Strategy for ordering the feed. */
-interface FeedRanker {
-    String name();
-    Comparator<Post> order(Member viewer);
-}
-
-final class ChronologicalRanker implements FeedRanker {
-    @Override public String name() { return "latest"; }
-    @Override public Comparator<Post> order(Member viewer) {
-        return Comparator.comparingLong(Post::createdAt).reversed();
-    }
-}
+/** Strategy for ordering the feed: ChronologicalRanker ("latest") or EngagementRanker ("top"). */
+interface FeedRanker { String name(); Comparator<Post> order(Member viewer); }
 
 /** Engagement score with a simple age decay; 1st-degree connections get a boost over follows. */
 final class EngagementRanker implements FeedRanker {
-    @Override public String name() { return "top"; }
-    @Override public Comparator<Post> order(Member viewer) {
-        return Comparator.comparingDouble((Post p) -> -score(p, viewer)).thenComparing(Comparator.comparingLong(Post::createdAt).reversed());
-    }
     private static double score(Post p, Member viewer) {
         double engagement = p.likeCount() + 2.0 * p.comments().size() + 3.0 * p.shares();
         double affinity = viewer.isConnectedTo(p.author()) ? 1.5 : 1.0;
@@ -3947,66 +1852,23 @@ final class EngagementRanker implements FeedRanker {
     }
 }
 
-/**
- * Pull model ("fan-out on read"): build the feed when it is opened from the
- * posts of connections and followed members. Fine for small networks; see the
- * README for the push model and the hybrid real sites use.
- */
+/** Pull model ("fan-out on read"): build the feed when it is opened. */
 final class FeedService {
-    private final java.util.function.LongFunction<Member> lookup;
-    FeedService(java.util.function.LongFunction<Member> lookup) { this.lookup = lookup; }
-
     List<Post> feed(Member viewer, FeedRanker ranker, int limit) {
         Set<Long> sources = new java.util.HashSet<>(viewer.connections());
         sources.addAll(viewer.followingMembers());
-        return sources.stream()
-                .map(lookup::apply)
+        return sources.stream().map(lookup::apply)
                 .filter(m -> m.status() == AccountStatus.ACTIVE)
                 .flatMap(m -> m.posts().stream())
-                .sorted(ranker.order(viewer))
-                .limit(limit)
-                .toList();
+                .sorted(ranker.order(viewer)).limit(limit).toList();
     }
 }
+// NotificationService sends each Notification(type, text, at) through every NotificationChannel (InAppChannel, EmailChannel).
 ```
 
 ```java
-// File: lld/ch18/linkedin/LinkedIn.java
-package lld.ch18.linkedin;
-
-import java.util.List;
-import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
-
 /** Facade that wires the services and checks account status before every action. */
 final class LinkedIn {
-    private final Map<Long, Member> members = new ConcurrentHashMap<>();
-    private final AtomicLong messageIds = new AtomicLong();
-    final NotificationService notifications;
-    final ConnectionService connections;
-    final SearchIndex search = new SearchIndex();
-    final FeedService feeds;
-
-    LinkedIn(List<NotificationChannel> channels) {
-        notifications = new NotificationService(channels);
-        connections = new ConnectionService(notifications, this::member);
-        feeds = new FeedService(this::member);
-    }
-
-    Member member(long id) {
-        Member m = members.get(id);
-        if (m == null) throw new NoSuchElementException("no member " + id);
-        return m;
-    }
-
-    <M extends Member> M join(M m) {
-        members.put(m.id(), m);
-        search.addMember(m);
-        return m;
-    }
-
     /** The code that changes a name must tell the index, or search goes stale. */
     void rename(Member m, String newName) {
         String old = m.name();
@@ -4014,200 +1876,22 @@ final class LinkedIn {
         m.rename(newName);
         search.addMember(m);
     }
-
-    List<Member> searchMembers(Member viewer, String query) {
-        List<Member> found = search.searchMembers(query);
-        found.stream().filter(m -> m != viewer).forEach(m -> m.profile().stats().recordSearchAppearance());
-        return found;
-    }
-
-    void viewProfile(Member viewer, Member owner) {
-        if (viewer != owner) owner.profile().stats().recordView();
-    }
-
     void endorse(Member by, Member owner, String skillName) {
         active(by);
         if (!by.isConnectedTo(owner)) throw new IllegalStateException("only 1st-degree connections can endorse " + owner);
-        Skill s = owner.profile().skill(skillName).orElseThrow(() -> new NoSuchElementException(owner + " has no skill " + skillName));
-        if (!s.endorse(by.id())) throw new IllegalStateException(by + " already endorsed " + skillName);
+        /* ... the skill must exist; Skill.endorse refuses a second endorsement ... */
     }
-
-    Recommendation requestRecommendation(Member requester, Member author) {
-        active(requester);
-        if (!requester.isConnectedTo(author)) throw new IllegalStateException("you can only ask your connections");
-        Recommendation r = new Recommendation(author.id(), author.name());
-        requester.profile().addRecommendation(r);
-        notifications.send(author, NotificationType.RECOMMENDATION_REQUEST, requester + " asked you for a recommendation");
-        return r;
-    }
-
-    Post post(Member author, String text) {
-        active(author);
-        Post p = new Post(author, text, null);
-        author.addPost(p);
-        return p;
-    }
-
-    Post share(Member by, Post original, String text) {
-        active(by);
-        Post p = new Post(by, text, original);
-        original.recordShare();
-        by.addPost(p);
-        return p;
-    }
-
-    Comment comment(Member by, Post post, String text) {
-        active(by);
-        Comment c = post.addComment(by, text);
-        if (post.author() != by) notifications.send(post.author(), NotificationType.NEW_COMMENT, by + " commented: \"" + text + "\"");
-        return c;
-    }
-
     Message message(Member from, List<Member> to, String text) {
         active(from);
-        for (Member r : to) {
+        for (Member r : to)
             if (!from.isConnectedTo(r)) throw new IllegalStateException(r + " is not a connection (that would need InMail)");
-        }
-        Message m = new Message(messageIds.incrementAndGet(), from, List.copyOf(to), text, Tick.next());
-        for (Member r : to) {
-            r.receive(m);
-            notifications.send(r, NotificationType.NEW_MESSAGE, "from " + from + ": " + text);
-        }
-        return m;
+        /* ... deliver to every recipient's inbox and notify ... */
     }
-
-    Company createCompany(Member by, String name) {
-        active(by);
-        Company c = new Company(name, by);
-        search.addCompany(c);
-        return c;
-    }
-
-    JobPosting postJob(Member by, Company c, String title, String location, EmploymentType type) {
-        JobPosting j = c.postJob(by, title, location, type);
-        search.addJob(j);
-        return j;
-    }
-
-    void followCompany(Member m, Company c) {
-        if (m.followCompany(c)) c.addFollower(m.id());
-    }
-
-    void block(Admin admin, Member target) { target.setStatus(AccountStatus.BLOCKED); }
-
-    private static void active(Member m) {
-        if (m.status() != AccountStatus.ACTIVE) throw new IllegalStateException(m + " is " + m.status());
-    }
+    // also: post, share, comment (notifies the author), requestRecommendation (connections only), searchMembers
+    // (records search appearances), viewProfile, createCompany, postJob (company admin only), followCompany, block(Admin, ...)
 }
-```
-
-```java
-// File: lld/ch18/linkedin/Main.java
-package lld.ch18.linkedin;
-
-import java.time.YearMonth;
-import java.util.List;
-
-public class Main {
-    public static void main(String[] args) {
-        LinkedIn li = new LinkedIn(List.of(new InAppChannel(), new EmailChannel()));
-        Member asha = li.join(new Member("Asha Sharma", "asha@example.com"));
-        Member ravi = li.join(new Member("Ravi Sharma", "ravi@example.com"));
-        Member meera = li.join(new Member("Meera Iyer", "meera@example.com"));
-        Member karan = li.join(new Member("Karan Mehta", "karan@example.com"));
-        Member zoya = li.join(new Member("Zoya Khan", "zoya@example.com"));
-        Admin admin = li.join(new Admin("Site Admin", "admin@example.com"));
-
-        section("1. Profile");
-        Profile p = asha.profile();
-        p.setHeadline("Backend engineer | Java | Distributed systems");
-        p.addExperience(new Experience("Software Engineer", "Acme Cloud", "Bengaluru", YearMonth.of(2022, 7), null, EmploymentType.FULL_TIME));
-        p.addEducation(new Education("IIT Madras", "B.Tech CSE", 2018, 2022));
-        p.addSkill("Java");
-        p.addSkill("System Design");
-        attempt(() -> p.addExperience(new Experience("Intern", "X", "Pune", YearMonth.of(2021, 6), YearMonth.of(2021, 1), EmploymentType.INTERNSHIP)));
-        System.out.println(asha + ": " + p.headline() + ", now at " + p.currentPosition().map(Experience::company).orElse("-"));
-
-        section("2. Connections");
-        ConnectionInvitation i1 = li.connections.invite(asha, meera, "We met at the Java meetup");
-        li.connections.accept(i1, meera);
-        attempt(() -> li.connections.accept(i1, meera));                 // accepted once, never again
-        li.connections.accept(li.connections.invite(meera, karan, "Ex-colleague"), karan);
-        li.connections.accept(li.connections.invite(karan, zoya, "Hi"), zoya);
-        ConnectionInvitation pending = li.connections.invite(asha, ravi, "Same surname!");
-        attempt(() -> li.connections.invite(ravi, asha, "Hello"));      // pending the other way
-        attempt(() -> li.connections.accept(pending, asha));             // only the receiver can accept
-        System.out.println("degree asha->meera=" + li.connections.degree(asha, meera).getAsInt()
-                + ", asha->karan=" + li.connections.degree(asha, karan).getAsInt()
-                + ", asha->zoya=" + li.connections.degree(asha, zoya).getAsInt()
-                + ", asha->ravi=" + (li.connections.degree(asha, ravi).isPresent() ? "?" : "out of network"));
-        System.out.println("people asha may know: " + li.connections.peopleYouMayKnow(asha, 5));
-
-        section("3. Endorsements and recommendations");
-        li.endorse(meera, asha, "Java");
-        attempt(() -> li.endorse(meera, asha, "Java"));
-        attempt(() -> li.endorse(karan, asha, "Java"));
-        Recommendation rec = li.requestRecommendation(asha, meera);
-        attempt(() -> rec.write(karan.id(), "Great engineer"));
-        rec.write(meera.id(), "Asha owns problems end to end.");
-        System.out.println("Java endorsements=" + p.skill("Java").orElseThrow().endorsements()
-                + ", recommendation from " + rec.authorName() + ": " + rec.text().orElse("") + " [" + rec.status() + "]");
-
-        section("4. Posts, comments, likes, feed");
-        karan.follow(asha);                                              // follow = one-sided, no approval
-        Post launch = li.post(meera, "We are hiring Java engineers at Acme Cloud!");
-        Post tip = li.post(asha, "Tip: prefer composition over inheritance.");
-        Comment c = li.comment(asha, launch, "Sharing with my network");
-        launch.like(asha.id());
-        c.like(meera.id());                                              // comments can be liked too
-        System.out.println("double like accepted? " + launch.like(asha.id()));
-        li.share(karan, tip, "Good advice");
-        tip.like(meera.id());
-        tip.like(zoya.id());
-        System.out.println("feed(asha, latest): " + li.feeds.feed(asha, new ChronologicalRanker(), 5));
-        System.out.println("feed(karan, top):   " + li.feeds.feed(karan, new EngagementRanker(), 5));
-
-        section("5. Messaging");
-        li.message(asha, List.of(meera), "Coffee on Friday?");
-        attempt(() -> li.message(asha, List.of(karan), "Hi Karan"));
-
-        section("6. Companies, jobs, groups");
-        Company acme = li.createCompany(meera, "Acme Cloud");
-        li.followCompany(asha, acme);
-        JobPosting job = li.postJob(meera, acme, "Senior Java Engineer", "Bengaluru", EmploymentType.FULL_TIME);
-        attempt(() -> li.postJob(asha, acme, "Fake job", "Nowhere", EmploymentType.CONTRACT));
-        System.out.println("search jobs 'java engineer': " + li.search.searchJobs("java engineer"));
-        job.apply(asha);
-        attempt(() -> job.apply(asha));
-        Group group = new Group("Java Developers India", meera);
-        group.join(asha);
-        attempt(() -> group.leave(meera));
-        System.out.println(acme + " followers=" + acme.followerCount() + ", applicants=" + job.applicantCount()
-                + ", group members=" + group.memberCount());
-
-        section("7. Search and profile stats");
-        System.out.println("search 'sharma' (by meera): " + li.searchMembers(meera, "sharma"));
-        li.rename(zoya, "Zoya Ali");
-        System.out.println("search 'khan' after rename: " + li.searchMembers(meera, "khan")
-                + ", search 'ali': " + li.searchMembers(meera, "ali"));
-        li.viewProfile(meera, asha);
-        li.viewProfile(karan, asha);
-        System.out.println("asha stats: views=" + p.stats().profileViews() + ", connections=" + asha.connections().size()
-                + ", search appearances=" + p.stats().searchAppearances());
-        System.out.println("meera's in-app notifications: " + meera.notifications().stream().map(Notification::type).toList());
-
-        section("8. Admin");
-        li.block(admin, karan);
-        attempt(() -> li.post(karan, "spam spam"));
-        System.out.println("feed(meera) hides blocked Karan's share: " + li.feeds.feed(meera, new ChronologicalRanker(), 5));
-    }
-
-    static void section(String t) { System.out.println("\n== " + t + " =="); }
-
-    static void attempt(Runnable r) {
-        try { r.run(); } catch (RuntimeException e) { System.out.println("  REJECTED: " + e.getMessage()); }
-    }
-}
+// Company owns its job postings (gone with the page) and counts followers from a set; JobPosting.apply refuses a
+// closed job or a second application; a Group owner cannot leave their own group.
 ```
 
 **Output:**
@@ -4416,38 +2100,17 @@ Top use cases: add/update profile; search members, groups, pages and posts; send
 
 The course builds Facebook in **five stages plus the extended requirement**.
 
-![Stage 1: the profile](../../assets/O-design-facebook-a-social-network-5.svg)
-*Figure — Stage 1: `Profile` holding lists of `Work`, `Education` and `Place` (course diagram)*
-
-**Stage 1 — the profile.** Work, education and places are small classes held in lists (composition). Every profile field starts with a **default** value, so a brand-new account already has a working profile, and no other code needs to make up a placeholder picture for someone who never uploaded one.
-
-![UML legend](../../assets/O-design-facebook-a-social-network-6.svg)
-*Figure — UML conventions used in these diagrams (course diagram)*
-
-![Stage 2: posts, privacy, messages and notification](../../assets/O-design-facebook-a-social-network-7.svg)
-*Figure — Stage 2: `SocialContent` with `Post` and `Comment`, a `0..1` association from `Post` to `PrivacyList`, `Message`, and abstract `Notification` (course diagram)*
+**Stage 1 — the profile** (`Profile` holding lists of `Work`, `Education`, `Place`). Work, education and places are small classes held in lists (composition). Every profile field starts with a **default** value, so a brand-new account already has a working profile, and no other code needs to make up a placeholder picture for someone who never uploaded one.
 
 **Stage 2 — posts, privacy, messages and notifications.** Three choices here repair bugs in older versions. (1) **Store the likers, not a like count** — an old `Post` received its like count through the constructor, so a fresh post could start with a thousand likes, and there was no way to know whether you had liked it already. (2) **Comments get likes too**, so the likes set lives in the shared `SocialContent` parent. (3) **Privacy is checked by the post itself** — `isAllowedByPrivacy` is a method on the post, not something each screen must remember. Yet it can answer only part of the question, because a post has no idea who is friends with whom; stage 5 supplies the rest. The link from `Post` to `PrivacyList` is marked `0..1`: a post might have no list (it is public), and one list is reused by many posts and survives them. `Notification` is abstract, with a subclass for each delivery method.
 
-![Stage 3: pages and groups](../../assets/O-design-facebook-a-social-network-8.svg)
-*Figure — Stage 3: `Page` owning its `Recommendation`s, followers as ids, and `Group`; no member-count fields (course diagram)*
+**Stage 3 — pages and groups** (`Page` owning its `Recommendation`s, followers as ids; `Group`). Look at what these classes do *not* have: a member-count field. An earlier version accepted the count in its constructor *and* also stored the members, so the two numbers could be different from day one. The rule: **if a number can be computed by counting a collection, do not keep it as a separate field; keep the collection and count it when asked.**
 
-**Stage 3 — pages and groups.** Look at what these classes do *not* have: a member-count field. An earlier version accepted the count in its constructor *and* also stored the members, so the two numbers could be different from day one. The rule: **if a number can be computed by counting a collection, do not keep it as a separate field; keep the collection and count it when asked.**
+**Stage 4 — the actors and the friend graph** (`Account`, `Person`, `Member`, `Admin`, `ConnectionInvitation`, `FriendService`). An earlier invitation class remembered only the person invited, not the person inviting, so there was no way to accept it properly. Since acceptance updates two members, it belongs in `FriendService`; that service therefore holds the **friend graph** (who is friends with whom) and is the obvious class to ask "are these two friends?" and "is a request already waiting between them?". Following (requirement 4) is deliberately different: one-sided, a set on the follower, no service.
 
-![Stage 4: the actors, and the friend graph](../../assets/O-design-facebook-a-social-network-9.svg)
-*Figure — Stage 4: `Account`, `Person`, `Member`, `Admin`, `ConnectionInvitation` and `FriendService`, which owns the friend graph (course diagram)*
+**Stage 5 — search** (`Search`, `SearchIndex` holding a `FriendService`). The most important detail is small: **`searchPost` needs the viewer as a parameter.** The privacy rule (requirement 8) still applies when someone searches; a keyword search that skips it would let anyone read posts that were never shared with them. Deciding visibility therefore needs two sources — the post's own privacy list, and the friendship data that only the friend service holds — and neither source can answer for the other. The index follows the same rule as LinkedIn's: each key maps to a collection.
 
-**Stage 4 — the actors and the friend graph.** An earlier invitation class remembered only the person invited, not the person inviting, so there was no way to accept it properly. Since acceptance updates two members, it belongs in `FriendService`; that service therefore holds the **friend graph** (who is friends with whom) and is the obvious class to ask "are these two friends?" and "is a request already waiting between them?". Following (requirement 4) is deliberately different: one-sided, a set on the follower, no service.
-
-![Stage 5: search](../../assets/O-design-facebook-a-social-network-10.svg)
-*Figure — Stage 5: `Search` and `SearchIndex`, which holds a `FriendService` so post search can respect privacy (course diagram)*
-
-**Stage 5 — search.** The most important detail is small: **`searchPost` needs the viewer as a parameter.** The privacy rule (requirement 8) still applies when someone searches; a keyword search that skips it would let anyone read posts that were never shared with them. Deciding visibility therefore needs two sources — the post's own privacy list, and the friendship data that only the friend service holds — and neither source can answer for the other. The index follows the same rule as LinkedIn's: each key maps to a collection.
-
-![Extended requirement](../../assets/O-design-facebook-a-social-network-11.svg)
-*Figure — Extended requirement: `SuggestionService` reading the friend graph and producing `Suggestion` objects, with no change to existing classes (course diagram)*
-
-**Extended requirement — friend suggestions.** Friends of friends, **scored by mutual friends** (someone reached through three of your friends beats someone reached through one). Never suggest yourself, an existing friend, or anyone with a request pending **in either direction** (the one candidates forget — showing someone you invited yesterday is a visible bug). Sort by mutual count, then by id, so equal scores do not reshuffle between page loads. Notice that the feature arrives as two new classes with no edits to existing ones; if a design must be modified every time a new question is asked, it will keep being modified.
+**Extended requirement — friend suggestions** (`SuggestionService` reads the friend graph and produces `Suggestion` objects). Friends of friends, **scored by mutual friends** (someone reached through three of your friends beats someone reached through one). Never suggest yourself, an existing friend, or anyone with a request pending **in either direction** (the one candidates forget — showing someone you invited yesterday is a visible bug). Sort by mutual count, then by id, so equal scores do not reshuffle between page loads. Notice that the feature arrives as two new classes with no edits to existing ones; if a design must be modified every time a new question is asked, it will keep being modified.
 
 ![The finished class diagram](../../assets/O-design-facebook-a-social-network-12.svg)
 *Figure — The finished Facebook class diagram with every class in full colour (course diagram)*
@@ -4643,116 +2306,11 @@ flowchart LR
 
 ### Java implementation
 
-Package `lld.ch18.facebook`.
+Package `lld.ch18.facebook`. Full runnable code is in `code/lld/ch18/facebook/`: `Model.java` (`Tick`, `Work`, `Education`, `Place`, `Profile` — every field has a default, so a profile is usable the moment the account exists — `Member`, `Admin`, `PrivacyList`, `Audience`, `SocialContent`, `Post`, `Comment`, `Message`), `PagesAndGroups.java`, `Services.java` (friends, privacy, notifications, search, news feed, suggestions), `Facebook.java` (the facade) and `Main.java`. The essential lines (`/* ... */` and `//` summary comments stand for code left out):
 
 ```java
-// File: lld/ch18/facebook/Model.java
-package lld.ch18.facebook;
-
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicLong;
-
-/** Deterministic logical clock for repeatable demo output. */
-final class Tick {
-    private static final AtomicLong NOW = new AtomicLong();
-    static long next() { return NOW.incrementAndGet(); }
-    static long now() { return NOW.get(); }
-    private Tick() {}
-}
-
-record Work(String title, String company, String location, int fromYear, Integer toYear) {
-    boolean isCurrent() { return toYear == null; }
-}
-record Education(String school, String degree, int fromYear, int toYear) {}
-record Place(String city, String country, int fromYear) {}
-
-/** Every field has a default, so a profile is usable the moment the account exists. */
-final class Profile {
-    private volatile String picture = "default-avatar.png";
-    private volatile String bio = "";
-    private final List<Work> work = new CopyOnWriteArrayList<>();
-    private final List<Education> education = new CopyOnWriteArrayList<>();
-    private final List<Place> places = new CopyOnWriteArrayList<>();
-
-    String picture() { return picture; }
-    void setPicture(String p) { picture = p; }
-    String bio() { return bio; }
-    void setBio(String b) { bio = b; }
-    void addWork(Work w) { work.add(w); }
-    void addEducation(Education e) { education.add(e); }
-    void addPlace(Place p) { places.add(p); }
-    List<Work> work() { return List.copyOf(work); }
-    List<Place> places() { return List.copyOf(places); }
-}
-
-enum AccountStatus { ACTIVE, BLOCKED, BANNED, COMPROMISED, ARCHIVED, UNKNOWN }
-
-class Member {
-    private static final AtomicLong IDS = new AtomicLong();
-    private final long id = IDS.incrementAndGet();
-    private final String name;
-    private final String email;
-    private final Profile profile = new Profile();
-    private volatile AccountStatus status = AccountStatus.ACTIVE;
-    private final Set<Long> followingMembers = ConcurrentHashMap.newKeySet();   // one-sided
-    private final Set<Long> followingPages = ConcurrentHashMap.newKeySet();
-    private final Set<Long> groups = ConcurrentHashMap.newKeySet();
-    private final List<Post> posts = new CopyOnWriteArrayList<>();
-    private final List<PrivacyList> privacyLists = new CopyOnWriteArrayList<>();
-    private final List<Message> inbox = new CopyOnWriteArrayList<>();
-    private final List<Notification> notifications = new CopyOnWriteArrayList<>();
-
-    Member(String name, String email) { this.name = name; this.email = email; }
-
-    long id() { return id; }
-    String name() { return name; }
-    String email() { return email; }
-    Profile profile() { return profile; }
-    AccountStatus status() { return status; }
-    void setStatus(AccountStatus s) { status = s; }
-
-    boolean follow(Member m) { return m.id != id && followingMembers.add(m.id); }
-    boolean unfollow(Member m) { return followingMembers.remove(m.id); }
-    Set<Long> followingMembers() { return Set.copyOf(followingMembers); }
-    boolean followPage(Page p) { return followingPages.add(p.id()); }
-    Set<Long> followingPages() { return Set.copyOf(followingPages); }
-    void joinedGroup(Group g) { groups.add(g.id()); }
-    Set<Long> groups() { return Set.copyOf(groups); }
-
-    void addPost(Post p) { posts.add(p); }
-    List<Post> posts() { return List.copyOf(posts); }
-    void addPrivacyList(PrivacyList l) { privacyLists.add(l); }
-    List<PrivacyList> privacyLists() { return List.copyOf(privacyLists); }
-    void receive(Message m) { inbox.add(m); }
-    List<Message> inbox() { return List.copyOf(inbox); }
-    void notify(Notification n) { notifications.add(n); }
-    List<Notification> notifications() { return List.copyOf(notifications); }
-
-    @Override public String toString() { return name; }
-}
-
-final class Admin extends Member {
-    Admin(String name, String email) { super(name, email); }
-}
-
 /** A named subset of the owner's friends, e.g. "Close friends". Outlives any single post. */
-final class PrivacyList {
-    private final Member owner;
-    private final String name;
-    private final Set<Long> members = ConcurrentHashMap.newKeySet();
-
-    PrivacyList(Member owner, String name) { this.owner = owner; this.name = name; }
-    Member owner() { return owner; }
-    String name() { return name; }
-    void add(long memberId) { members.add(memberId); }
-    boolean contains(long memberId) { return members.contains(memberId); }
-}
+final class PrivacyList { boolean contains(long memberId) { return members.contains(memberId); } }
 
 /** Who may see a post. A sealed type makes the visibility switch exhaustive. */
 sealed interface Audience {
@@ -4762,277 +2320,37 @@ sealed interface Audience {
     record OnlyMe() implements Audience {}
 }
 
-abstract class SocialContent {
-    private static final AtomicLong IDS = new AtomicLong(1000);
-    private final long id = IDS.incrementAndGet();
-    private final Member author;
-    private final String text;
-    private final long createdAt = Tick.next();
-    private final Set<Long> likes = new LinkedHashSet<>();      // a set: no double likes, can be undone
-
-    SocialContent(Member author, String text) { this.author = author; this.text = text; }
-
-    long id() { return id; }
-    Member author() { return author; }
-    String text() { return text; }
-    long createdAt() { return createdAt; }
-    synchronized boolean like(long memberId) { return likes.add(memberId); }
-    synchronized boolean unlike(long memberId) { return likes.remove(memberId); }
-    synchronized int likeCount() { return likes.size(); }
-}
-
-final class Post extends SocialContent {
+final class Post extends SocialContent {          // SocialContent: likes as a set — no double likes, can be undone
     private final Audience audience;
     private final Group group;          // null unless posted in a group
     private final Page page;            // null unless published by a page
-    private final Post sharedFrom;
-    private final List<Comment> comments = new ArrayList<>();
-
-    Post(Member author, String text, Audience audience, Group group, Page page, Post sharedFrom) {
-        super(author, text);
-        this.audience = audience;
-        this.group = group;
-        this.page = page;
-        this.sharedFrom = sharedFrom;
-    }
-
-    Audience audience() { return audience; }
-    Optional<Group> group() { return Optional.ofNullable(group); }
-    Optional<Page> page() { return Optional.ofNullable(page); }
-    Optional<Post> sharedFrom() { return Optional.ofNullable(sharedFrom); }
-
     /** The half of the privacy rule the post CAN answer on its own. */
     boolean isAllowedByPrivacyList(long viewerId) {
         return !(audience instanceof Audience.Custom c) || c.list().contains(viewerId);
     }
-
-    synchronized Comment addComment(Member by, String text) {
-        Comment c = new Comment(by, text, this);
-        comments.add(c);
-        return c;
-    }
-    synchronized List<Comment> comments() { return List.copyOf(comments); }
-
-    @Override public String toString() {
-        String where = page != null ? " [page " + page.name() + "]" : group != null ? " [group " + group.name() + "]" : "";
-        return "\"" + text() + "\" by " + author().name() + where;
-    }
-}
-
-final class Comment extends SocialContent {
-    private final Post post;
-    Comment(Member author, String text, Post post) { super(author, text); this.post = post; }
-    Post post() { return post; }
-}
-
-record Message(Member sender, List<Member> recipients, String text, long sentAt) {}
-```
-
-```java
-// File: lld/ch18/facebook/PagesAndGroups.java
-package lld.ch18.facebook;
-
-import java.util.List;
-import java.util.Map;
-import java.util.OptionalDouble;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicLong;
-
-enum PageType { BUSINESS, BRAND, PUBLIC_FIGURE, COMMUNITY }
-
-/** One recommendation per member per page, with a 1-5 rating. */
-record PageRecommendation(long memberId, int rating, String text) {
-    PageRecommendation {
-        if (rating < 1 || rating > 5) throw new IllegalArgumentException("rating must be 1..5");
-    }
-}
-
-final class Page {
-    private static final AtomicLong IDS = new AtomicLong(500);
-    private final long id = IDS.incrementAndGet();
-    private final String name;
-    private final PageType type;
-    private final Member owner;
-    private final Set<Long> followers = ConcurrentHashMap.newKeySet();
-    private final Map<Long, PageRecommendation> recommendations = new ConcurrentHashMap<>();   // owned
-    private final List<Post> posts = new CopyOnWriteArrayList<>();
-
-    Page(String name, PageType type, Member owner) { this.name = name; this.type = type; this.owner = owner; }
-
-    long id() { return id; }
-    String name() { return name; }
-    PageType type() { return type; }
-    Member owner() { return owner; }
-    void addFollower(long memberId) { followers.add(memberId); }
-    int followerCount() { return followers.size(); }            // never store what you can count
-
-    void recommend(Member by, int rating, String text) {
-        if (recommendations.putIfAbsent(by.id(), new PageRecommendation(by.id(), rating, text)) != null)
-            throw new IllegalStateException(by + " already recommended " + name);
-    }
-
-    OptionalDouble averageRating() {
-        return recommendations.values().stream().mapToInt(PageRecommendation::rating).average();
-    }
-    int recommendationCount() { return recommendations.size(); }
-
-    Post publish(Member by, String text) {
-        if (by.id() != owner.id()) throw new IllegalStateException(by + " does not manage page " + name);
-        Post p = new Post(by, text, new Audience.Public(), null, this, null);
-        posts.add(p);
-        return p;
-    }
-    List<Post> posts() { return List.copyOf(posts); }
-}
-
-enum GroupPrivacy { PUBLIC, PRIVATE }
-
-final class Group {
-    private static final AtomicLong IDS = new AtomicLong(900);
-    private final long id = IDS.incrementAndGet();
-    private final String name;
-    private final GroupPrivacy privacy;
-    private final Member owner;
-    private final Set<Long> members = ConcurrentHashMap.newKeySet();
-    private final Set<Long> joinRequests = ConcurrentHashMap.newKeySet();
-    private final List<Post> posts = new CopyOnWriteArrayList<>();
-
-    Group(String name, GroupPrivacy privacy, Member owner) {
-        this.name = name;
-        this.privacy = privacy;
-        this.owner = owner;
-        members.add(owner.id());
-        owner.joinedGroup(this);
-    }
-
-    long id() { return id; }
-    String name() { return name; }
-    boolean isPublic() { return privacy == GroupPrivacy.PUBLIC; }
-    boolean isMember(long memberId) { return members.contains(memberId); }
-    int memberCount() { return members.size(); }
-
-    /** Public groups: join at once. Private groups: the request waits for the owner. Returns true if joined now. */
-    boolean requestToJoin(Member m) {
-        if (isPublic()) { members.add(m.id()); m.joinedGroup(this); return true; }
-        joinRequests.add(m.id());
-        return false;
-    }
-
-    void approve(Member by, Member requester) {
-        if (by.id() != owner.id()) throw new IllegalStateException("only the owner approves members");
-        if (!joinRequests.remove(requester.id())) throw new IllegalStateException(requester + " did not ask to join");
-        members.add(requester.id());
-        requester.joinedGroup(this);
-    }
-
-    Post post(Member by, String text) {
-        if (!isMember(by.id())) throw new IllegalStateException(by + " is not a member of " + name);
-        Post p = new Post(by, text, new Audience.Public(), this, null, null);
-        posts.add(p);
-        return p;
-    }
-    List<Post> posts() { return List.copyOf(posts); }
 }
 ```
 
 ```java
-// File: lld/ch18/facebook/Services.java
-package lld.ch18.facebook;
-
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.LongFunction;
-import java.util.stream.Stream;
-
-// ------------------------------------------------------------------ friends
-
-enum RequestStatus { PENDING, ACCEPTED, REJECTED, CANCELED }
-
 /** Records BOTH ends; an invitation that only knows the invitee cannot be accepted. */
-final class FriendRequest {
-    private static final AtomicLong IDS = new AtomicLong();
-    private final long id = IDS.incrementAndGet();
-    private final Member from;
-    private final Member to;
-    private RequestStatus status = RequestStatus.PENDING;
-
-    FriendRequest(Member from, Member to) { this.from = from; this.to = to; }
-    long id() { return id; }
-    Member from() { return from; }
-    Member to() { return to; }
-    synchronized RequestStatus status() { return status; }
-    synchronized void moveTo(RequestStatus next) {
-        if (status != RequestStatus.PENDING) throw new IllegalStateException("request is already " + status);
-        status = next;
-    }
-}
+final class FriendRequest { /* from, to, PENDING -> ACCEPTED / REJECTED / CANCELED, only from PENDING */ }
 
 /** Owns the friend graph. Accepting changes two members, so it lives here, not on either member. */
 final class FriendService {
     private final Map<Long, Set<Long>> friends = new ConcurrentHashMap<>();
-    private final Map<Long, FriendRequest> requests = new ConcurrentHashMap<>();
-    private final NotificationService notifications;
-
-    FriendService(NotificationService notifications) { this.notifications = notifications; }
-
-    synchronized FriendRequest sendRequest(Member from, Member to) {
-        if (from.id() == to.id()) throw new IllegalArgumentException("cannot befriend yourself");
-        if (areFriends(from, to)) throw new IllegalStateException(from + " and " + to + " are already friends");
-        if (pendingBetween(from.id(), to.id())) throw new IllegalStateException("a request between " + from + " and " + to + " is pending");
-        FriendRequest r = new FriendRequest(from, to);
-        requests.put(r.id(), r);
-        notifications.send(to, NotificationType.FRIEND_REQUEST, from + " sent you a friend request");
-        return r;
-    }
-
     synchronized void accept(FriendRequest r, Member by) {
         if (by.id() != r.to().id()) throw new IllegalStateException("only " + r.to() + " can accept");
         r.moveTo(RequestStatus.ACCEPTED);
         friends.computeIfAbsent(r.from().id(), k -> ConcurrentHashMap.newKeySet()).add(r.to().id());
         friends.computeIfAbsent(r.to().id(), k -> ConcurrentHashMap.newKeySet()).add(r.from().id());
     }
-
-    synchronized void reject(FriendRequest r, Member by) {
-        if (by.id() != r.to().id()) throw new IllegalStateException("only " + r.to() + " can reject");
-        r.moveTo(RequestStatus.REJECTED);
-    }
-
-    synchronized void unfriend(Member a, Member b) {
-        friends.getOrDefault(a.id(), Set.of()).remove(b.id());
-        friends.getOrDefault(b.id(), Set.of()).remove(a.id());
-    }
-
-    boolean areFriends(Member a, Member b) { return friendsOf(a.id()).contains(b.id()); }
-    Set<Long> friendsOf(long memberId) { return Set.copyOf(friends.getOrDefault(memberId, Set.of())); }
-
     /** Looks BOTH ways: a request from a to b or from b to a. */
-    boolean pendingBetween(long a, long b) {
-        return requests.values().stream().anyMatch(r -> r.status() == RequestStatus.PENDING
-                && ((r.from().id() == a && r.to().id() == b) || (r.from().id() == b && r.to().id() == a)));
-    }
+    boolean pendingBetween(long a, long b) { /* ... */ }
+    // sendRequest rejects yourself, existing friends and a pending request either way; reject; unfriend (both sides)
 }
 
-// ------------------------------------------------------------------ privacy
-
-/**
- * The ONE place that decides "can this viewer see this post?". The post knows
- * its privacy list; only the friend graph knows friendship; this asks both.
- * Feed, search and profile pages all call it, so the rule is written once.
- */
+/** The ONE place that decides "can this viewer see this post?". Feed, search and profile pages all call it. */
 final class VisibilityService {
-    private final FriendService friends;
-    VisibilityService(FriendService friends) { this.friends = friends; }
-
     boolean canSee(Member viewer, Post post) {
         Member author = post.author();
         if (author.status() != AccountStatus.ACTIVE) return false;
@@ -5050,120 +2368,21 @@ final class VisibilityService {
     }
 }
 
-// ------------------------------------------------------------------ notifications
+/** Delivery Strategy; NotificationService routes each NotificationType to its own list of channels. */
+interface NotificationChannel { void deliver(Member to, Notification n); }   // PushChannel, EmailChannel
 
-enum NotificationType { FRIEND_REQUEST, NEW_MESSAGE, NEW_COMMENT, PAGE_UPDATE }
-
-record Notification(NotificationType type, String text, long at) {}
-
-/** Strategy for delivery. A new channel is a new class, not a new if-branch. */
-interface NotificationChannel { void deliver(Member to, Notification n); }
-
-final class PushChannel implements NotificationChannel {
-    @Override public void deliver(Member to, Notification n) {
-        to.notify(n);
-        System.out.println("    [push -> " + to + "] " + n.text());
-    }
-}
-
-final class EmailChannel implements NotificationChannel {
-    @Override public void deliver(Member to, Notification n) {
-        System.out.println("    [email -> " + to.email() + "] " + n.text());
-    }
-}
-
-final class NotificationService {
-    private final Map<NotificationType, List<NotificationChannel>> routes;
-    NotificationService(Map<NotificationType, List<NotificationChannel>> routes) { this.routes = Map.copyOf(routes); }
-    void send(Member to, NotificationType type, String text) {
-        Notification n = new Notification(type, text, Tick.next());
-        routes.getOrDefault(type, List.of()).forEach(c -> c.deliver(to, n));
-    }
-}
-
-// ------------------------------------------------------------------ search
-
-/** Every key maps to a set of matches (never a single object), and post search respects privacy. */
 final class SearchIndex {
-    private final Map<String, Set<Member>> members = new ConcurrentHashMap<>();
-    private final Map<String, Set<Group>> groups = new ConcurrentHashMap<>();
-    private final Map<String, Set<Page>> pages = new ConcurrentHashMap<>();
-    private final Map<String, Set<Post>> posts = new ConcurrentHashMap<>();
-    private final VisibilityService visibility;
-
-    SearchIndex(VisibilityService visibility) { this.visibility = visibility; }
-
-    void add(Member m) { index(members, m.name(), m); }
-    void add(Group g) { index(groups, g.name(), g); }
-    void add(Page p) { index(pages, p.name(), p); }
-    void add(Post p) { index(posts, p.text(), p); }
-
-    List<Member> searchMembers(String q) { return find(members, q).sorted(Comparator.comparing(Member::name)).toList(); }
-    List<Group> searchGroups(String q) { return find(groups, q).toList(); }
-    List<Page> searchPages(String q) { return find(pages, q).toList(); }
-
     /** Takes the viewer: privacy does not stop being true inside a search. */
     List<Post> searchPosts(String word, Member viewer) {
         return find(posts, word).filter(p -> visibility.canSee(viewer, p))
                 .sorted(Comparator.comparingLong(Post::createdAt).reversed()).toList();
     }
-
-    private static <T> void index(Map<String, Set<T>> idx, String text, T item) {
-        for (String w : words(text)) idx.computeIfAbsent(w, k -> ConcurrentHashMap.newKeySet()).add(item);
-    }
-
-    private static <T> Stream<T> find(Map<String, Set<T>> idx, String q) {
-        List<String> ws = words(q);
-        if (ws.isEmpty()) return Stream.empty();
-        return idx.getOrDefault(ws.get(0), Set.of()).stream()
-                .filter(item -> ws.stream().allMatch(w -> idx.getOrDefault(w, Set.of()).contains(item)));
-    }
-
-    private static List<String> words(String s) {
-        return Arrays.stream(s.toLowerCase(Locale.ROOT).split("\\W+")).filter(w -> !w.isEmpty()).toList();
-    }
 }
+```
 
-// ------------------------------------------------------------------ news feed
-
-/** Strategy for ranking the news feed. */
-interface FeedRanker { Comparator<Post> order(Member viewer); }
-
-final class RecentFirst implements FeedRanker {
-    @Override public Comparator<Post> order(Member viewer) { return Comparator.comparingLong(Post::createdAt).reversed(); }
-}
-
-/** Engagement x affinity / age, a toy version of the idea behind ranked feeds. */
-final class EngagementRanker implements FeedRanker {
-    private final FriendService friends;
-    EngagementRanker(FriendService friends) { this.friends = friends; }
-
-    @Override public Comparator<Post> order(Member viewer) {
-        return Comparator.comparingDouble((Post p) -> -score(viewer, p)).thenComparing(Comparator.comparingLong(Post::createdAt).reversed());
-    }
-
-    private double score(Member viewer, Post p) {
-        double engagement = 1 + p.likeCount() + 2.0 * p.comments().size();
-        double affinity = friends.areFriends(viewer, p.author()) ? 2.0 : 1.0;
-        return engagement * affinity / (1 + (Tick.now() - p.createdAt()) / 10.0);
-    }
-}
-
-/**
- * Pull model: gather candidates (friends, followed members, followed pages,
- * joined groups), drop what the viewer may not see, rank, cut to size.
- */
+```java
+/** Pull model: gather candidates, drop what the viewer may not see, rank (FeedRanker Strategy), cut to size. */
 final class NewsFeedService {
-    private final FriendService friends;
-    private final VisibilityService visibility;
-    private final LongFunction<Member> members;
-    private final LongFunction<Page> pages;
-    private final LongFunction<Group> groups;
-
-    NewsFeedService(FriendService f, VisibilityService v, LongFunction<Member> m, LongFunction<Page> p, LongFunction<Group> g) {
-        friends = f; visibility = v; members = m; pages = p; groups = g;
-    }
-
     List<Post> feed(Member viewer, FeedRanker ranker, int limit) {
         Set<Long> people = new HashSet<>(friends.friendsOf(viewer.id()));
         people.addAll(viewer.followingMembers());
@@ -5179,272 +2398,36 @@ final class NewsFeedService {
                 .toList();
     }
 }
-
-// ------------------------------------------------------------------ suggestions (extended requirement)
-
-record Suggestion(Member member, int mutualFriends) {
-    @Override public String toString() { return member.name() + "(" + mutualFriends + " mutual)"; }
-}
+// RecentFirst; EngagementRanker = (1 + likes + 2 x comments) x (2.0 if friends else 1.0) / (1 + age / 10).
 
 /** Friends of friends, scored by mutual friends; never yourself, a friend, or anyone with a pending request. */
-final class SuggestionService {
-    private final FriendService friends;
-    private final LongFunction<Member> members;
-
-    SuggestionService(FriendService friends, LongFunction<Member> members) { this.friends = friends; this.members = members; }
-
-    List<Suggestion> suggest(Member me, int limit) {
-        Set<Long> mine = friends.friendsOf(me.id());
-        Map<Long, Integer> mutual = new HashMap<>();
-        for (long f : mine) {
-            for (long candidate : friends.friendsOf(f)) {
-                if (candidate == me.id() || mine.contains(candidate) || friends.pendingBetween(me.id(), candidate)) continue;
-                mutual.merge(candidate, 1, Integer::sum);
-            }
-        }
-        return mutual.entrySet().stream()
-                .map(e -> new Suggestion(members.apply(e.getKey()), e.getValue()))
-                .sorted(Comparator.comparingInt(Suggestion::mutualFriends).reversed()
-                        .thenComparingLong(s -> s.member().id()))            // stable tie-break
-                .limit(limit)
-                .toList();
-    }
-}
+final class SuggestionService { List<Suggestion> suggest(Member me, int limit) { /* ties broken by member id */ } }
 ```
 
 ```java
-// File: lld/ch18/facebook/Facebook.java
-package lld.ch18.facebook;
-
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+/** One recommendation per member per page, with a 1-5 rating. */
+record PageRecommendation(long memberId, int rating, String text) { /* rejects a rating outside 1..5 */ }
+final class Page {
+    int followerCount() { return followers.size(); }            // never store what you can count
+    OptionalDouble averageRating() { return recommendations.values().stream().mapToInt(PageRecommendation::rating).average(); }
+    Post publish(Member by, String text) { /* owner only; posts are Public */ }
+}
+final class Group {
+    /** Public groups: join at once. Private groups: the request waits for the owner. Returns true if joined now. */
+    boolean requestToJoin(Member m) { /* ... */ }
+    // approve (owner only), post (members only)
+}
 
 /** Facade: wires the services and checks account status on every write. */
 final class Facebook {
-    private final Map<Long, Member> members = new ConcurrentHashMap<>();
-    private final Map<Long, Page> pages = new ConcurrentHashMap<>();
-    private final Map<Long, Group> groups = new ConcurrentHashMap<>();
-    final NotificationService notifications;
-    final FriendService friends;
-    final VisibilityService visibility;
-    final SearchIndex search;
-    final NewsFeedService feed;
-    final SuggestionService suggestions;
-
-    Facebook(Map<NotificationType, List<NotificationChannel>> routes) {
-        notifications = new NotificationService(routes);
-        friends = new FriendService(notifications);
-        visibility = new VisibilityService(friends);
-        search = new SearchIndex(visibility);
-        feed = new NewsFeedService(friends, visibility, members::get, pages::get, groups::get);
-        suggestions = new SuggestionService(friends, members::get);
-    }
-
-    <M extends Member> M register(M m) {
-        members.put(m.id(), m);
-        search.add(m);
-        return m;
-    }
-
-    PrivacyList createPrivacyList(Member owner, String name, List<Member> people) {
-        PrivacyList list = new PrivacyList(owner, name);
-        for (Member p : people) {
-            if (!friends.areFriends(owner, p)) throw new IllegalStateException(p + " is not a friend of " + owner);
-            list.add(p.id());
-        }
-        owner.addPrivacyList(list);
-        return list;
-    }
-
+    PrivacyList createPrivacyList(Member owner, String name, List<Member> people) { /* every person must be a friend */ }
     Post post(Member author, String text, Audience audience) {
         active(author);
         if (audience instanceof Audience.Custom c && c.list().owner() != author)
             throw new IllegalArgumentException("you can only use your own privacy lists");
-        Post p = new Post(author, text, audience, null, null, null);
-        author.addPost(p);
-        search.add(p);
-        return p;
+        /* ... add to author's posts and the search index ... */
     }
-
-    Post share(Member by, Post original, Audience audience) {
-        active(by);
-        if (!visibility.canSee(by, original)) throw new IllegalStateException(by + " cannot see that post");
-        Post p = new Post(by, "shared: " + original.text(), audience, null, null, original);
-        by.addPost(p);
-        return p;
-    }
-
-    Comment comment(Member by, Post post, String text) {
-        active(by);
-        if (!visibility.canSee(by, post)) throw new IllegalStateException(by + " cannot see that post");
-        Comment c = post.addComment(by, text);
-        if (post.author() != by) notifications.send(post.author(), NotificationType.NEW_COMMENT, by + " commented on your post");
-        return c;
-    }
-
-    boolean like(Member by, SocialContent content, Post containingPost) {
-        active(by);
-        if (!visibility.canSee(by, containingPost)) throw new IllegalStateException(by + " cannot see that post");
-        return content.like(by.id());
-    }
-
-    void message(Member from, List<Member> to, String text) {
-        active(from);
-        Message m = new Message(from, List.copyOf(to), text, Tick.next());
-        for (Member r : to) {
-            r.receive(m);
-            notifications.send(r, NotificationType.NEW_MESSAGE, "new message from " + from);
-        }
-    }
-
-    Page createPage(Member owner, String name, PageType type) {
-        active(owner);
-        Page p = new Page(name, type, owner);
-        pages.put(p.id(), p);
-        search.add(p);
-        return p;
-    }
-
-    void followPage(Member m, Page p) {
-        if (m.followPage(p)) p.addFollower(m.id());
-    }
-
-    Post publishOnPage(Member by, Page page, String text) {
-        Post p = page.publish(by, text);
-        search.add(p);
-        return p;
-    }
-
-    Group createGroup(Member owner, String name, GroupPrivacy privacy) {
-        active(owner);
-        Group g = new Group(name, privacy, owner);
-        groups.put(g.id(), g);
-        search.add(g);
-        return g;
-    }
-
-    Post postInGroup(Member by, Group g, String text) {
-        active(by);
-        Post p = g.post(by, text);
-        search.add(p);
-        return p;
-    }
-
-    void block(Admin admin, Member target) { target.setStatus(AccountStatus.BLOCKED); }
-
-    private static void active(Member m) {
-        if (m.status() != AccountStatus.ACTIVE) throw new IllegalStateException(m + " is " + m.status());
-    }
-}
-```
-
-```java
-// File: lld/ch18/facebook/Main.java
-package lld.ch18.facebook;
-
-import java.util.List;
-import java.util.Map;
-
-public class Main {
-    public static void main(String[] args) {
-        NotificationChannel push = new PushChannel();
-        NotificationChannel email = new EmailChannel();
-        Facebook fb = new Facebook(Map.of(
-                NotificationType.FRIEND_REQUEST, List.of(push, email),
-                NotificationType.NEW_MESSAGE, List.of(push),
-                NotificationType.NEW_COMMENT, List.of(push)));
-
-        Member alice = fb.register(new Member("Alice Rao", "alice@example.com"));
-        Member bob = fb.register(new Member("Bob Das", "bob@example.com"));
-        Member carol = fb.register(new Member("Carol Nair", "carol@example.com"));
-        Member dave = fb.register(new Member("Dave Paul", "dave@example.com"));
-        Member erin = fb.register(new Member("Erin Shah", "erin@example.com"));
-        Member frank = fb.register(new Member("Frank Lee", "frank@example.com"));
-        Member grace = fb.register(new Member("Grace Lee", "grace@example.com"));
-        Admin admin = fb.register(new Admin("Admin", "admin@example.com"));
-
-        section("1. Profile and search by name");
-        alice.profile().addWork(new Work("Designer", "Studio Nine", "Mumbai", 2021, null));
-        alice.profile().addPlace(new Place("Mumbai", "India", 2019));
-        System.out.println("Alice's picture before upload: " + alice.profile().picture());
-        System.out.println("search 'lee': " + fb.search.searchMembers("lee"));
-
-        section("2. Friend requests");
-        FriendRequest r = fb.friends.sendRequest(alice, bob);
-        fb.friends.accept(r, bob);
-        attempt(() -> fb.friends.accept(r, bob));
-        befriend(fb, alice, carol);
-        befriend(fb, alice, erin);
-        befriend(fb, bob, dave);
-        befriend(fb, carol, dave);
-        befriend(fb, erin, grace);
-        frank.follow(alice);                                         // follow without being friends
-
-        section("3. Friend suggestions (extended requirement)");
-        System.out.println("before: " + fb.suggestions.suggest(alice, 5));
-        fb.friends.sendRequest(alice, grace);
-        System.out.println("after inviting Grace: " + fb.suggestions.suggest(alice, 5));
-        attempt(() -> fb.friends.sendRequest(grace, alice));        // pending the other way
-
-        section("4. Posts and privacy");
-        PrivacyList close = fb.createPrivacyList(alice, "Close friends", List.of(bob, carol));
-        attempt(() -> fb.createPrivacyList(alice, "Oops", List.of(frank)));
-        Post pub = fb.post(alice, "New portfolio is live!", new Audience.Public());
-        Post fr = fb.post(alice, "Moving to Pune next month", new Audience.Friends());
-        Post secret = fb.post(alice, "Planning a surprise party for Erin", new Audience.Custom(close));
-        for (Member viewer : List.of(alice, bob, erin, frank)) {
-            System.out.printf("  %-10s public=%-5s friends=%-5s closeFriends=%s%n", viewer.name(),
-                    fb.visibility.canSee(viewer, pub), fb.visibility.canSee(viewer, fr), fb.visibility.canSee(viewer, secret));
-        }
-        System.out.println("search posts 'party' as Bob:  " + fb.search.searchPosts("party", bob));
-        System.out.println("search posts 'party' as Erin: " + fb.search.searchPosts("party", erin));
-
-        section("5. Comments, likes, shares");
-        Comment cm = fb.comment(bob, secret, "I'll bring the cake");
-        fb.like(carol, secret, secret);
-        fb.like(alice, cm, secret);                                  // comments can be liked too
-        System.out.println("Bob likes: " + fb.like(bob, secret, secret) + " / again: " + fb.like(bob, secret, secret));
-        attempt(() -> fb.comment(erin, secret, "What party?"));
-        fb.share(erin, pub, new Audience.Friends());
-
-        section("6. Pages and groups");
-        Page pizza = fb.createPage(carol, "Joe's Pizza", PageType.BUSINESS);
-        fb.followPage(alice, pizza);
-        pizza.recommend(alice, 5, "Best crust in town");
-        pizza.recommend(bob, 4, "Good, a bit slow");
-        attempt(() -> pizza.recommend(alice, 1, "changed my mind"));
-        fb.publishOnPage(carol, pizza, "Two-for-one pizza on Friday");
-        System.out.printf("%s: followers=%d, rating=%.1f from %d recommendations%n",
-                pizza.name(), pizza.followerCount(), pizza.averageRating().orElse(0), pizza.recommendationCount());
-        Group chess = fb.createGroup(dave, "Chess Club", GroupPrivacy.PRIVATE);
-        System.out.println("Frank joined at once? " + chess.requestToJoin(frank));
-        chess.approve(dave, frank);
-        fb.postInGroup(frank, chess, "Chess tournament on Sunday");
-        attempt(() -> fb.postInGroup(alice, chess, "Can I play?"));
-        System.out.println("search posts 'chess' as Alice: " + fb.search.searchPosts("chess", alice)
-                + ", as Dave: " + fb.search.searchPosts("chess", dave));
-
-        section("7. News feeds");
-        System.out.println("Alice (recent): " + fb.feed.feed(alice, new RecentFirst(), 5));
-        System.out.println("Bob   (ranked): " + fb.feed.feed(bob, new EngagementRanker(fb.friends), 5));
-        System.out.println("Frank (recent): " + fb.feed.feed(frank, new RecentFirst(), 5));
-
-        section("8. Messages and admin");
-        System.out.println("Dave before Frank is blocked: " + fb.feed.feed(dave, new RecentFirst(), 5));
-        fb.message(bob, List.of(alice, carol), "Party at 8?");
-        fb.block(admin, frank);
-        System.out.println("Dave after Frank is blocked: " + fb.feed.feed(dave, new RecentFirst(), 5));
-        System.out.println("Alice's notifications: " + alice.notifications().stream().map(Notification::type).toList());
-    }
-
-    static void befriend(Facebook fb, Member a, Member b) { fb.friends.accept(fb.friends.sendRequest(a, b), b); }
-
-    static void section(String t) { System.out.println("\n== " + t + " =="); }
-
-    static void attempt(Runnable r) {
-        try { r.run(); } catch (RuntimeException e) { System.out.println("  REJECTED: " + e.getMessage()); }
-    }
+    // share, comment and like first check visibility.canSee(by, post); block(Admin, ...); pages and groups are indexed.
 }
 ```
 

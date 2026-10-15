@@ -32,7 +32,7 @@ final class LockerStation {
     private final CompartmentSelector selector;
     private final Clock clock;
     private final RandomGenerator random;
-    private final Duration reservationHold, pickupWindow, lockout;
+    private final Duration reservationHold, pickupWindow, lockout, dropOffWindow;
     private final List<Parcel> newlyExpired = new ArrayList<>();
     private int nextBooking = 1, wrongCodes = 0;
     private long lockedUntil = 0;
@@ -45,6 +45,7 @@ final class LockerStation {
         this.reservationHold = Duration.ofHours(2);
         this.pickupWindow = Duration.ofDays(3);
         this.lockout = Duration.ofMinutes(15);
+        this.dropOffWindow = Duration.ofDays(2);
         for (int n = 1; n <= layout.size(); n++) {
             String cid = "%s-%02d".formatted(id, n);
             compartments.put(cid, new Compartment(cid, layout.get(n - 1)));
@@ -67,14 +68,19 @@ final class LockerStation {
     /** Carrier books a door before driving to the station. All-or-nothing: a door, or an exception. */
     synchronized Booking reserve(Parcel parcel) {
         expireOverdue();
-        if (bookings.values().stream().anyMatch(b -> b.parcel.id().equals(parcel.id()) && isActive(b)))
-            throw new LockerException("Parcel " + parcel.id() + " already has a locker");
-        List<Compartment> free = compartments.values().stream().filter(Compartment::isFree).toList();
-        Compartment c = selector.choose(free, parcel.dims())
-                .orElseThrow(() -> new LockerException("No free compartment fits " + parcel.dims() + " at " + id));
-        c.moveTo(CompartmentState.RESERVED);
-        Booking b = new Booking(id + "-B" + nextBooking++, parcel, c, now() + reservationHold.toSeconds());
-        bookings.put(b.id, b);
+        return allocate(parcel, BookingKind.DELIVERY, reservationHold);
+    }
+
+    /** Customer starts a return online: an empty door is held for 2 days and a drop-off code goes to the customer. */
+    Booking requestReturn(Parcel parcel) {
+        Booking b;
+        String code;
+        synchronized (this) {
+            expireOverdue();
+            b = allocate(parcel, BookingKind.CUSTOMER_RETURN, dropOffWindow);
+            code = issueCode(b);
+        }
+        for (LockerListener l : listeners) l.returnCodeIssued(id, b.parcel, code, b.holdUntil);   // outside the lock
         return b;
     }
 
@@ -89,15 +95,12 @@ final class LockerStation {
             b.compartment.moveTo(CompartmentState.OCCUPIED);
             b.status = BookingStatus.DEPOSITED;
             b.pickupBy = now() + pickupWindow.toSeconds();
-            do { code = "%06d".formatted(random.nextInt(1_000_000)); }       // unique among active codes here
-            while (bookingByCodeHash.containsKey(hash(code)));
-            b.codeHash = hash(code);
-            bookingByCodeHash.put(b.codeHash, b.id);
+            code = issueCode(b);
         }
         for (LockerListener l : listeners) l.parcelReady(id, b.parcel, code, b.pickupBy);   // outside the lock
     }
 
-    /** Customer types a code on the station keypad. */
+    /** Customer types a code on the station keypad: a pickup code, or a drop-off code for a return. */
     synchronized PickupResult pickup(String code) {
         expireOverdue();
         long t = now();
@@ -114,6 +117,12 @@ final class LockerStation {
         wrongCodes = 0;
         Booking b = bookings.get(bookingId);
         if (b.status == BookingStatus.EXPIRED) return new ParcelExpired(b.parcel.id());
+        if (b.kind == BookingKind.CUSTOMER_RETURN) {                // drop-off: open the empty door once
+            b.status = BookingStatus.DROPPED_OFF;
+            b.compartment.moveTo(CompartmentState.OCCUPIED);
+            bookingByCodeHash.remove(b.codeHash);
+            return new DropOffDoorOpened(b.compartment.id(), b.parcel.id());
+        }
         b.status = BookingStatus.PICKED_UP;
         b.compartment.moveTo(CompartmentState.FREE);
         bookingByCodeHash.remove(b.codeHash);                       // a code works once
@@ -129,6 +138,19 @@ final class LockerStation {
                 b.status = BookingStatus.RETURNED;
                 b.compartment.moveTo(CompartmentState.FREE);
                 bookingByCodeHash.remove(b.codeHash);
+                taken.add(b.parcel);
+            }
+        return taken;
+    }
+
+    /** Same visit: take the parcels customers dropped off for return. */
+    synchronized List<Parcel> collectReturns() {
+        expireOverdue();
+        List<Parcel> taken = new ArrayList<>();
+        for (Booking b : bookings.values())
+            if (b.status == BookingStatus.DROPPED_OFF) {
+                b.status = BookingStatus.RETURNED;
+                b.compartment.moveTo(CompartmentState.FREE);
                 taken.add(b.parcel);
             }
         return taken;
@@ -169,6 +191,7 @@ final class LockerStation {
             if (b.status == BookingStatus.RESERVED && t >= b.holdUntil) {
                 b.status = BookingStatus.CANCELLED;
                 b.compartment.moveTo(CompartmentState.FREE);
+                if (b.codeHash != null) bookingByCodeHash.remove(b.codeHash);   // an unused drop-off code dies too
             } else if (b.status == BookingStatus.DEPOSITED && t >= b.pickupBy) {
                 b.status = BookingStatus.EXPIRED;                   // door stays OCCUPIED until the carrier collects
                 newlyExpired.add(b.parcel);                         // notified by sweep(), outside the lock
@@ -177,7 +200,31 @@ final class LockerStation {
     }
 
     private static boolean isActive(Booking b) {
-        return b.status == BookingStatus.RESERVED || b.status == BookingStatus.DEPOSITED || b.status == BookingStatus.EXPIRED;
+        return b.status == BookingStatus.RESERVED || b.status == BookingStatus.DEPOSITED
+                || b.status == BookingStatus.EXPIRED || b.status == BookingStatus.DROPPED_OFF;
+    }
+
+    /** Caller holds the lock. All-or-nothing: a door marked RESERVED and a booking, or an exception. */
+    private Booking allocate(Parcel parcel, BookingKind kind, Duration hold) {
+        if (bookings.values().stream().anyMatch(b -> b.parcel.id().equals(parcel.id()) && isActive(b)))
+            throw new LockerException("Parcel " + parcel.id() + " already has a locker");
+        List<Compartment> free = compartments.values().stream().filter(Compartment::isFree).toList();
+        Compartment c = selector.choose(free, parcel.dims())
+                .orElseThrow(() -> new LockerException("No free compartment fits " + parcel.dims() + " at " + id));
+        c.moveTo(CompartmentState.RESERVED);
+        Booking b = new Booking(id + "-B" + nextBooking++, parcel, c, kind, now() + hold.toSeconds());
+        bookings.put(b.id, b);
+        return b;
+    }
+
+    /** Caller holds the lock. A random 6-digit code, unique among live codes here; only its hash is kept. */
+    private String issueCode(Booking b) {
+        String code;
+        do { code = "%06d".formatted(random.nextInt(1_000_000)); }
+        while (bookingByCodeHash.containsKey(hash(code)));
+        b.codeHash = hash(code);
+        bookingByCodeHash.put(b.codeHash, b.id);
+        return code;
     }
 
     private Booking booking(String bookingId) {

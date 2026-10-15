@@ -1,8 +1,8 @@
 # Chapter 7 — Refactoring
 
-> **What you will learn.** What refactoring is (and is not), when to do it, how tests make it safe, the full catalogue of **code smells** (the signals that tell you *where* to refactor), the full catalogue of **refactorings** from Martin Fowler's *Refactoring* (2nd edition, 2018), a smell → refactoring lookup table, a complete worked example in Java that goes from messy to clean in six compiling steps, and how refactoring leads you toward design patterns (named, reusable solutions to recurring design problems; Chapters 8–11).
+> **What you will learn.** What refactoring is (and is not), when to do it, how tests make it safe, the full catalogues of **code smells** (signals of *where* to refactor) and **refactorings** from Martin Fowler's *Refactoring* (2nd edition, 2018), a smell → refactoring lookup, a worked Java example from messy to clean in six compiling steps, and how refactoring leads toward design patterns (named, reusable solutions to recurring design problems; Chapters 8–11).
 >
-> **Why it matters for LLD interviews.** Machine-coding rounds (interview rounds where you build a small working program in about 60–120 minutes; a core part of LLD — low-level design — interviews) often end with "now add feature X" or "what would you clean up?". Interviewers want to hear you name a smell ("this switch is repeated in three places — a Repeated Switches smell") and name the fix ("Replace Conditional with Polymorphism, which gives us a Strategy" — the Strategy pattern puts each interchangeable algorithm in its own class). This chapter gives you that vocabulary.
+> **Why it matters for LLD interviews.** Machine-coding rounds (build a small working program in about 60–120 minutes; a core part of LLD — low-level design — interviews) often end with "now add feature X" or "what would you clean up?". Interviewers want you to name the smell ("this switch is repeated in three places — Repeated Switches") and the fix ("Replace Conditional with Polymorphism, giving a Strategy" — each interchangeable algorithm in its own class). This chapter gives you that vocabulary.
 
 **Chapter map**
 
@@ -15,7 +15,7 @@
 | 7.5 | Worked example — a messy invoice class refactored in six compiling steps |
 | 7.6 | Refactoring toward patterns — Strategy, State, Special Case, Template Method, Factory |
 | 7.7 | Trade-offs, mistakes, real-world examples, interview answers, self-check, TL;DR |
-| 7.8 | Full source code and program output |
+| 7.8 | Source layout, how to run, final program output |
 
 ---
 
@@ -29,12 +29,12 @@
 
 Two words in that definition do all the work:
 
-- **Behaviour-preserving.** After the change, the program does the same thing from the outside. Same outputs for the same inputs, same side effects (changes made besides returning a value, such as writing a file), same errors. The only things that may change are *internal* — names, where code lives, how it is split up. (Performance may change a little; see 7.1.9.)
-- **Small steps.** Each step is so small that it is almost impossible to get wrong, and the code compiles and the tests pass after *every* step. You chain many tiny steps to get a big change. If you ever sit with broken code for an hour, you were not refactoring — you were rewriting.
+- **Behaviour-preserving.** Same outputs for the same inputs, same side effects (changes besides returning a value, such as writing a file), same errors. Only *internal* things change — names, where code lives, how it is split. (Performance may change a little; see 7.1.9.)
+- **Small steps.** Each step is so small it is almost impossible to get wrong; the code compiles and the tests pass after *every* step, and many tiny steps chain into a big change. If you sit with broken code for an hour, you were not refactoring — you were rewriting.
 
-**Everyday analogy.** Think of reorganising a kitchen while the restaurant stays open. You move one shelf at a time. After each move, the cooks can still make every dish. You never tear the whole kitchen down on a Friday night.
+**Everyday analogy.** Reorganising a restaurant kitchen while it stays open: one shelf at a time, and after each move the cooks can still make every dish.
 
-> **Term — observable behaviour.** What a user (or calling code) can see: return values, printed output, data written, exceptions thrown. The *call stack* (the chain of method calls currently in progress), the *class structure*, and the *names of private methods* are not observable behaviour.
+> **Term — observable behaviour.** What a user (or calling code) can see: return values, printed output, data written, exceptions thrown. The *call stack* (the chain of method calls in progress), the *class structure* and the *names of private methods* are not observable behaviour.
 
 **What refactoring is NOT.**
 
@@ -51,17 +51,15 @@ Two words in that definition do all the work:
 
 ### The problem it solves
 
-Code decays. Every quick fix, every "just add another `if`", every copy-paste makes the next change a little harder. This is called **design decay** or **technical debt** — the extra cost you pay on every future change because the code is harder to work with than it needs to be.
-
-Refactoring pays down that debt. It keeps the design good *continuously*, instead of hoping to get the design right up front (which never fully works, because requirements change).
+Code decays: every quick fix, extra `if` and copy-paste makes the next change harder. This is **design decay** or **technical debt** — the extra cost paid on every future change because the code is harder to work with than it needs to be. Refactoring pays the debt down *continuously*, instead of hoping to get the design right up front (which never fully works, because requirements change).
 
 ### How it works
 
-1. **Make sure you have tests** that pin down current behaviour (7.1.7). Run them — they must be green (all passing).
-2. **Spot a smell** — a surface sign that the design could be better (7.2).
-3. **Pick a named refactoring** that cures the smell (7.3, 7.4).
-4. **Apply one small step** of it (ideally with the IDE's automated refactoring).
-5. **Compile and run the tests.** Green? Commit (locally) — i.e. save a snapshot of the code in version control such as Git. Red? Undo the step (don't debug) and take a smaller step.
+1. **Make sure you have tests** that pin down current behaviour (7.1.7); they must be green (all passing).
+2. **Spot a smell** — a surface sign the design could be better (7.2).
+3. **Pick a named refactoring** that cures it (7.3, 7.4).
+4. **Apply one small step** (ideally with the IDE's automated refactoring).
+5. **Compile and run the tests.** Green? Commit locally (save a snapshot in version control such as Git). Red? Undo the step (don't debug) and take a smaller one.
 6. **Repeat** until the code is clean enough for the job at hand.
 
 ```mermaid
@@ -80,78 +78,77 @@ flowchart LR
 
 ### 7.1.1 The two hats
 
-Kent Beck's metaphor: when you program you wear **one of two hats** at any moment.
+Kent Beck's metaphor: at any moment you wear **one of two hats**.
 
 | Hat | You are allowed to | You are NOT allowed to |
 |---|---|---|
 | **Adding function** | Add new behaviour, add new tests | Restructure existing code |
 | **Refactoring** | Restructure code | Add behaviour or tests for new behaviour (you may add tests for *existing* behaviour you forgot to cover) |
 
-You swap hats often — maybe every few minutes — but you always know which one you are wearing. Mixing them ("I'll just fix this bug while I extract this method") is how refactoring becomes risky: when a test fails you cannot tell which change caused it.
+You swap hats often — maybe every few minutes — but always know which you wear. Mixing them ("I'll fix this bug while I extract this method") means a failing test can't tell you which change caused it.
 
 ### 7.1.2 Why refactor
 
-- **It improves the design.** Without it, the internal design (architecture) of a program decays as people change code to meet short-term goals. Regular refactoring keeps the code in shape. A big part of this is **removing duplication** — making sure each fact lives in exactly one place.
-- **It makes software easier to understand.** Code is read far more often than it is written. Refactoring lets you move your understanding *out of your head and into the code*, so the next reader (including you in six months) does not need to rediscover it.
-- **It helps you find bugs.** When you clarify the structure, assumptions become visible and bugs have fewer places to hide.
-- **It helps you program faster.** This is the surprising one. Fowler calls it the **Design Stamina Hypothesis**: a team that keeps its internal quality high will, after a short while, add features *faster* than a team that does not, because each feature builds on clean code instead of fighting a mess. Speed is the economic argument for refactoring — not "clean code for its own sake".
+- **It improves the design**, which otherwise decays under short-term changes — largely by **removing duplication** (each fact in one place).
+- **It makes software easier to understand**: it moves your understanding *out of your head and into the code* for the next reader (including you in six months).
+- **It helps you find bugs**: clearer structure exposes assumptions.
+- **It helps you program faster.** Fowler's **Design Stamina Hypothesis**: a team that keeps internal quality high soon adds features *faster* than one that doesn't, because each feature builds on clean code instead of fighting a mess. Speed — not "clean code for its own sake" — is the economic argument.
 
 ### 7.1.3 When to refactor
 
 | Trigger | What it means | Example |
 |---|---|---|
 | **Rule of Three** (Don Roberts) | First time, just do it. Second time you do something similar, wince but duplicate. Third time, refactor. | Third copy of the same validation code → extract a validator |
-| **Preparatory refactoring** | Refactor *just before* adding a feature, to make the feature easy to add. "Make the change easy, then make the easy change." | Before adding HTML output, split calculation from text formatting (see 7.5, step 3) |
-| **Comprehension refactoring** | Refactor to understand code you are reading. Rename a variable once you understand it; extract a block once you know what it does. The understanding moves into the code. | Rename `d` to `daysOverdue` after working out what it holds |
-| **Litter-pickup refactoring** | You notice mess while working on something else. Fix it if it is quick; if not, note it and come back. The **Boy Scout Rule** — leave the campground cleaner than you found it. | Remove an unused parameter while passing by |
-| **Planned vs opportunistic** | Most refactoring should be *opportunistic* — woven into feature work and bug fixes, not scheduled separately. Planned refactoring episodes are sometimes needed when a team has neglected the code, but they should be rare. | Good: every feature PR (pull request — a change submitted for review) contains a few small refactoring commits. Warning sign: a "refactoring sprint" (a fixed 1–4-week work period) every quarter |
-| **Long-term refactoring** | Big changes (replacing a library, splitting a module) done gradually over weeks, keeping the system working the whole time — e.g. with **Branch by Abstraction** (introduce an abstraction layer, switch callers to it, swap the implementation behind it, delete the old one). | Moving from one ORM (library mapping objects to database tables) to another behind a repository interface |
-| **During code review** | Reviewing is a natural moment to suggest (or pair on) refactorings. Fowler prefers doing it *with the author*, trying the refactoring ideas as you go, rather than only leaving comments. | "This method has four flag parameters — can we Remove Flag Argument?" |
+| **Preparatory refactoring** | Refactor *just before* adding a feature, to make it easy to add. "Make the change easy, then make the easy change." | Before adding HTML output, split calculation from text formatting (7.5, step 3) |
+| **Comprehension refactoring** | Rename or extract as you come to understand code you are reading, so the understanding moves into the code. | Rename `d` to `daysOverdue` after working out what it holds |
+| **Litter-pickup refactoring** | Mess noticed in passing: fix it if quick, else note it. The **Boy Scout Rule** — leave the campground cleaner than you found it. | Remove an unused parameter while passing by |
+| **Planned vs opportunistic** | Mostly *opportunistic* — woven into features and fixes; planned episodes (after neglect) should be rare. | Good: every feature PR (pull request — a change submitted for review) has a few small refactoring commits. Warning sign: a "refactoring sprint" (a fixed 1–4-week work period) every quarter |
+| **Long-term refactoring** | Big changes (replace a library, split a module) done gradually over weeks with the system working — e.g. **Branch by Abstraction** (add an abstraction layer, switch callers to it, swap the implementation behind it, delete the old). | Moving from one ORM (library mapping objects to database tables) to another behind a repository interface |
+| **During code review** | Suggest or pair on refactorings; Fowler prefers trying them *with the author* over only commenting. | "This method has four flag parameters — can we Remove Flag Argument?" |
 
-> **Term — Rule of Three.** A heuristic: do not abstract on the first or second occurrence of a pattern (you do not yet know what varies); abstract on the third, when the shape is clear.
+> **Term — Rule of Three.** Don't abstract on the first or second occurrence (you don't yet know what varies); abstract on the third, when the shape is clear.
 
-**Should you tell your manager?** Fowler's position: for a manager who does not understand technical work, do not ask permission for refactoring any more than you ask permission to write tests. It is part of how professionals deliver features quickly. (For large, planned efforts, of course, discuss them.)
+**Should you tell your manager?** Fowler: don't ask permission to refactor any more than to write tests — it is how professionals deliver features quickly (large planned efforts should be discussed).
 
 ### 7.1.4 When NOT to refactor
 
-- **Code you never need to touch or understand.** Messy code hidden behind a clean API (the set of methods other code calls), that works and never changes, can stay messy. Refactor only what gets in your way.
-- **When rewriting is cheaper** than refactoring (see 7.1.10). This is a judgement call and usually needs experience.
-- **Without a safety net** — if you cannot test it and cannot use safe automated refactorings, first add tests (7.1.11 shows how for legacy code).
-- **On a deadline that truly cannot move**, a big refactoring may wait — but note that the Design Stamina Hypothesis says skipping it usually makes you *slower*, even in the short term. Deadlines are rarely a good excuse for small refactorings.
-- **Published interfaces** that you do not control the callers of (a public library API, a REST endpoint — a URL of a web API, see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md) — used by other teams). You can still refactor them, but you must keep the old version working for a while and deprecate it (mark it as outdated and due for removal) (see *Change Function Declaration*, migration mechanics).
+- **Code you never need to touch or understand.** Messy code behind a clean API (the methods other code calls) that works and never changes can stay messy.
+- **When rewriting is cheaper** (7.1.10) — a judgement call that usually needs experience.
+- **Without a safety net** — if you can neither test it nor use safe automated refactorings, add tests first (7.1.11).
+- **On a deadline that truly cannot move**, a big refactoring may wait — though the Design Stamina Hypothesis says skipping it usually makes you *slower* even short term; deadlines are rarely an excuse for small refactorings.
+- **Published interfaces** whose callers you don't control (a public library API, a REST endpoint — a URL of a web API, see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md) — used by other teams). You can still refactor them, but must keep the old version working for a while and deprecate it (mark it outdated and due for removal) — see *Change Function Declaration*, migration mechanics.
 
 ### 7.1.5 Problems and costs of refactoring
 
 | Problem | What goes wrong | Mitigation |
 |---|---|---|
-| Slowing down new features | Refactoring "takes time away" from features | Refactor *because* it speeds features up; focus on code you are about to change |
+| Slowing down new features | "Takes time away" from features | Refactor *because* it speeds features up; focus on code you're about to change |
 | Code ownership | You cannot rename a method whose callers are in another team's repo (repository — a project's version-controlled code store) | Keep the old name as a delegating, `@Deprecated` method; migrate callers later; prefer weak (team-wide) code ownership |
 | Long-lived feature branches (lines of work kept apart from the main code for a long time) | Refactoring renames and moves code, which makes merges painful | **Continuous Integration** (merge into the shared main line often, with automatic builds and tests) / trunk-based development (everyone works on one main branch): integrate at least daily, so refactorings conflict less |
 | Missing tests | Refactoring without tests is risky | Add tests first; use only IDE-automated, provably-safe refactorings until tests exist |
 | Legacy code | Big, untested, tangled | Feathers' techniques (7.1.11) |
 | Databases | Schema (table structure) changes are hard to reverse | **Evolutionary database design**: small migration scripts (scripts that change the database structure), versioned with the code; use **parallel change** (add new column, copy, switch readers, remove old) |
 
-> **Term — parallel change (expand / contract).** Make a breaking change in three phases: *expand* (add the new thing alongside the old), *migrate* (move all users to the new thing), *contract* (remove the old thing). At no point is anything broken.
+> **Term — parallel change (expand / contract).** A breaking change in three phases: *expand* (add the new thing alongside the old), *migrate* (move all users to it), *contract* (remove the old). Nothing is ever broken.
 
 ### 7.1.6 Refactoring, architecture and YAGNI
 
-In the past people tried to get the architecture "right" before writing code. Refactoring changes that: because you can reshape code safely later, you can build **only what today's requirements need** and evolve the design when new needs appear. This is **YAGNI** ("You Aren't Gonna Need It") — do not add flexibility for imagined future requirements. YAGNI does not mean "never think about architecture"; it means you trust refactoring to add the flexibility when the need becomes real (and you think harder up front only about things that are *truly* hard to change later, like a public API or a database schema).
+Because refactoring lets you reshape code safely later, you needn't get the architecture "right" up front: build **only what today's requirements need** and evolve the design — **YAGNI** ("You Aren't Gonna Need It"; no flexibility for imagined requirements). It doesn't mean ignoring architecture: trust refactoring to add flexibility when the need is real, and think hard up front only about things *truly* hard to change later, like a public API or a database schema.
 
 ### 7.1.7 Tests as the safety net
 
-Refactoring is safe only if you can detect a behaviour change immediately. That is what **self-testing code** gives you: a suite of automated tests that checks itself (pass/fail, no human reading output) and runs in seconds.
+Refactoring is safe only if you detect a behaviour change immediately — that is what **self-testing code** gives you: an automated suite that checks itself (pass/fail, no human reading output) and runs in seconds.
 
-- Run tests after **every** small step. With fast tests, a failure points at the few lines you just changed.
-- If a test fails, **revert** — do not start debugging a refactoring. Then redo it in smaller steps.
-- Tests should focus on **behaviour** (public API, outputs), not on private structure. Tests that check private methods break on every refactoring and become a cost instead of a safety net.
-- **Characterisation tests** (a term from Michael Feathers): for code without tests, write tests that record what the code *currently does* — even if that looks wrong — so you notice if a refactoring changes it. The worked example in 7.5 uses exactly this: a checker that compares every step's output with the original, byte for byte.
-- Consider **mutation testing** (e.g. PIT for Java) to check your tests actually catch changes — it deliberately introduces small bugs and reports any your tests fail to detect.
+- Run tests after **every** small step, so a failure points at the few lines just changed; if one fails, **revert** (don't debug a refactoring) and redo in smaller steps.
+- Test **behaviour** (public API, outputs), not private structure; tests of private methods break on every refactoring and become a cost.
+- **Characterisation tests** (Michael Feathers): for code without tests, record what it *currently does* — even if that looks wrong — so you notice if a refactoring changes it. 7.5 uses exactly this: a checker comparing every step's output with the original, byte for byte.
+- **Mutation testing** (e.g. PIT for Java) checks that your tests catch changes: it introduces small bugs deliberately and reports any your tests miss.
 
-> **Term — safety net.** Anything that tells you quickly and reliably that you broke something: unit tests (one class tested in isolation), integration tests (several real parts tested together), the compiler's type checks, and the IDE's automated refactorings (which are proven safe by the tool).
+> **Term — safety net.** Anything that tells you quickly and reliably that you broke something: unit tests (one class in isolation), integration tests (several real parts together), the compiler's type checks, and the IDE's automated refactorings (proven safe by the tool).
 
 ### 7.1.8 IDE automation
 
-Modern IDEs perform many refactorings *automatically and safely*, using the compiler's knowledge of the code (the **syntax tree** and **symbol resolution** — the parsed structure of the code, and knowing exactly which declaration each name refers to), not text search. A text search-and-replace of `name` would also hit comments, strings and unrelated fields; the IDE's Rename only changes that one symbol and all its real references.
+Modern IDEs perform many refactorings *automatically and safely* using the compiler's knowledge of the code — the **syntax tree** and **symbol resolution** (the parsed structure, and exactly which declaration each name refers to) — not text search. A text replace of `name` would also hit comments, strings and unrelated fields; the IDE's Rename changes only that symbol and its real references.
 
 History in one line: Bill Opdyke's 1992 PhD thesis formalised refactorings; John Brant and Don Roberts built the Smalltalk (an early object-oriented language) *Refactoring Browser*, the first automated tool; Java IDEs (IntelliJ IDEA, Eclipse) popularised it.
 
@@ -166,23 +163,23 @@ History in one line: Bill Opdyke's 1992 PhD thesis formalised refactorings; John
 | Move | F6 · F6 | Alt+Shift+V |
 | "Refactor This" menu | Ctrl+Alt+Shift+T · Ctrl+T | Alt+Shift+T |
 
-(Shortcuts are the default keymaps; check your IDE if you use a custom keymap.)
+(Default keymaps; check your IDE if you use a custom one.)
 
-Beyond the IDE there are **large-scale automated refactoring tools**, such as OpenRewrite (recipes that, for example, migrate a whole codebase between framework versions) and Google's Refaster templates in Error Prone (Google's bug-finding plugin for the Java compiler). These let a company apply the same refactoring across thousands of files.
+**Large-scale automated refactoring tools** such as OpenRewrite (recipes that, e.g., migrate a whole codebase between framework versions) and Google's Refaster templates in Error Prone (Google's bug-finding plugin for the Java compiler) apply the same refactoring across thousands of files.
 
-> **Caution.** Automated refactorings are safe for statically known calls. They can miss **reflection** (`Class.forName("…")` — code that looks up classes or methods by name at runtime), names used in **configuration files**, **serialised field names** (serialising = turning objects into text or bytes, e.g. JSON, a plain-text data format; JSON/Jackson, JPA — Java's standard ORM API — column names inferred from field names), and code in other repositories. After an IDE rename of a field that is serialised, the JSON your API returns changes — that *is* an observable behaviour change.
+> **Caution.** Automated refactorings are safe for statically known calls. They can miss **reflection** (`Class.forName("…")` — looking up classes or methods by name at runtime), names in **configuration files**, **serialised field names** (serialising = turning objects into text or bytes, e.g. JSON, a plain-text data format; JSON/Jackson, JPA — Java's standard ORM API — column names inferred from field names), and code in other repositories. After an IDE rename of a serialised field, the JSON your API returns changes — that *is* an observable behaviour change.
 
 ### 7.1.9 Performance and refactoring
 
-A common worry: "refactoring adds method calls and small objects, so the program gets slower." Fowler's answer has three parts:
+"Refactoring adds method calls and small objects, so the program gets slower." Fowler's three-part answer:
 
-1. **Most refactorings have negligible performance effect.** The JIT (Just-In-Time) compiler — the part of the JVM, Java's runtime, that compiles frequently run code to machine code while the program runs — inlines small methods (copies their body into the caller); extra method calls are nearly free in modern Java.
-2. **Programs spend most of their time in a small fraction of the code.** Optimising everywhere wastes effort on code that is rarely run. (The book retells a story from Ron Jeffries about Chrysler's slow payroll system: nobody's guesses about the cause were right; profiling (measuring where a program actually spends its time) found the time going to one unexpected spot, and a small fix there made it fast.)
-3. **Well-factored code is easier to tune.** When you do need speed, you profile, find the hot spot (the small piece of code where most time goes), and — because the code is well-structured — the hot spot is small and isolated, so it is easy to optimise.
+1. **Most refactorings have negligible performance effect.** The JIT (Just-In-Time) compiler — the part of the JVM, Java's runtime, that compiles frequently run code to machine code while the program runs — inlines small methods (copies their body into the caller), so extra calls are nearly free.
+2. **Programs spend most of their time in a small fraction of the code**, so optimising everywhere wastes effort. (The book retells Ron Jeffries' story of Chrysler's slow payroll system: nobody's guesses about the cause were right; profiling — measuring where a program actually spends its time — found one unexpected spot, and a small fix there made it fast.)
+3. **Well-factored code is easier to tune**: profiling finds the hot spot (where most time goes), and in well-structured code it is small, isolated and easy to optimise.
 
-So the recommended order is: **make it work → make it clean (refactor) → make it fast (profile, then optimise only the hot spots)**. Sometimes a refactoring makes code slightly slower; that is fine if it makes the later, targeted optimisation easier.
+Order: **make it work → make it clean (refactor) → make it fast (profile, then optimise only hot spots)**; a slightly slower refactoring is fine if it eases that later optimisation.
 
-**Example from this chapter.** In 7.5 step 2 we replace a summing loop with a stream (Java's pipeline for processing a sequence of elements). `DoubleStream.sum()` is allowed to use *compensated summation* (a technique that tracks rounding errors to make floating-point sums more accurate; OpenJDK, the reference Java implementation, does), so it can give a result that differs in the last bit from a plain loop — a tiny *behaviour change*. To stay a true refactoring we used `reduce(0.0, Double::sum)`, which adds left to right exactly like the loop. Refactoring demands this kind of care.
+**Example from this chapter.** In 7.5 step 2 a summing loop becomes a stream (Java's pipeline for processing a sequence of elements). `DoubleStream.sum()` may use *compensated summation* (tracking rounding errors to make floating-point sums more accurate; OpenJDK, the reference Java implementation, does), so its result can differ from a plain loop in the last bit — a tiny *behaviour change*. To stay a true refactoring we used `reduce(0.0, Double::sum)`, which adds left to right exactly like the loop.
 
 ### 7.1.10 Refactoring vs rewriting
 
@@ -194,24 +191,24 @@ So the recommended order is: **make it work → make it clean (refactor) → mak
 | Delivers value | Continuously | Only at the end |
 | Good when | Code mostly works, needs reshaping | Code is so broken it does not work at all, or the technology must change completely |
 
-Even when you must replace a system, you rarely do it in one go. The **Strangler Fig** approach (named by Fowler after a vine that slowly grows around a tree) builds the new system *around* the old one, routing one feature at a time to the new code until the old code can be switched off. It is the rewrite equivalent of "small steps".
+Even a replacement is rarely done in one go. The **Strangler Fig** approach (Fowler, after a vine that slowly grows around a tree) builds the new system *around* the old one, routing one feature at a time to the new code until the old can be switched off — the rewrite equivalent of "small steps".
 
 ### 7.1.11 Legacy code
 
-Michael Feathers (*Working Effectively with Legacy Code*, 2004) defines **legacy code as code without tests**. Such code is hard to refactor because you have no safety net, and hard to test because it was not designed for it. The way out is a loop:
+Michael Feathers (*Working Effectively with Legacy Code*, 2004) defines **legacy code as code without tests** — hard to refactor (no safety net) and hard to test (not designed for it). The way out is a loop:
 
 1. **Identify change points** — where you need to change code.
 2. **Find test points** — where you can observe behaviour.
-3. **Break dependencies** — using a **seam**: a place where you can change behaviour without editing the code there, e.g. by passing in an interface instead of calling `new Database()` inside a method (constructor injection), or overriding a method in a test subclass.
+3. **Break dependencies** using a **seam**: a place where behaviour can change without editing the code there, e.g. passing in an interface instead of calling `new Database()` inside a method (constructor injection), or overriding a method in a test subclass.
 4. **Write characterisation tests** that pin down current behaviour.
 5. **Make the change and refactor** under that safety net.
 
-Other useful techniques from that book:
+Other techniques from the book:
 
-- **Sprout Method / Sprout Class** — write the new feature as a *new*, fully tested method or class, and call it from the old code with a one-line change.
-- **Wrap Method / Wrap Class** — rename the old method and create a new method with the old name that calls the old one plus the new behaviour (a Decorator-like move — a Decorator wraps an object to add behaviour).
-- Use **safe automated refactorings only** (Rename, Extract Method with the IDE) until tests exist.
-- Do not try to clean everything. Refactor the areas you touch; over time the most-changed code becomes the cleanest.
+- **Sprout Method / Sprout Class** — the new feature as a *new*, fully tested method or class, called from the old code by a one-line change.
+- **Wrap Method / Wrap Class** — rename the old method; a new one with the old name calls it plus the new behaviour (Decorator-like — a Decorator wraps an object to add behaviour).
+- **Safe automated refactorings only** (IDE Rename, Extract Method) until tests exist.
+- Refactor only what you touch; over time the most-changed code becomes the cleanest.
 
 ---
 
@@ -219,20 +216,15 @@ Other useful techniques from that book:
 
 ### What it is
 
-A **code smell** (a term coined by Kent Beck) is a *surface sign* in the code that usually points to a deeper design problem. A smell is not a bug — the code works. It is a hint that the code will be hard to understand or change. Like a smell in a fridge, it tells you *where to look*, not exactly what is wrong.
-
-Smells are **heuristics, not rules**. A long method is not always bad; a switch statement is not always bad. The smell tells you to look closer and use judgement.
+A **code smell** (Kent Beck's term) is a *surface sign* that usually points to a deeper design problem. It is not a bug — the code works — but the code will be hard to understand or change. Like a smell in a fridge, it tells you *where to look*, not exactly what is wrong. Smells are **heuristics, not rules**: a long method or a switch is not always bad; look closer and use judgement.
 
 ### The problem it solves
 
-Knowing *how* to refactor is not enough; you must also know *when* and *where*. Fowler and Beck deliberately give no precise metrics ("no method longer than 10 lines"). Instead they give a catalogue of named smells, each with the refactorings that usually cure it. Names matter: in a code review, "Feature Envy" communicates in two words what would otherwise take a paragraph.
+You must know *when* and *where* to refactor, not just how. Fowler and Beck deliberately give no precise metrics ("no method longer than 10 lines") but a catalogue of named smells with their usual cures. Names matter: in review, "Feature Envy" says in two words what would otherwise take a paragraph.
 
 ### How it works
 
-1. Read the code and notice discomfort: "I had to scroll", "I changed five files for one feature", "I can't tell what `x2` is".
-2. Match the discomfort to a named smell (the table below).
-3. Look up the refactorings that cure it (each smell below, and 7.4).
-4. Apply them in small steps under tests.
+Notice discomfort ("I had to scroll", "I changed five files for one feature", "what is `x2`?") → match it to a named smell → look up its cures (each smell below, and 7.4) → apply them in small steps under tests.
 
 ### Smell groups (refactoring.guru classification)
 
@@ -249,22 +241,6 @@ refactoring.guru (a popular website on refactoring and design patterns) groups s
 
 > **Term — coupling.** How much one piece of code depends on another. High coupling means a change in one place forces changes in others. **Cohesion** is the opposite idea inside one unit: how strongly the things inside a class or module belong together. Good design: low coupling, high cohesion.
 
-```mermaid
-flowchart TB
-    S["Code smells"] --> B["Bloaters"]
-    S --> O["OO Abusers"]
-    S --> C["Change Preventers"]
-    S --> D["Dispensables"]
-    S --> K["Couplers"]
-    S --> N["2nd-edition extras"]
-    B --> B1["Long Function, Large Class, Primitive Obsession, Long Parameter List, Data Clumps"]
-    O --> O1["Repeated Switches, Temporary Field, Refused Bequest, Alternative Classes"]
-    C --> C1["Divergent Change, Shotgun Surgery"]
-    D --> D1["Comments, Duplicated Code, Lazy Element, Data Class, Speculative Generality"]
-    K --> K1["Feature Envy, Insider Trading, Message Chains, Middle Man"]
-    N --> N1["Mysterious Name, Global Data, Mutable Data, Loops"]
-```
-
 Below are all 24 smells from the 2nd edition, in the book's order. Each has: **what it is**, **why it hurts**, a small **Java example** (smelly → cured), and **refactorings that fix it** (the ones Fowler names for that smell; anything extra is marked). The names match the catalogue in 7.3.
 
 > **Note on the snippets.** Several short snippets use `double` for prices or balances to stay tiny. Real money should use `BigDecimal` (Java's exact decimal type) or a `Money` value object (a small immutable object compared by its value) — see 7.2.11 and `code/smells/Money.java`.
@@ -275,7 +251,7 @@ Below are all 24 smells from the 2nd edition, in the book's order. Each has: **w
 
 **What it is.** A function, variable, field, class or module whose name does not tell you what it does or holds: `data`, `tmp`, `proc()`, `x2`, `Manager`, `handle()`.
 
-**Why it hurts.** Names are the main tool for making code understandable. A bad name forces every reader to decode the implementation. And if you *cannot* think of a good name, that is often a sign of a deeper design problem — the thing does too much or has no clear purpose.
+**Why it hurts.** A bad name forces every reader to decode the implementation. If you *cannot* find a good name, the thing probably does too much or has no clear purpose.
 
 ```java
 // Smelly
@@ -293,7 +269,7 @@ double averageDailyRevenue(List<Double> dailyRevenues, int daysInPeriod) { ... }
 
 **What it is.** The same (or nearly the same) code structure in more than one place.
 
-**Why it hurts.** Every change must be made in every copy, and you must *find* every copy and check whether the small differences matter. Sooner or later one copy is missed and a bug appears.
+**Why it hurts.** Every change must be made — and every copy found and its small differences checked — in every copy; sooner or later one is missed.
 
 ```java
 // Smelly: two methods repeat the same tax rule
@@ -313,9 +289,9 @@ double quoteTotal(double net)    { return withTax(net); }
 
 ### 7.2.3 Long Function
 
-**What it is.** A function that does too much and is too long to understand at a glance. Fowler's heuristic: whenever you feel you need a **comment** to explain a block, extract that block into a function named after the *intent* of the block.
+**What it is.** A function too long to understand at a glance. Fowler's heuristic: whenever you feel a block needs a **comment**, extract it into a function named after its *intent*.
 
-**Why it hurts.** Long functions are hard to understand, hard to reuse partially, and hard to test. Short, well-named functions are self-documenting: you read the name and skip the body.
+**Why it hurts.** Hard to understand, reuse partially or test. Short, well-named functions are self-documenting: read the name, skip the body.
 
 ```java
 // Smelly
@@ -363,9 +339,9 @@ Booking book(Hotel hotel, Stay stay, Guests guests, MealPlan mealPlan) { ... }
 
 ### 7.2.5 Global Data
 
-**What it is.** Data that can be read and modified from anywhere: global variables, public static mutable fields (`static` fields belong to the class and are shared by the whole program), and mutable singletons (classes with exactly one shared instance).
+**What it is.** Data readable and modifiable from anywhere: global variables, public static mutable fields (`static` fields belong to the class, shared program-wide), mutable singletons (classes with one shared instance).
 
-**Why it hurts.** Any code anywhere can change it, and there is no way to find *who* changed it. Bugs appear far away from their cause. Fowler calls it one of the most pungent smells; the problems grow with the size of the program. (Class variables and singletons count too.)
+**Why it hurts.** Any code anywhere can change it and you can't find *who* did; bugs appear far from their cause. Fowler calls it one of the most pungent smells, worsening with program size.
 
 ```java
 // Smelly
@@ -392,7 +368,7 @@ public final class Config {
 
 **What it is.** Data that is changed after creation, especially when it is shared, or when the same variable is updated for different purposes.
 
-**Why it hurts.** A change in one place can break code in another place that assumed the value stayed the same. These bugs are hard to find, especially with threads (several paths of execution running at the same time). Functional programming is built on the idea that data should never change; you do not need to go that far, but you should limit where mutation can happen.
+**Why it hurts.** A change in one place breaks code elsewhere that assumed the value stayed the same — hard to find, especially with threads (several paths of execution running at once). Functional programming forbids changing data; you needn't go that far, but limit where mutation can happen.
 
 ```java
 // Smelly: callers can change the list inside the object, and total is a stored copy that can go stale
@@ -418,7 +394,7 @@ final class Cart {
 
 **What it is.** **One class is changed for many different reasons.** "I have to edit this class when we add a database, *and* when we add a financial instrument, *and* when we change the report format."
 
-**Why it hurts.** The class mixes several responsibilities (it breaks the **Single Responsibility Principle**, Chapter 4). Each kind of change risks breaking the others, and different people edit the same file for unrelated reasons.
+**Why it hurts.** It mixes responsibilities (breaking the **Single Responsibility Principle**, Chapter 4): each kind of change risks the others, and people edit the same file for unrelated reasons.
 
 ```java
 // Smelly: storage, pricing and formatting in one class
@@ -472,7 +448,7 @@ final class ShippingPolicy {
 
 **What it is.** A method that is more interested in *another* class's data than in its own — it calls many getters (methods that just return a field) on another object to compute something.
 
-**Why it hurts.** The behaviour lives away from the data it uses, so a change to that data needs changes elsewhere. The basic OO rule: **put behaviour next to the data it uses**. (Exception: patterns like Strategy and Visitor — an object that carries one operation across a group of classes — deliberately separate them, to allow swapping behaviour.)
+**Why it hurts.** Behaviour away from its data means a data change needs changes elsewhere. The basic OO rule: **put behaviour next to the data it uses**. (Strategy and Visitor — an object carrying one operation across a group of classes — separate them deliberately, to allow swapping behaviour.)
 
 ```java
 // Smelly: Order computes a line total using only Line's data
@@ -496,7 +472,7 @@ record Line(double unitPrice, int quantity, double discount) {
 
 **What it is.** The same group of data items always appear together — as fields in several classes, or as parameters in many signatures: `(street, city, zip)`, `(startDate, endDate)`, `(x, y)`, `(amount, currency)`.
 
-**Why it hurts.** The group is really a concept that has not been named. Without a class, behaviour about it (e.g. "does this range contain a date?") gets duplicated everywhere. **Test:** delete one item of the clump — if the others no longer make sense alone, they belong in an object.
+**Why it hurts.** The group is an unnamed concept; without a class, behaviour about it ("does this range contain a date?") is duplicated everywhere. **Test:** delete one item — if the others no longer make sense alone, they belong in an object.
 
 ```java
 // Smelly
@@ -518,7 +494,7 @@ boolean isAvailable(DateRange stay) { ... }
 
 **What it is.** Using primitive types (`int`, `double`, `String`, `boolean`) for domain concepts that deserve their own type: money as `double`, phone numbers as `String`, a status as `"ACTIVE"`, a temperature as a bare `int` without a unit.
 
-**Why it hurts.** No validation (`"banana"` is a valid `String` phone number), no behaviour (formatting and comparing logic is duplicated), easy mix-ups (`transfer(double amount, double fee)` — swap them and nothing complains). Money as `double` also suffers from floating-point error (binary `double` numbers cannot store most decimal fractions exactly): `0.1 + 0.2` prints `0.30000000000000004` (see the output in 7.8).
+**Why it hurts.** No validation (`"banana"` is a valid `String` phone number), no behaviour (formatting and comparing logic is duplicated), easy mix-ups (`transfer(double amount, double fee)` — swap them and nothing complains). Money as `double` also suffers from floating-point error (binary `double` numbers cannot store most decimal fractions exactly): `0.1 + 0.2` prints `0.30000000000000004` (see the smells output in 7.6).
 
 ```java
 // Smelly
@@ -537,7 +513,7 @@ void charge(Money amount) { ... }
 
 ### 7.2.12 Repeated Switches
 
-**What it is.** The *same* `switch` (or `if/else if` chain) on the same type code (a field, such as a string or int, that says which kind of thing an object is) appears in several places. (In the 1st edition this smell was "Switch Statements" — *any* switch. In the 2nd edition Fowler narrowed it: a single switch is fine; the problem is the *repetition*.)
+**What it is.** The *same* `switch` (or `if/else if` chain) on the same type code (a field, e.g. a string or int, saying which kind of thing an object is) in several places. (1st edition: "Switch Statements" — *any* switch; the 2nd edition narrowed it — one switch is fine, *repetition* is the problem.)
 
 **Why it hurts.** Adding a new case means finding and updating every switch — Shotgun Surgery. Miss one and you have a bug.
 
@@ -560,7 +536,7 @@ sealed interface Bird permits EuropeanSwallow, AfricanSwallow, NorwegianBlueParr
 
 ### 7.2.13 Loops
 
-**What it is.** A classic `for`/`while` loop that filters, maps or aggregates a collection, where a pipeline would state the intent more clearly. (New in the 2nd edition — languages now have good first-class functions (functions that can be stored in variables and passed around); in Java, the Stream API since Java 8.)
+**What it is.** A `for`/`while` loop that filters, maps or aggregates where a pipeline would state the intent more clearly. (New in the 2nd edition, now that languages have first-class functions — storable in variables and passable; in Java, the Stream API since Java 8.)
 
 **Why it hurts.** A loop makes the reader simulate the steps to see what it does. A pipeline names each step: *filter*, *map*, *collect*.
 
@@ -586,9 +562,9 @@ List<String> names = employees.stream()
 
 ### 7.2.14 Lazy Element
 
-**What it is.** A class, function or other structure that does not pull its weight — for example a class with one trivial method, a function whose body is as clear as its name, or a subclass that adds nothing. (1st edition: "Lazy Class".)
+**What it is.** An element that doesn't pull its weight — a class with one trivial method, a function whose body is as clear as its name, a subclass adding nothing. (1st edition: "Lazy Class".)
 
-**Why it hurts.** Every element costs something: a name to learn, a file to open, an indirection to follow. If it adds nothing, it is pure cost. Lazy elements are often left behind after other refactorings, or created for growth that never happened.
+**Why it hurts.** Every element costs a name to learn, a file to open, an indirection to follow; adding nothing, it is pure cost. Often left behind by other refactorings, or created for growth that never came.
 
 ```java
 // Smelly: a wrapper that adds nothing
@@ -604,9 +580,9 @@ String cleanName = rawName.trim();
 
 ### 7.2.15 Speculative Generality
 
-**What it is.** Hooks, abstract classes, parameters and special cases added "because we might need them someday" — but nobody uses them. Typical signs: an abstract class with only one subclass, unused parameters, methods only called by tests, a plug-in system with one plug-in.
+**What it is.** Hooks, abstract classes, parameters and special cases added "because we might need them someday" and never used: an abstract class with one subclass, unused parameters, methods called only by tests, a plug-in system with one plug-in.
 
-**Why it hurts.** It makes the code harder to understand and maintain for no benefit. It violates **YAGNI**. If the need does come, refactoring can add the flexibility then — usually in a better shape, because you then know the real requirement.
+**Why it hurts.** Harder to understand and maintain for no benefit — it violates **YAGNI**. If the need comes, refactoring adds the flexibility then, usually better shaped because the real requirement is known.
 
 ```java
 // Smelly
@@ -654,7 +630,7 @@ final class RouteSearch {                      // lives only for one search
 
 **What it is.** A client asks one object for another object, then asks that for another, and so on: `order.getCustomer().getAddress().getCity().getName()`. Also a long chain of temporary variables doing the same thing.
 
-**Why it hurts.** The client is coupled to the *whole structure* of the navigation. Any change in an intermediate relationship breaks the client. It violates the **Law of Demeter** ("talk only to your immediate friends", Chapter 5).
+**Why it hurts.** The client is coupled to the *whole navigation structure*; any change in between breaks it. It violates the **Law of Demeter** ("talk only to your immediate friends", Chapter 5).
 
 ```java
 // Smelly
@@ -698,7 +674,7 @@ Message Chains and Middle Man pull in opposite directions — Hide Delegate cure
 
 ### 7.2.19 Insider Trading
 
-**What it is.** Two modules (classes, packages) that exchange too much private information — they poke at each other's internals. Subclasses that know too much about their parents' internals are a common case. (1st edition: "Inappropriate Intimacy".)
+**What it is.** Modules (classes, packages) poking at each other's internals — commonly subclasses knowing too much about their parents'. (1st edition: "Inappropriate Intimacy".)
 
 **Why it hurts.** The modules are tightly coupled: you cannot change one without changing the other. Some trading is necessary; the goal is to keep it small and visible.
 
@@ -769,9 +745,9 @@ class SmsNotifier   implements Notifier { ... }
 
 **What it is.** A class with only fields and getters/setters (setters are methods that just overwrite a field), and no behaviour. Other classes manipulate its data in detail.
 
-**Why it hurts.** The behaviour that belongs with the data lives elsewhere (usually as Feature Envy in its clients), often duplicated across several clients. Public setters also allow anyone to break the object's invariants (rules that must always hold, e.g. "balance is never negative").
+**Why it hurts.** Its behaviour lives in clients (as Feature Envy), often duplicated; public setters let anyone break its invariants (rules that must always hold, e.g. "balance is never negative").
 
-**Important exceptions.** Immutable data carriers are fine and often good: a Java **record** that is the *result* of a computation (e.g. the output of Split Phase), a DTO (Data Transfer Object) crossing a network boundary, or a value object. The smell is about *mutable* data classes whose logic is scattered around them.
+**Important exceptions.** Immutable data carriers are fine: a Java **record** that is a computation's *result* (e.g. Split Phase output), a DTO (Data Transfer Object) crossing a network boundary, a value object. The smell is *mutable* data classes with their logic scattered around them.
 
 ```java
 // Smelly
@@ -797,7 +773,7 @@ class Account {
 
 **What it is.** A subclass inherits methods and data from its parent but does not want or need them — or worse, refuses the parent's *interface* (overrides methods to throw `UnsupportedOperationException`).
 
-**Why it hurts.** The inheritance relationship is wrong. Refusing *implementation* is a mild smell (Fowler says it is often not worth fixing). Refusing the *interface* is serious: it breaks the **Liskov Substitution Principle** (Chapter 4: a subclass must work anywhere its parent is expected) — code that uses the parent type will fail with this subclass.
+**Why it hurts.** The inheritance is wrong. Refusing *implementation* is mild (Fowler: often not worth fixing); refusing the *interface* is serious — it breaks the **Liskov Substitution Principle** (Chapter 4: a subclass must work anywhere its parent is expected), so code using the parent type fails with this subclass.
 
 ```java
 // Smelly: Stack extends a list type, and so inherits add(index, e), remove(index) ... which break stack rules
@@ -824,11 +800,9 @@ final class Stack<T> {
 
 ### 7.2.24 Comments
 
-**What it is.** Comments are not bad in themselves — Fowler calls them a *sweet* smell. The smell is comments used as **deodorant**: a long comment explaining *what* a confusing block does, when the block should have been made clear instead.
+**What it is.** Comments aren't bad in themselves — Fowler calls them a *sweet* smell. The smell is comments as **deodorant**: explaining *what* a confusing block does instead of making the block clear.
 
-**Why it hurts.** Comments go stale — the code changes and the comment does not. A comment that explains *what* code does is a sign the code does not explain itself.
-
-**Good comments** (keep them): *why* something is done a particular way, a warning, a reference to an algorithm or bug ticket, a note about something you are unsure of, public API documentation (Javadoc).
+**Why it hurts.** Comments go stale, and a *what* comment signals code that doesn't explain itself. **Good comments** (keep them): *why* something is done, a warning, a reference to an algorithm or bug ticket, a note of uncertainty, public API docs (Javadoc). Chapter 6, [§3 Comments](../06-clean-code/README.md#3-comments), catalogues good and bad comments in full.
 
 ```java
 // Smelly
@@ -868,15 +842,11 @@ refactoring.guru still uses the 1st-edition (1999) names. You may hear them in i
 
 ### What it is
 
-A **named refactoring** is a small, well-defined transformation with a name, a *motivation* (when and why to use it), *mechanics* (the safe steps), and examples. Fowler's 2nd edition catalogues 61 of them in seven chapters (Chapters 6–12 of the book). The same catalogue, with a few extra entries, is online at refactoring.com/catalog. Many 1st-edition names (1999) were changed to be language-neutral ("function" instead of "method") — the old names are shown as *aliases*.
-
-Many refactorings come in **inverse pairs** (Extract Function ↔ Inline Function). There is no "right direction" — you move whichever way makes the code clearer *for the change you are about to make*.
+A **named refactoring** is a small, well-defined transformation with a name, a *motivation* (when and why), *mechanics* (the safe steps) and examples. Fowler's 2nd edition catalogues 61 in seven chapters (book Chapters 6–12); the same catalogue plus a few extras is online at refactoring.com/catalog. Many 1st-edition (1999) names became language-neutral ("function" not "method") — the old names appear as *aliases*. Many refactorings are **inverse pairs** (Extract Function ↔ Inline Function); move whichever way makes the code clearer *for the change you are about to make*.
 
 ### How to read each entry
 
-- **Motivation** — when and why.
-- **Before → After** — a short Java sketch. `// ...` marks irrelevant code. Sketches are illustrative fragments; the fully compiling examples are in `code/` (7.5, 7.6, 7.8).
-- **Inverse** — the opposite refactoring, if one exists.
+**Motivation** (when and why), a short **Before → After** Java sketch (`// ...` marks irrelevant code; obvious ones are omitted; compiling examples are in `code/` — 7.5, 7.6, 7.8), and the **inverse** refactoring in the heading, if one exists.
 
 **Catalogue at a glance**
 
@@ -901,7 +871,7 @@ These are the refactorings you will use most — every day.
 
 #### Extract Function *(alias: Extract Method)* · inverse: Inline Function
 
-**Motivation.** Separate *intention* from *implementation*. If you have to spend effort looking at a fragment of code to work out *what* it does, extract it into a function named after that "what". Even a one-line function is worth it if the name says more than the code. Short functions are cheap in Java (the JIT inlines them).
+**Motivation.** Separate *intention* from *implementation*: if working out *what* a fragment does takes effort, extract it into a function named after that "what" — even one line, if the name says more than the code. Short functions are cheap in Java (the JIT inlines them).
 
 ```java
 // Before
@@ -952,17 +922,9 @@ return basePrice - quantityDiscount + shipping;
 
 **Motivation.** A variable whose name says no more than the expression, or which gets in the way of another refactoring (e.g. Extract Function), should be removed.
 
-```java
-// Before
-double basePrice = order.basePrice();
-return basePrice > 1000;
-// After
-return order.basePrice() > 1000;
-```
-
 #### Change Function Declaration *(aliases: Rename Function, Rename Method, Add Parameter, Remove Parameter, Change Signature)*
 
-**Motivation.** Function names and parameters are the joints of the system; bad ones make everything harder. Rename a function the moment you understand it better; add or remove parameters to change what the function depends on. Two ways: the **simple mechanics** (change the declaration and all callers at once — fine when you can see all callers, e.g. with the IDE) and the **migration mechanics** (create the new function, make the old one delegate to it and mark it `@Deprecated`, migrate callers gradually, then delete the old one — needed for published APIs).
+**Motivation.** Function names and parameters are the joints of the system. Rename a function the moment you understand it better; add or remove parameters to change what it depends on. Two ways: the **simple mechanics** (change the declaration and all callers at once — fine when you can see all callers, e.g. with the IDE) and the **migration mechanics** (create the new function, make the old one delegate to it and mark it `@Deprecated`, migrate callers gradually, then delete the old one — needed for published APIs).
 
 ```java
 // Before
@@ -975,27 +937,11 @@ double circum(double radius) { return circumference(radius); }   // delete when 
 
 #### Encapsulate Variable *(aliases: Encapsulate Field, Self-Encapsulate Field)*
 
-**Motivation.** Data is harder to refactor than functions, because every reference must change at once. Wrapping widely accessed data in accessor functions (getter/setter methods) turns "reorganise data" into "reorganise functions" and gives you one place to add validation, logging or change notifications. Always the first step for Global Data.
-
-```java
-// Before
-public static Owner defaultOwner = new Owner("Martin", "Fowler");
-// After
-private static Owner defaultOwner = new Owner("Martin", "Fowler");
-public static Owner defaultOwner() { return defaultOwner; }
-public static void setDefaultOwner(Owner owner) { defaultOwner = owner; }   // add checks later, as a separate change
-```
+**Motivation.** Data is harder to refactor than functions (every reference changes at once). Wrapping widely used data in accessors (getter/setter methods) turns "reorganise data" into "reorganise functions" and gives one place for validation, logging or change notifications. Always the first step for Global Data (see the `Config` sketch in 7.2.5).
 
 #### Rename Variable
 
 **Motivation.** Good names are the heart of clear code. The wider the scope of a variable, the more its name matters. A short name is fine in a three-line lambda; a field needs a descriptive name.
-
-```java
-// Before
-double a = height * width;
-// After
-double area = height * width;
-```
 
 #### Introduce Parameter Object
 
@@ -1013,7 +959,7 @@ List<Reading> readingsOutsideRange(Station s, NumberRange range) { ... }
 
 #### Combine Functions into Class
 
-**Motivation.** When several functions work on the same data (often passed as the same argument to all of them), create a class that holds the data as fields and turns the functions into methods. The shared data and the common environment become explicit, and clients no longer pass the data around.
+**Motivation.** When several functions work on the same data (often the same argument), make a class holding the data as fields with the functions as methods; the shared environment becomes explicit and clients stop passing the data around.
 
 ```java
 // Before
@@ -1031,7 +977,7 @@ final class ReadingCalculator {
 
 #### Combine Functions into Transform
 
-**Motivation.** An alternative to Combine Functions into Class when the source data is read-only: a *transform* function takes the raw data and returns an enriched copy with all derived values computed. All derivation logic lives in one place. (Use a class instead if the source data can change, since a transform's copy would go stale.)
+**Motivation.** For read-only source data, an alternative to Combine Functions into Class: a *transform* takes the raw data and returns an enriched copy with all derived values, keeping derivation logic in one place. (If the source can change, use a class — the copy would go stale.)
 
 ```java
 // Before (derived values computed in several places)
@@ -1047,7 +993,7 @@ static EnrichedReading enrichReading(Reading r) {
 
 #### Split Phase
 
-**Motivation.** When code deals with two different things in sequence (e.g. parse input, then compute; or compute, then format), split it into two phases connected by an intermediate data structure. Each phase can then be understood and changed separately — a classic cure for Divergent Change. Compilers are the textbook example (tokenise — split text into words and symbols → parse — build a tree of its structure → generate code). See the worked example, step 3.
+**Motivation.** When code deals with two different things in sequence (e.g. parse input, then compute; or compute, then format), split it into two phases connected by an intermediate data structure. Each phase can be understood and changed separately — a classic cure for Divergent Change. Compilers are the textbook example (tokenise — split text into words and symbols → parse into a structure tree → generate code); see 7.5, step 3.
 
 ```java
 // Before
@@ -1124,7 +1070,7 @@ List<Order> urgent = orders.stream().filter(o -> o.priority().higherThan(Priorit
 
 #### Replace Temp with Query
 
-**Motivation.** A temporary variable holding a computed value can only be used inside its function. Turn the computation into a method, and every other method of the class can use it too; it also makes Extract Function easier (fewer locals to pass). Works best when the temp is assigned once and its computation has no side effects.
+**Motivation.** A temp holding a computed value is usable only inside its function; as a method, every method of the class can use it, and Extract Function gets easier (fewer locals). Best when the temp is assigned once and its computation has no side effects.
 
 ```java
 // Before
@@ -1184,13 +1130,6 @@ Person manager = person.manager();
 #### Remove Middle Man · inverse: Hide Delegate
 
 **Motivation.** When a class has so many delegating methods that it is just a pass-through, let clients call the delegate directly. The right amount of hiding changes as the system changes.
-
-```java
-// Before
-Person manager = person.manager();              // manager() only forwards
-// After
-Person manager = person.department().getManager();
-```
 
 #### Substitute Algorithm
 
@@ -1297,7 +1236,7 @@ boolean appliesToMass = states.contains("MA");
 
 #### Slide Statements *(alias: Consolidate Duplicate Conditional Fragments)*
 
-**Motivation.** Code is easier to understand when related statements are next to each other — e.g. declare a variable right before its first use. Sliding is often a preparation for Extract Function. The 1st-edition alias covers one case: a statement repeated in every branch of a conditional can slide out of the conditional. Be careful: you cannot slide past code that the statement interferes with (shared variables, side effects).
+**Motivation.** Related statements belong together — e.g. declare a variable right before its first use; sliding often prepares Extract Function. The 1st-edition alias is one case: a statement repeated in every branch of a conditional slides out of it. You cannot slide past code the statement interferes with (shared variables, side effects).
 
 ```java
 // Before
@@ -1312,7 +1251,7 @@ double baseCharge = pricingPlan.base();
 
 #### Split Loop
 
-**Motivation.** A loop that does two things forces you to understand both whenever you change either. Split it into two loops, each doing one thing; then each can be extracted or turned into a pipeline. Worried about performance? Iterating twice is rarely a bottleneck — refactor first, optimise later if the profiler says so.
+**Motivation.** A loop doing two things makes you understand both to change either. Split it so each loop does one thing and can be extracted or turned into a pipeline. Iterating twice is rarely a bottleneck — optimise later if the profiler says so.
 
 ```java
 // Before
@@ -1350,14 +1289,6 @@ List<String> result = lines.stream()
 
 **Motivation.** Unused code still costs readers time ("is this called somewhere?"). Delete it — version control remembers it if you ever need it back. Do not comment it out.
 
-```java
-// Before
-if (false) { legacyDiscount(); }
-private void legacyDiscount() { /* unused since 2019 */ }
-// After
-// (gone)
-```
-
 ---
 
 ### 7.3.4 Organizing Data (book chapter 9)
@@ -1385,13 +1316,6 @@ System.out.println(area);
 
 **Motivation.** Field names explain the data structure; they deserve as much care as function names. Encapsulate first if the field is widely used, then rename. (For records, the accessor name changes too.)
 
-```java
-// Before
-record Organization(String nm, String country) { }
-// After
-record Organization(String name, String country) { }
-```
-
 #### Replace Derived Variable with Query
 
 **Motivation.** Mutable data that is *computed from* other data can drift out of sync. Compute it on demand instead. Exception: if the source data is immutable, a stored derived value is safe (e.g. a record computed once).
@@ -1414,7 +1338,7 @@ class ProductionPlan {
 
 #### Change Reference to Value · inverse: Change Value to Reference
 
-**Motivation.** If an inner object does not need identity (being tracked as one specific object) (two telephone numbers with the same digits are "the same"), make it an immutable **value object**: replace it wholesale instead of mutating it, and compare by value (`equals`/`hashCode`). Values are safe to share and to use across threads. Java `record`s are ideal.
+**Motivation.** If an inner object needs no identity (tracking as one specific object — two telephone numbers with the same digits are "the same"), make it an immutable **value object**: replace it wholesale rather than mutate it, compare by value (`equals`/`hashCode`). Values are safe to share across threads; Java `record`s are ideal.
 
 ```java
 // Before
@@ -1427,7 +1351,7 @@ person.setTelephone(new TelephoneNumber("020", person.telephone().number()));
 
 #### Change Value to Reference · inverse: Change Reference to Value
 
-**Motivation.** If many objects hold *copies* of the same logical entity (every order holds its own `Customer` copy) and that entity needs to be updated, a change to one copy is not seen by the others. Share **one** reference instead, usually via a **repository** (an object that stores domain objects and looks them up, usually by ID) that hands out the single instance per ID.
+**Motivation.** If many objects hold *copies* of one logical entity (each order its own `Customer`) and it gets updated, the other copies don't see the change. Share **one** reference instead, usually via a **repository** (an object that stores domain objects and looks them up, usually by ID) that hands out the single instance per ID.
 
 ```java
 // Before
@@ -1494,7 +1418,7 @@ double payAmount(Employee e) {
 
 #### Replace Conditional with Polymorphism
 
-**Motivation.** When a switch on a type appears in several places (Repeated Switches), or when there is a base behaviour with variants, create a class per case and let dynamic dispatch (the runtime choosing which class's method to run from the object's actual type) pick the behaviour. Adding a new case means adding a class, not editing every switch. This is how you arrive at **Strategy** or **State** (7.6) — State gives each state of an object its own class, which supplies the behaviour for that state. The worked example's step 5 does exactly this.
+**Motivation.** When a switch on a type appears in several places (Repeated Switches), or when there is a base behaviour with variants, create a class per case and let dynamic dispatch (the runtime choosing which class's method to run from the object's actual type) pick the behaviour. A new case means a new class, not edits to every switch. This is how you arrive at **Strategy** or **State** (7.6 — State gives each state of an object its own class supplying that state's behaviour); 7.5 step 5 does exactly this.
 
 ```java
 // Before
@@ -1535,7 +1459,7 @@ String name = customer.name();          // repository returns UnknownCustomer in
 
 #### Introduce Assertion
 
-**Motivation.** Some code only works if a condition holds (e.g. a discount rate is never negative). Make the assumption explicit with an assertion. An assertion documents the assumption and catches programmer errors early; the program must be correct *without* it. In Java, `assert` is disabled by default (enable with `java -ea`), so do not use it to validate external input — use exceptions for that.
+**Motivation.** Make an assumption the code relies on (a discount rate is never negative) explicit with an assertion: it documents the assumption and catches programmer errors early; the program must be correct *without* it. In Java, `assert` is disabled by default (enable with `java -ea`), so do not use it to validate external input — use exceptions for that.
 
 ```java
 // Before
@@ -1579,15 +1503,7 @@ void alertForMiscreant(List<String> people) {                      // modifier
 
 #### Parameterize Function *(alias: Parameterize Method)*
 
-**Motivation.** Several functions with very similar logic that differ only in some literal values can become one function with a parameter.
-
-```java
-// Before
-void tenPercentRaise(Person p)  { p.setSalary(p.salary() * 1.10); }
-void fivePercentRaise(Person p) { p.setSalary(p.salary() * 1.05); }
-// After
-void raise(Person p, double factor) { p.setSalary(p.salary() * (1 + factor)); }
-```
+**Motivation.** Functions with the same logic differing only in literal values become one function with a parameter (`tenPercentRaise(p)` + `fivePercentRaise(p)` → `raise(p, factor)`).
 
 #### Remove Flag Argument *(alias: Replace Parameter with Explicit Methods)*
 
@@ -1651,16 +1567,9 @@ double targetTemperature(HeatingPlan plan, double currentTemperature) {
 
 **Motivation.** If a field should not change after construction, remove its setter and set it in the constructor (make it `final`). The class then clearly communicates immutability.
 
-```java
-// Before
-class Person { private String id; void setId(String id) { this.id = id; } }
-// After
-class Person { private final String id; Person(String id) { this.id = id; } String id() { return id; } }
-```
-
 #### Replace Constructor with Factory Function *(alias: Replace Constructor with Factory Method)*
 
-**Motivation.** Constructors have limitations: they must return a new instance of exactly that class, their name is fixed, and `new` is needed. A static factory method (a `static` method that creates and returns an instance) can have an intention-revealing name, return a subclass or cached instance, and hide construction details. (Joshua Bloch's *Effective Java*, Item 1, makes the same argument. JDK examples: `List.of`, `Integer.valueOf`, `LocalDate.of`.)
+**Motivation.** A constructor must return a new instance of exactly its class, under a fixed name, via `new`. A static factory method (a `static` method that creates and returns an instance) can have an intention-revealing name, return a subclass or cached instance, and hide construction details. (Joshua Bloch's *Effective Java*, Item 1, makes the same argument. JDK examples: `List.of`, `Integer.valueOf`, `LocalDate.of`.)
 
 ```java
 // Before
@@ -1672,7 +1581,7 @@ Employee leadEngineer = Employee.createEngineer(document.leadEngineer());
 
 #### Replace Function with Command *(alias: Replace Method with Method Object)* · inverse: Replace Command with Function
 
-**Motivation.** Wrap a function in its own object (a **command**, with usually one `execute()` method). The object can hold state across steps, support undo, be queued, and — most commonly in refactoring — lets you break a big function with many local variables into small methods that share those variables as fields.
+**Motivation.** Wrap a function in its own object (a **command**, usually with one `execute()` method). It can hold state across steps, support undo and be queued — and, most often in refactoring, lets a big function with many locals split into small methods sharing those locals as fields.
 
 ```java
 // Before
@@ -1720,25 +1629,9 @@ Inheritance is powerful and easy to misuse. These refactorings move features up 
 
 **Motivation.** Duplicate methods in sibling subclasses belong in the superclass. If they are similar but not identical, first make them identical (Parameterize Function), or use a Template Method (7.6) — a base-class method that fixes an algorithm's steps and lets subclasses fill some in.
 
-```java
-// Before
-class Salesman extends Employee { String name() { return name; } }
-class Engineer extends Employee { String name() { return name; } }
-// After
-class Employee { String name() { return name; } }
-```
-
 #### Pull Up Field · inverse: Push Down Field
 
 **Motivation.** Subclasses developed independently often have the same field (maybe with different names). Rename to match, then move the field to the superclass.
-
-```java
-// Before
-class Salesman extends Employee { protected String name; }
-class Engineer extends Employee { protected String name; }
-// After
-class Employee { protected String name; }
-```
 
 #### Pull Up Constructor Body
 
@@ -1760,27 +1653,13 @@ class Manager extends Employee {
 
 **Motivation.** If a superclass method is only relevant to one (or a few) subclasses, move it down to them. Callers must then know they have that subclass — only do it when they do.
 
-```java
-// Before
-class Employee { int quota() { ... } }                      // only salesmen have a quota
-// After
-class Salesman extends Employee { int quota() { ... } }
-```
-
 #### Push Down Field · inverse: Pull Up Field
 
 **Motivation.** A field used by only one subclass should live in that subclass.
 
-```java
-// Before
-class Employee { protected int quota; }
-// After
-class Salesman extends Employee { private int quota; }
-```
-
 #### Replace Type Code with Subclasses *(aliases: Extract Subclass, Replace Type Code with State/Strategy)* · inverse: Remove Subclass
 
-**Motivation.** A type code field (`"engineer"`, `"manager"`) that drives behaviour is a hint that you need subclasses; then conditionals can become polymorphism. Two ways: **direct inheritance** (subclass the class itself) or **indirect** (the class holds a separate type object, e.g. `EmployeeType`, which is subclassed — needed if the type can change at runtime or the class is already subclassed for another reason; this is the old "Replace Type Code with State/Strategy").
+**Motivation.** A type code field (`"engineer"`, `"manager"`) that drives behaviour hints at subclasses, after which conditionals can become polymorphism. Two ways: **direct inheritance** (subclass the class itself) or **indirect** (the class holds a separate type object, e.g. `EmployeeType`, which is subclassed — needed if the type can change at runtime or the class is already subclassed for another reason; this is the old "Replace Type Code with State/Strategy").
 
 ```java
 // Before
@@ -1832,17 +1711,9 @@ class Employee extends Party { ... }
 
 **Motivation.** When a subclass and its superclass are no longer different enough to be worth keeping separate, merge them. A cure for Lazy Element and Speculative Generality.
 
-```java
-// Before
-class Employee { ... }
-class Salesman extends Employee { }          // adds nothing any more
-// After
-class Employee { ... }
-```
-
 #### Replace Subclass with Delegate
 
-**Motivation.** Inheritance has two limits: you can vary only **one** axis (a person cannot be subclassed by both age-group and income-level), and subclasses are tightly coupled to their parent. Delegation (composition) handles both: the varying behaviour moves to a separate delegate object that can be changed at runtime. This is "favour object composition over class inheritance" (GoF — the "Gang of Four" authors of the 1994 *Design Patterns* book), and the core of the **State** and **Strategy** patterns.
+**Motivation.** Inheritance has two limits: you can vary only **one** axis (a person cannot be subclassed by both age-group and income-level), and subclasses are tightly coupled to their parent. Delegation (composition) handles both: the varying behaviour moves to a delegate object that can change at runtime. This is "favour object composition over class inheritance" (GoF — the "Gang of Four" authors of the 1994 *Design Patterns* book), and the core of the **State** and **Strategy** patterns.
 
 ```java
 // Before
@@ -1879,7 +1750,7 @@ class Scroll {
 
 ### 7.3.8 Extra refactorings on refactoring.com
 
-The online catalogue (web edition) lists a few more refactorings that are not among the 61 book chapters' entries. They are worth knowing:
+The online catalogue (web edition) adds five refactorings that are not among the book's 61:
 
 #### Replace Control Flag with Break *(alias: Remove Control Flag)*
 
@@ -1956,62 +1827,40 @@ double calculateAscent() {
 
 ### 1st-edition names you may still hear
 
-| 1st-edition name | 2nd-edition name |
-|---|---|
-| Extract Method / Inline Method | Extract Function / Inline Function |
-| Introduce Explaining Variable / Inline Temp | Extract Variable / Inline Variable |
-| Rename Method, Add Parameter, Remove Parameter | Change Function Declaration |
-| Self-Encapsulate Field / Encapsulate Field | Encapsulate Variable |
-| Replace Record with Data Class | Encapsulate Record |
-| Replace Data Value with Object, Replace Type Code with Class | Replace Primitive with Object |
-| Move Method | Move Function |
-| Consolidate Duplicate Conditional Fragments | Slide Statements |
-| Split Temp, Remove Assignments to Parameters | Split Variable |
-| Introduce Null Object | Introduce Special Case |
-| Parameterize Method | Parameterize Function |
-| Replace Parameter with Explicit Methods | Remove Flag Argument |
-| Replace Parameter with Method | Replace Parameter with Query |
-| Replace Constructor with Factory Method | Replace Constructor with Factory Function |
-| Replace Method with Method Object | Replace Function with Command |
-| Extract Subclass, Replace Type Code with State/Strategy | Replace Type Code with Subclasses |
-| Replace Subclass with Fields | Remove Subclass |
-| Replace Inheritance with Delegation | Replace Superclass with Delegate |
-| Remove Control Flag | Replace Control Flag with Break (web) |
-| Replace Magic Number with Symbolic Constant | Replace Magic Literal (web) |
-| Replace Exception with Test | Replace Exception with Precheck (web) |
+The *alias* in each heading above is the 1st-edition (1999) name you may still hear (e.g. Extract Method, Inline Temp, Introduce Null Object, Replace Method with Method Object, Replace Inheritance with Delegation); the five in 7.3.8 exist only in the online (web) catalogue.
 
 ---
 
 ## 7.4 Smell → refactorings lookup table
 
-Use this when you have named a smell and need to choose a cure. **Bold** = the usual first move.
+Use this when you have named a smell and need a cure. The first move is listed here; each smell's full list of cures, with when to use each, is under its 7.2 entry.
 
-| Smell | Group | Refactorings that cure it |
-|---|---|---|
-| Mysterious Name | 2nd-ed extra | **Change Function Declaration**, Rename Variable, Rename Field |
-| Duplicated Code | Dispensables | **Extract Function**, Slide Statements, Pull Up Method *(also useful, not in Fowler's list: Replace Inline Code with Function Call, Substitute Algorithm)* |
-| Long Function | Bloaters | **Extract Function**, Replace Temp with Query, Introduce Parameter Object, Preserve Whole Object, Replace Function with Command, Decompose Conditional, Replace Conditional with Polymorphism, Split Loop |
-| Long Parameter List | Bloaters | Replace Parameter with Query, **Preserve Whole Object**, **Introduce Parameter Object**, Remove Flag Argument, Combine Functions into Class |
-| Global Data | 2nd-ed extra | **Encapsulate Variable** (then shrink its scope) |
-| Mutable Data | 2nd-ed extra | **Encapsulate Variable**, Split Variable, Slide Statements, Extract Function, Separate Query from Modifier, Remove Setting Method, Replace Derived Variable with Query, Combine Functions into Class, Combine Functions into Transform, Change Reference to Value |
-| Divergent Change | Change Preventers | **Split Phase**, Move Function, Extract Function, **Extract Class** |
-| Shotgun Surgery | Change Preventers | **Move Function**, **Move Field**, Combine Functions into Class, Combine Functions into Transform, Split Phase, Inline Function, Inline Class |
-| Feature Envy | Couplers | **Move Function**, Extract Function |
-| Data Clumps | Bloaters | **Extract Class**, **Introduce Parameter Object**, Preserve Whole Object |
-| Primitive Obsession | Bloaters | **Replace Primitive with Object**, Replace Type Code with Subclasses, Replace Conditional with Polymorphism, Extract Class, Introduce Parameter Object |
-| Repeated Switches | OO Abusers | **Replace Conditional with Polymorphism** |
-| Loops | 2nd-ed extra | **Replace Loop with Pipeline** |
-| Lazy Element | Dispensables | **Inline Function**, **Inline Class**, Collapse Hierarchy |
-| Speculative Generality | Dispensables | Collapse Hierarchy, Inline Function, Inline Class, Change Function Declaration, Remove Dead Code |
-| Temporary Field | OO Abusers | **Extract Class**, Move Function, Introduce Special Case |
-| Message Chains | Couplers | **Hide Delegate**, Extract Function, Move Function |
-| Middle Man | Couplers | **Remove Middle Man**, Inline Function, Replace Superclass with Delegate, Replace Subclass with Delegate |
-| Insider Trading | Couplers | **Move Function**, **Move Field**, Hide Delegate, Replace Subclass with Delegate, Replace Superclass with Delegate |
-| Large Class | Bloaters | **Extract Class**, Extract Superclass, Replace Type Code with Subclasses |
-| Alternative Classes with Different Interfaces | OO Abusers | **Change Function Declaration**, Move Function, Extract Superclass |
-| Data Class | Dispensables | **Encapsulate Record**, Remove Setting Method, Move Function, Extract Function, Split Phase |
-| Refused Bequest | OO Abusers | Push Down Method, Push Down Field, **Replace Subclass with Delegate**, **Replace Superclass with Delegate** |
-| Comments | Dispensables | **Extract Function**, Change Function Declaration, Introduce Assertion |
+| Smell | Group | Usual first move | Then / also |
+|---|---|---|---|
+| Mysterious Name | 2nd-ed extra | **Change Function Declaration** | Rename Variable, Rename Field |
+| Duplicated Code | Dispensables | **Extract Function** | Slide Statements, Pull Up Method |
+| Long Function | Bloaters | **Extract Function** | Replace Temp with Query, Decompose Conditional, Split Loop, … |
+| Long Parameter List | Bloaters | **Preserve Whole Object**, **Introduce Parameter Object** | Remove Flag Argument, Replace Parameter with Query |
+| Global Data | 2nd-ed extra | **Encapsulate Variable** | then shrink its scope |
+| Mutable Data | 2nd-ed extra | **Encapsulate Variable** | Split Variable, Replace Derived Variable with Query, Change Reference to Value, … |
+| Divergent Change | Change Preventers | **Split Phase**, **Extract Class** | Move Function, Extract Function |
+| Shotgun Surgery | Change Preventers | **Move Function**, **Move Field** | Combine Functions into Class/Transform, Inline first |
+| Feature Envy | Couplers | **Move Function** | Extract Function first |
+| Data Clumps | Bloaters | **Extract Class**, **Introduce Parameter Object** | Preserve Whole Object |
+| Primitive Obsession | Bloaters | **Replace Primitive with Object** | Replace Type Code with Subclasses, Replace Conditional with Polymorphism |
+| Repeated Switches | OO Abusers | **Replace Conditional with Polymorphism** | — |
+| Loops | 2nd-ed extra | **Replace Loop with Pipeline** | — |
+| Lazy Element | Dispensables | **Inline Function**, **Inline Class** | Collapse Hierarchy |
+| Speculative Generality | Dispensables | Collapse Hierarchy, Inline Function/Class | Change Function Declaration, Remove Dead Code |
+| Temporary Field | OO Abusers | **Extract Class** | Move Function, Introduce Special Case |
+| Message Chains | Couplers | **Hide Delegate** | Extract Function, Move Function |
+| Middle Man | Couplers | **Remove Middle Man** | Inline Function, Replace Super/Subclass with Delegate |
+| Insider Trading | Couplers | **Move Function**, **Move Field** | Hide Delegate, Replace Super/Subclass with Delegate |
+| Large Class | Bloaters | **Extract Class** | Extract Superclass, Replace Type Code with Subclasses |
+| Alternative Classes with Different Interfaces | OO Abusers | **Change Function Declaration** | Move Function, Extract Superclass |
+| Data Class | Dispensables | **Encapsulate Record** | Remove Setting Method, Move Function |
+| Refused Bequest | OO Abusers | **Replace Subclass with Delegate**, **Replace Superclass with Delegate** | Push Down Method/Field |
+| Comments | Dispensables | **Extract Function** | Change Function Declaration, Introduce Assertion |
 
 And the reverse view — which **design principle** each family of smells violates (links to Chapters 4–6):
 
@@ -2044,9 +1893,9 @@ Tariffs:
 | EXP | 12 + 2.0 per kg, plus 0.10 per km beyond 50 km | 1 per full 100 km, +2 bonus |
 | FRG | 8 + 1.5 per kg + 3 handling; ×1.2 if heavier than 10 kg | 1 per full 100 km |
 
-**The new feature request:** "We also need an HTML invoice for the web portal, and next quarter we are adding an OVERNIGHT service."
+**New feature request:** "an HTML invoice for the web portal; next quarter, an OVERNIGHT service."
 
-The current code (step 0, abridged — full file in 7.8):
+The current code (step 0, abridged — full file `code/worked/step0/Main.java`):
 
 ```java
 static String print(Inv inv) {
@@ -2087,13 +1936,11 @@ static String print(Inv inv) {
 | Data Class / Mutable Data | Public mutable fields in `Shp` and `Inv` |
 | Dead code | `int unused` |
 
-Adding HTML now would mean duplicating everything. So we do **preparatory refactoring** first: make the change easy, then make the easy change.
+Adding HTML now would duplicate everything, so we do **preparatory refactoring** first.
 
 ### The safety net
 
-Before touching anything we write a **characterisation check** — `lld.ch07.worked.Main`. It runs step 0 to record the "golden" output, then runs every later step and compares the output **byte for byte**. The fixture (the fixed test input data) includes boundary cases (exactly 100 km for STD, exactly 10 kg for FRG) because boundaries are where refactorings most often break behaviour. In a real project this would be a JUnit test (JUnit is the standard Java testing framework); here it is a plain `main` so it runs with the JDK (Java Development Kit — the compiler and runtime) alone.
-
-Each step lives in its own package (`step0` … `step5`) so you can compile and diff them (compare them line by line). After *every* step the checker prints `SAME output`.
+First, a **characterisation check** — `lld.ch07.worked.Main` — records step 0's "golden" output and compares every later step's output with it **byte for byte**. The fixture (fixed test input) includes boundary cases (exactly 100 km for STD, exactly 10 kg for FRG), where refactorings most often break behaviour. In a real project this would be a JUnit test (the standard Java test framework); here it is a plain `main` that runs with the JDK (Java Development Kit) alone. Each step has its own package (`step0` … `step5`) so you can diff them; after *every* step the checker prints `SAME output`.
 
 ### Step 1 — Extract Function, Rename Variable/Field, Remove Dead Code
 
@@ -2111,7 +1958,7 @@ for (Shipment shipment : invoice.shipments) {
 }
 ```
 
-The switch itself was *moved*, not changed. Moving before changing is a key habit: two small safe steps instead of one risky one.
+The switch was *moved*, not changed — move before changing: two small safe steps instead of one risky one.
 
 ### Step 2 — Inline Variable, Split Loop, Replace Temp with Query, Replace Loop with Pipeline, Slide Statements
 
@@ -2132,7 +1979,7 @@ static int totalPoints(Invoice invoice) {
 }
 ```
 
-**A subtle trap.** The obvious pipeline is `mapToDouble(...).sum()`. But `DoubleStream.sum()` may use compensated summation, so it can differ from a plain left-to-right loop in the last bit of a `double`. That is a (tiny) behaviour change. `reduce(0.0, Double::sum)` on a sequential stream adds in encounter order — exactly like the loop. (For `int`, addition is exact, so `IntStream.sum()` is safe.) Performance note: we now call `amountFor` twice per shipment — the kind of cost Fowler says to ignore until a profiler shows it matters.
+**A subtle trap.** The obvious `mapToDouble(...).sum()` may use compensated summation (7.1.9) and differ from the loop in the last bit — a behaviour change; `reduce(0.0, Double::sum)` on a sequential stream adds in encounter order, exactly like the loop. (`int` addition is exact, so `IntStream.sum()` is safe.) We now call `amountFor` twice per shipment — the kind of cost Fowler says to ignore until a profiler shows it matters.
 
 ### Step 3 — Split Phase, Encapsulate Record, Encapsulate Collection, Combine Functions into Transform
 
@@ -2149,7 +1996,7 @@ return new TextRenderer().render(new StatementCalculator().calculate(invoice));
 
 ### Step 4 — Replace Primitive with Object, Replace Magic Literal
 
-- **Replace Primitive with Object**: the `String` type code becomes `enum ServiceType { STANDARD("STD"), EXPRESS("EXP"), FRAGILE("FRG") }` with `fromCode(String)`. An unknown code now fails *at the boundary* (when the shipment is created) instead of deep inside the calculation. It is the same exception type and message, and in this program shipments are always built and printed together, so the observable behaviour is unchanged; if some caller created invoices without ever printing them, moving the failure earlier would be a behaviour change to check first. The `"STD"` strings survive only where data enters the system and where it is printed.
+- **Replace Primitive with Object**: the `String` type code becomes `enum ServiceType { STANDARD("STD"), EXPRESS("EXP"), FRAGILE("FRG") }` with `fromCode(String)`; `"STD"` strings survive only where data enters and where it is printed. An unknown code now fails *at the boundary* (shipment creation) instead of deep in the calculation — same exception type and message, and here shipments are always built and printed together, so behaviour is unchanged (if a caller built invoices without printing them, the earlier failure would be a behaviour change to check first).
 - **Replace Magic Literal**: every tariff number gets a name (`STD_FREE_KM`, `FRG_HEAVY_FACTOR`, ...).
 - The switch becomes a **switch expression** over the enum; with no `default` branch, the compiler checks it is exhaustive.
 
@@ -2237,25 +2084,7 @@ classDiagram
     StatementRenderer ..> StatementData : reads
 ```
 
-```mermaid
-sequenceDiagram
-    participant M as Main
-    participant C as StatementCalculator
-    participant S as Shipment
-    participant T as Tariff
-    participant R as StatementRenderer
-    M->>C: calculate(invoice)
-    loop each shipment
-        C->>S: charge()
-        S->>T: charge(weightKg, distanceKm)
-        T-->>S: amount
-        C->>S: loyaltyPoints()
-        S->>T: loyaltyPoints(distanceKm)
-    end
-    C-->>M: StatementData
-    M->>R: render(data)
-    R-->>M: text or HTML
-```
+At runtime `Main` calls `StatementCalculator.calculate(invoice)`, which asks each `Shipment` for `charge()` and `loyaltyPoints()` (each delegating to its `Tariff`) and returns `StatementData`; a `StatementRenderer` turns that into text or HTML.
 
 ### What changed, step by step
 
@@ -2290,7 +2119,7 @@ step5 polymorphism (final)     SAME output
 All steps preserve behaviour.
 ```
 
-**What we deliberately did NOT do.** Money is still a `double`. Switching to `BigDecimal` (or the `Money` type from `code/smells`) would change rounding in some cases — that is a *behaviour change*, so it belongs under the "adding function" hat, with its own tests and a product decision about rounding rules. Refactoring and behaviour changes are kept apart.
+**What we deliberately did NOT do.** Money is still a `double`: switching to `BigDecimal` (or `code/smells`' `Money`) would change some rounding — a *behaviour change* for the "adding function" hat, with its own tests and a product decision on rounding rules.
 
 ---
 
@@ -2298,7 +2127,7 @@ All steps preserve behaviour.
 
 ### What it is
 
-Design patterns (Chapters 8–11) are not only designed up front. Very often you **arrive at a pattern by refactoring** when the code asks for it. Joshua Kerievsky's book *Refactoring to Patterns* (2004) catalogues these moves; many are compositions of Fowler's small refactorings. The idea: do not force patterns in early (Speculative Generality); refactor *toward* a pattern when a smell appears, and sometimes *away* from one when it is no longer pulling its weight.
+Design patterns (Chapters 8–11) are not only designed up front: you often **arrive at a pattern by refactoring** when the code asks for it. Joshua Kerievsky's *Refactoring to Patterns* (2004) catalogues these moves, mostly compositions of Fowler's small refactorings. Don't force patterns in early (Speculative Generality); refactor *toward* one when a smell appears, and *away* from one that no longer pulls its weight.
 
 ### How it works
 
@@ -2321,11 +2150,11 @@ Design patterns (Chapters 8–11) are not only designed up front. Very often you
 | Subclass explosion for combinations of features | **Strategy / Decorator / Bridge** | Replace Subclass with Delegate |
 | A pattern that no longer earns its keep (one strategy, one decorator) | *Remove the pattern* | Inline Class, Collapse Hierarchy (Kerievsky: *Inline Singleton* and similar "away from" moves) |
 
-The runnable package `lld.ch07.towardpatterns` shows five of these with the **before** code and the **after** code side by side, and checks that both produce the same results. (The prices and loan amounts there are `double` only to keep the before/after comparison short; in production code use `BigDecimal` or a `Money` type.)
+The runnable package `lld.ch07.towardpatterns` shows five of these, **before** and **after** side by side, and checks both give the same results (prices and loan amounts are `double` only for brevity; use `BigDecimal` or `Money` in production).
 
 ### Replace Conditional Logic with Strategy
 
-**Before:** a `switch (tier)` that every new customer tier must edit. **After:** a `DiscountPolicy` functional interface (an interface with a single abstract method, so a lambda — a short inline function — can implement it), one policy per tier (lambdas here; classes if a policy grows), stored in an `EnumMap` (a map whose keys are enum constants). New tiers are *registered*, not coded into a switch.
+**Before:** a `switch (tier)` that every new tier must edit. **After:** a `DiscountPolicy` functional interface (one abstract method, so a lambda — a short inline function — can implement it), one policy per tier (classes if a policy grows) in an `EnumMap` (a map keyed by enum constants). New tiers are *registered*, not coded into a switch.
 
 ```java
 @FunctionalInterface
@@ -2338,7 +2167,7 @@ double price(Tier tier, double amount) {
 
 ### Replace State-Altering Conditionals with State
 
-**Before:** every method checks `status` strings and changes them — the rules of the lifecycle are scattered across methods. **After:** each state is an enum constant implementing `OrderState`; it overrides only the moves it allows. Default methods (interface methods with a built-in body) reject everything else. `Order` just delegates: `state = state.pay(this)`.
+**Before:** every method checks and changes `status` strings — the lifecycle rules are scattered. **After:** each state is an enum constant implementing `OrderState`, overriding only the moves it allows; default methods (interface methods with a body) reject the rest. `Order` just delegates: `state = state.pay(this)`.
 
 ```mermaid
 stateDiagram-v2
@@ -2392,7 +2221,7 @@ All pattern refactorings preserve behaviour.
 
 ### Small smell cures (package `lld.ch07.smells`)
 
-A separate runnable package shows the cures for several smells from 7.2 as real code: `Money` (Primitive Obsession), `DateRange` (Data Clumps), and `Order` with `shippingCity()` (Message Chains → Hide Delegate), `Line.total()` (Feature Envy → Move Function) and a read-only `lines()` view (Mutable Data → Encapsulate Collection).
+Cures from 7.2 as real code: `Money` (Primitive Obsession), `DateRange` (Data Clumps), and `Order` with `shippingCity()` (Message Chains → Hide Delegate), `Line.total()` (Feature Envy → Move Function) and a read-only `lines()` view (Mutable Data → Encapsulate Collection).
 
 **Output** (`java lld.ch07.smells.Main`):
 
@@ -2413,16 +2242,16 @@ outsider tried lines().clear() -> UnsupportedOperationException (collection is e
 
 | Benefit | Cost / risk |
 |---|---|
-| Code easier to read and change; features get faster over time (Design Stamina) | Takes time now; the pay-off is later and hard to measure |
+| Easier to read and change; features get faster (Design Stamina) | Takes time now; pay-off later and hard to measure |
 | Bugs become visible | Without tests, you can introduce bugs |
 | Design can evolve with requirements (less up-front guessing) | Renames and moves cause merge conflicts on long-lived branches |
-| Small steps are safe and can stop at any point | Small steps feel slow to beginners (they get fast with practice and IDE support) |
+| Small steps are safe and can stop at any point | Feel slow to beginners (fast with practice and IDE support) |
 | More small classes and methods, each easy to understand | More indirection — too much creates Middle Men and Lazy Elements |
-| Removes duplication | Premature abstraction (before the Rule of Three) can create the *wrong* abstraction, which is costlier than duplication |
+| Removes duplication | Premature abstraction (before the Rule of Three) risks the *wrong* abstraction, costlier than duplication |
 
 ### When not to use it
 
-(Summary of 7.1.4.) Do not refactor code you do not need to touch; do not refactor without a safety net (add tests first); do not refactor instead of a rewrite when the code does not work at all; do not break published interfaces without a migration path; do not mix refactoring with behaviour changes in the same step.
+See 7.1.4. In short: not code you never touch, not without a safety net, not instead of a rewrite when the code doesn't work at all, not a published interface without a migration path — and never mixed with behaviour changes in one step.
 
 ### Common mistakes
 
@@ -2430,10 +2259,9 @@ outsider tried lines().clear() -> UnsupportedOperationException (collection is e
 |---|---|---|
 | Calling any code change "refactoring" | Behaviour changes hide inside "refactoring" commits; reviewers relax | Keep refactoring commits separate from feature/bug-fix commits |
 | Big-bang refactoring (days with broken code) | High risk, merge pain, no way to stop halfway | Tiny steps, compile and test after each, commit often |
-| Refactoring without tests | Silent behaviour changes | Write characterisation tests first; use IDE-automated refactorings |
-| Debugging a failed refactoring step | Wastes time | Revert and redo in smaller steps |
+| Refactoring without tests, or debugging a failed step | Silent behaviour changes; wasted time | Characterisation tests first; revert and redo smaller (7.1.7) |
 | Tests coupled to private implementation | Every refactoring breaks tests | Test behaviour through public APIs |
-| Text search-and-replace for renames | Changes strings, comments, unrelated symbols | IDE Rename (symbol-aware) — and check reflection/config/serialisation |
+| Text search-and-replace for renames | Changes strings, comments, unrelated symbols | IDE Rename — and check reflection/config/serialisation (7.1.8) |
 | Abstracting on the first duplication | Wrong abstraction; many flags later | Rule of Three |
 | Changing rounding/ordering "while you're there" (e.g. `DoubleStream.sum()` vs loop, `toList()` vs mutable `ArrayList`) | Subtle behaviour changes | Know the exact semantics of the replacement API |
 | Adding patterns everywhere "for flexibility" | Speculative Generality | Refactor toward a pattern when a smell demands it |
@@ -2441,47 +2269,47 @@ outsider tried lines().clear() -> UnsupportedOperationException (collection is e
 
 ### Real-world examples
 
-- **IntelliJ IDEA, Eclipse, VS Code (Java extension)** — automated Rename, Extract Method, Inline, Change Signature, Move, Pull Up / Push Down: these are direct implementations of catalogue entries.
-- **OpenRewrite** — open-source engine for automated, large-scale source refactoring with "recipes"; used, for example, to migrate codebases between Spring Boot (a popular Java application framework) versions or from JUnit 4 to JUnit 5.
+- **IntelliJ IDEA, Eclipse, VS Code (Java extension)** — automated Rename, Extract Method, Inline, Change Signature, Move, Pull Up / Push Down implement catalogue entries directly.
+- **OpenRewrite** — open-source engine for large-scale automated refactoring with "recipes", e.g. migrating between Spring Boot (a popular Java framework) versions or from JUnit 4 to JUnit 5.
 - **Google** — Error Prone with Refaster templates, used for large automated changes across its monorepo (one giant repository holding most of the company's code).
-- **JDK history.** `java.util.Stack extends Vector` and `java.util.Properties extends Hashtable` are classic, often-cited cases of inheritance where delegation would have been better (Refused Bequest). For new code, the JDK docs recommend `ArrayDeque` (via the `Deque` interface) over `Stack`. `Date` → `java.time` (Java 8) shows Primitive Obsession/Mutable Data being replaced by immutable value types (`LocalDate`, `Instant`, `Duration`) — a new API alongside the old one rather than an in-place refactor, because the old API is published.
-- **Deprecation as migration mechanics.** The JDK and Spring mark old methods `@Deprecated` (Java 9 added `forRemoval`) and keep them delegating for several releases — exactly *Change Function Declaration* with migration mechanics.
+- **JDK history.** `java.util.Stack extends Vector` and `java.util.Properties extends Hashtable` are classic Refused Bequest cases; the JDK docs recommend `ArrayDeque` (via `Deque`) over `Stack` for new code. `Date` → `java.time` (Java 8) replaced Primitive Obsession/Mutable Data with immutable value types (`LocalDate`, `Instant`, `Duration`) — a new API alongside the old rather than an in-place refactor, because the old API is published.
+- **Deprecation as migration mechanics.** The JDK and Spring keep old methods `@Deprecated` (Java 9 added `forRemoval`) and delegating for several releases — *Change Function Declaration*'s migration mechanics.
 - **Java language features that support refactoring**: records (Encapsulate Record, value objects), `sealed` interfaces + switch pattern matching (safe type hierarchies), streams (Replace Loop with Pipeline), `Optional` (making absence explicit), `List.copyOf` / `Collections.unmodifiableList` (Encapsulate Collection).
-- **Strangler Fig in industry.** Many companies that split a monolith (an application built and deployed as one unit) into services (Fowler's own write-ups describe this pattern) route one feature at a time from the old system to the new, instead of a big-bang rewrite.
+- **Strangler Fig in industry.** Companies splitting a monolith (an application deployed as one unit) into services route one feature at a time to the new system (as Fowler's write-ups describe) instead of a big-bang rewrite.
 
 ### In the interview
 
 **30-second answer — "What is refactoring?"**
-"Refactoring is changing the internal structure of code to make it easier to understand and modify, without changing its observable behaviour. You do it in very small steps — each one compiles and passes the tests — so the system is never broken. You use code smells like Long Function, Duplicated Code or Repeated Switches to find where to refactor, and named refactorings like Extract Function, Move Function or Replace Conditional with Polymorphism to fix them. Tests are the safety net. The goal is economic: clean code lets you add features faster."
+"Changing code's internal structure to make it easier to understand and modify, without changing its observable behaviour — in very small steps that each compile and pass the tests, so the system is never broken. Smells like Long Function, Duplicated Code or Repeated Switches show where; named refactorings like Extract Function, Move Function or Replace Conditional with Polymorphism fix them; tests are the safety net. The goal is economic: clean code lets you add features faster."
 
 **Follow-ups (with answers)**
 
 - **Q: How do you refactor code that has no tests?**
-  A: Treat it as legacy code. First write characterisation tests that record current behaviour. If the code is hard to test, break dependencies at a seam — for example, pass an interface through the constructor instead of calling `new` inside. Until tests exist, use only IDE-automated, symbol-aware refactorings. Sprout Method/Class lets me add new, tested code without first cleaning everything.
+  A: As legacy code: characterisation tests first; if it's hard to test, break dependencies at a seam (pass an interface through the constructor instead of `new` inside); until tests exist, only IDE-automated, symbol-aware refactorings; Sprout Method/Class adds new, tested code without cleaning everything first.
 
 - **Q: Refactor or rewrite?**
-  A: Default to refactoring — small safe steps and the system keeps working. Consider a rewrite only when the code really does not work or the platform must change, and even then use a Strangler Fig approach to replace it piece by piece.
+  A: Default to refactoring — small safe steps, system always working. Rewrite only when the code really doesn't work or the platform must change, and then piece by piece (Strangler Fig).
 
 - **Q: Doesn't refactoring hurt performance?**
-  A: Rarely in a way that matters: small methods are inlined by the JIT, and most time is spent in a small part of the code. I refactor for clarity, then profile and optimise the real hot spots, which is easier in well-factored code.
+  A: Rarely: the JIT inlines small methods and most time is spent in a small part of the code. Refactor for clarity, then profile and optimise the real hot spots — easier in well-factored code.
 
 - **Q: What would you refactor in this code?** (In a machine-coding round.)
   A: Name smells and cures: "`processOrder` is a Long Function — I'd Extract Function for validation, pricing and persistence. The switch on `vehicleType` appears in three places — Repeated Switches — I'd Replace Conditional with Polymorphism, giving a Strategy per vehicle type. `double price` is Primitive Obsession — a `Money` value object. And `getParkingLot().getFloor(1).getSpot(3)` is a Message Chain — Hide Delegate."
 
 - **Q: When do you remove duplication?**
-  A: Rule of Three. After three occurrences the shape of what varies is clear, so the abstraction is likely right. Earlier abstraction risks the wrong abstraction.
+  A: Rule of Three — by the third occurrence what varies is clear; earlier abstraction risks the wrong one.
 
 - **Q: Difference between Divergent Change and Shotgun Surgery?**
-  A: Divergent Change: one class changes for many different reasons → split it. Shotgun Surgery: one reason to change touches many classes → gather the code into one place.
+  A: Divergent Change: one class, many reasons to change → split it. Shotgun Surgery: one reason, many classes → gather the code.
 
 - **Q: How do you get from a switch statement to the Strategy or State pattern?**
-  A: Extract each branch into a function, then Replace Conditional with Polymorphism: create an interface with one implementation per case and let the object hold the right implementation. If the choice is fixed by the client, it's Strategy; if the object moves between cases itself, it's State.
+  A: Extract each branch into a function, then Replace Conditional with Polymorphism: an interface with one implementation per case, held by the object. Fixed by the client → Strategy; the object moves between cases itself → State.
 
 - **Q: Is a data class always bad?**
-  A: No. Immutable records used as values, DTOs or the output of a Split Phase are fine. The smell is a *mutable* class with getters/setters whose behaviour lives in other classes.
+  A: No — immutable records as values, DTOs or Split Phase output are fine; the smell is a *mutable* getter/setter class whose behaviour lives elsewhere.
 
 - **Q: How do you rename a public API method used by other teams?**
-  A: Migration mechanics of Change Function Declaration: add the new method, make the old one delegate to it and mark it `@Deprecated`, migrate callers over time, then remove the old one. For REST APIs, versioning or expand/contract.
+  A: Change Function Declaration's migration mechanics: new method, old one delegating and `@Deprecated`, migrate callers, then remove it. For REST APIs, versioning or expand/contract.
 
 ### Self-check
 
@@ -2491,31 +2319,21 @@ outsider tried lines().clear() -> UnsupportedOperationException (collection is e
    **A:** Long Function; Extract Function for each block (and maybe Split Loop / Replace Temp with Query).
 3. **Q:** `book(hotel, from, to, 2, 1, true)` — which smells?
    **A:** Long Parameter List, Data Clumps (`from`, `to` and the two guest counts), a flag argument (`true`). Cures: Introduce Parameter Object (`Stay`, `Guests`), Remove Flag Argument (or replace the boolean with an explicit enum such as `MealPlan`).
-4. **Q:** What is the inverse of Hide Delegate, and when do you use it?
-   **A:** Remove Middle Man — when a class has become mostly forwarding methods.
-5. **Q:** Why did the worked example use `reduce(0.0, Double::sum)` instead of `DoubleStream.sum()`?
+4. **Q:** Why did the worked example use `reduce(0.0, Double::sum)` instead of `DoubleStream.sum()`?
    **A:** `DoubleStream.sum()` may use compensated summation and can differ from a plain loop in the last bit; `reduce` on a sequential stream adds left to right like the loop, so behaviour is preserved.
-6. **Q:** What is a characterisation test?
-   **A:** A test that records what existing code currently does (right or wrong), so a refactoring that changes behaviour is detected.
-7. **Q:** Which smell does `class Stack extends ArrayList` have, and what is the cure?
+5. **Q:** Which smell does `class Stack extends ArrayList` have, and what is the cure?
    **A:** Refused Bequest (it inherits list operations that break stack rules, violating Liskov). Replace Superclass with Delegate — hold a `Deque` instead.
-8. **Q:** Which refactoring turns a status-checking `if` chain into the State pattern?
-   **A:** Replace Type Code with Subclasses (via a state object) followed by Replace Conditional with Polymorphism (Kerievsky: Replace State-Altering Conditionals with State).
-9. **Q:** Name the five refactoring.guru smell groups.
-   **A:** Bloaters, Object-Orientation Abusers, Change Preventers, Dispensables, Couplers.
-10. **Q:** What is preparatory refactoring?
-    **A:** Refactoring just before a feature so that the feature becomes easy to add — "make the change easy, then make the easy change". Step 3 (Split Phase) of the worked example did this for HTML output.
-11. **Q:** When is a comment not a smell?
-    **A:** When it explains *why* (a decision, a trade-off, a reference, a warning), not *what* the code does.
-12. **Q:** What does Separate Query from Modifier enforce?
-    **A:** Command–Query Separation: functions that return values have no observable side effects.
-13. **Q:** A Java IDE rename of a field broke the JSON response. Was it a refactoring?
-    **A:** It was meant to be, but the JSON field name (observable behaviour) changed, so behaviour was not preserved. Check serialisation, reflection and config when renaming.
+6. **Q:** What is preparatory refactoring?
+   **A:** Refactoring just before a feature so that the feature becomes easy to add — "make the change easy, then make the easy change". Step 3 (Split Phase) of the worked example did this for HTML output.
+7. **Q:** When is a comment not a smell?
+   **A:** When it explains *why* (a decision, a trade-off, a reference, a warning), not *what* the code does.
+8. **Q:** A Java IDE rename of a field broke the JSON response. Was it a refactoring?
+   **A:** It was meant to be, but the JSON field name (observable behaviour) changed, so behaviour was not preserved. Check serialisation, reflection and config when renaming.
 
 ### TL;DR
 
-- **Refactoring = small, behaviour-preserving changes** to internal structure, done continuously, with tests after every step. Two hats: never refactor and change behaviour at the same time.
-- **When:** Rule of Three, preparatory ("make the change easy, then make the easy change"), comprehension, litter-pickup, during code review. Mostly opportunistic, rarely planned. **Not** for code you never touch, and not without a safety net.
+- **Refactoring = small, behaviour-preserving changes** to internal structure, continuously, tests after every step; never refactor and change behaviour at once (two hats).
+- **When:** Rule of Three, preparatory ("make the change easy, then make the easy change"), comprehension, litter-pickup, code review — mostly opportunistic. **Not** for code you never touch, nor without a safety net.
 - **Smells** tell you *where*: 24 in the 2nd edition — Mysterious Name, Duplicated Code, Long Function, Long Parameter List, Global Data, Mutable Data, Divergent Change, Shotgun Surgery, Feature Envy, Data Clumps, Primitive Obsession, Repeated Switches, Loops, Lazy Element, Speculative Generality, Temporary Field, Message Chains, Middle Man, Insider Trading, Large Class, Alternative Classes with Different Interfaces, Data Class, Refused Bequest, Comments. Groups: Bloaters, OO Abusers, Change Preventers, Dispensables, Couplers.
 - **Refactorings** tell you *how*: 61 named ones in seven families; the everyday core is Extract/Inline Function, Rename, Move Function, Extract Class, Split Phase, Replace Conditional with Polymorphism.
 - **Performance:** refactor first, then profile and optimise hot spots. **Rewrite** only rarely, and then with a Strangler Fig. **Legacy code** = code without tests → characterisation tests, seams, sprout/wrap.
@@ -2525,7 +2343,7 @@ outsider tried lines().clear() -> UnsupportedOperationException (collection is e
 
 ## 7.8 Full source code and output
 
-**How to compile and run** (Java 21, standard library only):
+The complete, compiling source for this chapter lives in `chapters/07-refactoring/code/` (the listings in 7.2–7.6 are the essential excerpts). **How to compile and run** (Java 21, standard library only):
 
 ```bash
 cd chapters/07-refactoring/code
@@ -2538,884 +2356,16 @@ java -cp /tmp/lld_07 lld.ch07.smells.Main           # small smell cures
 
 Packages: `lld.ch07.worked` (checker), `lld.ch07.worked.step0` … `step5` (each has its own `Main`; steps 0–4 print the text invoice only), `lld.ch07.towardpatterns`, `lld.ch07.smells`. All 9 `Main` classes compile and run.
 
-
-### Worked example — characterisation check
-
-```java
-// File: code/worked/Main.java
-package lld.ch07.worked;
-
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.function.Supplier;
-
-/**
- * Characterisation check - the safety net for the whole worked example.
- * Every step must print exactly what the messy STEP 0 printed. If one byte differs,
- * that step was not a refactoring (it changed behaviour) and we exit with an error.
- */
-public class Main {
-
-    public static void main(String[] args) {
-        Map<String, Supplier<String>> steps = new LinkedHashMap<>();
-        steps.put("step0 (messy original)", lld.ch07.worked.step0.Main::run);
-        steps.put("step1 extract + rename", lld.ch07.worked.step1.Main::run);
-        steps.put("step2 split loop + pipeline", lld.ch07.worked.step2.Main::run);
-        steps.put("step3 split phase", lld.ch07.worked.step3.Main::run);
-        steps.put("step4 primitive -> object", lld.ch07.worked.step4.Main::run);
-        steps.put("step5 polymorphism (final)", lld.ch07.worked.step5.Main::run);
-
-        String golden = lld.ch07.worked.step0.Main.run();
-        System.out.print("Golden output from step 0:\n" + golden);
-        System.out.println("---");
-        boolean allSame = true;
-        for (Map.Entry<String, Supplier<String>> e : steps.entrySet()) {
-            boolean same = golden.equals(e.getValue().get());
-            allSame &= same;
-            System.out.printf("%-30s %s%n", e.getKey(), same ? "SAME output" : "DIFFERENT output!");
-        }
-        if (!allSame) {
-            System.err.println("A step changed behaviour - that was not a refactoring.");
-            System.exit(1);
-        }
-        System.out.println("All steps preserve behaviour.");
-    }
-}
-```
-
-
-### Worked example — step 0 (messy original)
-
-```java
-// File: code/worked/step0/Main.java
-package lld.ch07.worked.step0;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-
-/** STEP 0 - the messy starting point. It works, but it smells. */
-public class Main {
-
-    // Mutable public data class (smells: Data Class, Mysterious Name)
-    static class Shp {
-        public String t;   // "STD", "EXP" or "FRG"
-        public double kg;
-        public int km;
-        Shp(String t, double kg, int km) { this.t = t; this.kg = kg; this.km = km; }
-    }
-
-    static class Inv {
-        public String cust;
-        public List<Shp> list = new ArrayList<>();
-    }
-
-    // One Long Function that calculates AND formats (smells: Long Function,
-    // Repeated Switches waiting to happen, magic numbers, temps everywhere)
-    static String print(Inv inv) {
-        double tot = 0;
-        int pts = 0;
-        int unused = 0;                                   // dead code
-        StringBuilder r = new StringBuilder("Invoice for " + inv.cust + "\n");
-        for (Shp s : inv.list) {
-            double amt = 0;
-            switch (s.t) {
-                case "STD":
-                    amt = 5 + s.kg * 1.2;
-                    if (s.km > 100) amt += (s.km - 100) * 0.05;
-                    break;
-                case "EXP":
-                    amt = 12 + s.kg * 2.0;
-                    if (s.km > 50) amt += (s.km - 50) * 0.10;
-                    break;
-                case "FRG":
-                    amt = 8 + s.kg * 1.5 + 3;
-                    if (s.kg > 10) amt = amt * 1.2;
-                    break;
-                default:
-                    throw new IllegalArgumentException("unknown type: " + s.t);
-            }
-            // loyalty points
-            pts += s.km / 100;
-            if ("EXP".equals(s.t)) pts += 2;
-            r.append("  ").append(s.t).append(" ").append(s.kg).append("kg ")
-             .append(s.km).append("km: ")
-             .append(String.format(Locale.ROOT, "%.2f", amt)).append("\n");
-            tot += amt;
-        }
-        r.append("Amount owed: ").append(String.format(Locale.ROOT, "%.2f", tot)).append("\n");
-        r.append("Points earned: ").append(pts).append("\n");
-        return r.toString();
-    }
-
-    /** Used by the characterisation check in lld.ch07.worked.Main. */
-    public static String run() {
-        Inv inv = new Inv();
-        inv.cust = "Asha Traders";
-        inv.list.add(new Shp("STD", 4.0, 250));
-        inv.list.add(new Shp("EXP", 2.5, 80));
-        inv.list.add(new Shp("FRG", 12.0, 40));
-        inv.list.add(new Shp("STD", 1.0, 90));
-        inv.list.add(new Shp("STD", 0.5, 100));   // boundary: exactly 100 km
-        inv.list.add(new Shp("FRG", 10.0, 150));  // boundary: exactly 10 kg
-        return print(inv);
-    }
-
-    public static void main(String[] args) {
-        System.out.print(run());
-    }
-}
-```
-
-
-### Worked example — step 1
-
-```java
-// File: code/worked/step1/Main.java
-package lld.ch07.worked.step1;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-
-/**
- * STEP 1 - Extract Function + Rename Variable + Remove Dead Code.
- * The loop body is split into amountFor() and pointsFor(); names now say what they mean.
- */
-public class Main {
-
-    static class Shipment {
-        public String type;          // Rename Field: t -> type
-        public double weightKg;      // kg -> weightKg
-        public int distanceKm;       // km -> distanceKm
-        Shipment(String type, double weightKg, int distanceKm) {
-            this.type = type; this.weightKg = weightKg; this.distanceKm = distanceKm;
-        }
-    }
-
-    static class Invoice {
-        public String customer;
-        public List<Shipment> shipments = new ArrayList<>();
-    }
-
-    static String statement(Invoice invoice) {
-        double totalAmount = 0;
-        int loyaltyPoints = 0;
-        StringBuilder result = new StringBuilder("Invoice for " + invoice.customer + "\n");
-        for (Shipment shipment : invoice.shipments) {
-            double thisAmount = amountFor(shipment);
-            loyaltyPoints += pointsFor(shipment);
-            result.append("  ").append(shipment.type).append(" ").append(shipment.weightKg).append("kg ")
-                  .append(shipment.distanceKm).append("km: ").append(money(thisAmount)).append("\n");
-            totalAmount += thisAmount;
-        }
-        result.append("Amount owed: ").append(money(totalAmount)).append("\n");
-        result.append("Points earned: ").append(loyaltyPoints).append("\n");
-        return result.toString();
-    }
-
-    /** Extracted from the loop body. The switch is unchanged - only moved. */
-    static double amountFor(Shipment shipment) {
-        double result;
-        switch (shipment.type) {
-            case "STD":
-                result = 5 + shipment.weightKg * 1.2;
-                if (shipment.distanceKm > 100) result += (shipment.distanceKm - 100) * 0.05;
-                break;
-            case "EXP":
-                result = 12 + shipment.weightKg * 2.0;
-                if (shipment.distanceKm > 50) result += (shipment.distanceKm - 50) * 0.10;
-                break;
-            case "FRG":
-                result = 8 + shipment.weightKg * 1.5 + 3;
-                if (shipment.weightKg > 10) result = result * 1.2;
-                break;
-            default:
-                throw new IllegalArgumentException("unknown type: " + shipment.type);
-        }
-        return result;
-    }
-
-    static int pointsFor(Shipment shipment) {
-        int result = shipment.distanceKm / 100;
-        if ("EXP".equals(shipment.type)) result += 2;
-        return result;
-    }
-
-    static String money(double amount) {
-        return String.format(Locale.ROOT, "%.2f", amount);
-    }
-
-    public static String run() {
-        Invoice invoice = new Invoice();
-        invoice.customer = "Asha Traders";
-        invoice.shipments.add(new Shipment("STD", 4.0, 250));
-        invoice.shipments.add(new Shipment("EXP", 2.5, 80));
-        invoice.shipments.add(new Shipment("FRG", 12.0, 40));
-        invoice.shipments.add(new Shipment("STD", 1.0, 90));
-        invoice.shipments.add(new Shipment("STD", 0.5, 100));
-        invoice.shipments.add(new Shipment("FRG", 10.0, 150));
-        return statement(invoice);
-    }
-
-    public static void main(String[] args) {
-        System.out.print(run());
-    }
-}
-```
-
-
-### Worked example — step 2
-
-```java
-// File: code/worked/step2/Main.java
-package lld.ch07.worked.step2;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-
-/**
- * STEP 2 - Inline Variable (thisAmount), Split Loop, Replace Temp with Query,
- * Replace Loop with Pipeline, Slide Statements.
- * The printing loop now only prints; totals come from their own small queries.
- */
-public class Main {
-
-    static class Shipment {
-        public String type;
-        public double weightKg;
-        public int distanceKm;
-        Shipment(String type, double weightKg, int distanceKm) {
-            this.type = type; this.weightKg = weightKg; this.distanceKm = distanceKm;
-        }
-    }
-
-    static class Invoice {
-        public String customer;
-        public List<Shipment> shipments = new ArrayList<>();
-    }
-
-    static String statement(Invoice invoice) {
-        StringBuilder result = new StringBuilder("Invoice for " + invoice.customer + "\n");
-        for (Shipment shipment : invoice.shipments) {
-            result.append("  ").append(shipment.type).append(" ").append(shipment.weightKg).append("kg ")
-                  .append(shipment.distanceKm).append("km: ").append(money(amountFor(shipment))).append("\n");
-        }
-        result.append("Amount owed: ").append(money(totalAmount(invoice))).append("\n");
-        result.append("Points earned: ").append(totalPoints(invoice)).append("\n");
-        return result.toString();
-    }
-
-    // reduce(0.0, Double::sum) is a plain left-to-right sum, exactly like the old loop.
-    // DoubleStream.sum() may use compensated summation and could differ in the last bit,
-    // which would NOT be a pure refactoring.
-    static double totalAmount(Invoice invoice) {
-        return invoice.shipments.stream().map(Main::amountFor).reduce(0.0, Double::sum);
-    }
-
-    static int totalPoints(Invoice invoice) {
-        return invoice.shipments.stream().mapToInt(Main::pointsFor).sum();
-    }
-
-    static double amountFor(Shipment shipment) {
-        double result;
-        switch (shipment.type) {
-            case "STD":
-                result = 5 + shipment.weightKg * 1.2;
-                if (shipment.distanceKm > 100) result += (shipment.distanceKm - 100) * 0.05;
-                break;
-            case "EXP":
-                result = 12 + shipment.weightKg * 2.0;
-                if (shipment.distanceKm > 50) result += (shipment.distanceKm - 50) * 0.10;
-                break;
-            case "FRG":
-                result = 8 + shipment.weightKg * 1.5 + 3;
-                if (shipment.weightKg > 10) result = result * 1.2;
-                break;
-            default:
-                throw new IllegalArgumentException("unknown type: " + shipment.type);
-        }
-        return result;
-    }
-
-    static int pointsFor(Shipment shipment) {
-        int result = shipment.distanceKm / 100;
-        if ("EXP".equals(shipment.type)) result += 2;
-        return result;
-    }
-
-    static String money(double amount) {
-        return String.format(Locale.ROOT, "%.2f", amount);
-    }
-
-    public static String run() {
-        Invoice invoice = new Invoice();
-        invoice.customer = "Asha Traders";
-        invoice.shipments.add(new Shipment("STD", 4.0, 250));
-        invoice.shipments.add(new Shipment("EXP", 2.5, 80));
-        invoice.shipments.add(new Shipment("FRG", 12.0, 40));
-        invoice.shipments.add(new Shipment("STD", 1.0, 90));
-        invoice.shipments.add(new Shipment("STD", 0.5, 100));
-        invoice.shipments.add(new Shipment("FRG", 10.0, 150));
-        return statement(invoice);
-    }
-
-    public static void main(String[] args) {
-        System.out.print(run());
-    }
-}
-```
-
-
-### Worked example — step 3
-
-```java
-// File: code/worked/step3/Shipment.java
-package lld.ch07.worked.step3;
-
-/** Encapsulate Record: the public mutable class became an immutable record. */
-public record Shipment(String type, double weightKg, int distanceKm) { }
-```
-
-```java
-// File: code/worked/step3/Invoice.java
-package lld.ch07.worked.step3;
-
-import java.util.List;
-
-/** Encapsulate Collection: callers get an unmodifiable copy, never the live list. */
-public record Invoice(String customer, List<Shipment> shipments) {
-    public Invoice {
-        shipments = List.copyOf(shipments);
-    }
-}
-```
-
-```java
-// File: code/worked/step3/StatementData.java
-package lld.ch07.worked.step3;
-
-import java.util.List;
-
-/** The intermediate data structure produced by phase 1 and consumed by phase 2 (Split Phase). */
-public record StatementData(String customer, List<Line> lines, double totalAmount, int totalPoints) {
-    public record Line(String type, double weightKg, int distanceKm, double amount) { }
-}
-```
-
-```java
-// File: code/worked/step3/StatementCalculator.java
-package lld.ch07.worked.step3;
-
-import java.util.List;
-
-/** Phase 1: pure calculation. Combine Functions into Transform - all derived values in one place. */
-public final class StatementCalculator {
-
-    public StatementData calculate(Invoice invoice) {
-        List<StatementData.Line> lines = invoice.shipments().stream()
-                .map(s -> new StatementData.Line(s.type(), s.weightKg(), s.distanceKm(), amountFor(s)))
-                .toList();
-        double total = lines.stream().map(StatementData.Line::amount).reduce(0.0, Double::sum);
-        int points = invoice.shipments().stream().mapToInt(this::pointsFor).sum();
-        return new StatementData(invoice.customer(), lines, total, points);
-    }
-
-    double amountFor(Shipment shipment) {
-        double result;
-        switch (shipment.type()) {
-            case "STD":
-                result = 5 + shipment.weightKg() * 1.2;
-                if (shipment.distanceKm() > 100) result += (shipment.distanceKm() - 100) * 0.05;
-                break;
-            case "EXP":
-                result = 12 + shipment.weightKg() * 2.0;
-                if (shipment.distanceKm() > 50) result += (shipment.distanceKm() - 50) * 0.10;
-                break;
-            case "FRG":
-                result = 8 + shipment.weightKg() * 1.5 + 3;
-                if (shipment.weightKg() > 10) result = result * 1.2;
-                break;
-            default:
-                throw new IllegalArgumentException("unknown type: " + shipment.type());
-        }
-        return result;
-    }
-
-    int pointsFor(Shipment shipment) {
-        int result = shipment.distanceKm() / 100;
-        if ("EXP".equals(shipment.type())) result += 2;
-        return result;
-    }
-}
-```
-
-```java
-// File: code/worked/step3/TextRenderer.java
-package lld.ch07.worked.step3;
-
-import java.util.Locale;
-
-/** Phase 2: pure formatting. Knows nothing about tariffs. */
-public final class TextRenderer {
-
-    public String render(StatementData data) {
-        StringBuilder result = new StringBuilder("Invoice for " + data.customer() + "\n");
-        for (StatementData.Line line : data.lines()) {
-            result.append("  ").append(line.type()).append(" ").append(line.weightKg()).append("kg ")
-                  .append(line.distanceKm()).append("km: ").append(money(line.amount())).append("\n");
-        }
-        result.append("Amount owed: ").append(money(data.totalAmount())).append("\n");
-        result.append("Points earned: ").append(data.totalPoints()).append("\n");
-        return result.toString();
-    }
-
-    static String money(double amount) {
-        return String.format(Locale.ROOT, "%.2f", amount);
-    }
-}
-```
-
-```java
-// File: code/worked/step3/Main.java
-package lld.ch07.worked.step3;
-
-import java.util.List;
-
-/** STEP 3 - Split Phase: calculate (StatementCalculator) then render (TextRenderer). */
-public class Main {
-
-    public static String run() {
-        Invoice invoice = new Invoice("Asha Traders", List.of(
-                new Shipment("STD", 4.0, 250),
-                new Shipment("EXP", 2.5, 80),
-                new Shipment("FRG", 12.0, 40),
-                new Shipment("STD", 1.0, 90),
-                new Shipment("STD", 0.5, 100),
-                new Shipment("FRG", 10.0, 150)));
-        return new TextRenderer().render(new StatementCalculator().calculate(invoice));
-    }
-
-    public static void main(String[] args) {
-        System.out.print(run());
-    }
-}
-```
-
-
-### Worked example — step 4
-
-```java
-// File: code/worked/step4/ServiceType.java
-package lld.ch07.worked.step4;
-
-/** Replace Primitive with Object (type code String -> enum). Invalid codes fail at the boundary. */
-public enum ServiceType {
-    STANDARD("STD"), EXPRESS("EXP"), FRAGILE("FRG");
-
-    private final String code;
-
-    ServiceType(String code) { this.code = code; }
-
-    public String code() { return code; }
-
-    public static ServiceType fromCode(String code) {
-        for (ServiceType t : values()) {
-            if (t.code.equals(code)) return t;
-        }
-        throw new IllegalArgumentException("unknown type: " + code);
-    }
-}
-```
-
-```java
-// File: code/worked/step4/Shipment.java
-package lld.ch07.worked.step4;
-
-import java.util.Objects;
-
-public record Shipment(ServiceType type, double weightKg, int distanceKm) {
-    public Shipment {
-        Objects.requireNonNull(type, "type");
-    }
-}
-```
-
-```java
-// File: code/worked/step4/Invoice.java
-package lld.ch07.worked.step4;
-
-import java.util.List;
-
-public record Invoice(String customer, List<Shipment> shipments) {
-    public Invoice {
-        shipments = List.copyOf(shipments);
-    }
-}
-```
-
-```java
-// File: code/worked/step4/StatementData.java
-package lld.ch07.worked.step4;
-
-import java.util.List;
-
-public record StatementData(String customer, List<Line> lines, double totalAmount, int totalPoints) {
-    public record Line(ServiceType type, double weightKg, int distanceKm, double amount) { }
-}
-```
-
-```java
-// File: code/worked/step4/StatementCalculator.java
-package lld.ch07.worked.step4;
-
-import java.util.List;
-
-/** Replace Magic Literal: every tariff number now has a name. The switch is exhaustive over the enum. */
-public final class StatementCalculator {
-
-    static final double STD_BASE = 5, STD_PER_KG = 1.2, STD_FREE_KM = 100, STD_PER_EXTRA_KM = 0.05;
-    static final double EXP_BASE = 12, EXP_PER_KG = 2.0, EXP_FREE_KM = 50, EXP_PER_EXTRA_KM = 0.10;
-    static final double FRG_BASE = 8, FRG_PER_KG = 1.5, FRG_HANDLING = 3, FRG_HEAVY_KG = 10, FRG_HEAVY_FACTOR = 1.2;
-    static final int KM_PER_POINT = 100, EXPRESS_BONUS_POINTS = 2;
-
-    public StatementData calculate(Invoice invoice) {
-        List<StatementData.Line> lines = invoice.shipments().stream()
-                .map(s -> new StatementData.Line(s.type(), s.weightKg(), s.distanceKm(), amountFor(s)))
-                .toList();
-        double total = lines.stream().map(StatementData.Line::amount).reduce(0.0, Double::sum);
-        int points = invoice.shipments().stream().mapToInt(this::pointsFor).sum();
-        return new StatementData(invoice.customer(), lines, total, points);
-    }
-
-    double amountFor(Shipment s) {
-        return switch (s.type()) {
-            case STANDARD -> STD_BASE + s.weightKg() * STD_PER_KG
-                    + (s.distanceKm() > STD_FREE_KM ? (s.distanceKm() - STD_FREE_KM) * STD_PER_EXTRA_KM : 0);
-            case EXPRESS -> EXP_BASE + s.weightKg() * EXP_PER_KG
-                    + (s.distanceKm() > EXP_FREE_KM ? (s.distanceKm() - EXP_FREE_KM) * EXP_PER_EXTRA_KM : 0);
-            case FRAGILE -> {
-                double base = FRG_BASE + s.weightKg() * FRG_PER_KG + FRG_HANDLING;
-                yield s.weightKg() > FRG_HEAVY_KG ? base * FRG_HEAVY_FACTOR : base;
-            }
-        };
-    }
-
-    int pointsFor(Shipment s) {
-        int result = s.distanceKm() / KM_PER_POINT;
-        if (s.type() == ServiceType.EXPRESS) result += EXPRESS_BONUS_POINTS;
-        return result;
-    }
-}
-```
-
-```java
-// File: code/worked/step4/TextRenderer.java
-package lld.ch07.worked.step4;
-
-import java.util.Locale;
-
-public final class TextRenderer {
-
-    public String render(StatementData data) {
-        StringBuilder result = new StringBuilder("Invoice for " + data.customer() + "\n");
-        for (StatementData.Line line : data.lines()) {
-            result.append("  ").append(line.type().code()).append(" ").append(line.weightKg()).append("kg ")
-                  .append(line.distanceKm()).append("km: ").append(money(line.amount())).append("\n");
-        }
-        result.append("Amount owed: ").append(money(data.totalAmount())).append("\n");
-        result.append("Points earned: ").append(data.totalPoints()).append("\n");
-        return result.toString();
-    }
-
-    static String money(double amount) {
-        return String.format(Locale.ROOT, "%.2f", amount);
-    }
-}
-```
-
-```java
-// File: code/worked/step4/Main.java
-package lld.ch07.worked.step4;
-
-import java.util.List;
-
-/** STEP 4 - Replace Primitive with Object (ServiceType enum) + Replace Magic Literal. */
-public class Main {
-
-    public static String run() {
-        Invoice invoice = new Invoice("Asha Traders", List.of(
-                new Shipment(ServiceType.fromCode("STD"), 4.0, 250),
-                new Shipment(ServiceType.fromCode("EXP"), 2.5, 80),
-                new Shipment(ServiceType.fromCode("FRG"), 12.0, 40),
-                new Shipment(ServiceType.fromCode("STD"), 1.0, 90),
-                new Shipment(ServiceType.fromCode("STD"), 0.5, 100),
-                new Shipment(ServiceType.fromCode("FRG"), 10.0, 150)));
-        return new TextRenderer().render(new StatementCalculator().calculate(invoice));
-    }
-
-    public static void main(String[] args) {
-        System.out.print(run());
-    }
-}
-```
-
-
-### Worked example — step 5 (final)
-
-```java
-// File: code/worked/step5/Tariff.java
-package lld.ch07.worked.step5;
-
-/**
- * Replace Conditional with Polymorphism: each branch of the old switch became a class.
- * A sealed interface lists every permitted implementation, so the compiler knows the full set.
- */
-public sealed interface Tariff permits StandardTariff, ExpressTariff, FragileTariff {
-
-    double charge(double weightKg, int distanceKm);
-
-    /** Default behaviour shared by most tariffs; ExpressTariff overrides it. */
-    default int loyaltyPoints(int distanceKm) {
-        return distanceKm / 100;
-    }
-}
-```
-
-```java
-// File: code/worked/step5/StandardTariff.java
-package lld.ch07.worked.step5;
-
-public record StandardTariff() implements Tariff {
-    private static final double BASE = 5, PER_KG = 1.2, FREE_KM = 100, PER_EXTRA_KM = 0.05;
-
-    @Override
-    public double charge(double weightKg, int distanceKm) {
-        return BASE + weightKg * PER_KG + (distanceKm > FREE_KM ? (distanceKm - FREE_KM) * PER_EXTRA_KM : 0);
-    }
-}
-```
-
-```java
-// File: code/worked/step5/ExpressTariff.java
-package lld.ch07.worked.step5;
-
-public record ExpressTariff() implements Tariff {
-    private static final double BASE = 12, PER_KG = 2.0, FREE_KM = 50, PER_EXTRA_KM = 0.10;
-    private static final int BONUS_POINTS = 2;
-
-    @Override
-    public double charge(double weightKg, int distanceKm) {
-        return BASE + weightKg * PER_KG + (distanceKm > FREE_KM ? (distanceKm - FREE_KM) * PER_EXTRA_KM : 0);
-    }
-
-    @Override
-    public int loyaltyPoints(int distanceKm) {
-        return Tariff.super.loyaltyPoints(distanceKm) + BONUS_POINTS;
-    }
-}
-```
-
-```java
-// File: code/worked/step5/FragileTariff.java
-package lld.ch07.worked.step5;
-
-public record FragileTariff() implements Tariff {
-    private static final double BASE = 8, PER_KG = 1.5, HANDLING = 3, HEAVY_KG = 10, HEAVY_FACTOR = 1.2;
-
-    @Override
-    public double charge(double weightKg, int distanceKm) {
-        double base = BASE + weightKg * PER_KG + HANDLING;
-        return weightKg > HEAVY_KG ? base * HEAVY_FACTOR : base;
-    }
-}
-```
-
-```java
-// File: code/worked/step5/ServiceType.java
-package lld.ch07.worked.step5;
-
-/** The enum now just names a service and points at its Tariff (Strategy). */
-public enum ServiceType {
-    STANDARD("STD", new StandardTariff()),
-    EXPRESS("EXP", new ExpressTariff()),
-    FRAGILE("FRG", new FragileTariff());
-
-    private final String code;
-    private final Tariff tariff;
-
-    ServiceType(String code, Tariff tariff) { this.code = code; this.tariff = tariff; }
-
-    public String code() { return code; }
-    public Tariff tariff() { return tariff; }
-
-    public static ServiceType fromCode(String code) {
-        for (ServiceType t : values()) {
-            if (t.code.equals(code)) return t;
-        }
-        throw new IllegalArgumentException("unknown type: " + code);
-    }
-}
-```
-
-```java
-// File: code/worked/step5/Shipment.java
-package lld.ch07.worked.step5;
-
-import java.util.Objects;
-
-/** Move Function: the shipment now answers its own charge and points (cures Feature Envy). */
-public record Shipment(ServiceType type, double weightKg, int distanceKm) {
-    public Shipment {
-        Objects.requireNonNull(type, "type");
-    }
-
-    public double charge() { return type.tariff().charge(weightKg, distanceKm); }
-
-    public int loyaltyPoints() { return type.tariff().loyaltyPoints(distanceKm); }
-}
-```
-
-```java
-// File: code/worked/step5/Invoice.java
-package lld.ch07.worked.step5;
-
-import java.util.List;
-
-public record Invoice(String customer, List<Shipment> shipments) {
-    public Invoice {
-        shipments = List.copyOf(shipments);
-    }
-}
-```
-
-```java
-// File: code/worked/step5/StatementData.java
-package lld.ch07.worked.step5;
-
-import java.util.List;
-
-public record StatementData(String customer, List<Line> lines, double totalAmount, int totalPoints) {
-    public record Line(ServiceType type, double weightKg, int distanceKm, double amount) { }
-}
-```
-
-```java
-// File: code/worked/step5/StatementCalculator.java
-package lld.ch07.worked.step5;
-
-import java.util.List;
-
-/** Phase 1. No switch left: adding a tariff never touches this class (Open/Closed). */
-public final class StatementCalculator {
-
-    public StatementData calculate(Invoice invoice) {
-        List<StatementData.Line> lines = invoice.shipments().stream()
-                .map(s -> new StatementData.Line(s.type(), s.weightKg(), s.distanceKm(), s.charge()))
-                .toList();
-        double total = lines.stream().map(StatementData.Line::amount).reduce(0.0, Double::sum);
-        int points = invoice.shipments().stream().mapToInt(Shipment::loyaltyPoints).sum();
-        return new StatementData(invoice.customer(), lines, total, points);
-    }
-}
-```
-
-```java
-// File: code/worked/step5/StatementRenderer.java
-package lld.ch07.worked.step5;
-
-import java.util.Locale;
-
-/** Phase 2 abstraction. Extracted once a second renderer (HTML) was needed. */
-public interface StatementRenderer {
-
-    String render(StatementData data);
-
-    static String money(double amount) {
-        return String.format(Locale.ROOT, "%.2f", amount);
-    }
-}
-```
-
-```java
-// File: code/worked/step5/TextRenderer.java
-package lld.ch07.worked.step5;
-
-import static lld.ch07.worked.step5.StatementRenderer.money;
-
-public final class TextRenderer implements StatementRenderer {
-
-    @Override
-    public String render(StatementData data) {
-        StringBuilder result = new StringBuilder("Invoice for " + data.customer() + "\n");
-        for (StatementData.Line line : data.lines()) {
-            result.append("  ").append(line.type().code()).append(" ").append(line.weightKg()).append("kg ")
-                  .append(line.distanceKm()).append("km: ").append(money(line.amount())).append("\n");
-        }
-        result.append("Amount owed: ").append(money(data.totalAmount())).append("\n");
-        result.append("Points earned: ").append(data.totalPoints()).append("\n");
-        return result.toString();
-    }
-}
-```
-
-```java
-// File: code/worked/step5/HtmlRenderer.java
-package lld.ch07.worked.step5;
-
-import static lld.ch07.worked.step5.StatementRenderer.money;
-
-/** The NEW feature. Thanks to Split Phase it reuses the calculator untouched. */
-public final class HtmlRenderer implements StatementRenderer {
-
-    @Override
-    public String render(StatementData data) {
-        StringBuilder result = new StringBuilder("<h1>Invoice for " + data.customer() + "</h1>\n<table>\n");
-        for (StatementData.Line line : data.lines()) {
-            result.append("  <tr><td>").append(line.type().code()).append("</td><td>")
-                  .append(line.weightKg()).append("kg</td><td>").append(line.distanceKm())
-                  .append("km</td><td>").append(money(line.amount())).append("</td></tr>\n");
-        }
-        result.append("</table>\n<p>Amount owed: <b>").append(money(data.totalAmount())).append("</b></p>\n");
-        result.append("<p>Points earned: <b>").append(data.totalPoints()).append("</b></p>\n");
-        return result.toString();
-    }
-}
-```
-
-```java
-// File: code/worked/step5/Main.java
-package lld.ch07.worked.step5;
-
-import java.util.List;
-
-/** STEP 5 (final) - Replace Conditional with Polymorphism + Move Function, then add the HTML feature. */
-public class Main {
-
-    static Invoice sampleInvoice() {
-        return new Invoice("Asha Traders", List.of(
-                new Shipment(ServiceType.fromCode("STD"), 4.0, 250),
-                new Shipment(ServiceType.fromCode("EXP"), 2.5, 80),
-                new Shipment(ServiceType.fromCode("FRG"), 12.0, 40),
-                new Shipment(ServiceType.fromCode("STD"), 1.0, 90),
-                new Shipment(ServiceType.fromCode("STD"), 0.5, 100),
-                new Shipment(ServiceType.fromCode("FRG"), 10.0, 150)));
-    }
-
-    public static String run() {
-        return new TextRenderer().render(new StatementCalculator().calculate(sampleInvoice()));
-    }
-
-    public static void main(String[] args) {
-        System.out.print(run());
-        System.out.println("--- new feature: HTML statement ---");
-        System.out.print(new HtmlRenderer().render(new StatementCalculator().calculate(sampleInvoice())));
-    }
-}
-```
-
-Output (`java -cp /tmp/lld_07 lld.ch07.worked.step5.Main`):
+| Folder | Files | What they show |
+|---|---|---|
+| `worked/` | `Main.java` | The characterisation check: records step 0's output as the "golden" text, runs every step, prints `SAME output` or `DIFFERENT output!` per step, and exits with an error if any step changed behaviour |
+| `worked/step0`–`step2` | `Main.java` | The messy original (`Shp`, `Inv`, one `print` with a switch), then Extract Function/Rename (step 1) and Split Loop/pipelines (step 2) |
+| `worked/step3`–`step4` | `Shipment`, `Invoice`, `StatementData`, `StatementCalculator`, `TextRenderer` (+ `ServiceType` in step 4), `Main` | Split Phase into calculate → render; then the `ServiceType` enum and named tariff constants |
+| `worked/step5` | adds `Tariff`, `StandardTariff`, `ExpressTariff`, `FragileTariff`, `StatementRenderer`, `HtmlRenderer` | Polymorphic tariffs (no conditionals left in the calculator) and the new HTML feature |
+| `towardpatterns/` | `StrategyRefactoring`, `StateRefactoring`, `SpecialCaseRefactoring`, `TemplateMethodRefactoring`, `FactoryRefactoring`, `Main` | Each has the *before* and *after* code and a `demo()` that checks both give the same result |
+| `smells/` | `Money`, `DateRange`, `Order`, `Main` | Primitive Obsession, Data Clumps, Hide Delegate / Move Function / Encapsulate Collection cures |
+
+Output of `lld.ch07.worked.step5.Main` (steps 0–4 each print the same text invoice as its first nine lines; the checker's output is in 7.5):
 
 ```text
 Invoice for Asha Traders
@@ -3441,484 +2391,7 @@ Points earned: 6
 <p>Points earned: <b>6</b></p>
 ```
 
-Output of `lld.ch07.worked.Main` is shown in 7.5. Steps 0–4 each print the same text invoice as the first nine lines above.
-
-### Refactoring toward patterns
-
-```java
-// File: code/towardpatterns/StrategyRefactoring.java
-package lld.ch07.towardpatterns;
-
-import java.util.EnumMap;
-import java.util.Map;
-
-/** Replace Conditional Logic with Strategy. */
-public final class StrategyRefactoring {
-
-    // ---------- BEFORE: a switch that every new tier must edit ----------
-    static double legacyPrice(String tier, double amount) {
-        switch (tier) {
-            case "GOLD":   return amount * 0.80;
-            case "SILVER": return amount * 0.90;
-            case "NEW":    return amount > 100 ? amount - 10 : amount;
-            default:       return amount;
-        }
-    }
-
-    // ---------- AFTER: one small class (here a lambda) per rule ----------
-    @FunctionalInterface
-    interface DiscountPolicy {
-        double apply(double amount);
-    }
-
-    enum Tier { GOLD, SILVER, NEW, REGULAR }
-
-    static final class PriceCalculator {
-        private final Map<Tier, DiscountPolicy> policies = new EnumMap<>(Tier.class);
-        private final DiscountPolicy fallback = amount -> amount;
-
-        PriceCalculator() {
-            policies.put(Tier.GOLD, amount -> amount * 0.80);
-            policies.put(Tier.SILVER, amount -> amount * 0.90);
-            policies.put(Tier.NEW, amount -> amount > 100 ? amount - 10 : amount);
-        }
-
-        /** New tiers are registered, not coded into a switch (Open/Closed). */
-        void register(Tier tier, DiscountPolicy policy) { policies.put(tier, policy); }
-
-        double price(Tier tier, double amount) {
-            return policies.getOrDefault(tier, fallback).apply(amount);
-        }
-    }
-
-    static boolean demo() {
-        PriceCalculator calc = new PriceCalculator();
-        boolean same = true;
-        for (Tier t : Tier.values()) {
-            for (double amount : new double[] {50, 100, 250}) {
-                double before = legacyPrice(t.name(), amount);
-                double after = calc.price(t, amount);
-                same &= before == after;
-            }
-        }
-        System.out.println("Strategy:        GOLD 250 -> " + calc.price(Tier.GOLD, 250)
-                + ", NEW 250 -> " + calc.price(Tier.NEW, 250) + " | same as switch: " + same);
-        return same;
-    }
-}
-```
-
-```java
-// File: code/towardpatterns/StateRefactoring.java
-package lld.ch07.towardpatterns;
-
-/** Replace State-Altering Conditionals with State. */
-public final class StateRefactoring {
-
-    // ---------- BEFORE: every method re-checks a status string ----------
-    static final class LegacyOrder {
-        String status = "NEW";
-
-        String pay() {
-            if (status.equals("NEW")) { status = "PAID"; return "paid"; }
-            return "cannot pay when " + status;
-        }
-        String ship() {
-            if (status.equals("PAID")) { status = "SHIPPED"; return "shipped"; }
-            return "cannot ship when " + status;
-        }
-        String cancel() {
-            if (status.equals("NEW") || status.equals("PAID")) { status = "CANCELLED"; return "cancelled"; }
-            return "cannot cancel when " + status;
-        }
-    }
-
-    // ---------- AFTER: each state is an object that knows its own legal moves ----------
-    interface OrderState {
-        String name();
-        default OrderState pay(Order o)    { return o.reject("pay", this); }
-        default OrderState ship(Order o)   { return o.reject("ship", this); }
-        default OrderState cancel(Order o) { return o.reject("cancel", this); }
-    }
-
-    enum States implements OrderState {
-        NEW {
-            @Override public OrderState pay(Order o)    { o.log("paid"); return PAID; }
-            @Override public OrderState cancel(Order o) { o.log("cancelled"); return CANCELLED; }
-        },
-        PAID {
-            @Override public OrderState ship(Order o)   { o.log("shipped"); return SHIPPED; }
-            @Override public OrderState cancel(Order o) { o.log("cancelled"); return CANCELLED; }
-        },
-        SHIPPED, CANCELLED
-    }
-
-    static final class Order {
-        private OrderState state = States.NEW;
-        private String lastMessage = "";
-
-        String pay()    { state = state.pay(this);    return lastMessage; }
-        String ship()   { state = state.ship(this);   return lastMessage; }
-        String cancel() { state = state.cancel(this); return lastMessage; }
-
-        void log(String msg) { lastMessage = msg; }
-
-        OrderState reject(String action, OrderState current) {
-            lastMessage = "cannot " + action + " when " + current.name();
-            return current;                       // stay in the same state
-        }
-    }
-
-    static boolean demo() {
-        LegacyOrder before = new LegacyOrder();
-        Order after = new Order();
-        String[] script = {"ship", "pay", "pay", "ship", "cancel"};
-        boolean same = true;
-        StringBuilder trace = new StringBuilder();
-        for (String step : script) {
-            String b = switch (step) { case "pay" -> before.pay(); case "ship" -> before.ship(); default -> before.cancel(); };
-            String a = switch (step) { case "pay" -> after.pay();  case "ship" -> after.ship();  default -> after.cancel(); };
-            same &= a.equals(b);
-            trace.append(a).append("; ");
-        }
-        System.out.println("State:           " + trace + "| same as if-chains: " + same);
-        return same;
-    }
-}
-```
-
-```java
-// File: code/towardpatterns/SpecialCaseRefactoring.java
-package lld.ch07.towardpatterns;
-
-import java.util.Map;
-
-/** Introduce Special Case (Null Object): stop repeating "if (customer == null)" at every call site. */
-public final class SpecialCaseRefactoring {
-
-    // ---------- BEFORE ----------
-    record LegacyCustomer(String name, String plan) { }
-
-    static final Map<String, LegacyCustomer> LEGACY_DB = Map.of("c1", new LegacyCustomer("Ravi", "premium"));
-
-    static String legacyGreeting(String id) {
-        LegacyCustomer c = LEGACY_DB.get(id);
-        String name = (c == null) ? "occupant" : c.name();       // null check #1
-        String plan = (c == null) ? "basic" : c.plan();          // null check #2 ... and so on in every client
-        return "Hello " + name + " on " + plan;
-    }
-
-    // ---------- AFTER ----------
-    sealed interface Customer permits KnownCustomer, UnknownCustomer {
-        String name();
-        String plan();
-    }
-    record KnownCustomer(String name, String plan) implements Customer { }
-    /** The special case: one place holds the default behaviour. */
-    record UnknownCustomer() implements Customer {
-        @Override public String name() { return "occupant"; }
-        @Override public String plan() { return "basic"; }
-    }
-
-    static final Map<String, Customer> DB = Map.of("c1", new KnownCustomer("Ravi", "premium"));
-
-    static Customer find(String id) {
-        return DB.getOrDefault(id, new UnknownCustomer());
-    }
-
-    static String greeting(String id) {
-        Customer c = find(id);                                    // no null checks at all
-        return "Hello " + c.name() + " on " + c.plan();
-    }
-
-    static boolean demo() {
-        boolean same = legacyGreeting("c1").equals(greeting("c1")) && legacyGreeting("zz").equals(greeting("zz"));
-        System.out.println("Special Case:    " + greeting("c1") + " / " + greeting("zz") + " | same: " + same);
-        return same;
-    }
-}
-```
-
-```java
-// File: code/towardpatterns/TemplateMethodRefactoring.java
-package lld.ch07.towardpatterns;
-
-import java.util.List;
-
-/** Form Template Method: two siblings with the same algorithm skeleton but different details. */
-public final class TemplateMethodRefactoring {
-
-    // ---------- BEFORE: duplicated skeleton ----------
-    static String legacyCsv(List<String> rows) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("name\n");                                   // header
-        for (String r : rows) sb.append(r).append("\n");       // body
-        sb.append("# ").append(rows.size()).append(" rows");   // footer
-        return sb.toString();
-    }
-    static String legacyMarkdown(List<String> rows) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("| name |\n|---|\n");
-        for (String r : rows) sb.append("| ").append(r).append(" |\n");
-        sb.append("_").append(rows.size()).append(" rows_");
-        return sb.toString();
-    }
-
-    // ---------- AFTER: the skeleton lives once, subclasses fill in the steps ----------
-    abstract static class Exporter {
-        /** The template method - final so subclasses cannot change the order of steps. */
-        final String export(List<String> rows) {
-            StringBuilder sb = new StringBuilder(header());
-            for (String r : rows) sb.append(row(r));
-            return sb.append(footer(rows.size())).toString();
-        }
-        protected abstract String header();
-        protected abstract String row(String value);
-        protected abstract String footer(int count);
-    }
-    static final class CsvExporter extends Exporter {
-        protected String header() { return "name\n"; }
-        protected String row(String v) { return v + "\n"; }
-        protected String footer(int n) { return "# " + n + " rows"; }
-    }
-    static final class MarkdownExporter extends Exporter {
-        protected String header() { return "| name |\n|---|\n"; }
-        protected String row(String v) { return "| " + v + " |\n"; }
-        protected String footer(int n) { return "_" + n + " rows_"; }
-    }
-
-    static boolean demo() {
-        List<String> rows = List.of("Asha", "Ravi");
-        boolean same = legacyCsv(rows).equals(new CsvExporter().export(rows))
-                && legacyMarkdown(rows).equals(new MarkdownExporter().export(rows));
-        System.out.println("Template Method: CSV and Markdown exporters | same: " + same);
-        return same;
-    }
-}
-```
-
-```java
-// File: code/towardpatterns/FactoryRefactoring.java
-package lld.ch07.towardpatterns;
-
-/** Replace Constructor with Factory Function (Kerievsky: Replace Constructors with Creation Methods). */
-public final class FactoryRefactoring {
-
-    // ---------- BEFORE: which boolean means what? ----------
-    static final class LegacyLoan {
-        final double amount; final boolean revolving; final int months;
-        LegacyLoan(double amount, boolean revolving, int months) {
-            this.amount = amount; this.revolving = revolving; this.months = months;
-        }
-        @Override public String toString() { return (revolving ? "revolver" : "term") + " " + amount + "/" + months; }
-    }
-
-    // ---------- AFTER: intention-revealing creation methods, private constructor ----------
-    static final class Loan {
-        private final double amount; private final boolean revolving; private final int months;
-        private Loan(double amount, boolean revolving, int months) {
-            this.amount = amount; this.revolving = revolving; this.months = months;
-        }
-        static Loan termLoan(double amount, int months) { return new Loan(amount, false, months); }
-        static Loan revolver(double limit)             { return new Loan(limit, true, 0); }
-        @Override public String toString() { return (revolving ? "revolver" : "term") + " " + amount + "/" + months; }
-    }
-
-    static boolean demo() {
-        boolean same = new LegacyLoan(5000, false, 12).toString().equals(Loan.termLoan(5000, 12).toString())
-                && new LegacyLoan(2000, true, 0).toString().equals(Loan.revolver(2000).toString());
-        System.out.println("Factory:         " + Loan.termLoan(5000, 12) + ", " + Loan.revolver(2000) + " | same: " + same);
-        return same;
-    }
-}
-```
-
-```java
-// File: code/towardpatterns/Main.java
-package lld.ch07.towardpatterns;
-
-/** Refactoring toward patterns: each demo runs the BEFORE and AFTER code and checks they agree. */
-public class Main {
-    public static void main(String[] args) {
-        boolean ok = StrategyRefactoring.demo()
-                & StateRefactoring.demo()
-                & SpecialCaseRefactoring.demo()
-                & TemplateMethodRefactoring.demo()
-                & FactoryRefactoring.demo();
-        System.out.println(ok ? "All pattern refactorings preserve behaviour." : "BEHAVIOUR CHANGED!");
-        if (!ok) System.exit(1);
-    }
-}
-```
-
-Output:
-
-```text
-Strategy:        GOLD 250 -> 200.0, NEW 250 -> 240.0 | same as switch: true
-State:           cannot ship when NEW; paid; cannot pay when PAID; shipped; cannot cancel when SHIPPED; | same as if-chains: true
-Special Case:    Hello Ravi on premium / Hello occupant on basic | same: true
-Template Method: CSV and Markdown exporters | same: true
-Factory:         term 5000.0/12, revolver 2000.0/0 | same: true
-All pattern refactorings preserve behaviour.
-```
-
-
-### Smell cures
-
-```java
-// File: code/smells/Money.java
-package lld.ch07.smells;
-
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.util.Currency;
-import java.util.Objects;
-
-/** Cure for Primitive Obsession: a value object instead of a bare double. */
-public record Money(BigDecimal amount, Currency currency) {
-
-    public Money {
-        Objects.requireNonNull(amount, "amount");
-        Objects.requireNonNull(currency, "currency");
-        amount = amount.setScale(currency.getDefaultFractionDigits(), RoundingMode.HALF_EVEN);
-    }
-
-    public static Money of(String amount, String currencyCode) {
-        return new Money(new BigDecimal(amount), Currency.getInstance(currencyCode));
-    }
-
-    public Money plus(Money other) {
-        requireSameCurrency(other);
-        return new Money(amount.add(other.amount), currency);
-    }
-
-    public Money times(int quantity) {
-        return new Money(amount.multiply(BigDecimal.valueOf(quantity)), currency);
-    }
-
-    private void requireSameCurrency(Money other) {
-        if (!currency.equals(other.currency)) {
-            throw new IllegalArgumentException("currency mismatch: " + currency + " vs " + other.currency);
-        }
-    }
-
-    @Override public String toString() { return currency.getCurrencyCode() + " " + amount.toPlainString(); }
-}
-```
-
-```java
-// File: code/smells/DateRange.java
-package lld.ch07.smells;
-
-import java.time.LocalDate;
-
-/** Cure for Data Clumps: start and end always travelled together, so they become one object. */
-public record DateRange(LocalDate start, LocalDate end) {
-
-    public DateRange {
-        if (end.isBefore(start)) throw new IllegalArgumentException("end before start");
-    }
-
-    public boolean contains(LocalDate day) {
-        return !day.isBefore(start) && !day.isAfter(end);
-    }
-
-    public boolean overlaps(DateRange other) {
-        return !other.end.isBefore(start) && !other.start.isAfter(end);
-    }
-}
-```
-
-```java
-// File: code/smells/Order.java
-package lld.ch07.smells;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-
-/**
- * Cures for Message Chains (Hide Delegate), Feature Envy (Move Function)
- * and Mutable Data (Encapsulate Collection).
- */
-public final class Order {
-
-    public record Address(String street, String city) { }
-    public record Customer(String name, Address address) { }
-    public record Line(String sku, Money unitPrice, int quantity) {
-        /** Moved here from Order: it only used Line's data (Feature Envy cured). */
-        public Money total() { return unitPrice.times(quantity); }
-    }
-
-    private final Customer customer;
-    private final List<Line> lines = new ArrayList<>();
-
-    public Order(Customer customer) { this.customer = customer; }
-
-    /** Hide Delegate: callers ask the order, not order.customer().address().city(). */
-    public String shippingCity() { return customer.address().city(); }
-
-    /** Encapsulate Collection: modification goes through the owner... */
-    public void add(Line line) { lines.add(line); }
-
-    /** ...and readers get a read-only view. */
-    public List<Line> lines() { return Collections.unmodifiableList(lines); }
-
-    public Money total() {
-        return lines.stream().map(Line::total).reduce(Money::plus).orElse(Money.of("0", "INR"));
-    }
-}
-```
-
-```java
-// File: code/smells/Main.java
-package lld.ch07.smells;
-
-import java.time.LocalDate;
-
-/** Small, runnable cures for common smells. */
-public class Main {
-    public static void main(String[] args) {
-        // Primitive Obsession -> Money: 0.1 + 0.2 is exact, currencies cannot be mixed by accident
-        System.out.println("double 0.1+0.2       = " + (0.1 + 0.2));
-        System.out.println("Money  0.10+0.20     = " + Money.of("0.10", "USD").plus(Money.of("0.20", "USD")));
-        try {
-            Money.of("1", "USD").plus(Money.of("1", "EUR"));
-        } catch (IllegalArgumentException e) {
-            System.out.println("mixing currencies    -> " + e.getMessage());
-        }
-
-        // Data Clumps -> DateRange
-        DateRange booking = new DateRange(LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 5));
-        DateRange other = new DateRange(LocalDate.of(2026, 10, 5), LocalDate.of(2026, 10, 8));
-        System.out.println("booking contains 3rd = " + booking.contains(LocalDate.of(2026, 10, 3))
-                + ", overlaps other = " + booking.overlaps(other));
-
-        // Message Chains, Feature Envy, Mutable Data
-        Order order = new Order(new Order.Customer("Asha", new Order.Address("MG Road", "Bengaluru")));
-        order.add(new Order.Line("PEN", Money.of("25.50", "INR"), 4));
-        order.add(new Order.Line("BOOK", Money.of("199", "INR"), 1));
-        System.out.println("ship to " + order.shippingCity() + ", total " + order.total());
-        try {
-            order.lines().clear();
-        } catch (UnsupportedOperationException e) {
-            System.out.println("outsider tried lines().clear() -> UnsupportedOperationException (collection is encapsulated)");
-        }
-    }
-}
-```
-
-Output:
-
-```text
-double 0.1+0.2       = 0.30000000000000004
-Money  0.10+0.20     = USD 0.30
-mixing currencies    -> currency mismatch: USD vs EUR
-booking contains 3rd = true, overlaps other = true
-ship to Bengaluru, total INR 301.00
-outsider tried lines().clear() -> UnsupportedOperationException (collection is encapsulated)
-```
-
+The outputs of `lld.ch07.towardpatterns.Main` and `lld.ch07.smells.Main` are shown in 7.6.
 
 ---
 

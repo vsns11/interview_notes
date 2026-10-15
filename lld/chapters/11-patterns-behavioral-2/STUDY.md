@@ -2,7 +2,7 @@
 
 > **Study edition.** Every topic of the full chapter, with the padding removed. For complete code listings, full outputs and extra follow-ups, see the Full Edition (`README.md`).
 >
-> **What you will learn.** The remaining five GoF behavioral patterns — **Observer, State, Strategy, Template Method, Visitor** — and how to tell apart the three that share one diagram (Strategy, State, Bridge). Then six non-GoF patterns interviews expect: **Null Object, Dependency Injection, Repository, Specification, MVC** and **Event Sourcing (lite)**, ending with a "which pattern do I need?" table.
+> **What you will learn.** The remaining five GoF behavioral patterns — **Observer, State, Strategy, Template Method, Visitor** — and how to tell apart the three that share one diagram (Strategy, State, Bridge). Then six non-GoF patterns interviews expect: **Null Object, Dependency Injection, Repository, Specification, MVC** and **Event Sourcing (lite)**, a "which pattern do I need?" table, and finally the **architectural patterns** (layered, client-server, modular monolith vs microservices, event-driven, pipe-and-filter, hexagonal/clean).
 
 **How to run the code**
 
@@ -10,7 +10,7 @@
 cd chapters/11-patterns-behavioral-2/code
 javac --release 21 -Xlint:all -d /tmp/lld_11 $(find . -name '*.java')   # compiles with 0 warnings
 java -cp /tmp/lld_11 lld.ch11.observer.Main
-# also: state, strategy, templatemethod, visitor, nullobject, di, repository, specification, mvc, eventsourcing
+# also: state, strategy, templatemethod, visitor, nullobject, di, repository, specification, mvc, eventsourcing, architecture
 ```
 
 The idea running through this chapter: most of these patterns turn a conditional (`if`/`switch`) or a hard-coded call into an **object** that can be swapped, subscribed, or visited.
@@ -1206,3 +1206,146 @@ Start from the **symptom**, not the pattern name.
 - **Template Method** = inheritance, one step varies; **Strategy** = composition, whole algorithm.
 - **Visitor** = cheap operations, expensive types; Java 21 **sealed + switch** usually replaces it.
 - Beyond GoF: **Null Object, DI, Repository, Specification, MVC, Event Sourcing** — the glue of real systems.
+
+---
+
+## 11.9 Architectural patterns, and how they differ from design patterns
+
+A **design pattern** arranges a few classes inside a program. An **architectural pattern** (architectural style) fixes the shape of the whole system: its large parts (layers, modules, services), which part may depend on which, and how they communicate. Design patterns live *inside* those parts; a hexagonal service, for example, uses Repository and DI inside. Changing a design pattern means refactoring a few files; changing an architecture can take months. In LLD the first minute of an answer still names where classes live, and follow-ups ("microservices?", "how does notification learn an order was placed?") are architectural.
+
+### 11.9.1 The styles at a glance
+
+| Style | Core idea | Use it when | Main cost | In an LLD answer |
+|---|---|---|---|---|
+| **Layered (n-tier)** | Layers; each calls only the one below | CRUD and business apps | Domain shaped by storage; features cut through all layers | `Controller -> Service -> Repository` |
+| **Client-server** | Clients request; the server owns the data and rules | Shared data, one authority | Server bottleneck until scaled out | The API boundary; the server re-validates |
+| **Modular monolith** | One deployable, modules with enforced boundaries | Default for new systems | One release train, shared failure | Packages per capability with interfaces |
+| **Microservices** | Independent deployables, each owning its database | Many teams; different scaling or release needs | Network failures, sagas, eventual consistency, ops | Say where you *would* split |
+| **Event-driven** | React to published events instead of calling | One action, many independent reactions | Hard to trace; duplicates, ordering | Observer in-process, a broker between services |
+| **Pipe-and-filter** | Data flows through independent transforming steps | Parsing, ETL, middleware | Shared state across steps is awkward | `Filter<I, O>` plus composition |
+| **Hexagonal / clean** | Core in the middle; I/O behind ports and adapters | Valuable rules, fast tests | More interfaces and mapping | No framework imports in domain; repo and gateway ports |
+| **MVC / MVP / MVVM** | Separate UI state, display, input | Interactive UIs | Classes for small screens | §11.7.5; the UI edge only |
+
+### 11.9.2 Layered (n-tier)
+
+Presentation → application (use cases) → domain → persistence. A **layer** is a logical separation; a **tier** is a physical one (a separate process or machine). **Strict** layering calls only the layer directly below; **relaxed** layering may skip layers. Pros: familiar, frameworks impose it. Cons: the dependency points *down to the database*; "sinkhole" layers that only forward calls. **Interview:** the default machine-coding layout. Keep rules out of controllers.
+
+### 11.9.3 Client-server (and peer-to-peer)
+
+The server owns the resource and the rules; clients start requests over a protocol (HTTP, gRPC). Never trust client-only validation. **Stateless** servers (session data in a token or a shared store) scale out behind a load balancer. **Peer-to-peer:** every node is both client and server (BitTorrent, blockchains). No central bottleneck, but consistency, discovery and trust are harder. **Interview:** state which side owns the truth, e.g. "the server re-checks seat availability under a lock".
+
+### 11.9.4 Monolith, modular monolith and microservices
+
+- **Monolith:** one deployable unit.
+- **Modular monolith:** one deployable, split by business capability into modules that expose small interfaces (enforced with packages, JPMS or build rules).
+- **Microservices:** independently deployable processes, each owning its own database, usually one per **bounded context** (a part of the business with one consistent vocabulary).
+
+Start modular; extract a service only for a concrete reason (team independence, scaling, technology, fault isolation). Microservice costs: timeouts and retries, **idempotency** (a repeated request has no extra effect), **sagas** (local transactions with compensating steps instead of cross-service transactions), eventual consistency, ops. The worst outcome is a **distributed monolith**: services that must be deployed together. **Interview:** "each port, like `PaymentGateway`, can become a network client with the same interface."
+
+### 11.9.5 Event-driven: broker vs mediator topology
+
+Producers publish immutable events and don't know their consumers (Observer at system level; Ch 20 §20.6 builds a pub-sub system).
+
+- **Broker topology (choreography):** consumers subscribe and may emit further events. Decoupled and scalable, but no one place sees the whole flow.
+- **Mediator topology (orchestration):** a central mediator sends ordered commands and handles compensation. Visible and controllable, but coupled to every step (Mediator, §10.4, at system level).
+
+Use a broker for independent reactions; a mediator for ordered multi-step processes. Costs: at-least-once delivery (so consumers must be idempotent), ordering only per key, eventual consistency, dead-letter queues for messages that keep failing.
+
+```mermaid
+flowchart LR
+    subgraph BROKER["Broker topology: choreography"]
+        OS1["Order"] -->|"OrderPaid"| T1(["topic"])
+        T1 --> W1["Warehouse"]
+        T1 --> E1["Email"]
+        W1 -->|"StockReserved"| T2(["topic"])
+        T2 --> SH1["Shipping"]
+    end
+    subgraph MEDIATOR["Mediator topology: orchestration"]
+        OS2["Order"] -->|"OrderPaid"| MED["Fulfilment mediator"]
+        MED -->|"1 reserve"| W2["Warehouse"]
+        MED -->|"2 ship"| SH2["Shipping"]
+        MED -->|"3 notify"| E2["Email"]
+    end
+```
+
+### 11.9.6 Pipe-and-filter
+
+Independent **filters** transform, enrich, validate or drop items. **Pipes** connect them: function composition, or bounded queues between threads (with **backpressure**: a full queue slows the producer). Examples: Unix pipes, Java Streams, compiler phases, servlet filters. Use it for parsing, ETL, logs and media. Versus **Chain of Responsibility**: in a CoR any handler may stop the request; in a pipeline every filter runs and transforms. Versus **Decorator**: filters may change the data type at each step.
+
+### 11.9.7 Hexagonal (ports and adapters) and clean architecture
+
+The **core** (domain plus use cases) owns **ports** (interfaces). A **driving port** is a use case called by driving adapters (REST, CLI, importer, test). A **driven port** is a need (repository, payment, publisher) implemented by driven adapters. All dependencies point **inward** (DIP, Ch 4 §4.10, at system scale), and a **composition root** wires adapters to the core. **Clean** (Martin) and **onion** (Palermo) architectures are the same dependency rule drawn as circles. Versus layered: persistence now depends *in* on the domain's port. Costs: more interfaces and mapping; little gain for trivial CRUD.
+
+```mermaid
+flowchart LR
+    CSV["CsvOrderImporter: driving adapter"] -->|"calls"| UC
+    TEST["Test or REST controller: driving adapter"] -->|"calls"| UC
+    subgraph CORE["Application core: no framework imports"]
+        UC["OrderingUseCase: driving port"]
+        SVC["OrderService + Order domain"]
+        SVC -.->|"implements"| UC
+        SVC -->|"uses"| REPO["OrderRepository port"]
+        SVC -->|"uses"| PAY["PaymentGateway port"]
+        SVC -->|"uses"| PUB["EventPublisher port"]
+    end
+    MEM["InMemoryOrderRepository"] -.->|"implements"| REPO
+    LIM["LimitPaymentGateway"] -.->|"implements"| PAY
+    BUS["InMemoryEventBus"] -.->|"implements"| PUB
+```
+
+### 11.9.8 Where MVC, MVP and MVVM fit
+
+These are **presentation patterns** (§11.7.5). They organise only the UI edge. A controller, presenter or view-model is a **driving adapter** of the core, so MVC and hexagonal complement each other.
+
+### 11.9.9 Java example
+
+Packages `domain`, `port`, `app`, `adapter`, `pipeline` under `lld.ch11.architecture`. `CsvOrderImporter` (driving adapter) parses lines through four filters composed with `then()`. `OrderService` implements `OrderingUseCase` using only ports. `InMemoryEventBus` is a broker-style `EventPublisher`.
+
+```java
+// File: code/lld/ch11/architecture/pipeline/Filter.java
+    default <R> Filter<I, R> then(Filter<O, R> next) {
+        return input -> switch (process(input)) {
+            case Result.Ok<O> ok -> next.process(ok.value());
+            case Result.Rejected<O> rejected -> new Result.Rejected<>(rejected.reason());
+        };
+    }
+```
+
+```java
+// File: code/lld/ch11/architecture/app/OrderService.java  (place)
+        Order order = Order.place("o-" + nextId.getAndIncrement(), cmd.customerId(), lines);
+        boolean paid = payments.charge(order.customerId(), order.total());
+        if (paid) order.markPaid(); else order.markPaymentFailed();
+        orders.save(order);
+        events.publish(paid
+            ? new OrderEvent.OrderPaid(order.id(), order.customerId(), order.total())
+            : new OrderEvent.PaymentFailed(order.id(), order.customerId(), order.total()));
+```
+
+What the run shows:
+- `pen:zero` is dropped by a filter (syntax, an adapter concern).
+- `kettle` is rejected by the core (unknown product, a business rule).
+- A paid order fans out to warehouse, email and audit handlers.
+- Swapping the payment adapter for `(customer, amount) -> false` needs no change to the core.
+
+Production gaps: `place` is not atomic (save `PENDING_PAYMENT` first, use an idempotency key, publish through an **outbox**); the bus is synchronous.
+
+Full runnable code: code/lld/ch11/architecture/ (see the Full Edition).
+
+### In the interview (architectural patterns)
+
+**30-second answer:** "A modular monolith with a hexagonal core: no framework imports in the domain; repositories, payment and notifications behind ports with in-memory adapters; side effects driven by domain events on a bus. Module boundaries are the future service boundaries." Choreography for independent reactions, orchestration for ordered processes with compensation. Don't draw microservices for a 90-minute machine-coding problem.
+
+### Self-check (architectural patterns)
+
+1. **Q:** Layer vs tier? **A:** Logical vs physical separation.
+2. **Q:** Who owns `OrderRepository` in hexagonal? **A:** The core; an adapter implements it.
+3. **Q:** Credit check → fraud check → approval, with undo on rejection? **A:** Mediator topology (orchestration).
+4. **Q:** MVC vs hexagonal? **A:** Complementary: the MVC controller is a driving adapter.
+
+### TL;DR
+
+- Design patterns arrange classes; architectural patterns arrange systems.
+- Layered: simple, but the domain depends on storage. Hexagonal flips that with ports and adapters.
+- Modular monolith first. Event-driven: broker (choreography) or mediator (orchestration).
+- Pipe-and-filter: every step runs and transforms.

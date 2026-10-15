@@ -1,17 +1,17 @@
 # Chapter 11 — Behavioral Design Patterns (Part 2) & Beyond GoF
 
-> **What you will learn.** The remaining five **GoF** ("Gang of Four" — the four authors of the 1994 book *Design Patterns*, which catalogued 23 classic patterns) behavioral patterns — **Observer, State, Strategy, Template Method, Visitor** — including the three that share one class diagram (Strategy, State, Bridge) and how to tell them apart. Then six widely used patterns that are *not* in the GoF book but come up constantly in interviews and real code: **Null Object, Dependency Injection, Repository, Specification, MVC** (the Head First "compound pattern") and **Event Sourcing (lite)**. The chapter ends with a "which behavioral pattern do I need?" decision table.
+> **What you will learn.** The remaining five **GoF** ("Gang of Four" — the four authors of the 1994 *Design Patterns*, which catalogued 23 classic patterns) behavioral patterns — **Observer, State, Strategy, Template Method, Visitor** — including the three that share one class diagram (Strategy, State, Bridge) and how to tell them apart. Then six widely used non-GoF patterns that come up constantly in interviews and real code: **Null Object, Dependency Injection, Repository, Specification, MVC** (the Head First "compound pattern") and **Event Sourcing (lite)**. Then a "which behavioral pattern do I need?" table, and finally the **architectural patterns** that shape whole systems (layered, client-server, modular monolith vs microservices, event-driven, pipe-and-filter, hexagonal/clean) and how they differ from design patterns.
 
-**How to run the code in this chapter**
+**How to run the code in this chapter** (listings show the essential lines; full files are in `code/`)
 
 ```bash
 cd chapters/11-patterns-behavioral-2/code
 javac --release 21 -Xlint:all -d /tmp/lld_11 $(find . -name '*.java')   # compiles with 0 warnings
 java -cp /tmp/lld_11 lld.ch11.observer.Main
-# also: state, strategy, templatemethod, visitor, nullobject, di, repository, specification, mvc, eventsourcing
+# also: state, strategy, templatemethod, visitor, nullobject, di, repository, specification, mvc, eventsourcing, architecture
 ```
 
-Chapter 10 introduced behavioral patterns: patterns about **how objects share work and talk to each other**. Keep one idea in mind for this chapter: most of these patterns take a conditional (`if`/`switch`) or a hard-coded call and turn it into an **object** that can be swapped, subscribed, or visited.
+Chapter 10 introduced behavioral patterns — **how objects share work and talk**. The idea to keep in mind here: most of these patterns turn a conditional (`if`/`switch`) or hard-coded call into an **object** that can be swapped, subscribed, or visited.
 
 ---
 
@@ -22,13 +22,11 @@ Chapter 10 introduced behavioral patterns: patterns about **how objects share wo
 
 ### What it is
 
-**Observer** lets one object (the **subject**, also called *publisher* or *observable*) notify many dependent objects (the **observers**, *subscribers* or *listeners*) when something happens — **without knowing who they are or what they do**.
+**Observer** lets one object (the **subject**, also *publisher* or *observable*) notify many dependents (the **observers**, *subscribers* or *listeners*) when something happens — **without knowing who they are or what they do**. Like a YouTube channel: subscribers are notified of a new video, the channel doesn't care what they do with it, and anyone can unsubscribe.
 
-Everyday analogy: a YouTube channel. You subscribe; when a new video is published, every subscriber is notified. The channel does not know or care what each subscriber does with the notification, and you can unsubscribe at any time.
+**GoF intent (paraphrased):** a one-to-many dependency, so that when one object's state changes, every dependent is told and can update itself automatically.
 
-**GoF intent (paraphrased):** set up a one-to-many dependency, so that when one object's state changes, every object that depends on it is told and can update itself automatically.
-
-**GoF participants** (and who plays them in our code):
+**GoF participants:**
 
 | Participant | Role | In `lld.ch11.observer` |
 |---|---|---|
@@ -39,7 +37,7 @@ Everyday analogy: a YouTube channel. You subscribe; when a new video is publishe
 
 ### The problem it solves
 
-Suppose four reactions must follow every finished build: a Slack message, a dashboard refresh, a metrics record and a deployment. The naive version calls all four itself:
+Four reactions must follow every finished build: Slack message, dashboard refresh, metrics record, deployment. Naively:
 
 ```java
 void finish(int buildNumber, String result) {
@@ -50,16 +48,16 @@ void finish(int buildNumber, String result) {
 }
 ```
 
-This costs more than it looks: the build pipeline now **depends on a chat service**; a fifth reaction means editing the pipeline; a **unit test** (an automated test that checks one class on its own) must fake four services; and disabling deployment in **staging** (the pre-production copy of the system used for final checks) needs an environment flag inside a class that ought to know nothing about environments.
+The pipeline now **depends on a chat service**; a fifth reaction edits the pipeline; a **unit test** (an automated test of one class on its own) must fake four services; and disabling deploys in **staging** (the pre-production copy used for final checks) needs an environment flag in a class that should know nothing of environments.
 
-Observer replaces the four references with **one list of one interface**. Anything that cares subscribes. **The source only announces; every listener chooses its own reaction.** No one orchestrates them, and listeners are unaware of one another.
+Observer replaces four references with **one list of one interface**. **The source only announces; every listener chooses its own reaction** — nobody orchestrates, and listeners don't know each other.
 
 ### How it works
 
-1. Define an **observer interface** with one method, e.g. `onBuildFinished(buildNumber, result)`.
-2. The **subject** keeps a list of observers and offers subscribe and unsubscribe operations (classically `addListener` / `removeListener`; our `addListener` instead returns a handle that unsubscribes).
-3. When its state changes, the subject **first finishes changing its state**, then loops over the list and calls each observer.
-4. Observers can be added and removed at run time (e.g. staging subscribes three listeners, production four).
+1. An **observer interface** with one method, e.g. `onBuildFinished(buildNumber, result)`.
+2. The **subject** keeps a list and offers subscribe/unsubscribe (classically `addListener` / `removeListener`; our `addListener` returns an unsubscribe handle).
+3. On a change the subject **first finishes changing its state**, then calls each observer.
+4. Observers are added and removed at run time (e.g. staging subscribes three listeners, production four).
 
 **Push vs pull** — two ways to deliver the data:
 
@@ -70,16 +68,14 @@ Observer replaces the four references with **one list of one interface**. Anythi
 | Pros | Simple; observers don't depend on the subject's getters | Each observer takes only what it needs; the interface doesn't change when new data is added |
 | Cons | Sends data some observers don't need; adding data changes the interface | Observers depend on the subject; they must work out *what* changed |
 
-`java.util.Observer.update(Observable o, Object arg)` supported both: `o` for pull, `arg` for push. *Head First Design Patterns* shows the same trade-off with its weather-station example.
+`java.util.Observer.update(Observable o, Object arg)` supported both (`o` for pull, `arg` for push); *Head First*'s weather station shows the same trade-off.
 
 ### Structure (UML)
 
 ![Observer Pattern - Class Diagram](../../assets/P-observer-pattern-2.svg)
 *Figure — Class diagram: BuildPipeline holds a list of BuildListener; SlackNotifier, DashboardUpdater, MetricsRecorder and DeployTrigger implement it (course diagram)*
 
-In the diagram above (a **UML** class diagram — UML, the Unified Modeling Language, is the standard box-and-arrow notation for classes and how they relate) all dependencies run in a single direction. Listeners never call the pipeline back, so one notification cannot set off another.
-
-Our Java design:
+In this **UML** class diagram (Unified Modeling Language — the standard box-and-arrow notation for classes and relations) all dependencies run one way: listeners never call the pipeline back, so one notification cannot trigger another.
 
 ```mermaid
 classDiagram
@@ -103,47 +99,21 @@ classDiagram
     BuildListener <|.. DeployTrigger
 ```
 
-```mermaid
-sequenceDiagram
-    participant P as BuildPipeline
-    participant S as SlackNotifier
-    participant D as DashboardUpdater
-    participant M as MetricsRecorder
-    P->>S: onBuildFinished(103, failed)
-    P->>D: onBuildFinished(103, failed)
-    D-->>P: throws IllegalStateException
-    Note over P: caught per listener, loop continues
-    P->>M: onBuildFinished(103, failed)
-```
-
 ### Java example
 
-`lld.ch11.observer` shows four things:
+`code/lld/ch11/observer/` shows four things:
 
-1. **Build pipeline.** Listeners live in a `CopyOnWriteArrayList` (a JDK list that copies its internal array on every write, so readers never see it change under them), whose iterator works on a **snapshot** — so a listener that unsubscribes during notification cannot break the loop, and the list is **thread-safe** (safe to use from several *threads* — independent paths of execution running at the same time — at once). `finish` **catches exceptions per listener**, so a broken dashboard does not stop metrics. `addListener` returns a `Runnable` (Java's built-in interface for "a piece of code to run later", with one method `run()`) that unsubscribes: whoever subscribes owns the matching unsubscribe.
-2. **Push vs pull** (`WeatherStation`): one display receives the whole `Reading`; the other receives the station and pulls only the temperature.
-3. **A tiny event bus** (`EventBus`): subscribers register for an event *type* (a class); publishers just publish objects. The returned `Subscription` is the unsubscribe handle. `Main` closes it in a `finally` block, so the refunds handler is removed even if publishing throws. (`Subscription` is also `AutoCloseable` — an interface whose `close()` method is called automatically when a *try-with-resources* block ends — so `try (var s = bus.subscribe(...)) { ... }` works too. But if the body never uses `s`, `javac -Xlint` warns that the resource is never referenced. Java 22+ lets you write `try (var _ = ...)` to say "unused on purpose". On Java 21, `try`/`finally` is the warning-free form.) The bus's handler list is a `CopyOnWriteArrayList`, so subscribing and publishing from different threads is safe. Delivery is still **synchronous on the publisher's thread** (the publisher waits while each handler runs, one after another) and nothing is stored, so it is not a **queue** (a waiting line that stores items and hands them out later, in order).
-4. **`java.beans.PropertyChangeSupport`** (the price is whole cents in an `int` — exact, never `double`), which the `Observable` **Javadoc** (the official API documentation generated from comments in Java source code) itself points to (the `java.beans` package) as the richer event model. Note it does **not** fire when the old and new values are both non-null and equal. (Since Java 9, `java.beans` lives in the `java.desktop` module; on the class path (the list of folders and JAR files where Java looks for classes) this needs nothing extra, but a modular app (one that declares its dependencies in a `module-info.java` file) must `requires java.desktop`.)
+1. **Build pipeline.** Listeners live in a `CopyOnWriteArrayList` (a JDK list copying its internal array on every write, so readers never see it change), whose iterator uses a **snapshot** — a listener unsubscribing mid-notification can't break the loop, and the list is **thread-safe** (safe across *threads* — independent paths of execution running at once). `finish` **catches exceptions per listener**, so a broken dashboard doesn't stop metrics. `addListener` returns a `Runnable` (Java's "code to run later" interface, one method `run()`) that unsubscribes: whoever subscribes owns the unsubscribe.
+2. **Push vs pull** (`WeatherStation`): one display receives the whole `Reading`; the other gets the station and pulls only the temperature.
+3. **A tiny event bus** (`EventBus`): subscribers register for an event *type* (a class); publishers just publish objects. The returned `Subscription` is the unsubscribe handle, closed in a `finally` so the refunds handler is removed even if publishing throws. (`Subscription` is also `AutoCloseable` — `close()` runs automatically when a *try-with-resources* block ends — so `try (var s = bus.subscribe(...))` works, but if the body never uses `s`, `javac -Xlint` warns the resource is unreferenced; Java 22+ allows `try (var _ = ...)`; on Java 21 `try`/`finally` is the warning-free form.) The handler list is a `CopyOnWriteArrayList`, so subscribing and publishing from different threads is safe. Delivery is still **synchronous on the publisher's thread** (it waits while each handler runs in turn) and nothing is stored, so it is not a **queue** (a waiting line storing items and handing them out later, in order).
+4. **`java.beans.PropertyChangeSupport`** (price in whole cents as an `int` — exact, never `double`), which the `Observable` **Javadoc** (official API docs generated from source comments) itself points to (the `java.beans` package) as the richer event model. It does **not** fire when old and new values are both non-null and equal. (Since Java 9 `java.beans` is in the `java.desktop` module; on the class path — the folders and JARs Java searches for classes — nothing extra is needed, but a modular app, one declaring dependencies in `module-info.java`, must `requires java.desktop`.)
 
 ```java
-// File: code/lld/ch11/observer/BuildListener.java
-package lld.ch11.observer;
-
-/** The OBSERVER interface: one method. A lambda can implement it. */
+// BuildListener.java — the OBSERVER interface: one method, so a lambda can implement it.
 @FunctionalInterface
-public interface BuildListener {
-    void onBuildFinished(int buildNumber, String result);
-}
-```
+public interface BuildListener { void onBuildFinished(int buildNumber, String result); }
 
-```java
-// File: code/lld/ch11/observer/BuildPipeline.java
-package lld.ch11.observer;
-
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-
-/** The SUBJECT: holds a list of one interface and imports none of the concrete reactions. */
+// BuildPipeline.java — the SUBJECT: a list of one interface; imports none of the concrete reactions.
 public final class BuildPipeline {
     // CopyOnWriteArrayList iterates over a snapshot: a listener that unsubscribes
     // itself mid-notification cannot break the loop, and it is safe across threads.
@@ -166,218 +136,45 @@ public final class BuildPipeline {
         }
     }
 }
-```
+// SlackNotifier, MetricsRecorder print; DashboardUpdater throws when offline; DeployTrigger deploys only on "success".
 
-```java
-// File: code/lld/ch11/observer/SlackNotifier.java
-package lld.ch11.observer;
-
-final class SlackNotifier implements BuildListener {
-    @Override
-    public void onBuildFinished(int n, String result) {
-        System.out.println("  [slack] #builds: build " + n + " " + result);
-    }
+// WeatherStation.measure — change state FIRST, then notify both styles.
+public void measure(Reading r) {
+    current = r;
+    pushObservers.forEach(o -> o.accept(r));      // PUSH: the data travels with the call
+    pullObservers.forEach(o -> o.accept(this));   // PULL: "I changed" + a reference; observers call temperature()
 }
 ```
 
 ```java
-// File: code/lld/ch11/observer/DashboardUpdater.java
-package lld.ch11.observer;
-
-final class DashboardUpdater implements BuildListener {
-    boolean offline = false;
-
-    @Override
-    public void onBuildFinished(int n, String result) {
-        if (offline) throw new IllegalStateException("dashboard is offline");
-        System.out.println("  [dashboard] status tile -> " + result);
-    }
+// EventBus.java — publishers and subscribers share only event TYPES. Synchronous, not durable (unlike Kafka).
+private record Handler<E>(Class<E> type, Consumer<? super E> action) {
+    void deliver(Object event) { if (type.isInstance(event)) action.accept(type.cast(event)); }
 }
-```
+public interface Subscription extends AutoCloseable { @Override void close(); }
+private final List<Handler<?>> handlers = new CopyOnWriteArrayList<>();
 
-```java
-// File: code/lld/ch11/observer/MetricsRecorder.java
-package lld.ch11.observer;
-
-final class MetricsRecorder implements BuildListener {
-    private int recorded = 0;
-
-    @Override
-    public void onBuildFinished(int n, String result) {
-        recorded++;
-        System.out.println("  [metrics] recorded build " + n + " (total " + recorded + ")");
-    }
+public <E> Subscription subscribe(Class<E> type, Consumer<? super E> action) {
+    Handler<E> h = new Handler<>(type, action);
+    handlers.add(h);
+    return () -> handlers.remove(h);
 }
-```
+public void publish(Object event) { handlers.forEach(h -> h.deliver(event)); }
 
-```java
-// File: code/lld/ch11/observer/DeployTrigger.java
-package lld.ch11.observer;
-
-final class DeployTrigger implements BuildListener {
-    @Override
-    public void onBuildFinished(int n, String result) {
-        if (result.equals("success")) System.out.println("  [deploy] deploying build " + n);
-    }
+// PricedItem.java — the JDK's recommended replacement for java.util.Observable.
+public void setPriceCents(int newPrice) {
+    int old = this.priceCents;
+    this.priceCents = newPrice;
+    support.firePropertyChange("priceCents", old, newPrice);   // no event if old == new
 }
-```
 
-```java
-// File: code/lld/ch11/observer/WeatherStation.java
-package lld.ch11.observer;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.function.Consumer;
-
-/** A subject that supports both notification styles, to compare PUSH and PULL. */
-public final class WeatherStation {
-    /** PUSH: the subject sends the data with the notification. */
-    public record Reading(double tempC, double humidity, double pressureHpa) {}
-
-    private final List<Consumer<Reading>> pushObservers = new ArrayList<>();
-    private final List<Consumer<WeatherStation>> pullObservers = new ArrayList<>();
-    private Reading current = new Reading(0, 0, 0);
-
-    public void subscribePush(Consumer<Reading> o) { pushObservers.add(o); }
-    public void subscribePull(Consumer<WeatherStation> o) { pullObservers.add(o); }
-
-    // PULL: observers get only "I changed" plus a reference, then ask for what they need.
-    public double temperature() { return current.tempC(); }
-    public double humidity() { return current.humidity(); }
-
-    public void measure(Reading r) {
-        current = r;                                             // change state FIRST...
-        pushObservers.forEach(o -> o.accept(r));                 // ...then notify
-        pullObservers.forEach(o -> o.accept(this));
-    }
-}
-```
-
-```java
-// File: code/lld/ch11/observer/EventBus.java
-package lld.ch11.observer;
-
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.Consumer;
-
-/**
- * A tiny in-process event bus: publishers and subscribers share only event TYPES,
- * never references to each other. Synchronous, not durable (unlike Kafka).
- */
-public final class EventBus {
-    private record Handler<E>(Class<E> type, Consumer<? super E> action) {
-        void deliver(Object event) {
-            if (type.isInstance(event)) action.accept(type.cast(event));
-        }
-    }
-
-    /** AutoCloseable so try-with-resources can unsubscribe for you. */
-    public interface Subscription extends AutoCloseable {
-        @Override void close();
-    }
-
-    private final List<Handler<?>> handlers = new CopyOnWriteArrayList<>();
-
-    public <E> Subscription subscribe(Class<E> type, Consumer<? super E> action) {
-        Handler<E> h = new Handler<>(type, action);
-        handlers.add(h);
-        return () -> handlers.remove(h);
-    }
-
-    public void publish(Object event) {
-        handlers.forEach(h -> h.deliver(event));
-    }
-}
-```
-
-```java
-// File: code/lld/ch11/observer/PricedItem.java
-package lld.ch11.observer;
-
-import java.beans.PropertyChangeListener;
-import java.beans.PropertyChangeSupport;
-
-/** The JDK's recommended replacement for java.util.Observable: java.beans.PropertyChangeSupport. */
-public final class PricedItem {
-    private final PropertyChangeSupport support = new PropertyChangeSupport(this);
-    private final String name;
-    private int priceCents;
-
-    public PricedItem(String name, int priceCents) {
-        this.name = name;
-        this.priceCents = priceCents;
-    }
-
-    public void addPropertyChangeListener(PropertyChangeListener l) { support.addPropertyChangeListener(l); }
-    public void removePropertyChangeListener(PropertyChangeListener l) { support.removePropertyChangeListener(l); }
-
-    public void setPriceCents(int newPrice) {
-        int old = this.priceCents;
-        this.priceCents = newPrice;
-        support.firePropertyChange("priceCents", old, newPrice);   // no event if old == new
-    }
-
-    public String name() { return name; }
-}
-```
-
-```java
-// File: code/lld/ch11/observer/Main.java
-package lld.ch11.observer;
-
-import java.math.BigDecimal;
-
-public class Main {
-    record OrderPlaced(String orderId, BigDecimal amount) {}
-    record OrderCancelled(String orderId) {}
-
-    public static void main(String[] args) {
-        System.out.println("=== 1. Build pipeline: subscribe, unsubscribe, failing listener ===");
-        BuildPipeline pipeline = new BuildPipeline();
-        DashboardUpdater dashboard = new DashboardUpdater();
-        pipeline.addListener(new SlackNotifier());
-        pipeline.addListener(dashboard);
-        pipeline.addListener(new MetricsRecorder());
-        Runnable unsubscribeDeploy = pipeline.addListener(new DeployTrigger());
-
-        pipeline.finish(101, "success");        // every listener runs
-        unsubscribeDeploy.run();                // e.g. staging has no auto-deploy
-        pipeline.finish(102, "success");        // three react
-        dashboard.offline = true;
-        pipeline.finish(103, "failed");         // dashboard throws, the others still run
-
-        System.out.println("\n=== 2. Push vs pull ===");
-        WeatherStation station = new WeatherStation();
-        station.subscribePush(r -> System.out.println("  [push display] got everything: " + r));
-        station.subscribePull(s -> System.out.println("  [pull display] asked only for temp: " + s.temperature() + " C"));
-        station.measure(new WeatherStation.Reading(31.5, 0.62, 1008));
-
-        System.out.println("\n=== 3. Event bus (typed topics, scoped unsubscribe) ===");
-        EventBus bus = new EventBus();
-        bus.subscribe(OrderPlaced.class, e -> System.out.println("  [email] confirmation for " + e.orderId()));
-        bus.subscribe(Object.class, e -> System.out.println("  [audit] " + e));
-        EventBus.Subscription refunds = bus.subscribe(OrderCancelled.class,
-                e -> System.out.println("  [refunds] start refund for " + e.orderId()));
-        try {
-            bus.publish(new OrderPlaced("A-1", new BigDecimal("499.00")));
-            bus.publish(new OrderCancelled("A-1"));
-        } finally {
-            refunds.close();                                   // refunds handler removed here, even on error
-        }
-        bus.publish(new OrderCancelled("A-2"));                // only audit sees this one
-
-        System.out.println("\n=== 4. JDK: PropertyChangeSupport (replacement for deprecated Observable) ===");
-        PricedItem phone = new PricedItem("phone", 49_900);
-        phone.addPropertyChangeListener(evt -> System.out.println(
-            "  [price watcher] " + phone.name() + " " + evt.getPropertyName() + ": "
-            + evt.getOldValue() + " -> " + evt.getNewValue()));
-        phone.setPriceCents(44_900);
-        phone.setPriceCents(44_900);    // same value: no event fired
-        phone.setPriceCents(39_900);
-    }
-}
+// Main.java (excerpt)
+Runnable unsubscribeDeploy = pipeline.addListener(new DeployTrigger());
+pipeline.finish(101, "success");        // every listener runs
+unsubscribeDeploy.run();                // e.g. staging has no auto-deploy
+EventBus.Subscription refunds = bus.subscribe(OrderCancelled.class, e -> ...);
+try { bus.publish(new OrderPlaced("A-1", new BigDecimal("499.00"))); bus.publish(new OrderCancelled("A-1")); }
+finally { refunds.close(); }            // refunds handler removed here, even on error
 ```
 
 **Output:**
@@ -416,61 +213,61 @@ Build 103 finished: failed
 
 ### Why `java.util.Observer` / `Observable` were deprecated
 
-Since **Java 9**, `java.util.Observer` and `java.util.Observable` are **deprecated** (officially marked "don't use in new code; may be removed one day") but not removed. The official reasons (Javadoc): the event model is **quite limited**, the **order of notifications is unspecified**, and **state changes are not one-for-one with notifications**. Other well-known problems:
+Since **Java 9**, `java.util.Observer` and `java.util.Observable` are **deprecated** (officially "don't use in new code; may be removed") but not removed. The Javadoc's reasons: the event model is **quite limited**, the **order of notifications is unspecified**, and **state changes are not one-for-one with notifications**. Also:
 
-- `Observable` is a **class**, not an interface — your subject must *extend* it, using up Java's **single inheritance** (a Java class can extend only one parent class).
-- `setChanged()` is **protected**, so you cannot use `Observable` by composition (holding one as a field) without subclassing.
-- The `update(Observable, Object)` signature is untyped (`Object arg`), so observers must cast.
-- Its thread safety is only partial: its methods are `synchronized` (only one thread at a time may run them, because each call first takes the object's **lock** — a token only one thread can hold), but `notifyObservers` calls observers outside the lock on a snapshot, so (as a comment in the **JDK** — Java Development Kit: the compiler, runtime and standard library — source admits) a newly added observer may miss a notification and a just-removed one may still get it.
+- `Observable` is a **class**, not an interface — your subject must *extend* it, using up Java's **single inheritance** (one parent class only).
+- `setChanged()` is **protected**, so you can't use `Observable` by composition (as a field) without subclassing.
+- `update(Observable, Object)` is untyped (`Object arg`), so observers must cast.
+- Thread safety is partial: methods are `synchronized` (one thread at a time, each call first taking the object's **lock** — a token only one thread can hold), but `notifyObservers` calls observers outside the lock on a snapshot, so (as a comment in the **JDK** — Java Development Kit: compiler, runtime, standard library — source admits) a newly added observer may miss a notification and a just-removed one may still get it.
 
-What to use instead (the Javadoc names the first, third and fourth): `java.beans.PropertyChangeSupport`/`PropertyChangeListener` for bean properties; your own typed listener interface (as in `BuildPipeline`); `java.util.concurrent` data structures (queues) for reliable, ordered hand-off between threads; the **`java.util.concurrent.Flow`** API (Java 9) for **reactive streams** (asynchronous streams of data items flowing from a producer to consumers) with **back-pressure** (the consumer tells the producer to slow down when it cannot keep up).
+Instead (the Javadoc names the first, third and fourth): `java.beans.PropertyChangeSupport`/`PropertyChangeListener` for bean properties; your own typed listener interface (as `BuildPipeline`); `java.util.concurrent` queues for reliable, ordered hand-off between threads; the **`java.util.concurrent.Flow`** API (Java 9) for **reactive streams** (asynchronous streams of items from a producer to consumers) with **back-pressure** (the consumer tells the producer to slow down when it can't keep up).
 
 ### Trade-offs
 
 | Pros | Cons |
 |---|---|
-| The source no longer depends on its reactions (a build pipeline no longer imports Slack). | Harder to trace: the call site gives no hint of which code will execute. |
-| Reactions are added/removed at run time; environments differ without flags. | **Memory leaks** (memory that is never freed) if an observer is never removed (the subject holds them forever). |
+| The source no longer depends on its reactions (the pipeline no longer imports Slack). | Harder to trace: the call site gives no hint which code will run. |
+| Reactions added/removed at run time; environments differ without flags. | **Memory leaks** (memory never freed) if an observer is never removed (the subject holds it forever). |
 | Each reaction is testable alone. | Stack traces start inside a loop over a list; debugging is harder. |
-| A new reaction = one class + one subscribe call (Open/Closed: open to extension, closed to modification). | **No ordering or delivery guarantee**; a crash loses the reactions not yet called. |
-| | With synchronous observers, the subject takes as long as all its listeners combined. |
+| A new reaction = one class + one subscribe call (Open/Closed). | **No ordering or delivery guarantee**; a crash loses reactions not yet called. |
+| | With synchronous observers, the subject takes as long as all listeners combined. |
 
 ### Observer vs Mediator, Chain of Responsibility, callbacks
 
 | Looks like | The actual difference |
 |---|---|
-| **Mediator** | Observer carries only "this changed"; each observer decides for itself, one way, and no order between reactions can be expressed. A mediator receives the change **and decides what happens next**, calling specific components back (two-way), and explicit ordering is its reason to exist. |
+| **Mediator** | Observer broadcasts one way and each observer decides; a mediator **decides what happens next**, calls components back (two-way) and owns the ordering — full table in [§10.4](../10-patterns-behavioral-1/README.md#mediator-or-observer). |
 | **Publish-subscribe with a broker** (a server that stores and forwards messages) | Same idea, but the broker contributes persistence, redelivery, ordering guarantees and a network hop — none of which in-process observers offer. |
 | **Chain of Responsibility** | Observer informs **all** listeners, and no listener can prevent the rest from running. A chain ends as soon as one handler accepts the request. |
 | **A callback** | One callback is one observer. It becomes the Observer pattern when the number of listeners varies and they subscribe and unsubscribe at run time. |
 
-**Observer outside Java.** With **first-class functions** (functions that can be stored in variables and passed around like any other value) a listener is just a **lambda** (a short anonymous function, written `x -> ...` in Java) — keep the handle, or you cannot unsubscribe. JavaScript has `EventTarget`/`EventEmitter`, and `AbortController` can unsubscribe by signal. Python often uses a plain list of callables, and `weakref.WeakSet` avoids the leak. C# has `event`, `IObservable<T>`, and `IDisposable` subscriptions. In every language, **weak references** (references that do not keep their target alive, so the garbage collector may still free it) fix the leak, at the cost of a listener disappearing when nothing else holds it.
+**Observer outside Java.** With **first-class functions** (functions stored and passed like values) a listener is a **lambda** (a short anonymous function, `x -> ...` in Java) — keep the handle or you can't unsubscribe. JavaScript has `EventTarget`/`EventEmitter`, and `AbortController` unsubscribes by signal. Python often uses a list of callables; `weakref.WeakSet` avoids the leak. C# has `event`, `IObservable<T>` and `IDisposable` subscriptions. Everywhere, **weak references** (which don't keep their target alive, so the garbage collector may free it) fix the leak, at the cost of a listener vanishing when nothing else holds it.
 
 ### When not to use it
 
-- **One listener, forever.** Call it directly.
-- **You need ordering or guaranteed delivery.** Use a queue or message broker (Kafka, RabbitMQ, SQS — popular broker products): same idea plus persistence, retries and a network — and very different failure modes.
-- **Reactions are slow.** Either notify **asynchronously** (hand the work to another thread and return at once — e.g. via an *executor*, a pool of worker threads, or a queue) or don't use in-process observers.
-- **The whole flow must be auditable/traceable.** Explicit calls are kinder to readers.
+- **One listener, forever** — call it directly.
+- **You need ordering or guaranteed delivery** — a queue or message broker (Kafka, RabbitMQ, SQS): same idea plus persistence, retries and a network — very different failure modes.
+- **Reactions are slow** — notify **asynchronously** (hand work to another thread and return at once, e.g. via an *executor* — a pool of worker threads — or a queue) or don't use in-process observers.
+- **The whole flow must be auditable/traceable** — explicit calls are kinder to readers.
 
 ### Common mistakes (the four classic ways observers go wrong, plus one)
 
-1. **No unsubscribe → memory leak.** The subject keeps a **strong reference** (an ordinary reference, which keeps the object alive in memory) to the listener and everything it points to. In long-running apps this is a top cause of slow memory growth. Every `add` needs an owner for the matching `remove`. (Weak references are one fix, at the cost of listeners vanishing when nothing else holds them.)
-2. **A throwing listener kills the loop.** Without a per-listener try/catch, listener 3 fails and 4 and 5 never run.
-3. **Changing the list during notification** → `ConcurrentModificationException` (the error Java throws when a collection is changed while it is being looped over) (or silently skipped listeners in some languages). Iterate over a copy, or use `CopyOnWriteArrayList`.
-4. **Listeners calling back into the subject** → cycles or endless recursion. Finish updating state before notifying, and never let a notification synchronously cause another one.
+1. **No unsubscribe → memory leak.** The subject's **strong reference** (an ordinary reference keeping the object alive) holds the listener and everything it points to — a top cause of slow memory growth in long-running apps. Every `add` needs an owner for its `remove` (or weak references, with listeners possibly vanishing).
+2. **A throwing listener kills the loop** — without per-listener try/catch, listener 3 fails and 4 and 5 never run.
+3. **Changing the list during notification** → `ConcurrentModificationException` (thrown when a collection changes while being looped over), or silently skipped listeners in some languages. Iterate a copy, or use `CopyOnWriteArrayList`.
+4. **Listeners calling back into the subject** → cycles or endless recursion. Finish updating state before notifying; never let a notification synchronously cause another.
 5. **Notifying before the state is updated**, so pull-style observers read stale data.
-6. **Relying on notification order.** Listeners are called in the order they happened to subscribe, which is a side effect of start-up code rather than a decision anyone made. If "update the dashboard, then decide whether to deploy" matters, that is coordination, and it belongs in a Mediator.
+6. **Relying on notification order** — it is the order of subscription, a side effect of start-up code nobody decided. If "update the dashboard, then decide whether to deploy" matters, that is coordination — a Mediator.
 
 ### Real-world examples
 
 - **Every UI event handler**: Swing `ActionListener`, Android `OnClickListener`, DOM `addEventListener`.
 - **JDK**: `PropertyChangeListener`, `java.util.concurrent.Flow` (`Publisher`/`Subscriber`), servlet listeners such as `HttpSessionListener`.
 - **Spring** (the most widely used Java application framework): `ApplicationEventPublisher` + `@EventListener` (in-process events, optionally `@Async` or `@TransactionalEventListener`).
-- **Guava `EventBus`**, **RxJava / Project Reactor / RxJS**, Kotlin `Flow`, and signals in front-end frameworks — observers with composable operators (map, filter, debounce — wait until events pause, then pass on only the latest) layered on top.
-- **Model–view separation**: a view registers with its model, which then updates freely with no idea that any screen is attached (see MVC in §11.7.5).
-- **Distributed publish–subscribe**: Kafka topics, Google Pub/Sub, AWS SNS. When an order is placed on an e-commerce site, the order service publishes one event and email, inventory, analytics and recommendation services each consume it independently — Observer at system scale, with durability added.
-- **Database triggers and change data capture** (CDC: streaming every row change out of a database's internal log; Debezium is a popular tool) — observers at the storage layer.
+- **Guava `EventBus`**, **RxJava / Project Reactor / RxJS**, Kotlin `Flow`, front-end signals — observers plus composable operators (map, filter, debounce — wait until events pause, then pass on only the latest).
+- **Model–view separation**: a view registers with its model, which updates freely without knowing any screen is attached (MVC in §11.7.5).
+- **Distributed publish–subscribe**: Kafka topics, Google Pub/Sub, AWS SNS. An order service publishes one "order placed" event and email, inventory, analytics and recommendation services each consume it — Observer at system scale, plus durability.
+- **Database triggers and change data capture** (CDC: streaming every row change from a database's internal log; Debezium is popular) — observers at the storage layer.
 
 ### In the interview
 
@@ -478,12 +275,10 @@ What to use instead (the Javadoc names the first, third and fourth): `java.beans
 
 **Follow-ups:**
 
-- *Push or pull?* Push sends the data (simple, but the interface grows with the data); pull sends a reference and observers ask for what they need (flexible, but couples observers to the subject's getters).
-- *Why was `java.util.Observable` deprecated?* Limited event model, unspecified notification order, notifications not one-for-one with changes; plus it's a class (uses up inheritance) with protected `setChanged`. Use `PropertyChangeSupport`, custom listeners, or `Flow`.
-- *Observer vs Pub/Sub?* In Observer the subject holds its observers directly. In publish–subscribe a **broker/event bus** sits in between, so publishers and subscribers don't know each other at all; brokers add durability, retries and ordering.
-- *Observer vs Mediator?* With Observer, the news is broadcast and every listener makes its own call; with Mediator, one central object makes the decision and tells particular components what to do. When the sequence of reactions matters, pick a mediator.
-- *How do you make it thread-safe?* `CopyOnWriteArrayList` for listeners (reads far outnumber writes), no locks held while calling listeners, and dispatch to an executor if listeners are slow.
-- *How do you avoid leaks?* Return a subscription handle, tie it to a lifecycle (try-with-resources, `onDestroy`, `@PreDestroy`), or use weak references.
+- *Push or pull? Why was `Observable` deprecated? Observer vs Mediator?* See the push/pull table, the deprecation section and the comparison table above (Mediator in depth: [§10.4](../10-patterns-behavioral-1/README.md#mediator-or-observer)) — when the sequence of reactions matters, pick a mediator.
+- *Observer vs Pub/Sub?* In Observer the subject holds its observers directly; in publish–subscribe a **broker/event bus** sits between, so publishers and subscribers don't know each other; brokers add durability, retries and ordering.
+- *How do you make it thread-safe?* `CopyOnWriteArrayList` for listeners (reads far outnumber writes), no locks held while calling listeners, an executor for slow listeners.
+- *How do you avoid leaks?* Return a subscription handle tied to a lifecycle (try-with-resources, `onDestroy`, `@PreDestroy`), or use weak references.
 
 ### Self-check
 
@@ -506,9 +301,7 @@ One subject, a list of listeners, one-way notification. **Iterate over a copy, c
 
 ### What it is
 
-**State** (GoF intent, paraphrased): when an object's internal condition changes, **its behaviour changes with it**, so from the outside it looks as if the object had switched to a different class. Rather than every method testing a status field, the object hands each action to a **state object**, and replaces that object whenever the condition changes.
-
-**GoF participants** (and who plays them in our code):
+**State** (GoF intent, paraphrased): when an object's internal condition changes, **its behaviour changes with it**, so from outside it looks as if the object switched class. Instead of every method testing a status field, the object hands each action to a **state object**, and replaces that object when the condition changes — like a phone's ringer switch: "call received" does different things in *ring*, *vibrate* and *silent*.
 
 | Participant | Role | In `lld.ch11.state` |
 |---|---|---|
@@ -516,13 +309,11 @@ One subject, a list of listeners, one-way notification. **Iterate over a copy, c
 | **State** | Interface declaring one method per request the context forwards | `SubscriptionState`, `VendingState` |
 | **ConcreteState** | One class per state, implementing the behaviour for that state | `Trialing`, `Active`, `PastDue`, `Cancelled`; `Idle`, `HasMoney`, `SoldOut` |
 
-GoF leaves open *who* performs the transitions: the context (with a fixed table) or the states themselves. Letting the states choose their successor, as here, is more flexible but makes the states know about each other.
-
-Everyday analogy: a phone's ringer switch. Pressing "call received" does something different in *ring*, *vibrate* and *silent* mode — the phone is the same, its mode decides the behaviour.
+GoF leaves open *who* performs transitions: the context (fixed table) or the states. Letting states choose their successor, as here, is more flexible but makes them know each other.
 
 ### The problem it solves
 
-Take a subscription whose life runs **trialing → active → past due → cancelled**. Written naively, each public method opens with an identical four-way branch:
+A subscription runs **trialing → active → past due → cancelled**. Naively each public method opens with the same four-way branch:
 
 ```java
 public void pay() {
@@ -533,16 +324,16 @@ public void pay() {
 }
 ```
 
-`cancel()` and `missPayment()` repeat those four branches. A fifth state forces you to hunt down every copy. Everything that defines one state is spread over all the methods. Worst of all, a **forgotten branch** quietly does nothing, and the bug surfaces weeks later as a vague "subscriptions randomly stop working".
+`cancel()` and `missPayment()` repeat it; a fifth state means hunting every copy; one state's definition is spread across all methods; and a **forgotten branch** silently does nothing, surfacing weeks later as "subscriptions randomly stop working".
 
-With the State pattern, **each state is a class**. The conditional vanishes (each context method shrinks to a single line), and everything about one state is gathered in one file — exactly what a reviewer or auditor wants to read.
+With State, **each state is a class**: the conditional vanishes (each context method is one line) and everything about a state sits in one file — what a reviewer or auditor wants.
 
 ### How it works
 
-1. Define a **State interface** with one method per action (`pay`, `missPayment`, `cancel`). Each state has to respond to each action, even when the response is "not allowed".
-2. Write one **concrete state** class per state.
-3. The **context** (`Subscription`) holds the current state and delegates each action: `state.pay(this)`.
-4. A state rules on whether the action is **legal** and which state comes **after** it, and advances the machine by calling `context.setState(new Active())`.
+1. A **State interface** with one method per action (`pay`, `missPayment`, `cancel`); every state answers every action, even with "not allowed".
+2. One **concrete state** class per state.
+3. The **context** (`Subscription`) holds the current state and delegates: `state.pay(this)`.
+4. A state rules whether the action is **legal** and which state comes **next**, advancing via `context.setState(new Active())`.
 5. Terminal states refuse everything, loudly, in one place.
 
 **The objects choose their own successors** — the machine advances itself. That is the key difference from Strategy.
@@ -552,9 +343,7 @@ With the State pattern, **each state is a class**. The conditional vanishes (eac
 ![State Pattern - Class Diagram](../../assets/P-state-pattern-2.svg)
 *Figure — Class diagram: Subscription (context) holds a SubscriptionState; Trialing, Active, PastDue and Cancelled implement it and call setState on the context (course diagram)*
 
-In the diagram above the states reach **back** into the context to replace themselves, and the state classes know each other (Trialing creates an Active).
-
-Our Java design (class-per-state version):
+States reach **back** into the context to replace themselves, and know each other (Trialing creates an Active).
 
 ```mermaid
 classDiagram
@@ -601,7 +390,7 @@ stateDiagram-v2
     Cancelled --> [*]
 ```
 
-Vending machine and traffic light:
+The vending machine (the traffic light, RED 30 s → GREEN 25 s → YELLOW 5 s → RED, is readable directly from its enum below):
 
 ```mermaid
 stateDiagram-v2
@@ -615,41 +404,22 @@ stateDiagram-v2
     }
 ```
 
-```mermaid
-stateDiagram-v2
-    [*] --> RED
-    RED --> GREEN : after 30s
-    GREEN --> YELLOW : after 25s
-    YELLOW --> RED : after 5s
-```
-
 ### Java example
 
-`lld.ch11.state` shows three styles:
+`code/lld/ch11/state/` shows three styles:
 
-1. **Class per state** (`Subscription` + four `record` states). `SubscriptionState` is a **sealed** interface (one that lists exactly which types may implement it): the compiler knows the complete set of states. The states have no fields, so **records** (Java's compact data classes whose fields are fixed at creation) with no components are a neat, **immutable** (cannot change after creation) choice.
-2. **Enum-based state machine** (`TrafficLight`). Each enum constant overrides `next()`; shared behaviour is a **default method** (an interface method with a body, inherited by implementers unless they override it). The **whole machine is readable in one file** — the idiomatic Java answer for simple machines.
-3. **Vending machine** (`VendingMachine` + `Idle`, `HasMoney`, `SoldOut`). The state interface uses **default methods that refuse**, so each state overrides only the actions it allows (`SoldOut` overrides nothing). Business actions (dispensing, returning change) live in the **context**; states only rule on whether an action is legal and which state follows. Money is kept as whole **cents in an `int`**, which is exact (unlike `double`); a real machine would use a `Money`/`BigDecimal` type (`BigDecimal` is Java's exact decimal-number class), as the Strategy and Visitor examples do.
+1. **Class per state** (`Subscription` + four `record` states). `SubscriptionState` is **sealed** (lists exactly which types may implement it), so the compiler knows every state. The states have no fields, so component-less **records** (compact data classes with fields fixed at creation) are a neat, **immutable** (unchangeable after creation) choice.
+2. **Enum-based state machine** (`TrafficLight`). Each constant overrides `next()`; shared behaviour is a **default method** (an interface method with a body, inherited unless overridden). The **whole machine is readable in one file** — idiomatic Java for simple machines.
+3. **Vending machine** (`VendingMachine` + `Idle`, `HasMoney`, `SoldOut`). The state interface's **default methods refuse**, so each state overrides only what it allows (`SoldOut` overrides nothing). Business actions (dispensing, returning change) live in the **context**; states only rule on legality and the next state. Money is whole **cents in an `int`** (exact, unlike `double`); a real machine would use a `Money`/`BigDecimal` (Java's exact decimal class) type, as the Strategy and Visitor examples do.
 
 ```java
-// File: code/lld/ch11/state/SubscriptionState.java
-package lld.ch11.state;
-
-/**
- * STATE interface. Each state implements all actions, including ones it only turns down.
- * Sealed: the compiler knows the full set of states.
- */
+// SubscriptionState.java — each state implements all actions, including ones it only turns down.
 public sealed interface SubscriptionState permits Trialing, Active, PastDue, Cancelled {
     String name();
     void pay(Subscription s);
     void missPayment(Subscription s);
     void cancel(Subscription s);
 }
-```
-
-```java
-// File: code/lld/ch11/state/Trialing.java
-package lld.ch11.state;
 
 public record Trialing() implements SubscriptionState {
     public String name() { return "trialing"; }
@@ -663,44 +433,7 @@ public record Trialing() implements SubscriptionState {
     }
     public void cancel(Subscription s) { s.setState(new Cancelled()); }
 }
-```
-
-```java
-// File: code/lld/ch11/state/Active.java
-package lld.ch11.state;
-
-public record Active() implements SubscriptionState {
-    public String name() { return "active"; }
-    public void pay(Subscription s) { System.out.println("  [active] renewed for another period"); }
-    public void missPayment(Subscription s) {
-        System.out.println("  [active] payment failed, grace period started");
-        s.setState(new PastDue());
-    }
-    public void cancel(Subscription s) { s.setState(new Cancelled()); }
-}
-```
-
-```java
-// File: code/lld/ch11/state/PastDue.java
-package lld.ch11.state;
-
-public record PastDue() implements SubscriptionState {
-    public String name() { return "past_due"; }
-    public void pay(Subscription s) {
-        System.out.println("  [past_due] arrears paid");
-        s.setState(new Active());
-    }
-    public void missPayment(Subscription s) {
-        System.out.println("  [past_due] grace period over");
-        s.setState(new Cancelled());
-    }
-    public void cancel(Subscription s) { s.setState(new Cancelled()); }
-}
-```
-
-```java
-// File: code/lld/ch11/state/Cancelled.java
-package lld.ch11.state;
+// Active: pay renews; missPayment -> PastDue. PastDue: pay -> Active; missPayment -> Cancelled.
 
 /** Terminal state: refuses everything, loudly, in one place. */
 public record Cancelled() implements SubscriptionState {
@@ -709,23 +442,14 @@ public record Cancelled() implements SubscriptionState {
     public void missPayment(Subscription s) { System.out.println("  [cancelled] ignored: nothing is billed"); }
     public void cancel(Subscription s) { System.out.println("  [cancelled] rejected: already cancelled"); }
 }
-```
-
-```java
-// File: code/lld/ch11/state/Subscription.java
-package lld.ch11.state;
 
 /** The CONTEXT: every public action is one line of delegation. No status switch anywhere. */
 public final class Subscription {
     private SubscriptionState state = new Trialing();
-
     void setState(SubscriptionState next) {
         System.out.println("    " + state.name() + " -> " + next.name());
         state = next;
     }
-
-    public String status() { return state.name(); }
-
     public void pay()         { state.pay(this); }
     public void missPayment() { state.missPayment(this); }
     public void cancel()      { state.cancel(this); }
@@ -733,195 +457,33 @@ public final class Subscription {
 ```
 
 ```java
-// File: code/lld/ch11/state/TrafficLight.java
-package lld.ch11.state;
-
-/**
- * State pattern the idiomatic-Java way: an enum whose constants override behaviour.
- * The whole machine is readable in one file.
- */
+// TrafficLight.java — State the idiomatic-Java way: an enum whose constants override behaviour.
 public enum TrafficLight {
-    RED(30) {
-        TrafficLight next() { return GREEN; }
-        boolean pedestriansMayCross() { return true; }
-    },
-    GREEN(25) {
-        TrafficLight next() { return YELLOW; }
-    },
-    YELLOW(5) {
-        TrafficLight next() { return RED; }
-    };
-
-    private final int seconds;
-
-    TrafficLight(int seconds) { this.seconds = seconds; }
-
-    int seconds() { return seconds; }
+    RED(30)    { TrafficLight next() { return GREEN; }  boolean pedestriansMayCross() { return true; } },
+    GREEN(25)  { TrafficLight next() { return YELLOW; } },
+    YELLOW(5)  { TrafficLight next() { return RED; } };
+    ...
     abstract TrafficLight next();
     boolean pedestriansMayCross() { return false; }    // default for most states
 }
-```
 
-```java
-// File: code/lld/ch11/state/VendingState.java
-package lld.ch11.state;
-
-/** Vending machine states. Default methods = "refuse", so each state overrides only what it allows. */
+// VendingState.java — default methods = "refuse", so each state overrides only what it allows.
 interface VendingState {
     String name();
-
-    default void insertCoin(VendingMachine m, int cents) {
-        System.out.println("  [" + name() + "] coin rejected, returned " + cents);
-    }
-
-    default void select(VendingMachine m, String code) {
-        System.out.println("  [" + name() + "] selection ignored");
-    }
-
-    default void cancel(VendingMachine m) {
-        System.out.println("  [" + name() + "] nothing to cancel");
-    }
+    default void insertCoin(VendingMachine m, int cents) { System.out.println("  [" + name() + "] coin rejected, returned " + cents); }
+    default void select(VendingMachine m, String code)   { System.out.println("  [" + name() + "] selection ignored"); }
+    default void cancel(VendingMachine m)                { System.out.println("  [" + name() + "] nothing to cancel"); }
 }
-```
+// Idle.insertCoin: m.addBalance(cents); m.setState(new HasMoney());   SoldOut overrides nothing.
 
-```java
-// File: code/lld/ch11/state/Idle.java
-package lld.ch11.state;
-
-final class Idle implements VendingState {
-    public String name() { return "idle"; }
-
-    @Override
-    public void insertCoin(VendingMachine m, int cents) {
-        m.addBalance(cents);
-        m.setState(new HasMoney());
-    }
-}
-```
-
-```java
-// File: code/lld/ch11/state/HasMoney.java
-package lld.ch11.state;
-
-final class HasMoney implements VendingState {
-    public String name() { return "has_money"; }
-
-    @Override
-    public void insertCoin(VendingMachine m, int cents) { m.addBalance(cents); }
-
-    @Override
-    public void select(VendingMachine m, String code) {
-        if (!m.inStock(code)) { System.out.println("  [has_money] " + code + " is empty, choose another"); return; }
-        int price = m.priceOf(code);
-        if (m.balance() < price) {
-            System.out.println("  [has_money] " + code + " costs " + price + ", balance " + m.balance());
-            return;
-        }
-        m.dispense(code);                                 // business action lives in the context
-        m.returnChange();
-        m.setState(m.anythingInStock() ? new Idle() : new SoldOut());
-    }
-
-    @Override
-    public void cancel(VendingMachine m) {
-        m.returnChange();
-        m.setState(new Idle());
-    }
-}
-```
-
-```java
-// File: code/lld/ch11/state/SoldOut.java
-package lld.ch11.state;
-
-final class SoldOut implements VendingState {
-    public String name() { return "sold_out"; }        // every action uses the refusing defaults
-}
-```
-
-```java
-// File: code/lld/ch11/state/VendingMachine.java
-package lld.ch11.state;
-
-import java.util.LinkedHashMap;
-import java.util.Map;
-
-/** CONTEXT: owns inventory and money; states rule on legality and pick the next state. */
-final class VendingMachine {
-    private record Slot(String product, int priceCents, int count) {}
-
-    private final Map<String, Slot> slots = new LinkedHashMap<>();
-    private VendingState state = new Idle();
-    private int balance = 0;
-
-    void load(String code, String product, int price, int count) { slots.put(code, new Slot(product, price, count)); }
-
-    // actions: delegate to the current state
-    void insertCoin(int cents) { System.out.println("insert " + cents); state.insertCoin(this, cents); }
-    void select(String code)   { System.out.println("select " + code); state.select(this, code); }
-    void cancel()              { System.out.println("cancel"); state.cancel(this); }
-
-    // helpers the states call
-    void setState(VendingState next) {
-        System.out.println("    " + state.name() + " -> " + next.name());
-        state = next;
-    }
-    void addBalance(int cents) { balance += cents; System.out.println("  balance " + balance); }
-    int balance() { return balance; }
-    boolean inStock(String code) { return slots.containsKey(code) && slots.get(code).count() > 0; }
-    boolean anythingInStock() { return slots.values().stream().anyMatch(s -> s.count() > 0); }
-    int priceOf(String code) { return slots.get(code).priceCents(); }
-
-    void dispense(String code) {
-        Slot s = slots.get(code);
-        slots.put(code, new Slot(s.product(), s.priceCents(), s.count() - 1));
-        balance -= s.priceCents();
-        System.out.println("  >> dispensed " + s.product());
-    }
-
-    void returnChange() {
-        if (balance > 0) System.out.println("  >> change returned " + balance);
-        balance = 0;
-    }
-}
-```
-
-```java
-// File: code/lld/ch11/state/Main.java
-package lld.ch11.state;
-
-public class Main {
-    public static void main(String[] args) {
-        System.out.println("=== 1. Subscription lifecycle (class per state) ===");
-        Subscription sub = new Subscription();
-        sub.pay();           // trialing -> active
-        sub.missPayment();   // active -> past_due
-        sub.pay();           // past_due -> active
-        sub.cancel();        // active -> cancelled
-        sub.pay();           // rejected, stays cancelled
-        System.out.println("  final status: " + sub.status());
-
-        System.out.println("\n=== 2. Traffic light (enum-based state machine) ===");
-        TrafficLight light = TrafficLight.RED;
-        for (int i = 0; i < 4; i++) {
-            System.out.printf("  %-6s for %2ds, pedestrians may cross: %s%n",
-                light, light.seconds(), light.pedestriansMayCross());
-            light = light.next();
-        }
-
-        System.out.println("\n=== 3. Vending machine ===");
-        VendingMachine vm = new VendingMachine();
-        vm.load("A1", "cola", 150, 1);
-        vm.load("B2", "chips", 100, 0);
-        vm.select("A1");        // idle: ignored
-        vm.insertCoin(100);     // idle -> has_money
-        vm.select("A1");        // not enough
-        vm.select("B2");        // empty slot
-        vm.insertCoin(100);
-        vm.select("A1");        // dispense, change 50, -> sold_out (nothing left)
-        vm.insertCoin(25);      // sold_out: rejected
-    }
-}
+// HasMoney.select — rules on legality; the business action lives in the context.
+if (!m.inStock(code)) { System.out.println("  [has_money] " + code + " is empty, choose another"); return; }
+int price = m.priceOf(code);
+if (m.balance() < price) { System.out.println("  [has_money] " + code + " costs " + price + ", balance " + m.balance()); return; }
+m.dispense(code);
+m.returnChange();
+m.setState(m.anythingInStock() ? new Idle() : new SoldOut());
+// VendingMachine (CONTEXT) owns slots and balance; insertCoin/select/cancel delegate to the current state.
 ```
 
 **Output:**
@@ -964,11 +526,11 @@ insert 25
   [sold_out] coin rejected, returned 25
 ```
 
-The final subscription line shows the payoff: an **illegal action** is refused the same way every time, by code in a single file.
+The final subscription line shows the payoff: an **illegal action** is refused the same way every time, by code in one file.
 
 ### State vs Strategy (and Bridge) — same diagram, different reasons
 
-These patterns draw **the same class diagram** (an object keeps a reference to an interface and forwards work to it). It is one of the most common interview questions, and the diagram cannot answer it:
+These patterns draw **the same class diagram** (an object holds an interface reference and forwards to it) — one of the most common interview questions, and the diagram cannot answer it:
 
 | | State | Strategy | Bridge |
 |---|---|---|---|
@@ -978,9 +540,7 @@ These patterns draw **the same class diagram** (an object keeps a reference to a
 | What varies | The object's current *condition*, and therefore its allowed actions | *How* one job gets done | A whole dimension of the design |
 | Why it exists | To model a lifecycle | To make one algorithm replaceable | To stop two class hierarchies multiplying |
 
-**The reliable test: do the alternatives name each other?** If yes, it is a State machine. If no, it is Strategy (or Bridge — then ask how often the choice changes).
-
-Two more things State gets confused with:
+**The reliable test: do the alternatives name each other?** Yes → State machine. No → Strategy (or Bridge — then ask how often the choice changes).
 
 | Looks like | The actual difference |
 |---|---|
@@ -992,42 +552,42 @@ Two more things State gets confused with:
 | Pros | Cons |
 |---|---|
 | Everything about one state sits in a single file. | One class per state; small classes multiply. |
-| The repeated conditional disappears; no branch can be missed. | The transitions live in several files, so no single place shows the whole machine. |
-| Illegal actions are rejected consistently. | Each state class must implement all actions, even if only to say no. |
+| The repeated conditional disappears; no branch can be missed. | Transitions live in several files; no single place shows the whole machine. |
+| Illegal actions are rejected consistently. | Each state must implement all actions, even just to say no. |
 | A new state = a new class; the compiler lists what it must implement. | Persisting needs a name↔class mapping — keep it in exactly one place. |
 
 ### When not to use it
 
-- **Only two states and a handful of methods** — a boolean flag with an `if` reads better.
-- **Behaviour doesn't change, only data does** — store the differing value in a field; a class per state adds nothing.
-- **A big, formal machine** (more than about a dozen states with guards) — use a **transition table** (`Map<(state, event), handler>`) or a state-machine library (e.g. **Spring Statemachine**), where the diagram can be the source of truth.
-- **Rule of thumb from the course:** the pattern pays off once **three or more methods repeat the same status switch**. Below that, an enum with a switch is a perfectly defensible answer.
-- **A signal you have outgrown it:** you keep sketching the machine on paper just to follow your own code. At that point make the sketch (a transition table or state chart) the real source of truth, instead of classes that only approximate it.
+- **Two states and a handful of methods** — a boolean with an `if` reads better.
+- **Only data changes, not behaviour** — store the differing value in a field.
+- **A big, formal machine** (over about a dozen states with guards) — a **transition table** (`Map<(state, event), handler>`) or a library (e.g. **Spring Statemachine**), where the diagram can be the source of truth.
+- **Rule of thumb from the course:** it pays off once **three or more methods repeat the same status switch**; below that, an enum with a switch is defensible.
+- **Signal you've outgrown it:** you keep sketching the machine on paper to follow your own code — make the sketch (transition table or state chart) the real source of truth.
 
 ### Common mistakes
 
-1. **Successors hard-coded everywhere.** Fine at 4 states, painful at 12. Past that, let the context or a transition table own the transitions.
-2. **Business logic inside state classes.** A state's job is to rule on *legality* and pick the *successor*; charging cards and sending emails belong in the context or a service it calls. Otherwise the state classes become a dumping ground.
-3. **Forgetting to make illegal actions explicit** (silently doing nothing).
-4. **Storing state objects in the DB** — store a name/enum and map it back to a state in exactly one place.
-5. **Sharing stateful state objects** between contexts. Stateless states (like ours) can be shared safely; stateful ones cannot.
+1. **Successors hard-coded everywhere** — fine at 4 states, painful at 12; then let the context or a transition table own transitions.
+2. **Business logic inside state classes.** A state rules on *legality* and picks the *successor*; charging cards and sending emails belong in the context or a service it calls.
+3. **Not making illegal actions explicit** (silently doing nothing).
+4. **Storing state objects in the DB** — store a name/enum and map it back in exactly one place.
+5. **Sharing stateful state objects** between contexts — stateless states (like ours) can be shared; stateful ones cannot.
 
 ### State in other languages
 
-- **Java:** an `enum` whose constants override behaviour (like `TrafficLight`) keeps the whole graph in one file. A `sealed` interface plus exhaustive pattern-matching `switch` gives compiler-checked coverage of every state.
+- **Java:** an `enum` with per-constant behaviour (`TrafficLight`) keeps the graph in one file; a `sealed` interface plus exhaustive pattern-matching `switch` gives compiler-checked coverage.
 - **Kotlin / Scala:** `sealed` hierarchies with exhaustive `when` / `match`.
-- **Rust:** enums with data, matched exhaustively. With the **typestate** pattern each state is a separate *type*, so calling an action that is illegal in that state is a compile error.
-- **Python:** a dict mapping `(state, action)` to a handler is a compact transition table that shows every transition in one place.
-- **TypeScript:** a **discriminated union** (a set of object types that each carry a fixed tag field saying which kind they are) plus a `switch` over its tag field, which the compiler can check for missing cases.
+- **Rust:** enums with data, matched exhaustively; the **typestate** pattern makes each state a separate *type*, so an action illegal in that state is a compile error.
+- **Python:** a dict mapping `(state, action)` to a handler — a compact transition table showing every transition.
+- **TypeScript:** a **discriminated union** (object types each carrying a fixed tag field) plus a `switch` on the tag, checked for missing cases.
 
 ### Real-world examples
 
-- **Order lifecycles** in food-delivery and e-commerce apps: placed → accepted → preparing → out for delivery → delivered (or cancelled); which actions are legal depends on the status (you can cancel while "placed" but usually not once "out for delivery").
-- **Payment and subscription lifecycles** (Stripe subscription statuses such as `trialing`, `active`, `past_due`, `canceled`).
-- **TCP connections** (TCP is the protocol under most internet traffic, giving ordered, reliable delivery; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) — GoF's own example: `LISTEN`, `ESTABLISHED`, `CLOSED`, each responding differently to the same call.
-- **Workflow/approval engines** (draft → in review → approved/rejected), **document editors' modes**, **game characters** (idle, running, jumping).
-- **Lexers/parsers** (programs that split text into tokens, then build a structure from them), **vending machines, ATMs, elevators, traffic lights** — favourite **machine-coding** questions (an interview round where you write working code for a small system in an hour or two) (see the case-study chapters).
-- **Libraries**: Spring Statemachine; in the JDK, `Thread.State` is an *enum of states* (the data), not the pattern itself.
+- **Order lifecycles** in food delivery and e-commerce: placed → accepted → preparing → out for delivery → delivered (or cancelled); you can cancel while "placed" but usually not once "out for delivery".
+- **Payment and subscription lifecycles** (Stripe statuses such as `trialing`, `active`, `past_due`, `canceled`).
+- **TCP connections** (the protocol under most internet traffic, giving ordered, reliable delivery; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) — GoF's own example: `LISTEN`, `ESTABLISHED`, `CLOSED` respond differently to the same call.
+- **Workflow/approval engines** (draft → in review → approved/rejected), **editor modes**, **game characters** (idle, running, jumping).
+- **Lexers/parsers** (split text into tokens, then build a structure), **vending machines, ATMs, elevators, traffic lights** — favourite **machine-coding** questions (an interview round writing working code for a small system in an hour or two; see the case-study chapters).
+- **Libraries**: Spring Statemachine; the JDK's `Thread.State` is an *enum of states* (data), not the pattern.
 
 ### In the interview
 
@@ -1035,11 +595,11 @@ Two more things State gets confused with:
 
 **Follow-ups:**
 
-- *State vs Strategy?* Use the naming test and the "who chooses" test (table above).
-- *Where should transitions live?* In the states for small machines; in the context or a transition table when the machine grows, so the whole graph is visible in one place.
-- *How do you persist it?* Store the state's name (enum) in the DB (database); rebuild the state object through one factory/mapping.
-- *How do you handle concurrency?* Two requests (e.g. "cancel" and "deliver") can **race** (run at the same moment and interfere, so the result depends on timing): guard transitions with a lock or, in a DB, an **optimistic** (no lock held; the write simply fails if someone changed the row first) `UPDATE ... WHERE status = 'PLACED'` and check the affected row count.
-- *Design a vending machine.* States Idle, HasMoney, SoldOut (maybe Dispensing, Maintenance); context owns inventory and balance; states allow or refuse actions (as in our code).
+- *State vs Strategy?* The naming test and the "who chooses" test (table above).
+- *Where should transitions live?* In the states for small machines; in the context or a transition table as it grows, so the graph is visible in one place.
+- *How do you persist it?* Store the state's name (enum) in the DB; rebuild the object through one factory/mapping.
+- *How do you handle concurrency?* Two requests ("cancel" and "deliver") can **race** (run together and interfere, the result depending on timing): guard transitions with a lock or, in a DB, an **optimistic** (no lock held; the write fails if someone changed the row first) `UPDATE ... WHERE status = 'PLACED'` and check the affected row count.
+- *Design a vending machine.* States Idle, HasMoney, SoldOut (maybe Dispensing, Maintenance); the context owns inventory and balance; states allow or refuse actions (as in our code).
 
 ### Self-check
 
@@ -1062,9 +622,7 @@ Two more things State gets confused with:
 
 ### What it is
 
-**Strategy** (GoF intent, paraphrased): group related algorithms into a **family**, wrap each one in its own class behind a **common interface**, and make them interchangeable, so the algorithm can change without touching the code that calls it; the choice can be made at run time. The object using it (the **context**) does not branch on which algorithm it has.
-
-**GoF participants** (and who plays them in our code):
+**Strategy** (GoF intent, paraphrased): group related algorithms into a **family**, each in its own class behind a **common interface**, interchangeable so the algorithm can change — even at run time — without touching the calling code. The object using it (the **context**) does not branch on which algorithm it has. Like getting to the airport by car, train or taxi: same goal, different algorithm, chosen by time, money and weather.
 
 | Participant | Role | In `lld.ch11.strategy` |
 |---|---|---|
@@ -1072,11 +630,9 @@ Two more things State gets confused with:
 | **ConcreteStrategy** | One implementation per algorithm | `FixedDelay`, `ExponentialBackoff`, the `RetryPolicy.none()` lambda (the course diagram names it `NoRetry`) |
 | **Context** | Is configured with a strategy object and delegates to it; may pass it the data it needs | `ApiClient` |
 
-Everyday analogy: getting to the airport. Car, train or taxi — same goal, different algorithm. You pick based on time, money and weather; the trip itself ("get to the airport") doesn't change.
-
 ### The problem it solves
 
-Retrying a failed request can mean: no retry, a fixed delay, or **exponential backoff** (doubling the wait after each failure — e.g. 100 ms, 200 ms, 400 ms). Written directly, the branch sits inside `ApiClient`:
+Retrying a failed request can mean no retry, a fixed delay, or **exponential backoff** (doubling the wait after each failure — 100 ms, 200 ms, 400 ms). Written directly, the branch sits inside `ApiClient`:
 
 ```java
 if (policy == NONE)             { /* give up */ }
@@ -1084,25 +640,23 @@ else if (policy == FIXED)       { /* wait 100ms, try again */ }
 else if (policy == EXPONENTIAL) { /* double the wait after each failure */ }
 ```
 
-`ApiClient` now contains backoff arithmetic that has nothing to do with calling an API. A fourth policy means editing a working class; you cannot test the backoff maths without building a client and faking a server; and a different team has to edit your class just to contribute a policy.
+`ApiClient` now holds backoff arithmetic unrelated to calling an API; a fourth policy edits a working class; backoff maths can't be tested without a client and a fake server; another team must edit your class to contribute a policy.
 
-Strategy gives every algorithm a class of its own. `ApiClient` asks its `RetryPolicy` "how long before the next attempt?" and **never checks what kind of policy it holds**. The choice is made **outside** the client — from configuration, a **feature toggle** (a setting that switches behaviour on or off without redeploying), or a customer-specific setting.
+Strategy gives each algorithm its own class. `ApiClient` asks its `RetryPolicy` "how long before the next attempt?" and **never checks what kind it holds**. The choice is made **outside** — configuration, a **feature toggle** (switches behaviour without redeploying), or a customer setting.
 
 ### How it works
 
-1. Define a **strategy interface** — small, ideally one question (`delayBeforeAttempt(attempt)`).
-2. Write one **concrete strategy** per algorithm; each holds only its own parameters.
+1. A **strategy interface** — small, ideally one question (`delayBeforeAttempt(attempt)`).
+2. One **concrete strategy** per algorithm, holding only its own parameters.
 3. The **context** receives a strategy (constructor, setter or method parameter) and calls it.
-4. A **factory, configuration or DI container** (a library that creates objects and hands them their dependencies — see §11.7.2) decides which strategy to use — not every call site.
+4. A **factory, configuration or DI container** (a library that creates objects and hands them their dependencies — §11.7.2) decides which — not every call site.
 
 ### Structure (UML)
 
 ![Strategy Pattern - Class Diagram](../../assets/P-strategy-pattern-2.svg)
 *Figure — Class diagram: ApiClient holds a RetryPolicy; NoRetry, FixedDelay and ExponentialBackoff implement it (course diagram)*
 
-In the diagram above, **no strategy references another** — `ExponentialBackoff` has never heard of `FixedDelay`. That absence is how you tell Strategy from State.
-
-Our Java design:
+**No strategy references another** — `ExponentialBackoff` has never heard of `FixedDelay`. That absence tells Strategy from State.
 
 ```mermaid
 classDiagram
@@ -1133,144 +687,48 @@ classDiagram
 
 ### Java example
 
-`lld.ch11.strategy`:
+`code/lld/ch11/strategy/`:
 
-1. **Retry policies.** `RetryPolicy` has one abstract method, so `RetryPolicy.none()` is just a **lambda**. Strategies with configuration (`FixedDelay`, `ExponentialBackoff`) are **records**. `ApiClient.call()` is identical for all runs; only the injected policy differs. (Delays are printed, not slept, to keep the demo fast.)
-2. **`Comparator`** — the JDK's everyday strategy. `List.sort(comparator)` keeps the sorting algorithm fixed and lets you plug in the comparison. `Comparator.comparing(...).reversed().thenComparing(...)` composes strategies.
-3. **Strategy registry.** A `Map<String, LongUnaryOperator>` of lambdas picked by a configuration key — short and readable when each strategy is one line.
+1. **Retry policies.** `RetryPolicy` has one abstract method, so `RetryPolicy.none()` is a **lambda**; configured strategies (`FixedDelay`, `ExponentialBackoff`) are **records**. `ApiClient.call()` is identical for all runs; only the injected policy differs. (Delays are printed, not slept.)
+2. **`Comparator`** — the JDK's everyday strategy: `List.sort(comparator)` fixes the sorting algorithm and plugs in the comparison; `Comparator.comparing(...).reversed().thenComparing(...)` composes strategies.
+3. **Strategy registry.** A `Map` from configuration key to a lambda (`UnaryOperator<BigDecimal>` pricing rules) — short and readable when each strategy is one line.
 
 ```java
-// File: code/lld/ch11/strategy/RetryPolicy.java
-package lld.ch11.strategy;
-
-/**
- * STRATEGY interface: one small question. Returns the delay in ms before the given
- * attempt (attempt >= 2), or STOP. One abstract method, so a lambda can be a policy.
- */
+/** STRATEGY: one small question — delay in ms before the given attempt (>= 2), or STOP. */
 @FunctionalInterface
 public interface RetryPolicy {
     int STOP = -1;
-
     int delayBeforeAttempt(int attempt);
-
     static RetryPolicy none() { return attempt -> STOP; }
 }
-```
-
-```java
-// File: code/lld/ch11/strategy/FixedDelay.java
-package lld.ch11.strategy;
-
 /** Strategies with configuration earn a real type (a record here). */
 public record FixedDelay(int delayMillis, int maxAttempts) implements RetryPolicy {
-    public int delayBeforeAttempt(int attempt) {
-        return attempt > maxAttempts ? STOP : delayMillis;
-    }
+    public int delayBeforeAttempt(int attempt) { return attempt > maxAttempts ? STOP : delayMillis; }
 }
-```
-
-```java
-// File: code/lld/ch11/strategy/ExponentialBackoff.java
-package lld.ch11.strategy;
-
 /** 100, 200, 400, ... ms. Knows nothing about FixedDelay: strategies never name each other. */
 public record ExponentialBackoff(int baseMillis, int maxAttempts) implements RetryPolicy {
-    public int delayBeforeAttempt(int attempt) {
-        return attempt > maxAttempts ? STOP : baseMillis << (attempt - 2);
+    public int delayBeforeAttempt(int attempt) { return attempt > maxAttempts ? STOP : baseMillis << (attempt - 2); }
+}
+
+/** CONTEXT: holds a policy and never asks WHICH policy it has. server: fake (attempt number -> success?). */
+public boolean call() {
+    for (int attempt = 1; ; attempt++) {
+        if (server.test(attempt)) { System.out.println("  attempt " + attempt + ": ok"); return true; }
+        int delay = policy.delayBeforeAttempt(attempt + 1);
+        if (delay == RetryPolicy.STOP) { System.out.println("  attempt " + attempt + ": failed, giving up"); return false; }
+        System.out.println("  attempt " + attempt + ": failed, waiting " + delay + "ms");  // simulated, no sleep
     }
 }
+
+// Main.java, parts 2 and 3
+Comparator<Product> byRatingThenName = Comparator.comparingDouble(Product::rating).reversed().thenComparing(Product::name);
+Map<String, UnaryOperator<BigDecimal>> pricing = Map.of(
+    "regular", p -> p,
+    "member", p -> p.multiply(new BigDecimal("0.90")).setScale(2, RoundingMode.HALF_EVEN),  // 10% off
+    "flash-sale", p -> p.subtract(new BigDecimal("20.00")).max(BigDecimal.ZERO));          // flat 20.00 off
 ```
 
-```java
-// File: code/lld/ch11/strategy/ApiClient.java
-package lld.ch11.strategy;
-
-import java.util.function.IntPredicate;
-
-/** CONTEXT: holds a policy and never asks WHICH policy it has. */
-public final class ApiClient {
-    private final RetryPolicy policy;
-    private final IntPredicate server;     // fake server: attempt number -> success?
-
-    public ApiClient(RetryPolicy policy, IntPredicate server) {
-        this.policy = policy;
-        this.server = server;
-    }
-
-    public boolean call() {
-        for (int attempt = 1; ; attempt++) {
-            if (server.test(attempt)) {
-                System.out.println("  attempt " + attempt + ": ok");
-                return true;
-            }
-            int delay = policy.delayBeforeAttempt(attempt + 1);
-            if (delay == RetryPolicy.STOP) {
-                System.out.println("  attempt " + attempt + ": failed, giving up");
-                return false;
-            }
-            System.out.println("  attempt " + attempt + ": failed, waiting " + delay + "ms");  // simulated, no sleep
-        }
-    }
-}
-```
-
-```java
-// File: code/lld/ch11/strategy/Main.java
-package lld.ch11.strategy;
-
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.function.IntPredicate;
-import java.util.function.UnaryOperator;
-
-public class Main {
-    record Product(String name, long priceCents, double rating) {}
-
-    public static void main(String[] args) {
-        System.out.println("=== 1. Retry policies: same ApiClient code, three strategies ===");
-        IntPredicate succeedsOnThirdTry = attempt -> attempt >= 3;
-        List<Map.Entry<String, RetryPolicy>> policies = List.of(
-            Map.entry("none (a lambda)", RetryPolicy.none()),
-            Map.entry("FixedDelay(100, 4)", new FixedDelay(100, 4)),
-            Map.entry("ExponentialBackoff(100, 4)", new ExponentialBackoff(100, 4)));
-        for (Map.Entry<String, RetryPolicy> e : policies) {
-            System.out.println(e.getKey() + ":");
-            new ApiClient(e.getValue(), succeedsOnThirdTry).call();
-        }
-        System.out.println("ExponentialBackoff(100, 4) against a server that is always down:");
-        new ApiClient(new ExponentialBackoff(100, 4), attempt -> false).call();
-
-        System.out.println("\n=== 2. Comparator: the JDK's everyday strategy ===");
-        List<Product> products = new ArrayList<>(List.of(
-            new Product("mouse", 1_999, 4.5), new Product("keyboard", 4_999, 4.7),
-            new Product("cable", 499, 4.5), new Product("monitor", 19_999, 4.2)));
-        Comparator<Product> byPrice = Comparator.comparingLong(Product::priceCents);
-        Comparator<Product> byRatingThenName =
-            Comparator.comparingDouble(Product::rating).reversed().thenComparing(Product::name);
-        products.sort(byPrice);
-        System.out.println("  by price:          " + products.stream().map(Product::name).toList());
-        products.sort(byRatingThenName);
-        System.out.println("  by rating, name:   " + products.stream().map(Product::name).toList());
-
-        System.out.println("\n=== 3. Strategy registry: lambdas chosen by configuration ===");
-        Map<String, UnaryOperator<BigDecimal>> pricing = Map.of(
-            "regular", p -> p,
-            "member", p -> p.multiply(new BigDecimal("0.90")).setScale(2, RoundingMode.HALF_EVEN),  // 10% off
-            "flash-sale", p -> p.subtract(new BigDecimal("20.00")).max(BigDecimal.ZERO));          // flat 20.00 off
-        BigDecimal keyboardPrice = new BigDecimal("49.99");
-        for (String tier : List.of("regular", "member", "flash-sale")) {   // e.g. read from config
-            UnaryOperator<BigDecimal> strategy = pricing.get(tier);
-            System.out.printf("  %-10s keyboard costs %s%n", tier, strategy.apply(keyboardPrice));
-        }
-    }
-}
-```
-
-Extending it is cheap: a policy that adds random **jitter** to the delay, or one that honours a server's `Retry-After` header (an **HTTP** response header in which the server says how long to wait; HTTP is the request/response protocol of the web), is one more class (or lambda) plus one line where the policy is chosen. `ApiClient` does not change.
+Extending is cheap: a policy adding random **jitter**, or one honouring a server's `Retry-After` header (an **HTTP** — the web's request/response protocol — response header saying how long to wait), is one more class (or lambda) plus one line where the policy is chosen; `ApiClient` doesn't change.
 
 **Output:**
 
@@ -1304,11 +762,11 @@ ExponentialBackoff(100, 4) against a server that is always down:
 
 ### Lambdas as strategies
 
-Of all the patterns, Strategy is the one a plain function replaces most often, and recognising that is part of understanding it. Since Java 8, any interface with a **single abstract method** (a *functional interface*) can be implemented by a lambda or method reference. So many strategies need **no class at all**: `Comparator<T>`, `Function`, `Predicate`, `Supplier`, or your own `RetryPolicy`. Keep a named class (or record) when the strategy has **configuration or state** (`FixedDelay(100, 4)`), needs a **name for logging**, or must be **discovered/registered** (e.g. Spring beans — objects the Spring container creates and manages — or `ServiceLoader`, the JDK's built-in plug-in discovery mechanism).
+Strategy is the pattern a plain function replaces most often. Since Java 8 any interface with a **single abstract method** (a *functional interface*) can be a lambda or method reference, so many strategies need **no class**: `Comparator<T>`, `Function`, `Predicate`, `Supplier`, or your `RetryPolicy`. Keep a named class (or record) when the strategy has **configuration or state** (`FixedDelay(100, 4)`), needs a **name for logging**, or must be **discovered/registered** (Spring beans — container-managed objects — or `ServiceLoader`, the JDK's plug-in discovery mechanism).
 
-Other languages: Python passes a function (or `functools.partial` to bind its parameters), and a dict from name to function is a one-line registry. JavaScript/TypeScript pass a function argument, or an object whose properties are functions. Kotlin/Scala take a function-typed constructor parameter, often with a default. Go uses a one-method interface (satisfied implicitly) or a `func` field.
+Other languages: Python passes a function (or `functools.partial` to bind parameters); a dict from name to function is a one-line registry. JavaScript/TypeScript pass a function argument or an object of functions. Kotlin/Scala take a function-typed constructor parameter, often with a default. Go uses a one-method interface (satisfied implicitly) or a `func` field.
 
-The registry in part 3 of the demo uses `BigDecimal` for prices. Money in domain code should never be `double`, because binary floating point cannot represent most cent values exactly.
+The registry uses `BigDecimal` for prices: money in domain code is never `double`, since binary floating point can't represent most cent values exactly.
 
 ### Trade-offs
 
@@ -1316,31 +774,31 @@ The registry in part 3 of the demo uses `BigDecimal` for prices. Money in domain
 |---|---|
 | New variants without editing working code — even by other teams (Open/Closed). | One class per variant (unless lambdas), one more file to open. |
 | Each algorithm is testable alone. | Someone must choose — ideally a factory or container, not every caller. |
-| Behaviour is configurable at run time (flag, setting, header). | The interface must fit every variant, including future ones. |
-| The context keeps to its real responsibility (no backoff maths in an API client). | Tempting to overuse: three strategies of one line each means three classes for three lines. |
+| Behaviour configurable at run time (flag, setting, header). | The interface must fit every variant, including future ones. |
+| The context keeps to its real job (no backoff maths in an API client). | Tempting to overuse: three one-line strategies = three classes for three lines. |
 
 ### When not to use it
 
-- **Just two branches, with no third in sight** — an `if` reads better. Introduce the pattern when a third variant actually shows up.
-- **One-line branches** — a `Map` from key to lambda is shorter than a class for each.
-- **Variants need different inputs** (one needs the customer, another the warehouse) — the shared interface is forced; rethink the split.
-- **The choice is fixed for the life of the program** — decide it when wiring the program (or use Bridge) instead.
+- **Two branches, no third in sight** — an `if` reads better; introduce the pattern when a third appears.
+- **One-line branches** — a `Map` from key to lambda is shorter than a class each.
+- **Variants need different inputs** (one the customer, another the warehouse) — the shared interface is forced; rethink the split.
+- **The choice is fixed for the program's life** — decide it when wiring (or use Bridge).
 
 ### Common mistakes
 
-1. **Making every call site choose** — the branch moved instead of disappearing. Let a factory/config/DI container choose.
-2. **A bloated interface** with parameters half the implementations ignore — a sign the variants do different jobs and should not share one abstraction.
-3. **Strategies that know about each other** — then you have State.
-4. **Stateful strategies shared between threads** — keep strategies immutable (records help).
+1. **Every call site choosing** — the branch moved instead of disappearing; let a factory/config/DI container choose.
+2. **A bloated interface** with parameters half the implementations ignore — the variants do different jobs.
+3. **Strategies that know about each other** — then it is State.
+4. **Stateful strategies shared between threads** — keep them immutable (records help).
 
 ### Real-world examples
 
 - **`Comparator`** with `Collections.sort` / `List.sort` / `TreeMap` — the textbook example.
-- **`ThreadPoolExecutor`'s** (the JDK's configurable thread pool) **`RejectedExecutionHandler`**: `AbortPolicy`, `CallerRunsPolicy`, `DiscardPolicy`, `DiscardOldestPolicy` — pick what happens when the pool is full.
-- **Spring Security `PasswordEncoder`** (`BCryptPasswordEncoder`, `Argon2PasswordEncoder`, ...) chosen by configuration, so upgrading the **hash** (a one-way scrambling of the password, so the stored value can't be turned back into it) does not touch login code.
-- **Resilience4j** (a Java fault-tolerance library) retry `IntervalFunction` (fixed, exponential, randomized backoff) and **Polly** in .NET — exactly this lesson's retry policies.
+- **`ThreadPoolExecutor`'s** (the JDK's configurable thread pool) **`RejectedExecutionHandler`**: `AbortPolicy`, `CallerRunsPolicy`, `DiscardPolicy`, `DiscardOldestPolicy` — what happens when the pool is full.
+- **Spring Security `PasswordEncoder`** (`BCryptPasswordEncoder`, `Argon2PasswordEncoder`, ...) chosen by configuration, so upgrading the **hash** (one-way scrambling of the password, irreversible) doesn't touch login code.
+- **Resilience4j** (a Java fault-tolerance library) retry `IntervalFunction` (fixed, exponential, randomized backoff) and **Polly** in .NET — exactly these retry policies.
 - **AWT/Swing `LayoutManager`** (`FlowLayout`, `BorderLayout`, `GridLayout`) — a container delegates layout to a strategy.
-- **Payment method at checkout** (card, UPI [India's instant bank-to-bank payment system], wallet, cash on delivery), **pricing/discount rules by customer tier**, **route planning modes** (drive, walk, transit) in map apps, **compression/serialization formats** (serialization = turning objects into bytes or text for storage or sending) chosen by a content-type header.
+- **Payment method at checkout** (card, UPI [India's instant bank-to-bank payment system], wallet, cash on delivery), **pricing/discount rules by customer tier**, **route modes** (drive, walk, transit) in map apps, **compression/serialization formats** (turning objects into bytes or text) chosen by a content-type header.
 
 ### In the interview
 
@@ -1348,12 +806,11 @@ The registry in part 3 of the demo uses `BigDecimal` for prices. Money in domain
 
 **Follow-ups:**
 
-- *Strategy vs State?* Strategies are picked from outside and don't know each other; states pick their successors.
-- *Strategy vs Template Method?* Template Method swaps **one step** of an algorithm whose order is fixed, through **inheritance** (fixed once the object is created, by the subclass you instantiate). Strategy swaps **the complete algorithm** through **composition** (holding another object in a field and delegating to it) (chosen at run time, can vary several axes at once). Prefer Strategy when both fit.
-- *Strategy vs Bridge?* Same diagram again. Bridge splits off a dimension of the design that is fixed when the program is assembled; Strategy is a decision that is meant to change, even from one call to the next. If a reviewer cannot tell which you meant, little is lost — the code is identical. What matters more is not using any of the three for two branches that will never become three.
-- *Strategy vs Command?* Strategy is *how* to do something; Command is *what* to do, with its arguments, kept to run later or undo.
-- *How is the strategy selected?* Config + factory (`Map<String, Strategy>`), DI container (Spring can inject a `Map<String, PaymentStrategy>` of all beans), or per-request (header, customer tier).
-- *Relation to Open/Closed and DIP?* The context depends on an abstraction (DIP) and new strategies extend behaviour without modifying it (OCP).
+- *Strategy vs State / Bridge?* Strategies are picked from outside and don't know each other; states pick their successors; Bridge is a design dimension fixed at assembly (see the State-vs-Strategy-vs-Bridge table in §11.2 and [§9.2](../09-patterns-structural/README.md#bridge-vs-strategy)). Don't use any of the three for two branches that will never become three.
+- *Strategy vs Template Method?* Template Method swaps **one step** by **inheritance**; Strategy swaps **the whole algorithm** by **composition**, chosen at run time (table in §11.4). Prefer Strategy when both fit.
+- *Strategy vs Command?* Strategy is *how* to do something; Command is *what* to do, with arguments, kept to run later or undo.
+- *How is the strategy selected?* Config + factory (`Map<String, Strategy>`), DI container (Spring can inject a `Map<String, PaymentStrategy>` of all beans), or per request (header, customer tier).
+- *Relation to Open/Closed and DIP?* The context depends on an abstraction (DIP); new strategies extend behaviour without modifying it (OCP).
 
 ### Self-check
 
@@ -1376,42 +833,34 @@ The registry in part 3 of the demo uses `BigDecimal` for prices. Money in domain
 
 ### What it is
 
-**Template Method** (GoF intent, paraphrased): put the **outline of an algorithm** into one base-class operation (the *template method*) and leave certain steps for **subclasses** to fill in; subclasses may redefine those steps but cannot alter the overall sequence.
-
-**GoF participants** (and who plays them in our code):
+**Template Method** (GoF intent, paraphrased): put the **outline of an algorithm** into one base-class operation (the *template method*) and leave certain steps for **subclasses**; they may redefine those steps but not the overall sequence. Like a recipe card with blanks — "boil water → brew ___ → pour → add ___ (if wanted)" — tea and coffee fill the blanks differently; the order never changes.
 
 | Participant | Role | In `lld.ch11.templatemethod` |
 |---|---|---|
 | **AbstractClass** | Declares the primitive steps (abstract or with a default) and implements the template method that calls them in order | `ImportJob`, `CaffeineBeverage` |
 | **ConcreteClass** | Implements the primitive steps that differ for its variant | `CsvImportJob`, `JsonImportJob`, `Tea`, `Coffee` |
 
-Everyday analogy: a recipe card with blanks. "Boil water → brew ___ → pour into cup → add ___ (if wanted)." Tea and coffee fill the blanks differently; the order never changes.
-
 ### The problem it solves
 
-A data import job always: reads rows, parses each one, validates, saves, reports "done". Only reading and parsing differ between CSV and JSON. Written as separate classes, the **shared flow** (order, validation, saving, reporting) is copied into each. When saving must also write an audit record, three files change — and the missed one is the bug.
-
-Template Method writes the flow once, in a method subclasses **cannot override** (`final`). The varying steps become methods the subclasses must supply.
+An import job always reads rows, parses each, validates, saves, reports "done"; only reading and parsing differ between CSV and JSON. As separate classes the **shared flow** (order, validation, saving, reporting) is copied into each; when saving must also write an audit record, three files change — and the missed one is the bug. Template Method writes the flow once in a method subclasses **cannot override** (`final`); varying steps become methods subclasses must supply.
 
 ### How it works
 
-1. Write the **template method** in an abstract class and mark it **`final`** so the order is guaranteed.
-2. Inside it, call the steps in order. Steps come in three kinds:
-   - **Required (abstract) steps** — every subclass must implement them; the compiler enforces it.
-   - **Hooks** — steps with a **default** (often empty or `true`) that a subclass *may* override, e.g. `shouldValidate()`.
+1. Write the **template method** in an abstract class, **`final`** so the order is guaranteed.
+2. It calls the steps in order. Three kinds:
+   - **Required (abstract) steps** — every subclass must implement; the compiler enforces it.
+   - **Hooks** — steps with a **default** (often empty or `true`) a subclass *may* override, e.g. `shouldValidate()`.
    - **Shared steps** — `private`, written once, not changeable.
 3. Each subclass implements only what differs.
 
-**The Hollywood Principle — "Don't call us, we'll call you."** (*Head First Design Patterns*.) The base class (high-level component) decides **when** the subclass's methods run; the subclass never calls the base class's flow itself. That **inversion of control** is the backbone of most **frameworks** (libraries that own the program's flow and call your code at set points): **the framework runs the sequence, and your class supplies only your own pieces.**
+**The Hollywood Principle — "Don't call us, we'll call you."** (*Head First*.) The base class (high-level component) decides **when** subclass methods run; the subclass never drives the flow. That **inversion of control** is the backbone of most **frameworks** (libraries that own the program's flow and call your code at set points): **the framework runs the sequence; your class supplies only your pieces.**
 
 ### Structure (UML)
 
 ![Template Method Pattern - Class Diagram](../../assets/P-template-method-pattern-2.svg)
 *Figure — Class diagram: ImportJob with final run(), abstract steps name/readRows/parseRow, hook shouldValidate and private save; CsvImportJob and JsonImportJob override only what differs (course diagram)*
 
-In the diagram above, the subclasses are tiny — but `CsvImportJob` on its own does not reveal the sequence it will follow at run time; only the parent shows that. That is the trade-off.
-
-Our Java design:
+Subclasses are tiny — but `CsvImportJob` alone doesn't reveal the sequence it follows; only the parent shows it. That is the trade-off.
 
 ```mermaid
 classDiagram
@@ -1448,21 +897,14 @@ classDiagram
 
 ### Java example
 
-`lld.ch11.templatemethod`:
+`code/lld/ch11/templatemethod/`:
 
-1. **Import jobs.** `ImportJob.run` is `final`. `name`, `readRows`, `parseRow` are **abstract** (required). `shouldValidate` and `afterSave` are **hooks** (defaults `true` and "do nothing"). `validate` and `save` are **private** shared steps. `JsonImportJob` overrides both hooks.
-2. **Beverages** (the *Head First* example). `customerWantsCondiments()` is a hook: `Coffee(black = true)` turns off the optional step.
+1. **Import jobs.** `ImportJob.run` is `final`; `name`, `readRows`, `parseRow` are **abstract** (required); `shouldValidate` and `afterSave` are **hooks** (defaults `true` and "do nothing"); `validate` and `save` are **private** shared steps. `JsonImportJob` overrides both hooks.
+2. **Beverages** (*Head First*). `customerWantsCondiments()` is a hook: `Coffee(black = true)` turns off the optional step.
 
 ```java
-// File: code/lld/ch11/templatemethod/ImportJob.java
-package lld.ch11.templatemethod;
-
-import java.util.ArrayList;
-import java.util.List;
-
 /** ABSTRACT CLASS holding the TEMPLATE METHOD. */
 public abstract class ImportJob {
-
     /** Template method. Marked final: subclasses cannot change the order, drop a step or insert one. */
     public final void run(String source) {
         System.out.println("Running the " + name() + " import:");
@@ -1479,87 +921,25 @@ public abstract class ImportJob {
         afterSave(records.size());                            // hook with an empty default
         System.out.println("  done");
     }
-
     // Required steps: the compiler forces every subclass to supply them.
     protected abstract String name();
     protected abstract List<String> readRows(String source);
     protected abstract String parseRow(String row);
-
     // Hooks: sensible defaults, overriding is optional.
     protected boolean shouldValidate() { return true; }
     protected void afterSave(int count) { }
-
-    // Shared steps: written once, private, cannot be changed by subclasses.
-    private void validate(List<String> records) {
-        long blank = records.stream().filter(String::isBlank).count();
-        System.out.println("  validated " + records.size() + " records, " + blank + " blank");
-    }
-
-    private void save(List<String> records) {
-        System.out.println("  saved " + records.size() + " records (+ audit entry)");
-    }
+    // Shared steps: private validate(...) and save(...) — written once, cannot be changed by subclasses.
 }
-```
-
-```java
-// File: code/lld/ch11/templatemethod/CsvImportJob.java
-package lld.ch11.templatemethod;
-
-import java.util.Arrays;
-import java.util.List;
 
 /** Supplies only what differs for CSV. */
 public final class CsvImportJob extends ImportJob {
     @Override protected String name() { return "CSV"; }
-
-    @Override
-    protected List<String> readRows(String source) {
-        return Arrays.stream(source.split("\n")).skip(1).toList();   // skip the header line
-    }
-
-    @Override
-    protected String parseRow(String row) { return row.split(",")[0].trim(); }
+    @Override protected List<String> readRows(String source) { return Arrays.stream(source.split("\n")).skip(1).toList(); } // skip header
+    @Override protected String parseRow(String row) { return row.split(",")[0].trim(); }
 }
-```
+// JsonImportJob (toy regex parsing, no JSON library) also overrides the hooks:
+//   shouldValidate() -> false;  afterSave(count) prints "[hook] notified upstream: N ids consumed"
 
-```java
-// File: code/lld/ch11/templatemethod/JsonImportJob.java
-package lld.ch11.templatemethod;
-
-import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
-/** Supplies what differs for JSON, and overrides two hooks. (Toy parsing: no JSON library.) */
-public final class JsonImportJob extends ImportJob {
-    private static final Pattern OBJECT = Pattern.compile("\\{[^}]*}");
-    private static final Pattern ID = Pattern.compile("\"id\"\\s*:\\s*\"([^\"]*)\"");
-
-    @Override protected String name() { return "JSON"; }
-
-    @Override
-    protected List<String> readRows(String source) {
-        return OBJECT.matcher(source).results().map(m -> m.group()).toList();
-    }
-
-    @Override
-    protected String parseRow(String row) {
-        Matcher m = ID.matcher(row);
-        return m.find() ? m.group(1) : "";
-    }
-
-    @Override protected boolean shouldValidate() { return false; }
-
-    @Override
-    protected void afterSave(int count) { System.out.println("  [hook] notified upstream: " + count + " ids consumed"); }
-}
-```
-
-```java
-// File: code/lld/ch11/templatemethod/CaffeineBeverage.java
-package lld.ch11.templatemethod;
-
-/** The classic beverage example: same recipe skeleton, two steps and one hook vary. */
 public abstract class CaffeineBeverage {
     public final void prepareRecipe() {          // template method
         boilWater();
@@ -1567,60 +947,13 @@ public abstract class CaffeineBeverage {
         pourInCup();
         if (customerWantsCondiments()) addCondiments();
     }
-
     protected abstract void brew();
     protected abstract void addCondiments();
-
     /** Hook: "Don't call us, we'll call you" - the base class decides WHEN this runs. */
     protected boolean customerWantsCondiments() { return true; }
-
-    private void boilWater() { System.out.println("  boiling water"); }
-    private void pourInCup() { System.out.println("  pouring into cup"); }
+    ...
 }
-```
-
-```java
-// File: code/lld/ch11/templatemethod/Tea.java
-package lld.ch11.templatemethod;
-
-public final class Tea extends CaffeineBeverage {
-    @Override protected void brew() { System.out.println("  steeping the tea"); }
-    @Override protected void addCondiments() { System.out.println("  adding lemon"); }
-}
-```
-
-```java
-// File: code/lld/ch11/templatemethod/Coffee.java
-package lld.ch11.templatemethod;
-
-public final class Coffee extends CaffeineBeverage {
-    private final boolean black;
-
-    public Coffee(boolean black) { this.black = black; }
-
-    @Override protected void brew() { System.out.println("  dripping coffee through filter"); }
-    @Override protected void addCondiments() { System.out.println("  adding sugar and milk"); }
-    @Override protected boolean customerWantsCondiments() { return !black; }
-}
-```
-
-```java
-// File: code/lld/ch11/templatemethod/Main.java
-package lld.ch11.templatemethod;
-
-public class Main {
-    public static void main(String[] args) {
-        System.out.println("=== 1. Import jobs ===");
-        new CsvImportJob().run("id,name\nu1, Asha\nu2, Ben\nu3, Chen");
-        new JsonImportJob().run("[{\"id\":\"p9\",\"qty\":1},{\"id\":\"p7\",\"qty\":4}]");
-
-        System.out.println("\n=== 2. Beverages (hook controls an optional step) ===");
-        System.out.println("tea:");
-        new Tea().prepareRecipe();
-        System.out.println("black coffee:");
-        new Coffee(true).prepareRecipe();
-    }
-}
+// Coffee(boolean black) overrides customerWantsCondiments() to return !black.
 ```
 
 **Output:**
@@ -1661,49 +994,49 @@ black coffee:
 | How many axes can vary | One (a class has one parent) | Several (hold several strategies) |
 | What one file shows | Just the varying pieces | The complete algorithm |
 
-Strategy is usually the more flexible choice. Template Method pays off when **most of the flow is common**, only small pieces differ, and you want the compiler to **enforce the sequence**. They combine well: the base class fixes the sequence, but each step is a **strategy object** (or lambda) handed in rather than inherited — so the order is still enforced, yet you are not limited to one parent. Spring's `JdbcTemplate` (a helper around **JDBC**, Java's standard API for talking to SQL databases) works like this: it owns the fixed flow (get connection, create statement, execute, handle exceptions, close resources) and takes your varying part as a **callback** (a function or object you hand over so the other code can call you back — here `RowMapper`, `PreparedStatementSetter`) rather than a subclass.
+Strategy is usually more flexible. Template Method pays off when **most of the flow is common**, small pieces differ, and you want the compiler to **enforce the sequence**. They combine well: the base fixes the sequence but each step is a **strategy object** (or lambda) passed in rather than inherited — order enforced, no single-parent limit. Spring's `JdbcTemplate` (a helper around **JDBC**, Java's standard SQL-database API) owns the fixed flow (get connection, create statement, execute, handle exceptions, close resources) and takes your part as a **callback** (a function/object you hand over to be called back — `RowMapper`, `PreparedStatementSetter`), not a subclass.
 
 ### Trade-offs
 
 | Pros | Cons |
 |---|---|
-| The shared flow is written once (DRY: Don't Repeat Yourself). | No single file tells the whole story: the parent holds the order, the child holds the pieces. |
+| The shared flow is written once (DRY: Don't Repeat Yourself). | No single file tells the whole story: parent holds the order, child the pieces. |
 | The order is guaranteed (`final`). | One parent only: two independent variations can't combine. |
-| New variants are small. | Parent and children are bound tightly; altering one step's signature forces every subclass to change. |
-| Abstract steps make the compiler report anything a subclass has not supplied. | Base classes tend to swell until they demand many abstract methods and nobody wants to extend them. |
+| New variants are small. | Tight parent–child binding; changing one step's signature changes every subclass. |
+| Abstract steps make the compiler report anything a subclass hasn't supplied. | Base classes swell until they demand many abstract methods and nobody wants to extend them. |
 
 ### When not to use it
 
 - **The flow is two lines** — nothing to protect.
-- **Variants must combine** (an encrypted CSV import would need both an "encrypted" and a "CSV" parent) — use composition.
-- **Behaviour must change after creation** — use Strategy.
-- **Subclasses override every step** — the flow was never really shared.
+- **Variants must combine** (an encrypted CSV import needs both an "encrypted" and a "CSV" parent) — composition.
+- **Behaviour must change after creation** — Strategy.
+- **Subclasses override every step** — the flow was never shared.
 
 ### Common mistakes
 
-1. **Too many required steps.** A subclass should only have to write two or three methods; give the rest a default and make them hooks.
-2. **Calling an overridable step from the base constructor.** The base constructor runs **before** the subclass's fields are initialised, so in Java the step sees `null`/`0`/`false`. (In C++ it is different but still wrong: during the base constructor a virtual call is dispatched to the base version, never the subclass override.) Call steps from the template method, never the constructor.
-3. **Leaving out `final` on the template method** — then a subclass can reorder or skip steps; nothing is enforced any more and the pattern becomes a mere agreement. (C++: make it non-virtual. Python and JavaScript cannot enforce it at all, so it must be documented and checked in review.)
-4. **Making steps `public`** — callers could run step 3 without steps 1 and 2. Keep them `protected` (or move reusable steps into a separate object).
-5. **Violating Liskov** (the Liskov Substitution Principle: a subclass must work anywhere its parent is expected) in overrides (a hook that throws, or a step that changes the contract).
+1. **Too many required steps** — a subclass should write two or three methods; make the rest hooks with defaults.
+2. **Calling an overridable step from the base constructor.** It runs **before** subclass fields are initialised, so in Java the step sees `null`/`0`/`false`. (In C++ it is different but still wrong: during the base constructor a virtual call dispatches to the base version, never the override.) Call steps from the template method only.
+3. **Omitting `final` on the template method** — a subclass can reorder or skip steps; the pattern becomes a mere agreement. (C++: make it non-virtual. Python and JavaScript can't enforce it — document and review.)
+4. **Making steps `public`** — callers could run step 3 without 1 and 2. Keep them `protected` (or move reusable steps into a separate object).
+5. **Violating Liskov** (Liskov Substitution Principle: a subclass must work wherever its parent is expected) in overrides — a hook that throws, a step that changes the contract.
 
 ### Template Method in other languages
 
-- **Java:** `final` template method, `protected abstract` required steps, `protected` hooks with a body. An interface `default` method can also act as a template method, but an interface has no instance state and a default method cannot be `final`, so any implementer may override it.
-- **Python:** `abc.ABC` with `@abstractmethod`. There is no `final` enforced at run time, so a comment (or `typing.final` for type checkers) is the only guard; a leading underscore marks internal steps.
+- **Java:** `final` template method, `protected abstract` required steps, `protected` hooks with a body. An interface `default` method can act as a template method, but an interface has no instance state and a default method can't be `final`, so any implementer may override it.
+- **Python:** `abc.ABC` with `@abstractmethod`; no run-time `final`, so a comment (or `typing.final` for type checkers) is the only guard; a leading underscore marks internal steps.
 - **TypeScript:** `abstract` classes give the compile-time check; plain JavaScript uses base methods that throw.
 - **C++:** a non-virtual public template method calling `protected virtual` steps — the **non-virtual interface (NVI)** idiom.
-- **Go and Rust** have no inheritance: a function taking an interface/trait with the varying steps — i.e. the Strategy shape.
+- **Go and Rust** have no inheritance: a function taking an interface/trait with the varying steps — the Strategy shape.
 
 ### Real-world examples
 
-- **`java.io.InputStream`**: `read(byte[], int, int)` is implemented in terms of the abstract `read()`; subclasses supply the single-byte read (and override the bulk method for speed).
-- **`java.util.AbstractList`**: implement `get(int)` and `size()`, and you inherit `iterator()`, `indexOf`, `contains`, `equals`, `hashCode`...
-- **`HttpServlet.service()`** (Jakarta/Java Servlet) dispatches to `doGet`/`doPost`/`doPut`... by HTTP method; you override the ones you support, and the ones you do not override reject the request (405 Method Not Allowed on HTTP/1.1).
-- **`AbstractQueuedSynchronizer`** (AQS — the JDK's internal building block for locks; behind `ReentrantLock`, `Semaphore`, `CountDownLatch`): `acquire()` is the template; subclasses implement `tryAcquire`/`tryRelease`.
-- **Test frameworks**: JUnit (`@BeforeEach`/`@AfterEach`) and pytest (fixtures, `setup_method`/`teardown_method`) own the set-up → test → tear-down flow; your hooks never call each other. **Mobile lifecycles**: Android `Activity` (`onCreate`, `onStart`, `onResume`...) and iOS `UIViewController` (`viewDidLoad`, `viewWillAppear`...). **Maven/Gradle** (Java build tools) build lifecycles (fixed phases, you plug in goals/tasks).
-- **Sorting with a comparison**: `Arrays.sort` owns the algorithm and needs just one step from you, the comparison. Old designs had the elements supply it (`Comparable.compareTo`); modern APIs pass it in as a `Comparator` — the Strategy form of the same idea.
-- **Spring `JdbcTemplate`, `RestTemplate`, `TransactionTemplate`** — "template + callback" variants of the same idea.
+- **`java.io.InputStream`**: `read(byte[], int, int)` is built on abstract `read()`; subclasses supply the single-byte read (and override the bulk method for speed).
+- **`java.util.AbstractList`**: implement `get(int)` and `size()` and inherit `iterator()`, `indexOf`, `contains`, `equals`, `hashCode`...
+- **`HttpServlet.service()`** (Jakarta/Java Servlet) dispatches to `doGet`/`doPost`/`doPut`... by HTTP method; methods you don't override reject the request (405 Method Not Allowed on HTTP/1.1).
+- **`AbstractQueuedSynchronizer`** (AQS — the JDK's building block behind `ReentrantLock`, `Semaphore`, `CountDownLatch`): `acquire()` is the template; subclasses implement `tryAcquire`/`tryRelease`.
+- **Test frameworks**: JUnit (`@BeforeEach`/`@AfterEach`) and pytest (fixtures, `setup_method`/`teardown_method`) own set-up → test → tear-down; your hooks never call each other. **Mobile lifecycles**: Android `Activity` (`onCreate`, `onStart`, `onResume`...), iOS `UIViewController` (`viewDidLoad`, `viewWillAppear`...). **Maven/Gradle** (Java build tools): fixed phases, you plug in goals/tasks.
+- **Sorting with a comparison**: `Arrays.sort` owns the algorithm and needs only the comparison. Old designs had elements supply it (`Comparable.compareTo`); modern APIs pass a `Comparator` — the Strategy form of the same idea.
+- **Spring `JdbcTemplate`, `RestTemplate`, `TransactionTemplate`** — "template + callback" variants.
 
 ### In the interview
 
@@ -1711,12 +1044,12 @@ Strategy is usually the more flexible choice. Template Method pays off when **mo
 
 **Follow-ups:**
 
-- *What is a hook?* A step with a default implementation that subclasses may override (e.g. `shouldValidate()`), giving optional control points.
+- *What is a hook?* A step with a default implementation that subclasses may override (e.g. `shouldValidate()`) — optional control points.
 - *What is the Hollywood Principle?* "Don't call us, we'll call you": high-level components call low-level ones at the right time; low-level components plug in but don't call up. It prevents "dependency rot" (dependencies tangled in every direction, so nothing can change safely).
-- *Why `final`?* It is the guarantee: without it a subclass could reorder or drop steps, and the pattern would be only a gentleman's agreement.
-- *Template Method vs Factory Method?* A factory method is often one step of a template method — the step whose job is to create an object (GoF notes that template methods frequently call factory methods). The course frames it more strongly — a factory method is a special template-method step whose subclass-supplied job is creation, while most template steps create nothing. Take that as "a factory method usually lives inside a template method", not as a strict rule: a factory method can also be called directly by clients.
-- *Template Method vs Decorator?* A decorator wraps an existing object at run time, and several can be layered; a template-method subclass is decided when the object is built and cannot be layered.
-- *Template Method vs Builder?* Both impose an order, but a Builder director invokes the steps on a **different** object (the builder it holds), while a template method invokes them on **its own** instance via inheritance.
+- *Why `final`?* It is the guarantee: without it a subclass could reorder or drop steps — only a gentleman's agreement.
+- *Template Method vs Factory Method?* A factory method is often one step of a template method — the step that creates an object (GoF notes template methods frequently call factory methods). The course frames it more strongly — a factory method is a special template step whose subclass-supplied job is creation; take that as "usually lives inside a template method", not a strict rule: clients can call a factory method directly.
+- *Template Method vs Decorator?* A decorator wraps an existing object at run time and can be layered; a template-method subclass is fixed when the object is built and can't be layered.
+- *Template Method vs Builder?* Both impose an order, but a Builder director invokes steps on a **different** object (the builder it holds); a template method invokes them on **its own** instance via inheritance.
 - *Constructor trap?* Never call overridable methods from a constructor; the subclass isn't initialised yet.
 
 ### Self-check
@@ -1740,11 +1073,9 @@ Strategy is usually the more flexible choice. Template Method pays off when **mo
 
 ### What it is
 
-**Visitor** lets you **introduce new operations** over a group of classes **while leaving those classes untouched**. Every operation lives in its own **visitor** class, which has a separate method for each kind of element; each element keeps one tiny method, `accept(visitor)`, whose body is `visitor.visit(this)`.
+**Visitor** lets you **add new operations** over a group of classes **without touching them**. Each operation is a **visitor** class with one method per element kind; each element keeps one tiny `accept(visitor)` whose body is `visitor.visit(this)`. Like a tax inspector who brings the rules for "restaurant", "shop" or "factory" — next year a fire-safety inspector visits with different rules, and the businesses don't change.
 
-**GoF intent (paraphrased):** represent an operation to be performed on the elements of an object structure as a separate object, so you can define a new operation without changing the classes of the elements it works on.
-
-**GoF participants** (and who plays them in our code):
+**GoF intent (paraphrased):** represent an operation on the elements of an object structure as a separate object, so you can define a new operation without changing the element classes.
 
 | Participant | Role | In `lld.ch11.visitor` |
 |---|---|---|
@@ -1754,36 +1085,32 @@ Strategy is usually the more flexible choice. Template Method pays off when **mo
 | **ConcreteElement** | Implements `accept` as `visitor.visit(this)` | `Server`, `Database`, `LoadBalancer`, `ResourceGroup` |
 | **ObjectStructure** | Holds the elements and lets a visitor reach each of them (a list or a Composite) | the `ResourceGroup` tree built in `Main` |
 
-Everyday analogy: a tax inspector visiting different businesses. The businesses don't each contain tax rules; the inspector brings them and applies the right rule for "restaurant", "shop" or "factory". Next year, a fire-safety inspector visits the same businesses with different rules — the businesses don't change.
-
 ### The problem it solves
 
-Picture an infrastructure plan made of just three resource kinds — server, database, load balancer. That **list of kinds is stable**. The **operations never stop arriving**: a monthly bill, a security review, a tag report, a diagram export, and so on.
+An infrastructure plan has three resource kinds — server, database, load balancer — a **stable list**. **Operations never stop arriving**: monthly bill, security review, tag report, diagram export...
 
-- Put each operation **inside** the resource classes → `Server` holds pricing, security, tagging and drawing code; unrelated teams edit the same file.
-- Put it **outside** with type checks → an `instanceof` chain in every operation. Add a resource kind, and you must find every chain; the compiler won't tell you which one you missed.
+- Operations **inside** the classes → `Server` holds pricing, security, tagging and drawing code; unrelated teams edit one file.
+- Operations **outside** with type checks → an `instanceof` chain in each; a new resource kind means finding every chain, and the compiler won't say which you missed.
 
-Visitor gives each operation its own class, and uses **double dispatch** to pick the right method without any type check.
+Visitor gives each operation its own class and uses **double dispatch** to pick the right method with no type check.
 
 ### How it works — double dispatch
 
-Java chooses **which override** (a subclass's replacement of an inherited method) of a method runs based on the **run-time type of the receiver** — the object before the dot (single dispatch) — but chooses **which overload** (one of several same-named methods with different parameter types: `visit(Server)` vs `visit(Database)`) at **compile time**, from the **static type** (the type the compiler sees in the declaration) of the argument. If you hold a `Resource r`, `visitor.visit(r)` cannot compile to the right overload — the compiler only knows "Resource".
+Java chooses **which override** (a subclass's replacement of an inherited method) runs from the **run-time type of the receiver** — the object before the dot (single dispatch) — but **which overload** (same-named methods with different parameter types: `visit(Server)` vs `visit(Database)`) at **compile time**, from the argument's **static type** (the declared type the compiler sees). Holding a `Resource r`, `visitor.visit(r)` can't compile to the right overload — the compiler only knows "Resource".
 
 Visitor makes **two calls**:
 
 1. `resource.accept(visitor)` — dispatch #1 on the **resource's** run-time type: `Server.accept` runs.
-2. Inside `Server.accept`, `visitor.visit(this)` — here `this` has static type `Server`, so the compiler picks `visit(Server)`; dispatch #2 then happens on the **visitor's** run-time type (`MonthlyCost` or `SecurityAudit`).
+2. Inside it, `visitor.visit(this)` — `this` has static type `Server`, so the compiler picks `visit(Server)`; dispatch #2 happens on the **visitor's** run-time type (`MonthlyCost` or `SecurityAudit`).
 
-The method that finally runs depends on **two** types — element and visitor. That is **double dispatch**.
+The method that runs depends on **two** types — element and visitor: **double dispatch**.
 
 ### Structure (UML)
 
 ![Visitor Pattern - Class Diagram](../../assets/P-visitor-pattern-2.svg)
 *Figure — Class diagram: Resource with accept; Server, Database, LoadBalancer implement it; PlanVisitor has one visit per resource type; MonthlyCost and SecurityAudit implement it (course diagram; it shows `total : double`, our Java code uses `BigDecimal` for money)*
 
-In the diagram above the two sets of arrows point in opposite directions: each element depends on the visitor interface (its `accept` has a visitor parameter), while each visitor depends on every element type (it has a `visit` for each). That second arrow is why **adding an element type is expensive**.
-
-Our Java design (with a Composite group element):
+The arrows point opposite ways: each element depends on the visitor interface (`accept` takes a visitor), while each visitor depends on every element type (a `visit` for each) — why **adding an element type is expensive**.
 
 ```mermaid
 classDiagram
@@ -1836,81 +1163,29 @@ classDiagram
     Resource ..> PlanVisitor : accept
 ```
 
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant R as Server (seen as Resource)
-    participant V as MonthlyCost
-    C->>R: accept(visitor)
-    Note over R: dispatch 1 picks Server.accept
-    R->>V: visit(this) with this typed as Server
-    Note over V: dispatch 2 picks MonthlyCost.visit(Server)
-    V-->>C: total updated
-```
-
 ### Java example
 
-`lld.ch11.visitor` has **both** styles over the same domain:
+`code/lld/ch11/visitor/` has **both** styles over one domain:
 
-1. **Classic Visitor.** Elements are **records** (so visitors read data through accessors, not public fields). `ResourceGroup` is a **Composite** (the pattern in which a group and a single item share one interface, so a tree can be handled uniformly): its `accept` visits itself and then its children. (A tree is optional: Visitor only requires a stable set of element types, and it works just as well over a flat list. Composite is simply the most common route into Visitor.) Prices are `BigDecimal`, never `double`. `MonthlyCost` and `SecurityAudit` each keep all their rules in one file; neither touches a resource class. A new visitor instance is used per run because they accumulate results.
-2. **Java 21 alternative — sealed interface + pattern matching** (`ModernPlan`). `Infra` is `sealed ... permits Vm, Sql, Lb`. `monthlyCost` is a `switch` with **no `default`** — the compiler checks it is **exhaustive** (covers every possible case), so adding a new permitted record breaks every switch that forgot it (the same safety net Visitor gave you). `audit` uses **record patterns** (deconstruction, `case Sql(String n, int gb, boolean enc)`) and **guards** (`when !enc`). A guarded case never counts toward exhaustiveness (the compiler cannot know the guard is sometimes true), which is why `audit` also needs the three unguarded `case Vm vm` / `Sql db` / `Lb lb` lines.
-
-```java
-// File: code/lld/ch11/visitor/Resource.java
-package lld.ch11.visitor;
-
-/** ELEMENT interface: the only thing every resource must provide is accept. */
-public interface Resource {
-    void accept(PlanVisitor visitor);
-}
-```
+1. **Classic Visitor.** Elements are **records** (visitors read data via accessors, not public fields). `ResourceGroup` is a **Composite** (group and single item share one interface, so a tree is handled uniformly): its `accept` visits itself then its children. (A tree is optional — Visitor needs only a stable set of element types and works over a flat list; Composite is just the most common route in.) Prices are `BigDecimal`, never `double`. `MonthlyCost` and `SecurityAudit` each keep all rules in one file and touch no resource class; a new visitor instance per run because they accumulate.
+2. **Java 21 alternative — sealed interface + pattern matching** (`ModernPlan`). `Infra` is `sealed ... permits Vm, Sql, Lb`. `monthlyCost` is a `switch` with **no `default`** — the compiler checks it is **exhaustive** (covers every case), so a new permitted record breaks every switch that forgot it (Visitor's safety net). `audit` uses **record patterns** (deconstruction, `case Sql(String n, int gb, boolean enc)`) and **guards** (`when !enc`). A guarded case never counts toward exhaustiveness (the compiler can't know the guard is sometimes true), so `audit` also needs the unguarded `case Vm vm` / `Sql db` / `Lb lb` lines.
 
 ```java
-// File: code/lld/ch11/visitor/PlanVisitor.java
-package lld.ch11.visitor;
+/** ELEMENT: the only thing every resource must provide is accept. */
+public interface Resource { void accept(PlanVisitor visitor); }
 
-/** VISITOR interface: one visit per element type. This list is what makes new types expensive. */
+/** VISITOR: one visit per element type. This list is what makes new types expensive. */
 public interface PlanVisitor {
     void visit(Server server);
     void visit(Database database);
     void visit(LoadBalancer loadBalancer);
     void visit(ResourceGroup group);
 }
-```
 
-```java
-// File: code/lld/ch11/visitor/Server.java
-package lld.ch11.visitor;
-
-/** Records expose data through accessors, so visitors need no public fields. */
 public record Server(String name, int vcpus, boolean publicIp) implements Resource {
     public void accept(PlanVisitor v) { v.visit(this); }   // 2nd dispatch: overload picked by static type Server
 }
-```
-
-```java
-// File: code/lld/ch11/visitor/Database.java
-package lld.ch11.visitor;
-
-public record Database(String name, int storageGb, boolean encrypted) implements Resource {
-    public void accept(PlanVisitor v) { v.visit(this); }
-}
-```
-
-```java
-// File: code/lld/ch11/visitor/LoadBalancer.java
-package lld.ch11.visitor;
-
-public record LoadBalancer(String name, int rules) implements Resource {
-    public void accept(PlanVisitor v) { v.visit(this); }
-}
-```
-
-```java
-// File: code/lld/ch11/visitor/ResourceGroup.java
-package lld.ch11.visitor;
-
-import java.util.List;
+// Database(name, storageGb, encrypted), LoadBalancer(name, rules): the same one-line accept.
 
 /** COMPOSITE element: visits itself, then passes the visitor to every child. */
 public record ResourceGroup(String name, List<Resource> children) implements Resource {
@@ -1919,143 +1194,50 @@ public record ResourceGroup(String name, List<Resource> children) implements Res
         for (Resource child : children) child.accept(v);
     }
 }
-```
 
-```java
-// File: code/lld/ch11/visitor/MonthlyCost.java
-package lld.ch11.visitor;
-
-import java.math.BigDecimal;
-
-/**
- * Operation 1: ALL pricing rules in one file. New instance per run (it accumulates).
- * Money is BigDecimal: exact decimal arithmetic, no binary rounding surprises.
- */
+/** Operation 1: ALL pricing rules in one file. New instance per run (it accumulates). */
 public final class MonthlyCost implements PlanVisitor {
-    static final BigDecimal PER_VCPU = new BigDecimal("24.00");
-    static final BigDecimal DB_BASE = new BigDecimal("40.00");
-    static final BigDecimal PER_GB = new BigDecimal("0.25");
-    static final BigDecimal LB_BASE = new BigDecimal("18.00");
-    static final BigDecimal PER_RULE = new BigDecimal("1.50");
-
+    static final BigDecimal PER_VCPU = new BigDecimal("24.00"), DB_BASE = new BigDecimal("40.00"),
+            PER_GB = new BigDecimal("0.25"), LB_BASE = new BigDecimal("18.00"), PER_RULE = new BigDecimal("1.50");
     private BigDecimal total = BigDecimal.ZERO;
-
-    public BigDecimal total() { return total; }
-
     public void visit(Server s)        { total = total.add(PER_VCPU.multiply(BigDecimal.valueOf(s.vcpus()))); }
     public void visit(Database d)      { total = total.add(DB_BASE.add(PER_GB.multiply(BigDecimal.valueOf(d.storageGb())))); }
     public void visit(LoadBalancer lb) { total = total.add(LB_BASE.add(PER_RULE.multiply(BigDecimal.valueOf(lb.rules())))); }
     public void visit(ResourceGroup g) { /* groups are free */ }
+    ...
 }
+// Operation 2, SecurityAudit, added later without touching a resource class: findings for a public IP,
+// an unencrypted database, a load balancer with no rules, an empty group.
 ```
 
 ```java
-// File: code/lld/ch11/visitor/SecurityAudit.java
-package lld.ch11.visitor;
+/** Java 21: a SEALED hierarchy + pattern-matching switch. No accept(), no visitor interface. */
+public sealed interface Infra permits Vm, Sql, Lb {}
+public record Vm(String name, int vcpus, boolean publicIp) implements Infra {}
+public record Sql(String name, int storageGb, boolean encrypted) implements Infra {}
+public record Lb(String name, int rules) implements Infra {}
 
-import java.util.ArrayList;
-import java.util.List;
-
-/** Operation 2: added later without touching a single resource class. */
-public final class SecurityAudit implements PlanVisitor {
-    private final List<String> findings = new ArrayList<>();
-
-    public List<String> findings() { return findings; }
-
-    public void visit(Server s) {
-        if (s.publicIp()) findings.add(s.name() + ": server has a public IP");
-    }
-    public void visit(Database d) {
-        if (!d.encrypted()) findings.add(d.name() + ": storage not encrypted");
-    }
-    public void visit(LoadBalancer lb) {
-        if (lb.rules() == 0) findings.add(lb.name() + ": load balancer has no rules");
-    }
-    public void visit(ResourceGroup g) {
-        if (g.children().isEmpty()) findings.add(g.name() + ": empty group");
-    }
+/** Operation 1 as a plain function. No 'default' branch, on purpose. Same prices as MonthlyCost. */
+public static BigDecimal monthlyCost(Infra r) {
+    return switch (r) {
+        case Vm vm -> MonthlyCost.PER_VCPU.multiply(BigDecimal.valueOf(vm.vcpus()));
+        case Sql db -> MonthlyCost.DB_BASE.add(MonthlyCost.PER_GB.multiply(BigDecimal.valueOf(db.storageGb())));
+        case Lb lb -> MonthlyCost.LB_BASE.add(MonthlyCost.PER_RULE.multiply(BigDecimal.valueOf(lb.rules())));
+    };
 }
-```
-
-```java
-// File: code/lld/ch11/visitor/ModernPlan.java
-package lld.ch11.visitor;
-
-import java.math.BigDecimal;
-import java.util.Optional;
-
-/**
- * The Java 21 alternative: a SEALED hierarchy + pattern-matching switch.
- * No accept(), no visitor interface. The compiler still checks exhaustiveness:
- * add a new record to 'permits' and every switch without it stops compiling.
- */
-public final class ModernPlan {
-    private ModernPlan() {}
-
-    public sealed interface Infra permits Vm, Sql, Lb {}
-    public record Vm(String name, int vcpus, boolean publicIp) implements Infra {}
-    public record Sql(String name, int storageGb, boolean encrypted) implements Infra {}
-    public record Lb(String name, int rules) implements Infra {}
-
-    /** Operation 1 as a plain function. No 'default' branch, on purpose. Same prices as MonthlyCost. */
-    public static BigDecimal monthlyCost(Infra r) {
-        return switch (r) {
-            case Vm vm -> MonthlyCost.PER_VCPU.multiply(BigDecimal.valueOf(vm.vcpus()));
-            case Sql db -> MonthlyCost.DB_BASE.add(MonthlyCost.PER_GB.multiply(BigDecimal.valueOf(db.storageGb())));
-            case Lb lb -> MonthlyCost.LB_BASE.add(MonthlyCost.PER_RULE.multiply(BigDecimal.valueOf(lb.rules())));
-        };
-    }
-
-    /** Operation 2 with record deconstruction patterns and guards. */
-    public static Optional<String> audit(Infra r) {
-        return switch (r) {
-            case Vm(String n, int cpus, boolean pub) when pub -> Optional.of(n + ": server has a public IP");
-            case Sql(String n, int gb, boolean enc) when !enc -> Optional.of(n + ": storage not encrypted");
-            case Lb(String n, int rules) when rules == 0 -> Optional.of(n + ": load balancer has no rules");
-            case Vm vm -> Optional.empty();     // no finding
-            case Sql db -> Optional.empty();
-            case Lb lb -> Optional.empty();
-        };
-    }
+/** Operation 2 with record deconstruction patterns and guards. */
+public static Optional<String> audit(Infra r) {
+    return switch (r) {
+        case Vm(String n, int cpus, boolean pub) when pub -> Optional.of(n + ": server has a public IP");
+        case Sql(String n, int gb, boolean enc) when !enc -> Optional.of(n + ": storage not encrypted");
+        case Lb(String n, int rules) when rules == 0 -> Optional.of(n + ": load balancer has no rules");
+        case Vm vm -> Optional.empty();     // no finding
+        case Sql db -> Optional.empty();
+        case Lb lb -> Optional.empty();
+    };
 }
-```
-
-```java
-// File: code/lld/ch11/visitor/Main.java
-package lld.ch11.visitor;
-
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.Optional;
-
-public class Main {
-    public static void main(String[] args) {
-        System.out.println("=== 1. Classic Visitor (double dispatch) over a composite plan ===");
-        Resource plan = new ResourceGroup("prod", List.of(
-            new Server("web-1", 4, true),
-            new Server("worker-1", 2, false),
-            new Database("orders-db", 200, false),
-            new LoadBalancer("edge-lb", 4),
-            new ResourceGroup("staging", List.of())));
-
-        MonthlyCost cost = new MonthlyCost();
-        plan.accept(cost);
-        System.out.println("  monthly cost: " + cost.total());
-
-        SecurityAudit audit = new SecurityAudit();
-        plan.accept(audit);
-        audit.findings().forEach(f -> System.out.println("  finding: " + f));
-
-        System.out.println("\n=== 2. Java 21: sealed interface + pattern matching switch ===");
-        List<ModernPlan.Infra> infra = List.of(
-            new ModernPlan.Vm("web-1", 4, true), new ModernPlan.Vm("worker-1", 2, false),
-            new ModernPlan.Sql("orders-db", 200, false), new ModernPlan.Lb("edge-lb", 4));
-        BigDecimal total = infra.stream().map(ModernPlan::monthlyCost).reduce(BigDecimal.ZERO, BigDecimal::add);
-        System.out.println("  monthly cost: " + total);
-        infra.stream().map(ModernPlan::audit).flatMap(Optional::stream)
-             .forEach(f -> System.out.println("  finding: " + f));
-    }
-}
+// Main: plan = ResourceGroup("prod", [Server web-1 4 vCPU public, Server worker-1 2, Database orders-db 200 GB
+// unencrypted, LoadBalancer edge-lb 4 rules, empty ResourceGroup staging]); plan.accept(new MonthlyCost()) ...
 ```
 
 **Output:**
@@ -2073,7 +1255,7 @@ public class Main {
   finding: orders-db: storage not encrypted
 ```
 
-Both styles give the same answer (cost 96.00 + 48.00 + 90.00 + 24.00 = 258.00; the empty `staging` group is free). The modern one needs no `accept`, no visitor interface, and each operation is just a function.
+Both styles agree (96.00 + 48.00 + 90.00 + 24.00 = 258.00; the empty `staging` group is free). The modern one needs no `accept` or visitor interface; each operation is a function.
 
 ### The one question that decides it: the expression problem
 
@@ -2082,54 +1264,54 @@ Both styles give the same answer (cost 96.00 + 48.00 + 90.00 + 24.00 = 258.00; t
 | Methods on the classes (plain OO) | Edit every class | One new class |
 | Visitor (or sealed + switch) | One new visitor/function | Edit the visitor interface **and every visitor** (compiler finds them) |
 
-So ask: **which changes more often here — the types or the operations?** Settled types + growing operations → Visitor (or sealed types with pattern matching). Growing types → put the operations on the classes. No ordinary OO design makes both cheap; this trade-off is called the **expression problem**.
+Ask: **which changes more often — types or operations?** Settled types + growing operations → Visitor (or sealed types with pattern matching). Growing types → operations on the classes. No ordinary OO design makes both cheap: the **expression problem**.
 
-**Open/Closed trade-off:** Visitor makes the element hierarchy **closed for modification but open for new operations** — at the price of being **closed to new element types** (each one forces edits to all visitors).
+**Open/Closed trade-off:** Visitor makes the element hierarchy **closed for modification but open for new operations** — at the price of being **closed to new element types** (each forces edits to all visitors).
 
-**Sealed interfaces + pattern matching (Java 17/21) as the modern alternative:** sealed classes arrived in Java 17 (JEP 409 — a JEP, JDK Enhancement Proposal, is the numbered design document for a Java feature); pattern matching for `switch` and record patterns were finalised in Java 21 (JEPs 441 and 440). Together they give the exhaustiveness check that was Visitor's main advantage, with far less code. The exact rules:
+**Sealed interfaces + pattern matching (Java 17/21) as the modern alternative:** sealed classes arrived in Java 17 (JEP 409 — a JEP, JDK Enhancement Proposal, is the numbered design document for a Java feature); pattern matching for `switch` and record patterns were finalised in Java 21 (JEPs 441 and 440). Together they give Visitor's main advantage, the exhaustiveness check, with far less code. The exact rules:
 
-- A `switch` **expression** must always be exhaustive. A `switch` **statement** must be exhaustive too as soon as it uses patterns or `case null` (old-style statements over constants need not be).
-- Over a `sealed` type, covering every permitted subtype with an **unguarded** pattern makes the switch exhaustive with no `default`. Guarded cases (`when ...`) do not count.
-- Over a type that is **not** sealed, the compiler cannot know all subtypes, so you need a `default` (or a total pattern such as `case Infra i`) — and then the check is gone.
+- A `switch` **expression** must always be exhaustive. A `switch` **statement** must be too once it uses patterns or `case null` (old-style statements over constants need not be).
+- Over a `sealed` type, covering every permitted subtype with an **unguarded** pattern makes the switch exhaustive with no `default`. Guarded cases (`when ...`) don't count.
+- Over a type that is **not** sealed, the compiler can't know all subtypes, so you need a `default` (or a total pattern such as `case Infra i`) — and the check is gone.
 - If a new subtype appears at run time without recompiling the switch (separate compilation), the compiler-generated fallback throws `MatchException`.
-- **Dominance:** cases are tried top to bottom, and a case that can never match because an earlier one already covers it is a compile error. That is why the guarded `case Vm(...) when pub` must come **before** the unguarded `case Vm vm`, never after.
-- **`null`:** a pattern `switch` without a `case null` throws `NullPointerException` when the selector is `null`; `default` alone does not match `null`.
+- **Dominance:** cases are tried top to bottom, and a case that can never match because an earlier one covers it is a compile error — why the guarded `case Vm(...) when pub` must come **before** the unguarded `case Vm vm`.
+- **`null`:** a pattern `switch` without `case null` throws `NullPointerException` on a `null` selector; `default` alone does not match `null`.
 
-Write a classic Visitor when the element hierarchy **is not and cannot be sealed** — typically because the element classes **belong to another team or library** and you cannot edit them — but already exposes `accept` (typical of libraries such as ASM — a library for reading and rewriting Java **bytecode**, the compiled instructions the JVM (Java Virtual Machine) runs — or javac's tree API, which ship their own visitor interfaces), when you need a **walk with per-node callbacks** over a big tree, or when each operation should be a separately testable, injectable class.
+Write a classic Visitor when the element hierarchy **is not and cannot be sealed** — typically classes **owned by another team or library** that already expose `accept` (libraries such as ASM — reads and rewrites Java **bytecode**, the compiled instructions the JVM (Java Virtual Machine) runs — or javac's tree API ship their own visitor interfaces) — when you need a **walk with per-node callbacks** over a big tree, or when each operation should be a separately testable, injectable class.
 
-**Visitor outside Java.** Kotlin: a sealed class with an exhaustive `when`. Python: `match` with class patterns, or `functools.singledispatch` (dispatch on the argument type with no `accept`). C++: `std::variant` + `std::visit` — the pattern as a library feature. Rust and Swift: enums with associated values plus `match`/`switch`, where a missing case is a build error. Languages without overloading (Python, JavaScript) name the methods `visitServer`, `visitDatabase`, ... instead of overloading `visit`.
+**Visitor outside Java.** Kotlin: sealed class + exhaustive `when`. Python: `match` with class patterns, or `functools.singledispatch` (dispatch on argument type, no `accept`). C++: `std::variant` + `std::visit` — the pattern as a library feature. Rust and Swift: enums with associated values plus `match`/`switch`; a missing case is a build error. Languages without overloading (Python, JavaScript) name methods `visitServer`, `visitDatabase`, ... instead of overloading `visit`.
 
 ### Trade-offs
 
 | Pros | Cons |
 |---|---|
-| Adding an operation = writing one class; elements stay as they are. | Adding an element type forces a change in every existing visitor. |
+| Adding an operation = writing one class; elements stay as they are. | Adding an element type changes every existing visitor. |
 | Related logic stays together (all pricing in one file). | Double dispatch is indirect; `accept` tells you nothing about what runs. |
-| The compiler reports any element type a visitor has not handled. | Elements often must expose their data (weaker encapsulation). |
+| The compiler reports any element type a visitor hasn't handled. | Elements often must expose their data (weaker encapsulation). |
 | Elements stay small: data + one-line `accept`. | Ceremony for small sets of types. |
 
 ### When not to use it
 
-- **New types arrive often** — every one edits every visitor.
-- **A tiny model** (say three element types and a single operation) — a type check or a plain method is simpler.
+- **New types arrive often** — each edits every visitor.
+- **A tiny model** (three element types, one operation) — a type check or plain method is simpler.
 - **The operation concerns one type only** — it's a method.
 - **Your language checks switch exhaustiveness** (Java 21 sealed types, Kotlin `when`, Rust `match`) — use that.
 
 ### Common mistakes
 
-1. Reaching for Visitor with two element types.
-2. Making element fields **public** for visitors (use accessors/records).
-3. **Reusing a stateful visitor** (like `MonthlyCost`) across runs without resetting — create a new one per run.
-4. Adding a `default` branch to a sealed-type switch — it **turns off** the exhaustiveness check you wanted.
-5. Forgetting that the composite's `accept` must forward to children (or deciding where traversal lives: element, visitor, or an Iterator).
-6. **Writing a visitor where a sealed-type `switch` would do.** If your language checks exhaustiveness (Java 21, Kotlin, Rust, Swift), that gives the same safety with a fraction of the code.
+1. Visitor with two element types.
+2. **Public** element fields for visitors (use accessors/records).
+3. **Reusing a stateful visitor** (`MonthlyCost`) across runs without resetting — create one per run.
+4. A `default` branch in a sealed-type switch — it **turns off** the exhaustiveness check you wanted.
+5. Forgetting the composite's `accept` must forward to children (or not deciding where traversal lives: element, visitor, or an Iterator).
+6. **A visitor where a sealed-type `switch` would do** — with checked exhaustiveness (Java 21, Kotlin, Rust, Swift) you get the same safety for a fraction of the code.
 
 ### Real-world examples
 
-- **Compilers and linters** (tools that flag suspicious code): an **AST** (abstract syntax tree — the tree a compiler builds from source code) has a fixed set of node kinds and endless passes (type check, optimise, format, lint rules). The JDK's `com.sun.source.tree.TreeVisitor` (javac tree API) and `javax.lang.model.element.ElementVisitor` (annotation processing) are visitors; ANTLR (a parser generator) generates visitor classes for your grammar.
+- **Compilers and linters** (tools flagging suspicious code): an **AST** (abstract syntax tree — the tree a compiler builds from source) has fixed node kinds and endless passes (type check, optimise, format, lint rules). The JDK's `com.sun.source.tree.TreeVisitor` (javac tree API) and `javax.lang.model.element.ElementVisitor` (annotation processing) are visitors; ANTLR (a parser generator) generates visitor classes for your grammar.
 - **Bytecode libraries**: ASM's `ClassVisitor` / `MethodVisitor`.
-- **`java.nio.file.FileVisitor`** with `Files.walkFileTree` — named after the pattern and often cited, but strictly it is a **tree-walk callback** interface (`preVisitDirectory`, `visitFile`, `visitFileFailed`, `postVisitDirectory`): there is no `accept` and no double dispatch over element classes. The *spirit* (operation kept outside the file-system objects) is Visitor's; the mechanism is closer to a Template Method walk calling your hooks.
-- **Document models**: a **DOM** (Document Object Model — the tree of elements that makes up a web page or XML document) has a fixed set of node kinds and ever more operations — serialise to HTML/PDF, pull out the plain text, collect all links; **infrastructure tools** computing cost, policy and diagrams over resource plans (this lesson's example); **query planners** (the database component that decides how to run a SQL query: cost estimation, rewriting, EXPLAIN).
+- **`java.nio.file.FileVisitor`** with `Files.walkFileTree` — named after the pattern and often cited, but strictly a **tree-walk callback** interface (`preVisitDirectory`, `visitFile`, `visitFileFailed`, `postVisitDirectory`): no `accept`, no double dispatch over element classes. The *spirit* (operation kept outside the file-system objects) is Visitor's; the mechanism is closer to a Template Method walk calling your hooks.
+- **Document models**: a **DOM** (Document Object Model — the element tree of a web page or XML document) has fixed node kinds and ever more operations — serialise to HTML/PDF, extract plain text, collect links; **infrastructure tools** computing cost, policy and diagrams over resource plans (this example); **query planners** (the database component deciding how to run a SQL query: cost estimation, rewriting, EXPLAIN).
 
 ### In the interview
 
@@ -2137,13 +1319,10 @@ Write a classic Visitor when the element hierarchy **is not and cannot be sealed
 
 **Follow-ups:**
 
-- *Explain double dispatch.* Java picks overloads at compile time from static types; `accept` runs on the element's run-time type, and inside it `this` has the concrete static type, so the right `visit` overload is chosen; then the visitor's run-time type picks the implementation.
-- *Why not just overload `visit` and call `visitor.visit(resource)`?* With a `Resource` static type, the compiler can't choose `visit(Server)`; it needs `visit(Resource)`, which doesn't exist.
-- *Visitor vs Iterator?* Iterator decides the route through the structure; Visitor decides the work done at each stop. Real code often combines them.
-- *Visitor vs Strategy?* A strategy is a single algorithm that ignores element types; a visitor is a set of methods, one for each element type, and exists precisely to dispatch on type.
-- *Visitor vs Composite?* Composite lets a client treat a whole tree and a single node alike; Visitor adds new operations over a stable set of types, whether or not they form a tree. The two frequently appear together.
-- *Visitor vs Interpreter?* Interpreter keeps evaluation **in** each node class; Visitor moves it **out**. Many interpreters begin in the first style and switch to the second once another pass (type checking, pretty-printing) is needed.
-- *How do you add a new element type?* Add it to the interface's `visit` list (or the `permits` clause) and fix every visitor/switch the compiler flags.
+- *Explain double dispatch.* Java picks overloads at compile time from static types; `accept` runs on the element's run-time type, inside it `this` has the concrete static type so the right `visit` overload is chosen; then the visitor's run-time type picks the implementation.
+- *Why not just call `visitor.visit(resource)`?* With static type `Resource` the compiler can't choose `visit(Server)`; it needs `visit(Resource)`, which doesn't exist.
+- *Visitor vs Iterator / Strategy / Composite / Interpreter?* Iterator decides the route, Visitor the work at each stop; a strategy is one algorithm ignoring element types, a visitor dispatches on type; Composite treats tree and node alike, Visitor adds operations over a stable type set (tree or not); Interpreter keeps evaluation **in** each node, Visitor moves it **out** (interpreters switch once a second pass arrives). Often combined.
+- *How do you add a new element type?* Add it to the `visit` list (or `permits` clause) and fix every visitor/switch the compiler flags.
 
 ### Self-check
 
@@ -2161,7 +1340,7 @@ Write a classic Visitor when the element hierarchy **is not and cannot be sealed
 
 ## 11.6 GoF behavioral patterns: quick-reference summary
 
-A single table with the key features, when to apply each pattern, an example, and pros and cons (compiled from the course summary plus this book's material).
+Key features, when to apply each, an example, pros and cons (from the course summary plus this book).
 
 | Pattern | Distinctive feature | Apply when | Example | Pros | Cons |
 |---|---|---|---|---|---|
@@ -2181,26 +1360,24 @@ A single table with the key features, when to apply each pattern, an example, an
 
 ## 11.7 Beyond GoF: patterns every LLD interview expects
 
-The GoF book (1994) is not the whole story. The patterns below come from later sources — *Patterns of Enterprise Application Architecture* (Fowler, 2002), *Domain-Driven Design* (Evans, 2003 — DDD, an approach that shapes code around the business domain and its vocabulary), *Head First Design Patterns*, and decades of framework practice. You will use them in almost every case study in this book.
+The GoF book (1994) is not the whole story. These come from later sources — *Patterns of Enterprise Application Architecture* (Fowler, 2002), *Domain-Driven Design* (Evans, 2003 — DDD, shaping code around the business domain and its vocabulary), *Head First Design Patterns*, and decades of framework practice — and appear in almost every case study in this book.
 
 ### 11.7.1 Null Object
 
 #### What it is
 
-A **Null Object** is a real object that implements an interface with **neutral, do-nothing behaviour**, used instead of `null` to mean "no object here". Callers can call it safely without `if (x != null)` checks.
-
-Analogy: a "guest" badge at an office. Guests can walk through the lobby like anyone else; the badge simply opens no special doors.
+A **Null Object** is a real object implementing an interface with **neutral, do-nothing behaviour**, used instead of `null` to mean "no object here", so callers need no `if (x != null)` checks — like a "guest" badge that walks the lobby like anyone else but opens no special doors.
 
 #### The problem it solves
 
-Returning `null` for "not found" forces **every caller** to remember a null check. One forgotten check → `NullPointerException` (NPE — the error Java throws when you call a method on `null`) in production. The checks also clutter the business logic.
+Returning `null` for "not found" forces **every caller** to remember a null check; one forgotten check → `NullPointerException` (NPE — thrown when calling a method on `null`) in production, and the checks clutter business logic.
 
 #### How it works
 
-1. Define an interface (`Customer`).
-2. Implement the real class (`RegisteredCustomer`) and a **null class** (`GuestCustomer`) whose methods return neutral values (0% discount) or do nothing (`notify` is empty).
-3. Where you would return `null`, return the null object instead. Stateless null objects can be a **singleton** (a class with exactly one shared instance — here an `enum` constant).
-4. If some caller really must know, offer an `isGuest()`/`isNull()` query — sparingly.
+1. An interface (`Customer`).
+2. The real class (`RegisteredCustomer`) and a **null class** (`GuestCustomer`) returning neutral values (0% discount) or doing nothing (empty `notify`).
+3. Return the null object where you'd return `null`. Stateless null objects can be a **singleton** (one shared instance — here an `enum` constant).
+4. If a caller truly must know, offer `isGuest()`/`isNull()` — sparingly.
 
 ```mermaid
 classDiagram
@@ -2225,95 +1402,37 @@ classDiagram
 
 #### Java example
 
-```java
-// File: code/lld/ch11/nullobject/Customer.java
-package lld.ch11.nullobject;
+Full code: `code/lld/ch11/nullobject/`.
 
-/** The abstraction both the real object and the Null Object implement. */
+```java
 public interface Customer {
     String displayName();
     int discountPercent();
     void notify(String message);
     default boolean isGuest() { return false; }
 }
-```
+// RegisteredCustomer(name, discountPercent, email) is a record; notify prints an email.
 
-```java
-// File: code/lld/ch11/nullobject/RegisteredCustomer.java
-package lld.ch11.nullobject;
-
-public record RegisteredCustomer(String name, int discountPercent, String email) implements Customer {
-    public String displayName() { return name; }
-    public void notify(String message) { System.out.println("    email to " + email + ": " + message); }
-}
-```
-
-```java
-// File: code/lld/ch11/nullobject/GuestCustomer.java
-package lld.ch11.nullobject;
-
-/**
- * NULL OBJECT: a real, do-nothing implementation with neutral values.
- * Stateless, so one shared instance is enough (an enum singleton).
- */
+/** NULL OBJECT: a real, do-nothing implementation with neutral values. Stateless -> enum singleton. */
 public enum GuestCustomer implements Customer {
     INSTANCE;
-
     public String displayName() { return "guest"; }
     public int discountPercent() { return 0; }            // neutral value
     public void notify(String message) { }                // does nothing, on purpose
     @Override public boolean isGuest() { return true; }   // for the rare caller that must know
 }
-```
 
-```java
-// File: code/lld/ch11/nullobject/CustomerDirectory.java
-package lld.ch11.nullobject;
+// CustomerDirectory
+/** Style 1: never return null; return the Null Object instead. */
+public Customer find(String id) { return byId.getOrDefault(id, GuestCustomer.INSTANCE); }
+/** Style 2: make absence explicit in the type; the caller chooses the fallback. */
+public Optional<Customer> lookup(String id) { return Optional.ofNullable(byId.get(id)); }
 
-import java.util.Map;
-import java.util.Optional;
-
-public final class CustomerDirectory {
-    private final Map<String, Customer> byId = Map.of(
-        "c1", new RegisteredCustomer("Asha", 10, "asha@example.com"));
-
-    /** Style 1: never return null; return the Null Object instead. */
-    public Customer find(String id) { return byId.getOrDefault(id, GuestCustomer.INSTANCE); }
-
-    /** Style 2: make absence explicit in the type; the caller chooses the fallback. */
-    public Optional<Customer> lookup(String id) { return Optional.ofNullable(byId.get(id)); }
-}
-```
-
-```java
-// File: code/lld/ch11/nullobject/Main.java
-package lld.ch11.nullobject;
-
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-
-public class Main {
-    private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
-
-    static void checkout(Customer c, BigDecimal price) {
-        // No "if (customer != null)" anywhere: the Null Object answers every call safely.
-        BigDecimal payable = price.multiply(BigDecimal.valueOf(100 - c.discountPercent()))
-                                  .divide(HUNDRED, 2, RoundingMode.HALF_EVEN);
-        System.out.printf("  %-6s pays %s%n", c.displayName(), payable);
-        c.notify("thanks for your order");
-    }
-
-    public static void main(String[] args) {
-        CustomerDirectory dir = new CustomerDirectory();
-        System.out.println("=== Null Object ===");
-        checkout(dir.find("c1"), new BigDecimal("100.00"));
-        checkout(dir.find("unknown-id"), new BigDecimal("100.00"));
-
-        System.out.println("=== Optional (absence visible in the signature) ===");
-        Customer c = dir.lookup("unknown-id").orElse(GuestCustomer.INSTANCE);
-        System.out.println("  lookup(unknown-id) present? " + dir.lookup("unknown-id").isPresent() + " -> using " + c.displayName());
-    }
-}
+// Main.checkout — no "if (customer != null)" anywhere: the Null Object answers every call safely.
+BigDecimal payable = price.multiply(BigDecimal.valueOf(100 - c.discountPercent()))
+                          .divide(HUNDRED, 2, RoundingMode.HALF_EVEN);
+System.out.printf("  %-6s pays %s%n", c.displayName(), payable);
+c.notify("thanks for your order");
 ```
 
 **Output:**
@@ -2337,19 +1456,19 @@ public class Main {
 | Polymorphism instead of conditionals. | One more class per interface. |
 | Easy to test; a natural default. | Callers may not realise they got a "nothing" object. |
 
-- **Don't use it** when absence is an **error** (throw an exception) or when the caller must decide what absence means (return `Optional<T>` — a JDK container that either holds a value or is empty).
-- **Null Object vs `Optional`:** Null Object hides absence behind neutral behaviour; `Optional` makes absence **visible in the type** and lets each caller choose (`orElse`, `orElseThrow`). Use `Optional` for return values of lookups; use Null Object for **collaborators** that are legitimately optional (a logger, a listener, a discount policy).
-- **Common mistakes:** a null object with **side effects** or non-neutral values; a mutable null-object singleton; overusing `isNull()` checks (which brings the conditionals back).
+- **Don't use it** when absence is an **error** (throw) or the caller must decide what absence means (return `Optional<T>` — a JDK container holding a value or empty).
+- **Null Object vs `Optional`:** Null Object hides absence behind neutral behaviour; `Optional` makes absence **visible in the type** and lets each caller choose (`orElse`, `orElseThrow`). `Optional` for lookup return values; Null Object for legitimately optional **collaborators** (a logger, listener, discount policy).
+- **Common mistakes:** a null object with **side effects** or non-neutral values; a mutable null-object singleton; overusing `isNull()` checks (the conditionals come back).
 
 #### Real-world examples
 
-`Collections.emptyList()` / `emptyMap()` (empty, not null); `InputStream.nullInputStream()`, `OutputStream.nullOutputStream()`, `Reader.nullReader()`, `Writer.nullWriter()` (Java 11); SLF4J's (a common Java logging API) `NOPLogger`; a "no-op" (does nothing) `MeterRegistry`/tracer in **observability** libraries (metrics, logs and traces that show what a running system is doing).
+`Collections.emptyList()` / `emptyMap()` (empty, not null); `InputStream.nullInputStream()`, `OutputStream.nullOutputStream()`, `Reader.nullReader()`, `Writer.nullWriter()` (Java 11); SLF4J's (a common Java logging API) `NOPLogger`; a "no-op" (does-nothing) `MeterRegistry`/tracer in **observability** libraries (metrics, logs and traces showing what a running system does).
 
 #### In the interview
 
 **30-second answer:** "Null Object replaces `null` with an implementation that does nothing or returns neutral values, so callers never need null checks — like returning an empty list instead of null. I use it for optional collaborators like loggers or discount policies, and `Optional` for lookups where the caller should decide. I avoid it when absence is actually an error, because it would hide the bug."
 
-*Follow-up — is it a GoF pattern?* No; it was described by Bobby Woolf (in *Pattern Languages of Program Design 3*) and appears in Fowler's *Refactoring* as "Introduce Special Case" (earlier "Introduce Null Object").
+*Follow-up — is it a GoF pattern?* No; Bobby Woolf described it (*Pattern Languages of Program Design 3*), and Fowler's *Refactoring* has it as "Introduce Special Case" (earlier "Introduce Null Object").
 
 **Self-check.** Q: What does `Collections.emptyList()` have to do with this? A: It's a null object for lists — safe to iterate, never null. Q: When should you throw instead? A: When the object must exist and its absence is a bug.
 
@@ -2361,9 +1480,7 @@ public class Main {
 
 #### What it is
 
-**Dependency Injection** means a class **receives** the objects it depends on (its *dependencies*) from outside, instead of **creating** them itself with `new` or looking them up. It is the most common way to implement **Inversion of Control (IoC)** — the framework or a "composition root" builds and wires objects, not the objects themselves. The name was settled by Martin Fowler in his 2004 article on IoC containers.
-
-Analogy: a restaurant kitchen doesn't grow its own vegetables; suppliers deliver them. Change the supplier, and the chef's recipes don't change.
+**Dependency Injection**: a class **receives** its dependencies from outside instead of **creating** them with `new` or looking them up — the most common way to implement **Inversion of Control (IoC)**, where the framework or a "composition root" builds and wires objects, not the objects themselves. Martin Fowler settled the name in his 2004 article on IoC containers. Like a kitchen supplied with vegetables rather than growing them: change supplier, recipes unchanged.
 
 #### The problem it solves
 
@@ -2373,15 +1490,13 @@ class OrderService {
 }
 ```
 
-This class can never send SMS, can't be unit-tested without really sending email, and hides its dependencies. DI fixes all three: depend on an **interface** (`MessageSender`), receive it through the **constructor**, and let someone else decide which implementation.
+It can never send SMS, can't be unit-tested without really sending email, and hides its dependencies. DI fixes all three: depend on an **interface** (`MessageSender`), receive it through the **constructor**, let someone else choose the implementation.
 
 #### How it works
 
-1. The class declares dependencies as **constructor parameters** typed by **interfaces** (Dependency Inversion Principle, Chapter 4).
-2. A **composition root** (usually `main`, or a DI container at start-up) creates the concrete objects and passes them in.
-3. Tests pass **fakes** (simple stand-in implementations used only in tests) instead.
-
-Three injection styles:
+1. Declare dependencies as **constructor parameters** typed by **interfaces** (Dependency Inversion Principle, Chapter 4).
+2. A **composition root** (usually `main`, or a DI container at start-up) creates concrete objects and passes them in.
+3. Tests pass **fakes** (simple stand-ins used only in tests).
 
 | Style | How | Use for |
 |---|---|---|
@@ -2414,139 +1529,37 @@ classDiagram
 
 #### Java example
 
-`OrderService` receives both a `MessageSender` and a `java.time.Clock` — injecting the clock makes time **testable** (`Clock.fixed`). `Container` is a toy IoC container: you register a *recipe* per type; `get` builds objects on demand (recipes can ask the container for their own dependencies) and caches them as singletons.
+Full code: `code/lld/ch11/di/`. `OrderService` receives a `MessageSender` and a `java.time.Clock` — injecting the clock makes time **testable** (`Clock.fixed`). `Container` is a toy IoC container: register a *recipe* per type; `get` builds on demand (recipes may ask the container for their own dependencies) and caches singletons.
 
 ```java
-// File: code/lld/ch11/di/MessageSender.java
-package lld.ch11.di;
-
-/** The abstraction the service depends on (Dependency Inversion). */
-public interface MessageSender {
-    void send(String to, String text);
-}
-```
-
-```java
-// File: code/lld/ch11/di/EmailSender.java
-package lld.ch11.di;
-
-public final class EmailSender implements MessageSender {
-    public void send(String to, String text) { System.out.println("  [smtp] to " + to + ": " + text); }
-}
-```
-
-```java
-// File: code/lld/ch11/di/SmsSender.java
-package lld.ch11.di;
-
-public final class SmsSender implements MessageSender {
-    public void send(String to, String text) { System.out.println("  [sms] to " + to + ": " + text); }
-}
-```
-
-```java
-// File: code/lld/ch11/di/RecordingSender.java
-package lld.ch11.di;
-
-import java.util.ArrayList;
-import java.util.List;
-
-/** Test double: records instead of sending. Only possible because the dependency is injected. */
-public final class RecordingSender implements MessageSender {
-    public final List<String> sent = new ArrayList<>();
-    public void send(String to, String text) { sent.add(to + "|" + text); }
-}
-```
-
-```java
-// File: code/lld/ch11/di/OrderService.java
-package lld.ch11.di;
-
-import java.time.Clock;
-import java.time.LocalTime;
-
-/**
- * CONSTRUCTOR INJECTION: the service declares what it needs and never calls 'new'
- * on its collaborators. Even the clock is injected, so time is testable.
- */
+/** CONSTRUCTOR INJECTION: declares what it needs, never calls 'new' on collaborators; even the clock is injected. */
 public final class OrderService {
     private final MessageSender sender;
     private final Clock clock;
-
-    public OrderService(MessageSender sender, Clock clock) {
-        this.sender = sender;
-        this.clock = clock;
-    }
-
+    public OrderService(MessageSender sender, Clock clock) { this.sender = sender; this.clock = clock; }
     public void placeOrder(String customer, String orderId) {
         LocalTime now = LocalTime.now(clock);
         sender.send(customer, "order " + orderId + " placed at " + now);
     }
 }
-```
+// EmailSender and SmsSender print; RecordingSender (test double) adds "to|text" to a list —
+// only possible because the dependency is injected.
 
-```java
-// File: code/lld/ch11/di/Container.java
-package lld.ch11.di;
-
-import java.util.HashMap;
-import java.util.Map;
-import java.util.function.Function;
-
-/**
- * A toy IoC container: register how to build each type once; ask for the type later.
- * Real containers (Spring, Guice, Dagger) add scanning, scopes, proxies and lifecycles.
- */
-public final class Container {
-    private final Map<Class<?>, Function<Container, ?>> recipes = new HashMap<>();
-    private final Map<Class<?>, Object> singletons = new HashMap<>();
-
-    public <T> void register(Class<T> type, Function<Container, ? extends T> recipe) {
-        recipes.put(type, recipe);
-    }
-
-    public <T> T get(Class<T> type) {
-        Object existing = singletons.get(type);
-        if (existing != null) return type.cast(existing);
-        Function<Container, ?> recipe = recipes.get(type);
-        if (recipe == null) throw new IllegalStateException("no binding for " + type.getSimpleName());
-        T created = type.cast(recipe.apply(this));   // the recipe may ask the container for its own deps
-        singletons.put(type, created);
-        return created;
-    }
+/** A toy IoC container. Real ones (Spring, Guice, Dagger) add scanning, scopes, proxies and lifecycles. */
+public <T> T get(Class<T> type) {
+    Object existing = singletons.get(type);
+    if (existing != null) return type.cast(existing);
+    Function<Container, ?> recipe = recipes.get(type);
+    if (recipe == null) throw new IllegalStateException("no binding for " + type.getSimpleName());
+    T created = type.cast(recipe.apply(this));   // the recipe may ask the container for its own deps
+    singletons.put(type, created);
+    return created;
 }
-```
 
-```java
-// File: code/lld/ch11/di/Main.java
-package lld.ch11.di;
-
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
-
-public class Main {
-    public static void main(String[] args) {
-        Clock fixed = Clock.fixed(Instant.parse("2026-01-15T09:30:00Z"), ZoneOffset.UTC);
-
-        System.out.println("=== 1. Manual DI: the composition root wires everything ===");
-        new OrderService(new EmailSender(), fixed).placeOrder("asha@example.com", "A-1");
-        new OrderService(new SmsSender(), fixed).placeOrder("+91-90000-00000", "A-2");
-
-        System.out.println("\n=== 2. In a unit test: inject a fake ===");
-        RecordingSender fake = new RecordingSender();
-        new OrderService(fake, fixed).placeOrder("ben", "T-9");
-        System.out.println("  fake recorded: " + fake.sent);
-
-        System.out.println("\n=== 3. A toy IoC container ===");
-        Container c = new Container();
-        c.register(Clock.class, k -> fixed);
-        c.register(MessageSender.class, k -> new EmailSender());
-        c.register(OrderService.class, k -> new OrderService(k.get(MessageSender.class), k.get(Clock.class)));
-        c.get(OrderService.class).placeOrder("chen@example.com", "A-3");
-        System.out.println("  same instance each time: " + (c.get(OrderService.class) == c.get(OrderService.class)));
-    }
-}
+// Main.java
+Clock fixed = Clock.fixed(Instant.parse("2026-01-15T09:30:00Z"), ZoneOffset.UTC);
+new OrderService(new EmailSender(), fixed).placeOrder("asha@example.com", "A-1");   // manual DI at the composition root
+c.register(OrderService.class, k -> new OrderService(k.get(MessageSender.class), k.get(Clock.class)));
 ```
 
 **Output:**
@@ -2572,18 +1585,18 @@ public class Main {
 | Easy unit tests with fakes. | Containers add "magic" (reflection — code inspecting classes at run time; proxies — generated wrapper objects) and start-up cost. |
 | Dependencies are explicit in the constructor. | Misconfiguration may only show at start-up (or run time). |
 
-- **Don't** inject value objects or simple data (`new Money(...)` is fine), or add interfaces with only one implementation "just for DI" when no test or variation needs them.
-- **Common mistakes:** the **Service Locator** anti-pattern (classes call `container.get(...)` themselves — dependencies hidden again); field injection; **constructor with 8+ dependencies** (a sign the class does too much — split it); **circular dependencies** (A needs B while B needs A).
+- **Don't** inject value objects or simple data (`new Money(...)` is fine), or add single-implementation interfaces "just for DI" when no test or variation needs them.
+- **Common mistakes:** the **Service Locator** anti-pattern (classes call `container.get(...)` themselves — dependencies hidden again); field injection; **a constructor with 8+ dependencies** (the class does too much — split it); **circular dependencies** (A needs B while B needs A).
 
 #### Real-world examples
 
-**Spring** (`@Component` + constructor injection, `ApplicationContext` as the container), **Google Guice**, **Dagger/Hilt** (compile-time DI on Android), **Jakarta CDI**, **Micronaut/Quarkus** (compile-time DI for fast start-up). Spring can even inject a `Map<String, PaymentStrategy>` of all strategy beans — DI + Strategy together.
+**Spring** (`@Component` + constructor injection, `ApplicationContext` as container), **Google Guice**, **Dagger/Hilt** (compile-time DI on Android), **Jakarta CDI**, **Micronaut/Quarkus** (compile-time DI for fast start-up). Spring can inject a `Map<String, PaymentStrategy>` of all strategy beans — DI + Strategy together.
 
 #### In the interview
 
 **30-second answer:** "Dependency injection means a class receives its collaborators through its constructor, typed by interfaces, instead of creating them. It's how we apply Dependency Inversion and Inversion of Control: a composition root or a container like Spring wires the graph. The benefits are swappable implementations and easy testing with fakes — I even inject the Clock. I prefer constructor injection, avoid field injection and service locators, and treat a huge constructor as a **design smell** (a surface sign that something deeper is wrong)."
 
-*Follow-ups:* **DI vs IoC?** IoC is the general idea (the framework calls you / controls object creation); DI is one way to achieve it. **DI vs Service Locator?** With a locator the class asks for dependencies (hidden); with DI they're handed in (visible). **DI vs Factory?** A factory creates objects on request; DI supplies ready-made dependencies — containers use factories internally.
+*Follow-ups:* **DI vs IoC?** IoC is the general idea (the framework calls you / controls object creation); DI is one way to achieve it. **DI vs Service Locator?** A locator: the class asks (hidden); DI: dependencies are handed in (visible). **DI vs Factory?** A factory creates objects on request; DI supplies ready-made dependencies — containers use factories internally.
 
 **Self-check.** Q: Why inject `Clock`? A: To make time-dependent code deterministic in tests. Q: Which injection style is preferred? A: Constructor injection.
 
@@ -2595,18 +1608,16 @@ public class Main {
 
 #### What it is
 
-A **Repository** is a **collection-like interface for loading and saving domain objects**, written in the language of the domain (`findByEmail`, `findActive`), that **hides how and where data is stored** (SQL — relational databases queried with the SQL language; NoSQL — non-relational stores such as key-value or document databases; files; memory). Described by Fowler (*PoEAA*) and central to Evans's *Domain-Driven Design*.
-
-Analogy: a library's front desk. You ask for "books by this author"; you don't need to know which shelf, basement or branch they come from.
+A **Repository** is a **collection-like interface for loading and saving domain objects**, in domain language (`findByEmail`, `findActive`), that **hides how and where data is stored** (SQL — relational databases; NoSQL — non-relational key-value or document stores; files; memory). Described by Fowler (*PoEAA*) and central to Evans's *DDD*. Like a library front desk: ask for "books by this author", never mind which shelf or branch.
 
 #### The problem it solves
 
-When SQL, connection handling and mapping code are scattered through business classes, the business rules become hard to read, impossible to unit-test without a database, and tied to one storage technology.
+SQL, connection handling and mapping code scattered through business classes make the rules hard to read, untestable without a database, and tied to one storage technology.
 
 #### How it works
 
-1. Define the interface in the **domain layer** (the code that holds business rules) (`UserRepository`: `save`, `findById`, `findByEmail`, ...). Return `Optional` for "maybe not found".
-2. Implement it in the **infrastructure layer** (code that talks to databases, networks and files): `InMemoryUserRepository` for tests, a JDBC/JPA one (JPA, the Java Persistence API, maps objects to tables) for production.
+1. Define the interface in the **domain layer** (code holding business rules): `UserRepository` with `save`, `findById`, `findByEmail`, ... returning `Optional` for "maybe not found".
+2. Implement it in the **infrastructure layer** (code talking to databases, networks, files): `InMemoryUserRepository` for tests, a JDBC/JPA one (JPA, the Java Persistence API, maps objects to tables) for production.
 3. Services depend on the **interface** (injected — see DI).
 
 ```mermaid
@@ -2633,29 +1644,16 @@ classDiagram
     SignupService --> UserRepository
 ```
 
-(`JdbcUserRepository` is shown to illustrate a production implementation; the demo code includes the in-memory one.)
+(`JdbcUserRepository` illustrates a production implementation; the demo includes the in-memory one.)
 
 #### Java example
 
-```java
-// File: code/lld/ch11/repository/User.java
-package lld.ch11.repository;
-
-/** A domain object. It knows nothing about storage. */
-public record User(String id, String email, boolean active) {}
-```
+Full code: `code/lld/ch11/repository/`.
 
 ```java
-// File: code/lld/ch11/repository/UserRepository.java
-package lld.ch11.repository;
+public record User(String id, String email, boolean active) {}   // domain object, knows nothing about storage
 
-import java.util.List;
-import java.util.Optional;
-
-/**
- * REPOSITORY: a collection-like interface for aggregates, in DOMAIN language.
- * The domain depends on this; the storage details live in implementations.
- */
+/** REPOSITORY: a collection-like interface for aggregates, in DOMAIN language. */
 public interface UserRepository {
     User save(User user);
     Optional<User> findById(String id);
@@ -2663,77 +1661,27 @@ public interface UserRepository {
     List<User> findActive();
     boolean deleteById(String id);
 }
-```
 
-```java
-// File: code/lld/ch11/repository/InMemoryUserRepository.java
-package lld.ch11.repository;
-
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
-
-/** One implementation: in memory (tests, prototypes). A JDBC/JPA one would implement the same interface. */
+/** In memory (tests, prototypes). A JDBC/JPA one would implement the same interface. */
 public final class InMemoryUserRepository implements UserRepository {
     private final Map<String, User> store = new ConcurrentHashMap<>();
-
     public User save(User user) { store.put(user.id(), user); return user; }
     public Optional<User> findById(String id) { return Optional.ofNullable(store.get(id)); }
-
     public Optional<User> findByEmail(String email) {
         return store.values().stream().filter(u -> u.email().equalsIgnoreCase(email)).findFirst();
     }
-
-    public List<User> findActive() {
-        return store.values().stream().filter(User::active)
-                    .sorted(Comparator.comparing(User::id)).toList();
-    }
-
+    public List<User> findActive() { return store.values().stream().filter(User::active).sorted(Comparator.comparing(User::id)).toList(); }
     public boolean deleteById(String id) { return store.remove(id) != null; }
 }
-```
-
-```java
-// File: code/lld/ch11/repository/SignupService.java
-package lld.ch11.repository;
 
 /** Business logic talks to the repository interface only: no SQL, no maps, no files. */
-public final class SignupService {
-    private final UserRepository users;
-
-    public SignupService(UserRepository users) { this.users = users; }
-
-    public String signUp(String id, String email) {
-        if (users.findByEmail(email).isPresent()) return "rejected: " + email + " already registered";
-        users.save(new User(id, email, true));
-        return "created " + id;
-    }
-
-    public void deactivate(String id) {
-        users.findById(id).ifPresent(u -> users.save(new User(u.id(), u.email(), false)));
-    }
+public String signUp(String id, String email) {
+    if (users.findByEmail(email).isPresent()) return "rejected: " + email + " already registered";
+    users.save(new User(id, email, true));
+    return "created " + id;
 }
-```
-
-```java
-// File: code/lld/ch11/repository/Main.java
-package lld.ch11.repository;
-
-public class Main {
-    public static void main(String[] args) {
-        UserRepository repo = new InMemoryUserRepository();   // swap for a JDBC version in production
-        SignupService service = new SignupService(repo);
-        System.out.println("  " + service.signUp("u1", "asha@example.com"));
-        System.out.println("  " + service.signUp("u2", "ben@example.com"));
-        System.out.println("  " + service.signUp("u3", "ASHA@example.com"));
-        service.deactivate("u2");
-        System.out.println("  active users: " + repo.findActive());
-        System.out.println("  findById(u9): " + repo.findById("u9"));
-        System.out.println("  deleteById(u2): " + repo.deleteById("u2"));
-    }
-}
+public void deactivate(String id) { users.findById(id).ifPresent(u -> users.save(new User(u.id(), u.email(), false))); }
+// Main: repo = new InMemoryUserRepository() (swap for a JDBC version in production); sign up u1, u2, u3 (ASHA@...).
 ```
 
 **Output:**
@@ -2755,14 +1703,14 @@ public class Main {
 | One place for queries per aggregate. | Can leak storage concerns (lazy loading — fetching data only when first touched; transactions — changes that succeed or fail together) anyway. |
 | Swap storage (SQL → NoSQL) behind the interface. | "Generic repository for everything" becomes a thin, useless wrapper. |
 
-- **Don't** create a repository per table; create one per **aggregate root** (DDD: the entry point object of a cluster, e.g. `Order` with its `OrderLine`s).
-- **Repository vs DAO:** a DAO (Data Access Object) is table/record-oriented and closer to the database; a repository is domain-oriented and behaves like a collection of aggregates. In small apps they often look the same.
-- **Common mistakes:** returning `null` instead of `Optional`; exposing SQL types (`ResultSet`) in the interface; putting business rules in the repository; dozens of `findByXAndYOrZ` methods — use **Specification** (next).
-- **Thread-safety note:** `InMemoryUserRepository` uses a `ConcurrentHashMap` (the JDK's thread-safe hash map), so each single call is safe, but `SignupService.signUp` is **check-then-act** (a race where the answer to the check can be stale by the time you act on it) (`findByEmail`, then `save`): two concurrent sign-ups with the same email can both pass the check. A real system enforces uniqueness with a database **unique constraint** (a rule that makes the database reject a duplicate value in a column) (or an atomic `putIfAbsent` keyed by email in memory).
+- **Don't** create one per table; one per **aggregate root** (DDD: the entry-point object of a cluster, e.g. `Order` with its `OrderLine`s).
+- **Repository vs DAO:** a DAO (Data Access Object) is table/record-oriented, close to the database; a repository is domain-oriented, behaving like a collection of aggregates. In small apps they often look the same.
+- **Common mistakes:** returning `null` instead of `Optional`; exposing SQL types (`ResultSet`); business rules in the repository; dozens of `findByXAndYOrZ` methods — use **Specification** (next).
+- **Thread-safety note:** `ConcurrentHashMap` (the JDK's thread-safe hash map) makes each single call safe, but `SignupService.signUp` is **check-then-act** (the check's answer can be stale by the time you act) — `findByEmail`, then `save` — so two concurrent sign-ups with one email can both pass. A real system enforces uniqueness with a database **unique constraint** (rejects a duplicate column value), or an atomic `putIfAbsent` keyed by email in memory.
 
 #### Real-world examples
 
-**Spring Data** `CrudRepository` / `JpaRepository` (derived query methods like `findByEmail` are generated from method names), Micronaut Data, Hibernate/JPA behind them; Android Room DAOs wrapped in repositories (Android architecture guidance).
+**Spring Data** `CrudRepository` / `JpaRepository` (derived query methods like `findByEmail` generated from method names), Micronaut Data, Hibernate/JPA behind them; Android Room DAOs wrapped in repositories (Android architecture guidance).
 
 #### In the interview
 
@@ -2778,19 +1726,17 @@ public class Main {
 
 #### What it is
 
-A **Specification** is a **business rule packaged as an object** with one question — `isSatisfiedBy(candidate)` — that can be **combined** with `and`, `or` and `not`. Introduced by Eric Evans and Martin Fowler.
-
-Analogy: the filter panel on a shopping site. "Electronics" ✓, "under ₹5,000" ✓, "in stock" ✓ — each is a separate rule, and the site combines the ones you tick.
+A **Specification** is a **business rule packaged as an object** with one question — `isSatisfiedBy(candidate)` — **combinable** with `and`, `or`, `not`. Introduced by Eric Evans and Martin Fowler. Like a shopping site's filter panel: "Electronics" ✓, "under ₹5,000" ✓, "in stock" ✓ — separate rules combined as ticked.
 
 #### The problem it solves
 
-Rules like "bargain electronics = category electronics AND price < 50.00 AND in stock" end up duplicated in queries, validations and UI filters, or as an explosion of repository methods (`findByCategoryAndPriceLessThanAndStockGreaterThan...`). Specification gives each rule a **name**, makes it **reusable** in several places (selection, validation, building to order), and **composable**.
+"Bargain electronics = category electronics AND price < 50.00 AND in stock" gets duplicated across queries, validations and UI filters, or becomes a method explosion (`findByCategoryAndPriceLessThanAndStockGreaterThan...`). Specification gives each rule a **name**, makes it **reusable** (selection, validation, building to order) and **composable**.
 
 #### How it works
 
-1. `Specification<T>` with `isSatisfiedBy(T)`; default methods `and`, `or`, `not` return new composite specifications (this is the **Composite** pattern + **Interpreter**-like evaluation).
-2. Write small named factories (`inStock()`, `cheaperThan(...)`).
-3. Combine them where needed; pass them to a repository or a stream filter.
+1. `Specification<T>` with `isSatisfiedBy(T)`; default `and`, `or`, `not` return new composite specifications (the **Composite** pattern + **Interpreter**-like evaluation).
+2. Small named factories (`inStock()`, `cheaperThan(...)`).
+3. Combine where needed; pass to a repository or a stream filter.
 
 ```mermaid
 classDiagram
@@ -2812,79 +1758,31 @@ classDiagram
 
 #### Java example
 
-```java
-// File: code/lld/ch11/specification/Specification.java
-package lld.ch11.specification;
+Full code: `code/lld/ch11/specification/`.
 
-/**
- * SPECIFICATION: a business rule as a small, named, combinable object.
- * isSatisfiedBy answers "does this candidate meet the rule?"
- */
+```java
+/** SPECIFICATION: a business rule as a small, named, combinable object. */
 @FunctionalInterface
 public interface Specification<T> {
     boolean isSatisfiedBy(T candidate);
-
     default Specification<T> and(Specification<T> other) { return c -> isSatisfiedBy(c) && other.isSatisfiedBy(c); }
     default Specification<T> or(Specification<T> other)  { return c -> isSatisfiedBy(c) || other.isSatisfiedBy(c); }
     default Specification<T> not()                       { return c -> !isSatisfiedBy(c); }
 }
-```
-
-```java
-// File: code/lld/ch11/specification/Product.java
-package lld.ch11.specification;
 
 public record Product(String name, String category, long priceCents, int stock, double rating) {}
-```
-
-```java
-// File: code/lld/ch11/specification/ProductSpecs.java
-package lld.ch11.specification;
 
 /** Named rules, in the language of the business. Each is tiny and testable alone. */
-public final class ProductSpecs {
-    private ProductSpecs() {}
+public static Specification<Product> inCategory(String c) { return p -> p.category().equals(c); }
+public static Specification<Product> cheaperThan(long cents) { return p -> p.priceCents() < cents; }
+public static Specification<Product> inStock() { return p -> p.stock() > 0; }
+public static Specification<Product> ratedAtLeast(double r) { return p -> p.rating() >= r; }
 
-    public static Specification<Product> inCategory(String c) { return p -> p.category().equals(c); }
-    public static Specification<Product> cheaperThan(long cents) { return p -> p.priceCents() < cents; }
-    public static Specification<Product> inStock() { return p -> p.stock() > 0; }
-    public static Specification<Product> ratedAtLeast(double r) { return p -> p.rating() >= r; }
-}
-```
-
-```java
-// File: code/lld/ch11/specification/Main.java
-package lld.ch11.specification;
-
-import static lld.ch11.specification.ProductSpecs.*;
-
-import java.util.List;
-
-public class Main {
-    static List<String> select(List<Product> catalog, Specification<Product> spec) {
-        return catalog.stream().filter(spec::isSatisfiedBy).map(Product::name).toList();
-    }
-
-    public static void main(String[] args) {
-        List<Product> catalog = List.of(
-            new Product("usb-cable", "electronics", 499, 120, 4.1),
-            new Product("headphones", "electronics", 7_999, 0, 4.6),
-            new Product("keyboard", "electronics", 4_999, 8, 4.7),
-            new Product("novel", "books", 1_299, 30, 4.8),
-            new Product("cookbook", "books", 2_499, 0, 3.9));
-
-        // The same rule objects are reused for querying AND for validation.
-        Specification<Product> bargainElectronics = inCategory("electronics").and(cheaperThan(5_000)).and(inStock());
-        Specification<Product> recommendable = ratedAtLeast(4.5).and(inStock());
-        Specification<Product> needsRestock = inStock().not();
-
-        System.out.println("  bargain electronics: " + select(catalog, bargainElectronics));
-        System.out.println("  recommendable:       " + select(catalog, recommendable));
-        System.out.println("  needs restock:       " + select(catalog, needsRestock));
-        System.out.println("  books or top-rated:  " + select(catalog, inCategory("books").or(ratedAtLeast(4.7))));
-        System.out.println("  is 'novel' recommendable? " + recommendable.isSatisfiedBy(catalog.get(3)));
-    }
-}
+// Main.java — the same rule objects are reused for querying AND for validation.
+Specification<Product> bargainElectronics = inCategory("electronics").and(cheaperThan(5_000)).and(inStock());
+Specification<Product> recommendable = ratedAtLeast(4.5).and(inStock());
+Specification<Product> needsRestock = inStock().not();
+// select(catalog, spec) = catalog.stream().filter(spec::isSatisfiedBy).map(Product::name).toList()
 ```
 
 **Output:**
@@ -2905,12 +1803,12 @@ public class Main {
 | Combining rules replaces a method explosion. | Overkill for one or two fixed filters. |
 | The same rule serves querying and validation. | Deeply nested combinations can be hard to debug. |
 
-- Java's own `Predicate<T>` (the JDK interface for a yes/no test on a value, with `and`, `or`, `negate`) is already a specification; a named `Specification` type adds domain meaning and a place for SQL translation.
+- Java's `Predicate<T>` (the JDK's yes/no test on a value, with `and`, `or`, `negate`) already is a specification; a named `Specification` type adds domain meaning and a place for SQL translation.
 - **Common mistake:** filtering millions of rows in memory — push specifications down to the database.
 
 #### Real-world examples
 
-**Spring Data JPA `Specification<T>`** (`where(...).and(...)`, `JpaSpecificationExecutor.findAll(spec)`), e-commerce search filters, eligibility rules (loan, coupon, delivery-slot eligibility), access-control policies.
+**Spring Data JPA `Specification<T>`** (`where(...).and(...)`, `JpaSpecificationExecutor.findAll(spec)`), e-commerce search filters, eligibility rules (loan, coupon, delivery-slot), access-control policies.
 
 #### In the interview
 
@@ -2928,11 +1826,11 @@ public class Main {
 
 **MVC** splits an interactive application into three roles:
 
-- **Model** — the data and business rules. Knows nothing about screens.
+- **Model** — data and business rules; knows nothing about screens.
 - **View** — displays the model and receives user input.
-- **Controller** — interprets user input and tells the model what to change.
+- **Controller** — interprets input and tells the model what to change.
 
-It was created by Trygve Reenskaug for Smalltalk at Xerox PARC in the late 1970s. *Head First Design Patterns* calls MVC a **compound pattern** — several patterns working together:
+Created by Trygve Reenskaug for Smalltalk at Xerox PARC in the late 1970s. *Head First* calls MVC a **compound pattern** — several patterns working together:
 
 | Pattern inside MVC | Where |
 |---|---|
@@ -2940,11 +1838,11 @@ It was created by Trygve Reenskaug for Smalltalk at Xerox PARC in the late 1970s
 | **Strategy** | The view delegates "what should this input do?" to a controller object; swap the controller to change behaviour (e.g. read-only mode). |
 | **Composite** | The view is a tree of nested components (panels containing labels, lists, buttons) rendered uniformly. |
 
-Analogy: a restaurant. The kitchen and pantry are the **model**; the dining-room menu and plates are the **view**; the waiter who takes your order and passes it to the kitchen is the **controller**.
+Analogy: a restaurant — kitchen and pantry are the **model**, menu and plates the **view**, the waiter passing your order to the kitchen the **controller**.
 
 #### The problem it solves
 
-When UI code, input handling and business rules are mixed, you cannot change the screen without risking the rules, cannot show the same data in two ways, and cannot test the rules without a UI.
+With UI code, input handling and business rules mixed, you can't change the screen without risking the rules, can't show the same data two ways, and can't test the rules without a UI.
 
 #### How it works
 
@@ -2953,19 +1851,6 @@ When UI code, input handling and business rules are mixed, you cannot change the
 3. The controller calls the **model** (`model.add(title)`); it does **not** redraw anything.
 4. The model changes and **notifies its listeners** (observer).
 5. The view re-renders its **composite** widget tree from the model.
-
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant V as TaskView
-    participant C as EditingController
-    participant M as TaskModel
-    U->>V: userTyped("add review diagrams")
-    V->>C: handle(input)
-    C->>M: add("review diagrams")
-    M-->>V: modelChanged(model)
-    V->>V: render widget tree
-```
 
 ```mermaid
 classDiagram
@@ -3008,79 +1893,24 @@ classDiagram
 
 #### Java example
 
-A console to-do app. `TaskModel` knows only `ModelListener`s. `TaskView` implements `ModelListener`, renders a **composite** of `Widget.Panel`/`Widget.Label`, and forwards input to a swappable `TaskController`. Switching to `ReadOnlyController` changes behaviour without touching the view or model.
+A console to-do app (full code: `code/lld/ch11/mvc/`). `TaskModel` knows only `ModelListener`s. `TaskView` implements `ModelListener`, renders a **composite** of `Widget.Panel`/`Widget.Label`, and forwards input to a swappable `TaskController`; switching to `ReadOnlyController` changes behaviour without touching view or model.
 
 ```java
-// File: code/lld/ch11/mvc/Task.java
-package lld.ch11.mvc;
-
-public record Task(int id, String title, boolean done) {}
-```
-
-```java
-// File: code/lld/ch11/mvc/TaskModel.java
-package lld.ch11.mvc;
-
-import java.util.ArrayList;
-import java.util.List;
-
 /** MODEL: state + business rules. Knows NOTHING about views or controllers, only listeners. */
 public final class TaskModel {
-    private final List<Task> tasks = new ArrayList<>();
-    private final List<ModelListener> listeners = new ArrayList<>();
-    private int nextId = 1;
-
-    public void addListener(ModelListener l) { listeners.add(l); }
-
-    public List<Task> tasks() { return List.copyOf(tasks); }
-
     public void add(String title) {
         if (title.isBlank()) throw new IllegalArgumentException("title must not be blank");
         tasks.add(new Task(nextId++, title, false));
         fireChanged();
     }
-
-    public void complete(int id) {
-        for (int i = 0; i < tasks.size(); i++) {
-            Task t = tasks.get(i);
-            if (t.id() == id) {
-                tasks.set(i, new Task(t.id(), t.title(), true));
-                fireChanged();
-                return;
-            }
-        }
-        throw new IllegalArgumentException("no task " + id);
-    }
-
+    // complete(id) replaces the task with a done copy and fires, or throws "no task <id>"
     private void fireChanged() { listeners.forEach(l -> l.modelChanged(this)); }
 }
-```
-
-```java
-// File: code/lld/ch11/mvc/ModelListener.java
-package lld.ch11.mvc;
-
-/** OBSERVER interface between model and views. */
-public interface ModelListener {
-    void modelChanged(TaskModel model);
-}
-```
-
-```java
-// File: code/lld/ch11/mvc/Widget.java
-package lld.ch11.mvc;
-
-import java.util.List;
-import java.util.function.Supplier;
 
 /** COMPOSITE: the view is a tree of widgets rendered the same way. */
 public interface Widget {
     void render(StringBuilder out, String indent);
-
-    record Label(Supplier<String> text) implements Widget {
-        public void render(StringBuilder out, String indent) { out.append(indent).append(text.get()).append('\n'); }
-    }
-
+    record Label(Supplier<String> text) implements Widget { ... }
     record Panel(String title, List<Widget> children) implements Widget {
         public void render(StringBuilder out, String indent) {
             out.append(indent).append("+ ").append(title).append('\n');
@@ -3088,122 +1918,31 @@ public interface Widget {
         }
     }
 }
-```
 
-```java
-// File: code/lld/ch11/mvc/TaskController.java
-package lld.ch11.mvc;
-
-/** CONTROLLER as a STRATEGY: the view delegates "what does this input mean?" to it. */
-public interface TaskController {
-    void handle(String input);
-}
-```
-
-```java
-// File: code/lld/ch11/mvc/EditingController.java
-package lld.ch11.mvc;
-
-/** Interprets user input and updates the MODEL. It does not redraw anything itself. */
-public final class EditingController implements TaskController {
-    private final TaskModel model;
-    private final TaskView view;
-
-    public EditingController(TaskModel model, TaskView view) {
-        this.model = model;
-        this.view = view;
-    }
-
-    public void handle(String input) {
-        try {
-            if (input.startsWith("add ")) model.add(input.substring(4));
-            else if (input.startsWith("done ")) model.complete(Integer.parseInt(input.substring(5).trim()));
-            else view.showMessage("unknown command: " + input);
-        } catch (IllegalArgumentException e) {        // NumberFormatException is a subclass
-            view.showMessage("error: " + e.getMessage());
-        }
+/** CONTROLLER as a STRATEGY: interprets input and updates the MODEL; it does not redraw anything. */
+public void handle(String input) {
+    try {
+        if (input.startsWith("add ")) model.add(input.substring(4));
+        else if (input.startsWith("done ")) model.complete(Integer.parseInt(input.substring(5).trim()));
+        else view.showMessage("unknown command: " + input);
+    } catch (IllegalArgumentException e) {        // NumberFormatException is a subclass
+        view.showMessage("error: " + e.getMessage());
     }
 }
-```
-
-```java
-// File: code/lld/ch11/mvc/ReadOnlyController.java
-package lld.ch11.mvc;
-
-/** Alternative strategy: same view, different behaviour (e.g. a viewer role). */
-public final class ReadOnlyController implements TaskController {
-    private final TaskView view;
-
-    public ReadOnlyController(TaskView view) { this.view = view; }
-
-    public void handle(String input) { view.showMessage("read-only mode, ignored: " + input); }
-}
-```
-
-```java
-// File: code/lld/ch11/mvc/TaskView.java
-package lld.ch11.mvc;
-
-import java.util.List;
-import java.util.stream.Collectors;
+// ReadOnlyController.handle: view.showMessage("read-only mode, ignored: " + input)
 
 /** VIEW: observes the model, renders it (composite), forwards user input to its controller (strategy). */
-public final class TaskView implements ModelListener {
-    private TaskController controller;
-    private final Widget root;
-    private TaskModel lastSeen;
-
-    public TaskView() {
-        root = new Widget.Panel("My Tasks", List.of(
-            new Widget.Label(() -> lastSeen == null ? "(empty)" : lastSeen.tasks().stream()
-                .map(t -> (t.done() ? "[x] " : "[ ] ") + t.id() + ". " + t.title())
-                .collect(Collectors.joining("\n    "))),
-            new Widget.Panel("Summary", List.of(
-                new Widget.Label(() -> lastSeen == null ? "0 open" :
-                    lastSeen.tasks().stream().filter(t -> !t.done()).count() + " open")))));
-    }
-
-    public void setController(TaskController controller) { this.controller = controller; }
-
-    /** A user action arrives at the view... and is handed straight to the controller. */
-    public void userTyped(String input) {
-        System.out.println("> " + input);
-        controller.handle(input);
-    }
-
-    public void showMessage(String msg) { System.out.println("  (" + msg + ")"); }
-
-    @Override
-    public void modelChanged(TaskModel model) {     // Observer callback: re-render from the model
-        lastSeen = model;
-        StringBuilder out = new StringBuilder();
-        root.render(out, "  ");
-        System.out.print(out);
-    }
+public void userTyped(String input) { System.out.println("> " + input); controller.handle(input); }
+@Override public void modelChanged(TaskModel model) {     // Observer callback: re-render from the model
+    lastSeen = model;
+    StringBuilder out = new StringBuilder();
+    root.render(out, "  ");
+    System.out.print(out);
 }
-```
 
-```java
-// File: code/lld/ch11/mvc/Main.java
-package lld.ch11.mvc;
-
-public class Main {
-    public static void main(String[] args) {
-        TaskModel model = new TaskModel();
-        TaskView view = new TaskView();
-        model.addListener(view);                                   // Observer: model -> view
-        view.setController(new EditingController(model, view));  // Strategy: view -> controller
-
-        view.userTyped("add write chapter 11");
-        view.userTyped("add review diagrams");
-        view.userTyped("done 1");
-        view.userTyped("done 42");
-
-        System.out.println("-- switching the view to a read-only controller --");
-        view.setController(new ReadOnlyController(view));
-        view.userTyped("add sneaky task");
-    }
-}
+// Main.java
+model.addListener(view);                                   // Observer: model -> view
+view.setController(new EditingController(model, view));  // Strategy: view -> controller
 ```
 
 **Output:**
@@ -3241,13 +1980,13 @@ public class Main {
 | Several views on one model (list, chart, widget). | Update flows via observers can be hard to trace. |
 | Swap controllers/views independently. | Controllers tend to get "fat" if business logic leaks into them. |
 
-- **Web MVC is different.** In **Spring MVC** (a "Model 2" design), a **front controller** (`DispatcherServlet` — a *servlet* is a Java class that handles HTTP requests inside a web server) routes each HTTP request to a `@Controller` method, which fills a model and returns a view name; the view renders once per request. The view does **not** observe the model — there is no long-lived observer link over HTTP.
-- **Relatives:** **MVP** (Model–View–Presenter: a passive view, the presenter updates it) and **MVVM** (Model–View–ViewModel: the view binds to observable properties of a view-model — Android Jetpack `ViewModel` + `LiveData`/`StateFlow`, WPF). MVVM's view-model also plays a **mediator** role.
-- **Common mistakes:** business logic in controllers ("fat controller"); views changing the model directly; models that import UI classes.
+- **Web MVC is different.** In **Spring MVC** (a "Model 2" design) a **front controller** (`DispatcherServlet` — a *servlet* is a Java class handling HTTP requests inside a web server) routes each request to a `@Controller` method, which fills a model and returns a view name; the view renders once per request and does **not** observe the model — no long-lived observer link over HTTP.
+- **Relatives:** **MVP** (Model–View–Presenter: a passive view the presenter updates) and **MVVM** (Model–View–ViewModel: the view binds to observable properties of a view-model — Android Jetpack `ViewModel` + `LiveData`/`StateFlow`, WPF). MVVM's view-model also plays a **mediator** role.
+- **Common mistakes:** business logic in controllers ("fat controller"); views changing the model directly; models importing UI classes.
 
 #### Real-world examples
 
-Spring MVC, Ruby on Rails, Django (which calls it MTV), ASP.NET MVC, Swing (each component has a model, e.g. `JTable` + `TableModel` with `TableModelListener`), iOS UIKit (`UIViewController`), Android (MVVM).
+Spring MVC, Ruby on Rails, Django (calls it MTV), ASP.NET MVC, Swing (each component has a model, e.g. `JTable` + `TableModel` with `TableModelListener`), iOS UIKit (`UIViewController`), Android (MVVM).
 
 #### In the interview
 
@@ -3263,21 +2002,19 @@ Spring MVC, Ruby on Rails, Django (which calls it MTV), ASP.NET MVC, Swing (each
 
 #### What it is
 
-**Event Sourcing** stores **every change as an immutable event** ("ItemAdded", "ItemRemoved", "CheckedOut") in an **append-only log** (a log you can only add to at the end, never edit), and derives the current state by **replaying** those events — instead of storing only the latest state and overwriting it. It is included here because it **borrows ideas from Command, Memento and Observer at system level** (events look like recorded commands, snapshots are mementos, projections observe the log), and it shows up in design interviews about carts, wallets, orders and audit trails.
-
-Analogy: a bank passbook. The balance is not the source of truth; the list of transactions is. The balance can always be recomputed from it.
+**Event Sourcing** stores **every change as an immutable event** ("ItemAdded", "ItemRemoved", "CheckedOut") in an **append-only log** (you can only add at the end, never edit) and derives current state by **replaying** them — instead of storing only the latest state and overwriting it. It is here because it **borrows Command, Memento and Observer ideas at system level** (events look like recorded commands, snapshots are mementos, projections observe the log), and appears in design interviews about carts, wallets, orders and audit trails. Like a bank passbook: the transaction list is the truth; the balance can always be recomputed.
 
 #### The problem it solves
 
-With "update in place", history is lost: you can't answer "what did the cart look like before checkout?", audit who changed what, or rebuild a **read model** (a copy of the data shaped for fast queries) after a bug. With events, the full history is kept, and you can **time-travel**, **audit**, and **build new views** later by replaying.
+With "update in place" history is lost: you can't answer "what did the cart look like before checkout?", audit who changed what, or rebuild a **read model** (a copy of data shaped for fast queries) after a bug. With events you keep full history and can **time-travel**, **audit**, and **build new views** by replaying.
 
 #### How it works
 
 1. **Command side:** load the aggregate by replaying its events; **validate** the command against current state; if valid, **emit an event** (a fact, past tense).
-2. **Append** the event to the store — never update or delete events.
-3. **Apply**: a **pure function** (its output depends only on its inputs, and it changes nothing else) updates state from an event (no validation, no side effects — events are facts).
-4. **Read side:** replay (all or the first *n* events) to get state at any point; publish events to **observers** that build read models (this split is **CQRS** — Command Query Responsibility Segregation).
-5. For long streams, save periodic **snapshots** (Memento!) and replay only newer events.
+2. **Append** it to the store — never update or delete events.
+3. **Apply**: a **pure function** (output depends only on inputs; changes nothing else) updates state from an event — no validation, no side effects; events are facts.
+4. **Read side:** replay (all or the first *n* events) for state at any point; publish events to **observers** building read models (this split is **CQRS** — Command Query Responsibility Segregation).
+5. For long streams, periodic **snapshots** (Memento!) and replay only newer events.
 
 ```mermaid
 flowchart LR
@@ -3291,124 +2028,47 @@ flowchart LR
 
 #### Java example
 
-A **sealed** `CartEvent` hierarchy; `ShoppingCart.apply` is an exhaustive pattern-matching `switch` over it (a `switch` *statement* with patterns must be exhaustive in Java 21, so a new event type that `apply` forgets is a compile error); `EventStore` is an append-only in-memory log whose methods are `synchronized`, so appends and reads from several threads are safe. Prices are `BigDecimal`.
+Full code: `code/lld/ch11/eventsourcing/`. A **sealed** `CartEvent` hierarchy; `ShoppingCart.apply` is an exhaustive pattern-matching `switch` (a `switch` *statement* with patterns must be exhaustive in Java 21, so a new event type `apply` forgets is a compile error); `EventStore` is an append-only in-memory log with `synchronized` methods, safe across threads. Prices are `BigDecimal`.
 
 ```java
-// File: code/lld/ch11/eventsourcing/CartEvent.java
-package lld.ch11.eventsourcing;
-
-import java.math.BigDecimal;
-
 /** Facts that HAPPENED (past tense). Immutable; never updated or deleted. */
 public sealed interface CartEvent permits CartEvent.ItemAdded, CartEvent.ItemRemoved, CartEvent.CheckedOut {
     record ItemAdded(String sku, int qty, BigDecimal unitPrice) implements CartEvent {}
     record ItemRemoved(String sku) implements CartEvent {}
     record CheckedOut() implements CartEvent {}
 }
-```
-
-```java
-// File: code/lld/ch11/eventsourcing/EventStore.java
-package lld.ch11.eventsourcing;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /** Append-only log per stream (cart id). The log IS the source of truth. */
-public final class EventStore {
-    private final Map<String, List<CartEvent>> streams = new ConcurrentHashMap<>();
+public synchronized void append(String streamId, CartEvent e) { streams.computeIfAbsent(streamId, k -> new ArrayList<>()).add(e); }
+public synchronized List<CartEvent> read(String streamId) { return List.copyOf(streams.getOrDefault(streamId, List.of())); }
 
-    public synchronized void append(String streamId, CartEvent e) {
-        streams.computeIfAbsent(streamId, k -> new ArrayList<>()).add(e);
-    }
-
-    public synchronized List<CartEvent> read(String streamId) {
-        return List.copyOf(streams.getOrDefault(streamId, List.of()));
+/** ShoppingCart: aggregate whose current state is DERIVED by replaying events. */
+public static ShoppingCart replay(List<CartEvent> history, int n) {    // first n events: "time travel"
+    ShoppingCart cart = new ShoppingCart();
+    history.stream().limit(n).forEach(cart::apply);
+    return cart;
+}
+/** Pure state transition: no validation, no side effects. Events are facts. */
+private void apply(CartEvent e) {
+    switch (e) {
+        case CartEvent.ItemAdded a -> lineTotals.merge(a.sku(), a.unitPrice().multiply(BigDecimal.valueOf(a.qty())), BigDecimal::add);
+        case CartEvent.ItemRemoved r -> lineTotals.remove(r.sku());
+        case CartEvent.CheckedOut c -> checkedOut = true;
     }
 }
-```
-
-```java
-// File: code/lld/ch11/eventsourcing/ShoppingCart.java
-package lld.ch11.eventsourcing;
-
-import java.math.BigDecimal;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-
-/** Aggregate whose current state is DERIVED by replaying events. */
-public final class ShoppingCart {
-    private final Map<String, BigDecimal> lineTotals = new LinkedHashMap<>();
-    private boolean checkedOut;
-
-    /** Rebuild state from history (optionally only the first n events: "time travel"). */
-    public static ShoppingCart replay(List<CartEvent> history, int n) {
-        ShoppingCart cart = new ShoppingCart();
-        history.stream().limit(n).forEach(cart::apply);
-        return cart;
-    }
-
-    /** Pure state transition: no validation, no side effects. Events are facts. */
-    private void apply(CartEvent e) {
-        switch (e) {
-            case CartEvent.ItemAdded a -> lineTotals.merge(a.sku(), a.unitPrice().multiply(BigDecimal.valueOf(a.qty())), BigDecimal::add);
-            case CartEvent.ItemRemoved r -> lineTotals.remove(r.sku());
-            case CartEvent.CheckedOut c -> checkedOut = true;
-        }
-    }
-
-    /** Command side: validate against current state, THEN emit an event. */
-    public CartEvent decideRemove(String sku) {
-        if (checkedOut) throw new IllegalStateException("cart already checked out");
-        if (!lineTotals.containsKey(sku)) throw new IllegalArgumentException(sku + " not in cart");
-        return new CartEvent.ItemRemoved(sku);
-    }
-
-    @Override
-    public String toString() {
-        BigDecimal total = lineTotals.values().stream().reduce(new BigDecimal("0.00"), BigDecimal::add);
-        return lineTotals.keySet() + " total=" + total + (checkedOut ? " CHECKED-OUT" : "");
-    }
+/** Command side: validate against current state, THEN emit an event. */
+public CartEvent decideRemove(String sku) {
+    if (checkedOut) throw new IllegalStateException("cart already checked out");
+    if (!lineTotals.containsKey(sku)) throw new IllegalArgumentException(sku + " not in cart");
+    return new CartEvent.ItemRemoved(sku);
 }
-```
 
-```java
-// File: code/lld/ch11/eventsourcing/Main.java
-package lld.ch11.eventsourcing;
-
-import java.math.BigDecimal;
-import java.util.List;
-
-public class Main {
-    public static void main(String[] args) {
-        EventStore store = new EventStore();
-        String cartId = "cart-7";
-        store.append(cartId, new CartEvent.ItemAdded("book", 2, new BigDecimal("12.99")));
-        store.append(cartId, new CartEvent.ItemAdded("pen", 5, new BigDecimal("0.99")));
-
-        ShoppingCart current = ShoppingCart.replay(store.read(cartId), Integer.MAX_VALUE);
-        store.append(cartId, current.decideRemove("pen"));      // validated, then recorded
-        store.append(cartId, new CartEvent.CheckedOut());
-
-        List<CartEvent> history = store.read(cartId);
-        System.out.println("event log:");
-        history.forEach(e -> System.out.println("  " + e));
-
-        System.out.println("state after each event (replay = time travel):");
-        for (int n = 0; n <= history.size(); n++) {
-            System.out.println("  after " + n + ": " + ShoppingCart.replay(history, n));
-        }
-
-        try {
-            ShoppingCart.replay(history, history.size()).decideRemove("book");
-        } catch (IllegalStateException e) {
-            System.out.println("command rejected: " + e.getMessage());
-        }
-    }
-}
+// Main.java
+store.append(cartId, new CartEvent.ItemAdded("book", 2, new BigDecimal("12.99")));
+store.append(cartId, new CartEvent.ItemAdded("pen", 5, new BigDecimal("0.99")));
+ShoppingCart current = ShoppingCart.replay(store.read(cartId), Integer.MAX_VALUE);
+store.append(cartId, current.decideRemove("pen"));      // validated, then recorded
+store.append(cartId, new CartEvent.CheckedOut());
 ```
 
 **Output:**
@@ -3437,11 +2097,11 @@ command rejected: cart already checked out
 | Natural fit with event-driven architectures. | Reads need projections (read models built from events); eventual consistency (the read side catches up after a short delay) between write and read sides. |
 
 - **Don't use it** for simple CRUD without audit or history needs.
-- **Common mistakes:** putting validation in `apply` (replay of old facts may then fail); events named as commands (`RemoveItem` instead of `ItemRemoved`); mutable events; storing derived data inside events; no snapshots for very long streams; **appending without an expected-version check** — two commands decided on the same old state can both append. Real event stores take an `expectedVersion` on append and reject the second writer (optimistic concurrency). The toy `EventStore` here omits it.
+- **Common mistakes:** validation in `apply` (replaying old facts may then fail); events named as commands (`RemoveItem` instead of `ItemRemoved`); mutable events; derived data stored inside events; no snapshots for very long streams; **appending without an expected-version check** — two commands decided on the same old state can both append. Real event stores take an `expectedVersion` on append and reject the second writer (optimistic concurrency); the toy `EventStore` omits it.
 
 #### Real-world examples
 
-Bank ledgers and payment systems (balances derived from ledger entries); Git (the version-control system — its history of commits); **Axon Framework** and **EventStoreDB**; Kafka used as an event log with long or unlimited **retention** (how long stored messages are kept) (not *compacted* topics — compaction keeps only the latest record per key, which throws away the history event sourcing needs); shopping carts and order histories where "what happened when" matters.
+Bank ledgers and payment systems (balances derived from ledger entries); Git (its history of commits); **Axon Framework** and **EventStoreDB**; Kafka as an event log with long or unlimited **retention** (how long messages are kept) — not *compacted* topics, which keep only the latest record per key and so discard the history event sourcing needs; shopping carts and order histories where "what happened when" matters.
 
 #### In the interview
 
@@ -3455,7 +2115,7 @@ Bank ledgers and payment systems (balances derived from ledger entries); Git (th
 
 ## 11.8 Choose the right behavioral pattern
 
-Start from the **symptom** in the code or requirement, not from the pattern name.
+Start from the **symptom** in the code or requirement, not the pattern name.
 
 | If you see / need... | Use | Not to be confused with |
 |---|---|---|
@@ -3487,7 +2147,7 @@ Start from the **symptom** in the code or requirement, not from the pattern name
 
 **"Which patterns have you used in production?"** Pick concrete ones and name the *trade-off*: "Strategy for payment methods, chosen by a map injected by Spring; Observer via Spring events for sending emails after an order, moved to Kafka when we needed retries; State for the order lifecycle, with the DB update guarded by `WHERE status = ?` to avoid races."
 
-**"When would you avoid patterns?"** When only two branches exist and a third is not expected; when a lambda or an enum does the job; when the indirection costs more readability than it buys flexibility. Patterns are a vocabulary for trade-offs, not a checklist.
+**"When would you avoid patterns?"** When only two branches exist and no third is expected; when a lambda or an enum does the job; when the indirection costs more readability than it buys flexibility. Patterns are a vocabulary for trade-offs, not a checklist.
 
 ### Self-check (whole chapter)
 
@@ -3505,3 +2165,406 @@ Start from the **symptom** in the code or requirement, not from the pattern name
 - **Template Method** = inheritance, one step varies; **Strategy** = composition, whole algorithm varies.
 - **Visitor** = cheap new operations, expensive new types; Java 21 **sealed + switch** usually replaces it.
 - Beyond GoF: **Null Object**, **DI**, **Repository**, **Specification**, **MVC**, **Event Sourcing** — the everyday glue of real systems and machine-coding answers.
+
+---
+## 11.9 Architectural patterns, and how they differ from design patterns
+
+A **design pattern** (everything above) arranges a handful of classes to solve one recurring problem inside a program. An **architectural pattern** (also called an **architectural style**) fixes the shape of the whole system: which large parts it has, which part may call or depend on which, and how they communicate (method call, network request or message). Design patterns sit *inside* the parts that an architectural pattern defines. For example, a hexagonal service (§11.9.7) uses Repository (§11.7.3) and Dependency Injection (§11.7.2) inside it.
+
+| | Design pattern | Architectural pattern |
+|---|---|---|
+| Scope | A few classes | A whole application or system |
+| Unit | Class, interface, object | Layer, module, component, service, process |
+| Main concern | Responsibility and collaboration between objects | Dependency direction, deployment, communication, data ownership |
+| Cost of changing it later | A refactoring of a few files | A re-architecture, often months of work |
+| Examples | Strategy, Observer, Repository | Layered, microservices, event-driven, hexagonal |
+
+**Why an LLD interview cares.** Your answer still says where the classes live ("controller, service, repository" or "domain core with ports"), and follow-ups such as "would you split this into microservices?" are architectural.
+
+### 11.9.1 The styles at a glance
+
+| Style | Core idea | Main cost | How it shows up in an LLD answer |
+|---|---|---|---|
+| **Layered (n-tier)** | Horizontal layers; each depends only on layers below | Domain shaped by storage; features cut through every layer | `Controller -> Service -> Repository` packages |
+| **Client-server** | Clients request; a central server owns data and rules | Server is a bottleneck until scaled out | The API boundary: what the server re-validates |
+| **Modular monolith** | One deployable split into modules with enforced boundaries | One release train, one shared failure fate | Packages per business capability, interfaces between them |
+| **Microservices** | Independently deployable services, each owning its data | Network failures, distributed data, operations | Say where you *would* split and why |
+| **Event-driven** | Components react to published events instead of calling each other | Hard to trace; duplicates, ordering, eventual consistency | Observer in-process, a broker between services |
+| **Pipe-and-filter** | Data flows through independent transforming steps | Shared state between steps is awkward | `Filter<I, O>` plus composition |
+| **Hexagonal / clean** | Domain core in the middle; I/O behind ports and adapters | More interfaces and mapping code | No framework imports in the domain; repository and gateway ports |
+| **MVC / MVP / MVVM** | Separate UI state, display and input | Extra classes for small screens | §11.7.5; only the UI edge of a system |
+
+The sections below add one diagram per style and say when to use it. §11.9.9 is one runnable program that combines hexagonal, pipe-and-filter and broker-style event-driven.
+
+### 11.9.2 Layered (n-tier)
+
+**What it is.** Code is split into horizontal **layers**; each layer serves the one above and depends only on layers below it. The usual four are: **presentation** (HTTP controllers, UI), **application** or service (use cases, transactions), **domain** (business rules) and **persistence** or data access (repositories, SQL). A **tier** is a *physical* separation (a separate process or machine), whereas a layer is a *logical* one. "Three-tier" usually means browser, application server and database. **Strict layering** allows calls only to the layer directly below. **Relaxed layering** allows skipping layers, for example a controller reading a repository directly. Relaxed layering is convenient but erodes the structure. The diagram shows the common relaxed form, where the service calls both the domain and the repository.
+
+```mermaid
+flowchart TD
+    P["Presentation: OrderController"] --> A["Application: OrderService"]
+    A --> D["Domain: Order, OrderLine"]
+    A --> R["Persistence: JdbcOrderRepository"]
+    R --> DB[("Database")]
+```
+
+**Use it when** the app is mostly forms over data, the team is new to the domain, or a framework (Spring, Rails, Django) already imposes it.
+
+**Trade-offs.** It is understood by everyone and gives separation of concerns for free. However, the dependency arrow points *down to the database*, so the domain ends up shaped by tables. One feature ("add a discount") touches every layer. And when services only forward calls ("sinkhole" layers), the layers add indirection without value. Hexagonal architecture (§11.9.7) keeps the layers but turns the bottom arrow around.
+
+**In an LLD interview.** This is the default machine-coding layout: `controller` (or `Main`), `service` (use cases), `repository` (interfaces with in-memory implementations), `model` (rules where they belong, never in the controller).
+
+### 11.9.3 Client-server (and peer-to-peer)
+
+**What it is.** A **server** owns a resource (data, computation) and waits for requests. **Clients** start requests and present results. The two communicate through a protocol (HTTP, gRPC, a database wire protocol). The server is the single source of truth and the place where rules are enforced. Never trust validation done only on the client. The contrasting style is **peer-to-peer (P2P)**: every node is both client and server, as in BitTorrent or a blockchain. P2P removes the central bottleneck, but it makes consistency, discovery and trust much harder.
+
+```mermaid
+flowchart LR
+    W["Web client"] -->|"HTTP request"| S["Server: API + rules"]
+    M["Mobile client"] -->|"HTTP request"| S
+    S -->|"response"| W
+    S -->|"response"| M
+    S --> DB[("Database")]
+```
+
+**Use it when** many users share data that needs one authority (almost every business app). P2P is used for file sharing, sync without a central host, and decentralised ledgers.
+
+**Trade-offs.** Central control makes rules, security and backups simple. The server can be scaled out (several instances behind a load balancer), but it is a bottleneck and a failure point until you do so. **Stateless** servers (no per-client memory between requests; session data lives in a token or a shared store) are much easier to scale than stateful ones.
+
+**In an LLD interview.** Client-server mostly appears as the API boundary of the system you design. Examples: "the client sends `bookSeat(showId, seatId)` and the server re-checks availability under a lock", or "the elevator panel is a client of the controller". State which side owns the truth and which side validates.
+
+### 11.9.4 Monolith, modular monolith and microservices
+
+**What they are.** A **monolith** is one deployable unit (one JAR, one process) containing all features. A **modular monolith** is still one deployable, but it is divided into **modules** by business capability (orders, payments, catalogue). Each module exposes a small public interface and hides everything else. Its boundaries are enforced by packages, Java modules (JPMS, the Java Platform Module System) or build rules. **Microservices** split the system into independently deployable services. Each runs in its own process, owns its own database (no other service reads its tables) and talks to the others over the network. The usual split follows a **bounded context**, a domain-driven-design term for a part of the business where words have one consistent meaning.
+
+```mermaid
+flowchart LR
+    subgraph MONO["Modular monolith: one process, one deploy"]
+        O1["orders module"] -->|"Java interface call"| P1["payments module"]
+        O1 --> C1["catalog module"]
+    end
+    subgraph MS["Microservices: one process and one database each"]
+        O2["order-service"] -->|"HTTP or message"| P2["payment-service"]
+        O2 -->|"HTTP"| C2["catalog-service"]
+        O2 --- DB1[("orders DB")]
+        P2 --- DB2[("payments DB")]
+    end
+```
+
+**Use a modular monolith** by default. It gives most of the structural benefit at none of the network cost. **Move a module out into a service** only when you have a concrete reason: a separate team that needs to release independently, very different scaling (a search module needing 50 instances while the rest needs 2), a different technology, or fault isolation.
+
+**Trade-offs of microservices.**
+- **Gains:** independent deploys and scaling, smaller codebases per team, and a crash in one service does not take down the others.
+- **Costs:** every call can be slow or fail, so you need timeouts, retries and **idempotency** (repeating a request has no extra effect). There are no cross-service database transactions, so a multi-step business action needs a **saga** (a series of local transactions, each with a compensating undo step). You also take on **eventual consistency** (other services see a change after a delay), distributed tracing, and many more deployments to run. A **distributed monolith** is the worst case: services that must be deployed together because they share a database or call each other synchronously in long chains.
+
+**In an LLD interview.** You design one service or a modular monolith. When asked "how would this scale to microservices?", point to your module interfaces (`PaymentGateway`, `NotificationSender`) and say that each could become a network client with the same interface, adding timeouts, retries and idempotency keys. That is the payoff of designing to interfaces.
+
+### 11.9.5 Event-driven architecture: broker vs mediator topology
+
+**What it is.** Components communicate by producing and consuming **events** (immutable facts such as `OrderPaid`) instead of calling each other directly. A producer does not know who consumes its events, so new reactions can be added without touching it. This is Observer (§11.1) lifted to system level. Between processes, a **message broker** (Kafka, RabbitMQ, a cloud queue) stores and delivers the events. Chapter 20 §20.6 designs such a pub-sub system. Event-driven systems come in two **topologies** (shapes of how events flow):
+
+- **Broker topology.** There is no central coordinator. Each consumer subscribes to the events it cares about, does its work and may publish new events, so the flow emerges as a chain. Highly decoupled and scalable, but no single place knows the whole flow, and error handling is spread out. Also called **choreography**.
+- **Mediator topology.** A central **mediator** (an orchestrator or workflow engine) receives the initial event and sends ordered commands to each step ("reserve stock", then "charge card", then "ship"). It decides what happens next and handles failures and compensation. The flow is easier to see and control, but the mediator couples to every step and can become a bottleneck. Also called **orchestration**. This is Mediator (§10.4) at system level.
+
+```mermaid
+flowchart LR
+    subgraph BROKER["Broker topology: choreography"]
+        OS1["Order"] -->|"OrderPaid"| T1(["topic"])
+        T1 --> W1["Warehouse"]
+        T1 --> E1["Email"]
+        W1 -->|"StockReserved"| T2(["topic"])
+        T2 --> SH1["Shipping"]
+    end
+    subgraph MEDIATOR["Mediator topology: orchestration"]
+        OS2["Order"] -->|"OrderPaid"| MED["Fulfilment mediator"]
+        MED -->|"1 reserve"| W2["Warehouse"]
+        MED -->|"2 ship"| SH2["Shipping"]
+        MED -->|"3 notify"| E2["Email"]
+    end
+```
+
+**Use it when** one action has many independent reactions (notifications, analytics, search indexing), when systems must be integrated loosely, or when work should continue after the user gets a response. Choose the **broker** topology for independent reactions, and the **mediator** for a multi-step business process with ordering and compensation, such as order fulfilment or loan approval.
+
+**Trade-offs.**
+- **Gains:** loose coupling, easy extension, consumers that scale and fail independently, and a natural audit trail when combined with Event Sourcing (§11.7.6).
+- **Costs:** the call flow is invisible in the code. Most brokers deliver **at least once**, so consumers must be idempotent. Ordering is guaranteed only per partition or key. Consumers see changes late (eventual consistency). And you need **dead-letter queues** (where messages that keep failing are parked for inspection).
+
+**In an LLD interview.** In-process, it is an `EventBus` or Observer with typed events. Between services, it is a broker with topics. The §11.9.9 demo is a broker-topology bus behind an `EventPublisher` port. Name the delivery guarantee and the idempotency strategy, for example "consumers keep processed event IDs".
+
+### 11.9.6 Pipe-and-filter
+
+**What it is.** Processing is split into **filters**: independent steps that each take an input, transform, enrich, validate or drop it, and emit an output. Filters are connected by **pipes** that carry each filter's output to the next filter. A filter knows nothing about its neighbours, only the data format on its input and output, so filters can be reordered, reused and tested alone. Pipes can be plain function composition (synchronous), or bounded queues between threads (each filter on its own thread, with **backpressure**, meaning a full queue slows down the producer). Unix shell pipelines (`grep | sort | uniq`), Java Streams, compiler phases and servlet filter chains are all this style.
+
+```mermaid
+flowchart LR
+    IN["CSV lines"] --> F1["dropBlankAndComments"]
+    F1 -->|"pipe"| F2["normalise"]
+    F2 -->|"pipe"| F3["splitFields"]
+    F3 -->|"pipe"| F4["toCommand"]
+    F4 --> OUT["PlaceOrderCommand"]
+    F1 -.->|"rejected"| REJ["report"]
+    F3 -.->|"rejected"| REJ
+    F4 -.->|"rejected"| REJ
+```
+
+**Use it when** the work is a sequence of transformations on a stream of items: parsing and import, ETL (extract, transform, load), log processing, image or audio processing, request middleware.
+
+**Trade-offs.** Each filter is simple, testable and replaceable, and with queues the stages run in parallel. The costs: steps that need shared context (for example "reject duplicates across lines") need a stateful filter or a side store; interactive request-reply flows fit poorly; and each step adds conversion or queue overhead.
+
+**Versus Chain of Responsibility (§10.1).** In a CoR, each handler may *stop* the request, and usually one handler handles it. In a pipeline, *every* filter normally runs and *transforms* the data, and a rejection is just one possible output. Versus Decorator (§9.4): a decorator wraps one object with the *same* interface, whereas filters may change the data type at each step (`String -> List<String> -> PlaceOrderCommand`).
+
+**In an LLD interview.** It appears in log processors, file-import jobs, request validation, rate-limiter middleware and the logging-framework case in Chapter 20 §20.5. Model it as `interface Filter<I, O>` with a composition method, as in §11.9.9.
+
+### 11.9.7 Hexagonal architecture (ports and adapters) and clean architecture
+
+**What it is.** **Hexagonal architecture** (Alistair Cockburn, 2005) puts the **application core** (domain model plus use cases) in the middle and pushes all I/O to the edge. The core talks to the outside only through **ports**, which are interfaces *owned by the core*. **Adapters** implement or call those ports for one specific technology. There are two kinds of each:
+
+- **Driving (primary, inbound) side.** Something outside *drives* the app: an HTTP controller, a CLI, a CSV importer, a test. The core declares a **driving port** (a use-case interface such as `OrderingUseCase`), and the driving adapter calls it.
+- **Driven (secondary, outbound) side.** The app needs something outside: a database, a payment provider, a message broker. The core declares a **driven port** (such as `OrderRepository` or `PaymentGateway`), and a driven adapter implements it.
+
+All source-code dependencies point *inward*. Adapters depend on ports, and the core imports no adapter, framework or I/O class. This is the Dependency Inversion Principle (Chapter 4 §4.10) applied to a whole application. A **composition root** (one place, usually `main` or the DI container's configuration) wires concrete adapters to the core.
+
+**Clean architecture** (Robert C. Martin, 2012) and **onion architecture** (Jeffrey Palermo, 2008) are the same idea drawn as concentric circles: entities, then use cases, then interface adapters, then frameworks and drivers. They share one **dependency rule**: source code may depend only on circles further in. Treat hexagonal, onion and clean as one style with different vocabulary.
+
+```mermaid
+flowchart LR
+    CSV["CsvOrderImporter: driving adapter"] -->|"calls"| UC
+    TEST["Test or REST controller: driving adapter"] -->|"calls"| UC
+    subgraph CORE["Application core: no framework imports"]
+        UC["OrderingUseCase: driving port"]
+        SVC["OrderService + Order domain"]
+        SVC -.->|"implements"| UC
+        SVC -->|"uses"| REPO["OrderRepository port"]
+        SVC -->|"uses"| PAY["PaymentGateway port"]
+        SVC -->|"uses"| PUB["EventPublisher port"]
+    end
+    MEM["InMemoryOrderRepository"] -.->|"implements"| REPO
+    LIM["LimitPaymentGateway"] -.->|"implements"| PAY
+    BUS["InMemoryEventBus"] -.->|"implements"| PUB
+```
+
+**Use it when** the business rules are valuable and long-lived, when you want fast tests without databases or networks, or when infrastructure is likely to change (swap the database, add a second payment provider, add a gRPC entry point next to REST).
+
+**Trade-offs.**
+- **Gains:** the core is testable with in-memory adapters, technology decisions can be postponed or reversed, and every new entry point is just another adapter.
+- **Costs:** more interfaces and **mapping code** (converting between adapter types such as JSON or table rows and core types). A trivial CRUD app gains little. Ports designed around one vendor's API ("leaky ports") bring the coupling back.
+
+**Hexagonal vs layered.** Both separate concerns. In layered architecture the domain depends *down* on persistence. In hexagonal, persistence depends *in* on the domain's port, and "top" and "bottom" become simply "driving side" and "driven side".
+
+**In an LLD interview.** This is what a strong machine-coding answer usually *is*, even when unnamed: domain classes with no I/O, `XxxRepository` and `XxxGateway` interfaces, in-memory implementations, and a `Main` that wires them together. Say the name and the dependency rule out loud. It shows that you know why the interfaces exist.
+
+### 11.9.8 Where MVC, MVP and MVVM fit
+
+MVC, MVP and MVVM ([§11.7.5](#1175-mvc--modelviewcontroller-the-head-first-compound-pattern)) are **presentation patterns**: they organise the *UI edge*, not the whole system. In a layered system MVC is the presentation layer (Spring MVC's "model" is often just data for a template; the rules live below). In hexagonal terms a controller, presenter or view-model is a **driving adapter** that turns user gestures into calls on a driving port. So "MVC vs hexagonal" is not a choice: MVC at the edge, hexagonal for the core.
+
+### 11.9.9 Java example: a hexagonal order service fed by a pipe-and-filter importer
+
+One small program shows three styles working together:
+
+- **Hexagonal.** `domain` holds `Order` and its rules. `port` holds the interfaces the core owns: one driving port (`OrderingUseCase`) and four driven ports. `app.OrderService` implements the use case using only ports and domain. `adapter` holds the technology-specific code. `Main` is the composition root. The diagram in §11.9.7 uses these exact names.
+- **Pipe-and-filter.** The driving adapter `CsvOrderImporter` parses CSV lines through four `Filter`s composed with `then()`. Syntax errors are dropped by the filters. Business errors (unknown product, declined payment) are decided by the core.
+- **Event-driven (broker topology).** The core publishes `OrderPaid` or `PaymentFailed` through the `EventPublisher` port. `InMemoryEventBus` delivers each event to whoever subscribed, so the warehouse, email and audit handlers are unknown to `OrderService`.
+
+The dependency rule can be checked mechanically. No file in `domain`, `port` or `app` imports anything from `adapter` or `pipeline`: `grep -r "architecture.adapter\|architecture.pipeline" domain port app` prints nothing.
+
+Full code: `code/lld/ch11/architecture/` (packages `domain`, `port`, `app`, `adapter`, `pipeline`, plus `Main`). The essential lines:
+
+```java
+// domain — pure Java: no imports from ports, adapters, frameworks or I/O.
+/** Value object: one priced line of an order. Immutable, compared by value. */
+public record OrderLine(String sku, int qty, BigDecimal unitPrice) {
+    public OrderLine {
+        if (qty <= 0) throw new IllegalArgumentException("quantity must be positive for " + sku);
+        if (unitPrice.signum() < 0) throw new IllegalArgumentException("negative price for " + sku);
+    }
+    public BigDecimal lineTotal() { return unitPrice.multiply(BigDecimal.valueOf(qty)); }
+}
+public enum OrderStatus { PENDING_PAYMENT, PAID, PAYMENT_FAILED }
+
+public final class Order {   // DOMAIN entity
+    /** Factory that enforces the invariant "an order has at least one line". */
+    public static Order place(String id, String customerId, List<OrderLine> lines) {
+        if (lines.isEmpty()) throw new IllegalArgumentException("an order needs at least one line");
+        return new Order(id, customerId, List.copyOf(lines));
+    }
+    public BigDecimal total() { return lines.stream().map(OrderLine::lineTotal).reduce(BigDecimal.ZERO, BigDecimal::add); }
+    public void markPaid() { requirePending(); status = OrderStatus.PAID; }
+    public void markPaymentFailed() { requirePending(); status = OrderStatus.PAYMENT_FAILED; }
+    ...
+}
+/** Domain events: facts the core announces. Past tense, immutable. */
+public sealed interface OrderEvent permits OrderEvent.OrderPaid, OrderEvent.PaymentFailed {
+    String orderId();
+    record OrderPaid(String orderId, String customerId, BigDecimal total) implements OrderEvent {}
+    record PaymentFailed(String orderId, String customerId, BigDecimal total) implements OrderEvent {}
+}
+```
+
+```java
+// port — interfaces OWNED BY THE CORE.
+/** DRIVING (inbound) port: what the outside world may ask the application to do. */
+public interface OrderingUseCase {
+    OrderReceipt place(PlaceOrderCommand command);
+    Optional<OrderReceipt> find(String orderId);
+}
+/** Input to the driving port. Plain data: no HTTP, CSV or JSON types leak in. */
+public record PlaceOrderCommand(String customerId, List<Item> items) {
+    public record Item(String sku, int qty) {}
+    public PlaceOrderCommand { items = List.copyOf(items); }
+}
+/** Output: a read-only view, so callers never hold the mutable Order. */
+public record OrderReceipt(String orderId, OrderStatus status, BigDecimal total) {}
+
+// DRIVEN (outbound) ports: the core needs these; it does not care how they are implemented.
+public interface OrderRepository { void save(Order order); Optional<Order> findById(String id); }
+public interface ProductCatalog { Optional<BigDecimal> priceOf(String sku); }      // prices never come from the caller
+@FunctionalInterface
+public interface PaymentGateway { boolean charge(String customerId, BigDecimal amount); }  // one method: a test can pass a lambda
+public interface EventPublisher { void publish(OrderEvent event); }                // the core does not know who listens
+```
+
+```java
+// app/OrderService.java — APPLICATION core: implements the driving port, uses only driven ports and the domain.
+@Override
+public OrderReceipt place(PlaceOrderCommand cmd) {
+    List<OrderLine> lines = cmd.items().stream()
+        .map(i -> new OrderLine(i.sku(), i.qty(), catalog.priceOf(i.sku())
+            .orElseThrow(() -> new IllegalArgumentException("unknown product " + i.sku()))))
+        .toList();
+    Order order = Order.place("o-" + nextId.getAndIncrement(), cmd.customerId(), lines);
+
+    boolean paid = payments.charge(order.customerId(), order.total());
+    if (paid) order.markPaid(); else order.markPaymentFailed();
+    orders.save(order);
+    events.publish(paid
+        ? new OrderEvent.OrderPaid(order.id(), order.customerId(), order.total())
+        : new OrderEvent.PaymentFailed(order.id(), order.customerId(), order.total()));
+    return receiptOf(order);
+}
+```
+
+```java
+// adapter — DRIVEN adapters: InMemoryOrderRepository (ConcurrentHashMap), InMemoryCatalog (fixed price list),
+// LimitPaymentGateway (approves charges up to a limit, printing "[payment] charge ... -> approved/declined"), and:
+/** A toy BROKER (event-driven, broker topology): publishers and subscribers know only the bus and event types.
+ *  Synchronous and in memory; Kafka or RabbitMQ would add durability and async delivery. */
+public final class InMemoryEventBus implements EventPublisher {
+    private record Subscription<T>(Class<T> type, Consumer<? super T> handler) {
+        void offer(Object event) { if (type.isInstance(event)) handler.accept(type.cast(event)); }
+    }
+    private final List<Subscription<?>> subscriptions = new CopyOnWriteArrayList<>();
+    public <T extends OrderEvent> void subscribe(Class<T> type, Consumer<? super T> handler) { subscriptions.add(new Subscription<>(type, handler)); }
+    @Override public void publish(OrderEvent event) { subscriptions.forEach(s -> s.offer(event)); }
+}
+```
+
+```java
+// pipeline — what a filter emits: a value for the next filter, or a rejection that ends the run.
+public sealed interface Result<T> permits Result.Ok, Result.Rejected {
+    record Ok<T>(T value) implements Result<T> {}
+    record Rejected<T>(String reason) implements Result<T> {}
+}
+/** PIPE-AND-FILTER: a filter turns one input into one output (or rejects it). then() is the PIPE.
+ *  Filters never call each other directly, so they can be reordered, reused and tested alone. */
+@FunctionalInterface
+public interface Filter<I, O> {
+    Result<O> process(I input);
+    static <I, O> Filter<I, O> of(Filter<I, O> filter) { return filter; }
+    default <R> Filter<I, R> then(Filter<O, R> next) {
+        return input -> switch (process(input)) {
+            case Result.Ok<O> ok -> next.process(ok.value());
+            case Result.Rejected<O> rejected -> new Result.Rejected<>(rejected.reason());
+        };
+    }
+}
+
+// adapter/CsvOrderImporter.java — DRIVING adapter: CSV lines ("customer, sku:qty, sku:qty") -> calls on the driving port.
+// Syntax checks live here; business rules (known products, payment) live in the core.
+private static final Filter<String, PlaceOrderCommand> PIPELINE =
+    Filter.of(CsvOrderImporter::dropBlankAndComments)   // rejects "blank line" / "comment"
+          .then(CsvOrderImporter::normalise)            // strip, lower-case, remove whitespace
+          .then(CsvOrderImporter::splitFields)          // rejects "expected a customer and at least one item in '...'"
+          .then(CsvOrderImporter::toCommand);           // rejects "bad item '...', expected sku:qty" (qty must match [1-9][0-9]{0,3})
+// importLines: Rejected -> "line n dropped by filter: <reason>"; Ok -> ordering.place(cmd), printing the receipt
+// or "line n rejected by core: <message>" on IllegalArgumentException.
+```
+
+```java
+// Main.java — COMPOSITION ROOT: the only class that knows every adapter. It wires them to the core.
+var catalog = new InMemoryCatalog(Map.of(
+    "book", new BigDecimal("12.99"), "pen", new BigDecimal("0.99"), "lamp", new BigDecimal("89.00")));
+var bus = new InMemoryEventBus();
+bus.subscribe(OrderEvent.OrderPaid.class, e -> System.out.println("    [warehouse] reserve stock for " + e.orderId()));
+bus.subscribe(OrderEvent.OrderPaid.class, e -> System.out.println("    [email] to " + e.customerId() + ": order " + e.orderId() + " confirmed"));
+bus.subscribe(OrderEvent.class, e -> System.out.println("    [audit] " + e));
+
+OrderingUseCase ordering = new OrderService(
+    new InMemoryOrderRepository(), catalog, new LimitPaymentGateway(new BigDecimal("100.00")), bus);
+
+new CsvOrderImporter(ordering).importLines(List.of(
+    "# customer, sku:qty, ...", "  C-1, Book:2,  pen:3", "", "c-2, lamp:2", "c-3, pen:zero", "c-4, kettle:1", "c-5"));
+// part 2: ordering.find("o-1"), ordering.find("o-9")
+// part 3: swap a driven adapter — same core, a lambda that declines every payment:
+OrderingUseCase declining = new OrderService(new InMemoryOrderRepository(), catalog, (customer, amount) -> false, bus);
+```
+
+**Output:**
+
+```text
+== 1. Driving adapter: CSV -> pipe-and-filter -> port -> core -> events ==
+  line 1 dropped by filter: comment
+  line 2 -> PlaceOrderCommand[customerId=c-1, items=[Item[sku=book, qty=2], Item[sku=pen, qty=3]]]
+    [payment] charge c-1 28.95 -> approved
+    [warehouse] reserve stock for o-1
+    [email] to c-1: order o-1 confirmed
+    [audit] OrderPaid[orderId=o-1, customerId=c-1, total=28.95]
+  line 2 receipt: OrderReceipt[orderId=o-1, status=PAID, total=28.95]
+  line 3 dropped by filter: blank line
+  line 4 -> PlaceOrderCommand[customerId=c-2, items=[Item[sku=lamp, qty=2]]]
+    [payment] charge c-2 178.00 -> declined
+    [audit] PaymentFailed[orderId=o-2, customerId=c-2, total=178.00]
+  line 4 receipt: OrderReceipt[orderId=o-2, status=PAYMENT_FAILED, total=178.00]
+  line 5 dropped by filter: bad item 'pen:zero', expected sku:qty
+  line 6 -> PlaceOrderCommand[customerId=c-4, items=[Item[sku=kettle, qty=1]]]
+  line 6 rejected by core: unknown product kettle
+  line 7 dropped by filter: expected a customer and at least one item in 'c-5'
+== 2. Another driving adapter (a test) calls the same port ==
+  find(o-1) = Optional[OrderReceipt[orderId=o-1, status=PAID, total=28.95]]
+  find(o-9) = Optional.empty
+== 3. Swap a driven adapter: same core, a lambda that declines every payment ==
+    [audit] PaymentFailed[orderId=o-1, customerId=c-9, total=0.99]
+  OrderReceipt[orderId=o-1, status=PAYMENT_FAILED, total=0.99]
+```
+
+**What to notice.**
+
+- **Validation is split by responsibility.** `pen:zero` never reaches the core, because a pipe-and-filter step rejects bad syntax. `kettle` is syntactically fine but is rejected by the core, because only the catalogue knows which products exist. Prices come from the `ProductCatalog` port, never from the caller.
+- **The core is unchanged when adapters change.** Part 3 replaces the payment adapter with a one-line lambda. That is how a unit test runs the core without a payment provider.
+- **The bus is the broker topology.** `OrderService` publishes one event, and three independent handlers react. Adding an SMS handler is one `subscribe` call in `Main`.
+- **Concurrency and production gaps.** The repository (`ConcurrentHashMap`), the bus (`CopyOnWriteArrayList`) and the ID counter (`AtomicLong`) are thread-safe one call at a time. `place` itself is not atomic, however: it charges, then saves, then publishes. A crash after the charge but before the save loses the order. Production code would save the order as `PENDING_PAYMENT` first, call the gateway with an **idempotency key** (the order ID) so that a retry cannot charge twice, and publish events through an **outbox** (events written in the same database transaction as the order and relayed to the broker afterwards). The bus is also synchronous: a slow handler slows down `place`. A real broker delivers asynchronously and at least once.
+
+### In the interview (architectural patterns)
+
+**"What architecture would you use?"** A strong 30-second answer: "A modular monolith with a hexagonal core: the domain and use cases have no framework imports, and repositories, payment and notifications sit behind ports with in-memory adapters, so the design is testable now and each adapter can later become a network client. Inside, side effects such as email and analytics hang off domain events on an event bus, broker style. If one capability needs to scale or ship independently, its module boundary is already the future service boundary."
+
+**Common follow-ups** (answers in the sections above): layered or hexagonal (§11.9.7), why not microservices from day one (§11.9.4), choreography or orchestration (§11.9.5), pipeline or chain of responsibility (§11.9.6).
+
+**Mistakes to avoid:** naming an architecture without saying the trade-off; drawing microservices for a 90-minute machine-coding problem; letting framework annotations or SQL types into domain classes; ports shaped like one vendor's API; events named as commands (`SendEmail` instead of `OrderPaid`).
+
+### Self-check (architectural patterns)
+
+1. **Q:** What is the difference between a layer and a tier? **A:** A layer is a logical code separation. A tier is a physical one (a separate process or machine).
+2. **Q:** In hexagonal architecture, who owns `OrderRepository`, and who implements it? **A:** The core owns the port. A driven adapter (in-memory, JDBC) implements it.
+3. **Q:** A loan application must pass a credit check, then a fraud check, then manual approval, and a rejection must undo earlier steps. Broker or mediator topology? **A:** Mediator (orchestration), because there is ordering plus compensation.
+4. **Q:** Why should most new systems start as a modular monolith? **A:** You get enforced boundaries without network failures, distributed transactions or operations overhead. Services can be extracted later along the module boundaries.
+5. **Q:** How do MVC and hexagonal relate? **A:** MVC organises the UI edge. Its controller is a driving adapter of the hexagonal core, so the two are complementary.
+6. **Q:** In §11.9.9, why is `pen:zero` rejected by a filter but `kettle` by the core? **A:** The first is a syntax error, an adapter concern. The second is a business rule (a known product), a core concern.
+
+### TL;DR
+
+- **Design patterns** arrange classes. **Architectural patterns** arrange the whole system: its parts, dependency directions and communication.
+- **Layered:** controller, then service, then repository; simple, but the domain depends on storage. **Client-server:** the server owns the truth and the validation.
+- **Modular monolith first**, microservices only for team, scaling or isolation reasons. Microservices cost network failures, sagas and eventual consistency.
+- **Event-driven:** a **broker** (choreography) for independent reactions, a **mediator** (orchestration) for ordered processes. Consumers must be idempotent.
+- **Pipe-and-filter:** independent transforming steps joined by pipes, where every step runs. In a chain of responsibility, any handler may stop the request.
+- **Hexagonal / clean / onion:** a core with ports, technology in adapters, and dependencies pointing inward (DIP at system scale). MVC/MVP/MVVM (§11.7.5) are driving adapters at the UI edge.

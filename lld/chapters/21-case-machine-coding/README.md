@@ -28,7 +28,7 @@ Every demo uses a fixed clock, a seeded random generator (a random-number genera
 
 (Food ordering "FoodKart", another kumaransg/LLD problem, is solved in Chapter 19.)
 
-> **Key terms — the sources and patterns in the map.** *awesome-low-level-design* and *kumaransg/LLD* are public GitHub repositories that collect low-level design (LLD) problems; Geektrust is a hiring platform that sets such coding challenges. The patterns, one line each: a **state machine** is a fixed set of states plus the moves allowed between them (here kept in an enum, a Java type with a fixed list of named values); **Specification** wraps one yes/no rule in an object so rules can be combined with AND / OR / NOT; **Strategy** puts each interchangeable rule in its own class behind one interface (a list of methods with no code, which several classes implement in their own way); **Observer** lets objects sign up to be told when something happens; **Facade** is one simple front class over several others; **Repository** hides how objects are stored behind save / find methods; **Command** turns each action into an object or handler that can be looked up by name; **Builder** assembles an object with many optional settings step by step; **Composite** lets a group of objects be treated like a single one. A few other words from the table: **idempotency keys** are explained in 21.2; **lock ordering** means always taking several locks in the same fixed order, so two threads can never block each other forever (a **thread** is one independent line of execution inside a running program; a **lock** is an object only one thread can hold at a time, while others wait); a **half-open interval** `[start, end)` includes its start but not its end; a **sweep** walks through sorted time points one by one; **unit normalisation** converts every input to one unit (e.g. square feet) as soon as it is read; an **SKU** (stock keeping unit) is the id of one sellable item; **OOD** is object-oriented design; an **Interpreter-style parser** turns text written in a small language into a tree of objects.
+> **Key terms.** *awesome-low-level-design* and *kumaransg/LLD* are public GitHub repositories of LLD problems; Geektrust is a hiring platform that sets such challenges; OOD = object-oriented design. Patterns (taught in Chapters 8–11): a **state machine** is a fixed set of states plus the allowed moves between them (here an enum, a Java type with a fixed list of named values); **Specification** wraps one yes/no rule in an object so rules combine with AND / OR / NOT; **Strategy** puts each interchangeable rule in its own class behind one interface; **Observer** lets objects subscribe to events; **Facade** is one simple front class over several others; **Repository** hides storage behind save / find methods; **Command** turns each action into a handler looked up by name; **Builder** assembles an object with many optional settings step by step; **Composite** lets a group be treated like a single object; an **Interpreter-style parser** turns text in a small language into a tree of objects. Other words: **idempotency keys** (21.2); **lock ordering** = always taking several locks in one fixed order, so two threads can never block each other forever (a **thread** is one independent line of execution in a program; a **lock** is an object only one thread can hold at a time); a **half-open interval** `[start, end)` includes its start but not its end; a **sweep** walks sorted time points one by one; **unit normalisation** converts every input to one unit as soon as it is read; an **SKU** (stock keeping unit) is the id of one sellable item.
 
 ---
 
@@ -36,13 +36,7 @@ Every demo uses a fixed clock, a seeded random generator (a random-number genera
 
 ### What it is
 
-A **machine-coding round** (also called an *LLD coding round*) is an object-oriented design (designing a program as classes of objects that hold data and behaviour together) interview in which **working code is the answer**. The same round is called *object-oriented design* or *low-level design* at other companies; machine coding simply adds the rule that the code must compile and run at the end. You get a one- or two-page problem statement (usually a PDF), a laptop with your own IDE (integrated development environment: the code editor plus compiler and debugger, such as IntelliJ IDEA), and 90–120 minutes. Internet use is limited to looking up syntax. There is **no database, no UI (user interface: screens) and no web framework (a library for building websites and web APIs — an API is the set of calls a program or service offers to other programs)**: all data lives in memory (maps and lists), and the program is driven by a `main` method, a list of commands, a file, or unit tests (small automated checks that call one piece of code and compare the result with what is expected).
-
-Do not confuse it with the **system design** interview. That round is about keeping a product alive under millions of users, so the conversation is about servers, databases, caches and message queues (see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md) if those words are new). This round never leaves a single program: its vocabulary is **classes** (a *class* is a named code type that bundles some data with the methods that act on that data), their fields and methods, and how the classes relate. Same product, very different zoom level — and practising for one leaves you unready for the other.
-
-Everyday analogy: a whiteboard design interview is an architect *describing* a house. A machine-coding round is being asked to *build a small shed* while the inspector watches — then the inspector leans on every wall.
-
-The format is especially common at Indian product companies such as Flipkart, Swiggy, PhonePe, Navi, Razorpay, CRED, Meesho and Cleartrip; several of this chapter's problems are statements candidates have shared from those rounds.
+A **machine-coding round** (also called an *LLD coding round*) is an object-oriented design interview (designing a program as **classes** — named code types that bundle data with the methods acting on it) in which **working code is the answer**: you get a one- or two-page problem statement (usually a PDF), your own IDE (integrated development environment: editor plus compiler and debugger, such as IntelliJ IDEA) and 90–120 minutes; the internet is for syntax only. There is **no database, no UI (user interface) and no web framework** (a library for building websites and web APIs; an **API** is the set of calls a program offers to other programs): all data lives in memory (maps and lists), and the program is driven by a `main` method, a list of commands, a file, or unit tests (small automated checks that compare a result with the expected one). It is not the **system design** interview, which is about servers, databases, caches and queues ([System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)); this round never leaves one program — its vocabulary is classes, their fields and methods, and how they relate (OOD vs LLD vs machine coding vs HLD compared in [§1.2](../01-lld-interview-approach/README.md#12-how-the-interview-runs)). It is especially common at Indian product companies (Flipkart, Swiggy, PhonePe, Navi, Razorpay, CRED, Meesho, Cleartrip); several problems below are statements candidates have shared from those rounds.
 
 ### How it is judged
 
@@ -62,45 +56,15 @@ Interviewers use a rubric (a scoring checklist). The exact wording differs by co
 
 ### The five-step method, and how the clock changes it
 
-The whiteboard version of this round (Chapter 1) always follows five steps in a fixed order:
+The whiteboard round's five steps — **requirements → actors & use cases → classes → relationships → code** — and its 45-minute budget (a quarter of the time before naming a class; code covers only 2–3 flows) are taught in [§1.2](../01-lld-interview-approach/README.md#how-it-works-the-five-core-steps). **Machine coding keeps the five steps but flips the proportions:** steps 1–4 shrink to about 20 minutes (time plan below) and code fills the rest, because every mandatory feature must actually run. Every problem in this chapter is laid out in that same order.
 
-1. **Requirements** — turn the one-line prompt into a short written list of what the system must do.
-2. **Actors and use cases** — name *who* uses the system (actors) and *what* each of them does with it (use cases).
-3. **Classes** — derive classes from the requirements and give each one responsibility.
-4. **Relationships** — decide how each pair of classes is connected and draw it as a class diagram.
-5. **Code** — implement the key classes, plus the two or three methods that make the main flows work.
+What still applies from §1.2: **make one thin path run end to end first, then widen** (a parking lot's ~12 classes have only three that carry the main flows — detailing all twelve equally leaves nothing demo-able); and the interviewer still grades **scope** (a bounded list), **one job per class**, the right **relationships** (hold / own / extend), **code that matches the model**, and **a trade-off said out loud** — not UML notation (the standard box-and-arrow notation for class diagrams).
 
-Getting the order right beats going fast: each step is the input of the next, so if you skip requirements, you end up inventing classes nobody asked for. Every problem in this chapter is laid out in that same order.
-
-A whiteboard round usually lasts 45 minutes to an hour. A budget for the 45-minute version:
-
-| Step | Minutes | Finished artefact |
-|---|---|---|
-| Requirements | 5–8 | 8–12 written requirements |
-| Actors & use cases | 3–5 | 2–4 actors, 6–10 use cases |
-| Classes | 8–10 | Class list, one responsibility each |
-| Relationships | 8–10 | Class diagram with relationships and multiplicity (how many objects sit on each side, e.g. one-to-many) |
-| Code | 12–15 | 2–3 methods for the main flows |
-
-Two things in that table catch people off guard. The first two steps — which name no class at all — may take as much as a quarter of the time. And coding gets the biggest single slot yet still covers only two or three methods: nobody finishes the whole product, and you are graded on the slice you chose to build well, not on how much ground you covered. **Machine coding keeps the five steps but flips the proportions:** steps 1–4 shrink to about 20 minutes (see the time plan below) and code fills the rest, because now every mandatory feature must actually run.
-
-**How big is a complete answer?** For a parking lot, roughly twelve requirements lead to about twelve classes joined by some fifteen relationships. Only three of them carry the main flows — issuing a ticket, holding a vehicle, pricing the stay. On a whiteboard you write those three properly and describe each of the other nine in one sentence. The costliest mistake is detailing all twelve equally: it looks thorough but leaves no time to demonstrate one complete flow. In machine coding the same instinct applies — make one thin path run end to end first, then widen.
-
-Beyond "does it run", the interviewer is watching five things:
-
-- **Scope** — did you pin down a bounded list of what you will build? A well-bounded design outranks a sprawling, open-ended one.
-- **One job per class** — can you describe every class in a single sentence? A class that needs two sentences is usually two classes.
-- **Relationships** — does a class *hold* another, *own* it, or *extend* it? These are different designs, and picking the wrong one is spotted immediately.
-- **Code and model agree** — if the code contains a method your model has no place for, either the model or the code needs fixing.
-- **A trade-off** — the option you took *and* the one you turned down, both said out loud.
-
-Notice what is missing: nobody grades your UML notation (UML: the standard box-and-arrow notation for class diagrams) or counts how many diagram types you drew. The model is what gets marked; a diagram is just one way of displaying it.
-
-The single most common failure is **running out of time with nothing that runs**. The second is a "god class" (a class that does everything): one `Manager` with every map and every method. Both are avoidable with the skeleton and time plan below.
+The single most common failure is **running out of time with nothing that runs**. The second is a "god class" (a class that does everything): one `Manager` with every map and every method. The skeleton and time plan below avoid both.
 
 ### A reusable project skeleton
 
-Type this structure from memory in the first five minutes. It is the same for every problem, which is exactly why it saves time.
+Type this from memory in the first five minutes; it is the same for every problem.
 
 ```text
 src/
@@ -121,7 +85,7 @@ src/
 | **exception** | — | — | One class per failure *kind*, with a message a user could read. |
 | **driver** | services | repositories' internals | Parsing and printing are replaceable; business logic is not. |
 
-In this book each problem lives in **one Java package** (for example `lld.ch21.wallet`) so the full listing stays short and readable. In the real round, create the sub-packages above — it costs nothing and the interviewer notices. Three reusable building blocks appear again and again:
+In this book each problem lives in **one Java package** (e.g. `lld.ch21.wallet`) for brevity; in the real round create the sub-packages above — it costs nothing and the interviewer notices. Three reusable building blocks:
 
 1. **A generic in-memory repository** — a `ConcurrentHashMap<K, V>` (a map that many threads can use at once; `K, V` are type parameters, so the same class works for any key and value type — that is what *generic* means) behind an interface with `save / findById / findAll / delete` (see `Repository<K,V>` in Coding Blox, 21.4).
 2. **An ID generator** — an `AtomicInteger` (an integer threads can increment safely without a lock) per entity type (`"T" + seq.incrementAndGet()`), thread-safe and predictable, which matches statements that say "auto-increment id starting with 1".
@@ -386,13 +350,7 @@ sequenceDiagram
 
 ### Java implementation
 
-```java
-// File: lld/ch21/taskmgmt/Priority.java
-package lld.ch21.taskmgmt;
-
-/** Ordered from least to most urgent, so natural enum order can be used for sorting. */
-public enum Priority { LOW, MEDIUM, HIGH, CRITICAL }
-```
+Full runnable code: `code/lld/ch21/taskmgmt/` (16 files). Below are the files that carry the design; the rest are the `Priority` enum, the `User`/`Comment`/`Activity` records, two exceptions, the repository pair, `TaskSort`, the listener pair and `Main`.
 
 ```java
 // File: lld/ch21/taskmgmt/TaskStatus.java
@@ -418,34 +376,6 @@ public enum TaskStatus {
     public boolean canMoveTo(TaskStatus next) { return allowedNext().contains(next); }
 
     public boolean isOpen() { return this != DONE && this != CANCELLED; }
-}
-```
-
-```java
-// File: lld/ch21/taskmgmt/User.java
-package lld.ch21.taskmgmt;
-
-public record User(String id, String name) { }
-```
-
-```java
-// File: lld/ch21/taskmgmt/Comment.java
-package lld.ch21.taskmgmt;
-
-import java.time.LocalDateTime;
-
-public record Comment(String authorId, String text, LocalDateTime at) { }
-```
-
-```java
-// File: lld/ch21/taskmgmt/Activity.java
-package lld.ch21.taskmgmt;
-
-import java.time.LocalDateTime;
-
-/** One line of a task's audit history ("who did what, when"). */
-public record Activity(LocalDateTime at, String actorId, String description) {
-    @Override public String toString() { return at.toLocalTime() + " " + actorId + ": " + description; }
 }
 ```
 
@@ -528,61 +458,6 @@ public class Task {
 ```
 
 ```java
-// File: lld/ch21/taskmgmt/InvalidTransitionException.java
-package lld.ch21.taskmgmt;
-
-public class InvalidTransitionException extends RuntimeException {
-    public InvalidTransitionException(String taskId, TaskStatus from, TaskStatus to) {
-        super("Task " + taskId + " cannot move from " + from + " to " + to);
-    }
-}
-```
-
-```java
-// File: lld/ch21/taskmgmt/NotFoundException.java
-package lld.ch21.taskmgmt;
-
-public class NotFoundException extends RuntimeException {
-    public NotFoundException(String what, String id) { super(what + " not found: " + id); }
-}
-```
-
-```java
-// File: lld/ch21/taskmgmt/TaskRepository.java
-package lld.ch21.taskmgmt;
-
-import java.util.Collection;
-import java.util.Optional;
-
-/** Storage contract. The service depends on this, not on a HashMap (Dependency Inversion). */
-public interface TaskRepository {
-    void save(Task task);
-    Optional<Task> findById(String id);
-    Collection<Task> findAll();
-    boolean delete(String id);
-}
-```
-
-```java
-// File: lld/ch21/taskmgmt/InMemoryTaskRepository.java
-package lld.ch21.taskmgmt;
-
-import java.util.Collection;
-import java.util.List;
-import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
-
-public class InMemoryTaskRepository implements TaskRepository {
-    private final ConcurrentHashMap<String, Task> tasks = new ConcurrentHashMap<>();
-
-    @Override public void save(Task task) { tasks.put(task.id(), task); }
-    @Override public Optional<Task> findById(String id) { return Optional.ofNullable(tasks.get(id)); }
-    @Override public Collection<Task> findAll() { return List.copyOf(tasks.values()); }
-    @Override public boolean delete(String id) { return tasks.remove(id) != null; }
-}
-```
-
-```java
 // File: lld/ch21/taskmgmt/TaskFilter.java
 package lld.ch21.taskmgmt;
 
@@ -612,58 +487,7 @@ public interface TaskFilter extends Predicate<Task> {
 ```
 
 ```java
-// File: lld/ch21/taskmgmt/TaskSort.java
-package lld.ch21.taskmgmt;
-
-import java.time.LocalDate;
-import java.util.Comparator;
-
-/** Sorting strategies; each constant wraps a Comparator (Strategy pattern). */
-public enum TaskSort {
-    BY_DUE_DATE(Comparator.comparing(Task::dueDate, Comparator.nullsLast(Comparator.<LocalDate>naturalOrder()))),
-    BY_PRIORITY_DESC(Comparator.comparing(Task::priority).reversed()),
-    BY_ID(Comparator.comparingInt((Task t) -> Integer.parseInt(t.id().substring(1))));   // numeric: T2 before T10
-
-    private final Comparator<Task> comparator;
-    TaskSort(Comparator<Task> c) { this.comparator = c.thenComparing(Task::id); }
-    public Comparator<Task> comparator() { return comparator; }
-}
-```
-
-```java
-// File: lld/ch21/taskmgmt/TaskEventListener.java
-package lld.ch21.taskmgmt;
-
-/** Observer: anything that wants to hear about task events (email, Slack, push...). */
-public interface TaskEventListener {
-    void onEvent(String recipientId, String message);
-}
-```
-
-```java
-// File: lld/ch21/taskmgmt/ConsoleNotifier.java
-package lld.ch21.taskmgmt;
-
-public class ConsoleNotifier implements TaskEventListener {
-    @Override public void onEvent(String recipientId, String message) {
-        System.out.println("  [notify " + recipientId + "] " + message);
-    }
-}
-```
-
-```java
-// File: lld/ch21/taskmgmt/TaskService.java
-package lld.ch21.taskmgmt;
-
-import java.time.Clock;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicInteger;
-
+// File: lld/ch21/taskmgmt/TaskService.java  (excerpt)
 /** Facade for every use case. Holds no storage details and no printing. */
 public class TaskService {
     private final TaskRepository tasks;
@@ -677,30 +501,7 @@ public class TaskService {
         this.clock = clock;
     }
 
-    public void addListener(TaskEventListener l) { listeners.add(l); }
-
-    public User addUser(String id, String name) {
-        User u = new User(id, name);
-        if (users.putIfAbsent(id, u) != null) throw new IllegalArgumentException("User exists: " + id);
-        return u;
-    }
-
-    public Task createTask(String creatorId, String title, String description, Priority priority, LocalDate due) {
-        requireUser(creatorId);
-        if (title == null || title.isBlank()) throw new IllegalArgumentException("Title is required");
-        if (due != null && due.isBefore(today())) throw new IllegalArgumentException("Due date is in the past: " + due);
-        Task t = new Task("T" + seq.incrementAndGet(), creatorId, title, description, priority, due);
-        tasks.save(t);
-        return t;
-    }
-
-    public void assign(String taskId, String assigneeId, String actorId) {
-        requireUser(actorId);
-        requireUser(assigneeId);
-        Task t = get(taskId);
-        t.assignTo(assigneeId, actorId, now());
-        if (!assigneeId.equals(actorId)) fire(assigneeId, actorId + " assigned you " + t.id() + " '" + t.title() + "'");
-    }
+    // ... addListener, addUser, createTask, assign, update, comment, delete: validate, then call Task
 
     public void changeStatus(String taskId, TaskStatus next, String actorId) {
         requireUser(actorId);
@@ -708,23 +509,6 @@ public class TaskService {
         t.changeStatus(next, actorId, now());
         if (!t.createdBy().equals(actorId)) fire(t.createdBy(), t.id() + " is now " + next);
     }
-
-    public void update(String taskId, String title, Priority priority, LocalDate due, String actorId) {
-        requireUser(actorId);
-        if (title != null && title.isBlank()) throw new IllegalArgumentException("Title cannot be blank");
-        if (due != null && due.isBefore(today())) throw new IllegalArgumentException("Due date is in the past: " + due);
-        get(taskId).update(title, priority, due, actorId, now());
-    }
-
-    public void comment(String taskId, String authorId, String text) {
-        requireUser(authorId);
-        Task t = get(taskId);
-        t.addComment(new Comment(authorId, text, now()));
-        String other = authorId.equals(t.assigneeId()) ? t.createdBy() : t.assigneeId();
-        if (other != null && !other.equals(authorId)) fire(other, authorId + " commented on " + t.id());
-    }
-
-    public boolean delete(String taskId) { return tasks.delete(taskId); }
 
     public List<Task> search(TaskFilter filter, TaskSort sort) {
         return tasks.findAll().stream().filter(filter).sorted(sort.comparator()).toList();
@@ -742,84 +526,12 @@ public class TaskService {
         return due.size();
     }
 
-    public Task get(String taskId) {
-        return tasks.findById(taskId).orElseThrow(() -> new NotFoundException("Task", taskId));
-    }
-
-    private void requireUser(String id) { if (!users.containsKey(id)) throw new NotFoundException("User", id); }
+    // ... get, requireUser, today/now helpers
     private void fire(String to, String msg) { listeners.forEach(l -> l.onEvent(to, msg)); }
-    private LocalDate today() { return LocalDate.now(clock); }
-    private LocalDateTime now() { return LocalDateTime.now(clock); }
 }
 ```
 
-```java
-// File: lld/ch21/taskmgmt/Main.java
-package lld.ch21.taskmgmt;
-
-import java.time.Clock;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneOffset;
-
-public class Main {
-    public static void main(String[] args) {
-        // Fixed clock => the demo prints the same thing on every run.
-        Clock clock = Clock.fixed(Instant.parse("2026-09-28T09:00:00Z"), ZoneOffset.UTC);
-        LocalDate today = LocalDate.now(clock);
-        TaskService svc = new TaskService(new InMemoryTaskRepository(), clock);
-        svc.addListener(new ConsoleNotifier());
-
-        svc.addUser("alice", "Alice");
-        svc.addUser("bob", "Bob");
-        svc.addUser("carol", "Carol");
-
-        System.out.println("== create & assign");
-        Task t1 = svc.createTask("alice", "Fix login bug", "NPE on empty password", Priority.CRITICAL, today.plusDays(1));
-        Task t2 = svc.createTask("alice", "Write release notes", "", Priority.LOW, today.plusDays(7));
-        Task t3 = svc.createTask("bob", "Upgrade to Java 21", "", Priority.HIGH, today.plusDays(3));
-        Task t4 = svc.createTask("carol", "Review PR #42", "", Priority.MEDIUM, today);
-        svc.assign(t1.id(), "bob", "alice");
-        svc.assign(t2.id(), "carol", "alice");
-        svc.assign(t3.id(), "bob", "bob");
-
-        System.out.println("== work on tasks");
-        svc.changeStatus(t1.id(), TaskStatus.IN_PROGRESS, "bob");
-        svc.comment(t1.id(), "bob", "Root cause found in PasswordValidator");
-        svc.changeStatus(t1.id(), TaskStatus.DONE, "bob");
-        svc.update(t3.id(), null, Priority.CRITICAL, null, "bob");
-
-        System.out.println("== search: bob's open tasks, by priority");
-        svc.search(TaskFilter.assignedTo("bob").and(TaskFilter.open()), TaskSort.BY_PRIORITY_DESC)
-           .forEach(t -> System.out.println("  " + t));
-        System.out.println("== search: priority >= MEDIUM due within 3 days, by due date");
-        svc.search(TaskFilter.atLeast(Priority.MEDIUM).and(TaskFilter.dueOnOrBefore(today.plusDays(3))),
-                   TaskSort.BY_DUE_DATE).forEach(t -> System.out.println("  " + t));
-
-        System.out.println("== reminders (due within 3 days)");
-        System.out.println("  reminders sent: " + svc.sendDueReminders(3));
-
-        System.out.println("== history of " + t1.id());
-        svc.get(t1.id()).history().forEach(a -> System.out.println("  " + a));
-
-        System.out.println("== edge cases");
-        attempt(() -> svc.changeStatus(t2.id(), TaskStatus.DONE, "carol"));   // TODO -> DONE skips IN_PROGRESS
-        attempt(() -> svc.assign("T99", "bob", "alice"));
-        attempt(() -> svc.assign(t2.id(), "dave", "alice"));
-        attempt(() -> svc.createTask("alice", "Past task", "", Priority.LOW, today.minusDays(1)));
-        svc.changeStatus(t4.id(), TaskStatus.CANCELLED, "carol");
-        attempt(() -> svc.assign(t4.id(), "bob", "carol"));
-        System.out.println("  deleted T2? " + svc.delete(t2.id()) + ", remaining=" + svc.search(TaskFilter.all(), TaskSort.BY_ID).size());
-    }
-
-    private static void attempt(Runnable r) {
-        try { r.run(); System.out.println("  ok"); }
-        catch (RuntimeException e) { System.out.println("  error: " + e.getMessage()); }
-    }
-}
-```
-
-**Output:**
+**Output** (of `Main.java`):
 
 ```text
 == create & assign
@@ -899,7 +611,7 @@ Task = entity that guards its own state machine and history. Service = facade. F
 
 ### Problem & clarifying questions
 
-Build the core of a wallet (an app account that stores money for payments) like Paytm, PhonePe or PayPal balance: users hold wallets, add money, transfer to other users and see a statement. The awesome-low-level-design statement also lists account and personal-info management, adding and removing payment methods (cards, bank accounts), transfers to *external* accounts, multiple currencies with conversion, security, **concurrent transactions with data consistency**, and scale. Promotional **cashback** (money given back to the customer after a payment, as a reward) is not in that statement; it is added here because wallet machine-coding variants often ask for it, and it is a clean place to show the Strategy pattern and double-entry thinking (the accounting rule that every amount added somewhere is taken from somewhere else, so the books always balance). In a machine-coding round the interviewer focuses on three things: **money arithmetic**, **no double-spending under concurrency** (spending the same money twice because two requests ran at the same time), and **no double-charging on retries** (idempotency).
+Build the core of a wallet (an app account that stores money for payments) like Paytm, PhonePe or PayPal balance: users hold wallets, add money, transfer to other users and see a statement. The awesome-low-level-design statement also lists account/personal-info management, adding and removing payment methods, transfers to *external* accounts, multiple currencies, security, **concurrent transactions with data consistency**, and scale. Promotional **cashback** (money given back after a payment, as a reward) is not in that statement; it is added because wallet variants often ask for it, and it shows Strategy and **double-entry** thinking (every amount added somewhere is taken from somewhere else, so the books always balance). The interviewer focuses on three things: **money arithmetic**, **no double-spending under concurrency** (the same money spent twice by two simultaneous requests), and **no double-charging on retries** (idempotency).
 
 > **Key term — idempotency:** an operation is **idempotent** if running it twice has the same effect as running it once. Networks fail in the middle of requests, so clients retry; if "transfer 100" is not idempotent, a retry moves another 100. The usual fix is an **idempotency key**: the client sends a unique id with the request, and the server remembers the result for each id and returns it again for a repeat instead of re-running the work. More in [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md).
 
@@ -1066,6 +778,8 @@ sequenceDiagram
 
 ### Java implementation
 
+Full runnable code: `code/lld/ch21/wallet/` (12 files). Below are the files that carry the design; the rest are `TxnType`, the `Transaction`/`TransferResult` records, two exceptions, the two `Offer` strategies and `Main`.
+
 ```java
 // File: lld/ch21/wallet/Money.java
 package lld.ch21.wallet;
@@ -1089,41 +803,6 @@ public final class Money {
         return normalize(amount);
     }
 }
-```
-
-```java
-// File: lld/ch21/wallet/TxnType.java
-package lld.ch21.wallet;
-
-/** CASHBACK_OUT is written on the promotions wallet, CASHBACK_IN on the user who receives it. */
-public enum TxnType { TOP_UP, TRANSFER_OUT, TRANSFER_IN, CASHBACK_OUT, CASHBACK_IN }
-```
-
-```java
-// File: lld/ch21/wallet/Transaction.java
-package lld.ch21.wallet;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-
-/** Immutable ledger entry. Each transfer writes two entries (out + in) sharing one reference. */
-public record Transaction(String id, String reference, String walletId, TxnType type, BigDecimal amount,
-                          BigDecimal balanceAfter, String counterparty, Instant at) {
-    @Override public String toString() {
-        return "%-5s %-12s %8s  bal=%8s  ref=%s%s".formatted(id, type, amount, balanceAfter, reference,
-                counterparty == null ? "" : " with " + counterparty);
-    }
-}
-```
-
-```java
-// File: lld/ch21/wallet/TransferResult.java
-package lld.ch21.wallet;
-
-import java.math.BigDecimal;
-
-/** What the caller gets back. A replayed (duplicate) request returns the stored result. */
-public record TransferResult(String reference, String from, String to, BigDecimal amount, BigDecimal cashback) { }
 ```
 
 ```java
@@ -1176,28 +855,6 @@ public class Wallet {
 ```
 
 ```java
-// File: lld/ch21/wallet/InsufficientFundsException.java
-package lld.ch21.wallet;
-
-import java.math.BigDecimal;
-
-public class InsufficientFundsException extends RuntimeException {
-    public InsufficientFundsException(String walletId, BigDecimal balance, BigDecimal needed) {
-        super("Insufficient funds in " + walletId + ": balance " + balance + ", needed " + needed);
-    }
-}
-```
-
-```java
-// File: lld/ch21/wallet/WalletNotFoundException.java
-package lld.ch21.wallet;
-
-public class WalletNotFoundException extends RuntimeException {
-    public WalletNotFoundException(String id) { super("Wallet not found: " + id); }
-}
-```
-
-```java
 // File: lld/ch21/wallet/Offer.java
 package lld.ch21.wallet;
 
@@ -1207,57 +864,6 @@ import java.math.BigDecimal;
 public interface Offer {
     String name();
     BigDecimal cashbackFor(Wallet sender, BigDecimal amount, int senderTransferCount);
-}
-```
-
-```java
-// File: lld/ch21/wallet/FirstTransferOffer.java
-package lld.ch21.wallet;
-
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-
-/** 10% cashback on a user's first transfer, capped. */
-public class FirstTransferOffer implements Offer {
-    private final BigDecimal percent;
-    private final BigDecimal cap;
-
-    public FirstTransferOffer(String percent, String cap) {
-        this.percent = new BigDecimal(percent);
-        this.cap = Money.of(cap);
-    }
-
-    @Override public String name() { return "FIRST_TRANSFER"; }
-
-    @Override public BigDecimal cashbackFor(Wallet sender, BigDecimal amount, int count) {
-        if (count != 1) return BigDecimal.ZERO;
-        BigDecimal raw = amount.multiply(percent).divide(BigDecimal.valueOf(100), Money.SCALE, RoundingMode.HALF_EVEN);
-        return raw.min(cap);
-    }
-}
-```
-
-```java
-// File: lld/ch21/wallet/BigTransferOffer.java
-package lld.ch21.wallet;
-
-import java.math.BigDecimal;
-
-/** Flat cashback for any transfer at or above a threshold. */
-public class BigTransferOffer implements Offer {
-    private final BigDecimal threshold;
-    private final BigDecimal flat;
-
-    public BigTransferOffer(String threshold, String flat) {
-        this.threshold = Money.of(threshold);
-        this.flat = Money.of(flat);
-    }
-
-    @Override public String name() { return "BIG_TRANSFER"; }
-
-    @Override public BigDecimal cashbackFor(Wallet sender, BigDecimal amount, int count) {
-        return amount.compareTo(threshold) >= 0 ? flat : BigDecimal.ZERO;
-    }
 }
 ```
 
@@ -1383,83 +989,7 @@ public class WalletService {
 }
 ```
 
-```java
-// File: lld/ch21/wallet/Main.java
-package lld.ch21.wallet;
-
-import java.math.BigDecimal;
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-
-public class Main {
-    public static void main(String[] args) throws InterruptedException {
-        Clock clock = Clock.fixed(Instant.parse("2026-09-28T10:00:00Z"), ZoneOffset.UTC);
-        WalletService svc = new WalletService(
-                List.of(new FirstTransferOffer("10", "50.00"), new BigTransferOffer("1000.00", "25.00")), clock);
-
-        svc.topUp(svc.promotions().id(), Money.of("100.00"), "budget-1");   // marketing funds the campaign
-        Wallet alice = svc.createWallet("Alice");
-        Wallet bob = svc.createWallet("Bob");
-
-        System.out.println("== top-ups");
-        svc.topUp(alice.id(), Money.of("2000.00"), "req-1");
-        svc.topUp(bob.id(), Money.of("300.50"), "req-2");
-        svc.topUp(alice.id(), Money.of("2000.00"), "req-1");       // client retry: same key, no double credit
-        System.out.println("  Alice=" + alice.balance() + "  Bob=" + bob.balance());
-
-        System.out.println("== transfers");
-        TransferResult r1 = svc.transfer(alice.id(), bob.id(), Money.of("200.00"), "req-3");
-        System.out.println("  " + r1);
-        TransferResult r1again = svc.transfer(alice.id(), bob.id(), Money.of("200.00"), "req-3");
-        System.out.println("  retry returns same result? " + (r1 == r1again));
-        System.out.println("  " + svc.transfer(alice.id(), bob.id(), Money.of("1200.00"), "req-4"));
-        System.out.println("  Alice=" + alice.balance() + "  Bob=" + bob.balance() + "  PROMO=" + svc.promotions().balance());
-
-        System.out.println("== edge cases");
-        attempt(() -> svc.transfer(bob.id(), alice.id(), Money.of("99999.00"), "req-5"));
-        attempt(() -> svc.transfer(bob.id(), alice.id(), new BigDecimal("-5"), "req-6"));
-        attempt(() -> svc.transfer(bob.id(), alice.id(), new BigDecimal("1.005"), "req-7"));
-        attempt(() -> svc.transfer(bob.id(), bob.id(), Money.of("1.00"), "req-8"));
-        attempt(() -> svc.transfer(bob.id(), "W99", Money.of("1.00"), "req-9"));
-        System.out.println("  failed req-5 can be retried later: " + svc.transfer(bob.id(), alice.id(), Money.of("10.00"), "req-5").amount());
-
-        System.out.println("== statement for Alice");
-        alice.statement().forEach(t -> System.out.println("  " + t));
-        System.out.println("== statement for PROMO");
-        svc.promotions().statement().forEach(t -> System.out.println("  " + t));
-
-        System.out.println("== concurrency: 1000 opposite transfers on 8 threads");
-        BigDecimal before = svc.totalMoney();
-        ExecutorService pool = Executors.newFixedThreadPool(8);
-        for (int i = 0; i < 1000; i++) {
-            final int n = i;
-            pool.submit(() -> {
-                try {
-                    if (n % 2 == 0) svc.transfer(alice.id(), bob.id(), Money.of("1.00"), "c-" + n);
-                    else svc.transfer(bob.id(), alice.id(), Money.of("1.00"), "c-" + n);
-                } catch (InsufficientFundsException ignored) { }
-            });
-        }
-        pool.shutdown();
-        pool.awaitTermination(10, TimeUnit.SECONDS);
-        System.out.println("  total before=" + before + " after=" + svc.totalMoney()
-                + " conserved=" + (before.compareTo(svc.totalMoney()) == 0));
-        System.out.println("  Alice=" + alice.balance() + "  Bob=" + bob.balance() + "  PROMO=" + svc.promotions().balance());
-    }
-
-    private static void attempt(Runnable r) {
-        try { r.run(); System.out.println("  ok"); }
-        catch (RuntimeException e) { System.out.println("  error: " + e.getMessage()); }
-    }
-}
-```
-
-**Output:**
+**Output** (of `Main.java`):
 
 ```text
 == top-ups
@@ -1498,11 +1028,11 @@ Reading the output: marketing first funds `PROMO` with 100.00; the retried top-u
 ### Concurrency & edge cases
 
 - **Race on one wallet:** every read-modify-write (read a value, compute a new one, write it back — three steps another thread can slip between) of `balance` happens with the wallet's lock held.
-- **Deadlock:** avoided by a global lock order (lexicographic — dictionary order — wallet id; `"PROMO"` sorts before `"W1"`). Every two-lock path goes through one helper, `withBoth`, so the order cannot be forgotten. The program never holds more than two wallet locks at a time.
+- **Deadlock:** avoided by a global lock order (lexicographic — dictionary order — wallet id; `"PROMO"` sorts before `"W1"`), enforced in one helper, `withBoth`; never more than two wallet locks held at once.
 - **Double submit:** idempotency key → at most one execution per key.
 - **Same key, different body** (client bug): today the stored result is returned. Production systems also store a hash (a short fingerprint computed from the data) of the request and reject a mismatch with an error.
 - **Validation:** non-positive amounts, more than 2 decimals, same source and target, unknown wallet, insufficient funds.
-- **Cashback money source:** a transfer from the `PROMO` wallet, so the books balance (double-entry: every credit has a matching debit). The cashback step runs after the transfer's locks are released, so for a moment the transfer is visible without its cashback — fine for a reward. If the budget cannot cover the offer, the result reports a cashback of zero and the transfer is kept.
+- **Cashback** (a `PROMO` → sender transfer) runs after the transfer's locks are released, so for a moment the transfer is visible without its cashback — fine for a reward. If the budget cannot cover the offer, cashback is zero and the transfer is kept.
 
 ### Extensions & follow-up questions
 
@@ -1525,7 +1055,7 @@ Lead with the three risks: exact money, concurrency, retries (and, if offers com
 
 ### Self-check
 
-- **Q:** Why is `new BigDecimal("0.1")` preferred over `new BigDecimal(0.1)`? → **A:** The double constructor captures the binary approximation of 0.1 (`double` stores numbers in base 2, where 0.1 has no exact form) (a long, inexact decimal); the String constructor is exact.
+- **Q:** Why is `new BigDecimal("0.1")` preferred over `new BigDecimal(0.1)`? → **A:** `double` stores numbers in base 2, where 0.1 has no exact form, so the double constructor captures a long, inexact decimal; the String constructor is exact.
 - **Q:** Two threads transfer W1→W2 and W2→W1 at once. Why no deadlock? → **A:** Both lock W1 first (smaller id), so one waits for the other instead of each holding what the other needs.
 - **Q:** A transfer fails for insufficient funds. Can the same idempotency key be reused? → **A:** Yes — `computeIfAbsent` stores nothing when the function throws.
 - **Q:** Where would a "max 3 transfers per minute" rule go? → **A:** A validator run before `doTransfer`, not inside the wallet.
@@ -1540,7 +1070,7 @@ Lead with the three risks: exact money, concurrency, retries (and, if offers com
 
 ### Problem & clarifying questions
 
-This is a Flipkart machine-coding statement (kumaransg/LLD, `Event_calendar_flipkart`). In short: onboard users with **working hours**; group users into **teams** (a user belongs to at most one team); create **events** on one day with a start and end time, whose participants are users, teams, or both. A user can be in **only one event at a time**. For team participants the event creator says how many **representatives (N)** each team must send; the system blocks the event against N *available* members of each team, and if any team cannot supply N the event is not created. Required features: create user, create team, create event, **get a user's events in a time range** (including events they were blocked for as a team representative), and **suggest free slots** for a list of users/teams on a day. Bonus: **update event time** (report failure if impossible) and **recurring events** (time, start date, end date, frequency). The statement says: no DB, no UI, no CLI (command-line interface: a program you type commands into) needed — a `main` or tests is enough — and "do not make assumptions, ask".
+This is a Flipkart machine-coding statement (kumaransg/LLD, `Event_calendar_flipkart`). In short: onboard users with **working hours**; group users into **teams** (a user belongs to at most one team); create **events** on one day with a start and end time, whose participants are users, teams, or both. A user can be in **only one event at a time**. For team participants the event creator says how many **representatives (N)** each team must send; the system blocks the event against N *available* members of each team, and if any team cannot supply N the event is not created. Required and bonus features are listed under Requirements below. The statement says: no DB, no UI, no CLI (command-line interface) needed — a `main` or tests is enough — and "do not make assumptions, ask".
 
 Clarifying questions (and the answers this solution uses):
 
@@ -1553,7 +1083,7 @@ Clarifying questions (and the answers this solution uses):
 | Free slots for a team with N representatives: what counts as "free"? | A moment is free for the team if at least N members are working and not busy then. |
 | Recurring event: if one occurrence clashes? | Reject the whole series (all-or-nothing). |
 
-**A note on the statement's sample.** For "free slots for user A and team T1 with 1 representative today" the sample answer says *10AM to 3PM and 4PM to 7PM*. But T1 = {C, E} and neither works before 11:00 (C starts 11:30, E 11:00), so by the statement's own rules the first slot should start at **11:00**. Our program prints `11:00-15:00, 16:00-19:00`. Pointing out such an inconsistency politely ("I think the sample means 11AM; shall I go with the rules?") is exactly what "do not make assumptions, ask" is testing. (A smaller slip in the same sample: its step 1 says "Onboard 5 Users" but then lists six, A to F. The demo creates all six.)
+**A note on the statement's sample.** For "free slots for user A and team T1 with 1 representative today" the sample answer says *10AM to 3PM and 4PM to 7PM*. But T1 = {C, E} and neither works before 11:00 (C starts 11:30, E 11:00), so by the statement's own rules the first slot starts at **11:00**; our program prints `11:00-15:00, 16:00-19:00`. Pointing this out politely ("I think the sample means 11AM; shall I go with the rules?") is exactly what "do not make assumptions, ask" tests. (Its step 1 also says "Onboard 5 Users" but lists six, A to F; the demo creates all six.)
 
 ### Requirements
 
@@ -1561,10 +1091,10 @@ Clarifying questions (and the answers this solution uses):
 1. Create user with working hours.
 2. Create team of existing users (one team per user).
 3. Create event for users and/or teams with N representatives; reject if any attendee is outside working hours, already busy, or a team lacks N free members.
-4. Events of a user between two date-times (direct + as representative).
-5. Free slots for users/teams on a day.
-6. Bonus: update event time (atomic: old booking kept on failure).
-7. Bonus: recurring events (daily/weekly between two dates).
+4. **Events of a user between two date-times** (direct + as team representative).
+5. **Suggest free slots** for users/teams on a day.
+6. Bonus: **update event time** (atomic: old booking kept on failure; report failure if impossible).
+7. Bonus: **recurring events** (time, start date, end date, frequency daily/weekly).
 
 **Non-functional**
 - The check "is everyone free?" and the booking must be **atomic**, or two concurrent creations could book the same person twice.
@@ -1718,6 +1248,8 @@ sequenceDiagram
 
 ### Java implementation
 
+Full runnable code: `code/lld/ch21/calendar/` (10 files). Below are the files that carry the design; the rest are `User`, `Team`, `Event`, `Frequency`, `EventStore` (index user → date → events), `CalendarException` and `Main`.
+
 ```java
 // File: lld/ch21/calendar/TimeSlot.java
 package lld.ch21.calendar;
@@ -1732,116 +1264,6 @@ public record TimeSlot(LocalTime start, LocalTime end) {
     public boolean overlaps(TimeSlot o) { return start.isBefore(o.end) && o.start.isBefore(end); }
     public boolean contains(TimeSlot o) { return !o.start.isBefore(start) && !o.end.isAfter(end); }
     @Override public String toString() { return start + "-" + end; }
-}
-```
-
-```java
-// File: lld/ch21/calendar/User.java
-package lld.ch21.calendar;
-
-public record User(String name, TimeSlot workingHours) { }
-```
-
-```java
-// File: lld/ch21/calendar/Team.java
-package lld.ch21.calendar;
-
-import java.util.List;
-
-/** Members are kept in onboarding order; representative selection walks this order. */
-public record Team(String name, List<User> members) {
-    public Team { members = List.copyOf(members); }
-}
-```
-
-```java
-// File: lld/ch21/calendar/Event.java
-package lld.ch21.calendar;
-
-import java.time.LocalDate;
-import java.util.List;
-import java.util.Set;
-
-/**
- * One concrete occurrence. `attendees` is the resolved list of users that the event blocks
- * (direct users + the representatives chosen from each team).
- */
-public record Event(String id, String name, LocalDate date, TimeSlot slot, Set<String> directUsers,
-                    Set<String> teams, int representativesPerTeam, List<String> attendees, String seriesId) {
-    public Event { attendees = List.copyOf(attendees); }
-    public boolean blocks(String user) { return attendees.contains(user); }
-    @Override public String toString() { return name + " " + date + " " + slot + " " + attendees; }
-}
-```
-
-```java
-// File: lld/ch21/calendar/Frequency.java
-package lld.ch21.calendar;
-
-import java.time.LocalDate;
-
-public enum Frequency {
-    DAILY { LocalDate next(LocalDate d) { return d.plusDays(1); } },
-    WEEKLY { LocalDate next(LocalDate d) { return d.plusWeeks(1); } };
-
-    abstract LocalDate next(LocalDate d);
-}
-```
-
-```java
-// File: lld/ch21/calendar/CalendarException.java
-package lld.ch21.calendar;
-
-public class CalendarException extends RuntimeException {
-    public CalendarException(String message) { super(message); }
-}
-```
-
-```java
-// File: lld/ch21/calendar/EventStore.java
-package lld.ch21.calendar;
-
-import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.TreeMap;
-import java.util.concurrent.ConcurrentHashMap;
-
-/** Repository: events by id and an index user -> date -> events. Not thread-safe on its own: CalendarService guards it. */
-public class EventStore {
-    private final Map<String, Event> byId = new ConcurrentHashMap<>();
-    private final Map<String, TreeMap<LocalDate, List<Event>>> byUser = new ConcurrentHashMap<>();
-
-    public void save(Event e) {
-        byId.put(e.id(), e);
-        for (String u : e.attendees())
-            byUser.computeIfAbsent(u, k -> new TreeMap<>()).computeIfAbsent(e.date(), d -> new ArrayList<>()).add(e);
-    }
-
-    public void remove(Event e) {
-        byId.remove(e.id());
-        for (String u : e.attendees()) {
-            List<Event> day = byUser.getOrDefault(u, new TreeMap<>()).get(e.date());
-            if (day != null) day.removeIf(x -> x.id().equals(e.id()));
-        }
-    }
-
-    public Optional<Event> find(String id) { return Optional.ofNullable(byId.get(id)); }
-
-    public List<Event> onDay(String user, LocalDate date) {
-        return List.copyOf(byUser.getOrDefault(user, new TreeMap<>()).getOrDefault(date, List.of()));
-    }
-
-    public List<Event> between(String user, LocalDate from, LocalDate to) {
-        List<Event> out = new ArrayList<>();
-        byUser.getOrDefault(user, new TreeMap<>()).subMap(from, true, to, true).values().forEach(out::addAll);
-        return out;
-    }
-
-    public Collection<Event> all() { return List.copyOf(byId.values()); }
 }
 ```
 
@@ -1864,23 +1286,7 @@ public interface RepresentativeSelector {
 ```
 
 ```java
-// File: lld/ch21/calendar/CalendarService.java
-package lld.ch21.calendar;
-
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeSet;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
-
+// File: lld/ch21/calendar/CalendarService.java  (excerpt)
 public class CalendarService {
     private final Map<String, User> users = new ConcurrentHashMap<>();
     private final Map<String, Team> teams = new ConcurrentHashMap<>();
@@ -1891,25 +1297,7 @@ public class CalendarService {
 
     public CalendarService(RepresentativeSelector selector) { this.selector = selector; }
 
-    public User createUser(String name, LocalTime workStart, LocalTime workEnd) {
-        User u = new User(name, new TimeSlot(workStart, workEnd));
-        if (users.putIfAbsent(name, u) != null) throw new CalendarException("User already exists: " + name);
-        return u;
-    }
-
-    public synchronized Team createTeam(String name, String... memberNames) {
-        if (teams.containsKey(name)) throw new CalendarException("Team already exists: " + name);
-        List<User> members = new ArrayList<>();
-        for (String m : memberNames) {
-            User u = user(m);
-            if (teamOf.containsKey(m)) throw new CalendarException(m + " already belongs to team " + teamOf.get(m));
-            members.add(u);
-        }
-        members.forEach(u -> teamOf.put(u.name(), name));
-        Team t = new Team(name, members);
-        teams.put(name, t);
-        return t;
-    }
+    // ... createUser, createTeam (a user joins at most one team)
 
     /** synchronized: the check-then-book sequence must be atomic or two events could grab the same person. */
     public synchronized Event createEvent(String name, Set<String> userNames, Set<String> teamNames,
@@ -1918,38 +1306,7 @@ public class CalendarService {
         store.save(e);
         return e;
     }
-
-    /** Bonus: recurring event. All occurrences are validated first; nothing is saved unless all fit. */
-    public synchronized List<Event> createRecurring(String name, Set<String> userNames, Set<String> teamNames, int reps,
-                                                    TimeSlot slot, LocalDate from, LocalDate to, Frequency freq) {
-        String series = "S" + seq.incrementAndGet();
-        List<Event> planned = new ArrayList<>();
-        for (LocalDate d = from; !d.isAfter(to); d = freq.next(d)) {
-            planned.add(plan(name + "@" + d, userNames, teamNames, reps, d, slot, series, null));
-        }
-        planned.forEach(store::save);
-        return planned;
-    }
-
-    /** Bonus: move an event. We try the new time ignoring the event itself; on failure nothing changes. */
-    public synchronized Event updateTime(String eventId, LocalDate date, TimeSlot slot) {
-        Event old = store.find(eventId).orElseThrow(() -> new CalendarException("No such event " + eventId));
-        Event moved = plan(old.name(), old.directUsers(), old.teams(), old.representativesPerTeam(),
-                date, slot, old.seriesId(), old);          // keeps old.id(); throws if the new time does not fit
-        store.remove(old);
-        store.save(moved);
-        return moved;
-    }
-
-    /** Events a user is blocked for between two date-times (includes team-representative bookings). */
-    public synchronized List<Event> eventsFor(String userName, LocalDateTime from, LocalDateTime to) {
-        user(userName);
-        return store.between(userName, from.toLocalDate(), to.toLocalDate()).stream()
-                .filter(e -> LocalDateTime.of(e.date(), e.slot().end()).isAfter(from)
-                          && LocalDateTime.of(e.date(), e.slot().start()).isBefore(to))
-                .sorted(Comparator.comparing(Event::date).thenComparing(e -> e.slot().start()))
-                .toList();
-    }
+    // ... createRecurring (plan every occurrence, save only if all fit), updateTime (re-plan ignoring itself), eventsFor
 
     /**
      * Free slots on a day where every listed user is free AND each listed team has at least `reps`
@@ -2021,96 +1378,11 @@ public class CalendarService {
                 .filter(e -> ignore == null || !e.id().equals(ignore.id()))
                 .noneMatch(e -> e.slot().overlaps(slot));
     }
-
-    private User user(String n) {
-        User u = users.get(n);
-        if (u == null) throw new CalendarException("Unknown user " + n);
-        return u;
-    }
-
-    private Team team(String n) {
-        Team t = teams.get(n);
-        if (t == null) throw new CalendarException("Unknown team " + n);
-        return t;
-    }
-
-    public synchronized Collection<Event> allEvents() { return store.all(); }
+    // ... user/team lookups, allEvents
 }
 ```
 
-```java
-// File: lld/ch21/calendar/Main.java
-package lld.ch21.calendar;
-
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.util.List;
-import java.util.Set;
-import java.util.function.Supplier;
-
-/** Replays the sample test cases from the problem statement, then the bonus features. */
-public class Main {
-    public static void main(String[] args) {
-        CalendarService cal = new CalendarService(RepresentativeSelector.firstAvailable());
-        LocalDate today = LocalDate.of(2026, 9, 28), tomorrow = today.plusDays(1);
-
-        System.out.println("== 1. onboard users");
-        cal.createUser("A", t("10:00"), t("19:00"));
-        cal.createUser("B", t("09:30"), t("17:30"));
-        cal.createUser("C", t("11:30"), t("18:30"));
-        cal.createUser("D", t("10:00"), t("18:00"));
-        cal.createUser("E", t("11:00"), t("19:30"));
-        cal.createUser("F", t("11:00"), t("18:30"));
-        System.out.println("  6 users created");
-
-        System.out.println("== 2. teams");
-        cal.createTeam("T1", "C", "E");
-        cal.createTeam("T2", "B", "D", "F");
-        System.out.println("  T1=[C,E] T2=[B,D,F]");
-        attempt(() -> cal.createTeam("T3", "A", "C"));
-
-        System.out.println("== 3. events");
-        attempt(() -> cal.createEvent("Event1", Set.of("A"), Set.of("T1"), 2, tomorrow, slot("14:00", "15:00")));
-        attempt(() -> cal.createEvent("Event2", Set.of("C"), Set.of(), 0, tomorrow, slot("14:00", "15:00")));
-        attempt(() -> cal.createEvent("Event3", Set.of(), Set.of("T1", "T2"), 2, today, slot("15:00", "16:00")));
-        attempt(() -> cal.createEvent("Event4", Set.of("A"), Set.of("T2"), 1, today, slot("15:00", "16:00")));
-        attempt(() -> cal.createEvent("Event5", Set.of("A", "F"), Set.of(), 0, today, slot("10:00", "11:00")));
-
-        System.out.println("== 4. events in a time range (today 10:00 .. tomorrow 17:00)");
-        LocalDateTime from = LocalDateTime.of(today, t("10:00")), to = LocalDateTime.of(tomorrow, t("17:00"));
-        for (String u : List.of("A", "B", "F"))
-            System.out.println("  " + u + ": " + cal.eventsFor(u, from, to).stream().map(Event::name).toList());
-
-        System.out.println("== 5. free slots today for A + T1 (1 representative)");
-        System.out.println("  " + cal.freeSlots(Set.of("A"), Set.of("T1"), 1, today));
-        System.out.println("  free slots today for B + D: " + cal.freeSlots(Set.of("B", "D"), Set.of(), 0, today));
-
-        System.out.println("== bonus: update event time");
-        Event e1 = cal.allEvents().stream().filter(e -> e.name().equals("Event1")).findFirst().orElseThrow();
-        attempt(() -> cal.updateTime(e1.id(), tomorrow, slot("18:30", "19:00")));   // needs 2 of T1, but C stops at 18:30
-        attempt(() -> cal.updateTime(e1.id(), tomorrow, slot("16:00", "17:00")));
-
-        System.out.println("== bonus: recurring daily stand-up (A + D), 3 days");
-        attempt(() -> cal.createRecurring("Standup", Set.of("A", "D"), Set.of(), 0, slot("10:00", "10:15"),
-                today, today.plusDays(2), Frequency.DAILY));
-        attempt(() -> cal.createRecurring("Sync", Set.of("A"), Set.of(), 0, slot("15:30", "16:30"),
-                today, today.plusDays(2), Frequency.DAILY));   // clashes with Event4 today -> whole series rejected
-        System.out.println("  A today..+2: " + cal.eventsFor("A", LocalDateTime.of(today, t("00:00")),
-                LocalDateTime.of(today.plusDays(2), t("23:59"))).stream().map(Event::name).toList());
-    }
-
-    static LocalTime t(String s) { return LocalTime.parse(s); }
-    static TimeSlot slot(String a, String b) { return new TimeSlot(t(a), t(b)); }
-
-    static void attempt(Supplier<?> s) {
-        try { System.out.println("  ok: " + s.get()); }
-        catch (RuntimeException e) { System.out.println("  FAILED: " + e.getMessage()); }
-    }
-}
-```
-
-**Output:**
+**Output** (of `Main.java`):
 
 ```text
 == 1. onboard users
@@ -2357,6 +1629,8 @@ stateDiagram-v2
 
 ### Java implementation
 
+Full runnable code: `code/lld/ch21/codingblox/` (13 files). Below are the files that carry the design; the rest are `User` (score starts at 1500), `Question`, `Contest` (OPEN → COMPLETED, creator cannot withdraw), `ContestStatus`, `ContestResult`, `RandomSolveSimulator` (seeded), `BloxException` and `Main`.
+
 ```java
 // File: lld/ch21/codingblox/Level.java
 package lld.ch21.codingblox;
@@ -2375,113 +1649,6 @@ public enum Level {
         try { return valueOf(s.toUpperCase()); }
         catch (IllegalArgumentException e) { throw new BloxException("Unknown level: " + s); }
     }
-}
-```
-
-```java
-// File: lld/ch21/codingblox/User.java
-package lld.ch21.codingblox;
-
-public class User {
-    public static final int DEFAULT_SCORE = 1500;
-    private final String name;
-    private int score = DEFAULT_SCORE;
-
-    public User(String name) { this.name = name; }
-    public String name() { return name; }
-    public synchronized int score() { return score; }
-    /** Read-modify-write under one lock, so two contests finishing together cannot lose an update. */
-    synchronized void applyContest(Level level, int points) { score = level.newScore(score, points); }
-}
-```
-
-```java
-// File: lld/ch21/codingblox/Question.java
-package lld.ch21.codingblox;
-
-public record Question(int id, Level level, int score) {
-    @Override public String toString() { return "Q" + id + "(" + level + "," + score + ")"; }
-}
-```
-
-```java
-// File: lld/ch21/codingblox/Contest.java
-package lld.ch21.codingblox;
-
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
-
-public class Contest {
-    private final int id;
-    private final String name;
-    private final Level level;
-    private final String creator;
-    private final Set<String> participants = new LinkedHashSet<>();
-    private final List<ContestResult> results = new ArrayList<>();
-    private ContestStatus status = ContestStatus.OPEN;
-
-    Contest(int id, String name, Level level, String creator) {
-        this.id = id; this.name = name; this.level = level; this.creator = creator;
-        participants.add(creator);                       // the creator always attends
-    }
-
-    public int id() { return id; }
-    public String name() { return name; }
-    public Level level() { return level; }
-    public String creator() { return creator; }
-    public synchronized ContestStatus status() { return status; }
-    public synchronized List<String> participants() { return List.copyOf(participants); }
-    public synchronized List<ContestResult> results() { return List.copyOf(results); }
-
-    synchronized void attend(String user) {
-        requireOpen();
-        if (!participants.add(user)) throw new BloxException(user + " already registered for contest " + id);
-    }
-
-    synchronized void withdraw(String user) {
-        requireOpen();
-        if (user.equals(creator)) throw new BloxException("Creator cannot withdraw from contest " + id);
-        if (!participants.remove(user)) throw new BloxException(user + " is not in contest " + id);
-    }
-
-    synchronized void complete(List<ContestResult> r) {
-        requireOpen();
-        results.addAll(r);
-        status = ContestStatus.COMPLETED;
-    }
-
-    private void requireOpen() {
-        if (status != ContestStatus.OPEN) throw new BloxException("Contest " + id + " has already run");
-    }
-
-    @Override public String toString() { return id + " " + name + " " + level + " by " + creator + " [" + status() + "]"; }
-}
-```
-
-```java
-// File: lld/ch21/codingblox/ContestStatus.java
-package lld.ch21.codingblox;
-
-public enum ContestStatus { OPEN, COMPLETED }
-```
-
-```java
-// File: lld/ch21/codingblox/ContestResult.java
-package lld.ch21.codingblox;
-
-import java.util.List;
-
-public record ContestResult(String user, int points, List<Integer> solvedIds) { }
-```
-
-```java
-// File: lld/ch21/codingblox/BloxException.java
-package lld.ch21.codingblox;
-
-public class BloxException extends RuntimeException {
-    public BloxException(String message) { super(message); }
 }
 ```
 
@@ -2517,40 +1684,7 @@ public interface SolveSimulator {
 ```
 
 ```java
-// File: lld/ch21/codingblox/RandomSolveSimulator.java
-package lld.ch21.codingblox;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Random;
-
-public class RandomSolveSimulator implements SolveSimulator {
-    private final Random random;
-    public RandomSolveSimulator(long seed) { this.random = new Random(seed); }
-
-    @Override public List<Question> solvedBy(String user, List<Question> pool) {
-        if (pool.isEmpty()) return List.of();
-        List<Question> copy = new ArrayList<>(pool);
-        Collections.shuffle(copy, random);
-        int k = 1 + random.nextInt(copy.size());          // solves between 1 and all questions
-        List<Question> picked = new ArrayList<>(copy.subList(0, k));
-        picked.sort(Comparator.comparingInt(Question::id));
-        return picked;
-    }
-}
-```
-
-```java
-// File: lld/ch21/codingblox/CodingBloxService.java
-package lld.ch21.codingblox;
-
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
-
+// File: lld/ch21/codingblox/CodingBloxService.java  (excerpt)
 public class CodingBloxService {
     private final Repository<String, User> users = new Repository<>();
     private final Repository<Integer, Question> questions = new Repository<>();
@@ -2561,40 +1695,7 @@ public class CodingBloxService {
 
     public CodingBloxService(SolveSimulator simulator) { this.simulator = simulator; }
 
-    public User createUser(String name) {
-        User u = new User(name);
-        if (!users.addIfAbsent(name, u)) throw new BloxException("User already exists: " + name);
-        return u;
-    }
-
-    public Question createQuestion(Level level, int score) {
-        if (score <= 0) throw new BloxException("Score must be positive");
-        Question q = new Question(questionSeq.incrementAndGet(), level, score);
-        questions.addIfAbsent(q.id(), q);
-        return q;
-    }
-
-    public List<Question> listQuestions(Level levelOrNull) {
-        return questions.all().stream().filter(q -> levelOrNull == null || q.level() == levelOrNull)
-                .sorted(Comparator.comparingInt(Question::id)).toList();
-    }
-
-    public Contest createContest(String name, Level level, String creator) {
-        user(creator);
-        if (listQuestions(level).isEmpty()) throw new BloxException("No " + level + " questions to build a contest");
-        Contest c = new Contest(contestSeq.incrementAndGet(), name, level, creator);
-        contests.addIfAbsent(c.id(), c);
-        return c;
-    }
-
-    public List<Contest> listContests(Level levelOrNull) {
-        return contests.all().stream().filter(c -> levelOrNull == null || c.level() == levelOrNull)
-                .sorted(Comparator.comparingInt(Contest::id)).toList();
-    }
-
-    public void attend(int contestId, String userName) { user(userName); contest(contestId).attend(userName); }
-
-    public void withdraw(int contestId, String userName) { user(userName); contest(contestId).withdraw(userName); }
+    // ... createUser, createQuestion, listQuestions, createContest, listContests, attend, withdraw
 
     /** Only the creator may run. Every participant gets random solved questions, then scores update. */
     public List<ContestResult> runContest(int contestId, String requester) {
@@ -2612,21 +1713,7 @@ public class CodingBloxService {
         return results;
     }
 
-    public List<User> leaderboard(boolean descending) {
-        Comparator<User> byScore = Comparator.comparingInt(User::score);
-        if (descending) byScore = byScore.reversed();
-        return users.all().stream().sorted(byScore.thenComparing(User::name)).toList();
-    }
-
-    public List<ContestResult> history(int contestId) {
-        Contest c = contest(contestId);
-        if (c.status() != ContestStatus.COMPLETED) throw new BloxException("Contest " + contestId + " has not run yet");
-        return c.results().stream().sorted(Comparator.comparingInt(ContestResult::points).reversed()
-                .thenComparing(ContestResult::user)).toList();
-    }
-
-    private User user(String n) { return users.find(n).orElseThrow(() -> new BloxException("No such user: " + n)); }
-    private Contest contest(int id) { return contests.find(id).orElseThrow(() -> new BloxException("No such contest: " + id)); }
+    // ... leaderboard (sort by score, then name), history, lookups
 }
 ```
 
@@ -2685,45 +1772,7 @@ public class CommandProcessor {
 }
 ```
 
-```java
-// File: lld/ch21/codingblox/Main.java
-package lld.ch21.codingblox;
-
-import java.util.List;
-
-public class Main {
-    static final List<String> SAMPLE_INPUT = List.of(
-            "CreateUser Ross", "CreateUser Monica", "CreateUser Joey", "CreateUser Chandler",
-            "CreateQuestion \"LOW\" 10", "CreateQuestion LOW 20", "CreateQuestion LOW 30",
-            "CreateQuestion MEDIUM 40", "CreateQuestion MEDIUM 50", "CreateQuestion HIGH 100",
-            "ListQuestion LOW",
-            "CreateContest \"diwali_contest\" LOW \"Ross\"",
-            "CreateContest holi_contest MEDIUM Monica",
-            "ListContest",
-            "AttendContest 1 Monica", "AttendContest 1 Joey", "AttendContest 1 Chandler",
-            "AttendContest 1 Joey",                  // duplicate
-            "WithdrawContest 1 Chandler",
-            "WithdrawContest 1 Ross",                // creator cannot withdraw
-            "RunContest 1 Monica",                   // not the creator
-            "RunContest 1 Ross",
-            "RunContest 1 Ross",                     // already run
-            "AttendContest 1 Chandler",              // too late
-            "ContestHistory 1",
-            "AttendContest 2 Chandler",
-            "RunContest 2 Monica",
-            "LeaderBoard score desc",
-            "LeaderBoard asc",
-            "CreateContest x HIGH Rachel",           // unknown user
-            "Dance 1");                              // unknown command
-
-    public static void main(String[] args) {
-        CommandProcessor cli = new CommandProcessor(new CodingBloxService(new RandomSolveSimulator(42)));
-        SAMPLE_INPUT.forEach(cli::execute);
-    }
-}
-```
-
-**Output:**
+**Output** (of `Main.java`):
 
 ```text
 > CreateUser Ross
@@ -2996,6 +2045,8 @@ stateDiagram-v2
 
 ### Java implementation
 
+Full runnable code: `code/lld/ch21/propertyhunt/` (11 files). Below are the files that carry the design; the rest are `Property`, `ListingType`, `PropertyStatus`, `SortBy`, `HuntException`, the pipe-separated `CommandProcessor` and `Main`.
+
 ```java
 // File: lld/ch21/propertyhunt/Price.java
 package lld.ch21.propertyhunt;
@@ -3072,91 +2123,6 @@ public enum AreaUnit {
 ```
 
 ```java
-// File: lld/ch21/propertyhunt/ListingType.java
-package lld.ch21.propertyhunt;
-
-public enum ListingType {
-    SELL, RENT;
-
-    public static ListingType parse(String s) {
-        return switch (s.trim().toLowerCase()) {
-            case "sell", "sale" -> SELL;
-            case "rent" -> RENT;
-            default -> throw new HuntException("Listing type must be sell or rent: " + s);
-        };
-    }
-}
-```
-
-```java
-// File: lld/ch21/propertyhunt/PropertyStatus.java
-package lld.ch21.propertyhunt;
-
-public enum PropertyStatus { AVAILABLE, SOLD }
-```
-
-```java
-// File: lld/ch21/propertyhunt/Property.java
-package lld.ch21.propertyhunt;
-
-import java.util.Set;
-
-public class Property {
-    private final int id;
-    private final String ownerId;
-    private final String title;
-    private final String location;          // stored lower-case for case-insensitive match
-    private final Set<String> nearby;       // bonus: nearby locations, lower-case
-    private final long price;
-    private final ListingType type;
-    private final double sizeSqft;
-    private final int rooms;
-    private PropertyStatus status = PropertyStatus.AVAILABLE;
-
-    Property(int id, String ownerId, String title, String location, Set<String> nearby, long price,
-             ListingType type, double sizeSqft, int rooms) {
-        this.id = id; this.ownerId = ownerId; this.title = title; this.location = location;
-        this.nearby = Set.copyOf(nearby); this.price = price; this.type = type;
-        this.sizeSqft = sizeSqft; this.rooms = rooms;
-    }
-
-    public int id() { return id; }
-    public String ownerId() { return ownerId; }
-    public String title() { return title; }
-    public String location() { return location; }
-    public Set<String> nearby() { return nearby; }
-    public long price() { return price; }
-    public ListingType type() { return type; }
-    public double sizeSqft() { return sizeSqft; }
-    public int rooms() { return rooms; }
-    public synchronized PropertyStatus status() { return status; }
-
-    synchronized void markSold() {
-        if (status == PropertyStatus.SOLD) throw new HuntException("Property " + id + " is already sold");
-        status = PropertyStatus.SOLD;
-    }
-}
-```
-
-```java
-// File: lld/ch21/propertyhunt/SortBy.java
-package lld.ch21.propertyhunt;
-
-import java.util.Comparator;
-
-public enum SortBy {
-    PRICE(Comparator.comparingLong(Property::price)),
-    SIZE(Comparator.comparingDouble(Property::sizeSqft)),
-    NONE(Comparator.comparingInt(Property::id));
-
-    final Comparator<Property> comparator;
-    SortBy(Comparator<Property> c) { this.comparator = c.thenComparingInt(Property::id); }
-
-    public static SortBy parse(String s) { return s == null ? NONE : valueOf(s.trim().toUpperCase()); }
-}
-```
-
-```java
 // File: lld/ch21/propertyhunt/SearchCriteria.java
 package lld.ch21.propertyhunt;
 
@@ -3186,47 +2152,13 @@ public record SearchCriteria(Set<String> locations, Long minPrice, Long maxPrice
 ```
 
 ```java
-// File: lld/ch21/propertyhunt/HuntException.java
-package lld.ch21.propertyhunt;
-
-public class HuntException extends RuntimeException {
-    public HuntException(String message) { super(message); }
-}
-```
-
-```java
-// File: lld/ch21/propertyhunt/PropertyService.java
-package lld.ch21.propertyhunt;
-
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Predicate;
-
+// File: lld/ch21/propertyhunt/PropertyService.java  (excerpt)
 public class PropertyService {
     private final Map<String, Set<Integer>> shortlists = new ConcurrentHashMap<>();  // user -> ids (the user registry)
     private final Map<Integer, Property> properties = new ConcurrentHashMap<>();
     private final AtomicInteger seq = new AtomicInteger();
 
-    public void registerUser(String name) {
-        if (shortlists.putIfAbsent(name, ConcurrentHashMap.newKeySet()) != null)
-            throw new HuntException("User already registered: " + name);
-    }
-
-    public Property list(String owner, String title, String location, Set<String> nearby, long price,
-                         ListingType type, double sizeSqft, int rooms) {
-        requireUser(owner);
-        if (price <= 0 || sizeSqft <= 0 || rooms <= 0) throw new HuntException("Price, size and rooms must be positive");
-        Property p = new Property(seq.incrementAndGet(), owner, title, location.trim().toLowerCase(),
-                lower(nearby), price, type, sizeSqft, rooms);
-        properties.put(p.id(), p);
-        return p;
-    }
+    // ... registerUser, list (validates, lower-cases locations)
 
     /** Only AVAILABLE properties. Exact location matches first, nearby matches last, then the chosen sort. */
     public List<Property> search(String user, SearchCriteria c) {
@@ -3247,190 +2179,18 @@ public class PropertyService {
                 : Comparator.<Property>comparingInt(p -> locationRank(p, locs)).thenComparing(c.sortBy().comparator);
         return properties.values().stream().filter(all).sorted(order).toList();
     }
-
-    public void shortlist(String user, int propertyId) {
-        requireUser(user);
-        Property p = get(propertyId);
-        if (p.ownerId().equals(user)) throw new HuntException("You cannot shortlist your own property");
-        if (p.status() == PropertyStatus.SOLD) throw new HuntException("Property " + propertyId + " is already sold");
-        if (!shortlists.get(user).add(propertyId)) throw new HuntException("Property " + propertyId + " already shortlisted");
-    }
-
-    /** Includes sold ones; the caller prints status so the buyer sees "SOLD". */
-    public List<Property> shortlisted(String user) {
-        requireUser(user);
-        return shortlists.get(user).stream().map(properties::get).sorted(Comparator.comparingInt(Property::id)).toList();
-    }
-
-    public List<Property> listedBy(String user) {
-        requireUser(user);
-        return properties.values().stream().filter(p -> p.ownerId().equals(user))
-                .sorted(Comparator.comparingInt(Property::id)).toList();
-    }
-
-    public List<Property> soldBy(String user) {
-        return listedBy(user).stream().filter(p -> p.status() == PropertyStatus.SOLD).toList();
-    }
-
-    public void markSold(String user, int propertyId) {
-        requireUser(user);
-        Property p = get(propertyId);
-        if (!p.ownerId().equals(user)) throw new HuntException("Only the owner can mark property " + propertyId + " sold");
-        p.markSold();
-    }
+    // ... shortlist, shortlisted, listedBy, soldBy, markSold (owner-only checks)
 
     /** 0 = exact location match, 1 = nearby match, 2 = no match. */
     private static int locationRank(Property p, Set<String> locs) {
         if (locs.contains(p.location())) return 0;
         return p.nearby().stream().anyMatch(locs::contains) ? 1 : 2;
     }
-
-    private Property get(int id) {
-        Property p = properties.get(id);
-        if (p == null) throw new HuntException("Property does not exist: " + id);
-        return p;
-    }
-
-    private void requireUser(String u) { if (!shortlists.containsKey(u)) throw new HuntException("User not registered: " + u); }
-
-    private static Set<String> lower(Set<String> s) {
-        Set<String> out = new LinkedHashSet<>();
-        s.forEach(x -> out.add(x.trim().toLowerCase()));
-        return out;
-    }
+    // ... lookups
 }
 ```
 
-```java
-// File: lld/ch21/propertyhunt/CommandProcessor.java
-package lld.ch21.propertyhunt;
-
-import java.util.Arrays;
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
-
-/**
- * Parses '|'-separated commands. Inside a field, ',' separates multiple values (bonus requirement).
- * "null" or an empty field means "not given".
- */
-public class CommandProcessor {
-    private final PropertyService svc;
-    public CommandProcessor(PropertyService svc) { this.svc = svc; }
-
-    public void execute(String line) {
-        System.out.println("-> " + line);
-        String[] f = Arrays.stream(line.split("\\|", -1)).map(String::trim).toArray(String[]::new);
-        try {
-            switch (f[0].toLowerCase()) {
-                case "registeruser" -> { svc.registerUser(f[1]); out("User registered successfully."); }
-                case "listproperty" -> {
-                    Set<String> nearby = f.length > 8 && given(f[8]) ? csv(f[8]) : Set.of();
-                    Property p = svc.list(f[1], f[2], f[3], nearby, Price.parse(f[4]), ListingType.parse(f[5]),
-                            AreaUnit.parseSize(f[6], AreaUnit.SQFT), rooms(f[7]));
-                    out("Property listed successfully. id=" + p.id());
-                }
-                case "search" -> printTable(svc.search(f[1], criteria(f)), false);
-                case "shortlist" -> { svc.shortlist(f[1], Integer.parseInt(f[2])); out("Shortlisted property"); }
-                case "viewshortlisted" -> printTable(svc.shortlisted(f[1]), true);
-                case "viewlisted" -> printTable(svc.listedBy(f[1]), true);
-                case "viewsold" -> printTable(svc.soldBy(f[1]), true);
-                case "marksold" -> { svc.markSold(f[1], Integer.parseInt(f[2])); out("Property marked SOLD"); }
-                default -> out("ERROR: unknown command " + f[0]);
-            }
-        } catch (HuntException | IllegalArgumentException | ArrayIndexOutOfBoundsException e) {
-            out("ERROR: " + e.getMessage());
-        }
-    }
-
-    /** Search|user|locations|priceRange|type|sizeRange|rooms|sortBy */
-    private SearchCriteria criteria(String[] f) {
-        SearchCriteria.Builder b = SearchCriteria.builder();
-        if (given(f[2])) b.locations(csv(f[2]));
-        if (given(f[3])) {
-            String[] r = f[3].split("-");                       // "X-Y" inclusive, "X" = at most X
-            if (r.length == 2) b.price(Price.parse(r[0]), Price.parse(r[1]));
-            else b.price(null, Price.parse(r[0]));
-        }
-        if (given(f[4])) b.type(ListingType.parse(f[4]));
-        if (given(f[5])) {
-            String[] r = f[5].split("-");                       // "X-Y" inclusive, "X" = at least X
-            if (r.length == 2) {
-                AreaUnit unit = unitOf(r[1]);                   // "1000-2000 sqft": unit written once
-                b.size(AreaUnit.parseSize(r[0], unit), AreaUnit.parseSize(r[1], unit));
-            } else b.size(AreaUnit.parseSize(r[0], AreaUnit.SQFT), null);
-        }
-        if (given(f[6])) b.rooms(csv(f[6]).stream().map(CommandProcessor::rooms).collect(Collectors.toSet()));
-        if (f.length > 7 && given(f[7])) b.sortBy(SortBy.parse(f[7]));
-        return b.build();
-    }
-
-    private static AreaUnit unitOf(String s) {
-        String unit = s.replaceAll("[0-9.\\s]", "");
-        return unit.isEmpty() ? AreaUnit.SQFT : AreaUnit.parse(unit);
-    }
-
-    private static int rooms(String s) { return Integer.parseInt(s.toUpperCase().replace("BHK", "").trim()); }
-    private static boolean given(String s) { return !s.isEmpty() && !s.equalsIgnoreCase("null"); }
-    private static Set<String> csv(String s) {
-        return Arrays.stream(s.split(",")).map(String::trim).filter(x -> !x.isEmpty()).collect(Collectors.toSet());
-    }
-
-    private static void printTable(List<Property> ps, boolean withStatus) {
-        if (ps.isEmpty()) { out("<- (no properties)"); return; }
-        out("<- %-3s %-20s %-10s %-6s %-9s %-5s %-5s%s".formatted("Id", "Title", "Location", "Price", "Size",
-                "Rooms", "For", withStatus ? " Status" : ""));
-        for (Property p : ps)
-            out("<- %-3d %-20s %-10s %-6s %-9s %-5s %-5s%s".formatted(p.id(), p.title(), p.location(),
-                    Price.format(p.price()), Math.round(p.sizeSqft()) + "sqft", p.rooms() + "BHK",
-                    p.type() == ListingType.SELL ? "Sale" : "Rent", withStatus ? " " + p.status() : ""));
-    }
-
-    private static void out(String s) { System.out.println(s); }
-}
-```
-
-```java
-// File: lld/ch21/propertyhunt/Main.java
-package lld.ch21.propertyhunt;
-
-import java.util.List;
-
-public class Main {
-    static final List<String> SAMPLE_INPUT = List.of(
-            "RegisterUser|Jack",
-            "RegisterUser|Jill",
-            "RegisterUser|Jack",
-            "ListProperty|Jack|A 3BHK for sale|bellandur|90L|sell|1800 sqft|3",
-            "ListProperty|Jack|A 2BHK for rent|sarjapur|40k|rent|1500 sq ft|2|bellandur,kadubeesanahalli,marathahalli",
-            "ListProperty|Jill|Cosy 1BHK|HSR|25k|rent|70 sqm|1BHK",
-            "ListProperty|Jill|Villa|whitefield|2.5Cr|sell|400 sqyd|4",
-            "Search|Jack|null|null|null|null|null|null",
-            "Search|Jack|bellandur|30000-50000|rent|150sqft|2|price",
-            "Search|Jack|bellandur|null|null|null|null|price",
-            "Search|Jill|null|1Cr|null|1000-2000 sqft|2,3|size",
-            "Search|Jill|hsr,sarjapur|null|rent|null|1BHK,2BHK|price",
-            "Shortlist|Jill|1",
-            "Shortlist|Jill|2",
-            "Shortlist|Jill|9",
-            "Shortlist|Jack|1",
-            "MarkSold|Jill|1",
-            "MarkSold|Jack|1",
-            "ViewShortlisted|Jill",
-            "ViewListed|Jack",
-            "ViewSold|Jack",
-            "Search|Jill|null|null|sell|null|null|price",
-            "ListProperty|Jill|Bad|x|abc|sell|100 sqft|1",
-            "Search|Bob|null|null|null|null|null|null");
-
-    public static void main(String[] args) {
-        CommandProcessor cli = new CommandProcessor(new PropertyService());
-        SAMPLE_INPUT.forEach(cli::execute);
-    }
-}
-```
-
-**Output:**
+**Output** (of `Main.java`):
 
 ```text
 -> RegisterUser|Jack
@@ -3672,34 +2432,7 @@ sequenceDiagram
 
 ### Java implementation
 
-```java
-// File: lld/ch21/ledger/LoanKey.java
-package lld.ch21.ledger;
-
-/** A borrower can hold one loan per bank; (bank, borrower) identifies it. */
-public record LoanKey(String bank, String borrower) { }
-```
-
-```java
-// File: lld/ch21/ledger/LumpSum.java
-package lld.ch21.ledger;
-
-import java.math.BigDecimal;
-
-/** Extra payment made right after EMI number `afterEmi`. */
-public record LumpSum(BigDecimal amount, int afterEmi) { }
-```
-
-```java
-// File: lld/ch21/ledger/Balance.java
-package lld.ch21.ledger;
-
-import java.math.BigDecimal;
-
-public record Balance(String bank, String borrower, BigDecimal amountPaid, int emisLeft) {
-    @Override public String toString() { return bank + " " + borrower + " " + amountPaid.toPlainString() + " " + emisLeft; }
-}
-```
+Full runnable code: `code/lld/ch21/ledger/` (10 files). Below are the files that carry the design; the rest are `LoanKey`, `LumpSum`, `Balance`, `LedgerException`, the `CommandProcessor` (LOAN / PAYMENT / BALANCE) and `Main`.
 
 ```java
 // File: lld/ch21/ledger/InterestPolicy.java
@@ -3780,15 +2513,6 @@ public class Loan {
 ```
 
 ```java
-// File: lld/ch21/ledger/LedgerException.java
-package lld.ch21.ledger;
-
-public class LedgerException extends RuntimeException {
-    public LedgerException(String message) { super(message); }
-}
-```
-
-```java
 // File: lld/ch21/ledger/LedgerService.java
 package lld.ch21.ledger;
 
@@ -3823,104 +2547,7 @@ public class LedgerService {
 }
 ```
 
-```java
-// File: lld/ch21/ledger/CommandProcessor.java
-package lld.ch21.ledger;
-
-import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.List;
-
-/**
- * LOAN BANK BORROWER PRINCIPAL YEARS RATE
- * PAYMENT BANK BORROWER LUMP_SUM EMI_NO
- * BALANCE BANK BORROWER EMI_NO      -> prints "BANK BORROWER AMOUNT_PAID EMIS_LEFT"
- * Only BALANCE produces output (as in the original statement); errors are printed with "ERROR".
- */
-public class CommandProcessor {
-    private final LedgerService svc;
-    public CommandProcessor(LedgerService svc) { this.svc = svc; }
-
-    public List<String> run(List<String> lines) {
-        List<String> output = new ArrayList<>();
-        for (String line : lines) {
-            if (line.isBlank()) continue;
-            String[] t = line.trim().split("\\s+");
-            try {
-                switch (t[0]) {
-                    case "LOAN" -> { need(t, 6); svc.loan(t[1], t[2], num(t[3]), Integer.parseInt(t[4]), num(t[5])); }
-                    case "PAYMENT" -> { need(t, 5); svc.payment(t[1], t[2], num(t[3]), Integer.parseInt(t[4])); }
-                    case "BALANCE" -> { need(t, 4); output.add(svc.balance(t[1], t[2], Integer.parseInt(t[3])).toString()); }
-                    default -> throw new LedgerException("Unknown command " + t[0]);
-                }
-            } catch (LedgerException | NumberFormatException e) {
-                output.add("ERROR " + e.getMessage() + "  [" + line + "]");
-            }
-        }
-        return output;
-    }
-
-    private static BigDecimal num(String s) {
-        try { return new BigDecimal(s); } catch (NumberFormatException e) { throw new LedgerException("Not a number: " + s); }
-    }
-
-    private static void need(String[] t, int n) {
-        if (t.length != n) throw new LedgerException(t[0] + " expects " + (n - 1) + " arguments");
-    }
-}
-```
-
-```java
-// File: lld/ch21/ledger/Main.java
-package lld.ch21.ledger;
-
-import java.util.List;
-
-public class Main {
-    static final List<String> SAMPLE_1 = List.of(
-            "LOAN IDIDI Dale 10000 5 4",
-            "LOAN MBI Harry 2000 2 2",
-            "BALANCE IDIDI Dale 5",
-            "BALANCE IDIDI Dale 40",
-            "BALANCE MBI Harry 12",
-            "BALANCE MBI Harry 0");
-
-    static final List<String> SAMPLE_2 = List.of(
-            "LOAN IDIDI Dale 5000 1 6",
-            "LOAN MBI Harry 10000 3 7",
-            "LOAN UON Shelly 15000 2 9",
-            "PAYMENT IDIDI Dale 1000 5",
-            "PAYMENT MBI Harry 5000 10",
-            "PAYMENT UON Shelly 7000 12",
-            "BALANCE IDIDI Dale 3",
-            "BALANCE IDIDI Dale 6",
-            "BALANCE UON Shelly 12",
-            "BALANCE MBI Harry 12");
-
-    static final List<String> EDGE_CASES = List.of(
-            "LOAN SBI Asha 1000 1 12",
-            "PAYMENT SBI Asha 2000 1",            // lump sum bigger than the rest of the loan
-            "BALANCE SBI Asha 2",
-            "LOAN SBI Asha 5 1 1",                // duplicate loan
-            "BALANCE HDFC Nobody 1",              // unknown loan
-            "BALANCE SBI Asha 13",                // beyond tenure
-            "PAYMENT SBI Asha ten 1",             // bad number
-            "REFUND SBI Asha 1");                 // unknown command
-
-    public static void main(String[] args) {
-        run("Sample 1", SAMPLE_1);
-        run("Sample 2", SAMPLE_2);
-        run("Edge cases", EDGE_CASES);
-    }
-
-    private static void run(String title, List<String> input) {
-        System.out.println("== " + title);
-        new CommandProcessor(new LedgerService(new SimpleInterest())).run(input).forEach(System.out::println);
-    }
-}
-```
-
-**Output:**
+**Output** (of `Main.java`):
 
 ```text
 == Sample 1
@@ -4141,52 +2768,7 @@ stateDiagram-v2
 
 ### Java implementation
 
-```java
-// File: lld/ch21/inventory/Product.java
-package lld.ch21.inventory;
-
-/** reorderPoint: raise an alert when total stock falls to this level or below. */
-public record Product(String sku, String name, int reorderPoint, int maxLevel) {
-    public Product {
-        if (reorderPoint < 0 || maxLevel <= reorderPoint) throw new InventoryException("Need 0 <= reorderPoint < maxLevel");
-    }
-}
-```
-
-```java
-// File: lld/ch21/inventory/Warehouse.java
-package lld.ch21.inventory;
-
-public record Warehouse(String id, String city) { }
-```
-
-```java
-// File: lld/ch21/inventory/MovementType.java
-package lld.ch21.inventory;
-
-public enum MovementType { INBOUND, OUTBOUND, TRANSFER, ADJUSTMENT }
-```
-
-```java
-// File: lld/ch21/inventory/StockMovement.java
-package lld.ch21.inventory;
-
-/** Append-only ledger line. Stock levels can always be rebuilt by replaying these. */
-public record StockMovement(int id, MovementType type, String sku, String fromWarehouse, String toWarehouse,
-                            int quantity, String reference) {
-    @Override public String toString() {
-        return "#%d %-10s %s qty=%+d %s->%s (%s)".formatted(id, type, sku, quantity,
-                fromWarehouse == null ? "-" : fromWarehouse, toWarehouse == null ? "-" : toWarehouse, reference);
-    }
-}
-```
-
-```java
-// File: lld/ch21/inventory/Allocation.java
-package lld.ch21.inventory;
-
-public record Allocation(String warehouseId, int quantity) { }
-```
+Full runnable code: `code/lld/ch21/inventory/` (12 files). Below are the files that carry the design; the rest are `Product`, `Warehouse`, `StockMovement`, `MovementType`, `Allocation`, `MostStockFirst`, `ReorderListener`, `InventoryException` and `Main`.
 
 ```java
 // File: lld/ch21/inventory/AllocationStrategy.java
@@ -4198,24 +2780,6 @@ import java.util.Map;
 /** Strategy: in which order should warehouses be drained to fulfil an order? */
 public interface AllocationStrategy {
     List<String> order(Map<String, Integer> stockByWarehouse, Map<String, Warehouse> warehouses);
-}
-```
-
-```java
-// File: lld/ch21/inventory/MostStockFirst.java
-package lld.ch21.inventory;
-
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-
-/** Fewest split shipments: take from the fullest warehouse first. */
-public class MostStockFirst implements AllocationStrategy {
-    @Override public List<String> order(Map<String, Integer> stock, Map<String, Warehouse> warehouses) {
-        return stock.keySet().stream()
-                .sorted(Comparator.comparing((String w) -> stock.get(w)).reversed().thenComparing(w -> w))
-                .toList();
-    }
 }
 ```
 
@@ -4242,40 +2806,7 @@ public class NearestCityFirst implements AllocationStrategy {
 ```
 
 ```java
-// File: lld/ch21/inventory/ReorderListener.java
-package lld.ch21.inventory;
-
-/** Observer: purchasing, email, dashboards... anyone who reacts to low stock. */
-public interface ReorderListener {
-    void lowStock(Product product, int totalOnHand, int suggestedOrderQty);
-}
-```
-
-```java
-// File: lld/ch21/inventory/InventoryException.java
-package lld.ch21.inventory;
-
-public class InventoryException extends RuntimeException {
-    public InventoryException(String message) { super(message); }
-}
-```
-
-```java
-// File: lld/ch21/inventory/InventoryService.java
-package lld.ch21.inventory;
-
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Queue;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.ReentrantLock;
-
+// File: lld/ch21/inventory/InventoryService.java  (excerpt)
 /**
  * Stock is kept per (sku, warehouse). Locking is per SKU: every operation on one product
  * (even across warehouses) is serialized, while different products proceed in parallel.
@@ -4290,17 +2821,8 @@ public class InventoryService {
     private final List<ReorderListener> listeners = new CopyOnWriteArrayList<>();
     private final AtomicInteger movementSeq = new AtomicInteger();
 
-    public void addListener(ReorderListener l) { listeners.add(l); }
 
-    public void addProduct(Product p) {
-        if (products.putIfAbsent(p.sku(), p) != null) throw new InventoryException("Duplicate SKU " + p.sku());
-        stock.put(p.sku(), new LinkedHashMap<>());
-        skuLocks.put(p.sku(), new ReentrantLock());
-    }
-
-    public void addWarehouse(Warehouse w) {
-        if (warehouses.putIfAbsent(w.id(), w) != null) throw new InventoryException("Duplicate warehouse " + w.id());
-    }
+    // ... addListener, addProduct (creates the SKU lock), addWarehouse
 
     public void receive(String warehouseId, String sku, int qty, String ref) {
         positive(qty);
@@ -4332,42 +2854,7 @@ public class InventoryService {
             return plan;
         });
     }
-
-    public void transfer(String sku, String fromWh, String toWh, int qty, String ref) {
-        positive(qty);
-        warehouse(fromWh); warehouse(toWh);
-        if (fromWh.equals(toWh)) throw new InventoryException("Source and target warehouse are the same");
-        withSku(sku, () -> {
-            int have = level(sku, fromWh);
-            if (have < qty) throw new InventoryException(fromWh + " has only " + have + " of " + sku);
-            change(sku, fromWh, -qty);
-            change(sku, toWh, qty);
-            record(MovementType.TRANSFER, sku, fromWh, toWh, qty, ref);
-        });
-    }
-
-    /** Cycle count: set the level to what was physically counted and log the difference. */
-    public void adjust(String warehouseId, String sku, int countedQty, String reason) {
-        if (countedQty < 0) throw new InventoryException("Counted quantity cannot be negative");
-        warehouse(warehouseId);
-        withSku(sku, () -> {
-            int delta = countedQty - level(sku, warehouseId);
-            if (delta == 0) return;
-            change(sku, warehouseId, delta);
-            record(MovementType.ADJUSTMENT, sku, null, warehouseId, delta, reason);
-        });
-    }
-
-    /** Sorted by warehouse id so output is stable. */
-    public Map<String, Integer> stockBySku(String sku) {
-        return withSku(sku, () -> java.util.Collections.unmodifiableMap(new java.util.TreeMap<>(stock.get(sku))));
-    }
-
-    public int total(String sku) { return withSku(sku, () -> totalUnlocked(sku)); }
-
-    public List<StockMovement> movements(String sku) {
-        return ledger.stream().filter(m -> m.sku().equals(sku)).toList();
-    }
+    // ... transfer and adjust follow the same shape: validate, withSku { check, change, record }
 
     // ------------------------------------------------------------ internals (called with the SKU lock held)
 
@@ -4391,103 +2878,17 @@ public class InventoryService {
         }
     }
 
-    private int totalUnlocked(String sku) { return stock.get(sku).values().stream().mapToInt(Integer::intValue).sum(); }
-    private int level(String sku, String wh) { return stock.get(sku).getOrDefault(wh, 0); }
-
     private <T> T withSku(String sku, java.util.function.Supplier<T> action) {
         ReentrantLock lock = skuLocks.get(sku);
         if (lock == null) throw new InventoryException("Unknown SKU " + sku);
         lock.lock();
         try { return action.get(); } finally { lock.unlock(); }
     }
-
-    private void withSku(String sku, Runnable action) { withSku(sku, () -> { action.run(); return null; }); }
-
-    private void warehouse(String id) { if (!warehouses.containsKey(id)) throw new InventoryException("Unknown warehouse " + id); }
-    private static void positive(int q) { if (q <= 0) throw new InventoryException("Quantity must be positive: " + q); }
+    // ... withSku(Runnable), lookups and validation
 }
 ```
 
-```java
-// File: lld/ch21/inventory/Main.java
-package lld.ch21.inventory;
-
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-
-public class Main {
-    public static void main(String[] args) throws InterruptedException {
-        InventoryService inv = new InventoryService();
-        inv.addListener((p, total, suggest) ->
-                System.out.println("  [ALERT] " + p.sku() + " low: " + total + " left, reorder " + suggest + " to reach " + p.maxLevel()));
-
-        inv.addWarehouse(new Warehouse("BLR-1", "Bengaluru"));
-        inv.addWarehouse(new Warehouse("BLR-2", "Bengaluru"));
-        inv.addWarehouse(new Warehouse("DEL-1", "Delhi"));
-        inv.addProduct(new Product("PHONE", "Phone X", 20, 100));
-        inv.addProduct(new Product("CASE", "Phone case", 10, 200));
-
-        System.out.println("== receive stock");
-        inv.receive("BLR-1", "PHONE", 30, "PO-1");
-        inv.receive("DEL-1", "PHONE", 40, "PO-2");
-        inv.receive("BLR-2", "PHONE", 5, "PO-3");
-        System.out.println("  PHONE: " + inv.stockBySku("PHONE") + " total=" + inv.total("PHONE"));
-
-        System.out.println("== ship 32 phones to a Bengaluru customer (nearest city first)");
-        System.out.println("  " + inv.ship("PHONE", 32, new NearestCityFirst("Bengaluru"), "ORD-1"));
-        System.out.println("  PHONE: " + inv.stockBySku("PHONE"));
-
-        System.out.println("== transfer 15 phones DEL-1 -> BLR-1");
-        inv.transfer("PHONE", "DEL-1", "BLR-1", 15, "TR-1");
-        System.out.println("  PHONE: " + inv.stockBySku("PHONE"));
-
-        System.out.println("== ship 25 more (most stock first) -> crosses reorder point");
-        System.out.println("  " + inv.ship("PHONE", 25, new MostStockFirst(), "ORD-2"));
-        System.out.println("  ship 1 more (no duplicate alert): " + inv.ship("PHONE", 1, new MostStockFirst(), "ORD-3"));
-
-        System.out.println("== cycle count finds 2 damaged units in BLR-1");
-        inv.adjust("BLR-1", "PHONE", inv.stockBySku("PHONE").get("BLR-1") - 2, "damaged");
-        System.out.println("  PHONE: " + inv.stockBySku("PHONE") + " total=" + inv.total("PHONE"));
-
-        System.out.println("== restock re-arms the alert");
-        inv.receive("BLR-1", "PHONE", 90, "PO-4");
-        inv.ship("PHONE", 90, new MostStockFirst(), "ORD-4");
-
-        System.out.println("== edge cases");
-        attempt(() -> inv.ship("PHONE", 999, new MostStockFirst(), "ORD-X"));
-        attempt(() -> inv.transfer("PHONE", "BLR-2", "BLR-2", 1, "TR-X"));
-        attempt(() -> inv.receive("MUM-1", "PHONE", 5, "PO-X"));
-        attempt(() -> inv.receive("BLR-1", "TABLET", 5, "PO-X"));
-        attempt(() -> inv.receive("BLR-1", "PHONE", 0, "PO-X"));
-
-        System.out.println("== movement ledger for PHONE");
-        inv.movements("PHONE").forEach(m -> System.out.println("  " + m));
-
-        System.out.println("== concurrency: 200 one-unit orders race for 50 cases");
-        inv.receive("BLR-1", "CASE", 50, "PO-5");
-        AtomicInteger ok = new AtomicInteger(), rejected = new AtomicInteger();
-        ExecutorService pool = Executors.newFixedThreadPool(8);
-        for (int i = 0; i < 200; i++) {
-            pool.submit(() -> {
-                try { inv.ship("CASE", 1, new MostStockFirst(), "web"); ok.incrementAndGet(); }
-                catch (InventoryException e) { rejected.incrementAndGet(); }
-            });
-        }
-        pool.shutdown();
-        pool.awaitTermination(10, TimeUnit.SECONDS);
-        System.out.println("  shipped=" + ok + " rejected=" + rejected + " left=" + inv.total("CASE"));
-    }
-
-    private static void attempt(Runnable r) {
-        try { r.run(); System.out.println("  ok"); }
-        catch (InventoryException e) { System.out.println("  error: " + e.getMessage()); }
-    }
-}
-```
-
-**Output:**
+**Output** (of `Main.java`):
 
 ```text
 == receive stock
@@ -4739,171 +3140,7 @@ flowchart TD
 
 ### Java implementation
 
-The file-system model:
-
-```java
-// File: lld/ch21/filesearch/FileType.java
-package lld.ch21.filesearch;
-
-public enum FileType { FILE, DIRECTORY }
-```
-
-```java
-// File: lld/ch21/filesearch/SearchException.java
-package lld.ch21.filesearch;
-
-/** Bad path, bad option or bad expression: a readable message, never a stack trace for the user. */
-public class SearchException extends RuntimeException {
-    public SearchException(String message) { super(message); }
-}
-```
-
-```java
-// File: lld/ch21/filesearch/Node.java
-package lld.ch21.filesearch;
-
-import java.time.Instant;
-
-/**
- * Composite pattern: a file-system entry is either a leaf (FileNode) or a container
- * (DirectoryNode) that holds more entries. Callers treat both through this one type.
- */
-public abstract sealed class Node permits FileNode, DirectoryNode {
-    private final String name;
-    private final DirectoryNode parent;
-    private final String owner;
-    private final Instant modified;
-
-    protected Node(String name, DirectoryNode parent, String owner, Instant modified) {
-        this.name = name; this.parent = parent; this.owner = owner; this.modified = modified;
-    }
-
-    public String name() { return name; }
-    public DirectoryNode parent() { return parent; }
-    public String owner() { return owner; }
-    public Instant modified() { return modified; }
-
-    public abstract FileType type();
-
-    /** Size in bytes of this entry alone (0 for a directory, as far as our filters care). */
-    public abstract long size();
-
-    /** du-style size: a file's own size; a directory's is the sum over everything inside it (Composite recursion). */
-    public abstract long totalSize();
-
-    public String path() {
-        if (parent == null) return "/";
-        String p = parent.path();
-        return (p.equals("/") ? "" : p) + "/" + name;
-    }
-
-    @Override public String toString() { return path(); }
-}
-```
-
-```java
-// File: lld/ch21/filesearch/FileNode.java
-package lld.ch21.filesearch;
-
-import java.time.Instant;
-
-public final class FileNode extends Node {
-    private final long size;
-
-    FileNode(String name, DirectoryNode parent, String owner, Instant modified, long size) {
-        super(name, parent, owner, modified);
-        if (size < 0) throw new SearchException("Negative size for " + name);
-        this.size = size;
-    }
-
-    @Override public FileType type() { return FileType.FILE; }
-    @Override public long size() { return size; }
-    @Override public long totalSize() { return size; }
-}
-```
-
-```java
-// File: lld/ch21/filesearch/DirectoryNode.java
-package lld.ch21.filesearch;
-
-import java.time.Instant;
-import java.util.Collection;
-import java.util.concurrent.ConcurrentSkipListMap;
-
-public final class DirectoryNode extends Node {
-    /** Sorted by name (deterministic output) and safe to read while another thread adds files. */
-    private final ConcurrentSkipListMap<String, Node> children = new ConcurrentSkipListMap<>();
-
-    DirectoryNode(String name, DirectoryNode parent, String owner, Instant modified) {
-        super(name, parent, owner, modified);
-    }
-
-    @Override public FileType type() { return FileType.DIRECTORY; }
-    @Override public long size() { return 0; }
-    @Override public long totalSize() { return children.values().stream().mapToLong(Node::totalSize).sum(); }
-
-    public Collection<Node> children() { return children.values(); }
-    public Node child(String name) { return children.get(name); }
-    public boolean isEmpty() { return children.isEmpty(); }
-
-    void add(Node n) {
-        if (children.putIfAbsent(n.name(), n) != null)
-            throw new SearchException(n.path() + " already exists");
-    }
-}
-```
-
-```java
-// File: lld/ch21/filesearch/FileSystem.java
-package lld.ch21.filesearch;
-
-import java.time.Instant;
-
-/** A small in-memory file system, so every demo run is identical. A java.nio adapter is an extension. */
-public final class FileSystem {
-    private final DirectoryNode root;
-
-    public FileSystem(Instant created) { root = new DirectoryNode("", null, "root", created); }
-
-    public DirectoryNode root() { return root; }
-
-    /** Creates missing directories along the way, like mkdir -p. */
-    public synchronized DirectoryNode mkdirs(String path, String owner, Instant modified) {
-        DirectoryNode dir = root;
-        for (String part : split(path)) {
-            Node next = dir.child(part);
-            if (next == null) { next = new DirectoryNode(part, dir, owner, modified); dir.add(next); }
-            if (!(next instanceof DirectoryNode d)) throw new SearchException(next.path() + " is a file, not a directory");
-            dir = d;
-        }
-        return dir;
-    }
-
-    public synchronized FileNode createFile(String path, long size, String owner, Instant modified) {
-        int slash = path.lastIndexOf('/');
-        DirectoryNode dir = mkdirs(path.substring(0, Math.max(slash, 0)), owner, modified);
-        FileNode f = new FileNode(path.substring(slash + 1), dir, owner, modified, size);
-        dir.add(f);
-        return f;
-    }
-
-    public Node resolve(String path) {
-        Node n = root;
-        for (String part : split(path)) {
-            if (!(n instanceof DirectoryNode d) || (n = d.child(part)) == null)
-                throw new SearchException("No such file or directory: " + path);
-        }
-        return n;
-    }
-
-    private static String[] split(String path) {
-        String p = path.replaceAll("^/+|/+$", "");
-        return p.isEmpty() ? new String[0] : p.split("/+");
-    }
-}
-```
-
-The filters — Specification leaves and Composite nodes:
+Full runnable code: `code/lld/ch21/filesearch/` (15 files). Below are the files that carry the design; the rest are the file-system model (`Node`, `FileNode`, `DirectoryNode`, `FileSystem`, `FileType`), `OrFilter`, `NotFilter`, `SearchCriteria` and its Builder, `SearchException` and `Main`.
 
 ```java
 // File: lld/ch21/filesearch/FileFilter.java
@@ -4956,53 +3193,7 @@ public record AndFilter(List<FileFilter> parts) implements FileFilter {
 ```
 
 ```java
-// File: lld/ch21/filesearch/OrFilter.java
-package lld.ch21.filesearch;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.stream.Collectors;
-
-/** Composite: matches when any child matches. Short-circuits like find's -o. */
-public record OrFilter(List<FileFilter> parts) implements FileFilter {
-    public OrFilter { parts = List.copyOf(parts); }
-
-    static FileFilter of(FileFilter a, FileFilter b) {
-        List<FileFilter> all = new ArrayList<>();
-        for (FileFilter f : List.of(a, b)) if (f instanceof OrFilter or) all.addAll(or.parts()); else all.add(f);
-        return new OrFilter(all);
-    }
-
-    @Override public boolean matches(Node n) {
-        for (FileFilter f : parts) if (f.matches(n)) return true;
-        return false;
-    }
-
-    @Override public String describe() {
-        return parts.stream().map(FileFilter::describe).collect(Collectors.joining(" OR ", "(", ")"));
-    }
-}
-```
-
-```java
-// File: lld/ch21/filesearch/NotFilter.java
-package lld.ch21.filesearch;
-
-/** Composite with one child: find's ! / -not. */
-public record NotFilter(FileFilter inner) implements FileFilter {
-    @Override public boolean matches(Node n) { return !inner.matches(n); }
-    @Override public String describe() { return "NOT " + inner.describe(); }
-}
-```
-
-```java
-// File: lld/ch21/filesearch/Filters.java
-package lld.ch21.filesearch;
-
-import java.time.Duration;
-import java.time.Instant;
-import java.util.regex.Pattern;
-
+// File: lld/ch21/filesearch/Filters.java  (excerpt)
 /** Static factories for the leaf filters (one per find test). New test = one new record here; nothing else changes. */
 public final class Filters {
     private Filters() { }
@@ -5018,58 +3209,7 @@ public final class Filters {
     /** spec like find's -mtime: "+7" (more than 7 whole days ago), "-1", "0". */
     public static FileFilter mtime(String spec, Instant now) { return MtimeFilter.parse(spec, now); }
 
-    record MatchAll() implements FileFilter {
-        @Override public boolean matches(Node n) { return true; }
-        @Override public String describe() { return "true"; }
-    }
-
-    /** Glob on the last path component only, like find -name: * ? [abc] [!abc], and \ to escape. */
-    record NameFilter(String glob, boolean ignoreCase, Pattern regex) implements FileFilter {
-        NameFilter(String glob, boolean ignoreCase) {
-            this(glob, ignoreCase, Pattern.compile(toRegex(glob), ignoreCase ? Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE : 0));
-        }
-        @Override public boolean matches(Node n) { return regex.matcher(n.name()).matches(); }
-        @Override public String describe() { return (ignoreCase ? "iname='" : "name='") + glob + "'"; }
-
-        static String toRegex(String glob) {
-            StringBuilder re = new StringBuilder();
-            for (int i = 0; i < glob.length(); i++) {
-                char c = glob.charAt(i);
-                switch (c) {
-                    case '*' -> re.append(".*");
-                    case '?' -> re.append('.');
-                    case '\\' -> { if (++i < glob.length()) re.append(Pattern.quote(String.valueOf(glob.charAt(i)))); }
-                    case '[' -> {
-                        int end = glob.indexOf(']', i + 2);
-                        if (end < 0) { re.append("\\["); break; }          // no closing ]: a literal [
-                        String body = glob.substring(i + 1, end);
-                        if (body.startsWith("!")) body = "^" + body.substring(1);
-                        re.append('[').append(body.replace("\\", "\\\\")).append(']');
-                        i = end;
-                    }
-                    default -> re.append(Pattern.quote(String.valueOf(c)));
-                }
-            }
-            return re.toString();
-        }
-    }
-
-    record TypeFilter(FileType type) implements FileFilter {
-        @Override public boolean matches(Node n) { return n.type() == type; }
-        @Override public String describe() { return "type=" + (type == FileType.FILE ? "f" : "d"); }
-    }
-
-    record OwnerFilter(String user) implements FileFilter {
-        @Override public boolean matches(Node n) { return n.owner().equals(user); }
-        @Override public String describe() { return "user=" + user; }
-    }
-
-    record EmptyFilter() implements FileFilter {
-        @Override public boolean matches(Node n) {
-            return n instanceof DirectoryNode d ? d.isEmpty() : n.size() == 0;
-        }
-        @Override public String describe() { return "empty"; }
-    }
+    // ... MatchAll, NameFilter (glob -> regex), TypeFilter, OwnerFilter, EmptyFilter, MtimeFilter
 
     /**
      * GNU find semantics: the file size is rounded UP to whole units, then compared.
@@ -5094,111 +3234,11 @@ public final class Filters {
         }
         @Override public String describe() { return "size" + (cmp == '=' ? "=" : "") + spec; }
     }
-
-    /** -mtime n: age in whole days (fraction dropped); +n = older than n days, -n = newer than n days. */
-    record MtimeFilter(char cmp, long days, Instant now, String spec) implements FileFilter {
-        static MtimeFilter parse(String spec, Instant now) {
-            var m = Pattern.compile("([+-]?)(\\d+)").matcher(spec);
-            if (!m.matches()) throw new SearchException("Invalid -mtime '" + spec + "' (use e.g. +7, -1, 0)");
-            char cmp = m.group(1).isEmpty() ? '=' : m.group(1).charAt(0);
-            return new MtimeFilter(cmp, Long.parseLong(m.group(2)), now, spec);
-        }
-        @Override public boolean matches(Node node) {
-            long age = Duration.between(node.modified(), now).toDays();
-            return switch (cmp) { case '+' -> age > days; case '-' -> age < days; default -> age == days; };
-        }
-        @Override public String describe() { return "mtime" + (cmp == '=' ? "=" : "") + spec; }
-    }
-}
-```
-
-Criteria, search and parser:
-
-```java
-// File: lld/ch21/filesearch/SearchCriteria.java
-package lld.ch21.filesearch;
-
-import java.util.LinkedHashSet;
-import java.util.Set;
-
-/**
- * Everything one search needs, immutable once built. Builder pattern: most options are optional,
- * so named builder calls replace a constructor with eight positional parameters.
- */
-public final class SearchCriteria {
-    private final String startPath;
-    private final FileFilter filter;
-    private final int minDepth, maxDepth, limit;
-    private final Set<String> pruneNames;
-
-    private SearchCriteria(Builder b) {
-        startPath = b.startPath; filter = b.filter; minDepth = b.minDepth; maxDepth = b.maxDepth;
-        limit = b.limit; pruneNames = Set.copyOf(b.pruneNames);
-    }
-
-    public static Builder from(String startPath) { return new Builder(startPath); }
-
-    public String startPath() { return startPath; }
-    public FileFilter filter() { return filter; }
-    public int minDepth() { return minDepth; }
-    public int maxDepth() { return maxDepth; }
-    public int limit() { return limit; }
-    public Set<String> pruneNames() { return pruneNames; }
-
-    @Override public String toString() {
-        return "from " + startPath + " where " + filter.describe()
-                + (minDepth > 0 ? " mindepth=" + minDepth : "")
-                + (maxDepth < Integer.MAX_VALUE ? " maxdepth=" + maxDepth : "")
-                + (pruneNames.isEmpty() ? "" : " prune=" + pruneNames)
-                + (limit < Integer.MAX_VALUE ? " limit=" + limit : "");
-    }
-
-    public static final class Builder {
-        private final String startPath;
-        private FileFilter filter = Filters.all();
-        private boolean filterSet;
-        private int minDepth = 0, maxDepth = Integer.MAX_VALUE, limit = Integer.MAX_VALUE;
-        private final Set<String> pruneNames = new LinkedHashSet<>();
-
-        private Builder(String startPath) {
-            if (startPath == null || startPath.isBlank()) throw new SearchException("Start path is required");
-            this.startPath = startPath;
-        }
-
-        /** Each call is ANDed with the previous ones, like consecutive tests on a find command line. */
-        public Builder where(FileFilter f) { filter = filterSet ? filter.and(f) : f; filterSet = true; return this; }
-        public Builder name(String glob) { return where(Filters.name(glob)); }
-        public Builder type(FileType t) { return where(Filters.type(t)); }
-        public Builder size(String spec) { return where(Filters.size(spec)); }
-        public Builder minDepth(int d) { minDepth = d; return this; }
-        public Builder maxDepth(int d) { maxDepth = d; return this; }
-        public Builder limit(int n) { limit = n; return this; }
-        /** Do not descend into directories with this name (like: -name node_modules -prune -o ...). */
-        public Builder prune(String dirName) { pruneNames.add(dirName); return this; }
-
-        public SearchCriteria build() {
-            if (minDepth < 0 || maxDepth < 0) throw new SearchException("Depths must be >= 0");
-            if (minDepth > maxDepth) throw new SearchException("mindepth " + minDepth + " > maxdepth " + maxDepth);
-            if (limit <= 0) throw new SearchException("Limit must be positive");
-            return new SearchCriteria(this);
-        }
-    }
 }
 ```
 
 ```java
-// File: lld/ch21/filesearch/FileSearcher.java
-package lld.ch21.filesearch;
-
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Deque;
-import java.util.List;
-import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.RecursiveTask;
-import java.util.function.Consumer;
-
+// File: lld/ch21/filesearch/FileSearcher.java  (excerpt)
 /** Walks the tree and reports every entry that passes the filter. */
 public final class FileSearcher {
     private final FileSystem fs;
@@ -5229,52 +3269,12 @@ public final class FileSearcher {
         return found;
     }
 
-    public List<Node> search(SearchCriteria c) {
-        List<Node> out = new ArrayList<>();
-        search(c, out::add);
-        return out;
-    }
-
-    /** Extension: one fork/join task per directory. Same results in the same order; no limit support. */
-    public List<Node> searchParallel(SearchCriteria c, ForkJoinPool pool) {
-        return pool.invoke(new Walk(fs.resolve(c.startPath()), 0, c));
-    }
-
-    private static final class Walk extends RecursiveTask<List<Node>> {
-        private final Node node; private final int depth; private final SearchCriteria c;
-        Walk(Node node, int depth, SearchCriteria c) { this.node = node; this.depth = depth; this.c = c; }
-
-        @Override protected List<Node> compute() {
-            List<Node> out = new ArrayList<>();
-            if (depth >= c.minDepth() && c.filter().matches(node)) out.add(node);
-            if (node instanceof DirectoryNode d && depth < c.maxDepth() && !c.pruneNames().contains(d.name())) {
-                List<Walk> tasks = new ArrayList<>();
-                List<Object> slots = new ArrayList<>();         // files tested inline, sub-directories forked
-                for (Node k : d.children()) {
-                    if (k instanceof DirectoryNode) { Walk w = new Walk(k, depth + 1, c); tasks.add(w); slots.add(w); }
-                    else slots.add(k);
-                }
-                invokeAll(tasks);                               // fork all sub-directories, wait for all
-                for (Object s : slots) {                        // collect in name order: same order as search()
-                    if (s instanceof Walk w) out.addAll(w.join());
-                    else if (depth + 1 >= c.minDepth() && c.filter().matches((Node) s)) out.add((Node) s);
-                }
-            }
-            return out;
-        }
-    }
+    // ... search(c) collects into a list; searchParallel forks one RecursiveTask per sub-directory
 }
 ```
 
 ```java
-// File: lld/ch21/filesearch/FindCommandParser.java
-package lld.ch21.filesearch;
-
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.regex.Pattern;
-
+// File: lld/ch21/filesearch/FindCommandParser.java  (excerpt)
 /**
  * Turns a find-style command line into SearchCriteria, with find's precedence:
  *   expr   := or
@@ -5291,29 +3291,7 @@ public final class FindCommandParser {
     private int pos;
     private SearchCriteria.Builder builder;
 
-    public FindCommandParser(Instant now) { this.now = now; }
-
-    /** tokens as the shell would pass them, e.g. ["find", "/home", "-name", "*.java", "-o", "-name", "*.md"]. */
-    public SearchCriteria parse(List<String> args) {
-        if (args.isEmpty() || !args.get(0).equals("find")) throw new SearchException("Command must start with 'find'");
-        tokens = args; pos = 1;
-        String start = pos < tokens.size() && !isOperatorOrTest(tokens.get(pos)) ? tokens.get(pos++) : ".";
-        builder = SearchCriteria.from(start.equals(".") ? "/" : start);
-        skipGlobalOptions();
-        if (pos < tokens.size()) {                     // no tests at all = match everything
-            builder.where(parseOr());
-            if (pos < tokens.size()) throw new SearchException("Unexpected '" + tokens.get(pos) + "'");
-        }
-        return builder.build();
-    }
-
-    /** Convenience: split on spaces; quotes group words and are removed (enough for the demo). */
-    public SearchCriteria parse(String commandLine) {
-        List<String> out = new ArrayList<>();
-        var m = Pattern.compile("'([^']*)'|\"([^\"]*)\"|(\\S+)").matcher(commandLine);
-        while (m.find()) out.add(m.group(1) != null ? m.group(1) : m.group(2) != null ? m.group(2) : m.group(3));
-        return parse(out);
-    }
+    // ... parse(args): read the start path, then builder.where(parseOr()); parse(String) splits on spaces
 
     private FileFilter parseOr() {
         FileFilter left = parseAnd();
@@ -5362,127 +3340,7 @@ public final class FindCommandParser {
             default -> throw new SearchException("Unknown predicate '" + t + "'");
         }
     }
-
-    /** -maxdepth/-mindepth are options, not tests: record them and keep parsing the expression. */
-    private void skipGlobalOptions() {
-        while (peekIs("-maxdepth", "-mindepth")) {
-            String opt = tokens.get(pos++);
-            int n;
-            try { n = Integer.parseInt(arg(opt)); } catch (NumberFormatException e) { throw new SearchException(opt + " needs a number"); }
-            if (opt.equals("-maxdepth")) builder.maxDepth(n); else builder.minDepth(n);
-        }
-    }
-
-    private String arg(String option) {
-        if (pos >= tokens.size()) throw new SearchException(option + " needs an argument");
-        return tokens.get(pos++);
-    }
-
-    private boolean peekIs(String... options) {
-        if (pos >= tokens.size()) return false;
-        for (String o : options) if (tokens.get(pos).equals(o)) return true;
-        return false;
-    }
-
-    private static boolean isOperatorOrTest(String t) { return t.startsWith("-") || t.equals("!") || t.equals("(") || t.equals(")"); }
-}
-```
-
-```java
-// File: lld/ch21/filesearch/Main.java
-package lld.ch21.filesearch;
-
-import java.time.Duration;
-import java.time.Instant;
-import java.util.List;
-import java.util.concurrent.ForkJoinPool;
-
-public class Main {
-    static final Instant NOW = Instant.parse("2026-10-01T12:00:00Z");
-    static final long KB = 1024, MB = 1024 * KB;
-
-    public static void main(String[] args) {
-        FileSystem fs = sampleTree();
-        FileSearcher finder = new FileSearcher(fs);
-        FindCommandParser parser = new FindCommandParser(NOW);
-
-        System.out.println("== Builder API ==");
-        show(finder, SearchCriteria.from("/").name("*.log").type(FileType.FILE).build());
-        show(finder, SearchCriteria.from("/home").where(Filters.iname("*.jpg").and(Filters.size("+1M"))).build());
-        show(finder, SearchCriteria.from("/").type(FileType.DIRECTORY).where(Filters.empty()).build());
-        show(finder, SearchCriteria.from("/home").maxDepth(2).build());
-        show(finder, SearchCriteria.from("/home/asha/projects")
-                .where(Filters.name("*.java").or(Filters.name("*.js"))).prune("node_modules").build());
-        show(finder, SearchCriteria.from("/").type(FileType.FILE).limit(3).build());
-
-        System.out.println("\n== find command lines ==");
-        for (String cmd : List.of(
-                "find /var/log -type f -size +10M -mtime +7",
-                "find /home -name '*.java' -o -name '*.md'",
-                "find /home ( -name '*.jpg' -o -name '*.png' ) ! -size +1M",
-                "find /home -size -1M",
-                "find / -user ravi -type f",
-                "find /home/asha -mindepth 2 -maxdepth 2 -type d",
-                "find /home -iname 'b*'",
-                "find /var/log -name 'app.log.[0-9]'"))
-            show(finder, parser.parse(cmd), cmd);
-
-        System.out.println("\n== bad input gives a clear message ==");
-        for (String cmd : List.of("find / -size 10X", "find / ( -name a", "find /nope -name x",
-                "find / -frobnicate", "find / -type x", "find / -maxdepth 1 -mindepth 3", "find / -name"))
-            try { finder.search(parser.parse(cmd)); System.out.println("   (no error?) " + cmd); }
-            catch (SearchException e) { System.out.printf("   %-34s -> %s%n", cmd, e.getMessage()); }
-
-        System.out.println("\n== Composite sizes (du -s) ==");
-        for (String p : List.of("/home/asha", "/home/asha/projects/app/node_modules", "/var/log"))
-            System.out.printf("   %-40s %,d bytes%n", p, fs.resolve(p).totalSize());
-
-        System.out.println("\n== Parallel search on a big generated tree ==");
-        FileSystem big = new FileSystem(NOW);
-        for (int d = 0; d < 200; d++)
-            for (int f = 0; f < 100; f++)
-                big.createFile("/data/d%03d/sub%d/f%03d.%s".formatted(d, f % 5, f, f % 3 == 0 ? "csv" : "txt"),
-                        (long) f * 10 * KB, "etl", NOW.minus(Duration.ofDays(f % 30)));
-        SearchCriteria q = new FindCommandParser(NOW).parse("find /data -name '*.csv' -size +500k -mtime -10");
-        FileSearcher bigFinder = new FileSearcher(big);
-        List<Node> seq = bigFinder.search(q);
-        List<Node> par = bigFinder.searchParallel(q, ForkJoinPool.commonPool());
-        System.out.println("   " + q);
-        System.out.println("   sequential=" + seq.size() + " parallel=" + par.size() + " same order=" + seq.equals(par)
-                + " first=" + seq.get(0) + " last=" + seq.get(seq.size() - 1));
-    }
-
-    static void show(FileSearcher finder, SearchCriteria c) { show(finder, c, c.toString()); }
-
-    static void show(FileSearcher finder, SearchCriteria c, String title) {
-        System.out.println("$ " + title);
-        if (!title.equals(c.toString())) System.out.println("  parsed: " + c);
-        int n = finder.search(c, node -> System.out.println("   " + node + (node instanceof DirectoryNode ? "/" : "")));
-        if (n == 0) System.out.println("   (no matches)");
-    }
-
-    static FileSystem sampleTree() {
-        FileSystem fs = new FileSystem(NOW);
-        Instant today = NOW.minus(Duration.ofHours(3)), lastWeek = NOW.minus(Duration.ofDays(8)), old = NOW.minus(Duration.ofDays(40));
-        fs.createFile("/home/asha/notes.txt", 2 * KB, "asha", today);
-        fs.createFile("/home/asha/photos/a.jpg", 3 * MB, "asha", lastWeek);
-        fs.createFile("/home/asha/photos/b.JPG", 5 * MB, "asha", lastWeek);
-        fs.createFile("/home/asha/photos/c.png", 800 * KB, "asha", old);
-        fs.createFile("/home/asha/photos/d.jpg", 900 * KB, "asha", old);
-        fs.createFile("/home/asha/projects/app/Main.java", 12 * KB, "asha", today);
-        fs.createFile("/home/asha/projects/app/Util.java", 4 * KB, "asha", today);
-        fs.createFile("/home/asha/projects/app/build.log", 3 * MB / 2, "asha", today);
-        fs.createFile("/home/asha/projects/app/node_modules/lodash.js", 500 * KB, "asha", old);
-        fs.createFile("/home/asha/projects/app/node_modules/react.js", MB, "asha", old);
-        fs.mkdirs("/home/asha/projects/empty-dir", "asha", old);
-        fs.createFile("/home/ravi/todo.md", 0, "ravi", today);
-        fs.createFile("/home/ravi/report.pdf", 2 * MB, "ravi", lastWeek);
-        fs.createFile("/var/log/syslog", 40 * MB, "root", old);
-        fs.createFile("/var/log/app.log", 3 * MB, "root", today);
-        fs.createFile("/var/log/app.log.1", 20 * MB, "root", lastWeek);
-        fs.mkdirs("/tmp", "root", today);
-        return fs;
-    }
+    // ... skipGlobalOptions (-maxdepth/-mindepth anywhere), arg, peekIs
 }
 ```
 
@@ -5496,7 +3354,7 @@ public class Main {
 - **Parser.** `parseOr` → `parseAnd` → `parseUnary`: one method per precedence level. `parseAnd` treats two tests side by side as AND; `-maxdepth`/`-mindepth` are options that can appear anywhere, so every level skips them first.
 - **Parallel.** `searchParallel` forks one task per sub-directory (files are tested inline), waits for all, then joins results in name order — the same list, in the same order, as the sequential search.
 
-**Output:**
+**Output** (of `Main.java`):
 
 ```text
 == Builder API ==

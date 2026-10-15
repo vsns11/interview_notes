@@ -1,21 +1,12 @@
 # Chapter 22 — Revision: Cheat Sheets & Glossary
 
-> **What you will learn in this chapter**
-> - How to revise the whole handbook in 15 minutes, or in one evening the night before.
-> - The LLD (low-level design: the classes and code inside one program) answer framework on one page (Chapter 1).
-> - OOP, relationships and UML arrows on one page (Chapters 2–3).
-> - SOLID, the other design principles, and the clean-code rules as tables (Chapters 4–6).
-> - All 24 code smells with the refactorings that cure them (Chapter 7).
-> - All 23 GoF patterns (the classic catalogue by the "Gang of Four" authors) plus the extras, and a "which pattern?" table sorted by symptom (Chapters 8–11).
-> - The concurrency toolbox, a deadlock checklist and a "which `java.util.concurrent` class?" table (`java.util.concurrent` is Java's standard package of thread-safety tools) (Chapters 12–13).
-> - A map of every case study: entities, patterns, concurrency concern, and where to find it (Chapters 14–21).
-> - A machine-coding checklist, an edge-case checklist, and a glossary of about 200 terms.
+> **What this chapter is.** One-page summaries of the whole handbook — the LLD (low-level design: the classes and code inside one program) answer framework (Ch 1), OOP and UML (Ch 2–3), SOLID, principles and clean code (Ch 4–6), the 24 smells (Ch 7), all 23 GoF patterns plus extras (Ch 8–11), the concurrency toolbox (Ch 12–13), a map of every case study (Ch 14–21), machine-coding and edge-case checklists, and a glossary of about 200 terms.
 >
-> Nothing in this chapter is new. Every row is a summary of a section in Chapters 1–21, and the right-hand column tells you where to go for the full explanation. This chapter has no code.
+> Nothing here is new: every row summarises a section of Chapters 1–21, and the right-hand column says where to find the full explanation. No code.
 
 **How to read the references.** "§12.17" means section 12.17. Chapters 5 and 6 number their sections from 1 inside the chapter, so "Ch 5 §13" means section 13 of Chapter 5 (Fail Fast). Chapters 16, 17 and 19 have unnumbered case studies, so they are referenced by name, for example "Ch 16 · Car Rental".
 
-**New to a term?** Every technical word in the tables below, from `API` and `JVM` to `TTL` and `SKU`, has a one-line definition in the glossary (22.11). A **TL;DR** ("too long; didn't read") heading marks a short summary.
+**New to a term?** Every technical word in the tables, from `API` and `JVM` to `TTL` and `SKU`, is defined once — in its cheat-sheet row or in the glossary (22.11). A **TL;DR** ("too long; didn't read") heading marks a short summary.
 
 ---
 
@@ -72,7 +63,7 @@
 
 ### Time budgets
 
-| 45-minute OOD (object-oriented design) round | | 90-minute machine-coding round (write runnable code) | |
+| 45-minute OOD round | | 90-minute machine-coding round (write runnable code) | |
 |---|---|---|---|
 | Clarify requirements | 5–8 min | Read, requirements, assumptions | 5–10 min |
 | Actors and use cases | 3–5 min | Model: entities, enums, service interfaces | 10–15 min |
@@ -138,10 +129,10 @@ Skeleton: **Models → Repositories → Strategies → Services → Driver** (§
 
 | Pillar | One line | Java tools | Smell when missing |
 |---|---|---|---|
-| **Encapsulation** (§2.3) | Data is private; only the owning class's methods change it, and they enforce the rules (the *invariants*: facts that must always hold) | `private` fields, no setters, validation in constructors | Public fields; setters that break invariants |
+| **Encapsulation** (§2.3) | Data is private; only the owning class's methods change it, and they enforce the *invariants* | `private` fields, no setters, validation in constructors | Public fields; setters that break invariants |
 | **Abstraction** (§2.4) | Expose only what callers need; hide how | Interfaces, abstract classes, small public API | Callers reach into internals |
 | **Inheritance** (§2.5) | Child reuses and specialises parent — **only when "child is a parent" is truly correct** | `extends`, `super`, `@Override` | Subclass refuses or throws on parent methods |
-| **Polymorphism** (§2.6) | One call, different behaviour per object; removes type switches | Overriding + dynamic dispatch (the method is picked from the object's real class at run time) | `switch` / `instanceof` chains on type |
+| **Polymorphism** (§2.6) | One call, different behaviour per object; removes type switches | Overriding + dynamic dispatch | `switch` / `instanceof` chains on type |
 
 **Encapsulation vs abstraction:** hiding *data* behind rule-enforcing methods vs hiding *complexity* behind a minimal set of operations (Ch 2 self-check).
 
@@ -151,13 +142,13 @@ Skeleton: **Models → Repositories → Strategies → Services → Driver** (§
 |---|---|---|
 | Overloading vs overriding | Compile time, by declared parameter types vs run time, by the actual object. Fields and `static` methods are not polymorphic (statics are hidden, not overridden) | §2.7 |
 | `this`, `static`, `final` | Current object; one per class; cannot be reassigned/overridden/extended | §2.2 |
-| Interfaces | Contracts; can have `default`, `static`, `private` methods; a functional interface has one abstract method (lambdas: short inline functions such as `x -> x * 2`) | §2.8 |
+| Interfaces | Contracts; can have `default`, `static`, `private` methods; a functional interface has one abstract method (usable with lambdas) | §2.8 |
 | Enums | Fixed sets with fields and behaviour ("which spot types fit a truck" lives on `VehicleType`) | §2.10 |
 | Composition over inheritance | Avoids fragile base classes; allows run-time swapping | §2.11, Ch 5 §6 |
 | `equals`/`hashCode` | Equal objects must have equal hash codes; override both or hash collections break | §2.12 |
 | Immutability & records | Final class, private final fields, no setters, defensive copies. Records are only **shallowly** immutable — copy collections in the compact constructor | §2.13 |
-| Access modifiers | Default to `private`; package-private = same package only | §2.14 |
-| Generics | Type-safe reusable infrastructure; **PECS**: producer `extends`, consumer `super` | §2.15 |
+| Access modifiers | Who can see a member: `public`, `protected`, package-private (same package only), `private`; default to `private` | §2.14 |
+| Generics | Type parameters (`List<T>`) for type-safe reusable infrastructure; **PECS**: producer `extends`, consumer `super` | §2.15 |
 | Coupling & cohesion | Low coupling (between classes), high cohesion (inside a class) | §2.16 |
 | OOA → OOD → OOP | What the problem is → how, with objects → code. Connections that carry data become objects | §2.17 |
 
@@ -173,7 +164,7 @@ Skeleton: **Models → Repositories → Strategies → Services → Driver** (§
 | Relationship expressed | "is a" (shared identity and state) | "can do" (capability / role) |
 | Typical use | Shared state + partial implementation for a close family (Template Method) | Contracts, roles, strategies, test seams |
 
-**Rule of thumb:** start with an interface; add an abstract class underneath when implementations share real state or a fixed algorithm (JDK, the Java Development Kit's standard library: `List` + `AbstractList` + `ArrayList`).
+**Rule of thumb:** start with an interface; add an abstract class underneath when implementations share real state or a fixed algorithm (JDK: `List` + `AbstractList` + `ArrayList`).
 
 ### The six relationships (§3.2–§3.8)
 
@@ -253,7 +244,7 @@ SOLID = five names for the ways code becomes painful to change. **Use them to di
 | **O** — Open/Closed (§4.7) | Add new behaviour by adding code, not by editing working code | A `switch`/`if` chain over a type; *Repeated Switches*, *Shotgun Surgery* | Put the part that *has* varied behind an interface; add variants as classes (Replace Conditional with Polymorphism) | Strategy, Template Method, Decorator, Factory Method, Observer, Command, Visitor |
 | **L** — Liskov Substitution (§4.8) | A subtype must be usable anywhere its parent is expected | Subclass throws, does nothing, or refuses a parent method; *Refused Bequest* | Better parent, a narrower interface, or composition (Replace Subclass with Delegate) | Composite, Null Object |
 | **I** — Interface Segregation (§4.9) | No client should depend on methods it does not use | Empty method bodies or `UnsupportedOperationException` in implementers; fat interfaces | Split into **role interfaces**, one per kind of caller | Adapter |
-| **D** — Dependency Inversion (§4.10) | Depend on abstractions, not concrete details; the policy owns the abstraction | A high-level class does `new` of (or names) a low-level one; cannot test without the real DB (database)/provider | Inject an interface owned by the high-level class; `main` wires the details | Strategy, Factory Method / Abstract Factory, Adapter, Observer |
+| **D** — Dependency Inversion (§4.10) | Depend on abstractions, not concrete details; the policy owns the abstraction | A high-level class does `new` of (or names) a low-level one; cannot test without the real database/provider | Inject an interface owned by the high-level class; `main` wires the details | Strategy, Factory Method / Abstract Factory, Adapter, Observer |
 
 **LSP in detail (§4.8, TL;DR):** a subclass must accept at least as much, promise at least as much, keep invariants and history, and throw nothing new. Square/Rectangle is worse than `Penguin.fly()` throwing because it fails **silently** (wrong area, no error).
 
@@ -270,7 +261,7 @@ Run S → O → L → I → D over the diagram you just drew. **Two findings is 
 | Coupling | How much does A depend on B? |
 | Separation of Concerns | Is each area of work in its own module? |
 | SRP vs ISP | SRP splits **classes** (guards the worker); ISP splits **interfaces** (guards the caller) |
-| DIP vs DI vs IoC | DIP = principle (depend on abstractions); DI = technique (pass dependencies in); IoC = the broader idea that a framework calls your code; IoC containers (libraries such as Spring that create and wire objects for you) perform DI |
+| DIP vs DI vs IoC | DIP = principle (depend on abstractions); DI = technique (pass dependencies in); IoC = the broader idea that a framework calls your code; IoC containers (e.g. Spring) perform DI |
 
 ### Common mistakes: over-engineering (§4.15)
 
@@ -313,15 +304,15 @@ Say **observation → cost → fix → price of the fix**, and describe before y
 | Fail fast | Detect problems early and loudly | Distant `NullPointerException`s | Guard clauses, `requireNonNull` | Ch 5 §13 |
 | Immutability | Objects never change after creation | Aliasing, races | Records, `List.copyOf` | Ch 5 §14 |
 | Design by Contract | Preconditions (caller), postconditions (method), invariants (always) | Magic error values | Checks at method entry/exit | Ch 5 §15 |
-| GRASP | Nine guidelines for "which class should do this?" | God classes | Expert, Creator, Controller… | Ch 5 §16 |
-| Domain-Driven Design | Model the business: bounded contexts, entities vs value objects, small aggregates, domain events, repositories per root | Anemic model, big ball of mud, primitive obsession | Records as value objects, aggregate roots, events + outbox (events saved in the same transaction as the data, published afterwards) | Ch 5 §17 |
+| GRASP | Larman's nine guidelines for "which class should do this?" | God classes | Expert, Creator, Controller… | Ch 5 §16 |
+| Domain-Driven Design | Model the business: bounded contexts, entities vs value objects, small aggregates, domain events, repositories per root | Anemic model, big ball of mud, primitive obsession | Records as value objects, aggregate roots, events + outbox | Ch 5 §17 |
 
 **GRASP in one line each (Ch 5 §16.1–§16.9):**
 
 | Guideline | Rule |
 |---|---|
 | Information Expert | The class with the data does the work |
-| Creator | The container (or the one with the initial data) creates |
+| Creator | The class that contains, records or has the initial data for A creates A |
 | Controller | A thin non-UI object receives each system event and delegates |
 | Low Coupling | Choose the design with fewer, more stable dependencies |
 | High Cohesion | Each class does one related set of things |
@@ -350,8 +341,8 @@ Say **observation → cost → fix → price of the fix**, and describe before y
 | Concurrency | Separate concurrency code; share as little as possible; use the library; keep locks small; plan shutdown | Ch 6 §12 |
 | Smells | The C/E/F/G/J/N/T heuristics catalogue as a review vocabulary | Ch 6 §14 |
 | Code review | Correctness → design → readability → tests → security → performance → operability; automate style; small PRs (pull requests: proposed changes sent for review) | Ch 6 §15 |
-| Error strategy | Classify, translate at boundaries, retry only transient + idempotent (safe to repeat) with backoff (waiting longer between attempts), one global handler that logs once | Ch 6 §16 |
-| Testing strategy | Many unit, some integration, few E2E (end-to-end, whole-system); right test double (a stand-in such as a mock or fake); verify state over interactions; don't mock what you don't own | Ch 6 §17 |
+| Error strategy | Classify, translate at boundaries, retry only transient + idempotent with backoff, one global handler that logs once | Ch 6 §16 |
+| Testing strategy | Many unit, some integration, few E2E (end-to-end, whole-system); right test double; verify state over interactions; don't mock what you don't own | Ch 6 §17 |
 
 **Boy Scout Rule:** leave the code a little cleaner than you found it (Ch 6 intro).
 
@@ -434,9 +425,9 @@ Say **observation → cost → fix → price of the fix**, and describe before y
 
 | Pattern | Intent (one line) | Use when | Java / JDK example | Commonly confused with | Where |
 |---|---|---|---|---|---|
-| **Singleton** | Exactly one instance with a global access point | There really must be exactly one (config, pool, registry) | `Runtime.getRuntime()`; Spring (a popular Java framework) singleton-scoped beans | A global variable; a DI singleton scope (preferred for testing) | §8.8 |
+| **Singleton** | Exactly one instance with a global access point | There really must be exactly one (config, pool, registry) | `Runtime.getRuntime()`; Spring singleton-scoped beans | A global variable; a DI singleton scope (preferred for testing) | §8.8 |
 | **Factory Method** | Subclasses decide which concrete class to create via an overridable method | Shared procedure, varying product; others will add types | `Collection.iterator()` | Simple Factory (one method with a switch) | §8.10 |
-| **Abstract Factory** | Create *families* of related objects without naming concrete classes | Products must match; swap a whole set at once | `DocumentBuilderFactory`; JDBC (Java's database API) `Connection` | Factory Method (one product by inheritance vs a family by composition) | §8.11 |
+| **Abstract Factory** | Create *families* of related objects without naming concrete classes | Products must match; swap a whole set at once | `DocumentBuilderFactory`; JDBC `Connection` | Factory Method (one product by inheritance vs a family by composition) | §8.11 |
 | **Builder** | Build a complex object step by step; one validating `build()` | Many optional fields, cross-field validation, immutable result | `StringBuilder`, `HttpClient.newBuilder()` | A plain constructor (fine for a handful of required fields); telescoping constructors | §8.12 |
 | **Prototype** | Create new objects by copying a configured instance | Setup is expensive, or only the interface is known | Copy constructors, `ArrayList.clone()` | Memento (a snapshot to restore, not a copy to use) | §8.13 |
 
@@ -450,9 +441,9 @@ Singleton notes (§8.8, §8.17): eager, holder-class or **`enum`** (most robust:
 | **Bridge** | Split abstraction from implementation so both vary independently | Class names with two nouns; two dimensions multiplying classes | JDBC `Connection` + drivers | Adapter; Strategy (same shape) | §9.2 |
 | **Composite** | Treat single objects and trees uniformly | Part-whole trees (files, menus, UI) | `java.awt.Container` is a `Component` holding `Component`s | Decorator (also wraps a component, but adds behaviour to one) | §9.3 |
 | **Decorator** | Add responsibilities dynamically by wrapping; same interface, stackable | "Sometimes logging, sometimes caching, sometimes both" | `BufferedInputStream`, `Collections.synchronizedList` | Proxy (same shape; Proxy *controls access*); Chain of Responsibility (in CoR someone can stop the flow) | §9.4 |
-| **Facade** | One simple entry point to a complex subsystem | Every caller repeats the same multi-step sequence | SLF4J (a logging facade library) `LoggerFactory`, service layers | Adapter (converts one object's interface); Mediator | §9.5 |
+| **Facade** | One simple entry point to a complex subsystem | Every caller repeats the same multi-step sequence | SLF4J `LoggerFactory`, service layers | Adapter (converts one object's interface); Mediator | §9.5 |
 | **Flyweight** | Share intrinsic (immutable) state across huge numbers of objects | Millions of near-identical objects | `Integer.valueOf`, `String.intern()` | Object Pool (reuses objects one borrower at a time; flyweights are shared at once) | §9.6 |
-| **Proxy** | A stand-in that controls access (lazy, remote, protective, caching) | It's expensive, remote or restricted | `java.lang.reflect.Proxy`, Spring `@Transactional`, Hibernate (maps objects to database tables) lazy load | Decorator | §9.7 |
+| **Proxy** | A stand-in that controls access (lazy, remote, protective, caching) | It's expensive, remote or restricted | `java.lang.reflect.Proxy`, Spring `@Transactional`, Hibernate lazy load | Decorator | §9.7 |
 
 Memory hooks (§9.8): Adapter *make it fit* · Decorator *add to it* · Proxy *guard it* · Facade *simplify it* · Bridge *split it* · Composite *nest it* · Flyweight *share it*.
 
@@ -465,7 +456,7 @@ Memory hooks (§9.8): Adapter *make it fit* · Decorator *add to it* · Proxy *g
 | **Iterator** | Traverse a collection without exposing how it is stored | Walk a collection/tree/paged API | `Iterator`, `Spliterator`, JDBC `ResultSet` | Visitor (what to do at each node) | §10.3 |
 | **Mediator** | Centralise communication between peers in one coordinator | Many objects interact in tangled ways; order of reactions matters | Chat servers, UI controllers; `Executor`/`Timer` are a loose fit (§10.4) | Observer (broadcast, no coordination); Facade | §10.4 |
 | **Memento** | Capture and restore state without breaking encapsulation | Undo, checkpoints, rollback | A `record` snapshot; DB `ROLLBACK`, Git commits (real-world) | Command undo (store actions, not states); Prototype | §10.5 |
-| **Interpreter** | One class per grammar rule; evaluate sentences of a small language | User-written rules/expressions | `java.util.regex.Pattern`, SpEL (Spring's expression language) | Composite (same tree); Visitor (many operations over the AST, the abstract syntax tree a parser builds) | §10.6 |
+| **Interpreter** | One class per grammar rule; evaluate sentences of a small language | User-written rules/expressions | `java.util.regex.Pattern`, SpEL (Spring's expression language) | Composite (same tree); Visitor (many operations over the AST) | §10.6 |
 | **Observer** | Notify many dependents automatically when one object changes | An open-ended set of independent listeners | `PropertyChangeListener`, `java.util.concurrent.Flow`, Spring `@EventListener` | Mediator; pub-sub (Observer through a broker, §20.6) | §11.1 |
 | **State** | Behaviour changes with internal state, as if the class changed | Many states/transitions; methods repeat a `switch` on status | TCP connection (GoF's example), order lifecycles. `Thread.State` is only an enum of states, not the pattern | Strategy (same diagram; states know each other and advance themselves) | §11.2 |
 | **Strategy** | Make a family of algorithms interchangeable behind one interface | Several ways to do one job, chosen at run time | `Comparator`; `RejectedExecutionHandler` policies | State; Template Method; Decorator (Strategy *replaces* a rule, Decorator *wraps* one) | §11.3 |
@@ -479,46 +470,47 @@ Memory hooks (§9.8): Adapter *make it fit* · Decorator *add to it* · Proxy *g
 | **Simple Factory** (idiom) | One `create(type)` method maps a type value to a class | Small, stable set of types chosen by config | `Calendar.getInstance()`, `EnumSet.noneOf` | Factory Method | §8.9 |
 | **Object Pool** | Borrow and return a bounded set of expensive objects | DB connections, limited resources | HikariCP (a database connection pool), `ThreadPoolExecutor` | Flyweight | §8.14 |
 | **Null Object** | A do-nothing implementation instead of `null` | `null` checks everywhere for an optional collaborator | `Collections.emptyList()`, `OutputStream.nullOutputStream()` | `Optional` (for lookups) | §11.7.1 |
-| **Dependency Injection** | Receive collaborators (as interfaces) through the constructor | Classes create their own collaborators; hard to test | Spring constructor injection; a hand-wired `main` | Service Locator (anti-pattern: the class asks for its dependencies) | §11.7.2 |
+| **Dependency Injection** | Receive collaborators (as interfaces) through the constructor | Classes create their own collaborators; hard to test | Spring constructor injection; a hand-wired `main` | Service Locator (anti-pattern) | §11.7.2 |
 | **Repository** | Collection-like interface over storage | Business logic mixed with storage code | Spring Data `CrudRepository` | DAO (table-oriented) | §11.7.3 |
 | **Specification** | A named, combinable business rule (`isSatisfiedBy`, and/or/not) | Same rule in queries and validation; finder-method explosion | `Predicate`; Spring Data JPA `Specification` | — | §11.7.4 |
 | **MVC** | Separate model, view and controller (Observer + Strategy + Composite) | UI, input handling and rules tangled | Spring MVC; Swing `JTable` + `TableModel` | MVP, MVVM (relatives) | §11.7.5 |
 | **Event Sourcing** (lite) | Store the events; derive current state by replaying them | Full history, audit, time travel | Append-only logs | Plain audit log | §11.7.6 |
+| **Architectural styles** (layered, client-server, modular monolith vs microservices, event-driven, pipe-and-filter, hexagonal/clean) | Fix the shape of the *whole system*: parts, dependency direction, communication | Deciding where classes live and answering "would you split this?" | Spring layered apps; Kafka consumers; Unix pipes; ports and adapters | Design patterns (a few classes inside one part); MVC (only the UI edge) | §11.9 |
 
 ### "Which pattern?" by problem symptom
 
-*Combined from §8.5, §8.15, §9.8, §11.8 and §7.6.*
+*Combined from §8.5, §8.15, §9.8, §11.8 and §7.6. Look-alikes to rule out are in each pattern's "Commonly confused with" cell above.*
 
-| If you see / need… | Use | Not to be confused with |
-|---|---|---|
-| One operation, several interchangeable rules chosen at run time (pricing, matching, routing) | **Strategy** | State, Template Method |
-| The class to create depends on a type value; caller shouldn't know the concrete class | **Factory** (Simple Factory / Factory Method) | Abstract Factory |
-| Products must always match as a family | **Abstract Factory** | Factory Method |
-| Constructor has ~6+ arguments, many optional | **Builder** | — |
-| Another one of *this*, cheaply or without knowing its class | **Prototype** | Memento |
-| Exactly one instance must exist | **Singleton** (or DI singleton scope) | A convenient global handle |
-| Expensive objects created and destroyed repeatedly | **Object Pool** | Flyweight |
-| Existing class has the wrong interface | **Adapter** | Facade, Bridge |
-| Two dimensions multiplying classes (`WindowsButton`, `MacButton`, …) | **Bridge** | Adapter |
-| Tree of part-whole objects treated the same | **Composite** | Decorator |
-| Add behaviour in combinations without editing the class | **Decorator** | Proxy |
-| Every caller repeats the same five steps into a subsystem | **Facade** | Mediator |
-| Millions of near-identical objects | **Flyweight** | Object Pool |
-| Lazy load, access control, remote, caching (same interface) | **Proxy** | Decorator |
-| A request must pass several checks; any may reject it | **Chain of Responsibility** | Decorator (all layers run) |
-| Undo/redo, queue, schedule, retry or log *requested actions* | **Command** | Strategy |
-| Evaluate user-written rules in a small language | **Interpreter** (+ Specification) | Visitor |
-| Walk a collection/tree/paged API without exposing structure | **Iterator** | Visitor |
-| Many objects depend on each other and the **order** of reactions matters | **Mediator** | Observer |
-| Roll back to an earlier state without exposing internals | **Memento** | Command undo |
-| One change must reach an open-ended set of listeners | **Observer** (or a broker) | Mediator |
-| Three or more methods repeat one `switch` over a status; legal actions depend on it | **State** (or enum + guarded method for 3–4 states) | Strategy |
-| Several classes share a long fixed flow, differ in a few steps | **Template Method** | Strategy |
-| Many new operations over a stable set of types | **Visitor**, or sealed types + pattern matching | Iterator |
-| `null` checks everywhere | **Null Object** / `Optional` | — |
-| Classes create their own collaborators | **Dependency Injection** | Service Locator |
-| Business logic mixed with storage | **Repository** | DAO |
-| Same rule duplicated in queries and validation | **Specification** | — |
+| If you see / need… | Use |
+|---|---|
+| One operation, several interchangeable rules chosen at run time (pricing, matching, routing) | **Strategy** |
+| The class to create depends on a type value; caller shouldn't know the concrete class | **Factory** (Simple Factory / Factory Method) |
+| Products must always match as a family | **Abstract Factory** |
+| Constructor has ~6+ arguments, many optional | **Builder** |
+| Another one of *this*, cheaply or without knowing its class | **Prototype** |
+| Exactly one instance must exist | **Singleton** (or DI singleton scope) |
+| Expensive objects created and destroyed repeatedly | **Object Pool** |
+| Existing class has the wrong interface | **Adapter** |
+| Two dimensions multiplying classes (`WindowsButton`, `MacButton`, …) | **Bridge** |
+| Tree of part-whole objects treated the same | **Composite** |
+| Add behaviour in combinations without editing the class | **Decorator** |
+| Every caller repeats the same five steps into a subsystem | **Facade** |
+| Millions of near-identical objects | **Flyweight** |
+| Lazy load, access control, remote, caching (same interface) | **Proxy** |
+| A request must pass several checks; any may reject it | **Chain of Responsibility** |
+| Undo/redo, queue, schedule, retry or log *requested actions* | **Command** |
+| Evaluate user-written rules in a small language | **Interpreter** (+ Specification) |
+| Walk a collection/tree/paged API without exposing structure | **Iterator** |
+| Many objects depend on each other and the **order** of reactions matters | **Mediator** |
+| Roll back to an earlier state without exposing internals | **Memento** |
+| One change must reach an open-ended set of listeners | **Observer** (or a broker) |
+| Three or more methods repeat one `switch` over a status; legal actions depend on it | **State** (or enum + guarded method for 3–4 states) |
+| Several classes share a long fixed flow, differ in a few steps | **Template Method** |
+| Many new operations over a stable set of types | **Visitor**, or sealed types + pattern matching |
+| `null` checks everywhere | **Null Object** / `Optional` |
+| Classes create their own collaborators | **Dependency Injection** |
+| Business logic mixed with storage | **Repository** |
+| Same rule duplicated in queries and validation | **Specification** |
 
 **Three questions for the famous look-alikes (§11.8):**
 1. Do the alternatives reference each other? Yes → **State**. No → **Strategy** (or Bridge if chosen once at wiring).
@@ -579,8 +571,8 @@ Races come from **shared mutable state**. Make the critical section atomic, or r
 | `ConcurrentHashMap` | Shared map | `containsKey` then `put` is a race — use `putIfAbsent`/`computeIfAbsent`/`merge`; no slow work or recursive updates inside `compute`; no `null` keys/values | §12.16 |
 | `CopyOnWriteArrayList` | Read-mostly lists (listener lists) | Every write copies the array | §12.16 |
 | `BlockingQueue` (bounded) | Handing work between threads (producer–consumer) | Unbounded queue → no back-pressure → memory blow-up; one poison pill per consumer | §12.22 |
-| `ExecutorService` / `ThreadPoolExecutor` | Running tasks on a bounded pool | Call `shutdown()`; `newFixedThreadPool` has an **unbounded** queue; exceptions in `submit`ted tasks are lost unless you call `get()`; tasks waiting on tasks in the same pool → thread-starvation deadlock | §12.4, §12.21 |
-| Virtual threads | Many blocking I/O tasks | Pinning (Java 21–23: blocking inside `synchronized`); heavy `ThreadLocal`s waste memory | §12.4, §12.24 |
+| `ExecutorService` / `ThreadPoolExecutor` | Running tasks on a bounded pool (separates what to run from how) | Call `shutdown()`; `newFixedThreadPool` has an **unbounded** queue; exceptions in `submit`ted tasks are lost unless you call `get()`; tasks waiting on tasks in the same pool → thread-starvation deadlock | §12.4, §12.21 |
+| Virtual threads | Lightweight JVM-managed threads (Java 21) for many blocking I/O tasks | Pinning (Java 21–23: blocking inside `synchronized`); heavy `ThreadLocal`s waste memory | §12.4, §12.24 |
 | `ForkJoinPool` / parallel streams | Splitting CPU work | Use a threshold: tiny tasks cost more to schedule than to run; subtasks must touch disjoint data | §12.26, §13.10 |
 | `CompletableFuture` | Combining async results (`thenApply`, `thenCombine`, `allOf`) | Handle errors with `exceptionally` rather than calling `get()` at every step | §12.4 |
 | `ThreadLocal` | Per-thread state (thread confinement) | Clear it (`remove()`) in pooled threads, or values leak into the next task | §12.24 |
@@ -588,24 +580,7 @@ Races come from **shared mutable state**. Make the critical section atomic, or r
 
 ### Which `java.util.concurrent` class for which job (§12.26)
 
-| I need to… | Use |
-|---|---|
-| Increment a shared counter | `AtomicInteger`/`AtomicLong`; `LongAdder` if very hot |
-| Stop a loop from another thread | `volatile boolean` flag or `interrupt()` |
-| Make a multi-step update atomic | `synchronized` or `ReentrantLock` |
-| Give up if the lock is busy | `tryLock(timeout)` |
-| Many readers, few writers | `ReentrantReadWriteLock`, `StampedLock`, or an immutable snapshot in a `volatile` field |
-| Limit concurrent access to N | `Semaphore(N)` |
-| Wait for a condition on shared state | `Lock` + `Condition` (or `wait/notifyAll`) in a `while` loop |
-| Wait for N events once | `CountDownLatch` |
-| N threads meet each phase | `CyclicBarrier` / `Phaser` |
-| Hand work between threads | Bounded `BlockingQueue` |
-| Shared map | `ConcurrentHashMap` with `putIfAbsent`/`compute`/`merge` |
-| Read-mostly list | `CopyOnWriteArrayList` |
-| Run tasks | `ExecutorService` (bounded); virtual threads for blocking I/O |
-| Split CPU work | `ForkJoinPool` / parallel streams |
-| Combine async results | `CompletableFuture` |
-| Avoid synchronization entirely | Immutability, thread confinement |
+Read the **Use for** column of the table above as the §12.26 "I need to… → use" lookup (`java.util.concurrent` is Java's standard package of thread-safety tools). Two entries not in that table: to **stop a loop from another thread**, use a `volatile boolean` flag or `interrupt()`; for **many readers, few writers**, an immutable snapshot published through a `volatile` field is often simpler than a read-write lock.
 
 ### Deadlock checklist (§12.17–§12.19)
 
@@ -645,7 +620,7 @@ A deadlock needs **all four Coffman conditions**; break any one and it cannot ha
 | FizzBuzz (§13.3) | monitor + `notifyAll` | Predicates partition 1..n |
 | H2O (§13.4) | 2 semaphores + barrier | ≤ 2 H and ≤ 1 O per round |
 | Dining Philosophers (§13.5) | ordered locks / n−1 semaphore | No circular wait |
-| TTL (time to live) cache (§13.6) | `ConcurrentHashMap` + `compute` + conditional remove | Never return or keep expired data |
+| TTL cache (§13.6) | `ConcurrentHashMap` + `compute` + conditional remove | Never return or keep expired data |
 | Striped map (§13.7) | lock array | Each bucket belongs to exactly one stripe |
 | Blocking queue (§13.8) | lock + 2 conditions | 0 ≤ count ≤ capacity; wait in loops |
 | Bloom filter (§13.9) | atomic OR | Bits only go 0 → 1; no false negatives |
@@ -672,25 +647,26 @@ A deadlock needs **all four Coffman conditions**; break any one and it cannot ha
 | Problem | Key entities | Patterns used | Concurrency concern | Where |
 |---|---|---|---|---|
 | Parking lot | `ParkingLot`, `ParkingFloor`, `ParkingSpot`, `Vehicle`, `Ticket`, `DisplayBoard`, `SpotType`/`VehicleType` enums | Strategy (pricing, spot-finding), Factory (electric spots), Observer (boards); Singleton rejected | Two gates take one spot → atomic `pollFirst` + CAS; per-ticket lock for payment; `putIfAbsent` for plates | §14.1 |
-| Vending machine | `VendingMachine`, `Slot`, `Inventory`, `CashBox`, `Denomination`, `VendingState` + 5 states | **State** (the whole design) | `synchronized` machine; change-making by bounded coin-change DP (dynamic programming: build the answer from smaller amounts), not greedy (always take the biggest coin) | §14.2 |
+| Vending machine | `VendingMachine`, `Slot`, `Inventory`, `CashBox`, `Denomination`, `VendingState` + 5 states | **State** (the whole design) | `synchronized` machine; change-making by bounded coin-change DP, not greedy | §14.2 |
 | Coffee machine | `CoffeeMachine`, `Recipe`, `RecipeBook`, `IngredientStore`, `OrderResult` (sealed) | Observer (low stock), recipes as data | Two orders take the last milk → one `ReentrantLock` around check + deduct; notify outside the lock | §14.3 |
 | ATM | `Atm`, `AtmState` + 4 states, `Transaction` (sealed), `NoteHandler`, `CashDispenser`, `BankService`, `Account` | State (session), Command (transactions), Chain of Responsibility (note cassettes) | Overdraw from two ATMs → per-account lock; transfers lock in id order | §14.4 |
 | Elevator | `Elevator`, `StopList` (two sorted sets), `Door`, `Dispatcher`, `DispatchStrategy`, `Building` | Strategy (dispatch) + modes; LOOK scheduling | Per-car lock, synchronized dispatcher; tick-driven `step()` | §14.5 |
 | Traffic signal | `Intersection`, `TrafficLight`, `Phase`, `SignalState` + 5 states, `TimingPolicy`, `SafetyMonitor` | State (timed), Strategy (timing), Observer (lights) | Synchronized tick; safe with a timer thread plus emergency threads | §14.6 |
-| Shipping locker | `LockerStation`, `Compartment`, `Booking`, `CompartmentSelector`, `PickupResult` (sealed), `LockerListener`, `LockerNetwork` | Strategy (door choice), Observer (SMS text messages), enum state machines, sealed results | Two carriers, one door → station lock around choose-and-mark; lazy expiry of holds and pickup windows; hashed single-use codes, keypad lockout | §14.7 |
+| Shipping locker (Amazon Locker) | `LockerStation`, `Compartment`, `Booking`, `CompartmentSelector`, `PickupResult` (sealed), `LockerListener`, `LockerNetwork` | Strategy (door choice), Observer (SMS text messages), enum state machines, sealed results | Two carriers, one door → station lock around choose-and-mark; lazy expiry of holds and pickup windows; hashed single-use pickup and return drop-off codes, keypad lockout | §14.7 |
 
 ### Booking & inventory (Chapters 15–16)
 
 | Problem | Key entities | Patterns used | Concurrency concern | Where |
 |---|---|---|---|---|
-| Library | `Book` (title) vs `BookItem` (copy), `Member`, `BookLending`, `LendingService`, `Catalog` | Strategy (fines), notifier interface; FIFO (first in, first out) reservation queue per title | Last copy lent twice → lock member then copy (fixed order) | §15.1 |
+| Library | `Book` (title) vs `BookItem` (copy), `Member`, `BookLending`, `LendingService`, `Catalog` | Strategy (fines), notifier interface; FIFO reservation queue per title | Last copy lent twice → lock member then copy (fixed order) | §15.1 |
 | Movie tickets (BookMyShow) | `Show`, `ShowSeat`, `Booking`, `SeatLockProvider`, `BookingService`, `CancellationPolicy` | Strategy (refund rule), gateway behind an interface | Book `ShowSeat`s; all-or-nothing hold with TTL → pay → atomic commit; refund if hold lost | §15.2 |
-| Concert tickets | `SeatedInventory`, `GaPool`, `SeatState` (sealed), `Hold`, `VirtualWaitingRoom`, `PurchaseLimiter` | Sealed seat states, waitlist | Extreme contention → CAS per seat, CAS counter for GA (general admission, unseated), FIFO waiting room, per-user limits, TTL holds with a reaper | §15.3 |
+| Concert tickets | `SeatedInventory`, `GaPool`, `SeatState` (sealed), `Hold`, `VirtualWaitingRoom`, `PurchaseLimiter` | Sealed seat states, waitlist | Extreme contention → CAS per seat, CAS counter for GA, FIFO waiting room, per-user limits, TTL holds with a reaper | §15.3 |
 | Hotel | `Hotel`, `Room`, `RoomBooking`, `Invoice`, `RoomCharge`, `Payment` subclasses, `FrontDesk` | Template Method (`RoomCharge`) | Room × night reserved atomically in `synchronized Room.tryReserve` | §15.4 |
 | Car rental | `Vehicle`, `DateRange`, `Reservation`, `Bill`/`BillItem`, `ReservationAddOn`, `PricingStrategy` | Template Method (add-ons), Strategy + Decorator (pricing), state machine | Availability is about **dates** → `Vehicle.tryBook(range)` synchronized | Ch 16 · Car Rental |
 | Restaurant | `Menu`/`MenuSection`/`MenuItem`, `Table`, `Reservation`, `Order`, `Meal`/`MealItem`, `Kitchen`, `Check` | Observer (order ready), Strategy (chef assignment, payment), state machine | Two receptionists, one table → `Table.tryHold(time)` synchronized; listeners after the lock | Ch 16 · Restaurant |
 | Airline | `Flight` vs `FlightInstance`, `Seat` vs `FlightSeat`, `FlightReservation`, `Itinerary`, `FareStrategy` | Strategy + Decorator (fares), Facade | Selling one seat twice → `FlightInstance.holdSeats` all-or-nothing under the instance lock | Ch 16 · Airline |
 | Course registration | `Course` vs `Section`, `Student`, `RegistrationRule`s, `Registrar` | Chain of rules / Specification | Overselling a section → section lock inside a student lock (fixed order) | Ch 16 · Course Registration |
+| Meeting scheduler | `Interval` (half-open), `Room` (owns a `TreeMap` calendar), `Meeting`, `Invitation`, `RoomSelectionStrategy`, `MeetingObserver`, `Recurrence` | Strategy (room ranking), Observer (invites, RSVPs) | Two organizers, overlapping times → check (`lowerEntry`) and insert under the room lock; rank then try each room; lock order meeting → room | Ch 16 · Meeting Scheduler |
 
 ### Games (Chapter 17)
 
@@ -701,6 +677,7 @@ A deadlock needs **all four Coffman conditions**; break any one and it cannot ha
 | Tic-tac-toe | `Board` (row/col/diagonal counters), `Game`, `Player`, `MoveStrategy` | Strategy (players) | Many games in a `ConcurrentHashMap`; per-game lock | Ch 17 · Tic-Tac-Toe |
 | Snake & ladder | `Board`, `Jump`, `Dice`, `Rules`, `OverflowRule`, `WinStrategy`, `Game` | Strategy (dice, overflow, win) | Each game its own `Random` and its own thread of turns | Ch 17 · Snake and Ladder |
 | 2048 | `LineMerger`, `Board`, `TileSpawner`, `Game`, `Direction` | Strategy (spawner); one pure merge function | Single-threaded; `synchronized move` if UI and input threads both call it | Ch 17 · 2048 |
+| Jigsaw puzzle | `Side` (FLAT/TAB/BLANK + shape code), `Piece` (immutable), `Board` + `Placement` (piece, rotation), `PuzzleValidator`, `SolverStrategy` | Strategy (brute force vs edge-first with a side index); one placement check for players and solvers | Co-op players → `synchronized` game; solvers carry an attempt budget | Ch 17 · Jigsaw |
 
 ### Platforms (Chapters 18–19)
 
@@ -727,7 +704,7 @@ A deadlock needs **all four Coffman conditions**; break any one and it cannot ha
 | Ride sharing (Uber) | `Rider`, `Driver`, `Trip`, `MatchingStrategy`, `PricingStrategy`, `SurgePricing` | Strategy ×3, Decorator (surge), trip state machine | Double-booking a driver → atomic claim (`AtomicBoolean`) | §20.4 |
 | Logging framework | `Logger`, `LogManager`, `LogRecord`, `Appender`, `AsyncAppender`, `Formatter` | Chain of Responsibility (hierarchy), Singleton (`LogManager`), Strategy (formatters), Template Method (appender), Decorator (async) | Thread-safe sinks; never block on a full queue; never crash the app | §20.5 |
 | Pub-sub | `Broker`, `Topic`, `Subscription`, `Subscriber`, `Message` | Observer through a broker | One dispatcher per subscription; ack after processing (at-least-once) → idempotent subscribers | §20.6 |
-| Rate limiter | `Limiter` (TokenBucket, FixedWindow, SlidingWindowLog/Counter), `CompositeLimiter`, `LimiterFactory` | Strategy, Simple Factory, Composite, Facade | Atomic refill-check-take; one limiter per key via `computeIfAbsent`; Redis (a shared in-memory store) + Lua (a script Redis runs atomically) across servers | §20.7 |
+| Rate limiter | `Limiter` (TokenBucket, FixedWindow, SlidingWindowLog/Counter), `CompositeLimiter`, `LimiterFactory` | Strategy, Simple Factory, Composite, Facade | Atomic refill-check-take; one limiter per key via `computeIfAbsent`; Redis + Lua across servers | §20.7 |
 
 ### Machine-coding problems (Chapter 21)
 
@@ -739,7 +716,7 @@ A deadlock needs **all four Coffman conditions**; break any one and it cannot ha
 | Coding Blox (Flipkart) | `Contest`, `Level`, `User`, `Question`, `SolveSimulator`, `CommandProcessor` | Command map, Strategy (solver, scoring) | Atomic rating update; don't run a contest twice | §21.4 |
 | PropertyHunt (ClearTrip) | `Property`, `SearchCriteria` (+ Builder), `PropertyService` | Builder + predicate list, Strategy (sort) | Synchronized mark-sold | §21.5 |
 | Ledger Co (Navi) | `Loan`, `LumpSum`, `Balance`, `InterestPolicy`, `LedgerService` | Strategy (interest), derived state, command loop | Synchronized lump sums | §21.6 |
-| Inventory management | `Product`, `Warehouse`, `StockMovement`, `AllocationStrategy`, `ReorderListener` | Strategy (allocation), Observer (edge-triggered alerts) | Overselling → lock per SKU (stock-keeping unit: one product variant) | §21.7 |
+| Inventory management | `Product`, `Warehouse`, `StockMovement`, `AllocationStrategy`, `ReorderListener` | Strategy (allocation), Observer (edge-triggered alerts) | Overselling → lock per SKU | §21.7 |
 | Unix file search (`find`) | `Node` → `FileNode`/`DirectoryNode`, `FileFilter`, `AndFilter`/`OrFilter`/`NotFilter`, `SearchCriteria` (+ Builder), `FileSearcher`, `FindCommandParser` | Specification + Composite (filters and file tree), Builder, recursive-descent parser | Weakly consistent children map; read-only fork/join walk | §21.8 |
 
 ### TL;DR — what every case study teaches
@@ -808,465 +785,456 @@ A deadlock needs **all four Coffman conditions**; break any one and it cannot ha
 
 ### Common mistakes (§21.0)
 
-| Mistake | Instead |
-|---|---|
-| 20 minutes on a perfect class diagram | Enums/records first; the diagram lives in names |
-| One `Manager` with 15 maps | One service per area + repositories |
-| `System.out.println` inside a service | Services return data; the driver prints |
-| `double` for money | `BigDecimal` with a fixed scale, or whole units in a `long` |
-| Crashing on the first bad command | Catch domain exceptions in the driver loop |
-| Bonus before mandatory | Mandatory in order; bonus last |
-| `Random` without a seed | Seed it, or put randomness behind a Strategy |
-| `LocalDate.now()` in logic | Inject a `java.time.Clock` |
+All covered by the checklist above and 22.2: a 20-minute "perfect" class diagram (type enums/records first — the diagram lives in the names), one `Manager` with 15 maps, printing inside services, `double` money, crashing on the first bad command, bonus before mandatory, unseeded `Random`, and `LocalDate.now()` in logic (inject a `java.time.Clock`).
 
 ---
 
 ## 22.11 Glossary
 
-Alphabetical. "Where" gives the chapter (and section) where the term is explained in full. Besides the design vocabulary, the list covers the everyday Java, tooling and domain words the case studies use (`JVM`, `Redis`, `SKU`, `UPI` …), so a newcomer can look up anything a chapter takes for granted. System-design terms such as latency, throughput, caching, message brokers and eventual consistency are explained in more depth in [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md).
+Alphabetical; "Where" is the section with the full explanation. Besides design vocabulary it covers the everyday Java, tooling and domain words the case studies take for granted (`JVM`, `Redis`, `SKU`, `UPI` …). Terms already defined in a cheat-sheet row above (principles, smells, patterns, concurrency tools) point there instead of being defined twice. System-design terms (latency, throughput, caching, brokers, eventual consistency) go deeper in [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md).
 
 | Term | Plain meaning | Where |
 |---|---|---|
-| ABA problem | A value changes A → B → A, so a compare-and-swap cannot notice the change; fix with a version stamp (`AtomicStampedReference`) | Ch 12 §12.15 |
-| Abstract class | A class that cannot be instantiated; may hold state, constructors, finished and abstract methods | Ch 2 §2.9 |
-| Abstract Factory | Creational pattern that creates families of matching objects without naming their classes | Ch 8 §8.11 |
-| Abstraction | Exposing only what callers need and hiding how it is done (interface or abstract class) | Ch 2 §2.4 |
-| Access modifiers | `public`, `protected`, package-private, `private`: who can see a member | Ch 2 §2.14 |
-| Activity diagram | UML flowchart of a process, with decisions, swimlanes and fork/join | Ch 3 §3.13 |
-| Actor | Someone or something that uses the system (customer, admin, the system itself) | Ch 1 §1.5 |
-| Adapter | Structural pattern that converts one interface into the one the client expects | Ch 9 §9.1 |
+| ABA problem | A value changes A → B → A, so a compare-and-swap cannot notice the change; fix with a version stamp (`AtomicStampedReference`) | §12.15 |
+| Abstract class | OOP fact — see 22.3 | §2.9 |
+| Abstract Factory | Creational pattern — see 22.7 | §8.11 |
+| Abstraction | OOP pillar — see 22.3 | §2.4 |
+| Access modifiers | OOP fact — see 22.3 | §2.14 |
+| Activity diagram | UML flowchart of a process, with decisions, swimlanes and fork/join | §3.13 |
+| Actor | Someone or something that uses the system (customer, admin, the system itself) | §1.5 |
+| Adapter | Structural pattern — see 22.7 | §9.1 |
 | Aggregate (DDD) | A cluster of objects changed as one unit; only its root is reachable from outside, and the root guards the invariants | Ch 5 §17 |
-| Aggregation | "Has-a" where the part can outlive the whole; hollow diamond at the whole | Ch 3 §3.3 |
+| Aggregation | UML relationship — see 22.3 | §3.3 |
 | Anemic domain model | Classes with data but no behaviour; the logic lives in services that pull the data out | Ch 5 §5 |
 | Anti-corruption layer | Translation layer at a bounded context's border that keeps a foreign or legacy model out of yours | Ch 5 §17 |
-| Anti-pattern | A common "solution" that reliably causes more problems than it solves | Ch 8 §8.6 |
-| AOP (aspect-oriented programming) | Adding cross-cutting behaviour (logging, transactions) around many methods without editing them, usually via generated proxies | Ch 5 §11, Ch 9 §9.7 |
-| API | Application Programming Interface: the set of public methods (or endpoints) other code is allowed to call | Ch 2 §2.6, §2.14 |
-| Appender / formatter | Logging roles: an appender writes a log record somewhere (console, file); a formatter turns it into text | Ch 20 §20.5 |
-| Append-only log | Messages are only ever added at the end; readers track their own offset | Ch 20 §20.6 |
+| Anti-pattern | A common "solution" that reliably causes more problems than it solves | §8.6 |
+| AOP (aspect-oriented programming) | Adding cross-cutting behaviour (logging, transactions) around many methods without editing them, usually via generated proxies | Ch 5 §11, §9.7 |
+| API | Application Programming Interface: the set of public methods (or endpoints) other code is allowed to call | §2.6, §2.14 |
+| Appender / formatter | Logging roles: an appender writes a log record somewhere (console, file); a formatter turns it into text | §20.5 |
+| Append-only log | Messages are only ever added at the end; readers track their own offset | §20.6 |
 | Assertion | A check in code or a test that a condition is true, failing loudly if it is not | Ch 6 §8 |
-| Association | A class keeps a reference to another it does not own; solid line | Ch 3 §3.2 |
-| Association class | A class that holds data about a link itself (e.g. `Enrollment{grade}`) | Ch 3 §3.11 |
-| AST (abstract syntax tree) | The tree a parser builds from an expression or program, one node per piece of grammar | Ch 10 §10.6 |
-| Asynchronous vs synchronous | The caller carries on and gets the result later vs the caller waits until the work finishes | Ch 3 §3.12, Ch 20 §20.5 |
-| At-least-once delivery | A message may be delivered more than once, never lost; consumers must be idempotent | Ch 20 §20.6 |
-| Atomic variable | `AtomicInteger`/`AtomicLong`/`AtomicReference`: lock-free single-variable updates using CAS | Ch 12 §12.15 |
-| Atomicity / atomic operation | An operation that happens completely or not at all, with no other thread able to see it half-done | Ch 12 §12.5 |
-| Audit log | An append-only record of who did what and when, kept for checking later | Ch 10 §10.2, Ch 21 |
-| Authentication vs authorization | Proving who you are (login, PIN) vs checking what you are allowed to do | Ch 6 §10, Ch 14 §14.4 |
-| Back-pressure | Slowing producers when consumers can't keep up, e.g. with a bounded queue | Ch 12 §12.22 |
-| BFS / DFS | Breadth-first search (visit neighbours level by level) vs depth-first search (go deep down one path, then back up) | Ch 18 §18.3, Ch 21 §21.8 |
-| `BigDecimal` | Exact decimal type used for money; build from strings, compare with `compareTo` | Ch 1 §1.10, Ch 4 (money note) |
-| Big-O notation | Shorthand for how running time or memory grows with input size: `O(1)` constant, `O(log n)`, `O(n)` linear | Ch 20 §20.3 |
-| Blocking call | A call that makes the thread wait (for I/O, a lock or a queue) before it can continue | Ch 12 §12.4 |
-| Bloom filter | Probabilistic set: may say "maybe present" wrongly, never says "absent" wrongly | Ch 13 §13.9 |
-| Boilerplate | Repetitive code that must be written but carries no real logic (getters, `equals`, `hashCode`) | Ch 2 §2.13 |
+| Association | UML relationship — see 22.3 | §3.2 |
+| Association class | A class that holds data about a link itself (e.g. `Enrollment{grade}`) | §3.11 |
+| AST (abstract syntax tree) | The tree a parser builds from an expression or program, one node per piece of grammar | §10.6 |
+| Asynchronous vs synchronous | The caller carries on and gets the result later vs the caller waits until the work finishes | §3.12, §20.5 |
+| At-least-once delivery | A message may be delivered more than once, never lost; consumers must be idempotent | §20.6 |
+| Atomic variable | `AtomicInteger`/`AtomicLong`/`AtomicReference` — concurrency tool, see 22.8 | §12.15 |
+| Atomicity / atomic operation | An operation that happens completely or not at all, with no other thread able to see it half-done | §12.5 |
+| Audit log | An append-only record of who did what and when, kept for checking later | §10.2, Ch 21 |
+| Authentication vs authorization | Proving who you are (login, PIN) vs checking what you are allowed to do | Ch 6 §10, §14.4 |
+| Back-pressure | Slowing producers when consumers can't keep up, e.g. with a bounded queue | §12.22 |
+| BFS / DFS | Breadth-first search (visit neighbours level by level) vs depth-first search (go deep down one path, then back up) | §18.3, §21.8 |
+| `BigDecimal` | Exact decimal type used for money; build from strings, compare with `compareTo` | §1.10, Ch 4 (money note) |
+| Big-O notation | Shorthand for how running time or memory grows with input size: `O(1)` constant, `O(log n)`, `O(n)` linear | §20.3 |
+| Blocking call | A call that makes the thread wait (for I/O, a lock or a queue) before it can continue | §12.4 |
+| Bloom filter | Probabilistic set: may say "maybe present" wrongly, never says "absent" wrongly | §13.9 |
+| Boilerplate | Repetitive code that must be written but carries no real logic (getters, `equals`, `hashCode`) | §2.13 |
 | Bounded context | Boundary inside which one domain model and one vocabulary apply consistently (often one team or service) | Ch 5 §17 |
-| Bounded queue | A queue with a fixed capacity; producers wait or are refused when it is full | Ch 12 §12.22 |
-| Boy Scout Rule | Leave the code a little cleaner than you found it | Ch 6 (intro) |
-| Bridge | Structural pattern splitting an abstraction from its implementation so both vary independently | Ch 9 §9.2 |
-| Broker | A middleman service that receives messages from publishers and delivers them to subscribers | Ch 20 §20.6 |
-| Build tool | A program (Maven, Gradle) that downloads dependencies, compiles, tests and packages the code | Ch 3 §3.5 |
-| Builder | Creational pattern that builds a complex object step by step, validated in `build()` | Ch 8 §8.12 |
-| Busy waiting (spinning) | A thread repeatedly checking a condition in a loop instead of sleeping; wastes CPU | Ch 12 §12.6 |
+| Bounded queue | A queue with a fixed capacity; producers wait or are refused when it is full | §12.22 |
+| Boy Scout Rule | Clean-code rule — see 22.5 | Ch 6 (intro) |
+| Bridge | Structural pattern — see 22.7 | §9.2 |
+| Broker | A middleman service that receives messages from publishers and delivers them to subscribers | §20.6 |
+| Build tool | A program (Maven, Gradle) that downloads dependencies, compiles, tests and packages the code | §3.5 |
+| Builder | Creational pattern — see 22.7 | §8.12 |
+| Busy waiting (spinning) | A thread repeatedly checking a condition in a loop instead of sleeping; wastes CPU | §12.6 |
 | Bytecode | The compact instruction format `javac` produces and the JVM runs | Ch 12 |
 | Callback | A function you hand to other code so it can call you back when something happens | Ch 5 §10 |
-| Caretaker / Originator | Memento roles: the originator makes and restores snapshots; the caretaker stores them without looking inside | Ch 10 §10.5 |
-| Carrier thread | The real OS thread that a virtual thread runs on while it is not blocked | Ch 12 §12.4 |
-| CAS (compare-and-swap) | Atomic "set to new value only if it still equals the expected value" | Ch 12 §12.15 |
-| Chain of Responsibility | Behavioral pattern passing a request along handlers until one handles or stops it | Ch 10 §10.1 |
-| Characterisation test | A test that records what existing code does now, before you refactor it | Ch 7 §7.8 |
-| Checked vs unchecked exception | Checked exceptions must be declared or caught (compiler-enforced); unchecked ones (`RuntimeException` subclasses) need not be | Ch 2 §2.5, Ch 6 §6 |
-| Check-then-act | Read a condition, then act on it, as two steps: a race unless made atomic | Ch 12 §12.5, §12.25 |
+| Caretaker / Originator | Memento roles: the originator makes and restores snapshots; the caretaker stores them without looking inside | §10.5 |
+| Carrier thread | The real OS thread that a virtual thread runs on while it is not blocked | §12.4 |
+| CAS (compare-and-swap) | Atomic "set to new value only if it still equals the expected value" | §12.15 |
+| Chain of Responsibility | Behavioral pattern — see 22.7 | §10.1 |
+| Characterisation test | A test that records what existing code does now, before you refactor it | §7.8 |
+| Checked vs unchecked exception | Checked exceptions must be declared or caught (compiler-enforced); unchecked ones (`RuntimeException` subclasses) need not be | §2.5, Ch 6 §6 |
+| Check-then-act | Read a condition, then act on it, as two steps: a race unless made atomic | §12.5, §12.25 |
 | Circuit breaker | Stops calling a failing dependency for a while after repeated errors, then tries again carefully | Ch 5 §13 |
-| Circular wait | T1 waits for T2's lock while T2 waits for T1's; one of the four deadlock conditions | Ch 12 §12.17 |
-| Class | A blueprint for objects: fields plus methods | Ch 2 §2.2 |
-| Class diagram | UML diagram of classes, fields, methods and relationships — "the answer" in an LLD round | Ch 3 §3.11 |
-| Class explosion | Subclasses multiplying across two dimensions (`WindowsButton`, `MacButton`, …) | Ch 9 §9.2 |
-| Classpath | The list of folders and JAR files where the JVM looks for classes | Ch 1 §1.3 |
+| Circular wait | T1 waits for T2's lock while T2 waits for T1's; one of the four deadlock conditions | §12.17 |
+| Class | A blueprint for objects: fields plus methods | §2.2 |
+| Class diagram | UML diagram of classes, fields, methods and relationships — "the answer" in an LLD round | §3.11 |
+| Class explosion | Subclasses multiplying across two dimensions (`WindowsButton`, `MacButton`, …) | §9.2 |
+| Classpath | The list of folders and JAR files where the JVM looks for classes | §1.3 |
 | Clean code | Code whose intent is obvious to the next reader and which is easy to change safely | Ch 6 (intro) |
-| Coarse- vs fine-grained locking | One big lock for everything (simple, slow under load) vs many small locks per item (faster, harder to get right) | Ch 12 §12.11 |
+| Coarse- vs fine-grained locking | One big lock for everything (simple, slow under load) vs many small locks per item (faster, harder to get right) | §12.11 |
 | Code review | A peer reads a change before merge: correctness first, then design, readability, tests, security, performance | Ch 6 §15 |
-| Code smell | A surface symptom that usually signals a deeper design problem; not a bug by itself | Ch 7 §7.2 |
-| Coffman conditions | Mutual exclusion, hold and wait, no preemption, circular wait: all four needed for deadlock | Ch 12 §12.17 |
-| Cohesion | How closely the things inside one class belong together; high is good | Ch 2 §2.16, Ch 4 §4.3 |
-| Coin-change DP | Finding the fewest coins (or whether change is possible) by building answers for smaller amounts first | Ch 14 §14.2 |
+| Code smell | A surface symptom that usually signals a deeper design problem; not a bug by itself | §7.2 |
+| Coffman conditions | Deadlock — see 22.8 | §12.17 |
+| Cohesion | How closely the things inside one class belong together; high is good | §2.16, §4.3 |
+| Coin-change DP | Finding the fewest coins (or whether change is possible) by building answers for smaller amounts first | §14.2 |
 | Collections framework | Java's built-in data structures (`List`, `Set`, `Map`, `Queue`) and their implementations | Ch 2 |
-| Command | Behavioral pattern turning a request into an object so it can be queued, logged or undone | Ch 10 §10.2 |
+| Command | Behavioral pattern — see 22.7 | §10.2 |
 | Command–Query Separation (CQS) | A method either changes state or returns a value, not both | Ch 6 §2 |
-| Commit / rollback | Make a transaction's changes permanent vs throw all of them away | Ch 10 §10.5, Ch 15 §15.2 |
-| `Comparator` / `Comparable` | An object that orders two values from outside vs a class's own natural order (`compareTo`) | Ch 1 §1.9, Ch 11 §11.3 |
-| Compensation | Undoing a completed step with a new action (e.g. a refund) because money can't be rolled back | Ch 15 §15.2 |
-| Compile time vs run time | When `javac` checks and translates the code vs when the program is actually executing | Ch 2 §2.7 |
-| `CompletableFuture` | A future you can chain (`thenApply`, `thenCombine`) to combine asynchronous results | Ch 12 §12.4 |
-| Composite | Structural pattern that lets clients treat single objects and trees the same way | Ch 9 §9.3 |
-| Composition | "Owns" relationship: the part is created and hidden by the whole and dies with it; filled diamond | Ch 3 §3.4 |
-| Composition over inheritance | Reuse behaviour by holding and delegating rather than subclassing | Ch 2 §2.11, Ch 5 §6 |
+| Commit / rollback | Make a transaction's changes permanent vs throw all of them away | §10.5, §15.2 |
+| `Comparator` / `Comparable` | An object that orders two values from outside vs a class's own natural order (`compareTo`) | §1.9, §11.3 |
+| Compensation | Undoing a completed step with a new action (e.g. a refund) because money can't be rolled back | §15.2 |
+| Compile time vs run time | When `javac` checks and translates the code vs when the program is actually executing | §2.7 |
+| `CompletableFuture` | Concurrency tool — see 22.8 | §12.4 |
+| Composite | Structural pattern — see 22.7 | §9.3 |
+| Composition | UML relationship — see 22.3 | §3.4 |
+| Composition over inheritance | Principle — see 22.5 | §2.11, Ch 5 §6 |
 | Composition root | The one place (usually `main`) where objects are created and wired together | Ch 6 §10 |
-| Compound interest | Interest charged on the principal plus interest already added | Ch 21 §21.6 |
-| Concurrency | Several tasks in progress at once, possibly sharing data | Ch 12 §12.1 |
-| Concurrency vs parallelism | Many tasks in progress (structure) vs many executing at the same instant (hardware) | Ch 12 §12.1 |
-| `ConcurrentHashMap` | Thread-safe map with atomic compound operations (`putIfAbsent`, `compute`, `merge`) | Ch 12 §12.16 |
-| Condition variable | Lets a thread wait until shared state meets a condition (`wait/notify`, `Condition`) | Ch 12 §12.13 |
-| Constructor | Special method that runs when an object is created and sets up its fields | Ch 2 §2.2 |
-| Constructor chaining | One constructor calling another with `this(...)` | Ch 2 §2.2 |
-| Contention | Many threads competing for the same lock or variable at once, making them wait | Ch 12 §12.7, §12.11 |
-| Context switch | The OS pausing one thread and resuming another on a CPU core; costs time | Ch 12 §12.1 |
-| Controller (GRASP) | A thin non-UI object that receives each system event and delegates | Ch 5 §16.3 |
-| `CopyOnWriteArrayList` | Thread-safe list that copies on every write; good for read-mostly listener lists | Ch 12 §12.16 |
-| `CountDownLatch` | One-shot gate that opens after N `countDown()` calls | Ch 12 §12.14 |
-| Coupling | How much one class depends on another's details; low is good | Ch 2 §2.16, Ch 4 §4.4 |
-| CPU | The processor; each core runs one thread at a time | Ch 12 §12.1 |
+| Compound interest | Interest charged on the principal plus interest already added | §21.6 |
+| Concurrency | Several tasks in progress at once, possibly sharing data | §12.1 |
+| Concurrency vs parallelism | Many tasks in progress (structure) vs many executing at the same instant (hardware) | §12.1 |
+| `ConcurrentHashMap` | Concurrency tool — see 22.8 | §12.16 |
+| Condition variable | Concurrency tool — see 22.8 | §12.13 |
+| Constructor | Special method that runs when an object is created and sets up its fields | §2.2 |
+| Constructor chaining | One constructor calling another with `this(...)` | §2.2 |
+| Contention | Many threads competing for the same lock or variable at once, making them wait | §12.7, §12.11 |
+| Context switch | The OS pausing one thread and resuming another on a CPU core; costs time | §12.1 |
+| Controller (GRASP) | GRASP guideline — see 22.5 | Ch 5 §16.3 |
+| `CopyOnWriteArrayList` | Concurrency tool — see 22.8 | §12.16 |
+| `CountDownLatch` | Concurrency tool — see 22.8 | §12.14 |
+| Coupling | How much one class depends on another's details; low is good | §2.16, §4.4 |
+| CPU | The processor; each core runs one thread at a time | §12.1 |
 | CQRS | Command Query Responsibility Segregation: separate models for writing data and for reading it | Ch 5 §17 |
-| Creator (GRASP) | The class that contains, records or has the data for A should create A | Ch 5 §16.2 |
-| Critical section | Code that touches shared state and must run in one thread at a time | Ch 12 §12.5 |
-| Cron | A schedule format (minute, hour, day…) for running a job at fixed times | Ch 10 §10.6 |
-| Cross-cutting concern | Behaviour needed in many places (logging, security, transactions) that doesn't belong to one class | Ch 4 §4.5, Ch 6 §10 |
+| Creator (GRASP) | GRASP guideline — see 22.5 | Ch 5 §16.2 |
+| Critical section | Code that touches shared state and must run in one thread at a time | §12.5 |
+| Cron | A schedule format (minute, hour, day…) for running a job at fixed times | §10.6 |
+| Cross-cutting concern | Behaviour needed in many places (logging, security, transactions) that doesn't belong to one class | §4.5, Ch 6 §10 |
 | CRUD | Create, Read, Update, Delete: the four basic storage operations | Ch 5 §17 |
 | CSV | Comma-separated values: a plain-text table, one row per line | Ch 5 §3 |
-| `CyclicBarrier` | Reusable meeting point where N threads wait for each other | Ch 12 §12.14 |
-| Daemon thread | A background thread that does not keep the JVM alive once all normal threads end | Ch 12 §12.4 |
-| DAO (Data Access Object) | A class that wraps the SQL for one table; closer to the database than a Repository | Ch 11 §11.7.3 |
-| Data Class (smell) | A class with only fields and getters/setters, manipulated by others | Ch 7 §7.2.22 |
-| Data Clumps (smell) | The same group of values always travelling together | Ch 7 §7.2.10 |
-| Database transaction | A group of database changes that succeed or fail together | Ch 12 §12.25, Ch 15 |
+| `CyclicBarrier` | Concurrency tool — see 22.8 | §12.14 |
+| Daemon thread | A background thread that does not keep the JVM alive once all normal threads end | §12.4 |
+| DAO (Data Access Object) | A class that wraps the SQL for one table; closer to the database than a Repository | §11.7.3 |
+| Data Class (smell) | Code smell — see 22.6 | §7.2.22 |
+| Data Clumps (smell) | Code smell — see 22.6 | §7.2.10 |
+| Database transaction | A group of database changes that succeed or fail together | §12.25, Ch 15 |
 | Dead code | Code that is never run or whose result is never used; delete it | Ch 6 §13, Ch 7 |
-| Dead-letter queue | Where messages go after retries are exhausted, for later inspection | Ch 20 §20.6 |
-| Deadlock | Two or more threads each wait forever for a resource another holds | Ch 12 §12.17 |
-| Debit / credit | Taking money out of an account vs putting money in | Ch 14 §14.4, Ch 21 §21.2 |
-| Decorator | Structural pattern adding behaviour by wrapping an object behind the same interface | Ch 9 §9.4 |
-| Deep vs shallow copy | Copying nested objects too vs sharing them with the original | Ch 8 §8.13 |
-| Defensive copy | Copying a mutable object passed in or handed out so outsiders can't change your internals | Ch 2 §2.13 |
-| Delegation | An object handing a job to another object it holds, instead of doing it itself | Ch 2 §2.11, Ch 5 §6 |
-| Dependency | "Uses" relationship: B appears only as a parameter, local, return type or static call; dashed arrow | Ch 3 §3.5 |
-| Dependency injection (DI) | Supplying a class's collaborators from outside (usually via the constructor) | Ch 4 §4.10, Ch 11 §11.7.2 |
-| Dependency Inversion Principle | High- and low-level code both depend on abstractions owned by the high-level policy | Ch 4 §4.10 |
-| `Deque` / `ArrayDeque` | Double-ended queue: add and remove at both ends; the usual Java stack and queue | Ch 7 §7.7 |
-| Derive, don't store | Compute counts and totals from the underlying records so they can't drift | Ch 18 §18.5 |
-| Design by Contract | Preconditions (caller's duty), postconditions (method's promise), invariants (always true) | Ch 5 §15 |
-| Design pattern | A named, reusable solution to a recurring design problem | Ch 8 §8.1 |
-| Director | Optional Builder role that runs a fixed sequence of building steps | Ch 8 §8.12 |
-| Distributed lock | A lock shared by several servers, kept in an external store (database, Redis) | Ch 12 §12.25 |
-| Divergent Change (smell) | One class changed for many different reasons | Ch 7 §7.2.7 |
+| Dead-letter queue | Where messages go after retries are exhausted, for later inspection | §20.6 |
+| Deadlock | Concurrency hazard — see 22.8 | §12.17 |
+| Debit / credit | Taking money out of an account vs putting money in | §14.4, §21.2 |
+| Decorator | Structural pattern — see 22.7 | §9.4 |
+| Deep vs shallow copy | Copying nested objects too vs sharing them with the original | §8.13 |
+| Defensive copy | Copying a mutable object passed in or handed out so outsiders can't change your internals | §2.13 |
+| Delegation | An object handing a job to another object it holds, instead of doing it itself | §2.11, Ch 5 §6 |
+| Dependency | UML relationship — see 22.3 | §3.5 |
+| Dependency injection (DI) | Pattern — see 22.7 | §4.10, §11.7.2 |
+| Dependency Inversion Principle | SOLID principle — see 22.4 | §4.10 |
+| `Deque` / `ArrayDeque` | Double-ended queue: add and remove at both ends; the usual Java stack and queue | §7.7 |
+| Derive, don't store | Compute counts and totals from the underlying records so they can't drift | §18.5 |
+| Design by Contract | Principle — see 22.5 | Ch 5 §15 |
+| Design pattern | A named, reusable solution to a recurring design problem | §8.1 |
+| Director | Optional Builder role that runs a fixed sequence of building steps | §8.12 |
+| Distributed lock | A lock shared by several servers, kept in an external store (database, Redis) | §12.25 |
+| Divergent Change (smell) | Code smell — see 22.6 | §7.2.7 |
 | Domain event | Past-tense record of a business fact (`OrderPlaced`) that other parts of the system react to | Ch 5 §17 |
-| Domain exception | A custom exception named after a business rule (`InsufficientBalanceException`) | Ch 21 §21.0 |
-| Domain-Driven Design (DDD) | Modelling software on the business: bounded contexts, entities, value objects, aggregates, domain events, repositories | Ch 5 §17 |
-| Double dispatch | Choosing a method by both the element's and the visitor's type (Visitor's `accept`) | Ch 11 §11.5 |
-| Double-checked locking | Lazy singleton that checks, locks, checks again; the field must be `volatile` | Ch 8 §8.8 |
-| Driver (machine coding) | The `main` class that feeds commands to the services and prints results | Ch 1 §1.10, Ch 21 §21.0 |
-| DRY | Don't Repeat Yourself: each piece of knowledge has one authoritative home | Ch 5 §1 |
-| DTO (Data Transfer Object) | A plain data holder used only to carry values across a boundary (API, layer) | Ch 2 §2.3 |
-| Dynamic dispatch | The JVM picks an overridden method from the object's actual class at run time | Ch 2 §2.6–§2.7 |
-| Dynamic programming (DP) | Solving a problem by combining saved answers to smaller sub-problems | Ch 14 §14.2 |
-| Edge-triggered alert | Fires once when a value crosses a threshold, not on every update while it stays past it | Ch 19 · Grocery Store, Ch 21 §21.7 |
-| EMI | Equated monthly instalment: the fixed amount repaid each month on a loan | Ch 21 §21.6 |
-| Encapsulate what varies | Isolate the part that changes behind an interface | Ch 5 §8 |
-| Encapsulation | Data kept private; only the owning class's methods change it and enforce its rules | Ch 2 §2.3 |
+| Domain exception | A custom exception named after a business rule (`InsufficientBalanceException`) | §21.0 |
+| Domain-Driven Design (DDD) | Principle — see 22.5 | Ch 5 §17 |
+| Double dispatch | Choosing a method by both the element's and the visitor's type (Visitor's `accept`) | §11.5 |
+| Double-checked locking | Lazy singleton that checks, locks, checks again; the field must be `volatile` | §8.8 |
+| Driver (machine coding) | The `main` class that feeds commands to the services and prints results | §1.10, §21.0 |
+| DRY | Don't Repeat Yourself — principle, see 22.5 | Ch 5 §1 |
+| DTO (Data Transfer Object) | A plain data holder used only to carry values across a boundary (API, layer) | §2.3 |
+| Dynamic dispatch | The JVM picks an overridden method from the object's actual class at run time | §2.6–§2.7 |
+| Dynamic programming (DP) | Solving a problem by combining saved answers to smaller sub-problems | §14.2 |
+| Edge-triggered alert | Fires once when a value crosses a threshold, not on every update while it stays past it | Ch 19 · Grocery Store, §21.7 |
+| EMI | Equated monthly instalment: the fixed amount repaid each month on a loan | §21.6 |
+| Encapsulate what varies | Principle — see 22.5 | Ch 5 §8 |
+| Encapsulation | OOP pillar — see 22.3 | §2.3 |
 | Entity (DDD) | Object defined by an identity that survives changes; two entities are equal when their ids are equal | Ch 5 §17 |
-| Enum (with behaviour) | A fixed set of named constants that can carry fields and methods | Ch 2 §2.10 |
-| `EnumMap` / `EnumSet` | Very fast map and set implementations whose keys are the constants of one enum | Ch 2 §2.10 |
-| `equals`/`hashCode` contract | Equal objects must have equal hash codes | Ch 2 §2.12 |
-| Event Sourcing | Store the stream of changes (events); rebuild state by replaying them | Ch 11 §11.7.6 |
+| Enum (with behaviour) | A fixed set of named constants that can carry fields and methods | §2.10 |
+| `EnumMap` / `EnumSet` | Very fast map and set implementations whose keys are the constants of one enum | §2.10 |
+| `equals`/`hashCode` contract | Equal objects must have equal hash codes | §2.12 |
+| Event Sourcing | Pattern — see 22.7 | §11.7.6 |
 | Event-driven | Parts of the system react to published events instead of calling each other directly | Ch 5 §9 |
 | Eventual consistency | Copies of data may disagree for a short time but converge once updates stop | Ch 5 §17 |
-| Eviction | Removing entries from a cache to make room (LRU, LFU, FIFO) | Ch 20 §20.3 |
+| Eviction | Removing entries from a cache to make room (LRU, LFU, FIFO) | §20.3 |
 | Exception | An object thrown to signal an error, which unwinds the call stack until something catches it | Ch 6 §6 |
-| `ExecutorService` | Runs submitted tasks on a pool of threads; separates what to run from how | Ch 12 §12.4 |
+| `ExecutorService` | Concurrency tool — see 22.8 | §12.4 |
 | Exponential backoff | Waiting longer after each failed retry (1 s, 2 s, 4 s…), usually with jitter | Ch 6 §16 |
-| Expression problem | Visitor makes adding operations cheap but adding types expensive (and the reverse for plain polymorphism) | Ch 11 §11.5 |
-| Facade | Structural pattern giving one simple entry point to a complex subsystem | Ch 9 §9.5 |
-| Factory Method | Creational pattern where subclasses decide which product to create | Ch 8 §8.10 |
-| Fail fast | Detect problems early and loudly (guard clauses, `requireNonNull`) | Ch 5 §13 |
-| Fairness | Serving waiting threads roughly in order so none starves; costs throughput | Ch 12 §12.19 |
-| Fan-out | One event or post copied to many receivers (followers' feeds, subscribers) | Ch 18 §18.4, Ch 20 §20.6 |
-| Feature Envy (smell) | A method more interested in another class's data than its own | Ch 7 §7.2.9 |
-| Field | A variable that belongs to an object (instance field) or to the class (`static` field) | Ch 2 §2.2 |
-| FIFO / LIFO | First in, first out (a queue) vs last in, first out (a stack) | Ch 12 §12.8, Ch 15 |
-| F.I.R.S.T. | Clean tests are Fast, Independent, Repeatable, Self-validating, Timely | Ch 6 §8 |
+| Expression problem | Visitor makes adding operations cheap but adding types expensive (and the reverse for plain polymorphism) | §11.5 |
+| Facade | Structural pattern — see 22.7 | §9.5 |
+| Factory Method | Creational pattern — see 22.7 | §8.10 |
+| Fail fast | Principle — see 22.5 | Ch 5 §13 |
+| Fairness | Serving waiting threads roughly in order so none starves; costs throughput | §12.19 |
+| Fan-out | One event or post copied to many receivers (followers' feeds, subscribers) | §18.4, §20.6 |
+| Feature Envy (smell) | Code smell — see 22.6 | §7.2.9 |
+| Field | A variable that belongs to an object (instance field) or to the class (`static` field) | §2.2 |
+| FIFO / LIFO | First in, first out (a queue) vs last in, first out (a stack) | §12.8, Ch 15 |
+| F.I.R.S.T. | Clean-test rule — see 22.5 | Ch 6 §8 |
 | Flag argument | A boolean parameter that makes a function do two things; split it instead | Ch 6 §2 |
-| Flyweight | Structural pattern sharing intrinsic state among many fine-grained objects | Ch 9 §9.6 |
-| Fork/Join | Split a task recursively into subtasks run in parallel, then combine results | Ch 12 §12.26, Ch 13 §13.10 |
+| Flyweight | Structural pattern — see 22.7 | §9.6 |
+| Fork/Join | Split a task recursively into subtasks run in parallel, then combine results | §12.26, §13.10 |
 | Fragile base class | A change in a parent class silently breaks subclasses | Ch 5 §6 |
 | Framework | A library that owns the program's flow and calls your code at set points (Spring, JUnit) | Ch 5 §10 |
-| Functional interface | An interface with one abstract method, usable with lambdas | Ch 2 §2.8 |
-| Functional requirement | A behaviour the system must have ("a customer takes a ticket") | Ch 1 §1.5 |
-| GA (general admission) | Unnumbered standing or seating tickets sold as a count, not as named seats | Ch 15 §15.3 |
+| Functional interface | An interface with one abstract method, usable with lambdas | §2.8 |
+| Functional requirement | A behaviour the system must have ("a customer takes a ticket") | §1.5 |
+| GA (general admission) | Unnumbered standing or seating tickets sold as a count, not as named seats | §15.3 |
 | Garbage collection (GC) | The JVM automatically freeing memory of objects nothing refers to any more | Ch 12 |
-| Generalization | "Is-a" (inheritance) relationship; solid line, hollow triangle at the parent | Ch 3 §3.6 |
-| Generics | Type parameters (`List<T>`) for type-safe reusable code | Ch 2 §2.15 |
-| Geohash | Encodes a latitude/longitude as a short string; nearby places share a prefix, so it works as a search key | Ch 20 §20.4 |
-| Getter / setter | Methods that read (`getX`) or change (`setX`) a field | Ch 2 §2.3 |
-| Git | The version-control tool that records every change to the code as commits | Ch 4 §4.2 |
+| Generalization | UML relationship — see 22.3 | §3.6 |
+| Generics | OOP fact — see 22.3 | §2.15 |
+| Geohash | Encodes a latitude/longitude as a short string; nearby places share a prefix, so it works as a search key | §20.4 |
+| Getter / setter | Methods that read (`getX`) or change (`setX`) a field | §2.3 |
+| Git | The version-control tool that records every change to the code as commits | §4.2 |
 | Glob | Filename wildcard pattern: `*` any characters, `?` one character, `[0-9]` one character from a set | §21.8 |
-| Global Data (smell) | Data readable and writable from anywhere, including mutable singletons | Ch 7 §7.2.5 |
-| God class / God Object | One class that knows and does almost everything | Ch 8 §8.6, Ch 7 §7.2.20 |
-| GoF | "Gang of Four": the four authors of the 1994 book that catalogued the 23 classic design patterns | Ch 8 §8.2 |
-| Golden Hammer | Applying a favourite tool or pattern to every problem | Ch 8 §8.6 |
-| Graph | Nodes joined by edges (people and connections, stops and routes) | Ch 18 §18.3 |
-| GRASP | Larman's nine guidelines for assigning responsibilities to classes | Ch 5 §16 |
-| Greedy algorithm | Always take the best-looking choice right now; fast, but not always correct (e.g. coin change) | Ch 14 §14.2 |
+| Global Data (smell) | Code smell — see 22.6 | §7.2.5 |
+| God class / God Object | Anti-pattern — see 22.7 | §8.6, §7.2.20 |
+| GoF | "Gang of Four": the four authors of the 1994 book that catalogued the 23 classic design patterns | §8.2 |
+| Golden Hammer | Anti-pattern — see 22.7 | §8.6 |
+| Graph | Nodes joined by edges (people and connections, stops and routes) | §18.3 |
+| GRASP | Principle — see 22.5 | Ch 5 §16 |
+| Greedy algorithm | Always take the best-looking choice right now; fast, but not always correct (e.g. coin change) | §14.2 |
 | GST | Goods and Services Tax, India's sales tax | Ch 19 · Grocery Store |
-| Guard clause | An early check-and-return/throw at the top of a method instead of nested `if`s | Ch 7 §7.3.5, Ch 5 §13 |
-| Half-open interval | A time range `[start, end)` that includes the start but not the end, so back-to-back bookings don't clash | Ch 15 §15.4, Ch 21 §21.3 |
-| Happens-before | Java Memory Model rule guaranteeing one action's effects are visible to another | Ch 12 §12.6 |
-| Hash function / hash code | Turns a value into a number used to pick a bucket; equal values must give equal hashes | Ch 2 §2.12 |
-| Hash table / `HashMap` | Key-value store that finds an entry in about constant time by hashing the key | Ch 2 §2.12 |
-| Heap vs stack (memory) | Where objects live (shared by all threads) vs each thread's own area for local variables and calls | Ch 12 §12.2 |
+| Guard clause | An early check-and-return/throw at the top of a method instead of nested `if`s | §7.3.5, Ch 5 §13 |
+| Half-open interval | A time range `[start, end)` that includes the start but not the end, so back-to-back bookings don't clash | §15.4, §21.3 |
+| Happens-before | Java Memory Model rule guaranteeing one action's effects are visible to another | §12.6 |
+| Hash function / hash code | Turns a value into a number used to pick a bucket; equal values must give equal hashes | §2.12 |
+| Hash table / `HashMap` | Key-value store that finds an entry in about constant time by hashing the key | §2.12 |
+| Heap vs stack (memory) | Where objects live (shared by all threads) vs each thread's own area for local variables and calls | §12.2 |
 | Heuristic | A rule of thumb that is usually right and cheap to apply, not a guarantee | Ch 6 §14 |
-| Hexagonal architecture | Ports and adapters: the domain core defines interfaces; databases, UIs and vendors plug in from outside | Ch 20 §20.4 |
-| High Cohesion (GRASP) | Assign responsibilities so each class does related work | Ch 5 §16.5 |
-| HLD vs LLD | Many services and machines vs classes inside one application | Ch 1 §1.2 |
-| Hold with TTL | A temporary claim (e.g. seats during payment) that expires automatically | Ch 15 §15.2 |
-| Holder-class idiom | Lazy singleton created inside a nested static class; the JVM's class loading makes it thread-safe | Ch 8 §8.8 |
-| Hollywood Principle | "Don't call us, we'll call you": the framework calls your hooks | Ch 5 §10 |
-| HTTP | The request/response protocol browsers and web services use | Ch 3 §3.12 |
+| Hexagonal architecture | Ports and adapters: the domain core defines interfaces; databases, UIs and vendors plug in from outside | §20.4 |
+| High Cohesion (GRASP) | GRASP guideline — see 22.5 | Ch 5 §16.5 |
+| HLD vs LLD | Many services and machines vs classes inside one application | §1.2 |
+| Hold with TTL | A temporary claim (e.g. seats during payment) that expires automatically | §15.2 |
+| Holder-class idiom | Lazy singleton created inside a nested static class; the JVM's class loading makes it thread-safe | §8.8 |
+| Hollywood Principle | Principle — see 22.5 | Ch 5 §10 |
+| HTTP | The request/response protocol browsers and web services use | §3.12 |
 | IDE | Integrated development environment (IntelliJ, Eclipse): editor plus compiler, debugger and refactoring tools | Ch 7 |
-| Idempotency | Running an operation twice has the same effect as once; an idempotency key enforces it | Ch 21 §21.2, Ch 20 §20.6 |
-| Identity vs equality | Same object in memory (`==`) vs same value (`equals`) | Ch 2 §2.12 |
-| Immutability | Objects that never change after creation; safe to share between threads | Ch 2 §2.13, Ch 5 §14 |
-| Indirection (GRASP) | Put an intermediate object between two things that shouldn't know each other | Ch 5 §16.8 |
-| Information Expert (GRASP) | The class that has the data does the work | Ch 5 §16.1 |
-| Inheritance | A child class reuses and specialises a parent (`extends`); only for true is-a | Ch 2 §2.5 |
-| In-memory | Data kept only in the program's RAM, lost when it stops; the default in LLD rounds | Ch 1 §1.4 |
-| Insider Trading (smell) | Two modules exchanging too much private information | Ch 7 §7.2.19 |
-| Instance | One object created from a class | Ch 2 §2.2 |
+| Idempotency | Running an operation twice has the same effect as once; an idempotency key enforces it | §21.2, §20.6 |
+| Identity vs equality | Same object in memory (`==`) vs same value (`equals`) | §2.12 |
+| Immutability | Principle — see 22.5 | §2.13, Ch 5 §14 |
+| Indirection (GRASP) | GRASP guideline — see 22.5 | Ch 5 §16.8 |
+| Information Expert (GRASP) | GRASP guideline — see 22.5 | Ch 5 §16.1 |
+| Inheritance | OOP pillar — see 22.3 | §2.5 |
+| In-memory | Data kept only in the program's RAM, lost when it stops; the default in LLD rounds | §1.4 |
+| Insider Trading (smell) | Code smell — see 22.6 | §7.2.19 |
+| Instance | One object created from a class | §2.2 |
 | Integration test | Tests several real parts together (e.g. service plus database), slower than a unit test | Ch 6 §17 |
-| Interface | A contract of methods; a class can implement many | Ch 2 §2.8 |
-| Interface Segregation Principle | No client should depend on methods it does not use | Ch 4 §4.9 |
-| Interning | Keeping one shared copy of each equal value (`String.intern()`) | Ch 9 §9.6 |
-| Interpreter | Behavioral pattern with one class per grammar rule, evaluating sentences of a small language | Ch 10 §10.6 |
-| Interrupt | A polite request to a thread to stop what it is doing; blocking calls react by throwing `InterruptedException` | Ch 12 §12.3 |
-| Intrinsic vs extrinsic state | Flyweight's shared, immutable part vs the per-use part passed in by the caller | Ch 9 §9.6 |
+| Interface | A contract of methods; a class can implement many | §2.8 |
+| Interface Segregation Principle | SOLID principle — see 22.4 | §4.9 |
+| Interning | Keeping one shared copy of each equal value (`String.intern()`) | §9.6 |
+| Interpreter | Behavioral pattern — see 22.7 | §10.6 |
+| Interrupt | A polite request to a thread to stop what it is doing; blocking calls react by throwing `InterruptedException` | §12.3 |
+| Intrinsic vs extrinsic state | Flyweight's shared, immutable part vs the per-use part passed in by the caller | §9.6 |
 | Invariant | A fact about an object that must always be true ("balance is never negative") | Ch 5 (key terms), §15 |
-| Inversion of Control (IoC) | The framework controls the flow and calls your code; DI is one way to achieve it | Ch 5 §10, Ch 4 §4.14 |
-| Inverted index | A map from each word/tag to the list of items containing it, for search | Ch 18 §18.1 |
-| Invoker / Receiver | Command roles: the invoker triggers commands; the receiver does the real work | Ch 10 §10.2 |
-| I/O | Input/output: reading or writing files, network or database; slow compared with CPU work | Ch 12 §12.4 |
-| Iterator | Behavioral pattern for traversing a collection without exposing its storage | Ch 10 §10.3 |
-| JAR | Java archive: a zip file of compiled classes and resources | Ch 4 §4.7 |
-| Java Memory Model (JMM) | Rules for when one thread's writes become visible to another | Ch 12 §12.6 |
-| `java.time` | Java's date-time API: `Instant` (a moment), `Duration`, `LocalDate`, and `Clock` (injectable "now") | Ch 1 §1.10 |
-| JDBC | Java's standard API for talking to relational databases | Ch 8 §8.11 |
+| Inversion of Control (IoC) | The framework controls the flow and calls your code; DI is one way to achieve it | Ch 5 §10, §4.14 |
+| Inverted index | A map from each word/tag to the list of items containing it, for search | §18.1 |
+| Invoker / Receiver | Command roles: the invoker triggers commands; the receiver does the real work | §10.2 |
+| I/O | Input/output: reading or writing files, network or database; slow compared with CPU work | §12.4 |
+| Iterator | Behavioral pattern — see 22.7 | §10.3 |
+| JAR | Java archive: a zip file of compiled classes and resources | §4.7 |
+| Java Memory Model (JMM) | Rules for when one thread's writes become visible to another | §12.6 |
+| `java.time` | Java's date-time API: `Instant` (a moment), `Duration`, `LocalDate`, and `Clock` (injectable "now") | §1.10 |
+| JDBC | Java's standard API for talking to relational databases | §8.11 |
 | JDK | Java Development Kit: compiler, tools and the standard library | Ch 2 |
 | JIT compiler | Part of the JVM that turns hot bytecode into fast machine code while the program runs | Ch 12 |
-| Jitter | Random extra delay added to retries so many clients don't retry at the same instant | Ch 6 §16, Ch 12 §12.18 |
-| JPA / Hibernate | Java's standard for mapping objects to database tables, and its most popular implementation | Ch 9 §9.7 |
-| JSON | A text format for structured data: objects in `{}`, lists in `[]` | Ch 3 §3.2 |
+| Jitter | Random extra delay added to retries so many clients don't retry at the same instant | Ch 6 §16, §12.18 |
+| JPA / Hibernate | Java's standard for mapping objects to database tables, and its most popular implementation | §9.7 |
+| JSON | A text format for structured data: objects in `{}`, lists in `[]` | §3.2 |
 | JUnit | The standard Java unit-testing framework | Ch 6 §8 |
 | JVM | Java Virtual Machine: runs compiled Java bytecode and manages memory and threads | Ch 2, Ch 12 |
-| Kafka | A distributed append-only log used as a durable message broker | Ch 20 §20.6 |
-| KISS | Keep It Simple: choose the simplest design that works | Ch 5 §2 |
-| KYC | Know Your Customer: identity checks a financial app must do before allowing higher limits | Ch 21 §21.2 |
-| Lambda | A short anonymous function, e.g. `x -> x * 2`, usable wherever a functional interface is expected | Ch 2 §2.8 |
-| Large Class (smell) | A class trying to do too much; a God Class | Ch 7 §7.2.20 |
-| Latency | How long one operation takes from start to finish | Ch 1 §1.4 |
-| Law of Demeter | Only talk to your immediate friends; avoid `a.getB().getC()` chains | Ch 5 §4 |
-| Lazy Element (smell) | A class or function that doesn't pull its weight | Ch 7 §7.2.14 |
-| Lazy expiry | Deleting an expired entry only when someone next touches it, instead of by a timer | Ch 13 §13.6, Ch 14 §14.7 |
-| Lazy initialization | Creating an object only when it is first needed | Ch 8 §8.8 |
-| Lease | A lock or hold that expires automatically after a set time unless renewed | Ch 12 §12.9 |
-| Least Astonishment | Code should do what its name promises and nothing more | Ch 5 §12 |
-| Ledger | An append-only list of money movements from which balances are derived | Ch 20 §20.1, Ch 21 |
-| Legacy code | Existing code, often without tests, that is risky to change | Ch 7 §7.8 |
-| LFU / MRU | Cache eviction that removes the least frequently used vs the most recently used entry | Ch 20 §20.3 |
-| Linked list | A chain of nodes where each points to the next (doubly linked: also the previous) | Ch 20 §20.3 |
-| `LinkedHashMap` | A `HashMap` that also remembers insertion or access order; the shortcut for an LRU cache | Ch 20 §20.3 |
+| Kafka | A distributed append-only log used as a durable message broker | §20.6 |
+| KISS | Keep It Simple — principle, see 22.5 | Ch 5 §2 |
+| KYC | Know Your Customer: identity checks a financial app must do before allowing higher limits | §21.2 |
+| Lambda | A short anonymous function, e.g. `x -> x * 2`, usable wherever a functional interface is expected | §2.8 |
+| Large Class (smell) | Code smell — see 22.6 | §7.2.20 |
+| Latency | How long one operation takes from start to finish | §1.4 |
+| Law of Demeter | Principle — see 22.5 | Ch 5 §4 |
+| Lazy Element (smell) | Code smell — see 22.6 | §7.2.14 |
+| Lazy expiry | Deleting an expired entry only when someone next touches it, instead of by a timer | §13.6, §14.7 |
+| Lazy initialization | Creating an object only when it is first needed | §8.8 |
+| Lease | A lock or hold that expires automatically after a set time unless renewed | §12.9 |
+| Least Astonishment | Principle — see 22.5 | Ch 5 §12 |
+| Ledger | An append-only list of money movements from which balances are derived | §20.1, Ch 21 |
+| Legacy code | Existing code, often without tests, that is risky to change | §7.8 |
+| LFU / MRU | Cache eviction that removes the least frequently used vs the most recently used entry | §20.3 |
+| Linked list | A chain of nodes where each points to the next (doubly linked: also the previous) | §20.3 |
+| `LinkedHashMap` | A `HashMap` that also remembers insertion or access order; the shortcut for an LRU cache | §20.3 |
 | Linter / static analysis | Tools that read code without running it and flag likely bugs or style issues | Ch 6 §15 |
-| Liskov Substitution Principle | A subtype must be usable anywhere its parent is expected, with no surprises | Ch 4 §4.8 |
-| Listener | An object registered to be told when an event happens (the observer in Observer) | Ch 11 §11.1 |
-| Livelock | Threads keep reacting to each other and running, but none makes progress | Ch 12 §12.18 |
-| Lock ordering | Always acquire locks in one global order to prevent circular wait | Ch 12 §12.17 |
-| Lock striping | Guarding a map with an array of locks, each covering some buckets | Ch 13 §13.7 |
-| Lombok | A library that generates boilerplate (getters, builders) from annotations at compile time | Ch 8 §8.12 |
-| Long Function (smell) | A function too long to understand at a glance | Ch 7 §7.2.3 |
-| Long Parameter List (smell) | Many parameters, often of the same type or boolean flags | Ch 7 §7.2.4 |
-| `LongAdder` | Counter that scales better than `AtomicLong` under heavy contention | Ch 12 §12.15 |
-| LOOK scheduling | Elevator keeps moving in one direction while stops remain ahead, then reverses | Ch 14 §14.5 |
-| Loops (smell) | A classic loop where a stream pipeline would state the intent more clearly | Ch 7 §7.2.13 |
-| Loose coupling | Interacting objects know as little about each other as possible | Ch 5 §9 |
-| Lost wakeup | A signal sent before the waiter started waiting, so the waiter sleeps forever | Ch 12 §12.13 |
-| Low Coupling (GRASP) | Assign responsibilities to keep dependencies few and stable | Ch 5 §16.4 |
-| LRU cache | Evicts the least recently used entry; hash map + doubly linked list gives O(1) | Ch 20 §20.3 |
-| Lua | A small scripting language; Redis runs a Lua script as one atomic step | Ch 20 §20.7 |
-| Machine-coding round | LLD round where working, runnable in-memory code is the answer (90–120 min) | Ch 1 §1.2, Ch 21 §21.0 |
+| Liskov Substitution Principle | SOLID principle — see 22.4 | §4.8 |
+| Listener | An object registered to be told when an event happens (the observer in Observer) | §11.1 |
+| Livelock | Concurrency hazard — see 22.8 | §12.18 |
+| Lock ordering | Always acquire locks in one global order to prevent circular wait | §12.17 |
+| Lock striping | Guarding a map with an array of locks, each covering some buckets | §13.7 |
+| Lombok | A library that generates boilerplate (getters, builders) from annotations at compile time | §8.12 |
+| Long Function (smell) | Code smell — see 22.6 | §7.2.3 |
+| Long Parameter List (smell) | Code smell — see 22.6 | §7.2.4 |
+| `LongAdder` | Concurrency tool — see 22.8 | §12.15 |
+| LOOK scheduling | Elevator keeps moving in one direction while stops remain ahead, then reverses | §14.5 |
+| Loops (smell) | Code smell — see 22.6 | §7.2.13 |
+| Loose coupling | Principle — see 22.5 | Ch 5 §9 |
+| Lost wakeup | A signal sent before the waiter started waiting, so the waiter sleeps forever | §12.13 |
+| Low Coupling (GRASP) | GRASP guideline — see 22.5 | Ch 5 §16.4 |
+| LRU cache | Evicts the least recently used entry; hash map + doubly linked list gives O(1) | §20.3 |
+| Lua | A small scripting language; Redis runs a Lua script as one atomic step | §20.7 |
+| Machine-coding round | LLD round where working, runnable in-memory code is the answer (90–120 min) | §1.2, §21.0 |
 | Market vs limit order | Buy or sell now at the best available price vs only at a given price or better | Ch 19 · Stock Brokerage |
 | Matching engine | Per-symbol order book matching buy and sell orders by best price, then oldest first | Ch 19 · Stock Brokerage |
-| MDC | Mapped Diagnostic Context: per-thread key-values (request id, user) automatically added to log lines | Ch 20 §20.5 |
-| Mediator | Behavioral pattern centralising communication between peers in one coordinator | Ch 10 §10.4 |
-| Memento | Behavioral pattern capturing and restoring state without exposing internals | Ch 10 §10.5 |
-| Memory leak | Memory that is never freed because something still holds references to objects no longer needed | Ch 11 §11.1, Ch 12 §12.24 |
-| Message Chains (smell) | `a.getB().getC().getD()` navigation | Ch 7 §7.2.17 |
-| Message queue | A buffer service where producers leave messages for consumers to process later | Ch 20 §20.6 |
-| Method | A function that belongs to a class | Ch 2 §2.2 |
-| Method reference | Shorthand for a lambda that just calls a method, e.g. `String::length` | Ch 2 §2.8 |
+| MDC | Mapped Diagnostic Context: per-thread key-values (request id, user) automatically added to log lines | §20.5 |
+| Mediator | Behavioral pattern — see 22.7 | §10.4 |
+| Memento | Behavioral pattern — see 22.7 | §10.5 |
+| Memory leak | Memory that is never freed because something still holds references to objects no longer needed | §11.1, §12.24 |
+| Message Chains (smell) | Code smell — see 22.6 | §7.2.17 |
+| Message queue | A buffer service where producers leave messages for consumers to process later | §20.6 |
+| Method | A function that belongs to a class | §2.2 |
+| Method reference | Shorthand for a lambda that just calls a method, e.g. `String::length` | §2.8 |
 | Microservice vs monolith | Many small independently deployed services vs one deployable application | Ch 5 §17 |
-| Middle Man (smell) | A class whose methods mostly forward to another class | Ch 7 §7.2.18 |
-| Mixin | A small interface with `default` methods that adds a capability to many classes | Ch 4 §4.3 |
+| Middle Man (smell) | Code smell — see 22.6 | §7.2.18 |
+| Mixin | A small interface with `default` methods that adds a capability to many classes | §4.3 |
 | Mock / stub / fake | Test doubles: a mock checks calls were made, a stub returns canned answers, a fake is a simple working version | Ch 6 §17 |
 | Mockito | The most common Java library for creating mocks in tests | Ch 6 §8 |
-| Module / package | A group of related classes; in Java a package is a folder-level namespace | Ch 2 §2.14 |
-| Monitor | The lock built into every Java object, used by `synchronized` and `wait/notify` | Ch 12 §12.7 |
-| Multiplicity | How many objects take part at each end of a relationship (`1`, `0..1`, `*`, `1..*`) | Ch 3 §3.2 |
-| Mutable Data (smell) | Shared data changed after creation, causing surprises elsewhere | Ch 7 §7.2.6 |
+| Module / package | A group of related classes; in Java a package is a folder-level namespace | §2.14 |
+| Monitor | The lock built into every Java object, used by `synchronized` and `wait/notify` | §12.7 |
+| Multiplicity | How many objects take part at each end of a relationship (`1`, `0..1`, `*`, `1..*`) | §3.2 |
+| Mutable Data (smell) | Code smell — see 22.6 | §7.2.6 |
 | Mutation testing | Deliberately breaking the code in small ways to check the tests notice | Ch 6 §17 |
-| Mutex | A lock that lets only one thread into a critical section | Ch 12 §12.7 |
-| MVC | Model–View–Controller; a compound of Observer, Strategy and Composite | Ch 11 §11.7.5 |
-| Mysterious Name (smell) | A name that doesn't say what the thing does or holds | Ch 7 §7.2.1 |
-| Non-functional requirement | A quality: thread safety, extensibility, in-memory storage, latency | Ch 1 §1.5 |
-| Null Object | A do-nothing implementation used instead of `null` | Ch 11 §11.7.1 |
+| Mutex | A lock that lets only one thread into a critical section | §12.7 |
+| MVC | Model–View–Controller — pattern, see 22.7 | §11.7.5 |
+| Mysterious Name (smell) | Code smell — see 22.6 | §7.2.1 |
+| Non-functional requirement | A quality: thread safety, extensibility, in-memory storage, latency | §1.5 |
+| Null Object | Pattern — see 22.7 | §11.7.1 |
 | `NullPointerException` (NPE) | Thrown when you call a method or read a field through a `null` reference | Ch 5 §13 |
-| Object | One instance of a class with real values | Ch 2 §2.2 |
-| Object Pool | Borrow and return a bounded set of expensive objects | Ch 8 §8.14 |
-| Observer | Behavioral pattern notifying many dependents when one object changes | Ch 11 §11.1 |
-| Offset | A position number in a log or list; each reader remembers its own | Ch 20 §20.6 |
-| OOA / OOD / OOP | Analysis (what) → design (how, with objects) → programming (code) | Ch 2 §2.17 |
-| Open/Closed Principle | Open for extension, closed for modification: add code, don't edit working code | Ch 4 §4.7 |
-| Optimistic locking | Read with a version; the write succeeds only if the version is unchanged | Ch 12 §12.10, §12.25 |
-| `Optional` | A container that may be empty; return it when "not found" is normal | Ch 1 §1.10 |
+| Object | One instance of a class with real values | §2.2 |
+| Object Pool | Creational pattern — see 22.7 | §8.14 |
+| Observer | Behavioral pattern — see 22.7 | §11.1 |
+| Offset | A position number in a log or list; each reader remembers its own | §20.6 |
+| OOA / OOD / OOP | Object-oriented analysis / design / programming — see 22.3 | §2.17 |
+| Open/Closed Principle | SOLID principle — see 22.4 | §4.7 |
+| Optimistic locking | Read with a version; the write succeeds only if the version is unchanged | §12.10, §12.25 |
+| `Optional` | A container that may be empty; return it when "not found" is normal | §1.10 |
 | Order book | Per-stock lists of waiting buy and sell orders, sorted by price then time | Ch 19 · Stock Brokerage |
-| OTP | One-time password: a short code valid for a single use, usually sent by SMS | Ch 5 §13, Ch 20 §20.2 |
+| OTP | One-time password: a short code valid for a single use, usually sent by SMS | Ch 5 §13, §20.2 |
 | Outbox (transactional) | Save events in a table in the same transaction as the data, and publish them afterwards, so neither is lost | Ch 5 §17 |
-| `OutOfMemoryError` | Thrown when the JVM cannot find memory for a new object | Ch 12 §12.2 |
-| Out-of-scope list | Written list of what you will not build; shrinks the problem | Ch 1 §1.5 |
-| Overloading | Same method name, different parameters; chosen at compile time | Ch 2 §2.7 |
-| Overriding | Subclass replaces a parent's method; chosen at run time | Ch 2 §2.7 |
-| Payment gateway | An external service that actually charges cards or UPI; hidden behind your own interface | Ch 15 §15.2, Ch 19 |
-| PECS | Producer `extends`, consumer `super` — the rule for generic wildcards | Ch 2 §2.15 |
-| Pessimistic locking | Lock a row before changing it (e.g. `SELECT … FOR UPDATE`) so nobody else can touch it meanwhile | Ch 12 §12.5, Ch 15 §15.2 |
-| Phaser | A reusable, flexible barrier for threads meeting in phases | Ch 12 §12.14, §12.26 |
+| `OutOfMemoryError` | Thrown when the JVM cannot find memory for a new object | §12.2 |
+| Out-of-scope list | Written list of what you will not build; shrinks the problem | §1.5 |
+| Overloading | OOP fact — see 22.3 | §2.7 |
+| Overriding | OOP fact — see 22.3 | §2.7 |
+| Payment gateway | An external service that actually charges cards or UPI; hidden behind your own interface | §15.2, Ch 19 |
+| PECS | OOP fact — see 22.3 | §2.15 |
+| Pessimistic locking | Lock a row before changing it (e.g. `SELECT … FOR UPDATE`) so nobody else can touch it meanwhile | §12.5, §15.2 |
+| Phaser | Concurrency tool — see 22.8 | §12.14, §12.26 |
 | PII | Personally identifiable information (names, phone numbers) that must not leak into logs | Ch 6 §15 |
-| Pinning | A virtual thread stuck on its carrier thread while it blocks | Ch 12 §12.4 |
-| Pipeline | Data flowing through a sequence of steps, each feeding the next (streams, filters, middleware) | Ch 7 §7.2.13 |
+| Pinning | A virtual thread stuck on its carrier thread while it blocks | §12.4 |
+| Pipeline | Data flowing through a sequence of steps, each feeding the next (streams, filters, middleware) | §7.2.13 |
 | PLU code | Four-digit price look-up code for loose produce, keyed at the till together with the scale weight | Ch 19 · Grocery Store |
-| Plugin | A piece of code added to a system through a known interface without editing the system | Ch 4 §4.7 |
+| Plugin | A piece of code added to a system through a known interface without editing the system | §4.7 |
 | PNR | Passenger name record: the booking reference for an airline reservation | Ch 16 · Airline |
-| Poison pill | A special message telling a consumer to stop; one per consumer | Ch 12 §12.22 |
-| Polymorphism | One call behaves differently depending on the object; removes type switches | Ch 2 §2.6, Ch 5 §16.6 |
+| Poison pill | A special message telling a consumer to stop; one per consumer | §12.22 |
+| Polymorphism | OOP pillar — see 22.3 | §2.6, Ch 5 §16.6 |
 | POS | Point of sale: the till where a sale is rung up and paid | Ch 19 · Grocery Store |
-| Precondition / postcondition | What must be true before a call (caller's duty) / what the method promises after it | Ch 4 §4.8, Ch 5 §15 |
-| Primitive Obsession (smell) | Using `double`, `String`, `int` for domain concepts like money or status | Ch 7 §7.2.11 |
+| Precondition / postcondition | What must be true before a call (caller's duty) / what the method promises after it | §4.8, Ch 5 §15 |
+| Primitive Obsession (smell) | Code smell — see 22.6 | §7.2.11 |
 | `PriorityQueue` | A queue that always hands out the smallest (or highest-priority) element first; a binary heap inside | Ch 16 · Course Registration |
-| Process | A running program with its own memory; it contains one or more threads | Ch 12 §12.2 |
-| Producer–consumer | Threads hand work through a (bounded) queue | Ch 12 §12.22 |
-| Program to an interface | Depend on supertypes; pick the concrete class once, at the edge | Ch 5 §7 |
-| Protected Variations (GRASP) | Wrap points of instability behind a stable interface | Ch 5 §16.9 |
-| Prototype | Creational pattern creating new objects by copying a configured one | Ch 8 §8.13 |
-| Proxy | Structural pattern: a stand-in controlling access to another object | Ch 9 §9.7 |
-| Pub-sub | Observer through a broker: publishers and subscribers don't know each other | Ch 20 §20.6 |
-| Pure Fabrication (GRASP) | An invented helper class (e.g. a repository) when no domain class fits | Ch 5 §16.7 |
-| Pure function | A function whose result depends only on its inputs and which changes nothing else | Ch 11 §11.7.6, Ch 17 · 2048 |
-| Qualified association | An association looked up by a key (`Library [isbn] → Book`, i.e. a `Map`) | Ch 3 §3.11 |
-| Race condition | The result depends on the timing of threads touching shared mutable state | Ch 12 §12.5 |
-| Rate limiter | Caps how many requests a key may make per time window (token bucket, windows) | Ch 13 §13.11, Ch 20 §20.7 |
-| Read-write lock | Many readers at once, or one writer | Ch 12 §12.10 |
-| Realization | A class implements an interface; dashed line, hollow triangle at the interface | Ch 3 §3.7 |
-| Record | Compact Java class for immutable data; only shallowly immutable | Ch 2 §2.13 |
-| Recursion | A function that solves a problem by calling itself on a smaller part | Ch 9 §9.3 |
-| Recursive-descent parser | A parser with one method per grammar rule, each calling the others | Ch 10 §10.6, Ch 21 §21.8 |
-| Redis | A fast shared in-memory key-value store, often used for caches, counters and distributed locks | Ch 20 §20.7 |
-| Reentrancy | A thread may re-acquire a lock it already holds | Ch 12 §12.8 |
-| `ReentrantLock` | Explicit lock with try/timed/fair locking and conditions | Ch 12 §12.8 |
-| Refactoring | Changing internal structure without changing observable behaviour | Ch 7 §7.1 |
-| Reflection | Code inspecting or calling classes, fields and methods at run time by name | Ch 8 §8.8 |
-| Refused Bequest (smell) | A subclass that doesn't want, or throws on, inherited methods | Ch 7 §7.2.23 |
-| Regex | Regular expression: a pattern language for matching text | Ch 10 §10.6 |
-| Repeated Switches (smell) | The same `switch` on a type code in several places | Ch 7 §7.2.12 |
-| Repository | Collection-like interface that hides storage from business logic | Ch 11 §11.7.3 |
-| Requirement | One thing the system must do, written so you can check it | Ch 1 §1.5 |
+| Process | A running program with its own memory; it contains one or more threads | §12.2 |
+| Producer–consumer | Threads hand work through a (bounded) queue | §12.22 |
+| Program to an interface | Principle — see 22.5 | Ch 5 §7 |
+| Protected Variations (GRASP) | GRASP guideline — see 22.5 | Ch 5 §16.9 |
+| Prototype | Creational pattern — see 22.7 | §8.13 |
+| Proxy | Structural pattern — see 22.7 | §9.7 |
+| Pub-sub | Observer through a broker: publishers and subscribers don't know each other | §20.6 |
+| Pure Fabrication (GRASP) | GRASP guideline — see 22.5 | Ch 5 §16.7 |
+| Pure function | A function whose result depends only on its inputs and which changes nothing else | §11.7.6, Ch 17 · 2048 |
+| Qualified association | An association looked up by a key (`Library [isbn] → Book`, i.e. a `Map`) | §3.11 |
+| Race condition | The result depends on the timing of threads touching shared mutable state | §12.5 |
+| Rate limiter | Caps how many requests a key may make per time window (token bucket, windows) | §13.11, §20.7 |
+| Read-write lock | Many readers at once, or one writer | §12.10 |
+| Realization | UML relationship — see 22.3 | §3.7 |
+| Record | OOP fact — see 22.3 | §2.13 |
+| Recursion | A function that solves a problem by calling itself on a smaller part | §9.3 |
+| Recursive-descent parser | A parser with one method per grammar rule, each calling the others | §10.6, §21.8 |
+| Redis | A fast shared in-memory key-value store, often used for caches, counters and distributed locks | §20.7 |
+| Reentrancy | A thread may re-acquire a lock it already holds | §12.8 |
+| `ReentrantLock` | Concurrency tool — see 22.8 | §12.8 |
+| Refactoring | Refactoring — see 22.6 | §7.1 |
+| Reflection | Code inspecting or calling classes, fields and methods at run time by name | §8.8 |
+| Refused Bequest (smell) | Code smell — see 22.6 | §7.2.23 |
+| Regex | Regular expression: a pattern language for matching text | §10.6 |
+| Repeated Switches (smell) | Code smell — see 22.6 | §7.2.12 |
+| Repository | Pattern — see 22.7 | §11.7.3 |
+| Requirement | One thing the system must do, written so you can check it | §1.5 |
 | REST | A style of HTTP API built around resources (URLs) and verbs (GET, POST…) | Ch 5 §1 |
 | Retry | Trying a failed operation again; safe only if the operation is idempotent | Ch 6 §16 |
-| Role interface | A small interface serving one kind of caller (the ISP fix) | Ch 4 §4.9 |
-| Rule of three | Refactor to an abstraction at the second or third case, not the first | Ch 4 §4.15 |
-| `RuntimeException` | Base class of unchecked exceptions | Ch 2 §2.5 |
-| Saga | A long business process split into local steps, each with a compensating action if a later step fails | Ch 3 §3.12, Ch 15 |
-| Scalability | How well a system keeps working as users, data or load grow | Ch 1 §1.14 |
-| `ScheduledExecutorService` | Runs tasks after a delay or repeatedly at a fixed rate | Ch 13 §13.6 |
-| Schema | The defined structure of stored data (tables, columns, types) | Ch 2 §2.17 |
-| SDK | Software development kit: a vendor's ready-made library for calling its service | Ch 9 §9.1 |
-| Sealed type | A type whose permitted subtypes are fixed, enabling exhaustive `switch` | Ch 11 §11.5 |
-| Seam | A place where you can swap behaviour (e.g. an interface) without editing the code around it; used for testing | Ch 2 §2.9, Ch 7 §7.7 |
+| Role interface | A small interface serving one kind of caller (the ISP fix) | §4.9 |
+| Rule of three | Refactor to an abstraction at the second or third case, not the first | §4.15 |
+| `RuntimeException` | Base class of unchecked exceptions | §2.5 |
+| Saga | A long business process split into local steps, each with a compensating action if a later step fails | §3.12, Ch 15 |
+| Scalability | How well a system keeps working as users, data or load grow | §1.14 |
+| `ScheduledExecutorService` | Runs tasks after a delay or repeatedly at a fixed rate | §13.6 |
+| Schema | The defined structure of stored data (tables, columns, types) | §2.17 |
+| SDK | Software development kit: a vendor's ready-made library for calling its service | §9.1 |
+| Sealed type | A type whose permitted subtypes are fixed, enabling exhaustive `switch` | §11.5 |
+| Seam | A place where you can swap behaviour (e.g. an interface) without editing the code around it; used for testing | §2.9, §7.7 |
 | Seed | The starting number for a pseudo-random generator; the same seed gives the same sequence | Ch 17 |
-| Semaphore | A counter of permits that limits concurrent access or signals between threads | Ch 12 §12.12 |
-| Separation of Concerns | Each part of the program handles one concern | Ch 4 §4.5, Ch 5 §11 |
-| Sequence diagram | UML diagram of messages between objects over time | Ch 3 §3.12 |
-| Serialization | Turning an object into bytes or text (and back) for storing or sending | Ch 8 §8.8 |
-| Service Locator | Anti-pattern where a class asks a registry for its dependencies, hiding them | Ch 11 §11.7.2 |
-| Sharding | Splitting data across independent parts (each with its own lock) to scale | Ch 20 §20.3 |
-| Shotgun Surgery (smell) | One change forces many small edits across many classes | Ch 7 §7.2.8 |
+| Semaphore | Concurrency tool — see 22.8 | §12.12 |
+| Separation of Concerns | Principle — see 22.5 | §4.5, Ch 5 §11 |
+| Sequence diagram | UML diagram of messages between objects over time | §3.12 |
+| Serialization | Turning an object into bytes or text (and back) for storing or sending | §8.8 |
+| Service Locator | Anti-pattern where a class asks a registry for its dependencies, hiding them | §11.7.2 |
+| Sharding | Splitting data across independent parts (each with its own lock) to scale | §20.3 |
+| Shotgun Surgery (smell) | Code smell — see 22.6 | §7.2.8 |
 | Side effect | Anything a function does besides returning a value (changing a field, writing a file) | Ch 5 §12, Ch 6 §2 |
-| Signaling | One thread tells another that something has happened (semaphore, latch) | Ch 12 §12.20 |
-| Simple Factory | One method mapping a type value to a class; an idiom, not GoF | Ch 8 §8.9 |
-| Single Responsibility Principle | A class should have one reason (one actor) to change | Ch 4 §4.2 |
-| Singleton | Creational pattern ensuring exactly one instance with global access | Ch 8 §8.8 |
-| SKU | Stock-keeping unit: one sellable product variant tracked in inventory | Ch 21 §21.7 |
-| SLF4J | A logging facade: code logs through its API and any logging library can sit underneath | Ch 9 §9.5 |
-| Sliding window | Rate-limit algorithm counting requests in a moving time window (log or counter) | Ch 20 §20.7 |
-| SMS / SMTP | Text messages to phones / the protocol for sending email | Ch 20 §20.2 |
-| Snapshot | A copy of state at one moment, used to restore it or to read it safely | Ch 10 §10.5 |
-| SOLID | SRP, OCP, LSP, ISP, DIP: five guidelines that keep one change from spreading | Ch 4 §4.1 |
-| Specification | Named, combinable business-rule object with `isSatisfiedBy` | Ch 11 §11.7.4 |
-| Speculative Generality (smell) | Hooks and abstractions added "in case" but never used | Ch 7 §7.2.15 |
+| Signaling | One thread tells another that something has happened (semaphore, latch) | §12.20 |
+| Simple Factory | Creational pattern — see 22.7 | §8.9 |
+| Single Responsibility Principle | SOLID principle — see 22.4 | §4.2 |
+| Singleton | Creational pattern — see 22.7 | §8.8 |
+| SKU | Stock-keeping unit: one sellable product variant tracked in inventory | §21.7 |
+| SLF4J | A logging facade: code logs through its API and any logging library can sit underneath | §9.5 |
+| Sliding window | Rate-limit algorithm counting requests in a moving time window (log or counter) | §20.7 |
+| SMS / SMTP | Text messages to phones / the protocol for sending email | §20.2 |
+| Snapshot | A copy of state at one moment, used to restore it or to read it safely | §10.5 |
+| SOLID | SRP, OCP, LSP, ISP, DIP — see 22.4 | §4.1 |
+| Specification | Pattern — see 22.7 | §11.7.4 |
+| Speculative Generality (smell) | Code smell — see 22.6 | §7.2.15 |
 | Split tender | Paying one bill with several payment methods (e.g. part UPI, part cash) | Ch 19 · Grocery Store |
-| Spring | The most widely used Java application framework; creates and wires objects (DI), web, data access | Ch 4 §4.14, Ch 11 §11.7.2 |
-| Spurious wakeup | A waiting thread wakes with no signal; why `wait()` sits in a `while` loop | Ch 12 §12.13 |
-| SQL | The language for querying and updating relational databases | Ch 11 §11.7.3 |
+| Spring | The most widely used Java application framework; creates and wires objects (DI), web, data access | §4.14, §11.7.2 |
+| Spurious wakeup | A waiting thread wakes with no signal; why `wait()` sits in a `while` loop | §12.13 |
+| SQL | The language for querying and updating relational databases | §11.7.3 |
 | Stack trace | The list of method calls active when an exception was thrown; shows where it came from | Ch 6 §6 |
-| `StampedLock` | Read-write lock with optimistic reads; not reentrant | Ch 12 §12.10 |
-| Starvation | One thread never gets the resource while others keep progressing | Ch 12 §12.19 |
-| State (pattern) | Behavioral pattern where an object's behaviour changes with its internal state | Ch 11 §11.2 |
-| State machine diagram | UML diagram of one object's states and transitions (`event [guard] / action`) | Ch 3 §3.14 |
-| Stateless vs stateful | Keeps no data between calls (safe to share) vs remembers data between calls | Ch 1 §1.6 |
-| `static` | Belongs to the class, one per class, not to each object | Ch 2 §2.2 |
+| `StampedLock` | Concurrency tool — see 22.8 | §12.10 |
+| Starvation | Concurrency hazard — see 22.8 | §12.19 |
+| State (pattern) | Behavioral pattern — see 22.7 | §11.2 |
+| State machine diagram | UML diagram of one object's states and transitions (`event [guard] / action`) | §3.14 |
+| Stateless vs stateful | Keeps no data between calls (safe to share) vs remembers data between calls | §1.6 |
+| `static` | Belongs to the class, one per class, not to each object | §2.2 |
 | Stop-loss / stop-limit | Orders that wake up when the price hits a trigger, then sell at market / at a limit price | Ch 19 · Stock Brokerage |
-| Strategy | Behavioral pattern making algorithms interchangeable behind one interface | Ch 11 §11.3 |
-| Stream (Java) | A pipeline over a collection (`filter`, `map`, `collect`) that states what, not how | Ch 2 §2.8, Ch 7 §7.2.13 |
-| Subclass / superclass | The child class that `extends` / the parent it extends | Ch 2 §2.5 |
-| `synchronized` | Java keyword that runs a block or method under an object's monitor: one thread at a time, with visibility | Ch 12 §12.7 |
-| TCP | The internet protocol that delivers a reliable, ordered byte stream between two machines | Ch 11 §11.2 |
-| Technical debt | Shortcuts in code that make future changes slower until someone cleans them up | Ch 7 §7.1 |
-| Telescoping constructors | A ladder of constructors each adding one more parameter; Builder replaces it | Ch 8 §8.12 |
-| Tell, Don't Ask | Tell objects what to do instead of pulling their data out to decide | Ch 5 §5 |
-| Template Method | Behavioral pattern: fixed algorithm skeleton in a base class, steps in subclasses | Ch 11 §11.4 |
-| Temporary Field (smell) | A field set only in some situations and empty otherwise | Ch 7 §7.2.16 |
+| Strategy | Behavioral pattern — see 22.7 | §11.3 |
+| Stream (Java) | A pipeline over a collection (`filter`, `map`, `collect`) that states what, not how | §2.8, §7.2.13 |
+| Subclass / superclass | The child class that `extends` / the parent it extends | §2.5 |
+| `synchronized` | Concurrency tool — see 22.8 | §12.7 |
+| TCP | The internet protocol that delivers a reliable, ordered byte stream between two machines | §11.2 |
+| Technical debt | Shortcuts in code that make future changes slower until someone cleans them up | §7.1 |
+| Telescoping constructors | A ladder of constructors each adding one more parameter; Builder replaces it | §8.12 |
+| Tell, Don't Ask | Principle — see 22.5 | Ch 5 §5 |
+| Template Method | Behavioral pattern — see 22.7 | §11.4 |
+| Temporary Field (smell) | Code smell — see 22.6 | §7.2.16 |
 | Test double | Anything standing in for a real dependency in a test: dummy, stub, spy, mock, fake | Ch 6 §17 |
 | Test-Driven Development (TDD) | Failing test → make it pass → refactor, in very short cycles | Ch 6 §8 |
-| Thread | An independent path of execution inside a process, sharing its memory | Ch 12 §12.2 |
-| Thread confinement | Keeping data inside one thread so it never needs locking | Ch 12 §12.24 |
-| Thread dump | A snapshot of every thread's state and call stack (`jstack`, `jcmd`) used to diagnose hangs | Ch 12 §12.3 |
-| Thread pool | A fixed set of reusable threads fed from a task queue | Ch 12 §12.21 |
-| Thread states | NEW, RUNNABLE, BLOCKED, WAITING, TIMED_WAITING, TERMINATED | Ch 12 §12.3 |
-| Thread-safe | Gives correct results even when many threads call it at the same time | Ch 12 §12.5 |
-| Thread-starvation deadlock | Tasks in a bounded pool wait for tasks queued behind them in the same pool | Ch 12 §12.17, §12.21 |
-| Throughput | How much work gets done per unit of time (requests per second) | Ch 12 §12.11 |
-| Timeout | A limit on how long to wait before giving up | Ch 12 §12.9 |
+| Thread | An independent path of execution inside a process, sharing its memory | §12.2 |
+| Thread confinement | Keeping data inside one thread so it never needs locking | §12.24 |
+| Thread dump | A snapshot of every thread's state and call stack (`jstack`, `jcmd`) used to diagnose hangs | §12.3 |
+| Thread pool | A fixed set of reusable threads fed from a task queue | §12.21 |
+| Thread states | NEW, RUNNABLE, BLOCKED, WAITING, TIMED_WAITING, TERMINATED | §12.3 |
+| Thread-safe | Gives correct results even when many threads call it at the same time | §12.5 |
+| Thread-starvation deadlock | Tasks in a bounded pool wait for tasks queued behind them in the same pool | §12.17, §12.21 |
+| Throughput | How much work gets done per unit of time (requests per second) | §12.11 |
+| Timeout | A limit on how long to wait before giving up | §12.9 |
 | TL;DR | "Too long; didn't read": a short summary at the end of each section or chapter | Every chapter |
-| Token bucket | Rate-limit algorithm: tokens refill at a fixed rate; each request takes one; allows bursts | Ch 13 §13.11 |
-| `toString` | Method returning a readable text form of an object, used in logs and printing | Ch 2 §2.12 |
-| `TreeMap` / `TreeSet` | Sorted map and set (red-black tree inside); support "next higher" and range queries | Ch 14 §14.5 |
-| `tryLock` | Acquire a lock only if free (or within a timeout); otherwise give up | Ch 12 §12.9 |
-| TTL (time to live) | How long an entry or hold stays valid before it expires | Ch 13 §13.6, Ch 15 §15.2 |
-| Two hats | While coding you are either adding function or refactoring, never both at once | Ch 7 §7.1.1 |
-| Type erasure | Java removes generic type arguments after compiling, so `List<String>` and `List<Integer>` are the same class at run time | Ch 2 §2.15 |
+| Token bucket | Rate-limit algorithm: tokens refill at a fixed rate; each request takes one; allows bursts | §13.11 |
+| `toString` | Method returning a readable text form of an object, used in logs and printing | §2.12 |
+| `TreeMap` / `TreeSet` | Sorted map and set (red-black tree inside); support "next higher" and range queries | §14.5 |
+| `tryLock` | Concurrency tool — see 22.8 | §12.9 |
+| TTL (time to live) | How long an entry or hold stays valid before it expires | §13.6, §15.2 |
+| Two hats | Refactoring — see 22.6 | §7.1.1 |
+| Type erasure | Java removes generic type arguments after compiling, so `List<String>` and `List<Integer>` are the same class at run time | §2.15 |
 | Ubiquitous language | One vocabulary shared by domain experts and the code (`place()`, not `setStatus(2)`) | Ch 5 §17 |
-| UI | User interface: the screens or controls a person interacts with | Ch 11 §11.7.5 |
-| UML | Unified Modeling Language: 14 diagram types, 7 structural and 7 behavioural | Ch 3 §3.9 |
+| UI | User interface: the screens or controls a person interacts with | §11.7.5 |
+| UML | Unified Modeling Language: 14 diagram types, 7 structural and 7 behavioural | §3.9 |
 | Unit test | A fast test of one small piece of code in isolation | Ch 6 §8 |
-| UPI | Unified Payments Interface: India's instant bank-to-bank mobile payment system | Ch 19, Ch 21 §21.2 |
-| Use case | One thing an actor can do with the system | Ch 1 §1.5, Ch 3 §3.10 |
-| Use-case diagram | UML diagram of actors, use cases and the system boundary («include», «extend») | Ch 3 §3.10 |
+| UPI | Unified Payments Interface: India's instant bank-to-bank mobile payment system | Ch 19, §21.2 |
+| Use case | One thing an actor can do with the system | §1.5, §3.10 |
+| Use-case diagram | UML diagram of actors, use cases and the system boundary («include», «extend») | §3.10 |
 | UTC | Coordinated Universal Time: the time-zone-free reference clock for storing timestamps | Ch 16 · Airline |
-| Value object | A small immutable object defined by its values (money, date range), usually a record | Ch 2 §2.13, Ch 5 §1, Ch 5 §17 |
-| Virtual threads | Lightweight JVM-managed threads for large numbers of blocking tasks (Java 21) | Ch 12 §12.4 |
-| Virtual waiting room | FIFO queue that admits buyers gradually during a ticket rush | Ch 15 §15.3 |
-| Visibility (memory) | Whether a write by one thread can be seen by another; not guaranteed without `volatile`, locks or other happens-before edges | Ch 12 §12.6 |
-| Visitor | Behavioral pattern adding operations to a stable set of classes via double dispatch | Ch 11 §11.5 |
-| `volatile` | Makes writes to a field visible to other threads; does not make `x++` atomic | Ch 12 §12.6 |
-| Webhook | A URL a service calls to notify you that something happened (e.g. "payment succeeded") | Ch 15 §15.2 |
-| Wildcard (generics) | `?` in a generic type: `? extends T` (read from it), `? super T` (write to it) | Ch 2 §2.15 |
-| Work stealing | Idle threads in a fork/join pool take queued tasks from busy threads | Ch 12 §12.26 |
-| Wrapper | An object that holds another and adds or changes behaviour around it (decorators, adapters, boxed primitives) | Ch 9 §9.4 |
-| Write-through / write-back | Cache writes go to storage immediately vs later in batches | Ch 20 §20.3 |
-| YAGNI | You Aren't Gonna Need It: don't build features before they are needed | Ch 5 §3 |
+| Value object | A small immutable object defined by its values (money, date range), usually a record | §2.13, Ch 5 §1, Ch 5 §17 |
+| Virtual threads | Concurrency tool — see 22.8 | §12.4 |
+| Virtual waiting room | FIFO queue that admits buyers gradually during a ticket rush | §15.3 |
+| Visibility (memory) | Whether a write by one thread can be seen by another; not guaranteed without `volatile`, locks or other happens-before edges | §12.6 |
+| Visitor | Behavioral pattern — see 22.7 | §11.5 |
+| `volatile` | Concurrency tool — see 22.8 | §12.6 |
+| Webhook | A URL a service calls to notify you that something happened (e.g. "payment succeeded") | §15.2 |
+| Wildcard (generics) | `?` in a generic type: `? extends T` (read from it), `? super T` (write to it) | §2.15 |
+| Work stealing | Idle threads in a fork/join pool take queued tasks from busy threads | §12.26 |
+| Wrapper | An object that holds another and adds or changes behaviour around it (decorators, adapters, boxed primitives) | §9.4 |
+| Write-through / write-back | Cache writes go to storage immediately vs later in batches | §20.3 |
+| YAGNI | You Aren't Gonna Need It — principle, see 22.5 | Ch 5 §3 |
 
 ---
 

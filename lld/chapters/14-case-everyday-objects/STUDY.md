@@ -10,7 +10,7 @@
 | 14.4 | ATM | **Security + money correctness**: authenticate, never lose money, never double-spend | State, Chain of Responsibility (cash dispenser), Command (transactions) |
 | 14.5 | Elevator System | **Scheduling** (SCAN/LOOK) and **dispatching** many cars | Strategy (dispatch), State-like modes |
 | 14.6 | Traffic Signal Control | **Timed state machine** with a hard safety invariant and emergency override | State, Strategy (timing), Observer (safety monitor) |
-| 14.7 | Shipping Locker System | **Best-fit allocation + deadlines + a secret**: reserve a door atomically, expire holds and uncollected parcels, single-use hashed pickup codes | Strategy (door choice), Observer (SMS), enum state machines, sealed results |
+| 14.7 | Shipping Locker System (Amazon Locker) | **Best-fit allocation + deadlines + a secret**: reserve a door atomically, expire holds and uncollected parcels, single-use hashed pickup codes | Strategy (door choice), Observer (SMS), enum state machines, sealed results |
 
 ### What these problems test
 
@@ -1564,7 +1564,9 @@ With 12 cars waiting E-W, the adaptive policy gives a 10 s green (the maximum).
 
 ---
 
-## 14.7 Design a Shipping Locker System
+## 14.7 Design a Shipping Locker System (Amazon Locker)
+
+> **Also asked as:** "Design Amazon Locker" or "Design a parcel/pickup locker".
 
 A **parcel locker** is a wall of numbered doors in a shop or lobby: a courier puts a parcel behind one door, the customer types a **pickup code** and that door opens (Amazon Hub Locker, InPost Paczkomat). It looks like the parking lot — hand out limited spaces of several sizes — plus three extras interviewers probe: **deadlines** (a reservation that times out, a parcel that expires), **a secret** (the code, hard to guess, never shown to the courier) and **a network** (station full → suggest another).
 
@@ -1577,17 +1579,18 @@ A **parcel locker** is a wall of numbered doors in a shop or lobby: a courier pu
 | How does the customer open it? | 6-digit **one-time code** by SMS/app on deposit; the courier never sees it. |
 | How long can a parcel stay? | 3 days; then it **expires** and the courier takes it back. |
 | Code guessing? | Random, single-use; 5 wrong codes in a row lock the keypad for 15 min. |
-| Many stations? | Yes; offer the nearest one with space. Returns and cash on delivery are extensions. |
+| Many stations? | Yes; offer the nearest one with space. Cash on delivery is an extension. |
+| Returns? | Yes: a door is held 2 days, a single-use **drop-off code** opens it empty once, the courier collects later. |
 
 ### Requirements
 
-**Functional:** (1) numbered doors of fixed sizes; (2) **reserve** the best-fitting free door, all-or-nothing, with a hold deadline; (3) **deposit** → one-time code **sent to the customer only**; (4) **pickup** opens one door once; (5) **expiry** → customer told, courier collects for return; (6) keypad lockout; (7) nearest station with space; (8) doors out of service.
+**Functional:** (1) numbered doors of fixed sizes; (2) **reserve** the best-fitting free door, all-or-nothing, with a hold deadline; (3) **deposit** → one-time code **sent to the customer only**; (4) **pickup** opens one door once; (5) **expiry** → customer told, courier collects for return; (6) keypad lockout; (7) nearest station with space; (8) doors out of service; (9) **customer return** to a locker with a drop-off code.
 
 **Non-functional:** never one door for two parcels under concurrency; codes unpredictable, single-use, stored as a hash; deadlines correct even if the timer is late; clock and randomness injected.
 
 ### Use cases
 
-**Actors → use cases:** Carrier system → reserve, find a station with space; Courier → deposit, collect expired; Customer → pick up; Technician → door out of service; Scheduler → sweep deadlines and notify.
+**Actors → use cases:** Customer → find a locker near me, pick up with code, start a return, drop off with code; Carrier system → reserve; Delivery agent → deposit (includes: send code), collect expired parcels and returns; Locker admin → door out of service; Scheduler → sweep deadlines and notify. Keypad lockout *extends* pickup after 5 wrong codes. (Use-case and activity diagrams: Full Edition.)
 
 ### Core entities
 
@@ -1595,8 +1598,8 @@ A **parcel locker** is a wall of numbered doors in a shop or lobby: a courier pu
 |---|---|
 | `Size` (enum), `Dimensions`, `Parcel` (records) | Door sizes with `fits()` (sort both boxes' sides, compare in order); parcel data. |
 | `Compartment` + `CompartmentState` | One door: FREE, RESERVED, OCCUPIED, OUT_OF_SERVICE; legal moves in `moveTo`. |
-| `Booking` + `BookingStatus` | One parcel's stay: RESERVED → DEPOSITED → PICKED_UP / EXPIRED → RETURNED / CANCELLED; deadlines and code **hash**. |
-| `PickupResult` (sealed) | `DoorOpened`, `WrongCode`, `KeypadLocked`, `ParcelExpired`. |
+| `Booking` + `BookingKind` + `BookingStatus` | One parcel's stay, DELIVERY or CUSTOMER_RETURN (statuses below); deadlines and code **hash**. |
+| `PickupResult` (sealed) | `DoorOpened`, `DropOffDoorOpened`, `WrongCode`, `KeypadLocked`, `ParcelExpired`. |
 | `CompartmentSelector` | **Strategy**: `SmallestFit`, `FirstFit`. |
 | `LockerListener` | **Observer**: parcel ready (with code), parcel expired. |
 | `LockerStation`, `LockerNetwork` | Doors, bookings, code index, lockout under one lock; nearest station with space. |
@@ -1637,15 +1640,21 @@ classDiagram
 ```mermaid
 stateDiagram-v2
     direction LR
-    [*] --> RESERVED : reserve
-    RESERVED --> DEPOSITED : deposit, send code
+    [*] --> RESERVED : reserve or requestReturn
+    RESERVED --> DEPOSITED : delivery deposited, send code
+    RESERVED --> DROPPED_OFF : return, drop-off code typed
     RESERVED --> CANCELLED : hold expired, free door
     DEPOSITED --> PICKED_UP : right code, free door
     DEPOSITED --> EXPIRED : pickup window over, notify
     EXPIRED --> RETURNED : courier collects, free door
+    DROPPED_OFF --> RETURNED : courier collects, free door
 ```
 
 **Delivery:** carrier `reserve(parcel)` → `SmallestFit` picks the smallest free door that fits → door RESERVED, hold 2 h → courier `deposit` → door OCCUPIED, random code, only its SHA-256 hash stored → listener sends the code to the customer **after the lock is released** → customer `pickup(code)` → hash matches → door FREE, code deleted. The door has its own small machine: FREE ↔ RESERVED → OCCUPIED → FREE, and FREE ↔ OUT_OF_SERVICE.
+
+**Station full / courier late:** no door fits → ask the network for the nearest station with space (none → home delivery); courier misses the 2 h hold → booking CANCELLED, reserve again.
+
+**Keypad (pickup or return drop-off):** locked? → show wait. Hash unknown? → count it; the 5th in a row locks for 15 min. Delivery expired? → "will be returned". Otherwise the booking's kind decides: delivery → door opens, PICKED_UP, door FREE; return → empty door opens, DROPPED_OFF, door OCCUPIED. Either way the code is deleted. The courier's visit (`collectExpired`, `collectReturns`) marks both kinds RETURNED and frees the doors.
 
 ### Design decisions & patterns used
 
@@ -1732,6 +1741,8 @@ Full runnable code: code/lld/ch14/locker/ (see the Full Edition).
    station F: small parcel -> F-01(LARGE), then large parcel -> REJECTED
    station S: small parcel -> S-02(SMALL), then large parcel -> S-01(LARGE)
    reserved=20 rejected=30 distinct doors=20
+   customer types the drop-off code -> DropOffDoorOpened[compartmentId=RT04-02, parcelId=R1]
+   2 days later, never dropped off: booking RT04-B2 is CANCELLED, old code -> WrongCode[attemptsLeft=4]
 ```
 
 The mug was upgraded to MEDIUM because both small doors were taken; `FirstFit` wasted the large door and had to refuse a large parcel; 50 concurrent reservations on 20 doors gave exactly 20 distinct doors.
@@ -1751,12 +1762,11 @@ The mug was upgraded to MEDIUM because both small doors were taken; `FirstFit` w
 
 ### Extensions & follow-up questions
 
-1. **Returns** → drop-off booking with its own code; courier collects later.
-2. **Extend pickup window** → move `pickupBy` once, only while DEPOSITED.
-3. **Cash on delivery** → a payment step before the door opens.
-4. **Keep large doors for large parcels** → a selector that refuses upgrades when few large doors are left.
-5. **Thousands of stations** → shard by station; geo index (geohash, R-tree) for the network search.
-6. **Database** → `UPDATE compartment SET state='RESERVED' WHERE id=? AND state='FREE'` and check one row changed.
+1. **Extend pickup window** → move `pickupBy` once, only while DEPOSITED.
+2. **Cash on delivery** → a payment step before the door opens.
+3. **Keep large doors for large parcels** → a selector that refuses upgrades when few large doors are left.
+4. **Thousands of stations** → shard by station; geo index (geohash, R-tree) for the network search.
+5. **Database** → `UPDATE compartment SET state='RESERVED' WHERE id=? AND state='FREE'` and check one row changed.
 
 ### Real-world example
 
@@ -1781,7 +1791,7 @@ Amazon Hub Locker sends a pickup code and returns uncollected parcels after a li
 ### TL;DR
 
 - **Strategy** picks the smallest free door that fits; choose-and-mark is **atomic** per station.
-- Two **state machines**: door and booking (RESERVED → DEPOSITED → PICKED_UP / EXPIRED → RETURNED / CANCELLED).
+- Two **state machines**: door and booking (RESERVED → DEPOSITED → PICKED_UP / EXPIRED → RETURNED / CANCELLED; returns RESERVED → DROPPED_OFF → RETURNED).
 - Codes **random, single-use, hashed**, sent via an **Observer** outside the lock; lockout after 5 wrong.
 - Deadlines enforced **lazily**; inject clock and randomness.
 

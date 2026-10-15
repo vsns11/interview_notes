@@ -35,6 +35,11 @@ public class Main {
         @Override public void parcelExpired(String station, Parcel p) {
             System.out.printf("   SMS to %s: parcel %s was not collected and will be returned%n", p.customerPhone(), p.id());
         }
+        @Override public void returnCodeIssued(String station, Parcel p, String code, long dropOffBy) {
+            lastCode.put(p.customerPhone(), code);
+            System.out.printf("   SMS to %s: drop return %s at locker %s with code %s by %s%n",
+                    p.customerPhone(), p.id(), station, code, Instant.ofEpochSecond(dropOffBy));
+        }
     }
 
     public static void main(String[] args) throws Exception {
@@ -130,5 +135,22 @@ public class Main {
             go.countDown();
         }
         System.out.println("   reserved=" + ok + " rejected=" + full + " distinct doors=" + doorsGiven.size());
+
+        System.out.println("\n== 10. Customer return: drop-off code opens an empty door, courier collects ==");
+        LockerStation rt = new LockerStation("RT04", 0, 0, LockerStation.layout(1, 1, 0), new SmallestFit(), clock, new SplittableRandom(11));
+        rt.addListener(sms);
+        Parcel kettle = new Parcel("R1", "+91-98450-00010", new Dimensions(15, 18, 22));
+        Booking rb = rt.requestReturn(kettle);
+        System.out.println("   return " + rb.id + " holds " + rb.compartment + ", free now: " + rt.freeBySize());
+        System.out.println("   customer types the drop-off code -> " + rt.pickup(sms.lastCode.get(kettle.customerPhone())));
+        System.out.println("   booking " + rb.id + " is " + rt.status(rb.id));
+        System.out.println("   courier collects returns: " + rt.collectReturns().stream().map(Parcel::id).toList()
+                + ", free now: " + rt.freeBySize());
+        Parcel lamp = new Parcel("R2", "+91-98450-00011", new Dimensions(5, 10, 10));
+        Booking lb = rt.requestReturn(lamp);
+        String lampCode = sms.lastCode.get(lamp.customerPhone());
+        clock.advance(Duration.ofDays(2));
+        System.out.println("   2 days later, never dropped off: booking " + lb.id + " is " + rt.status(lb.id)
+                + ", old code -> " + rt.pickup(lampCode));
     }
 }

@@ -1,20 +1,20 @@
 # Chapter 16 — Case Studies: Booking & Inventory (Part 2) — Study Edition
 
-> **Where this fits.** Chapter 15 covered the first group of booking problems. This chapter finishes the family with four more: car rental, restaurant, airline and course registration. They are one problem underneath: **a limited resource, a calendar, and many people trying to claim it at once.** Spot that skeleton and every new booking problem is quick to set up.
+> **Where this fits.** Chapter 15 covered the first group of booking problems. This chapter finishes the family with five more: car rental, restaurant, airline, course registration and a meeting scheduler. They are one problem underneath: **a limited resource, a calendar, and many people trying to claim it at once.** Spot that skeleton and every new booking problem is quick to set up.
 
 **The shared skeleton of every booking problem**
 
-| Idea | Car rental | Restaurant | Airline | Course registration |
-|---|---|---|---|---|
-| The thing being booked | a vehicle | a table | a seat on one flight instance | a seat in one section |
-| The "calendar" | days | hourly time slots | the flight instance (route + date) | the term |
-| The atomic check-then-claim | `Vehicle.tryBook` | `Table.tryHold` | `FlightInstance.holdSeats` | `Section.enroll` |
-| When it is full | search another car | try the next table | another seat or flight | waitlist |
-| Money | bill lines + late fee | check split by seat + tax | fare per seat class, paid per itinerary | none (fees are an extension) |
+| Idea | Car rental | Restaurant | Airline | Course registration | Meeting scheduler |
+|---|---|---|---|---|---|
+| The thing being booked | a vehicle | a table | a seat on one flight instance | a seat in one section | a room for a time range |
+| The "calendar" | days | hourly time slots | the flight instance (route + date) | the term | continuous time (half-open intervals) |
+| The atomic check-then-claim | `Vehicle.tryBook` | `Table.tryHold` | `FlightInstance.holdSeats` | `Section.enroll` | `Room.tryReserve` |
+| When it is full | search another car | try the next table | another seat or flight | waitlist | next fitting room |
+| Money | bill lines + late fee | check split by seat + tax | fare per seat class, paid per itinerary | none (fees are an extension) | none |
 
 A **resource** is anything in limited supply. A **race condition** is a bug where the result depends on which thread runs first — here, two people both "win" one seat because both checked "free?" before either wrote "taken".
 
-**How to run:** `cd chapters/16-case-booking-2/code && javac --release 21 -d /tmp/lld_16 $(find . -name '*.java') && java -cp /tmp/lld_16 lld.ch16.carrental.Main` (or `restaurant`, `airline`, `courseregistration`). Where threads race, the *counts* are always the same; *which* racer wins varies. One file sometimes holds several small package-private types (legal Java; production code would split them).
+**How to run:** `cd chapters/16-case-booking-2/code && javac --release 21 -d /tmp/lld_16 $(find . -name '*.java') && java -cp /tmp/lld_16 lld.ch16.carrental.Main` (or `restaurant`, `airline`, `courseregistration`, `meetingscheduler`). Where threads race, the *counts* are always the same; *which* racer wins varies. One file sometimes holds several small package-private types (legal Java; production code would split them).
 
 > **Money.** All prices use `BigDecimal`, never `double` — a `double` cannot store 0.1 exactly, so sums drift by fractions of a cent.
 
@@ -1013,6 +1013,241 @@ Plan: 0–5 clarify; 5–12 entities and diagram; 12–30 code `Section.enroll/d
 
 ---
 
+## Design a Meeting Scheduler
+
+### Problem & clarifying questions
+
+A **meeting scheduler** books meeting rooms: the organizer picks a time and invitees, the system finds a room that fits and is free, sends invitations and collects answers. Two twists: the calendar is **continuous time** (10:15–10:40), not slots; and **people** are booked too, but a person in two meetings is only a warning, while a room in two meetings is impossible.
+
+Terms: **organizer** / **invitee**; **RSVP** = an invitee's answer (accepted, tentative, declined; **pending** before answering); a **half-open interval** `[start, end)` includes start, excludes end, so 10:00–11:00 and 11:00–12:00 do not overlap — two intervals overlap iff `a.start < b.end && b.start < a.end`; a **hard conflict** blocks (room taken), a **soft conflict** warns (person busy); a **recurring** meeting is a **series** of **occurrences**.
+
+| Question | Assumed answer |
+|---|---|
+| Who picks the room? | The organizer names one, or the system picks one that fits. |
+| Fits? | Capacity ≥ organizer + invitees, and has the required equipment. |
+| Invitee double-booked? | Allowed, reported as a warning. |
+| Reschedule / cancel? | Organizer only; reschedule resets every RSVP to pending. |
+| Notifications? | Invite, RSVP (to organizer), reschedule, cancel; channel pluggable. |
+| Recurring? | Extension: daily/weekly × N, all in one room or not at all. |
+| Concurrency? | A room must never hold two overlapping meetings. |
+
+### Requirements
+
+**Functional:** (1) add rooms (capacity, equipment); (2) book a meeting, in a named room or any fitting room; (3) reject room overlaps, allow back-to-back; (4) warn on busy people; (5) invite, RSVP, notify the organizer; (6) reschedule and cancel with notifications; (7) agenda and free-room search; (8) extension: recurring series.
+
+**Non-functional:** no double-booking under concurrency; different rooms never share a lock; new room-selection policy or notification channel = new class.
+
+### Use cases
+
+**Organizer** — book (includes *pick room and detect conflicts* and *notify*; extended by *book recurring*), reschedule, cancel, search rooms. **Invitee** — RSVP, view agenda. **Facilities admin** — add rooms. Picking and notifying are included use cases, not a "System" actor.
+
+### Core entities
+
+| Class | Responsibility |
+|---|---|
+| `Interval` | Half-open `[start, end)`; `overlaps`. |
+| `Room` | Capacity, equipment, **its own calendar**. The only place a time range is claimed, under the room's lock. |
+| `Meeting`, `Invitation` | Organizer, room, interval, `SCHEDULED`/`CANCELLED`; one `RsvpStatus` per invitee. |
+| `RoomSelectionStrategy` (`SmallestFitStrategy`, `LeastBusyStrategy`) | Orders the rooms that fit. |
+| `MeetingObserver` (`InboxNotifier`, `EventCounter`) | Receives invited / RSVP / rescheduled / cancelled events. |
+| `Recurrence` | Extension: frequency × count → occurrences. |
+| `MeetingScheduler` | Book, book series, RSVP, reschedule, cancel, agenda, soft-conflict warnings; lock order. |
+
+### Class diagram
+
+```mermaid
+classDiagram
+    class MeetingScheduler {
+        +book(MeetingRequest) BookingResult
+        +bookRecurring(MeetingRequest, Recurrence) BookingResult
+        +respond(meetingId, userId, RsvpStatus)
+        +reschedule(meetingId, byUser, Interval) BookingResult
+        +cancel(meetingId, byUser)
+    }
+    class Room {
+        -calendar NavigableMap
+        -lock ReentrantLock
+        +tryReserve(meetingId, Interval) boolean
+        +tryReserveAll(Map) boolean
+        +move(meetingId, from, to) boolean
+        +release(meetingId, Interval)
+    }
+    class Meeting {
+        -status MeetingStatus
+        -when Interval
+        +respond(userId, RsvpStatus)
+        +movedTo(Interval)
+        +markCancelled() boolean
+    }
+    class RoomSelectionStrategy {
+        <<interface>>
+        +rank(rooms, request) List
+    }
+    class MeetingObserver {
+        <<interface>>
+        +onEvent(MeetingEvent)
+    }
+    MeetingScheduler o-- Room
+    MeetingScheduler o-- Meeting
+    MeetingScheduler --> RoomSelectionStrategy
+    MeetingScheduler --> MeetingObserver
+    Room *-- Reservation
+    Meeting --> Room
+    Meeting *-- Invitation
+    RoomSelectionStrategy <|.. SmallestFitStrategy
+    RoomSelectionStrategy <|.. LeastBusyStrategy
+    MeetingObserver <|.. InboxNotifier
+```
+
+### Key flows
+
+```mermaid
+flowchart TD
+    A["book(request)"] --> B["rooms that fit: capacity and equipment"]
+    B --> C{"any?"}
+    C -- "no" --> X["FAIL: no room fits"]
+    C -- "yes" --> D["strategy ranks them"]
+    D --> E["next room: tryReserve under room lock"]
+    E --> F{"claimed?"}
+    F -- "yes" --> G["create Meeting, PENDING invitations, notify, return warnings"]
+    F -- "no" --> H{"more rooms?"}
+    H -- "yes" --> E
+    H -- "no" --> Y["FAIL: all fitting rooms taken"]
+```
+
+- **Reschedule:** lock meeting → organizer and still scheduled? → `room.move(old, new)` under the room lock (old slot restored if new is taken) → new time, all RSVPs `PENDING` → unlock → notify.
+- **Cancel:** lock meeting → organizer? → `markCancelled` (second cancel is a no-op) → `room.release` → unlock → notify.
+- **Invitation states:** `PENDING` → `ACCEPTED` / `TENTATIVE` / `DECLINED` (changeable); any → `PENDING` on reschedule; all end when the meeting is cancelled.
+
+### Design decisions & patterns used
+
+Notifications are **Observer** ([§11.1](../11-patterns-behavioral-2/README.md#111-observer)) and room ranking is **Strategy** ([§11.3](../11-patterns-behavioral-2/README.md#113-strategy)), as in earlier cases. What is specific here:
+
+| Decision | Why | Alternative rejected |
+|---|---|---|
+| **Room owns its calendar** and its lock | The no-overlap invariant is per room; rooms never block each other. | One global list under one lock. |
+| **`TreeMap` keyed by start; clash = `lowerEntry(end)`** | Stored bookings are disjoint, so only the one with the latest start before the new end can overlap. O(log n). | Scanning a list. |
+| **Half-open intervals** | Back-to-back is legal with no special case. | Closed intervals. |
+| **Rank, then *try* rooms in order** | The ranking is a stale snapshot; each room's atomic claim decides. | "Find a free room, then book it" (check-then-act race). |
+| **Room clash blocks, people clash warns** | People double-book and choose by RSVP; declined meetings don't count as busy. | Blocking on a busy invitee. |
+| **Reschedule = atomic `Room.move`, RSVPs reset** | Slot never lost; old answers were for the old time. | Cancel + re-book (slot can be stolen; confusing notices). |
+| **Notify after unlocking** | Slow e-mail must not block bookings. | Publishing inside the lock. |
+
+### Java implementation
+
+Package `lld.ch16.meetingscheduler`. Full runnable code: code/lld/ch16/meetingscheduler/ (see the Full Edition).
+
+```java
+// Room.java — the only place a time range is claimed
+private Optional<Reservation> clash(Interval iv) {
+    var e = calendar.lowerEntry(iv.end());           // latest booking starting before iv.end
+    return e != null && e.getValue().interval().end().isAfter(iv.start()) ? Optional.of(e.getValue()) : Optional.empty();
+}
+
+boolean tryReserve(String meetingId, Interval iv) {
+    lock.lock();
+    try {
+        if (clash(iv).isPresent()) return false;
+        calendar.put(iv.start(), new Reservation(meetingId, iv));
+        return true;
+    } finally {
+        lock.unlock();
+    }
+}
+// tryReserveAll: check every occurrence, then insert every one, under one lock (recurring series).
+// move: remove old, check new, insert new or restore old, under one lock.
+
+// MeetingScheduler.java
+BookingResult book(MeetingRequest r) {
+    var rooms = candidates(r);   // the named room if it fits, else strategy.rank(every room that fits)
+    if (rooms.isEmpty()) return BookingResult.failure("no room fits " + r.headcount() + " people with " + r.needs());
+    String id = "M" + ids.incrementAndGet();
+    for (var room : rooms) {
+        if (!room.tryReserve(id, r.when())) continue;          // lost this room: try the next one
+        var m = new Meeting(id, null, r.title(), r.organizer(), room, r.when(), r.invitees());
+        meetings.put(id, m);
+        for (var u : r.invitees()) publish(EventType.INVITED, m, u, "");
+        return BookingResult.success(List.of(m), "booked " + m, busyPeople(m));
+    }
+    // ... failure message
+}
+
+BookingResult reschedule(String meetingId, String byUserId, Interval to) {
+    // ...
+    synchronized (m) {                                          // 1st lock: the meeting
+        requireOrganizer(m, byUserId);
+        if (!m.isScheduled()) return BookingResult.failure(meetingId + " is cancelled");
+        from = m.when();
+        if (!m.room().move(meetingId, from, to))                // 2nd lock: the room
+            return BookingResult.failure(m.room().name() + " is not free at " + to);
+        m.movedTo(to);                                          // new time, every RSVP back to PENDING
+    }
+    // notify invitees after unlocking
+}
+```
+
+Output excerpt:
+
+```text
+2) Conflicts in a named room (half-open intervals)
+   FAIL R2 is taken by M1 Mon 11-02 10:00-11:00
+   OK   booked M3 'Back-to-back' Mon 11-02 11:00-11:30 in Maple
+   OK   booked M5 'Hiring sync' Mon 11-02 10:30-11:00 in Huddle warnings=[eve is busy in M1, dee is busy in M1]
+   M1 [ben=PENDING, cy=PENDING, dee=PENDING, eve=PENDING]
+   ben cancels -> ben is not the organizer of M1
+   FAIL no single fitting room is free for all 3 occurrences
+   OK   booked series S17 in Maple
+9) Race: 20 organizers want Oak at Tue 10:00 at the same instant
+   winners=1, Oak bookings at that time=1
+10) Race: 20 organizers, any room, Wed 10:00 - 4 rooms exist, so exactly 4 win
+   per room {Atrium=1, Huddle=1, Maple=1, Oak=1}, rejected=16
+```
+
+Overlap fails with the blocker named; back-to-back succeeds; a busy invitee only warns; reschedule resets RSVPs; a series that cannot fit in one room fails whole, and with automatic choice moves to the next room. Race counts are exact every run.
+
+### Concurrency & edge cases
+
+Per-resource lock with check-and-claim inside, as for show seats ([§15.2](../15-case-booking-1/README.md#152-design-a-movie-ticket-booking-system-bookmyshow)) and hotel rooms ([§15.4](../15-case-booking-1/README.md#154-design-a-hotel-management-system)). New here:
+
+- **Overlap, not equal keys:** 10:00–11:00 and 10:30–11:15 have different start keys, so `putIfAbsent` can't catch them; the `lowerEntry` check and the insert must share one lock.
+- **Auto-choice race:** all threads rank the same room first; losers fail the claim and move on.
+- **Lock order meeting → room; never two rooms** → no deadlock. `book` needs only the room lock (the meeting isn't visible yet). Cancel vs reschedule and RSVP vs reschedule serialise on the meeting.
+- **Series:** checked and inserted under one room lock; nothing slips in between.
+- **Soft-conflict warnings** read without a global lock — advisory only.
+- **Time zones:** store `Instant`, expand series in the organizer's zone.
+- **Many servers:** PostgreSQL exclusion constraint `EXCLUDE USING gist (room_id WITH =, slot WITH &&)` (needs `btree_gist`), or `SELECT … FOR UPDATE` on the room row.
+
+### Extensions & follow-up questions
+
+- **Common free time?** Merge everyone's busy intervals (sort, merge), walk the gaps in working hours.
+- **Virtual meetings?** A `Location` interface: `Room` (has a calendar) or `VideoLink`.
+- **Edit one occurrence?** Store rule + exceptions (iCalendar RFC 5545) instead of eager occurrences.
+- **Reminders?** A scheduled job publishing `REMINDER` to the same observers.
+
+### In the interview
+
+**30-second answer:** "Each room owns a sorted calendar of half-open intervals; booking is check-then-insert under the room's lock, and one `lowerEntry(end)` lookup finds any clash. A strategy ranks fitting rooms and the scheduler tries to claim them in order. Room clashes block, people clashes warn. Reschedule is an atomic move that resets RSVPs; observers notify after unlocking; series are all-or-nothing in one room."
+
+Plan: 0–5 clarify; 5–12 entities and diagram; 12–28 `Interval`, `Room.tryReserve`, `book`; 28–35 RSVP, reschedule, cancel; 35–45 concurrency, series, DB constraint, common free time.
+
+### Self-check
+
+1. **Q:** Why does one `lowerEntry(end)` lookup find any clash? **A:** Bookings are disjoint and sorted; if the latest one starting before the new end ends by the new start, all earlier ones do.
+2. **Q:** Why not `putIfAbsent`? **A:** Overlapping meetings have different keys; ranges need check + insert under one lock.
+3. **Q:** Strategy said Huddle was free but Maple was booked — bug? **A:** No; another thread claimed Huddle first.
+4. **Q:** Many servers? **A:** Database exclusion constraint or a row lock on the room.
+
+### TL;DR
+
+- Room owns a `TreeMap` calendar of half-open intervals; claim under the room lock; `lowerEntry(end)` finds clashes.
+- Strategy ranks, scheduler tries each room's atomic claim.
+- Room clash blocks; people clash warns.
+- Reschedule = atomic move + RSVP reset; cancel idempotent; notify after unlock. Lock order meeting → room.
+
+**Real-world example.** Outlook/Exchange and Google Calendar treat rooms as resources with their own calendars that decline conflicting bookings, while people may be double-booked; recurring meetings are a rule plus exceptions (iCalendar). For a rooms-free version of the same interval logic, see the Event Calendar in [§21.3](../21-case-machine-coding/README.md#213-design-an-event-calendar-flipkart).
+
+---
+
 ## Chapter summary
 
 | Problem | Key insight | Atomic claim | Patterns |
@@ -1021,5 +1256,6 @@ Plan: 0–5 clarify; 5–12 entities and diagram; 12–30 code `Section.enroll/d
 | Restaurant | **Meal per seat**; table = status + slots | `Table.tryHold(time)` | Observer, Strategy (chefs, payment), state machine |
 | Airline | **Flight ≠ FlightInstance, Seat ≠ FlightSeat** | `FlightInstance.holdSeats(map)` (all or nothing) | Strategy + Decorator, Facade, cancellation index |
 | Course registration | **Course ≠ Section**; rules as objects | `Section.enroll` inside a student lock | Specification / Chain of rules, lock ordering |
+| Meeting scheduler | **Room owns a calendar of half-open intervals**; room clash blocks, people clash warns | `Room.tryReserve(interval)` | Strategy, Observer, meeting → room lock order |
 
 **Find the calendar, find the atomic check-then-claim, and put the rules on the object that owns the data.**

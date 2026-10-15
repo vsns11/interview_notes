@@ -15,9 +15,9 @@
 
 > **Key idea: seeded randomness.** `java.util.Random` is *pseudo-random*: the same **seed** always gives the same sequence, and `Collections.shuffle(list, rnd)` is deterministic for a given `Random`. Rule: **never call `new Random()` or `Math.random()` inside the game — accept a `Random` (or a `Dice`/`Spawner`) from outside.** Production passes an unseeded (or `SecureRandom`) source; tests pass a seed. This is plain Dependency Injection (Ch. 5).
 
-**Problems:** 17.1 Blackjack and a deck of cards · 17.2 Chess · 17.3 Tic-Tac-Toe · 17.4 Snake and Ladder · 17.5 2048.
+**Problems:** 17.1 Blackjack and a deck of cards · 17.2 Chess · 17.3 Tic-Tac-Toe · 17.4 Snake and Ladder · 17.5 2048 · 17.6 Jigsaw Puzzle.
 
-**How to run:** `cd chapters/17-case-games/code && javac --release 21 -d /tmp/lld_17 $(find . -name '*.java') && java -cp /tmp/lld_17 lld.ch17.blackjack.Main` (or `chess`, `tictactoe`, `snakeladder`, `game2048`). All randomness is seeded or scripted, so output is exact.
+**How to run:** `cd chapters/17-case-games/code && javac --release 21 -d /tmp/lld_17 $(find . -name '*.java') && java -cp /tmp/lld_17 lld.ch17.blackjack.Main` (or `chess`, `tictactoe`, `snakeladder`, `game2048`, `jigsaw`). All randomness is seeded or scripted, so output is exact.
 
 **A reusable skeleton for any board/card game** — name these five parts early:
 
@@ -1254,6 +1254,203 @@ A seeded corner-strategy game reaches the 128 target and keeps playing until the
 
 ---
 
+## Design a Jigsaw Puzzle
+
+### Problem & clarifying questions
+
+A picture cut into roughly square pieces, each with **four sides**: **flat** (an edge side — belongs on the outer frame), **tab** (a knob that sticks out) or **blank** (a hole a tab slots into). Two sides **interlock** when one is a tab, the other a blank, with the same **cut profile**. Solved = every cell filled and every shared side interlocks. The interview tests: the matching rule in one place, and the search algorithm behind a swappable interface.
+
+| Question | Assumed answer |
+|---|---|
+| Shape? | `rows × cols` rectangle, at least 2 × 2; one piece per cell. |
+| How do sides fit? | Each tab/blank has a **shape code**; TAB fits BLANK with the same code. |
+| Rotation? | Quarter turns only; no flipping. |
+| Picture matching? | No — shapes only (extension). |
+| Who places? | Players (co-op allowed) and an automatic **solver**, which can finish a half-built board. |
+| Look-alike pieces? | Generator supports unique codes or a few reused codes (forces search). |
+
+### Requirements
+
+**Functional:** (1) piece = four sides; kind = **corner** (2 flat) / **border** (1) / **interior** (0); (2) side matching; (3) place with rotation, refused **with a reason** if off board, cell taken, piece used, non-flat side facing out, flat side facing in, or a side not fitting a placed neighbour; (4) remove; (5) **validate** the box before play; (6) **solve** with a pluggable algorithm, from empty or partial; (7) progress and SOLVED.
+
+**Non-functional:** one home for placement rules (players and solvers agree); new solvers without touching `Board` (Open/Closed); seeded generator; safe co-op.
+
+### Use cases
+
+**Player**: start a puzzle (includes *validate the box*), place a piece (includes *choose a rotation*), remove a piece, ask the solver to finish (includes *place a piece*: the solver is part of the system, not an actor), see progress and SOLVED.
+
+### Core entities
+
+| Class | Responsibility |
+|---|---|
+| `SideType`, `Side` (record) | FLAT/TAB/BLANK + shape code; `fits`, `partner()` (the one side that fits). |
+| `Direction` | TOP, RIGHT, BOTTOM, LEFT clockwise; neighbour offset; `opposite()`. |
+| `Piece`, `PieceKind` | Immutable id + 4 sides at rotation 0; `side(d, rotation)`, `kind()`. |
+| `Board` + `Placement(piece, rotation)` | Grid; **every placement rule** in `check`; `place`, `remove`, `verify`, `isSolved`. |
+| `PlaceResult` | OK or the reason a placement was refused. |
+| `Puzzle`, `PuzzleGenerator`, `PuzzleValidator` | The box; seeded cutting + shuffling + turning; cheap sanity checks. |
+| `SolverStrategy` → `BruteForceSolver`, `EdgeFirstSolver` | Swappable algorithms; `SolveResult` (attempts, backtracks). |
+| `JigsawGame`, `GameStatus` | Validates on start; `place`/`remove`/`finishWith(solver)`; `synchronized`. |
+
+**Rotation lives in `Placement`, not `Piece`:** it is a fact about where a piece lies; immutable pieces mean trying a rotation needs no undo.
+
+### Class diagram
+
+```mermaid
+classDiagram
+    class Side {
+        <<record>>
+        SideType type
+        int shape
+        +fits(Side) boolean
+        +partner() Side
+    }
+    class Piece {
+        -Side[4] sides
+        +side(Direction, int) Side
+        +kind() PieceKind
+    }
+    class Board {
+        -Placement[][] cells
+        +check(Piece, int, int, int) PlaceResult
+        +place(Piece, int, int, int) PlaceResult
+        +remove(int, int) Placement
+        +isSolved() boolean
+    }
+    class SolverStrategy {
+        <<interface>>
+        +solve(Puzzle, Board) SolveResult
+    }
+    class JigsawGame {
+        +place(int, int, int, int) PlaceResult
+        +finishWith(SolverStrategy) SolveResult
+    }
+    Piece *-- "4" Side
+    Board *-- "0..*" Placement
+    Placement --> Piece
+    Puzzle o-- "1..*" Piece
+    JigsawGame *-- Board
+    JigsawGame --> Puzzle
+    SolverStrategy <|.. BruteForceSolver
+    SolverStrategy <|.. EdgeFirstSolver
+    SolverStrategy ..> Board : places via check
+```
+
+### Key flows
+
+**Rotation:** sides stored clockwise `[TOP, RIGHT, BOTTOM, LEFT]`; one clockwise turn moves TOP to RIGHT, so after `r` turns the side facing `d` is `sides[(d − r) mod 4]` (`Math.floorMod`, since `-1 % 4` is `-1` in Java).
+
+**`Board.check`:** bounds → cell free → piece unused → for each direction: outside the picture ⇒ side must be FLAT; inside ⇒ not FLAT, and must `fit` a placed neighbour's opposite side. O(1). Corners land only in corners, in the one right rotation, with no special-case code.
+
+**Edge-first solve** (the human way): validate → sort by kind → index every non-flat side (`Side → (piece, side position)`) → corner at top-left → walk the frame clockwise → fill the inside row by row. Each next cell has a placed neighbour; it needs that neighbour's facing side's **partner**, so the index returns candidates in O(1) and rotation = `(d − i) mod 4`. Dead end ⇒ **backtrack** (undo the latest placement, try the next candidate). An attempt budget bounds the search.
+
+### Design decisions & patterns used
+
+| Decision | Why | Alternative rejected |
+|---|---|---|
+| All rules in `Board.check`. | Player and solver moves judged identically. | Each solver re-checking fit. |
+| **Strategy** `SolverStrategy` ([§11.3](../11-patterns-behavioral-2/README.md#113-strategy)). | Add solvers without touching board/game. | `switch (algorithm)` in the game. |
+| `Side` is a value record. | Usable as a map key — enables the index. | Identity-compared mutable sides. |
+| `PlaceResult` reason, not exception. | Wrong guesses are normal play; UI can explain. | Exceptions for routine refusals. |
+| Validate first; budget every search. | Bad boxes fail fast; solvers always return. | Discovering a missing piece by failing to solve. |
+
+### Java implementation
+
+Package `lld.ch17.jigsaw`. Full runnable code: code/lld/ch17/jigsaw/ (see the Full Edition).
+
+```java
+// Side.java
+public boolean fits(Side other) {
+    return !isFlat() && !other.isFlat() && other.type == type.complement() && other.shape == shape;
+}
+public Side partner() { return new Side(type.complement(), shape); }
+
+// Piece.java
+public Side side(Direction d, int rotation) { return sides[Math.floorMod(d.ordinal() - rotation, 4)]; }
+
+// Board.java
+public PlaceResult check(Piece piece, int rotation, int r, int c) {
+    if (!inside(r, c)) return PlaceResult.OUT_OF_BOUNDS;
+    if (cells[r][c] != null) return PlaceResult.CELL_OCCUPIED;
+    if (placedIds.contains(piece.id())) return PlaceResult.ALREADY_PLACED;
+    for (Direction d : Direction.values()) {
+        Side mine = piece.side(d, rotation);
+        int nr = r + d.dRow, nc = c + d.dCol;
+        if (!inside(nr, nc)) {
+            if (!mine.isFlat()) return PlaceResult.EDGE_MUST_BE_FLAT;
+            continue;
+        }
+        if (mine.isFlat()) return PlaceResult.FLAT_FACES_INSIDE;
+        Placement neighbour = cells[nr][nc];
+        if (neighbour != null && !mine.fits(neighbour.side(d.opposite()))) return PlaceResult.SIDES_DO_NOT_FIT;
+    }
+    return PlaceResult.OK;
+}
+
+// EdgeFirstSolver.java — candidates for an empty cell
+Side needed = board.at(nr, nc).side(d.opposite()).partner();      // what must face d from this cell
+for (Hit h : index.getOrDefault(needed, List.of()))
+    if (!board.isPlaced(h.piece().id()) && h.piece().kind() == wanted)
+        out.add(new Board.Placement(h.piece(), Math.floorMod(d.ordinal() - h.sideIndex(), 4)));
+```
+
+**Output excerpt:**
+
+```text
+  piece 12 (interior) at corner (0,0)    EDGE_MUST_BE_FLAT
+  piece 3 at (0,0), wrong turn           FLAT_FACES_INSIDE
+  piece 3 at (0,0), right turn           OK
+  solver finishes the rest: EdgeFirst+Index    solved=true  attempts=        9 backtracks=        0
+  one side mis-cut: [shape 8: 2 tabs but 0 blanks]
+  10 x 10, shapeVariety 0 (every joint unique)
+    BruteForce         solved=true  attempts=   11,060 backtracks=        0  verify=true
+    EdgeFirst+Index    solved=true  attempts=      101 backtracks=        0  verify=true
+  6 x 6, shapeVariety 2 (look-alike pieces)
+    BruteForce         solved=true  attempts=2,099,470 backtracks=   46,642  verify=true
+    EdgeFirst+Index    solved=true  attempts=  501,976 backtracks=   72,683  verify=true
+```
+
+Unique shapes: edge-first ≈ one attempt per piece; brute force grows with the square of the piece count. Look-alikes force both to search.
+
+### Concurrency & edge cases
+
+- **Co-op:** `synchronized` game methods; a second player racing for the same cell or piece gets CELL_OCCUPIED / ALREADY_PLACED. One lock per game.
+- **Solver holds the lock** for the whole solve; for big puzzles solve on a copy and offer hints.
+- **Bad box** (missing/extra piece, 3 flat sides, opposite flats, tabs ≠ blanks per shape) — refused before play. Validation is **necessary, not sufficient**.
+- **Look-alikes:** any layout passing `verify` counts as solved. **Failed solve** leaves the board as it was.
+
+### Extensions & follow-up questions
+
+- **Picture matching?** Edge colour signatures on `Side` + a new strategy that ranks candidates.
+- **Faster on look-alikes?** Next cell = the one with the fewest candidates; check both neighbours when listing candidates.
+- **Undo / live UI?** Command stack of placements (§10.2); `PiecePlaced` events (Observer, §11.1).
+
+### Real-world example
+
+Shape-only jigsaw solving with look-alike pieces is NP-complete in general; practical solvers add picture-content scores between edges to edge-first, greedy placement.
+
+### In the interview
+
+**30-second answer:** "Immutable `Piece` with four clockwise `Side`s; a side is FLAT/TAB/BLANK + shape code, TAB fits BLANK with the same code. Rotation lives in the placement: facing side = `sides[(d − r) mod 4]`. `Board.check` holds every rule and both players and solvers use it. Solving is a Strategy — brute force, or edge-first with a side→pieces index (≈ n attempts). Validate the box first; synchronized game for co-op."
+
+**Time plan:** 10 min on `Side.fits`, `Piece.side(d, r)`, `Board.check`; 10–15 min on the solver interface and the index.
+
+### Self-check
+
+1. **Q:** `[F, T1, B2, F]` turned clockwise twice — what faces TOP? **A:** `sides[2] = B2`.
+2. **Q:** Border (non-corner) pieces in 5 × 7? **A:** `2·3 + 2·5 = 16`.
+3. **Q:** How does a corner piece end up only in corners? **A:** `check` needs outward sides flat and inward sides not flat.
+4. **Q:** Why ≈ one attempt per piece for edge-first? **A:** The index returns the pieces having the partner of a placed neighbour's side — with unique shapes, exactly one.
+
+### TL;DR
+
+- `Side` = type + shape code; TAB↔BLANK with equal codes. Rotation in `Placement`; `sides[(d − r) mod 4]`.
+- `Board.check` = the one home of every rule; returns a reason.
+- **Strategy** solvers: brute force vs edge-first + `Side → pieces` index; budget the search.
+- Validate first; `synchronized` for co-op.
+
+---
+
 ## Chapter summary
 
 | Game | Core rule object | Pluggable strategies | Randomness for tests | Signature technique |
@@ -1263,6 +1460,7 @@ A seeded corner-strategy game reaches the 128 target and keeps playing until the
 | Tic-Tac-Toe | `Board` counters | `MoveStrategy` | Seeded `RandomStrategy`, scripted | O(1) win with counters |
 | Snake & Ladder | `Board` + `Rules` | `Dice`, `OverflowRule`, `WinStrategy` | `RandomDice`, `LoadedDice` | Validated config; queue-based turns |
 | 2048 | `LineMerger` | `TileSpawner` | Seeded spawner, `Board.of` | One merge function for 4 directions |
+| Jigsaw | `Board.check` | `SolverStrategy` | Seeded `PuzzleGenerator` | Side matching + rotation formula; edge-first with side index |
 
 **Patterns used:** Strategy (everywhere), Factory Method (`Deck.standard52`, `Piece.create`, `Board.of`), template-style base (`SlidingPiece`), Command + Memento (chess undo), State (status enums; full State pattern suggested for blackjack rounds), Observer (event-log hooks; suggested for UIs).
 

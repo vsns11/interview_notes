@@ -13,9 +13,9 @@ Every chapter is written for a first-time learner, every Java example is **Java 
 ## What's in here
 | Path | Purpose |
 |---|---|
-| `LLD-Handbook-Study-Vol1.pdf`, `LLD-Handbook-Study-Vol2.pdf` | **Start here — Study Edition in two volumes.** Vol 1: the concepts (OOP, UML, SOLID, principles, clean code, refactoring, patterns, concurrency). Vol 2: the interview approach and all case studies. Every topic, heading and case study, with less padding. |
+| `LLD-Handbook-Study-Vol1.pdf` … `LLD-Handbook-Study-Vol3.pdf` | **Start here — Study Edition in three volumes (each under 350 pages).** Vol 1: the concepts (OOP, UML, SOLID, principles, clean code, refactoring, patterns, concurrency). Vol 2: the interview approach and case studies I (Ch 1, 14–18). Vol 3: case studies II, machine coding, cheat sheets, question bank and mock drills (Ch 19–24). Every topic, heading and case study, with less padding. |
 | `interview/LLD-Interview-Edition.pdf` | **Interview Edition (~47 pages)** — fast night-before revision: framework, OOP/UML/SOLID, every pattern as one table row, concurrency, all 45 case studies as compact cards. Source: `interview/INTERVIEW.md`. |
-| `LLD-Handbook-Vol1.pdf` … `LLD-Handbook-Vol4.pdf` | Full Edition in four volumes (each under 600 pages), with longer explanations and complete code listings. Vol 1: OOP, UML, SOLID, design principles, clean code, refactoring (Ch 2–7). Vol 2: design patterns and concurrency (Ch 8–13). Vol 3: the LLD interview approach and case studies I (Ch 1, 14–17). Vol 4: case studies II, cheat sheets and the interview question bank (Ch 18–23). |
+| `LLD-Handbook-Vol1.pdf` … `LLD-Handbook-Vol5.pdf` | Full Edition in five volumes (each under 350 pages), with longer explanations and complete code listings. Vol 1: OOP, UML, SOLID, design principles, clean code, refactoring (Ch 2–7). Vol 2: design patterns and concurrency (Ch 8–13). Vol 3: the LLD interview approach and case studies I (Ch 1, 14–16). Vol 4: case studies II (Ch 17–20). Vol 5: machine-coding problems, cheat sheets, interview question bank and mock interview drills (Ch 21–24). |
 | `chapters/NN-name/STUDY.md` + `ChapterNN-Study.pdf` | One chapter, Study Edition. |
 | `chapters/NN-name/README.md` + `ChapterNN-Notes.pdf` | One chapter, Full Edition. |
 | `chapters/NN-name/code/` | Runnable Java for that chapter (package per topic/case, each with a `Main`). |
@@ -54,6 +54,7 @@ Every chapter is written for a first-time learner, every Java example is **Java 
 | **Part V — Revision** | |
 | 22 | [Cheat sheets & glossary](chapters/22-cheatsheets-glossary/README.md) |
 | 23 | [Interview question bank: 190+ most-asked LLD, machine-coding and concept questions with short answers](chapters/23-interview-question-bank/README.md) |
+| 24 | [Mock interview drills: one timed interview script per classic OOD problem, with a scoring rubric](chapters/24-mock-interview-drills/README.md) |
 
 ## Rebuild
 ```bash

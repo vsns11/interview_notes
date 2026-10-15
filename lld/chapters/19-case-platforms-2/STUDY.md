@@ -1067,6 +1067,8 @@ Two shapes:
 | Restaurant | Manage menu, accept/refuse, preparing, ready |
 | Delivery agent | Get assigned, pick up, deliver |
 | System | Fees, rider assignment, waiting queue, notifications |
+| Admin | Onboard restaurants and delivery agents |
+| Payment gateway | Charge UPI/card (included in "place order"); refund extends "cancel" and a kitchen-full refusal when paid upfront |
 
 ### Core entities
 
@@ -1125,7 +1127,9 @@ FoodKart (Part B): `FoodKartService` (current user; `registerUser`, `loginUser`,
 
 ### Key flows
 
-**Order states:** PENDING → CONFIRMED (accepted, kitchen slots reserved) or CANCELLED (kitchen full / customer); CONFIRMED → PREPARING or CANCELLED (slots released); PREPARING → READY_FOR_PICKUP (slots released) → OUT_FOR_DELIVERY (rider assigned) → DELIVERED. Real apps split pickup into "rider assigned / arrived / picked up" — a local enum change.
+**Order states:** PENDING → CONFIRMED (accepted, kitchen slots reserved) or CANCELLED (kitchen full / customer; refund if prepaid); CONFIRMED → PREPARING or CANCELLED (slots released); PREPARING → READY_FOR_PICKUP (slots released) → OUT_FOR_DELIVERY (rider assigned) → DELIVERED. Real apps split pickup into "rider assigned / arrived / picked up" — a local enum change.
+
+**Place order (activity):** browse within radius → cart (a second restaurant's item is refused) → choose payment → restaurant open and items available? (no → reject) → copy prices, fee by distance → if paid upfront, payment must succeed → order PENDING, restaurant notified → kitchen has room? yes → CONFIRMED (slots reserved); no → CANCELLED and refunded if prepaid.
 
 **Food ready → rider:** `foodReady` marks READY_FOR_PICKUP, releases slots, adds the order to the queue; while the queue is not empty: the strategy ranks free agents, `tryClaim()` (CAS true → false) on each in turn; claimed → poll, assign, OUT_FOR_DELIVERY, notify; none → stop, order waits. `delivered()` frees the rider and runs the same loop.
 
@@ -1202,13 +1206,14 @@ Full runnable code: code/lld/ch19/fooddelivery/ (see the Full Edition).
 == 4. Kitchen capacity: 4 items max at Dosa Corner ==
     (Dosa Corner kitchen full: needs 2 item slots, free 1)
     [OD103 CANCELLED] -> customer Asha
+    refund 111.20 to card ****4242
     (OD104 waiting for a free rider)
     [OD101 DELIVERED] -> customer Asha
     [OD104 OUT_FOR_DELIVERY] -> customer Vikram: Ravi is on the way
   o6 rider: Meena (fewer deliveries today)
 ```
 
-The far grill (beyond 10 km) is hidden; a second restaurant in the cart is refused; fee = 20 + 8 × 1.4 km = 31.20 and a later dosa price change does not alter the order; an order out for delivery cannot be cancelled while a confirmed card order can (and is refunded); with both riders at one spot, fair share picks Meena (1 delivery) over Ravi (2).
+The far grill (beyond 10 km) is hidden; a second restaurant in the cart is refused; fee = 20 + 8 × 1.4 km = 31.20 and a later dosa price change does not alter the order; a card order refused for a full kitchen is cancelled and refunded; an order out for delivery cannot be cancelled while a confirmed card order can (and is refunded); with both riders at one spot, fair share picks Meena (1 delivery) over Ravi (2).
 
 #### Part B — FoodKart (`lld.ch19.foodkart`)
 

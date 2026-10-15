@@ -171,44 +171,10 @@ These are the "Design X" prompts that show up again and again in object-oriented
 → *Related design:* [Ch 16 — Design a Course Registration System](../16-case-booking-2/README.md)
 
 **Q21. ★ Design a Meeting Scheduler / meeting room booking**
-
-*Requirements.* An office has rooms, each with a capacity. A user books a room for a time interval with a list of attendees. The system picks a free room large enough, rejects clashes, supports cancellation, shows a room's or a person's calendar, and notifies attendees. A common follow-up asks for the first free slot that suits every attendee.
-
-*Main classes.*
-
-```mermaid
-classDiagram
-    class Scheduler {
-        +book(interval, attendees, size) Meeting
-        +cancel(meetingId)
-    }
-    class Room {
-        +id
-        +capacity
-        +isFree(interval) boolean
-    }
-    class Meeting {
-        +id
-        +interval
-        +attendees
-    }
-    class RoomSelectionStrategy {
-        <<interface>>
-        +pick(rooms, size) Room
-    }
-    Scheduler --> Room
-    Scheduler --> RoomSelectionStrategy
-    Room --> Meeting
-```
-
-- `Interval`: a record `(start, end)` with `overlaps(other)`. Treat it as half-open, so 10:00–11:00 and 11:00–12:00 do not clash.
-- `Room`: keeps its bookings in a `TreeMap<start, Meeting>`. To check a clash, look only at the neighbours (`floorEntry`, `ceilingEntry`), which takes O(log n).
-- `RoomSelectionStrategy`: picks the smallest room that fits, or the nearest room.
-- `NotificationService`: tells attendees about invites, changes and cancellations (Observer).
-
-*Concurrency and edge cases.* Two people can book the same room for overlapping times. Lock per room, then check and insert under that lock. If you try rooms one by one, release each lock before taking the next, so the code cannot deadlock. Reject `end <= start`. A recurring meeting expands into instances, and the booking fails if any instance clashes (or the system offers to skip it).
-
-*Extension question.* "Find the earliest 30-minute slot when all attendees are free." Collect every attendee's busy intervals, sort them, merge the overlapping ones, then scan the gaps. This is the classic merge-intervals technique.
+- Entities: `Interval` (half-open), `Room` (owns a sorted calendar), `Meeting`, `Invitation` (RSVP), `MeetingScheduler`, `RoomSelectionStrategy`, `MeetingObserver`.
+- Patterns: Strategy for room ranking, Observer for invitations and RSVPs.
+- What interviewers probe: overlapping bookings of one room (check and insert under the room lock), room clash blocks while a busy person only warns, reschedule without losing the slot, and "first time everyone is free" (merge busy intervals, scan the gaps).
+→ *Full design:* [Ch 16 — Design a Meeting Scheduler](../16-case-booking-2/README.md#design-a-meeting-scheduler)
 
 **Q22. ★ Design a doctor appointment booking system**
 
@@ -229,6 +195,10 @@ classDiagram
 *Concurrency and edge cases.* Two patients may book the last slot together. Guard the slot status with a per-slot lock, or a compare-and-set on an `AtomicReference<SlotStatus>`. Check the patient's own clash under the patient's lock. Lock patient then slot, always in that order, so no deadlock can form. Validate that slots are whole hours inside working hours. Cancelling an already-cancelled booking is a no-op.
 
 *Extension question.* "Show the trending doctor: the one with the most bookings today." Keep a counter per doctor that `book` updates, and read it through a max-heap or a sorted view.
+
+**Q192. Meeting scheduler: why can't a concurrent map keyed by start time stop double-booking, and how do you find a clash fast?**
+Overlapping meetings usually start at different times (10:00–11:00 and 10:30–11:15), so their keys differ and `putIfAbsent` lets both in. Keep each room's bookings in a `TreeMap` keyed by start; because stored bookings never overlap, only the one returned by `lowerEntry(newEnd)` can clash, an O(log n) check. Do that check and the insert under the room's lock.
+→ *More:* [Ch 16 — Design a Meeting Scheduler](../16-case-booking-2/README.md#design-a-meeting-scheduler)
 
 ## Games
 
@@ -323,6 +293,12 @@ This book has no Bowling Alley case study, so this outline is the whole answer h
 *Concurrency and edge cases.* Keep the world single-threaded. Input arrives from other threads into a `ConcurrentLinkedQueue`, and the loop drains it at the start of each tick. Asset loading can run on virtual threads, publishing "loaded" events. Use a fixed time step, so physics gives the same result on fast and slow machines.
 
 *Extension question.* "Make it multiplayer." The server owns the true state and runs ticks. Clients send commands, predict movement locally, and correct themselves when the server state arrives.
+
+**Q193. Design a Jigsaw Puzzle**
+- Entities: `Side` (FLAT, TAB or BLANK plus a shape code), immutable `Piece` (four sides clockwise), `Board` with `Placement(piece, rotation)`, `PuzzleValidator`, `SolverStrategy`.
+- Patterns: Strategy for solvers (brute-force backtracking vs edge-first with a `Side → pieces` index); all placement rules in one `Board.check` used by players and solvers.
+- What interviewers probe: where rotation lives (in the placement, so pieces stay immutable), the facing side after `r` turns (`sides[(d − r) mod 4]`), why corners need no special rule, and the cost of solving (about n attempts with unique shapes, exponential with look-alikes, hence an attempt budget).
+→ *Full design:* [Ch 17 — Design a Jigsaw Puzzle](../17-case-games/README.md#design-a-jigsaw-puzzle)
 
 ## Platforms and marketplaces
 
@@ -1195,6 +1171,22 @@ Names reveal intent (`activeBookings`, not `list2`). Functions are small, do one
 **Q132. Unit testing: mocks vs stubs, and how do you make a design testable?**
 A **stub** returns canned answers so the code under test can run. A **mock** also *verifies* interactions (for example, "`send` was called once"). A **fake** is a working lightweight version, such as an in-memory repository. Designs are testable when dependencies are injected through interfaces, time and randomness are injected (`Clock`), and logic sits apart from I/O.
 → *More:* [Ch 06 — §17 Testing strategies](../06-clean-code/README.md)
+
+**Q194. ★ Layered vs hexagonal architecture: what is the difference?**
+Both separate concerns. In **layered** architecture (controller → service → repository) the domain depends *down* on persistence, so storage tends to shape the model. In **hexagonal** (ports and adapters) the core owns interfaces such as `OrderRepository`, and adapters (JDBC, in-memory, REST) depend *in* on them, so the core imports no framework and tests run with in-memory adapters. Layered suits CRUD; hexagonal pays off when the rules are valuable.
+→ *More:* [Ch 11 — 11.9 Architectural patterns](../11-patterns-behavioral-2/README.md#119-architectural-patterns-and-how-they-differ-from-design-patterns)
+
+**Q195. Event-driven architecture: broker vs mediator topology?**
+**Broker** (choreography): no coordinator; each consumer reacts to events and may publish new ones. Very decoupled, but no single place shows the whole flow. **Mediator** (orchestration): a central coordinator sends ordered commands and handles failures and compensation. Use a broker for independent reactions (email, analytics) and a mediator for an ordered process with undo (order fulfilment). Either way, delivery is usually at least once, so consumers must be idempotent.
+→ *More:* [Ch 11 — 11.9.5 Event-driven architecture](../11-patterns-behavioral-2/README.md#1195-event-driven-architecture-broker-vs-mediator-topology)
+
+**Q196. Pipe-and-filter vs Chain of Responsibility?**
+In a **pipeline** every filter runs and *transforms* the data, possibly into a new type (`String → fields → command`); a rejection is just one possible output. In a **chain of responsibility** each handler may handle or *stop* the request, and usually one handler deals with it. Decorator differs from both: it wraps one object behind the *same* interface.
+→ *More:* [Ch 11 — 11.9.6 Pipe-and-filter](../11-patterns-behavioral-2/README.md#1196-pipe-and-filter)
+
+**Q197. ★ Modular monolith or microservices for a new system?**
+Start with a **modular monolith**: one deployable split into business modules with small public interfaces, which gives clear boundaries without network failures. Extract a module into a **microservice** only for a concrete reason (independent team releases, very different scaling, fault isolation), and accept the costs: timeouts and retries, idempotency, sagas instead of cross-service transactions, eventual consistency. Services that must be deployed together are a "distributed monolith", the worst of both.
+→ *More:* [Ch 11 — 11.9.4 Monolith, modular monolith and microservices](../11-patterns-behavioral-2/README.md#1194-monolith-modular-monolith-and-microservices)
 
 ## Creational patterns
 

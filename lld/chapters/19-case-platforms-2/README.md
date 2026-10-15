@@ -277,416 +277,59 @@ Requirement 8 ("cancel only if not shipped") is now one line: `canCancel()` retu
 
 Files: `Money.java` (BigDecimal helpers), `Catalog.java` (category, product, review, search, catalog), `Order.java` (address, item, cart, order status machine, order), `Payments.java` (payments, shipment), `Accounts.java` (account, customer, guest, member, admin), `OrderService.java` (listeners, notifications, service), `Main.java` (demo).
 
-```java
-// File: lld/ch19/amazon/Accounts.java
-package lld.ch19.amazon;
-
-import java.util.ArrayList;
-import java.util.List;
-
-enum AccountStatus { ACTIVE, BLOCKED, BANNED, COMPROMISED, ARCHIVED, UNKNOWN }
-
-/** Login data shared by members and admins. */
-final class Account {
-    private final String userName;
-    private final String email;
-    private final String phone;
-    private final List<Address> addresses = new ArrayList<>();
-    private volatile AccountStatus status = AccountStatus.ACTIVE;
-
-    Account(String userName, String email, String phone) {
-        this.userName = userName;
-        this.email = email;
-        this.phone = phone;
-    }
-
-    String userName() { return userName; }
-    String email() { return email; }
-    String phone() { return phone; }
-    AccountStatus status() { return status; }
-    void setStatus(AccountStatus s) { status = s; }
-    synchronized void addAddress(Address a) { addresses.add(a); }
-    synchronized List<Address> addresses() { return List.copyOf(addresses); }
-}
-
-/**
- * Everything any shopper may do - browse and fill a cart. Placing an order is
- * deliberately NOT here, because a Guest is a Customer and must not inherit it (LSP).
- */
-abstract sealed class Customer permits Guest, Member {
-    private final ShoppingCart cart = new ShoppingCart();
-
-    ShoppingCart cart() { return cart; }
-    void addToCart(Product p, int qty) { cart.addItem(p, qty); }
-    void removeFromCart(String productId) { cart.removeItem(productId); }
-}
-
-final class Guest extends Customer {
-    /** Registering turns a guest into a member and carries the cart across. */
-    Member register(String memberId, Account account) {
-        Member m = new Member(memberId, account);
-        m.cart().mergeFrom(cart());
-        cart().clear();
-        return m;
-    }
-}
-
-final class Member extends Customer {
-    private final String id;
-    private final Account account;
-
-    Member(String id, Account account) {
-        this.id = id;
-        this.account = account;
-    }
-
-    String id() { return id; }
-    Account account() { return account; }
-    boolean canBuy() { return account.status() == AccountStatus.ACTIVE; }
-}
-
-final class Admin {
-    private final Account account;
-
-    Admin(Account account) { this.account = account; }
-
-    ProductCategory addCategory(String name, String description) { return new ProductCategory(name, description); }
-
-    void block(Member m) { m.account().setStatus(AccountStatus.BLOCKED); }
-
-    void unblock(Member m) { m.account().setStatus(AccountStatus.ACTIVE); }
-
-    String name() { return account.userName(); }
-}
-```
+The full runnable source is in [`code/lld/ch19/amazon/`](code/lld/ch19/amazon/); below are the lines that carry the design (getters, constructors and `Main` omitted).
 
 ```java
+// File: lld/ch19/amazon/Money.java - money is always BigDecimal at scale 2, never double
+static BigDecimal of(String amount) { return new BigDecimal(amount).setScale(2, RoundingMode.HALF_EVEN); }
+
 // File: lld/ch19/amazon/Catalog.java
-package lld.ch19.amazon;
-
-import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-
-/** A category such as "Books". Products point at it; it does not own them. */
-record ProductCategory(String name, String description) { }
-
-/** A review names its reviewer by id, so Product never depends on Member. */
-record ProductReview(String reviewerId, int rating, String text) {
-    ProductReview {
-        if (rating < 1 || rating > 5) throw new IllegalArgumentException("rating must be 1..5");
-    }
-}
-
-/** The thing being sold. Owns its reviews and guards its own stock count. */
-final class Product {
-    private final String id;
-    private final String name;
-    private final ProductCategory category;
-    private final String sellerId;
-    private volatile BigDecimal price;
+final class Product {                                 // owns its reviews, guards its own stock
     private int availableCount;                       // guarded by this
-    private final List<ProductReview> reviews = new CopyOnWriteArrayList<>();
-
-    Product(String id, String name, ProductCategory category, BigDecimal price,
-            String sellerId, int availableCount) {
-        this.id = id;
-        this.name = name;
-        this.category = category;
-        this.price = Money.of(price);
-        this.sellerId = sellerId;
-        this.availableCount = availableCount;
-    }
-
-    String id() { return id; }
-    String name() { return name; }
-    ProductCategory category() { return category; }
-    String sellerId() { return sellerId; }
-    BigDecimal price() { return price; }
-    synchronized int availableCount() { return availableCount; }
-
-    void updatePrice(BigDecimal newPrice) {
-        if (newPrice.signum() < 0) throw new IllegalArgumentException("negative price");
-        price = Money.of(newPrice);
-    }
-
     /** Take stock out of the pool. False means "not enough" - nothing changes. */
     synchronized boolean reserve(int quantity) {
         if (quantity <= 0 || quantity > availableCount) return false;
         availableCount -= quantity;
         return true;
     }
-
     synchronized void release(int quantity) { availableCount += quantity; }
-
-    void addReview(ProductReview review) { reviews.add(review); }
-
-    double averageRating() {
-        return reviews.stream().mapToInt(ProductReview::rating).average().orElse(0.0);
-    }
-
-    @Override public String toString() { return name + " (" + Money.fmt(price) + ")"; }
 }
 
-/** Requirement: search by name or by category. */
-interface Search {
-    List<Product> searchByName(String text);
-    List<Product> searchByCategory(String categoryName);
-}
-
-/**
- * The catalog points to products but never owns them. It keeps one index per search
- * (words of the name, category name), so a lookup is a map read, not a scan of every
- * product. Every index is updated in one method (addProduct) so they can never drift apart.
- */
-final class Catalog implements Search {
-    private final Map<String, Product> byId = new ConcurrentHashMap<>();
+final class Catalog implements Search {               // points to products, never owns them
     private final Map<String, Set<Product>> byNameWord = new ConcurrentHashMap<>();
     private final Map<String, List<Product>> byCategory = new ConcurrentHashMap<>();
-
-    void addProduct(Product p) {
+    void addProduct(Product p) {                       // every index updated in one place
         byId.put(p.id(), p);
         for (String word : words(p.name()))
             byNameWord.computeIfAbsent(word, k -> ConcurrentHashMap.newKeySet()).add(p);
         byCategory.computeIfAbsent(key(p.category().name()), k -> new CopyOnWriteArrayList<>()).add(p);
     }
-
-    Optional<Product> find(String productId) { return Optional.ofNullable(byId.get(productId)); }
-
-    /** Products whose name contains every word of the query (e.g. "clean code"). */
-    @Override public List<Product> searchByName(String text) {
-        List<String> query = words(text);
-        if (query.isEmpty()) return List.of();
-        Set<Product> hits = new HashSet<>(byNameWord.getOrDefault(query.get(0), Set.of()));
-        for (String w : query.subList(1, query.size())) hits.retainAll(byNameWord.getOrDefault(w, Set.of()));
-        List<Product> out = new ArrayList<>(hits);
-        out.sort((a, b) -> a.name().compareTo(b.name()));
-        return out;
-    }
-
-    @Override public List<Product> searchByCategory(String categoryName) {
-        return Collections.unmodifiableList(byCategory.getOrDefault(key(categoryName), List.of()));
-    }
-
-    private static List<String> words(String s) {
-        return Arrays.stream(key(s).split("[^\\p{Alnum}]+")).filter(w -> !w.isEmpty()).toList();
-    }
-
-    private static String key(String s) { return s.toLowerCase(Locale.ROOT).trim(); }
+    // searchByName: intersect the sets of every query word; searchByCategory: one map read
 }
-```
 
-```java
-// File: lld/ch19/amazon/Main.java
-package lld.ch19.amazon;
-
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicInteger;
-
-public class Main {
-    public static void main(String[] args) throws Exception {
-        Admin admin = new Admin(new Account("root", "admin@shop.test", "000"));
-        ProductCategory books = admin.addCategory("Books", "Printed and e-books");
-        ProductCategory electronics = admin.addCategory("Electronics", "Gadgets");
-
-        Catalog catalog = new Catalog();
-        catalog.addProduct(new Product("P1", "Clean Code", books, Money.of("32.50"), "seller-9", 5));
-        catalog.addProduct(new Product("P2", "Refactoring", books, Money.of("41.00"), "seller-9", 2));
-        catalog.addProduct(new Product("P3", "USB-C Cable", electronics, Money.of("9.99"), "seller-4", 100));
-        catalog.addProduct(new Product("P4", "Design Patterns (last copy)", books, Money.of("55.00"), "seller-2", 1));
-
-        System.out.println("== 1. Search ==");
-        System.out.println("name 'code'      -> " + catalog.searchByName("code"));
-        System.out.println("name 'usb cable' -> " + catalog.searchByName("usb cable"));
-        System.out.println("category 'books' -> " + catalog.searchByCategory("books"));
-
-        Map<String, Account> accounts = new ConcurrentHashMap<>();
-        OrderService orders = new OrderService(catalog);
-        orders.subscribe(new NotificationService(accounts::get, List.of(new EmailChannel(), new SmsChannel())));
-
-        System.out.println("\n== 2. Guest fills a cart, then registers (cart carries over) ==");
-        Guest guest = new Guest();
-        guest.addToCart(catalog.find("P1").orElseThrow(), 1);
-        guest.addToCart(catalog.find("P3").orElseThrow(), 3);
-        Account aliceAcc = new Account("alice", "alice@mail.test", "+1-555-0101");
-        Member alice = guest.register("M1", aliceAcc);
-        accounts.put(alice.id(), aliceAcc);
-        alice.cart().updateQuantity("P3", 2);
-        alice.cart().snapshot().forEach(i -> System.out.println("  cart: " + i.quantity() + " x " + i.name()
-                + " = " + Money.fmt(i.lineTotal())));
-
-        System.out.println("\n== 3. Checkout with a credit card ==");
-        Address home = new Address("1 Main St", "Seattle", "98101", "US");
-        Order o1 = orders.placeOrder(alice, home,
-                amt -> new CreditCardPayment(amt, "4242", Money.of("1000.00")));
-        System.out.println("  " + o1.orderNumber() + " total " + Money.fmt(o1.total()) + ", status " + o1.status()
-                + ", stock of Clean Code now " + catalog.find("P1").orElseThrow().availableCount());
-
-        System.out.println("\n== 4. Ship, track, deliver ==");
-        orders.ship(o1.orderNumber(), "UPS Ground");
-        orders.updateShipment(o1.orderNumber(), ShipmentStatus.SHIPPED, "Portland hub");
-        orders.updateShipment(o1.orderNumber(), ShipmentStatus.DELIVERED, "front door");
-        System.out.println("  tracking now: " + o1.shipment().current() + ", order " + o1.status());
-        System.out.println("  cancel after delivery? " + orders.cancel(o1.orderNumber()));
-
-        System.out.println("\n== 5. Bank transfer (pending) then cancel before shipping -> refund ==");
-        alice.addToCart(catalog.find("P2").orElseThrow(), 2);
-        Order o2 = orders.placeOrder(alice, home, amt -> new BankTransferPayment(amt, "Chase"));
-        System.out.println("  " + o2.orderNumber() + " status " + o2.status() + ", payment " + o2.payment().status());
-        orders.onPaymentSettled(o2.orderNumber());
-        System.out.println("  cancel before shipping? " + orders.cancel(o2.orderNumber())
-                + " -> " + o2.status() + ", payment " + o2.payment().status()
-                + ", Refactoring stock back to " + catalog.find("P2").orElseThrow().availableCount());
-        System.out.println("  order log: " + o2.log().stream().map(OrderLog::status).toList());
-
-        System.out.println("\n== 6. Illegal transition is rejected by the state machine ==");
-        try {
-            orders.ship(o2.orderNumber(), "FedEx");
-        } catch (IllegalStateException e) {
-            System.out.println("  " + e.getMessage());
-        }
-
-        System.out.println("\n== 7. Review ==");
-        Product cleanCode = catalog.find("P1").orElseThrow();
-        cleanCode.addReview(new ProductReview(alice.id(), 5, "Changed how I name things"));
-        cleanCode.addReview(new ProductReview("M7", 4, "Good, a bit long"));
-        System.out.println("  Clean Code average rating = " + cleanCode.averageRating());
-
-        System.out.println("\n== 8. Blocked member cannot buy ==");
-        admin.block(alice);
-        alice.addToCart(catalog.find("P3").orElseThrow(), 1);
-        try {
-            orders.placeOrder(alice, home, amt -> new CreditCardPayment(amt, "4242", Money.of("1000")));
-        } catch (IllegalStateException e) {
-            System.out.println("  rejected: " + e.getMessage());
-        }
-        admin.unblock(alice);
-        alice.cart().clear();
-
-        System.out.println("\n== 9. Ten members race for the last copy ==");
-        OrderService quiet = new OrderService(catalog);          // no listeners: keep output short
-        Product last = catalog.find("P4").orElseThrow();
-        CountDownLatch start = new CountDownLatch(1);
-        AtomicInteger winners = new AtomicInteger();
-        AtomicInteger losers = new AtomicInteger();
-        Thread[] threads = new Thread[10];
-        for (int t = 0; t < threads.length; t++) {
-            Member m = new Member("R" + t, new Account("racer" + t, "r" + t + "@mail.test", "-"));
-            m.addToCart(last, 1);
-            threads[t] = new Thread(() -> {
-                try {
-                    start.await();
-                    quiet.placeOrder(m, home, amt -> new CreditCardPayment(amt, "1111", new BigDecimal("500")));
-                    winners.incrementAndGet();
-                } catch (IllegalStateException e) {
-                    losers.incrementAndGet();
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-            });
-            threads[t].start();
-        }
-        start.countDown();
-        for (Thread t : threads) t.join();
-        System.out.println("  winners=" + winners + " losers=" + losers + " stock left=" + last.availableCount());
+// File: lld/ch19/amazon/Accounts.java
+/** Ordering is deliberately NOT here: a Guest is a Customer and must not inherit it (LSP). */
+abstract sealed class Customer permits Guest, Member {
+    private final ShoppingCart cart = new ShoppingCart();
+    void addToCart(Product p, int qty) { cart.addItem(p, qty); }
+}
+final class Guest extends Customer {
+    Member register(String memberId, Account account) {   // the cart survives registration
+        Member m = new Member(memberId, account);
+        m.cart().mergeFrom(cart());
+        cart().clear();
+        return m;
     }
 }
-```
-
-```java
-// File: lld/ch19/amazon/Money.java
-package lld.ch19.amazon;
-
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-
-/** Money helpers: always BigDecimal, always 2 decimal places, never double. */
-final class Money {
-    private Money() { }
-
-    static final BigDecimal ZERO = of("0");
-
-    static BigDecimal of(String amount) { return new BigDecimal(amount).setScale(2, RoundingMode.HALF_EVEN); }
-
-    static BigDecimal of(BigDecimal amount) { return amount.setScale(2, RoundingMode.HALF_EVEN); }
-
-    static String fmt(BigDecimal amount) { return "$" + amount.setScale(2, RoundingMode.HALF_EVEN).toPlainString(); }
+final class Member extends Customer {
+    boolean canBuy() { return account.status() == AccountStatus.ACTIVE; }
 }
-```
 
-```java
 // File: lld/ch19/amazon/Order.java
-package lld.ch19.amazon;
+record Item(String productId, String name, int quantity, BigDecimal unitPrice) { }  // price copied at add time
 
-import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.EnumSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
-record Address(String street, String city, String zip, String country) {
-    @Override public String toString() { return street + ", " + city + " " + zip + ", " + country; }
-}
-
-/** One line of a cart or an order: an immutable snapshot of product, quantity and unit price. */
-record Item(String productId, String name, int quantity, BigDecimal unitPrice) {
-    Item {
-        if (quantity <= 0) throw new IllegalArgumentException("quantity must be positive");
-    }
-    BigDecimal lineTotal() { return unitPrice.multiply(BigDecimal.valueOf(quantity)); }
-}
-
-/** A mutable working area. Owns its items (they die when the cart is cleared). */
-final class ShoppingCart {
-    private final Map<String, Item> items = new LinkedHashMap<>();
-
-    synchronized void addItem(Product p, int qty) {
-        items.merge(p.id(), new Item(p.id(), p.name(), qty, p.price()),
-                (old, add) -> new Item(old.productId(), old.name(), old.quantity() + add.quantity(), p.price()));
-    }
-
-    synchronized void updateQuantity(String productId, int qty) {
-        if (qty == 0) { items.remove(productId); return; }
-        Item old = items.get(productId);
-        if (old == null) throw new IllegalArgumentException("not in cart: " + productId);
-        items.put(productId, new Item(old.productId(), old.name(), qty, old.unitPrice()));
-    }
-
-    synchronized void removeItem(String productId) { items.remove(productId); }
-
-    /** A copy, so an order never shares its lines with the cart. */
-    synchronized List<Item> snapshot() { return List.copyOf(items.values()); }
-
-    synchronized boolean isEmpty() { return items.isEmpty(); }
-
-    synchronized void clear() { items.clear(); }
-
-    synchronized void mergeFrom(ShoppingCart other) {
-        for (Item i : other.snapshot()) items.merge(i.productId(), i,
-                (a, b) -> new Item(a.productId(), a.name(), a.quantity() + b.quantity(), a.unitPrice()));
-    }
-}
-
-/** The order state machine. Each state lists the states it may move to. */
 enum OrderStatus {
     PENDING, UNSHIPPED, SHIPPED, COMPLETED, CANCELED, REFUND_APPLIED;
-
     private Set<OrderStatus> next() {
         return switch (this) {
             case PENDING -> EnumSet.of(UNSHIPPED, CANCELED);      // waiting for payment
@@ -696,50 +339,13 @@ enum OrderStatus {
             case COMPLETED, REFUND_APPLIED -> EnumSet.noneOf(OrderStatus.class);
         };
     }
-
     boolean canMoveTo(OrderStatus target) { return next().contains(target); }
 }
 
-record OrderLog(OrderStatus status, String note) { }
-
-/** A fixed copy of the purchased lines, plus a status that only moves along legal edges. */
 final class Order {
-    private final String orderNumber;
-    private final String memberId;
-    private final List<Item> items;              // copied from the cart, never shared
-    private final Address shippingAddress;
+    private final List<Item> items;                   // List.copyOf(cart lines), never shared
     private final List<OrderLog> log = new ArrayList<>();
-    private OrderStatus status = OrderStatus.PENDING;
-    private Payment payment;
-    private Shipment shipment;
-
-    Order(String orderNumber, String memberId, List<Item> items, Address shippingAddress) {
-        this.orderNumber = orderNumber;
-        this.memberId = memberId;
-        this.items = List.copyOf(items);
-        this.shippingAddress = shippingAddress;
-        log.add(new OrderLog(status, "order placed"));
-    }
-
-    String orderNumber() { return orderNumber; }
-    String memberId() { return memberId; }
-    List<Item> items() { return items; }
-    Address shippingAddress() { return shippingAddress; }
-    synchronized OrderStatus status() { return status; }
-    synchronized Payment payment() { return payment; }
-    synchronized Shipment shipment() { return shipment; }
-    synchronized List<OrderLog> log() { return Collections.unmodifiableList(new ArrayList<>(log)); }
-
-    BigDecimal total() {
-        return items.stream().map(Item::lineTotal).reduce(Money.ZERO, BigDecimal::add);
-    }
-
-    synchronized void attachPayment(Payment p) { this.payment = p; }
-    synchronized void attachShipment(Shipment s) { this.shipment = s; }
-
-    /** Requirement 8 lives in exactly one place. */
     synchronized boolean canCancel() { return status.canMoveTo(OrderStatus.CANCELED); }
-
     synchronized void moveTo(OrderStatus target, String note) {
         if (!status.canMoveTo(target))
             throw new IllegalStateException(orderNumber + ": " + status + " -> " + target + " is not allowed");
@@ -747,266 +353,64 @@ final class Order {
         log.add(new OrderLog(target, note));
     }
 }
-```
 
-```java
-// File: lld/ch19/amazon/OrderService.java
-package lld.ch19.amazon;
-
-import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
-
-/** Observer: anything that wants to hear about order and shipment changes. */
-interface OrderEventListener {
-    void onOrderStatus(Order order, OrderStatus status);
-    void onShipmentUpdate(Order order, ShipmentLog entry);
-}
-
-/** One way of delivering a message (email, SMS, push...). */
-interface NotificationChannel {
-    void send(Account to, String message);
-}
-
-final class EmailChannel implements NotificationChannel {
-    @Override public void send(Account to, String message) {
-        System.out.println("    [email -> " + to.email() + "] " + message);
-    }
-}
-
-final class SmsChannel implements NotificationChannel {
-    @Override public void send(Account to, String message) {
-        System.out.println("    [sms   -> " + to.phone() + "] " + message);
-    }
-}
-
-/** Requirement 9: tell the member whenever order or shipping status changes. */
-final class NotificationService implements OrderEventListener {
-    private final Function<String, Account> accountLookup;
-    private final List<NotificationChannel> channels;
-
-    NotificationService(Function<String, Account> accountLookup, List<NotificationChannel> channels) {
-        this.accountLookup = accountLookup;
-        this.channels = List.copyOf(channels);
-    }
-
-    @Override public void onOrderStatus(Order order, OrderStatus status) {
-        Account to = accountLookup.apply(order.memberId());
-        String msg = "Order " + order.orderNumber() + " is now " + status;
-        channels.forEach(c -> c.send(to, msg));
-    }
-
-    @Override public void onShipmentUpdate(Order order, ShipmentLog entry) {
-        Account to = accountLookup.apply(order.memberId());
-        channels.get(0).send(to, "Shipment for " + order.orderNumber() + ": " + entry.status() + " @ " + entry.location());
-    }
-}
-
-/** Application service (facade) that turns a cart into an order and drives the order state machine. */
-final class OrderService {
-    private final Catalog catalog;
-    private final Map<String, Order> orders = new ConcurrentHashMap<>();
-    private final List<OrderEventListener> listeners = new CopyOnWriteArrayList<>();
-    private final AtomicInteger orderSeq = new AtomicInteger(1000);
-    private final AtomicInteger shipSeq = new AtomicInteger(1);
-
-    OrderService(Catalog catalog) { this.catalog = catalog; }
-
-    void subscribe(OrderEventListener l) { listeners.add(l); }
-
-    /**
-     * Checkout. Stock is reserved when the order is placed (not when paid), all-or-nothing,
-     * so two buyers can never both take the last copy.
-     */
-    Order placeOrder(Member member, Address address, Function<BigDecimal, Payment> paymentMethod) {
-        if (!member.canBuy()) throw new IllegalStateException("account " + member.account().status());
-        List<Item> items = member.cart().snapshot();
-        if (items.isEmpty()) throw new IllegalStateException("cart is empty");
-
-        List<Item> reserved = new ArrayList<>();
-        for (Item i : items) {
-            Product p = catalog.find(i.productId()).orElseThrow();
-            if (!p.reserve(i.quantity())) {
-                reserved.forEach(r -> catalog.find(r.productId()).orElseThrow().release(r.quantity()));
-                throw new IllegalStateException("out of stock: " + i.name());
-            }
-            reserved.add(i);
-        }
-
-        Order order = new Order("ORD-" + orderSeq.incrementAndGet(), member.id(), items, address);
-        orders.put(order.orderNumber(), order);
-
-        Payment payment = paymentMethod.apply(order.total());
-        order.attachPayment(payment);
-        switch (payment.process()) {
-            case COMPLETED -> { transition(order, OrderStatus.UNSHIPPED, "paid by " + payment.describe()); member.cart().clear(); }
-            case PENDING -> { publish(order, OrderStatus.PENDING); member.cart().clear(); }
-            default -> {                                  // declined: give the stock back, keep the cart
-                releaseStock(order);
-                transition(order, OrderStatus.CANCELED, "payment declined");
-            }
-        }
-        return order;
-    }
-
-    /** Called when a bank transfer finally clears. */
-    void onPaymentSettled(String orderNumber) {
-        Order o = get(orderNumber);
-        o.payment().markSettled();
-        transition(o, OrderStatus.UNSHIPPED, "transfer cleared");
-    }
-
-    /** Requirement 8: cancel only if not shipped yet. */
-    boolean cancel(String orderNumber) {
-        Order o = get(orderNumber);
-        synchronized (o) {                     // check-then-act must be atomic against ship()
-            if (!o.canCancel()) return false;
-            releaseStock(o);
-            transition(o, OrderStatus.CANCELED, "cancelled by member");
-        }
-        if (o.payment().refund() == PaymentStatus.REFUNDED)
-            transition(o, OrderStatus.REFUND_APPLIED, "refunded " + Money.fmt(o.total()));
-        return true;
-    }
-
-    void ship(String orderNumber, String method) {
-        Order o = get(orderNumber);
-        Shipment s = new Shipment("SHP-" + shipSeq.getAndIncrement(), method);
-        synchronized (o) {
-            transition(o, OrderStatus.SHIPPED, "handed to " + method);
-            o.attachShipment(s);
-        }
-        updateShipment(orderNumber, ShipmentStatus.SHIPPED, "sort centre");
-    }
-
-    void updateShipment(String orderNumber, ShipmentStatus status, String location) {
-        Order o = get(orderNumber);
-        o.shipment().addLog(status, location);
-        ShipmentLog entry = o.shipment().current();
-        listeners.forEach(l -> l.onShipmentUpdate(o, entry));
-        if (status == ShipmentStatus.DELIVERED) transition(o, OrderStatus.COMPLETED, "delivered");
-    }
-
-    Order get(String orderNumber) {
-        Order o = orders.get(orderNumber);
-        if (o == null) throw new IllegalArgumentException("no order " + orderNumber);
-        return o;
-    }
-
-    private void releaseStock(Order o) {
-        o.items().forEach(i -> catalog.find(i.productId()).orElseThrow().release(i.quantity()));
-    }
-
-    private void transition(Order o, OrderStatus target, String note) {
-        o.moveTo(target, note);
-        publish(o, target);
-    }
-
-    private void publish(Order o, OrderStatus s) { listeners.forEach(l -> l.onOrderStatus(o, s)); }
-}
-```
-
-```java
-// File: lld/ch19/amazon/Payments.java
-package lld.ch19.amazon;
-
-import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.List;
-
-enum PaymentStatus { UNPAID, PENDING, COMPLETED, DECLINED, CANCELLED, REFUNDED }
-
-/**
- * Strategy for taking money. Each subclass behaves differently: a card clears at
- * once, a bank transfer comes back PENDING and only clears later.
- */
+// File: lld/ch19/amazon/Payments.java - Strategy: a card clears now, a transfer is PENDING
 abstract sealed class Payment permits CreditCardPayment, BankTransferPayment {
-    private final BigDecimal amount;
-    protected PaymentStatus status = PaymentStatus.UNPAID;
-
-    Payment(BigDecimal amount) { this.amount = Money.of(amount); }
-
-    BigDecimal amount() { return amount; }
-    synchronized PaymentStatus status() { return status; }
-
-    /** Try to take the money. Returns the new status. */
     abstract PaymentStatus process();
-
-    abstract String describe();
-
-    synchronized void markSettled() {
-        if (status == PaymentStatus.PENDING) status = PaymentStatus.COMPLETED;
-    }
-
     synchronized PaymentStatus refund() {
         if (status == PaymentStatus.COMPLETED) status = PaymentStatus.REFUNDED;
         else if (status == PaymentStatus.PENDING || status == PaymentStatus.UNPAID) status = PaymentStatus.CANCELLED;
         return status;
     }
 }
+// Shipment keeps a List<ShipmentLog>; current() = last entry, history() = all of them
 
-final class CreditCardPayment extends Payment {
-    private final String last4;             // never store the full card number
-    private final BigDecimal creditLimit;
+// File: lld/ch19/amazon/OrderService.java - Facade; publishes to OrderEventListener (Observer)
+Order placeOrder(Member member, Address address, Function<BigDecimal, Payment> paymentMethod) {
+    if (!member.canBuy()) throw new IllegalStateException("account " + member.account().status());
+    List<Item> items = member.cart().snapshot();
+    if (items.isEmpty()) throw new IllegalStateException("cart is empty");
 
-    CreditCardPayment(BigDecimal amount, String last4, BigDecimal creditLimit) {
-        super(amount);
-        this.last4 = last4;
-        this.creditLimit = creditLimit;
+    List<Item> reserved = new ArrayList<>();          // all-or-nothing reservation
+    for (Item i : items) {
+        Product p = catalog.find(i.productId()).orElseThrow();
+        if (!p.reserve(i.quantity())) {
+            reserved.forEach(r -> catalog.find(r.productId()).orElseThrow().release(r.quantity()));
+            throw new IllegalStateException("out of stock: " + i.name());
+        }
+        reserved.add(i);
     }
+    Order order = new Order("ORD-" + orderSeq.incrementAndGet(), member.id(), items, address);
+    orders.put(order.orderNumber(), order);
 
-    @Override synchronized PaymentStatus process() {
-        status = amount().compareTo(creditLimit) <= 0 ? PaymentStatus.COMPLETED : PaymentStatus.DECLINED;
-        return status;
+    Payment payment = paymentMethod.apply(order.total());
+    order.attachPayment(payment);
+    switch (payment.process()) {
+        case COMPLETED -> { transition(order, OrderStatus.UNSHIPPED, "paid by " + payment.describe()); member.cart().clear(); }
+        case PENDING -> { publish(order, OrderStatus.PENDING); member.cart().clear(); }
+        default -> {                                  // declined: give the stock back, keep the cart
+            releaseStock(order);
+            transition(order, OrderStatus.CANCELED, "payment declined");
+        }
     }
-
-    @Override String describe() { return "card ****" + last4; }
+    return order;
 }
 
-final class BankTransferPayment extends Payment {
-    private final String bankName;
-
-    BankTransferPayment(BigDecimal amount, String bankName) {
-        super(amount);
-        this.bankName = bankName;
+boolean cancel(String orderNumber) {
+    Order o = get(orderNumber);
+    synchronized (o) {                     // check-then-act must be atomic against ship()
+        if (!o.canCancel()) return false;
+        releaseStock(o);
+        transition(o, OrderStatus.CANCELED, "cancelled by member");
     }
-
-    @Override synchronized PaymentStatus process() {
-        status = PaymentStatus.PENDING;      // clears later, when the bank confirms
-        return status;
-    }
-
-    @Override String describe() { return "bank transfer via " + bankName; }
+    if (o.payment().refund() == PaymentStatus.REFUNDED)
+        transition(o, OrderStatus.REFUND_APPLIED, "refunded " + Money.fmt(o.total()));
+    return true;
 }
-
-enum ShipmentStatus { PENDING, SHIPPED, DELIVERED, ON_HOLD }
-
-record ShipmentLog(ShipmentStatus status, String location) { }
-
-/** Keeps a log, not one status field: the last entry is "now", the rest is history. */
-final class Shipment {
-    private final String shipmentNumber;
-    private final String method;
-    private final List<ShipmentLog> log = new ArrayList<>();
-
-    Shipment(String shipmentNumber, String method) {
-        this.shipmentNumber = shipmentNumber;
-        this.method = method;
-        log.add(new ShipmentLog(ShipmentStatus.PENDING, "warehouse"));
-    }
-
-    String shipmentNumber() { return shipmentNumber; }
-    String method() { return method; }
-    synchronized void addLog(ShipmentStatus s, String where) { log.add(new ShipmentLog(s, where)); }
-    synchronized ShipmentLog current() { return log.get(log.size() - 1); }
-    synchronized List<ShipmentLog> history() { return List.copyOf(log); }
-}
+// ship() locks the order around transition(SHIPPED); transition() = moveTo + notify every listener
 ```
+
+`NotificationService implements OrderEventListener` and sends each message through every registered `NotificationChannel` (`EmailChannel`, `SmsChannel`).
 
 Output:
 
@@ -1415,122 +819,101 @@ Files: `Orders.java` (enums, money helper, `OrderPart`, the order hierarchy), `M
 
 The simulated exchange offers a fixed depth of shares per price level (70 shares at each level, 5 cents apart, 3 levels) so fills come back in parts, like a real book. Part B builds a real matching engine.
 
+The full runnable source is in [`code/lld/ch19/brokerage/`](code/lld/ch19/brokerage/); below are the lines that carry the design.
+
 ```java
+// File: lld/ch19/brokerage/Orders.java
+/** The four order types differ in exactly two answers. */
+abstract class Order {
+    /** Question 1. Market and limit orders always say yes; stop orders wait for the trigger. */
+    abstract boolean canTradeAt(BigDecimal marketPrice);
+    /** Question 2. Empty means "any price" (market behaviour). */
+    abstract Optional<BigDecimal> limitPrice();
+
+    /** Is a fill at this price acceptable? BUY: price <= limit. SELL: price >= limit. */
+    final boolean acceptsPrice(BigDecimal price) {
+        return limitPrice().map(l -> side == Side.BUY ? price.compareTo(l) <= 0 : price.compareTo(l) >= 0)
+                           .orElse(true);
+    }
+    final synchronized void addPart(OrderPart p) {
+        if (p.quantity() > remaining()) throw new IllegalStateException("overfill");
+        parts.add(p);
+        status = remaining() == 0 ? OrderStatus.FILLED : OrderStatus.PARTIALLY_FILLED;
+    }
+}
+
+final class MarketOrder extends Order {
+    @Override boolean canTradeAt(BigDecimal p) { return true; }
+    @Override Optional<BigDecimal> limitPrice() { return Optional.empty(); }
+}
+final class LimitOrder extends Order {
+    @Override boolean canTradeAt(BigDecimal p) { return true; }
+    @Override Optional<BigDecimal> limitPrice() { return Optional.of(limit); }
+}
+class StopLossOrder extends Order {
+    @Override final synchronized boolean canTradeAt(BigDecimal p) {
+        if (!triggered)                                       // latches: once true, stays true
+            triggered = side() == Side.SELL ? p.compareTo(stopPrice) <= 0 : p.compareTo(stopPrice) >= 0;
+        return triggered;
+    }
+    @Override Optional<BigDecimal> limitPrice() { return Optional.empty(); }
+}
+final class StopLimitOrder extends StopLossOrder {           // inherits the trigger, adds a limit
+    @Override Optional<BigDecimal> limitPrice() { return Optional.of(limit); }
+}
+
+// File: lld/ch19/brokerage/Market.java - simulated exchange: 70 shares per level, 5 cents apart, 3 levels
+synchronized void tick(String symbol, BigDecimal newPrice) {      // stops trigger here
+    inventory.find(symbol).orElseThrow().setPrice(newPrice);
+    for (Order o : List.copyOf(openOrders.getOrDefault(symbol, List.of()))) tryFill(o, newPrice);
+    prune(symbol);
+}
+private void tryFill(Order o, BigDecimal market) {
+    if (!o.isOpen() || !o.canTradeAt(market)) return;
+    for (int k = 0; k < levels && o.remaining() > 0; k++) {
+        BigDecimal step = tickSize.multiply(BigDecimal.valueOf(k));
+        BigDecimal levelPrice = o.side() == Side.BUY ? market.add(step) : market.subtract(step);
+        if (!o.acceptsPrice(levelPrice)) break;          // limit reached: rest stays open
+        OrderPart part = new OrderPart(Math.min(depthPerLevel, o.remaining()), levelPrice, day);
+        o.addPart(part);
+        listeners.get(o.memberId()).onFill(o, part);     // Observer callback
+    }
+}
+
+// File: lld/ch19/brokerage/Holdings.java
+List<LotSale> sell(int qty, BigDecimal price, Optional<String> preferredLot) {   // StockPosition
+    // named lot first, then oldest first (FIFO); one LotSale per lot touched
+    for (StockLot lot : order) {
+        if (left == 0) break;
+        int take = Math.min(left, lot.quantity());
+        if (take == 0) continue;
+        lot.take(take);
+        out.add(new LotSale(lot.lotId(), take, lot.buyPrice(), price));
+        left -= take;
+    }
+}
+abstract class Statement {                                   // Template Method
+    final String render(String memberName, List<Trade> all) {
+        List<Trade> inRange = all.stream().filter(t -> t.day() >= fromDay && t.day() <= toDay).toList();
+        StringBuilder sb = new StringBuilder(title() + " for " + memberName + " (days " + fromDay + "-" + toDay + ")\n");
+        body(inRange, sb);                                   // QuarterlyStatement / TaxStatement fill this in
+        return sb.toString();
+    }
+}
+
 // File: lld/ch19/brokerage/Accounts.java
-package lld.ch19.brokerage;
-
-import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-
-enum AccountStatus { ACTIVE, CLOSED, CANCELED, BLACKLISTED, NONE }
-
-enum ReturnStatus { SUCCESS, FAIL, INSUFFICIENT_FUNDS, INSUFFICIENT_QUANTITY, NO_STOCK_POSITION, ACCOUNT_NOT_ACTIVE }
-
-enum Direction { DEPOSIT, WITHDRAW }
-
-/** Three ways to move money. They differ only in name and clearing time; the limit rule lives here once. */
-abstract class MoneyTransfer {
+abstract class MoneyTransfer {                               // Check (5 days), Wire (1), ElectronicBank (3)
     static final BigDecimal TRANSFER_LIMIT = Money.of("100000");
-    private final BigDecimal amount;
-    private final Direction direction;
-    MoneyTransfer(BigDecimal amount, Direction direction) { this.amount = amount; this.direction = direction; }
-    BigDecimal amount() { return amount; }
-    Direction direction() { return direction; }
     boolean isValid() { return amount.signum() > 0 && amount.compareTo(TRANSFER_LIMIT) <= 0; }
-    abstract String methodName();
     abstract int daysToClear();
 }
 
-final class CheckTransfer extends MoneyTransfer {
-    CheckTransfer(BigDecimal a, Direction d) { super(a, d); }
-    @Override String methodName() { return "check"; }
-    @Override int daysToClear() { return 5; }
-}
-
-final class WireTransfer extends MoneyTransfer {
-    WireTransfer(BigDecimal a, Direction d) { super(a, d); }
-    @Override String methodName() { return "wire"; }
-    @Override int daysToClear() { return 1; }
-}
-
-final class ElectronicBankTransfer extends MoneyTransfer {
-    ElectronicBankTransfer(BigDecimal a, Direction d) { super(a, d); }
-    @Override String methodName() { return "electronic bank transfer"; }
-    @Override int daysToClear() { return 3; }
-}
-
-interface Notifier { void send(String to, String message); }
-
-final class EmailNotifier implements Notifier {
-    @Override public void send(String to, String message) { System.out.println("    [email " + to + "] " + message); }
-}
-
-/**
- * A member. Implements OrderListener so the exchange can call back without knowing
- * what a member is. Holds reserved funds so ten $1,000 orders cannot all pass a $1,000 check.
- * Lock order: the member never calls the exchange while holding its own lock.
- */
 final class Member implements OrderListener {
-    private final String id;
-    private final String name;
-    private final String email;
-    private final StockExchange exchange;
-    private final StockInventory inventory;
-    private final Notifier notifier;
-    private volatile AccountStatus status = AccountStatus.ACTIVE;
-
-    private BigDecimal cash = Money.of("0");
-    private final Map<String, BigDecimal> reservedFunds = new HashMap<>();   // buy orderId -> money still reserved
-    private final Map<String, Order> pendingSells = new HashMap<>();            // sell orderId -> open sell order
-    private final Map<String, StockPosition> positions = new LinkedHashMap<>();
-    private final Map<String, Watchlist> watchlists = new LinkedHashMap<>();
-    private final List<Trade> trades = new ArrayList<>();
-    private int lotSeq = 1;
-
-    Member(String id, String name, String email, StockExchange ex, StockInventory inv, Notifier n) {
-        this.id = id; this.name = name; this.email = email;
-        this.exchange = ex; this.inventory = inv; this.notifier = n;
-        ex.register(id, this);
-    }
-
-    String id() { return id; }
-    String name() { return name; }
-    void setStatus(AccountStatus s) { status = s; }
-
-    // ---- money ----
-    synchronized ReturnStatus transfer(MoneyTransfer t) {
-        if (!t.isValid()) return ReturnStatus.FAIL;
-        if (t.direction() == Direction.WITHDRAW) {
-            if (t.amount().compareTo(availableFunds()) > 0) return ReturnStatus.INSUFFICIENT_FUNDS;
-            cash = cash.subtract(t.amount());
-        } else {
-            cash = cash.add(t.amount());
-        }
-        return ReturnStatus.SUCCESS;
-    }
-
-    synchronized BigDecimal cash() { return cash; }
-
-    synchronized BigDecimal reserved() {
-        BigDecimal r = Money.of("0");
-        for (Map.Entry<String, BigDecimal> e : reservedFunds.entrySet()) r = r.add(e.getValue());
-        return r;
-    }
-
-    synchronized BigDecimal availableFunds() { return cash.subtract(reserved()); }
-
-    // ---- orders ----
     ReturnStatus place(Order o) {
         ReturnStatus check = reserveFor(o);                // under our lock
-        if (check == ReturnStatus.SUCCESS) exchange.submit(o);   // outside our lock
+        if (check == ReturnStatus.SUCCESS) exchange.submit(o);   // outside our lock (lock order)
         return check;
     }
-
     private synchronized ReturnStatus reserveFor(Order o) {
         if (status != AccountStatus.ACTIVE) return ReturnStatus.ACCOUNT_NOT_ACTIVE;
         if (o.side() == Side.BUY) {
@@ -1540,533 +923,17 @@ final class Member implements OrderListener {
             reservedFunds.put(o.id(), need);           // released part by part as fills arrive
             return ReturnStatus.SUCCESS;
         }
-        StockPosition pos = positions.get(o.symbol());
-        if (pos == null) return ReturnStatus.NO_STOCK_POSITION;
-        int promised = pendingSells.values().stream()               // shares already promised to other
-                .filter(p -> p.symbol().equals(o.symbol()))              // open sells of this symbol
-                .mapToInt(Order::remaining).sum();
+        // SELL: shares owned minus shares already promised to other open sells
         if (o.quantity() > pos.quantity() - promised) return ReturnStatus.INSUFFICIENT_QUANTITY;
         pendingSells.put(o.id(), o);
         return ReturnStatus.SUCCESS;
     }
-
-    ReturnStatus cancel(Order o) { return exchange.cancel(o) ? ReturnStatus.SUCCESS : ReturnStatus.FAIL; }
-
     /** Called by the exchange: this is where money and shares actually move. */
     @Override public synchronized void onFill(Order o, OrderPart part) {
-        BigDecimal value = Money.times(part.price(), part.quantity());
-        List<LotSale> sales = List.of();
-        if (o.side() == Side.BUY) {
-            cash = cash.subtract(value);
-            BigDecimal left = reservedFunds.getOrDefault(o.id(), Money.of("0")).subtract(value);
-            if (o.remaining() == 0 || left.signum() <= 0) reservedFunds.remove(o.id());
-            else reservedFunds.put(o.id(), left);
-            positions.computeIfAbsent(o.symbol(), StockPosition::new)
-                     .addLot(new StockLot("L" + lotSeq++, part.quantity(), part.price(), part.day()));
-        } else {
-            cash = cash.add(value);
-            if (o.remaining() == 0) pendingSells.remove(o.id());
-            sales = positions.get(o.symbol()).sell(part.quantity(), part.price(), Optional.empty());
-            if (positions.get(o.symbol()).quantity() == 0) positions.remove(o.symbol());
-        }
+        // BUY:  cash -= value, shrink the reservation, add a new StockLot for this part
+        // SELL: cash += value, StockPosition.sell(...) FIFO -> LotSales for the tax statement
         trades.add(new Trade(part.day(), o.symbol(), o.side(), part.quantity(), part.price(), sales));
-        notifier.send(email, "filled " + part.quantity() + " " + o.symbol() + " @ " + part.price()
-                + " (" + o.id() + " " + o.status() + ")");
     }
-
-    @Override public synchronized void onCancelled(Order o) {
-        reservedFunds.remove(o.id());
-        pendingSells.remove(o.id());
-        notifier.send(email, o.id() + " cancelled, " + o.remaining() + " shares unfilled");
-    }
-
-    // ---- watchlists, positions, reports ----
-    synchronized Watchlist watchlist(String name) { return watchlists.computeIfAbsent(name, Watchlist::new); }
-    synchronized List<Watchlist> watchlists() { return List.copyOf(watchlists.values()); }
-    synchronized Map<String, List<StockLot>> holdings() {
-        Map<String, List<StockLot>> m = new LinkedHashMap<>();
-        positions.forEach((s, p) -> m.put(s, p.lots()));
-        return m;
-    }
-    synchronized String statement(Statement s) { return s.render(name, List.copyOf(trades)); }
-}
-
-final class Admin {
-    void block(Member m) { m.setStatus(AccountStatus.BLACKLISTED); }
-    void unblock(Member m) { m.setStatus(AccountStatus.ACTIVE); }
-}
-```
-
-```java
-// File: lld/ch19/brokerage/Holdings.java
-package lld.ch19.brokerage;
-
-import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
-
-/** One purchase at one price. Kept apart from other purchases because tax depends on it. */
-final class StockLot {
-    private final String lotId;
-    private final BigDecimal buyPrice;
-    private final int day;
-    private int quantity;
-
-    StockLot(String lotId, int quantity, BigDecimal buyPrice, int day) {
-        this.lotId = lotId; this.quantity = quantity; this.buyPrice = buyPrice; this.day = day;
-    }
-    String lotId() { return lotId; }
-    int quantity() { return quantity; }
-    BigDecimal buyPrice() { return buyPrice; }
-    int day() { return day; }
-    void take(int q) { quantity -= q; }
-    @Override public String toString() { return lotId + ":" + quantity + "@" + buyPrice; }
-}
-
-/** What came out of one lot in one sale - exactly what a tax statement needs. */
-record LotSale(String lotId, int quantity, BigDecimal buyPrice, BigDecimal sellPrice) {
-    BigDecimal gain() { return Money.times(sellPrice.subtract(buyPrice), quantity); }
-}
-
-/** All lots of one symbol. Sells from the named lot first, then oldest first (FIFO). */
-final class StockPosition {
-    private final String symbol;
-    private final List<StockLot> lots = new ArrayList<>();
-
-    StockPosition(String symbol) { this.symbol = symbol; }
-
-    String symbol() { return symbol; }
-    void addLot(StockLot lot) { lots.add(lot); }
-    int quantity() { return lots.stream().mapToInt(StockLot::quantity).sum(); }
-    List<StockLot> lots() { return List.copyOf(lots); }
-
-    List<LotSale> sell(int qty, BigDecimal price, Optional<String> preferredLot) {
-        if (qty > quantity()) throw new IllegalStateException("not enough shares");
-        List<LotSale> out = new ArrayList<>();
-        List<StockLot> order = new ArrayList<>(lots);
-        preferredLot.flatMap(id -> lots.stream().filter(l -> l.lotId().equals(id)).findFirst())
-                    .ifPresent(l -> { order.remove(l); order.add(0, l); });
-        int left = qty;
-        for (StockLot lot : order) {
-            if (left == 0) break;
-            int take = Math.min(left, lot.quantity());
-            if (take == 0) continue;
-            lot.take(take);
-            out.add(new LotSale(lot.lotId(), take, lot.buyPrice(), price));
-            left -= take;
-        }
-        for (Iterator<StockLot> it = lots.iterator(); it.hasNext(); ) if (it.next().quantity() == 0) it.remove();
-        return out;
-    }
-}
-
-/** A watchlist holds symbols, not Stock objects, so it never goes stale. */
-final class Watchlist {
-    private final String name;
-    private final Set<String> symbols = new LinkedHashSet<>();
-    Watchlist(String name) { this.name = name; }
-    String name() { return name; }
-    void add(String symbol) { symbols.add(symbol); }
-    void remove(String symbol) { symbols.remove(symbol); }
-    Set<String> symbols() { return Set.copyOf(symbols); }
-    String render(StockInventory inv) {
-        StringBuilder sb = new StringBuilder(name + ":");
-        symbols.forEach(s -> sb.append(' ').append(s).append('=').append(inv.priceOf(s)));
-        return sb.toString();
-    }
-}
-
-/** One executed fill as the member sees it. Sells carry the lots they consumed. */
-record Trade(int day, String symbol, Side side, int quantity, BigDecimal price, List<LotSale> sales) { }
-
-/** Template Method: the base class filters trades by day range, subclasses write the lines. */
-abstract class Statement {
-    private final int fromDay;
-    private final int toDay;
-    Statement(int fromDay, int toDay) { this.fromDay = fromDay; this.toDay = toDay; }
-
-    final String render(String memberName, List<Trade> all) {
-        List<Trade> inRange = all.stream().filter(t -> t.day() >= fromDay && t.day() <= toDay).toList();
-        StringBuilder sb = new StringBuilder(title() + " for " + memberName + " (days " + fromDay + "-" + toDay + ")\n");
-        body(inRange, sb);
-        return sb.toString();
-    }
-    abstract String title();
-    abstract void body(List<Trade> trades, StringBuilder sb);
-}
-
-final class QuarterlyStatement extends Statement {
-    QuarterlyStatement(int from, int to) { super(from, to); }
-    @Override String title() { return "Quarterly statement"; }
-    @Override void body(List<Trade> trades, StringBuilder sb) {
-        for (Trade t : trades)
-            sb.append(String.format("  day %d %-4s %-4s %4d @ %s%n", t.day(), t.side(), t.symbol(), t.quantity(), t.price()));
-    }
-}
-
-final class TaxStatement extends Statement {
-    TaxStatement(int from, int to) { super(from, to); }
-    @Override String title() { return "Tax statement"; }
-    @Override void body(List<Trade> trades, StringBuilder sb) {
-        BigDecimal total = Money.of("0");
-        for (Trade t : trades) for (LotSale s : t.sales()) {
-            sb.append(String.format("  %s %s: %d sh bought @ %s sold @ %s gain %s%n",
-                    t.symbol(), s.lotId(), s.quantity(), s.buyPrice(), s.sellPrice(), Money.fmt(s.gain())));
-            total = total.add(s.gain());
-        }
-        sb.append("  realised gain: ").append(Money.fmt(total)).append('\n');
-    }
-}
-```
-
-```java
-// File: lld/ch19/brokerage/Main.java
-package lld.ch19.brokerage;
-
-import java.math.BigDecimal;
-
-public class Main {
-    public static void main(String[] args) {
-        StockInventory inv = new StockInventory();
-        inv.list("AAPL", Money.of("10.00"));
-        inv.list("MSFT", Money.of("300.00"));
-        inv.list("AMZN", Money.of("120.00"));
-        // 70 shares offered per price level, levels 5 cents apart, 3 levels deep
-        StockExchange ex = new StockExchange(inv, 70, new BigDecimal("0.05"), 3);
-        Member alice = new Member("M1", "Alice", "alice@mail.test", ex, inv, new EmailNotifier());
-        Admin admin = new Admin();
-
-        System.out.println("== 1. Fund the account ==");
-        System.out.println("  wire 5,000        -> " + alice.transfer(new WireTransfer(Money.of("5000"), Direction.DEPOSIT)));
-        System.out.println("  check 200,000     -> " + alice.transfer(new CheckTransfer(Money.of("200000"), Direction.DEPOSIT))
-                + " (over the 100,000 limit)");
-        System.out.println("  cash = " + Money.fmt(alice.cash()));
-
-        System.out.println("\n== 2. Watchlists and search ==");
-        alice.watchlist("tech").add("AAPL");
-        alice.watchlist("tech").add("MSFT");
-        alice.watchlist("retail").add("AMZN");
-        alice.watchlists().forEach(w -> System.out.println("  " + w.render(inv)));
-        System.out.println("  search 'A' -> " + inv.search("A"));
-
-        System.out.println("\n== 3. Market buy 100 AAPL fills in two parts (two lots) ==");
-        Order m1 = new MarketOrder("O1", "M1", "AAPL", Side.BUY, 100);
-        System.out.println("  place -> " + alice.place(m1));
-        System.out.println("  " + m1 + " parts=" + m1.parts());
-
-        System.out.println("\n== 4. Next day: limit buy 50 AAPL @ 9.50 waits, then fills when price drops ==");
-        ex.setDay(2);
-        Order l1 = new LimitOrder("O2", "M1", "AAPL", Side.BUY, 50, Money.of("9.50"), TimeInForce.GOOD_TILL_CANCELLED);
-        System.out.println("  place -> " + alice.place(l1) + ", " + l1 + ", reserved " + Money.fmt(alice.reserved()));
-        ex.tick("AAPL", Money.of("9.40"));
-        System.out.println("  after tick 9.40: " + l1 + ", reserved " + Money.fmt(alice.reserved()));
-        System.out.println("  holdings " + alice.holdings());
-
-        System.out.println("\n== 5. Day 3: price rises, sell 120 AAPL (FIFO across lots) ==");
-        ex.setDay(3);
-        ex.tick("AAPL", Money.of("11.00"));
-        Order s1 = new LimitOrder("O3", "M1", "AAPL", Side.SELL, 120, Money.of("10.90"), TimeInForce.GOOD_TILL_CANCELLED);
-        System.out.println("  place -> " + alice.place(s1) + ", " + s1);
-        System.out.println("  holdings " + alice.holdings());
-
-        System.out.println("\n== 6. Protect the rest with a stop-loss @ 10.00, then the price falls ==");
-        ex.setDay(4);
-        Order stop = new StopLossOrder("O4", "M1", "AAPL", Side.SELL, 30, Money.of("10.00"));
-        System.out.println("  place -> " + alice.place(stop) + ", " + stop);
-        ex.tick("AAPL", Money.of("10.50"));
-        System.out.println("  tick 10.50: " + stop);
-        ex.tick("AAPL", Money.of("9.95"));
-        System.out.println("  tick 9.95: " + stop + " parts=" + stop.parts());
-
-        System.out.println("\n== 7. Stop-limit buy triggers but its limit is not met ==");
-        Order sl = new StopLimitOrder("O5", "M1", "MSFT", Side.BUY, 5, Money.of("305.00"), Money.of("306.00"));
-        System.out.println("  place -> " + alice.place(sl) + ", " + sl);
-        ex.tick("MSFT", Money.of("310.00"));
-        System.out.println("  tick 310 (stop hit, above limit): " + sl);
-        ex.tick("MSFT", Money.of("305.50"));
-        System.out.println("  tick 305.50 (within limit): " + sl);
-
-        System.out.println("\n== 8. Reserved funds block over-spending, cancel releases them ==");
-        System.out.println("  cash " + Money.fmt(alice.cash()) + ", available " + Money.fmt(alice.availableFunds()));
-        Order big1 = new LimitOrder("O6", "M1", "AMZN", Side.BUY, 20, Money.of("100.00"), TimeInForce.GOOD_TILL_CANCELLED);
-        Order big2 = new LimitOrder("O7", "M1", "AMZN", Side.BUY, 20, Money.of("100.00"), TimeInForce.GOOD_TILL_CANCELLED);
-        System.out.println("  O6 buy 20 AMZN @ 100 -> " + alice.place(big1) + ", available " + Money.fmt(alice.availableFunds()));
-        System.out.println("  O7 buy 20 AMZN @ 100 -> " + alice.place(big2));
-        System.out.println("  cancel O6 -> " + alice.cancel(big1) + ", available " + Money.fmt(alice.availableFunds()));
-        System.out.println("  sell 10 AMZN (none owned) -> "
-                + alice.place(new MarketOrder("O8", "M1", "AMZN", Side.SELL, 10)));
-
-        System.out.println("\n== 9. Blocked account cannot trade ==");
-        admin.block(alice);
-        System.out.println("  -> " + alice.place(new MarketOrder("O9", "M1", "AAPL", Side.BUY, 1)));
-        admin.unblock(alice);
-
-        System.out.println("\n== 10. Reports ==");
-        System.out.print(alice.statement(new QuarterlyStatement(1, 90)));
-        System.out.print(alice.statement(new TaxStatement(1, 365)));
-    }
-}
-```
-
-```java
-// File: lld/ch19/brokerage/Market.java
-package lld.ch19.brokerage;
-
-import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
-
-/** A symbol and its latest price. */
-final class Stock {
-    private final String symbol;
-    private volatile BigDecimal price;
-    Stock(String symbol, BigDecimal price) { this.symbol = symbol; this.price = price; }
-    String symbol() { return symbol; }
-    BigDecimal price() { return price; }
-    void setPrice(BigDecimal p) { price = p; }
-}
-
-/** The one place prices are read from, so no two parts of the system disagree. */
-final class StockInventory {
-    private final Map<String, Stock> stocks = new ConcurrentHashMap<>();
-    void list(String symbol, BigDecimal price) { stocks.put(symbol, new Stock(symbol, price)); }
-    Optional<Stock> find(String symbol) { return Optional.ofNullable(stocks.get(symbol)); }
-    BigDecimal priceOf(String symbol) {
-        return find(symbol).orElseThrow(() -> new IllegalArgumentException("unknown " + symbol)).price();
-    }
-    List<String> search(String prefix) {
-        return stocks.keySet().stream().filter(s -> s.startsWith(prefix.toUpperCase())).sorted().toList();
-    }
-}
-
-/** Observer: how the exchange calls back without knowing what a Member is. */
-interface OrderListener {
-    void onFill(Order order, OrderPart part);
-    void onCancelled(Order order);
-}
-
-/**
- * A simulated exchange. At each price level it offers a fixed depth of shares
- * (e.g. 70 @ price, 70 @ price+0.05 ...) so that fills come back in parts, like a
- * real order book. (A real matching engine is built in lld.ch19.stockexchange.)
- * All methods are synchronized: one lock orders every event on the exchange.
- */
-final class StockExchange {
-    private final StockInventory inventory;
-    private final int depthPerLevel;
-    private final BigDecimal tickSize;
-    private final int levels;
-    private final Map<String, List<Order>> openOrders = new ConcurrentHashMap<>();
-    private final Map<String, OrderListener> listeners = new ConcurrentHashMap<>();
-    private int day = 1;
-
-    StockExchange(StockInventory inventory, int depthPerLevel, BigDecimal tickSize, int levels) {
-        this.inventory = inventory;
-        this.depthPerLevel = depthPerLevel;
-        this.tickSize = tickSize;
-        this.levels = levels;
-    }
-
-    synchronized void register(String memberId, OrderListener l) { listeners.put(memberId, l); }
-    synchronized void setDay(int d) { day = d; }
-    synchronized int day() { return day; }
-
-    synchronized void submit(Order o) {
-        openOrders.computeIfAbsent(o.symbol(), k -> new ArrayList<>()).add(o);
-        tryFill(o, inventory.priceOf(o.symbol()));
-        prune(o.symbol());
-    }
-
-    /** A new price arrives: every open order on that symbol gets another chance (stops trigger here). */
-    synchronized void tick(String symbol, BigDecimal newPrice) {
-        inventory.find(symbol).orElseThrow().setPrice(newPrice);
-        for (Order o : List.copyOf(openOrders.getOrDefault(symbol, List.of()))) tryFill(o, newPrice);
-        prune(symbol);
-    }
-
-    synchronized boolean cancel(Order o) {
-        if (!o.cancel()) return false;
-        prune(o.symbol());
-        listeners.get(o.memberId()).onCancelled(o);
-        return true;
-    }
-
-    private void tryFill(Order o, BigDecimal market) {
-        if (!o.isOpen() || !o.canTradeAt(market)) return;
-        for (int k = 0; k < levels && o.remaining() > 0; k++) {
-            BigDecimal step = tickSize.multiply(BigDecimal.valueOf(k));
-            BigDecimal levelPrice = o.side() == Side.BUY ? market.add(step) : market.subtract(step);
-            if (!o.acceptsPrice(levelPrice)) break;          // limit reached: rest stays open
-            OrderPart part = new OrderPart(Math.min(depthPerLevel, o.remaining()), levelPrice, day);
-            o.addPart(part);
-            listeners.get(o.memberId()).onFill(o, part);
-        }
-    }
-
-    private void prune(String symbol) {
-        openOrders.getOrDefault(symbol, new ArrayList<>()).removeIf(o -> !o.isOpen());
-    }
-}
-```
-
-```java
-// File: lld/ch19/brokerage/Orders.java
-package lld.ch19.brokerage;
-
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-
-enum Side { BUY, SELL }
-
-enum OrderStatus { OPEN, PARTIALLY_FILLED, FILLED, CANCELLED }
-
-/** Time in force: how long an order may stay alive. Modelled, only GTC used in the demo. */
-enum TimeInForce { GOOD_TILL_CANCELLED, FILL_OR_KILL, IMMEDIATE_OR_CANCEL, ON_THE_OPEN, ON_THE_CLOSE }
-
-final class Money {
-    private Money() { }
-    static BigDecimal of(String s) { return new BigDecimal(s).setScale(2, RoundingMode.HALF_EVEN); }
-    static BigDecimal times(BigDecimal price, int qty) {
-        return price.multiply(BigDecimal.valueOf(qty)).setScale(2, RoundingMode.HALF_EVEN);
-    }
-    static String fmt(BigDecimal b) { return "$" + b.setScale(2, RoundingMode.HALF_EVEN).toPlainString(); }
-}
-
-/** One fill. A 100-share order might be filled as 70 @ 10.00 plus 30 @ 10.05. */
-record OrderPart(int quantity, BigDecimal price, int day) { }
-
-/**
- * Everything the four order types share. They differ in exactly two answers:
- * (1) may I trade at this market price? (2) what is the worst price I accept?
- */
-abstract class Order {
-    private final String id;
-    private final String memberId;
-    private final String symbol;
-    private final Side side;
-    private final int quantity;
-    private final TimeInForce timeInForce;
-    private final List<OrderPart> parts = new ArrayList<>();
-    private OrderStatus status = OrderStatus.OPEN;
-
-    Order(String id, String memberId, String symbol, Side side, int quantity, TimeInForce tif) {
-        if (quantity <= 0) throw new IllegalArgumentException("quantity must be positive");
-        this.id = id;
-        this.memberId = memberId;
-        this.symbol = symbol;
-        this.side = side;
-        this.quantity = quantity;
-        this.timeInForce = tif;
-    }
-
-    /** Question 1. Market and limit orders always say yes; stop orders wait for the trigger. */
-    abstract boolean canTradeAt(BigDecimal marketPrice);
-
-    /** Question 2. Empty means "any price" (market behaviour). */
-    abstract Optional<BigDecimal> limitPrice();
-
-    abstract String type();
-
-    /** Is a fill at this price acceptable? BUY: price <= limit. SELL: price >= limit. */
-    final boolean acceptsPrice(BigDecimal price) {
-        return limitPrice().map(l -> side == Side.BUY ? price.compareTo(l) <= 0 : price.compareTo(l) >= 0)
-                           .orElse(true);
-    }
-
-    final synchronized void addPart(OrderPart p) {
-        if (p.quantity() > remaining()) throw new IllegalStateException("overfill");
-        parts.add(p);
-        status = remaining() == 0 ? OrderStatus.FILLED : OrderStatus.PARTIALLY_FILLED;
-    }
-
-    final synchronized boolean cancel() {
-        if (status == OrderStatus.FILLED || status == OrderStatus.CANCELLED) return false;
-        status = OrderStatus.CANCELLED;
-        return true;
-    }
-
-    final synchronized int filled() { return parts.stream().mapToInt(OrderPart::quantity).sum(); }
-    final synchronized int remaining() { return quantity - filled(); }
-    final synchronized OrderStatus status() { return status; }
-    final synchronized boolean isOpen() { return status == OrderStatus.OPEN || status == OrderStatus.PARTIALLY_FILLED; }
-    final synchronized List<OrderPart> parts() { return List.copyOf(parts); }
-
-    final String id() { return id; }
-    final String memberId() { return memberId; }
-    final String symbol() { return symbol; }
-    final Side side() { return side; }
-    final int quantity() { return quantity; }
-    final TimeInForce timeInForce() { return timeInForce; }
-
-    @Override public String toString() {
-        return id + " " + type() + " " + side + " " + quantity + " " + symbol + " [" + status() + "]";
-    }
-}
-
-final class MarketOrder extends Order {
-    MarketOrder(String id, String memberId, String symbol, Side side, int qty) {
-        super(id, memberId, symbol, side, qty, TimeInForce.GOOD_TILL_CANCELLED);
-    }
-    @Override boolean canTradeAt(BigDecimal p) { return true; }
-    @Override Optional<BigDecimal> limitPrice() { return Optional.empty(); }
-    @Override String type() { return "MARKET"; }
-}
-
-final class LimitOrder extends Order {
-    private final BigDecimal limit;
-    LimitOrder(String id, String memberId, String symbol, Side side, int qty, BigDecimal limit, TimeInForce tif) {
-        super(id, memberId, symbol, side, qty, tif);
-        this.limit = limit;
-    }
-    @Override boolean canTradeAt(BigDecimal p) { return true; }
-    @Override Optional<BigDecimal> limitPrice() { return Optional.of(limit); }
-    @Override String type() { return "LIMIT@" + limit; }
-}
-
-/**
- * Stop (stop-loss) order: sleeps until the market reaches the stop price, then trades
- * like a market order. SELL stop fires when price <= stop, BUY stop when price >= stop.
- * Once triggered it stays triggered.
- */
-class StopLossOrder extends Order {
-    private final BigDecimal stopPrice;
-    private boolean triggered;
-
-    StopLossOrder(String id, String memberId, String symbol, Side side, int qty, BigDecimal stopPrice) {
-        super(id, memberId, symbol, side, qty, TimeInForce.GOOD_TILL_CANCELLED);
-        this.stopPrice = stopPrice;
-    }
-
-    @Override final synchronized boolean canTradeAt(BigDecimal p) {
-        if (!triggered) {
-            triggered = side() == Side.SELL ? p.compareTo(stopPrice) <= 0 : p.compareTo(stopPrice) >= 0;
-        }
-        return triggered;
-    }
-    @Override Optional<BigDecimal> limitPrice() { return Optional.empty(); }
-    @Override String type() { return "STOP@" + stopPrice; }
-    BigDecimal stopPrice() { return stopPrice; }
-}
-
-/** A stop order that becomes a LIMIT order (not a market order) once triggered. */
-final class StopLimitOrder extends StopLossOrder {
-    private final BigDecimal limit;
-    StopLimitOrder(String id, String memberId, String symbol, Side side, int qty, BigDecimal stop, BigDecimal limit) {
-        super(id, memberId, symbol, side, qty, stop);
-        this.limit = limit;
-    }
-    @Override Optional<BigDecimal> limitPrice() { return Optional.of(limit); }
-    @Override String type() { return "STOP@" + stopPrice() + "/LIMIT@" + limit; }
 }
 ```
 
@@ -2147,361 +1014,27 @@ Tax statement for Alice (days 1-365)
 
 Files: `OrderBook.java` (side, order, trade, price policy, book), `MatchingEngine.java` (routing, per-symbol locking, line parser), `MatchingEngineTests.java` (nine tests, standard library only), `Main.java` (runs the sample — or a file given as the first argument — then the tests).
 
-```java
-// File: lld/ch19/stockexchange/Main.java
-package lld.ch19.stockexchange;
-
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.List;
-
-/** Usage: java lld.ch19.stockexchange.Main [orders.txt]  (no file = the sample from the problem statement). */
-public class Main {
-    static final List<String> SAMPLE = List.of(
-            "#1 09:45 BAC sell 240.12 100",
-            "#2 09:46 BAC sell 237.45 90",
-            "#3 09:47 BAC buy 238.10 110",
-            "#4 09:48 BAC buy 237.80 10",
-            "#5 09:49 BAC buy 237.80 40",
-            "#6 09:50 BAC sell 236.00 50");
-
-    public static void main(String[] args) throws IOException {
-        List<String> lines = args.length > 0 ? Files.readAllLines(Path.of(args[0])) : SAMPLE;
-
-        System.out.println("== Trades (execution price = sell order's price) ==");
-        MatchingEngine engine = new MatchingEngine(ExecutionPricePolicy.SELL_PRICE, System.out::println);
-        lines.stream().filter(l -> !l.isBlank()).forEach(engine::submitLine);
-        System.out.println("book after: " + engine.book("BAC").snapshot());
-
-        System.out.println("\n== Same input, real-exchange rule (price of the resting order) ==");
-        MatchingEngine real = new MatchingEngine(ExecutionPricePolicy.RESTING_PRICE, System.out::println);
-        lines.stream().filter(l -> !l.isBlank()).forEach(real::submitLine);
-
-        System.out.println("\n== Tests ==");
-        int failed = MatchingEngineTests.runAll();
-        if (failed > 0) System.exit(1);
-    }
-}
-```
-
-```java
-// File: lld/ch19/stockexchange/MatchingEngine.java
-package lld.ch19.stockexchange;
-
-import java.math.BigDecimal;
-import java.time.LocalTime;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Consumer;
-
-/**
- * Routes each order to its symbol's book. One lock per book: orders for different
- * symbols match in parallel, orders for the same symbol are strictly serialised
- * (which is what makes "time priority" well defined).
- */
-final class MatchingEngine {
-    private final Map<String, OrderBook> books = new ConcurrentHashMap<>();
-    private final Map<String, String> symbolOfOrder = new ConcurrentHashMap<>();
-    private final AtomicLong sequence = new AtomicLong();
-    private final ExecutionPricePolicy policy;
-    private final Consumer<Trade> tradeSink;
-
-    MatchingEngine(ExecutionPricePolicy policy, Consumer<Trade> tradeSink) {
-        this.policy = policy;
-        this.tradeSink = tradeSink;
-    }
-
-    List<Trade> submit(String id, LocalTime time, String symbol, Side side, BigDecimal price, int qty) {
-        if (qty <= 0 || price.signum() <= 0) throw new IllegalArgumentException("bad quantity/price: " + id);
-        if (symbolOfOrder.putIfAbsent(id, symbol) != null) throw new IllegalArgumentException("duplicate order id " + id);
-        OrderBook book = books.computeIfAbsent(symbol, s -> new OrderBook(s, policy));
-        List<Trade> trades;
-        synchronized (book) {
-            // the sequence is taken inside the lock, so arrival order == matching order
-            Order o = new Order(id, time, symbol, side, price, qty, sequence.incrementAndGet());
-            trades = book.add(o);
-        }
-        trades.forEach(tradeSink);        // publish outside the lock
-        return trades;
-    }
-
-    boolean cancel(String orderId) {
-        String symbol = symbolOfOrder.get(orderId);
-        if (symbol == null) return false;
-        OrderBook book = books.get(symbol);
-        synchronized (book) { return book.cancel(orderId); }
-    }
-
-    OrderBook book(String symbol) { return books.get(symbol); }
-
-    /** Parses "#1 09:45 BAC sell 240.12 100" and submits it. */
-    List<Trade> submitLine(String line) {
-        String[] f = line.trim().split("\\s+");
-        if (f.length != 6) throw new IllegalArgumentException("bad line: " + line);
-        return submit(f[0], LocalTime.parse(f[1]), f[2], Side.valueOf(f[3].toUpperCase()),
-                new BigDecimal(f[4]), Integer.parseInt(f[5]));
-    }
-}
-```
-
-```java
-// File: lld/ch19/stockexchange/MatchingEngineTests.java
-package lld.ch19.stockexchange;
-
-import java.math.BigDecimal;
-import java.time.LocalTime;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-
-/** Tiny test harness (no JUnit - standard library only). Each test throws AssertionError on failure. */
-final class MatchingEngineTests {
-    private MatchingEngineTests() { }
-
-    interface Test { void run() throws Exception; }
-
-    record Case(String name, Test body) { }
-
-    static int runAll() {
-        List<Case> tests = List.of(
-                new Case("sample input gives the expected four trades", MatchingEngineTests::sample),
-                new Case("better price wins over earlier time", MatchingEngineTests::pricePriority),
-                new Case("same price: earlier order fills first", MatchingEngineTests::timePriority),
-                new Case("no trade when prices do not cross", MatchingEngineTests::noCross),
-                new Case("partial fill leaves the remainder resting", MatchingEngineTests::partialFill),
-                new Case("cancelled order is never matched", MatchingEngineTests::cancel),
-                new Case("symbols never match each other", MatchingEngineTests::symbolIsolation),
-                new Case("duplicate id and bad quantity rejected", MatchingEngineTests::validation),
-                new Case("concurrent submits conserve quantity", MatchingEngineTests::concurrency));
-        int failed = 0;
-        for (Case t : tests) {
-            try {
-                t.body().run();
-                System.out.println("  PASS  " + t.name());
-            } catch (Exception | AssertionError e) {
-                failed++;
-                System.out.println("  FAIL  " + t.name() + " -> " + e.getMessage());
-            }
-        }
-        System.out.println("  " + (tests.size() - failed) + "/" + tests.size() + " passed");
-        return failed;
-    }
-
-    // ---------- helpers ----------
-    private static MatchingEngine engine(List<Trade> sink) {
-        return new MatchingEngine(ExecutionPricePolicy.SELL_PRICE, sink::add);
-    }
-
-    private static void eq(Object expected, Object actual) {
-        if (!expected.equals(actual)) throw new AssertionError("expected <" + expected + "> but was <" + actual + ">");
-    }
-
-    private static List<String> str(List<Trade> trades) { return trades.stream().map(Trade::toString).toList(); }
-
-    private static final LocalTime T = LocalTime.of(10, 0);
-
-    // ---------- tests ----------
-    static void sample() {
-        List<Trade> out = new ArrayList<>();
-        MatchingEngine e = engine(out);
-        Main.SAMPLE.forEach(e::submitLine);
-        eq(List.of("#3 237.45 90 #2", "#3 236.00 20 #6", "#4 236.00 10 #6", "#5 236.00 20 #6"), str(out));
-    }
-
-    static void pricePriority() {
-        List<Trade> out = new ArrayList<>();
-        MatchingEngine e = engine(out);
-        e.submit("s1", T, "X", Side.SELL, new BigDecimal("101"), 10);   // earlier but worse
-        e.submit("s2", T, "X", Side.SELL, new BigDecimal("100"), 10);   // later but cheaper
-        e.submit("b1", T, "X", Side.BUY, new BigDecimal("105"), 10);
-        eq(List.of("b1 100 10 s2"), str(out));
-    }
-
-    static void timePriority() {
-        List<Trade> out = new ArrayList<>();
-        MatchingEngine e = engine(out);
-        e.submit("b1", T, "X", Side.BUY, new BigDecimal("50"), 5);
-        e.submit("b2", T, "X", Side.BUY, new BigDecimal("50"), 5);
-        e.submit("s1", T, "X", Side.SELL, new BigDecimal("49"), 7);
-        eq(List.of("b1 49 5 s1", "b2 49 2 s1"), str(out));
-        eq(3, e.book("X").restingQty(Side.BUY));
-    }
-
-    static void noCross() {
-        List<Trade> out = new ArrayList<>();
-        MatchingEngine e = engine(out);
-        e.submit("b1", T, "X", Side.BUY, new BigDecimal("99.99"), 5);
-        e.submit("s1", T, "X", Side.SELL, new BigDecimal("100.00"), 5);
-        eq(0, out.size());
-        eq(5, e.book("X").restingQty(Side.BUY));
-        eq(5, e.book("X").restingQty(Side.SELL));
-    }
-
-    static void partialFill() {
-        List<Trade> out = new ArrayList<>();
-        MatchingEngine e = engine(out);
-        e.submit("s1", T, "X", Side.SELL, new BigDecimal("10"), 100);
-        e.submit("b1", T, "X", Side.BUY, new BigDecimal("10"), 30);
-        e.submit("b2", T, "X", Side.BUY, new BigDecimal("10"), 30);
-        eq(40, e.book("X").restingQty(Side.SELL));
-        eq(0, e.book("X").restingQty(Side.BUY));
-    }
-
-    static void cancel() {
-        List<Trade> out = new ArrayList<>();
-        MatchingEngine e = engine(out);
-        e.submit("s1", T, "X", Side.SELL, new BigDecimal("10"), 10);
-        e.submit("s2", T, "X", Side.SELL, new BigDecimal("10"), 10);
-        eq(true, e.cancel("s1"));
-        eq(false, e.cancel("s1"));
-        e.submit("b1", T, "X", Side.BUY, new BigDecimal("10"), 10);
-        eq(List.of("b1 10 10 s2"), str(out));
-    }
-
-    static void symbolIsolation() {
-        List<Trade> out = new ArrayList<>();
-        MatchingEngine e = engine(out);
-        e.submit("s1", T, "AAA", Side.SELL, new BigDecimal("1"), 10);
-        e.submit("b1", T, "BBB", Side.BUY, new BigDecimal("5"), 10);
-        eq(0, out.size());
-    }
-
-    static void validation() {
-        MatchingEngine e = engine(new ArrayList<>());
-        e.submit("x1", T, "X", Side.BUY, new BigDecimal("1"), 1);
-        try { e.submit("x1", T, "X", Side.BUY, new BigDecimal("1"), 1); throw new AssertionError("dup accepted"); }
-        catch (IllegalArgumentException expected) { /* ok */ }
-        try { e.submit("x2", T, "X", Side.BUY, new BigDecimal("1"), 0); throw new AssertionError("qty 0 accepted"); }
-        catch (IllegalArgumentException expected) { /* ok */ }
-    }
-
-    /** 8 threads x 500 orders on one symbol. Every share bought must equal every share sold. */
-    static void concurrency() throws InterruptedException {
-        List<Trade> out = Collections.synchronizedList(new ArrayList<>());
-        MatchingEngine e = engine(out);
-        ExecutorService pool = Executors.newFixedThreadPool(8);
-        CountDownLatch go = new CountDownLatch(1);
-        AtomicInteger buys = new AtomicInteger();
-        AtomicInteger sells = new AtomicInteger();
-        for (int t = 0; t < 8; t++) {
-            int thread = t;
-            pool.submit(() -> {
-                go.await();
-                for (int i = 0; i < 500; i++) {
-                    Side side = (i + thread) % 2 == 0 ? Side.BUY : Side.SELL;
-                    int qty = 1 + (i % 7);
-                    (side == Side.BUY ? buys : sells).addAndGet(qty);
-                    e.submit("t" + thread + "-" + i, T, "X", side, new BigDecimal(100 + (i % 3)), qty);
-                }
-                return null;
-            });
-        }
-        go.countDown();
-        pool.shutdown();
-        if (!pool.awaitTermination(30, TimeUnit.SECONDS)) throw new AssertionError("timeout");
-        int traded = out.stream().mapToInt(Trade::quantity).sum();
-        eq(buys.get(), traded + e.book("X").restingQty(Side.BUY));
-        eq(sells.get(), traded + e.book("X").restingQty(Side.SELL));
-        // the book must never be left crossed: best bid < best ask
-        OrderBook book = e.book("X");
-        if (book.bestBid().isPresent() && book.bestAsk().isPresent()
-                && book.bestBid().get().compareTo(book.bestAsk().get()) >= 0)
-            throw new AssertionError("book left crossed: " + book.snapshot());
-    }
-}
-```
+The full runnable source (including all nine tests) is in [`code/lld/ch19/stockexchange/`](code/lld/ch19/stockexchange/); below is the heart of it.
 
 ```java
 // File: lld/ch19/stockexchange/OrderBook.java
-package lld.ch19.stockexchange;
-
-import java.math.BigDecimal;
-import java.time.LocalTime;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Deque;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.NavigableMap;
-import java.util.Optional;
-import java.util.TreeMap;
-
-enum Side { BUY, SELL }
-
-/** An order. Only remainingQty changes, and only under the book's lock. */
-final class Order {
-    private final String id;
-    private final LocalTime time;
-    private final String symbol;
-    private final Side side;
-    private final BigDecimal price;
-    private final long sequence;           // arrival order: breaks ties when times are equal
-    private int remainingQty;
-
-    Order(String id, LocalTime time, String symbol, Side side, BigDecimal price, int qty, long sequence) {
-        if (qty <= 0) throw new IllegalArgumentException("quantity must be positive: " + id);
-        if (price.signum() <= 0) throw new IllegalArgumentException("price must be positive: " + id);
-        this.id = id; this.time = time; this.symbol = symbol; this.side = side;
-        this.price = price; this.remainingQty = qty; this.sequence = sequence;
-    }
-
-    String id() { return id; }
-    LocalTime time() { return time; }
-    String symbol() { return symbol; }
-    Side side() { return side; }
-    BigDecimal price() { return price; }
-    long sequence() { return sequence; }
-    int remainingQty() { return remainingQty; }
-    void fill(int qty) { remainingQty -= qty; }
-    boolean isDone() { return remainingQty == 0; }
-}
-
-/** Output line: "<buy_order_id> <execution_price> <quantity> <sell_order_id>". */
-record Trade(String buyOrderId, BigDecimal price, int quantity, String sellOrderId) {
-    @Override public String toString() { return buyOrderId + " " + price.toPlainString() + " " + quantity + " " + sellOrderId; }
-}
-
 /** Who sets the trade price. The Navi problem uses the SELL order's price; real exchanges use the resting order's. */
 interface ExecutionPricePolicy {
     BigDecimal price(Order buy, Order sell, Order incoming);
-
     ExecutionPricePolicy SELL_PRICE = (buy, sell, incoming) -> sell.price();
     ExecutionPricePolicy RESTING_PRICE = (buy, sell, incoming) -> incoming == buy ? sell.price() : buy.price();
 }
 
-/**
- * The order book for ONE symbol. Each side is a sorted map of price level -> FIFO queue.
- * Bids: highest price first. Asks: lowest price first. Inside a level: first come, first served.
- * That is price-time priority. Not thread-safe by itself: the engine locks it.
- */
+/** The book for ONE symbol: price level -> FIFO queue. Bids highest first, asks lowest first. */
 final class OrderBook {
-    private final String symbol;
     private final NavigableMap<BigDecimal, Deque<Order>> bids = new TreeMap<>(Collections.reverseOrder());
     private final NavigableMap<BigDecimal, Deque<Order>> asks = new TreeMap<>();
-    private final Map<String, Order> resting = new HashMap<>();
-    private final ExecutionPricePolicy pricePolicy;
-
-    OrderBook(String symbol, ExecutionPricePolicy pricePolicy) {
-        this.symbol = symbol;
-        this.pricePolicy = pricePolicy;
-    }
+    private final Map<String, Order> resting = new HashMap<>();      // id -> order, for cancel
 
     /** Match the incoming order against the other side, then rest whatever is left. */
     List<Trade> add(Order incoming) {
         List<Trade> trades = new ArrayList<>();
         NavigableMap<BigDecimal, Deque<Order>> opposite = incoming.side() == Side.BUY ? asks : bids;
-
         while (!incoming.isDone() && !opposite.isEmpty()) {
             Map.Entry<BigDecimal, Deque<Order>> best = opposite.firstEntry();
             if (!crosses(incoming, best.getKey())) break;          // best price does not meet ours: stop
@@ -2515,38 +1048,12 @@ final class OrderBook {
                 trades.add(new Trade(buy.id(), pricePolicy.price(buy, sell, incoming), qty, sell.id()));
                 incoming.fill(qty);
                 restingOrder.fill(qty);
-                if (restingOrder.isDone()) {
-                    it.remove();
-                    resting.remove(restingOrder.id());
-                }
+                if (restingOrder.isDone()) { it.remove(); resting.remove(restingOrder.id()); }
             }
             if (queue.isEmpty()) opposite.pollFirstEntry();
         }
-        if (!incoming.isDone()) rest(incoming);
+        if (!incoming.isDone()) rest(incoming);                     // addLast to its own price level
         return trades;
-    }
-
-    boolean cancel(String orderId) {
-        Order o = resting.remove(orderId);
-        if (o == null) return false;
-        NavigableMap<BigDecimal, Deque<Order>> side = o.side() == Side.BUY ? bids : asks;
-        Deque<Order> q = side.get(o.price());
-        q.remove(o);
-        if (q.isEmpty()) side.remove(o.price());
-        return true;
-    }
-
-    int restingQty(Side side) {
-        return (side == Side.BUY ? bids : asks).values().stream()
-                .flatMap(Deque::stream).mapToInt(Order::remainingQty).sum();
-    }
-
-    Optional<BigDecimal> bestBid() { return bids.isEmpty() ? Optional.empty() : Optional.of(bids.firstKey()); }
-
-    Optional<BigDecimal> bestAsk() { return asks.isEmpty() ? Optional.empty() : Optional.of(asks.firstKey()); }
-
-    String snapshot() {
-        return symbol + " bids=" + levels(bids) + " asks=" + levels(asks);
     }
 
     private static boolean crosses(Order incoming, BigDecimal bestOpposite) {
@@ -2554,19 +1061,26 @@ final class OrderBook {
                 ? incoming.price().compareTo(bestOpposite) >= 0     // buy meets or beats the ask
                 : incoming.price().compareTo(bestOpposite) <= 0;    // sell meets or undercuts the bid
     }
-
-    private void rest(Order o) {
-        (o.side() == Side.BUY ? bids : asks).computeIfAbsent(o.price(), p -> new ArrayDeque<>()).addLast(o);
-        resting.put(o.id(), o);
-    }
-
-    private static String levels(NavigableMap<BigDecimal, Deque<Order>> side) {
-        List<String> out = new ArrayList<>();
-        side.forEach((p, q) -> out.add(p.toPlainString() + "x" + q.stream().mapToInt(Order::remainingQty).sum()));
-        return out.toString();
-    }
 }
+
+// File: lld/ch19/stockexchange/MatchingEngine.java - one lock per symbol
+List<Trade> submit(String id, LocalTime time, String symbol, Side side, BigDecimal price, int qty) {
+    if (qty <= 0 || price.signum() <= 0) throw new IllegalArgumentException("bad quantity/price: " + id);
+    if (symbolOfOrder.putIfAbsent(id, symbol) != null) throw new IllegalArgumentException("duplicate order id " + id);
+    OrderBook book = books.computeIfAbsent(symbol, s -> new OrderBook(s, policy));
+    List<Trade> trades;
+    synchronized (book) {
+        // the sequence is taken inside the lock, so arrival order == matching order
+        Order o = new Order(id, time, symbol, side, price, qty, sequence.incrementAndGet());
+        trades = book.add(o);
+    }
+    trades.forEach(tradeSink);        // publish outside the lock
+    return trades;
+}
+// cancel(orderId) takes the same per-symbol lock; submitLine parses "#1 09:45 BAC sell 240.12 100"
 ```
+
+`Main` runs the six sample lines (or a file given as the first argument) twice — once with `SELL_PRICE`, once with `RESTING_PRICE` — then `MatchingEngineTests.runAll()`.
 
 Output:
 
@@ -2816,66 +1330,19 @@ sequenceDiagram
 
 Files: `Auction.java` (user, bid, status, outcome records, listing, manual clock), `AuctionService.java` (listener, notifier, query, service), `Main.java`.
 
+The full runnable source is in [`code/lld/ch19/auction/`](code/lld/ch19/auction/); below are the lines that carry the design.
+
 ```java
 // File: lld/ch19/auction/Auction.java
-package lld.ch19.auction;
-
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.InstantSource;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-
-record User(String id, String name, String email) { }
-
-/** One bid. seq breaks ties between bids with the same timestamp. */
-record Bid(User bidder, BigDecimal amount, Instant at, long seq) { }
-
-enum AuctionStatus { SCHEDULED, ACTIVE, CLOSED, CANCELLED }
-
 /** Why a bid was refused - returned, not thrown, because refusals are normal business. */
 enum BidOutcome { ACCEPTED, AUCTION_NOT_ACTIVE, AUCTION_ENDED, SELLER_CANNOT_BID, TOO_LOW, ALREADY_HIGHEST }
 
-/** Result of placeBid: what happened, the bid that was accepted, who (if anyone) was just outbid. */
-record BidResult(BidOutcome outcome, BigDecimal minimumNextBid, Optional<Bid> accepted, Optional<User> outbid) { }
-
-/** Result of closing: sold to a winner, or unsold. */
-record CloseResult(AuctionListing listing, Optional<Bid> winningBid, boolean reserveMet) { }
-
-/**
- * One auction. All state changes go through synchronized methods, so the
- * "read highest bid, compare, replace" sequence is atomic: two bidders can never
- * both believe they are the highest.
- */
+/** One auction. Every state change is synchronized, so "read highest, compare, replace" is atomic. */
 final class AuctionListing {
-    private final String id;
-    private final String itemName;
-    private final String description;
-    private final String category;
-    private final User seller;
-    private final BigDecimal startingPrice;
-    private final BigDecimal minIncrement;
     private final BigDecimal reservePrice;          // hidden minimum; ZERO = no reserve
-    private final Instant startsAt;
-    private final Instant endsAt;
-    private AuctionStatus status = AuctionStatus.SCHEDULED;
-    private final List<Bid> bids = new ArrayList<>();
     private Bid highest;
 
-    AuctionListing(String id, String itemName, String description, String category, User seller,
-                   BigDecimal startingPrice, BigDecimal minIncrement, BigDecimal reservePrice,
-                   Instant startsAt, Duration duration) {
-        if (startingPrice.signum() <= 0 || minIncrement.signum() <= 0) throw new IllegalArgumentException("prices must be > 0");
-        this.id = id; this.itemName = itemName; this.description = description; this.category = category;
-        this.seller = seller; this.startingPrice = money(startingPrice); this.minIncrement = money(minIncrement);
-        this.reservePrice = money(reservePrice); this.startsAt = startsAt; this.endsAt = startsAt.plus(duration);
-    }
-
-    /** Lazily moves SCHEDULED -> ACTIVE when the start time has passed. */
-    private void refresh(Instant now) {
+    private void refresh(Instant now) {             // lazy SCHEDULED -> ACTIVE
         if (status == AuctionStatus.SCHEDULED && !now.isBefore(startsAt)) status = AuctionStatus.ACTIVE;
     }
 
@@ -2899,7 +1366,6 @@ final class AuctionListing {
         return highest == null ? startingPrice : highest.amount().add(minIncrement);
     }
 
-    /** ACTIVE -> CLOSED once time is up. Returns empty if not yet due (or already closed). */
     synchronized Optional<CloseResult> closeIfDue(Instant now) {
         refresh(now);
         if (status != AuctionStatus.ACTIVE || now.isBefore(endsAt)) return Optional.empty();
@@ -2914,247 +1380,27 @@ final class AuctionListing {
         status = AuctionStatus.CANCELLED;
         return true;
     }
-
-    private BidResult refuse(BidOutcome why) { return new BidResult(why, minimumNextBid(), Optional.empty(), Optional.empty()); }
-
-    private static BigDecimal money(BigDecimal b) { return b.setScale(2, RoundingMode.HALF_EVEN); }
-
-    String id() { return id; }
-    String itemName() { return itemName; }
-    String description() { return description; }
-    String category() { return category; }
-    User seller() { return seller; }
-    BigDecimal startingPrice() { return startingPrice; }
-    synchronized AuctionStatus status(Instant now) { refresh(now); return status; }
-    Instant endsAt() { return endsAt; }
-    synchronized Optional<Bid> highestBid() { return Optional.ofNullable(highest); }
-    synchronized BigDecimal currentPrice() { return highest == null ? startingPrice : highest.amount(); }
-    synchronized List<Bid> bidHistory() { return List.copyOf(bids); }
-
-    @Override public String toString() { return id + " '" + itemName + "' now " + currentPrice(); }
 }
 
-/** A controllable clock for demos and tests (production code passes InstantSource.system()). */
-final class ManualClock implements InstantSource {
-    private Instant now;
-    ManualClock(Instant start) { now = start; }
-    @Override public synchronized Instant instant() { return now; }
-    synchronized void advance(Duration d) { now = now.plus(d); }
-}
-```
-
-```java
 // File: lld/ch19/auction/AuctionService.java
-package lld.ch19.auction;
-
-import java.math.BigDecimal;
-import java.time.Duration;
-import java.time.InstantSource;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Predicate;
-
-/** Observer: who wants to hear about bids and results. */
-interface AuctionListener {
-    default void onNewHighBid(AuctionListing a, Bid bid) { }
-    default void onOutbid(AuctionListing a, User outbid, BigDecimal newPrice) { }
-    default void onWon(AuctionListing a, Bid winning) { }
-    default void onUnsold(AuctionListing a, boolean hadBids) { }
-}
-
-final class ConsoleNotifier implements AuctionListener {
-    private volatile boolean muted;
-    void mute(boolean m) { muted = m; }
-    private void say(String to, String msg) { if (!muted) System.out.println("    [notify " + to + "] " + msg); }
-
-    @Override public void onOutbid(AuctionListing a, User u, BigDecimal p) {
-        say(u.name(), "you were outbid on " + a.itemName() + ", now " + p);
-    }
-    @Override public void onWon(AuctionListing a, Bid w) {
-        say(w.bidder().name(), "you WON " + a.itemName() + " for " + w.amount());
-        say(a.seller().name(), a.itemName() + " sold to " + w.bidder().name());
-    }
-    @Override public void onUnsold(AuctionListing a, boolean hadBids) {
-        say(a.seller().name(), a.itemName() + " unsold" + (hadBids ? " (reserve not met)" : " (no bids)"));
-    }
-}
-
-/** Search criteria, built up fluently. Each criterion is a Predicate (Specification pattern). */
-final class AuctionQuery {
-    private final List<Predicate<AuctionListing>> parts = new ArrayList<>();
-    AuctionQuery nameContains(String s) {
-        parts.add(a -> a.itemName().toLowerCase(Locale.ROOT).contains(s.toLowerCase(Locale.ROOT))); return this;
-    }
+final class AuctionQuery {                          // Specification: each criterion is a Predicate
     AuctionQuery category(String c) { parts.add(a -> a.category().equalsIgnoreCase(c)); return this; }
-    AuctionQuery priceBetween(BigDecimal lo, BigDecimal hi) {
-        parts.add(a -> a.currentPrice().compareTo(lo) >= 0 && a.currentPrice().compareTo(hi) <= 0); return this;
-    }
     Predicate<AuctionListing> toPredicate() { return parts.stream().reduce(x -> true, Predicate::and); }
 }
 
-/** Facade over listings, bidding and closing. Listeners are called OUTSIDE listing locks. */
-final class AuctionService {
-    private final InstantSource clock;
-    private final Map<String, User> users = new ConcurrentHashMap<>();
-    private final Map<String, AuctionListing> listings = new ConcurrentHashMap<>();
-    private final List<AuctionListener> listeners = new CopyOnWriteArrayList<>();
-    private final AtomicInteger listingSeq = new AtomicInteger();
-    private final AtomicInteger userSeq = new AtomicInteger();
-    private final AtomicLong bidSeq = new AtomicLong();
-
-    AuctionService(InstantSource clock) { this.clock = clock; }
-
-    void subscribe(AuctionListener l) { listeners.add(l); }
-
-    User register(String name, String email) {
-        User u = new User("U" + userSeq.incrementAndGet(), name, email);
-        if (users.putIfAbsent(u.id(), u) != null) throw new IllegalStateException("id clash");
-        return u;
-    }
-
-    AuctionListing createListing(User seller, String item, String description, String category,
-                                 BigDecimal startingPrice, BigDecimal increment, BigDecimal reserve, Duration duration) {
-        AuctionListing a = new AuctionListing("A" + listingSeq.incrementAndGet(), item, description, category, seller,
-                startingPrice, increment, reserve, clock.instant(), duration);
-        listings.put(a.id(), a);
-        return a;
-    }
-
-    List<AuctionListing> search(AuctionQuery q) {
-        return listings.values().stream()
-                .filter(a -> a.status(clock.instant()) == AuctionStatus.ACTIVE)
-                .filter(q.toPredicate())
-                .sorted(Comparator.comparing(AuctionListing::endsAt))
-                .toList();
-    }
-
-    BidResult placeBid(String listingId, User bidder, BigDecimal amount) {
-        AuctionListing a = listings.get(listingId);
-        if (a == null) throw new IllegalArgumentException("no listing " + listingId);
-        BidResult r = a.placeBid(bidder, amount, clock.instant(), bidSeq.incrementAndGet());
-        r.accepted().ifPresent(top -> {                 // snapshot taken inside the lock
-            listeners.forEach(l -> l.onNewHighBid(a, top));
-            r.outbid().ifPresent(u -> listeners.forEach(l -> l.onOutbid(a, u, top.amount())));
-        });
-        return r;
-    }
-
-    /** Run periodically (e.g. by a ScheduledExecutorService). Closes every auction whose time is up. */
-    List<CloseResult> closeExpired() {
-        List<CloseResult> closed = new ArrayList<>();
-        for (AuctionListing a : listings.values()) {
-            Optional<CloseResult> r = a.closeIfDue(clock.instant());
-            r.ifPresent(closed::add);
-        }
-        for (CloseResult r : closed) {
-            if (r.winningBid().isPresent()) listeners.forEach(l -> l.onWon(r.listing(), r.winningBid().get()));
-            else listeners.forEach(l -> l.onUnsold(r.listing(), r.listing().highestBid().isPresent()));
-        }
-        return closed;
-    }
+BidResult placeBid(String listingId, User bidder, BigDecimal amount) {    // AuctionService (facade)
+    AuctionListing a = listings.get(listingId);
+    BidResult r = a.placeBid(bidder, amount, clock.instant(), bidSeq.incrementAndGet());
+    r.accepted().ifPresent(top -> {                 // snapshot taken inside the lock; notify outside it
+        listeners.forEach(l -> l.onNewHighBid(a, top));
+        r.outbid().ifPresent(u -> listeners.forEach(l -> l.onOutbid(a, u, top.amount())));
+    });
+    return r;
 }
+// closeExpired(): closeIfDue on every listing, then onWon / onUnsold after all locks are released
 ```
 
-```java
-// File: lld/ch19/auction/Main.java
-package lld.ch19.auction;
-
-import java.math.BigDecimal;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-
-public class Main {
-    public static void main(String[] args) throws Exception {
-        ManualClock clock = new ManualClock(Instant.parse("2026-09-28T10:00:00Z"));
-        AuctionService svc = new AuctionService(clock);
-        ConsoleNotifier notifier = new ConsoleNotifier();
-        svc.subscribe(notifier);
-
-        User sam = svc.register("Sam", "sam@mail.test");
-        User ana = svc.register("Ana", "ana@mail.test");
-        User bob = svc.register("Bob", "bob@mail.test");
-
-        System.out.println("== 1. Create listings ==");
-        AuctionListing guitar = svc.createListing(sam, "Vintage Guitar", "1965 hollow body", "Music",
-                bd("100"), bd("10"), bd("0"), Duration.ofHours(2));
-        AuctionListing watch = svc.createListing(sam, "Pocket Watch", "Silver, working", "Collectibles",
-                bd("50"), bd("5"), bd("500"), Duration.ofHours(1));
-        System.out.println("  " + guitar + ", " + watch);
-
-        System.out.println("\n== 2. Search (name 'watch', price 0-100) ==");
-        System.out.println("  " + svc.search(new AuctionQuery().nameContains("watch").priceBetween(bd("0"), bd("100"))));
-
-        System.out.println("\n== 3. Bidding rules ==");
-        show("Ana bids 90 (below start)", svc.placeBid(guitar.id(), ana, bd("90")));
-        show("Ana bids 100", svc.placeBid(guitar.id(), ana, bd("100")));
-        show("Ana bids 120 (already top)", svc.placeBid(guitar.id(), ana, bd("120")));
-        show("Bob bids 105 (increment is 10)", svc.placeBid(guitar.id(), bob, bd("105")));
-        show("Bob bids 110", svc.placeBid(guitar.id(), bob, bd("110")));
-        show("Sam bids on own item", svc.placeBid(guitar.id(), sam, bd("500")));
-        show("Ana bids 150", svc.placeBid(guitar.id(), ana, bd("150")));
-        show("Bob bids 60 on the watch", svc.placeBid(watch.id(), bob, bd("60")));
-
-        System.out.println("\n== 4. One hour later: the watch closes, reserve (500) not met ==");
-        clock.advance(Duration.ofHours(1));
-        svc.closeExpired().forEach(r -> System.out.println("  closed " + r.listing().id() + " reserveMet=" + r.reserveMet()));
-
-        System.out.println("\n== 5. 50 threads bid on the guitar at once ==");
-        List<User> crowd = new ArrayList<>();
-        for (int i = 0; i < 50; i++) crowd.add(svc.register("bidder" + i, "b" + i + "@mail.test"));
-        notifier.mute(true);                 // ~50 outbid messages would drown the output
-        AtomicInteger accepted = new AtomicInteger();
-        CountDownLatch go = new CountDownLatch(1);
-        ExecutorService pool = Executors.newFixedThreadPool(16);
-        for (int i = 0; i < crowd.size(); i++) {
-            User u = crowd.get(i);
-            BigDecimal amount = bd(String.valueOf(160 + i * 10));
-            pool.submit(() -> {
-                go.await();
-                if (svc.placeBid(guitar.id(), u, amount).outcome() == BidOutcome.ACCEPTED) accepted.incrementAndGet();
-                return null;
-            });
-        }
-        go.countDown();
-        pool.shutdown();
-        pool.awaitTermination(10, TimeUnit.SECONDS);
-        notifier.mute(false);
-        Bid top = guitar.highestBid().orElseThrow();
-        boolean increasing = true;
-        List<Bid> history = guitar.bidHistory();
-        for (int i = 1; i < history.size(); i++)
-            increasing &= history.get(i).amount().compareTo(history.get(i - 1).amount().add(bd("10"))) >= 0;
-        System.out.println("  accepted=" + accepted + " (varies run to run), highest=" + top.amount() + " by " + top.bidder().name()
-                + ", history strictly increasing by >= increment: " + increasing);
-
-        System.out.println("\n== 6. Time is up: the guitar closes and the winner is told ==");
-        clock.advance(Duration.ofHours(1));
-        show("late bid", svc.placeBid(guitar.id(), ana, bd("5000")));
-        svc.closeExpired();
-        System.out.println("  status " + guitar.status(clock.instant()) + ", final price " + guitar.currentPrice());
-    }
-
-    private static BigDecimal bd(String s) { return new BigDecimal(s); }
-
-    private static void show(String what, BidResult r) {
-        System.out.println("  " + what + " -> " + r.outcome() + " (next minimum " + r.minimumNextBid() + ")");
-    }
-}
-```
+`Main` drives a `ManualClock` (an `InstantSource` it moves forward) instead of sleeping.
 
 Output:
 
@@ -3413,223 +1659,23 @@ Skip first checks the plan's rolling (always the last 60 minutes, not a fixed cl
 
 Files: `Catalog.java` (genre, artist, album, song, library, plans, user, playlist), `Player.java` (play-order strategies, repeat/state enums, listener, player, recommender), `Main.java`.
 
+The full runnable source is in [`code/lld/ch19/music/`](code/lld/ch19/music/); below are the lines that carry the design.
+
 ```java
-// File: lld/ch19/music/Catalog.java
-package lld.ch19.music;
-
-import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.Function;
-
-enum Genre { ROCK, POP, JAZZ, CLASSICAL, HIPHOP }
-
-record Artist(String id, String name) { }
-
-record Album(String id, String title, Artist artist, int year) { }
-
-record Song(String id, String title, Artist artist, Album album, Genre genre, int durationSec) {
-    @Override public String toString() { return title + " - " + artist.name(); }
-}
-
-/** The shared, read-mostly catalog. Thread-safe collections because every user reads it at once. */
-final class MusicLibrary {
-    private final Map<String, Song> songs = new ConcurrentHashMap<>();
-    private final Map<String, Album> albums = new ConcurrentHashMap<>();
-    private final Map<String, Artist> artists = new ConcurrentHashMap<>();
-
-    void add(Song s) {
-        songs.put(s.id(), s);
-        albums.putIfAbsent(s.album().id(), s.album());
-        artists.putIfAbsent(s.artist().id(), s.artist());
-    }
-
-    Song song(String id) { return songs.get(id); }
-    List<Song> allSongs() { return sorted(songs.values(), Song::id); }
-
-    List<Song> searchSongs(String q) { return match(songs.values(), q, Song::title); }
-    List<Album> searchAlbums(String q) { return match(albums.values(), q, Album::title); }
-    List<Artist> searchArtists(String q) { return match(artists.values(), q, Artist::name); }
-    List<Song> byArtist(Artist a) { return songs.values().stream().filter(s -> s.artist().equals(a)).sorted(
-            (x, y) -> x.id().compareTo(y.id())).toList(); }
-
-    private static <T> List<T> match(Iterable<T> items, String q, Function<T, String> field) {
-        String needle = q.toLowerCase(Locale.ROOT);
-        List<T> out = new ArrayList<>();
-        for (T t : items) if (field.apply(t).toLowerCase(Locale.ROOT).contains(needle)) out.add(t);
-        out.sort((a, b) -> field.apply(a).compareTo(field.apply(b)));
-        return out;
-    }
-
-    private static <T> List<T> sorted(Iterable<T> items, Function<T, String> key) {
-        List<T> out = new ArrayList<>();
-        items.forEach(out::add);
-        out.sort((a, b) -> key.apply(a).compareTo(key.apply(b)));
-        return out;
-    }
-}
-
-/** What each plan allows. The enum carries the rules, so no if (plan == FREE) scattered around. */
+// File: lld/ch19/music/Catalog.java - the plan carries its own rules
 enum SubscriptionPlan {
     FREE(new BigDecimal("0.00"), 6, true, false),
     PREMIUM(new BigDecimal("10.99"), Integer.MAX_VALUE, false, true);
-
     final BigDecimal monthlyPrice;
     final int skipsPerHour;
     final boolean ads;
     final boolean offlineDownloads;
-
-    SubscriptionPlan(BigDecimal price, int skipsPerHour, boolean ads, boolean offline) {
-        this.monthlyPrice = price; this.skipsPerHour = skipsPerHour; this.ads = ads; this.offlineDownloads = offline;
-    }
 }
 
-final class User {
-    private final String id;
-    private final String name;
-    private volatile SubscriptionPlan plan = SubscriptionPlan.FREE;
-    private final List<Playlist> playlists = new CopyOnWriteArrayList<>();
-    private final List<Song> history = new CopyOnWriteArrayList<>();
-
-    User(String id, String name) { this.id = id; this.name = name; }
-    String id() { return id; }
-    String name() { return name; }
-    SubscriptionPlan plan() { return plan; }
-
-    /** Returns the amount to charge now. */
-    BigDecimal subscribe(SubscriptionPlan p) { plan = p; return p.monthlyPrice; }
-
-    Playlist createPlaylist(String name) { Playlist p = new Playlist(name, this); playlists.add(p); return p; }
-    List<Playlist> playlists() { return List.copyOf(playlists); }
-    void recordPlay(Song s) { history.add(s); }
-    List<Song> history() { return Collections.unmodifiableList(history); }
-}
-
-/** An ordered, user-owned list of songs. Duplicates are allowed, as in real apps. */
-final class Playlist {
-    private final String name;
-    private final User owner;
-    private final List<Song> songs = new ArrayList<>();
-
-    Playlist(String name, User owner) { this.name = name; this.owner = owner; }
-    String name() { return name; }
-    User owner() { return owner; }
-    synchronized Playlist add(Song s) { songs.add(s); return this; }
-    synchronized void remove(Song s) { songs.remove(s); }
-    synchronized void move(int from, int to) { songs.add(to, songs.remove(from)); }
-    synchronized List<Song> songs() { return List.copyOf(songs); }
-}
-```
-
-```java
-// File: lld/ch19/music/Main.java
-package lld.ch19.music;
-
-import java.time.Instant;
-import java.time.InstantSource;
-import java.util.List;
-
-public class Main {
-    public static void main(String[] args) {
-        MusicLibrary lib = new MusicLibrary();
-        Artist queen = new Artist("AR1", "Queen");
-        Artist miles = new Artist("AR2", "Miles Davis");
-        Artist adele = new Artist("AR3", "Adele");
-        Album opera = new Album("AL1", "A Night at the Opera", queen, 1975);
-        Album blue = new Album("AL2", "Kind of Blue", miles, 1959);
-        Album twentyFive = new Album("AL3", "25", adele, 2015);
-        lib.add(new Song("S1", "Bohemian Rhapsody", queen, opera, Genre.ROCK, 354));
-        lib.add(new Song("S2", "Love of My Life", queen, opera, Genre.ROCK, 219));
-        lib.add(new Song("S3", "So What", miles, blue, Genre.JAZZ, 562));
-        lib.add(new Song("S4", "Blue in Green", miles, blue, Genre.JAZZ, 337));
-        lib.add(new Song("S5", "Hello", adele, twentyFive, Genre.POP, 295));
-        lib.add(new Song("S6", "Death on Two Legs", queen, opera, Genre.ROCK, 223));
-        lib.add(new Song("S7", "Freddie Freeloader", miles, blue, Genre.JAZZ, 589));
-        lib.add(new Song("S8", "All Blues", miles, blue, Genre.JAZZ, 693));
-        lib.add(new Song("S9", "When We Were Young", adele, twentyFive, Genre.POP, 291));
-        lib.add(new Song("S10", "You're My Best Friend", queen, opera, Genre.ROCK, 172));
-
-        System.out.println("== 1. Search ==");
-        System.out.println("  songs 'blue'    -> " + lib.searchSongs("blue"));
-        System.out.println("  albums 'opera'  -> " + lib.searchAlbums("opera").stream().map(Album::title).toList());
-        System.out.println("  artists 'da'    -> " + lib.searchArtists("da").stream().map(Artist::name).toList());
-
-        System.out.println("\n== 2. Playlist ==");
-        User mia = new User("U1", "Mia");
-        Playlist mix = mia.createPlaylist("Road trip")
-                .add(lib.song("S1")).add(lib.song("S3")).add(lib.song("S5")).add(lib.song("S2")).add(lib.song("S4"));
-        mix.move(4, 1);
-        System.out.println("  " + mix.name() + ": " + mix.songs());
-
-        System.out.println("\n== 3. Play in order, pause, seek, repeat-one ==");
-        MusicPlayer player = new MusicPlayer(mia, InstantSource.fixed(Instant.parse("2026-09-28T08:00:00Z")));
-        player.addListener((u, s) -> u.recordPlay(s));          // history is just another listener
-        player.load(mix.songs());
-        player.play();
-        player.seek(120);
-        player.pause();
-        System.out.println("  state " + player.state() + " at " + player.position() + "s");
-        player.resume();
-        player.setRepeat(RepeatMode.ONE);
-        player.trackFinished();                                   // replays the same song
-        player.setRepeat(RepeatMode.OFF);
-        player.trackFinished();
-
-        System.out.println("\n== 4. Shuffle keeps the current song, reorders the rest ==");
-        player.setShuffle(true);
-        System.out.println("  now " + player.current() + ", up next " + player.upNext(4));
-
-        System.out.println("\n== 5. FREE plan: skip limit (6/hour) and ads, repeat-all wraps the shuffled queue ==");
-        player.setRepeat(RepeatMode.ALL);
-        for (int i = 0; i < 7; i++) player.skip();
-
-        System.out.println("\n== 6. Upgrade to PREMIUM: no ads, unlimited skips ==");
-        System.out.println("  charged $" + mia.subscribe(SubscriptionPlan.PREMIUM));
-        player.setShuffle(false);
-        player.load(List.of(lib.song("S6"), lib.song("S7")));
-        player.setRepeat(RepeatMode.ALL);
-        player.play();
-        player.skip();
-        player.skip();                                            // wraps to the start
-        player.setRepeat(RepeatMode.OFF);
-        player.trackFinished();
-        player.trackFinished();                                   // end of queue
-
-        System.out.println("\n== 7. Recommendations from listening history ==");
-        System.out.println("  plays so far: " + mia.history().size());
-        System.out.println("  recommended: " + new GenreRecommender(lib).recommend(mia, 3));
-    }
-}
-```
-
-```java
 // File: lld/ch19/music/Player.java
-package lld.ch19.music;
-
-import java.time.Duration;
-import java.time.Instant;
-import java.time.InstantSource;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Deque;
-import java.util.EnumMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
-import java.util.stream.IntStream;
-
-/** Strategy: in what order should the queue be played? */
-interface PlaybackOrder {
-    /** A permutation of 0..size-1 that starts with {@code first}. */
+interface PlaybackOrder {                       // Strategy: a permutation of 0..size-1 starting with first
     List<Integer> order(int size, int first);
 }
-
 final class SequentialOrder implements PlaybackOrder {
     @Override public List<Integer> order(int size, int first) {
         List<Integer> out = new ArrayList<>(IntStream.range(0, size).boxed().toList());
@@ -3637,9 +1683,7 @@ final class SequentialOrder implements PlaybackOrder {
         return out;
     }
 }
-
 final class ShuffleOrder implements PlaybackOrder {
-    private final Random random;
     ShuffleOrder(long seed) { this.random = new Random(seed); }   // seeded: repeatable demo and tests
     @Override public List<Integer> order(int size, int first) {
         List<Integer> rest = new ArrayList<>(IntStream.range(0, size).filter(i -> i != first).boxed().toList());
@@ -3649,58 +1693,14 @@ final class ShuffleOrder implements PlaybackOrder {
     }
 }
 
-enum RepeatMode { OFF, ALL, ONE }
-
-enum PlayerState { STOPPED, PLAYING, PAUSED }
-
-/** Observer hook: history, royalties, recommendations all listen to plays. */
-interface PlaybackListener { void onStart(User user, Song song); }
-
-/**
- * One user's player. Not shared between users, but a phone and a web tab could send
- * commands at once, so every public method is synchronized.
- */
-final class MusicPlayer {
-    private final User user;
-    private final InstantSource clock;
-    private final List<PlaybackListener> listeners = new ArrayList<>();
-    private final Deque<Instant> recentSkips = new ArrayDeque<>();
+final class MusicPlayer {                       // one per user session; every public method synchronized
     private List<Song> queue = List.of();
-    private List<Integer> order = List.of();
+    private List<Integer> order = List.of();    // indexes into the unchanged queue
     private int cursor;                         // index into order
-    private int positionSec;
-    private int songsSinceAd;
-    private PlayerState state = PlayerState.STOPPED;
-    private RepeatMode repeat = RepeatMode.OFF;
-    private PlaybackOrder playbackOrder = new SequentialOrder();
-
-    MusicPlayer(User user, InstantSource clock) { this.user = user; this.clock = clock; }
-
-    synchronized void addListener(PlaybackListener l) { listeners.add(l); }
-
-    synchronized void load(List<Song> songs) {
-        queue = List.copyOf(songs);
-        order = playbackOrder.order(queue.size(), 0);
-        cursor = 0;
-        state = PlayerState.STOPPED;
-    }
-
-    synchronized void play() {
-        if (queue.isEmpty()) throw new IllegalStateException("queue is empty");
-        start();
-    }
-
-    synchronized void pause() { if (state == PlayerState.PLAYING) state = PlayerState.PAUSED; }
-
-    synchronized void resume() { if (state == PlayerState.PAUSED) state = PlayerState.PLAYING; }
-
-    synchronized void seek(int sec) {
-        positionSec = Math.max(0, Math.min(sec, current().durationSec()));
-    }
 
     /** User pressed "next". Free users have a skip limit per rolling hour. */
     synchronized boolean skip() {
-        if (state == PlayerState.STOPPED) return false;          // nothing to skip
+        if (state == PlayerState.STOPPED) return false;
         Instant now = clock.instant();
         while (!recentSkips.isEmpty() && recentSkips.peekFirst().isBefore(now.minus(Duration.ofHours(1)))) recentSkips.pollFirst();
         if (recentSkips.size() >= user.plan().skipsPerHour) {
@@ -3712,33 +1712,13 @@ final class MusicPlayer {
         return true;
     }
 
-    /** The current song ended naturally. Repeat-one replays it; skip does not honour repeat-one. */
-    synchronized void trackFinished() { advance(true); }
-
-    synchronized void previous() {
-        if (positionSec > 3 || cursor == 0) { positionSec = 0; return; }   // like most players: restart first
-        cursor--;
-        start();
-    }
+    synchronized void trackFinished() { advance(true); }   // repeat-one honoured only on a natural end
 
     synchronized void setShuffle(boolean on) {
         int now = order.isEmpty() ? 0 : order.get(cursor);
         playbackOrder = on ? new ShuffleOrder(42) : new SequentialOrder();
         order = playbackOrder.order(queue.size(), now);
         cursor = 0;
-    }
-
-    synchronized void setRepeat(RepeatMode m) { repeat = m; }
-
-    synchronized Song current() { return queue.get(order.get(cursor)); }
-    synchronized PlayerState state() { return state; }
-    synchronized int position() { return positionSec; }
-
-    /** The next few songs in play order (what the "Up next" panel shows). */
-    synchronized List<Song> upNext(int n) {
-        List<Song> out = new ArrayList<>();
-        for (int i = cursor + 1; i < order.size() && out.size() < n; i++) out.add(queue.get(order.get(i)));
-        return out;
     }
 
     private void advance(boolean natural) {
@@ -3754,7 +1734,7 @@ final class MusicPlayer {
         System.out.println("  [player] end of queue");
     }
 
-    private void start() {
+    private void start() {                      // FREE plan: an ad every few songs; then notify PlaybackListeners
         if (user.plan().ads && ++songsSinceAd > 3) {
             System.out.println("  [player] (30-second ad for FREE plan)");
             songsSinceAd = 1;
@@ -3766,27 +1746,8 @@ final class MusicPlayer {
         listeners.forEach(l -> l.onStart(user, s));
     }
 }
-
-/** Strategy for "what should this user hear next?" - a simple stub based on favourite genre. */
-interface Recommender { List<Song> recommend(User user, int n); }
-
-final class GenreRecommender implements Recommender {
-    private final MusicLibrary library;
-    GenreRecommender(MusicLibrary library) { this.library = library; }
-
-    @Override public List<Song> recommend(User user, int n) {
-        Map<Genre, Integer> counts = new EnumMap<>(Genre.class);
-        user.history().forEach(s -> counts.merge(s.genre(), 1, Integer::sum));
-        List<Genre> favourite = counts.entrySet().stream()
-                .sorted((a, b) -> b.getValue() - a.getValue()).map(Map.Entry::getKey).toList();
-        List<Song> heard = user.history();
-        List<Song> out = new ArrayList<>();
-        for (Genre g : favourite)
-            for (Song s : library.allSongs())
-                if (out.size() < n && s.genre() == g && !heard.contains(s)) out.add(s);
-        return out;
-    }
-}
+// previous(): restarts the song if more than 3 s in (or at the first song), else goes back one.
+// GenreRecommender: count the user's history per Genre, suggest unheard songs from the top genres.
 ```
 
 Output:
@@ -3945,12 +1906,52 @@ This problem also comes in two shapes:
 
 ### Use cases
 
-| Actor | Use cases |
-|---|---|
-| Customer | Browse nearby restaurants, build cart, pay, place order, track, cancel, rate |
-| Restaurant | Manage menu/prices/availability, accept or refuse order, mark preparing, mark ready |
-| Delivery agent | Get assigned, pick up, deliver |
-| System | Compute fees, assign riders, queue orders when no rider is free, notify everyone |
+Notation (system box, include/extend arrows) as in [§3.10](../03-relationships-and-uml/README.md#310-use-case-diagrams). The **Admin** onboards restaurants and delivery agents (`addRestaurant`, `addAgent`); the **Payment gateway** is the outside service that charges UPI and cards.
+
+```mermaid
+flowchart TD
+    Cust(["Actor: Customer"])
+    Rest(["Actor: Restaurant"])
+    subgraph Platform["Food delivery platform"]
+        U1(["Browse nearby restaurants"])
+        U2(["Build cart"])
+        U3(["Place order"])
+        U4(["Pay"])
+        U5(["Track order"])
+        U6(["Cancel order"])
+        U7(["Rate restaurant"])
+        U8(["Manage menu and availability"])
+        U9(["Accept or refuse order"])
+        U10(["Mark preparing and ready"])
+        U11(["Assign delivery agent"])
+        U12(["Pick up and deliver"])
+        U13(["Notify status change"])
+        U14(["Onboard restaurants and agents"])
+        U15(["Refund"])
+    end
+    Agent(["Actor: Delivery agent"])
+    Admin(["Actor: Admin"])
+    Pay(["Actor: Payment gateway"])
+    Cust --- U1
+    Cust --- U2
+    Cust --- U3
+    Cust --- U5
+    Cust --- U6
+    Cust --- U7
+    Rest --- U8
+    Rest --- U9
+    Rest --- U10
+    Agent --- U12
+    Admin --- U14
+    U4 --- Pay
+    U3 -. "include" .-> U4
+    U10 -. "include" .-> U11
+    U9 -. "include" .-> U13
+    U15 -. "extend (paid upfront)" .-> U6
+    U15 -. "extend (refused, paid upfront)" .-> U9
+```
+
+"Assign delivery agent" has no human actor: the platform runs it when food is ready or a rider becomes free. Every status change also includes "Notify status change"; only one such arrow is drawn to keep the picture readable.
 
 ### Core entities
 
@@ -4073,9 +2074,9 @@ classDiagram
 stateDiagram-v2
     [*] --> PENDING : customer places order
     PENDING --> CONFIRMED : restaurant accepts - kitchen slots reserved
-    PENDING --> CANCELLED : kitchen full or customer cancels
+    PENDING --> CANCELLED : kitchen full or customer cancels - refund if prepaid
     CONFIRMED --> PREPARING : cooking starts
-    CONFIRMED --> CANCELLED : customer cancels - slots released
+    CONFIRMED --> CANCELLED : customer cancels - slots released, refund if prepaid
     PREPARING --> READY_FOR_PICKUP : food ready - slots released
     READY_FOR_PICKUP --> OUT_FOR_DELIVERY : rider assigned and picks up
     OUT_FOR_DELIVERY --> DELIVERED : handed to customer
@@ -4111,6 +2112,74 @@ sequenceDiagram
     Note over S,A: delivered() frees the rider and runs the same loop
 ```
 
+**Activity — place an order** (with the restaurant's accept or refuse; one swimlane per actor, notation as in [§3.13](../03-relationships-and-uml/README.md#313-activity-diagrams)).
+
+```mermaid
+flowchart TD
+    subgraph Customer
+        S((" ")) --> A1["Browse restaurants within the radius"]
+        A2["Add items to cart"]
+        D1{"Item from another restaurant?"}
+        A3["Choose UPI, card or cash on delivery"]
+    end
+    subgraph Platform
+        D2{"Restaurant open and all items available?"}
+        X1["Reject checkout with reason"]
+        A4["Copy item prices, compute fee by distance"]
+        D3{"Paid upfront?"}
+        D4{"Payment succeeded?"}
+        A5["Create order PENDING and notify restaurant"]
+        X3["Order CANCELLED, kitchen full"]
+        X4["Refund if paid upfront"]
+    end
+    subgraph Restaurant
+        D5{"Kitchen has room for all items?"}
+        A6["Order CONFIRMED, kitchen slots reserved"]
+    end
+    A1 --> A2 --> D1
+    D1 -->|"[yes] refused"| A2
+    D1 -->|"[no]"| A3 --> D2
+    D2 -->|"[no]"| X1 --> E1((("end")))
+    D2 -->|"[yes]"| A4 --> D3
+    D3 -->|"[no] COD"| A5
+    D3 -->|"[yes]"| D4
+    D4 -->|"[no]"| X1
+    D4 -->|"[yes]"| A5
+    A5 --> D5
+    D5 -->|"[yes]"| A6 --> E2((("end")))
+    D5 -->|"[no]"| X3 --> X4 --> E1
+```
+
+The payment-gateway call is a stub in the demo (every payment succeeds); the branch shows where a real gateway's failure goes.
+
+**Activity — cook, assign a delivery agent and deliver.**
+
+```mermaid
+flowchart TD
+    subgraph Restaurant
+        S((" ")) --> A1["Start cooking, order PREPARING"]
+        A2["Food ready, order READY_FOR_PICKUP"]
+    end
+    subgraph Platform
+        A3["Release kitchen slots, add order to waiting queue"]
+        A4["Strategy ranks free agents"]
+        D1{"Some agent claimed by CAS?"}
+        X1["Order waits in queue"]
+        A5["Assign agent, order OUT_FOR_DELIVERY"]
+        A8["Free the agent, run dispatch again"]
+    end
+    subgraph Agent["Delivery agent"]
+        A6["Pick up at restaurant, ride to customer"]
+        A7["Hand over food, order DELIVERED"]
+    end
+    A1 --> A2 --> A3 --> A4 --> D1
+    D1 -->|"[no]"| X1
+    X1 -. "a rider becomes free" .-> A4
+    D1 -->|"[yes]"| A5 --> A6 --> A7 --> A8 --> E((("end")))
+```
+
+Cancelling is possible only before cooking starts (PENDING or CONFIRMED), so this second flow has no cancel branch. The sequence diagram above shows the same dispatch loop as calls between objects.
+
 **FoodKart `place_order(name, qty)`**: user logged in? → restaurant exists? → delivers to the user's pincode? → `take(qty)` atomically (quantity ≥ qty, then subtract) → record in history → "Order Placed Successfully." Otherwise "Cannot place order".
 
 **FoodKart selection variant**: filter restaurants that deliver to the user's pincode and have `quantity ≥ qty` → ask the strategy to pick one → `take(qty)`; if another user took the capacity in between, drop that restaurant and ask again (bounded retries).
@@ -4138,476 +2207,111 @@ sequenceDiagram
 
 Files: `Model.java` (location, customer, menu item, restaurant, cart, order item, status machine, payments, order, delivery agent), `FoodDeliveryService.java` (strategies, listener, notifier, service), `Main.java`.
 
-```java
-// File: lld/ch19/fooddelivery/FoodDeliveryService.java
-package lld.ch19.fooddelivery;
-
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicInteger;
-
-/** Strategy: which free rider gets this order? Returns riders in preference order. */
-interface DeliveryAssignmentStrategy {
-    List<DeliveryAgent> rank(Order order, List<DeliveryAgent> free);
-}
-
-/** Closest rider to the restaurant - fastest pickup. */
-final class NearestAgentStrategy implements DeliveryAssignmentStrategy {
-    @Override public List<DeliveryAgent> rank(Order o, List<DeliveryAgent> free) {
-        Location r = o.restaurant().location();
-        return free.stream().sorted(Comparator.comparingDouble(a -> a.location().distanceTo(r))).toList();
-    }
-}
-
-/** Fewest deliveries today first (spreads earnings), nearest as tie-breaker. */
-final class FairShareStrategy implements DeliveryAssignmentStrategy {
-    @Override public List<DeliveryAgent> rank(Order o, List<DeliveryAgent> free) {
-        Location r = o.restaurant().location();
-        return free.stream().sorted(Comparator.comparingInt(DeliveryAgent::deliveriesToday)
-                .thenComparingDouble(a -> a.location().distanceTo(r))).toList();
-    }
-}
-
-/** Observer: customer app, restaurant tablet and rider app all track the order. */
-interface OrderListener { void onStatus(Order order, OrderStatus status); }
-
-final class Notifier implements OrderListener {
-    @Override public void onStatus(Order o, OrderStatus s) {
-        String who = switch (s) {
-            case PENDING -> "restaurant " + o.restaurant().name() + ": new order";
-            case OUT_FOR_DELIVERY -> "customer " + o.customer().name() + ": " + o.agent().map(DeliveryAgent::name).orElse("?") + " is on the way";
-            default -> "customer " + o.customer().name();
-        };
-        System.out.println("    [" + o.id() + " " + s + "] -> " + who);
-    }
-}
-
-/** Facade: browse, order, accept, prepare, dispatch, deliver, cancel. */
-final class FoodDeliveryService {
-    private static final BigDecimal BASE_FEE = new BigDecimal("20.00");
-    private static final BigDecimal PER_KM = new BigDecimal("8.00");
-
-    private final Map<String, Restaurant> restaurants = new ConcurrentHashMap<>();
-    private final List<DeliveryAgent> agents = new CopyOnWriteArrayList<>();
-    private final Map<String, Order> orders = new ConcurrentHashMap<>();
-    private final Queue<Order> awaitingRider = new ConcurrentLinkedQueue<>();
-    private final List<OrderListener> listeners = new CopyOnWriteArrayList<>();
-    private final AtomicInteger seq = new AtomicInteger(100);
-    private volatile DeliveryAssignmentStrategy strategy;
-
-    FoodDeliveryService(DeliveryAssignmentStrategy strategy) { this.strategy = strategy; }
-
-    void setStrategy(DeliveryAssignmentStrategy s) { strategy = s; }
-    void subscribe(OrderListener l) { listeners.add(l); }
-    void addRestaurant(Restaurant r) { restaurants.put(r.id(), r); }
-    void addAgent(DeliveryAgent a) { agents.add(a); }
-
-    /** Open restaurants within the radius, nearest first. */
-    List<Restaurant> browse(Customer c, double radiusKm) {
-        return restaurants.values().stream().filter(Restaurant::isOpen)
-                .filter(r -> r.location().distanceTo(c.address()) <= radiusKm)
-                .sorted(Comparator.comparingDouble(r -> r.location().distanceTo(c.address()))).toList();
-    }
-
-    Order placeOrder(Customer c, Cart cart, PaymentMethod pay) {
-        if (cart.isEmpty()) throw new IllegalStateException("empty cart");
-        Restaurant r = cart.restaurant();
-        if (!r.isOpen()) throw new IllegalStateException(r.name() + " is closed");
-        List<OrderItem> items = new ArrayList<>();
-        cart.quantities().forEach((itemId, qty) -> {
-            MenuItem m = r.item(itemId).orElseThrow();
-            if (!m.available()) throw new IllegalStateException(m.name() + " is sold out");
-            items.add(new OrderItem(itemId, m.name(), m.price(), qty));
-        });
-        BigDecimal km = BigDecimal.valueOf(r.location().distanceTo(c.address())).setScale(1, RoundingMode.HALF_UP);
-        BigDecimal fee = BASE_FEE.add(PER_KM.multiply(km)).setScale(2, RoundingMode.HALF_EVEN);
-        Order o = new Order("OD" + seq.incrementAndGet(), c, r, items, fee, pay);
-        orders.put(o.id(), o);
-        cart.clear();
-        publish(o, OrderStatus.PENDING);
-        return o;
-    }
-
-    /** The restaurant accepts only if its kitchen has room; otherwise the order is auto-cancelled. */
-    boolean restaurantAccepts(String orderId) {
-        Order o = orders.get(orderId);
-        synchronized (o) {                              // same lock as cancel(): capacity can never leak
-            if (o.status() != OrderStatus.PENDING) return false;
-            if (!o.restaurant().tryReserveKitchen(o.itemCount())) {
-                System.out.println("    (" + o.restaurant().name() + " kitchen full: needs " + o.itemCount()
-                        + " item slots, free " + o.restaurant().freeCapacity() + ")");
-                transition(o, OrderStatus.CANCELLED);
-                return false;
-            }
-            transition(o, OrderStatus.CONFIRMED);
-            return true;
-        }
-    }
-
-    void startPreparing(String orderId) { transition(orders.get(orderId), OrderStatus.PREPARING); }
-
-    /** Food is ready: kitchen capacity comes back, and we look for a rider. */
-    void foodReady(String orderId) {
-        Order o = orders.get(orderId);
-        transition(o, OrderStatus.READY_FOR_PICKUP);
-        o.restaurant().releaseKitchen(o.itemCount());
-        awaitingRider.add(o);
-        dispatchWaiting();
-    }
-
-    void delivered(String orderId) {
-        Order o = orders.get(orderId);
-        transition(o, OrderStatus.DELIVERED);
-        DeliveryAgent a = o.agent().orElseThrow();
-        a.moveTo(o.customer().address());
-        a.completeDelivery();
-        dispatchWaiting();                              // a freed rider takes the oldest waiting order
-    }
-
-    boolean cancel(String orderId) {
-        Order o = orders.get(orderId);
-        synchronized (o) {
-            if (!o.status().canMoveTo(OrderStatus.CANCELLED)) return false;
-            boolean kitchenHeld = o.status() == OrderStatus.CONFIRMED;
-            transition(o, OrderStatus.CANCELLED);
-            if (kitchenHeld) o.restaurant().releaseKitchen(o.itemCount());
-        }
-        if (o.payment().paidUpfront()) System.out.println("    refund " + o.total() + " to " + o.payment().describe());
-        return true;
-    }
-
-    Order order(String id) { return orders.get(id); }
-
-    /** Hand waiting orders (oldest first) to free riders. CAS on the rider prevents double booking. */
-    private synchronized void dispatchWaiting() {
-        Order o;
-        while ((o = awaitingRider.peek()) != null) {
-            List<DeliveryAgent> free = agents.stream().filter(DeliveryAgent::isAvailable).toList();
-            Optional<DeliveryAgent> got = Optional.empty();
-            for (DeliveryAgent a : strategy.rank(o, free)) if (a.tryClaim()) { got = Optional.of(a); break; }
-            if (got.isEmpty()) {
-                System.out.println("    (" + o.id() + " waiting for a free rider)");
-                return;
-            }
-            awaitingRider.poll();
-            o.assign(got.get());
-            transition(o, OrderStatus.OUT_FOR_DELIVERY);
-        }
-    }
-
-    private void transition(Order o, OrderStatus s) {
-        o.moveTo(s);
-        listeners.forEach(l -> l.onStatus(o, s));
-    }
-
-    private void publish(Order o, OrderStatus s) { listeners.forEach(l -> l.onStatus(o, s)); }
-}
-```
-
-```java
-// File: lld/ch19/fooddelivery/Main.java
-package lld.ch19.fooddelivery;
-
-import java.math.BigDecimal;
-
-public class Main {
-    public static void main(String[] args) {
-        FoodDeliveryService app = new FoodDeliveryService(new NearestAgentStrategy());
-        app.subscribe(new Notifier());
-
-        Restaurant dosa = new Restaurant("R1", "Dosa Corner", new Location(1, 1), 4);
-        dosa.addItem(new MenuItem("D1", "Masala Dosa", new BigDecimal("120.00")));
-        dosa.addItem(new MenuItem("D2", "Filter Coffee", new BigDecimal("40.00")));
-        Restaurant pizza = new Restaurant("R2", "Pizza Hub", new Location(5, 5), 10);
-        pizza.addItem(new MenuItem("P1", "Margherita", new BigDecimal("299.00")));
-        Restaurant far = new Restaurant("R3", "Far Away Grill", new Location(30, 30), 10);
-        app.addRestaurant(dosa);
-        app.addRestaurant(pizza);
-        app.addRestaurant(far);
-        DeliveryAgent ravi = new DeliveryAgent("A1", "Ravi", new Location(0, 0));
-        DeliveryAgent meena = new DeliveryAgent("A2", "Meena", new Location(6, 6));
-        app.addAgent(ravi);
-        app.addAgent(meena);
-
-        Customer asha = new Customer("C1", "Asha", "98000", new Location(2, 2));
-        Customer vik = new Customer("C2", "Vikram", "98001", new Location(4, 4));
-
-        System.out.println("== 1. Browse within 10 km ==");
-        app.browse(asha, 10).forEach(r -> System.out.println("  " + r.name()));
-
-        System.out.println("\n== 2. One restaurant per cart ==");
-        Cart cart = new Cart();
-        cart.add(dosa, "D1", 2);
-        cart.add(dosa, "D2", 1);
-        try { cart.add(pizza, "P1", 1); } catch (IllegalStateException e) { System.out.println("  " + e.getMessage()); }
-
-        System.out.println("\n== 3. Place, accept, prepare, ready, deliver ==");
-        Order o1 = app.placeOrder(asha, cart, new UpiPayment("asha@upi"));
-        System.out.println("  subtotal " + o1.subtotal() + " + delivery " + o1.deliveryFee() + " = " + o1.total());
-        dosa.item("D1").orElseThrow().setPrice(new BigDecimal("150.00"));    // later price change...
-        System.out.println("  price changed after ordering; order still " + o1.total());
-        app.restaurantAccepts(o1.id());
-        app.startPreparing(o1.id());
-        app.foodReady(o1.id());
-        System.out.println("  rider: " + o1.agent().orElseThrow() + " (nearest to Dosa Corner)");
-
-        System.out.println("\n== 4. Kitchen capacity: 4 items max at Dosa Corner ==");
-        Cart c2 = new Cart();
-        c2.add(dosa, "D1", 3);
-        Order o2 = app.placeOrder(vik, c2, new CashOnDelivery());
-        app.restaurantAccepts(o2.id());                                     // 3 of 4 slots used
-        Cart c3 = new Cart();
-        c3.add(dosa, "D2", 2);
-        Order o3 = app.placeOrder(asha, c3, new CardPayment("4242"));
-        app.restaurantAccepts(o3.id());                                     // needs 2, only 1 free
-
-        System.out.println("\n== 5. Only one rider free: second ready order waits ==");
-        app.startPreparing(o2.id());
-        app.foodReady(o2.id());                                             // Meena takes it
-        Cart c4 = new Cart();
-        c4.add(pizza, "P1", 1);
-        Order o4 = app.placeOrder(vik, c4, new UpiPayment("vik@upi"));
-        app.restaurantAccepts(o4.id());
-        app.startPreparing(o4.id());
-        app.foodReady(o4.id());                                             // nobody free
-        app.delivered(o1.id());                                             // Ravi frees up -> takes o4
-        System.out.println("  o4 rider: " + o4.agent().orElseThrow());
-
-        System.out.println("\n== 6. Cancel rules ==");
-        System.out.println("  cancel o2 (out for delivery)? " + app.cancel(o2.id()));
-        Cart c5 = new Cart();
-        c5.add(pizza, "P1", 2);
-        Order o5 = app.placeOrder(asha, c5, new CardPayment("4242"));
-        app.restaurantAccepts(o5.id());
-        System.out.println("  cancel o5 (confirmed)? " + app.cancel(o5.id()));
-
-        System.out.println("\n== 7. Swap strategy at run time: fair share ==");
-        app.delivered(o2.id());
-        app.delivered(o4.id());
-        System.out.println("  deliveries today: Ravi=" + ravi.deliveriesToday() + ", Meena=" + meena.deliveriesToday()
-                + " (both now at Vikram's address)");
-        app.setStrategy(new FairShareStrategy());
-        Cart c6 = new Cart();
-        c6.add(dosa, "D2", 1);
-        Order o6 = app.placeOrder(asha, c6, new UpiPayment("asha@upi"));
-        app.restaurantAccepts(o6.id());
-        app.startPreparing(o6.id());
-        app.foodReady(o6.id());
-        System.out.println("  o6 rider: " + o6.agent().orElseThrow() + " (fewer deliveries today)");
-        System.out.println("  o1 history: " + o1.history());
-    }
-}
-```
+The full runnable source is in [`code/lld/ch19/fooddelivery/`](code/lld/ch19/fooddelivery/); below are the lines that carry the design.
 
 ```java
 // File: lld/ch19/fooddelivery/Model.java
-package lld.ch19.fooddelivery;
-
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.EnumSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-
-/** A point on a simple km grid (real systems use lat/long and a road-distance service). */
-record Location(double x, double y) {
-    double distanceTo(Location o) { return Math.hypot(x - o.x, y - o.y); }
+synchronized boolean tryReserveKitchen(int items) {          // Restaurant: check-and-take kitchen slots
+    if (itemsInKitchen + items > kitchenCapacity) return false;
+    itemsInKitchen += items;
+    return true;
 }
-
-record Customer(String id, String name, String phone, Location address) { }
-
-final class MenuItem {
-    private final String id;
-    private final String name;
-    private volatile BigDecimal price;
-    private volatile boolean available = true;
-
-    MenuItem(String id, String name, BigDecimal price) { this.id = id; this.name = name; this.price = price; }
-    String id() { return id; }
-    String name() { return name; }
-    BigDecimal price() { return price; }
-    boolean available() { return available; }
-    void setPrice(BigDecimal p) { price = p; }
-    void setAvailable(boolean a) { available = a; }
+synchronized void add(Restaurant r, String itemId, int qty) { // Cart: one restaurant per cart
+    if (restaurant != null && !restaurant.id().equals(r.id()))
+        throw new IllegalStateException("cart has items from " + restaurant.name() + " - clear it first");
+    restaurant = r;
+    quantities.merge(itemId, qty, Integer::sum);
 }
-
-/**
- * A restaurant manages its own menu and has a kitchen capacity: at most N items being
- * prepared at once. Capacity is taken when an order is accepted and returned when the
- * food is ready (dispatched).
- */
-final class Restaurant {
-    private final String id;
-    private final String name;
-    private final Location location;
-    private final int kitchenCapacity;
-    private final Map<String, MenuItem> menu = new ConcurrentHashMap<>();
-    private volatile boolean open = true;
-    private int itemsInKitchen;                         // guarded by this
-
-    Restaurant(String id, String name, Location location, int kitchenCapacity) {
-        this.id = id; this.name = name; this.location = location; this.kitchenCapacity = kitchenCapacity;
-    }
-
-    String id() { return id; }
-    String name() { return name; }
-    Location location() { return location; }
-    boolean isOpen() { return open; }
-    void setOpen(boolean o) { open = o; }
-    void addItem(MenuItem m) { menu.put(m.id(), m); }
-    Optional<MenuItem> item(String itemId) { return Optional.ofNullable(menu.get(itemId)); }
-    Collection<MenuItem> menu() { return menu.values(); }
-
-    synchronized boolean tryReserveKitchen(int items) {
-        if (itemsInKitchen + items > kitchenCapacity) return false;
-        itemsInKitchen += items;
-        return true;
-    }
-
-    synchronized void releaseKitchen(int items) { itemsInKitchen -= items; }
-
-    synchronized int freeCapacity() { return kitchenCapacity - itemsInKitchen; }
-}
-
-/** A customer's cart. One restaurant per cart, as in Swiggy/Zomato. */
-final class Cart {
-    private Restaurant restaurant;
-    private final Map<String, Integer> quantities = new LinkedHashMap<>();
-
-    synchronized void add(Restaurant r, String itemId, int qty) {
-        if (restaurant != null && !restaurant.id().equals(r.id()))
-            throw new IllegalStateException("cart has items from " + restaurant.name() + " - clear it first");
-        r.item(itemId).orElseThrow(() -> new IllegalArgumentException("no item " + itemId));
-        restaurant = r;
-        quantities.merge(itemId, qty, Integer::sum);
-    }
-
-    synchronized void clear() { restaurant = null; quantities.clear(); }
-    synchronized Restaurant restaurant() { return restaurant; }
-    synchronized Map<String, Integer> quantities() { return Map.copyOf(quantities); }
-    synchronized boolean isEmpty() { return quantities.isEmpty(); }
-}
-
-/** Price is copied at order time: a later menu price change never alters a placed order. */
-record OrderItem(String itemId, String name, BigDecimal unitPrice, int quantity) {
-    BigDecimal total() { return unitPrice.multiply(BigDecimal.valueOf(quantity)); }
-}
-
-/** The order-tracking state machine. */
-enum OrderStatus {
-    PENDING, CONFIRMED, PREPARING, READY_FOR_PICKUP, OUT_FOR_DELIVERY, DELIVERED, CANCELLED;
-
-    private Set<OrderStatus> next() {
-        return switch (this) {
-            case PENDING -> EnumSet.of(CONFIRMED, CANCELLED);
-            case CONFIRMED -> EnumSet.of(PREPARING, CANCELLED);
-            case PREPARING -> EnumSet.of(READY_FOR_PICKUP);
-            case READY_FOR_PICKUP -> EnumSet.of(OUT_FOR_DELIVERY);
-            case OUT_FOR_DELIVERY -> EnumSet.of(DELIVERED);
-            case DELIVERED, CANCELLED -> EnumSet.noneOf(OrderStatus.class);
-        };
-    }
-
+enum OrderStatus {   // next(): PENDING -> CONFIRMED|CANCELLED, CONFIRMED -> PREPARING|CANCELLED,
+                     // PREPARING -> READY_FOR_PICKUP -> OUT_FOR_DELIVERY -> DELIVERED
     boolean canMoveTo(OrderStatus t) { return next().contains(t); }
 }
-
-/** Strategy: how the customer pays. */
 sealed interface PaymentMethod permits UpiPayment, CardPayment, CashOnDelivery {
-    String describe();
-    default boolean paidUpfront() { return true; }
+    default boolean paidUpfront() { return true; }           // CashOnDelivery overrides: false
 }
-
-record UpiPayment(String vpa) implements PaymentMethod {
-    public String describe() { return "UPI " + vpa; }
-}
-
-record CardPayment(String last4) implements PaymentMethod {
-    public String describe() { return "card ****" + last4; }
-}
-
-record CashOnDelivery() implements PaymentMethod {
-    public String describe() { return "cash on delivery"; }
-    public boolean paidUpfront() { return false; }
-}
-
-final class Order {
-    private final String id;
-    private final Customer customer;
-    private final Restaurant restaurant;
-    private final List<OrderItem> items;
-    private final BigDecimal deliveryFee;
-    private final PaymentMethod payment;
-    private final List<OrderStatus> history = new ArrayList<>();
-    private OrderStatus status = OrderStatus.PENDING;
-    private DeliveryAgent agent;
-
-    Order(String id, Customer c, Restaurant r, List<OrderItem> items, BigDecimal fee, PaymentMethod payment) {
-        this.id = id; this.customer = c; this.restaurant = r; this.items = List.copyOf(items);
-        this.deliveryFee = fee; this.payment = payment;
-        history.add(status);
-    }
-
-    String id() { return id; }
-    Customer customer() { return customer; }
-    Restaurant restaurant() { return restaurant; }
-    List<OrderItem> items() { return items; }
-    PaymentMethod payment() { return payment; }
-    int itemCount() { return items.stream().mapToInt(OrderItem::quantity).sum(); }
-    BigDecimal subtotal() { return items.stream().map(OrderItem::total).reduce(BigDecimal.ZERO, BigDecimal::add); }
-    BigDecimal total() { return subtotal().add(deliveryFee).setScale(2, RoundingMode.HALF_EVEN); }
-    BigDecimal deliveryFee() { return deliveryFee; }
-    synchronized OrderStatus status() { return status; }
-    synchronized List<OrderStatus> history() { return List.copyOf(history); }
-    synchronized Optional<DeliveryAgent> agent() { return Optional.ofNullable(agent); }
-    synchronized void assign(DeliveryAgent a) { agent = a; }
-
-    synchronized void moveTo(OrderStatus t) {
-        if (!status.canMoveTo(t)) throw new IllegalStateException(id + ": " + status + " -> " + t + " not allowed");
-        status = t;
-        history.add(t);
-    }
-}
-
-/** A rider. available is an AtomicBoolean so two orders can never claim the same rider. */
-final class DeliveryAgent {
-    private final String id;
-    private final String name;
-    private volatile Location location;
-    private final AtomicBoolean available = new AtomicBoolean(true);
-    private final AtomicInteger deliveriesToday = new AtomicInteger();
-
-    DeliveryAgent(String id, String name, Location location) { this.id = id; this.name = name; this.location = location; }
-    String id() { return id; }
-    String name() { return name; }
-    Location location() { return location; }
-    void moveTo(Location l) { location = l; }
-    boolean isAvailable() { return available.get(); }
-    int deliveriesToday() { return deliveriesToday.get(); }
-
+final class DeliveryAgent {                                   // available is an AtomicBoolean
     /** Compare-and-set: exactly one caller wins. */
     boolean tryClaim() { return available.compareAndSet(true, false); }
-
     void completeDelivery() { deliveriesToday.incrementAndGet(); available.set(true); }
-
-    @Override public String toString() { return name; }
 }
+
+// File: lld/ch19/fooddelivery/FoodDeliveryService.java
+interface DeliveryAssignmentStrategy {                        // NearestAgentStrategy, FairShareStrategy
+    List<DeliveryAgent> rank(Order order, List<DeliveryAgent> free);
+}
+
+Order placeOrder(Customer c, Cart cart, PaymentMethod pay) {
+    // ... closed restaurant / sold-out item -> IllegalStateException
+    cart.quantities().forEach((itemId, qty) -> {
+        MenuItem m = r.item(itemId).orElseThrow();
+        items.add(new OrderItem(itemId, m.name(), m.price(), qty));   // price copied at order time
+    });
+    BigDecimal km = BigDecimal.valueOf(r.location().distanceTo(c.address())).setScale(1, RoundingMode.HALF_UP);
+    BigDecimal fee = BASE_FEE.add(PER_KM.multiply(km)).setScale(2, RoundingMode.HALF_EVEN);   // 20 + 8/km
+    // ... new Order(...), cart.clear(), publish PENDING
+}
+
+/** The restaurant accepts only if its kitchen has room; otherwise the order is auto-cancelled and refunded. */
+boolean restaurantAccepts(String orderId) {
+    Order o = orders.get(orderId);
+    synchronized (o) {                              // same lock as cancel(): capacity can never leak
+        if (o.status() != OrderStatus.PENDING) return false;
+        if (o.restaurant().tryReserveKitchen(o.itemCount())) {
+            transition(o, OrderStatus.CONFIRMED);
+            return true;
+        }
+        System.out.println("    (" + o.restaurant().name() + " kitchen full: needs " + o.itemCount()
+                + " item slots, free " + o.restaurant().freeCapacity() + ")");
+        transition(o, OrderStatus.CANCELLED);
+    }
+    refundIfPrepaid(o);                             // like cancel(): a prepaid order gets its money back
+    return false;
+}
+
+/** Food is ready: kitchen capacity comes back, and we look for a rider. */
+void foodReady(String orderId) {
+    Order o = orders.get(orderId);
+    transition(o, OrderStatus.READY_FOR_PICKUP);
+    o.restaurant().releaseKitchen(o.itemCount());
+    awaitingRider.add(o);
+    dispatchWaiting();
+}
+// delivered(): DELIVERED, agent.completeDelivery(), then dispatchWaiting() so a freed rider takes the oldest waiting order
+
+boolean cancel(String orderId) {
+    Order o = orders.get(orderId);
+    synchronized (o) {
+        if (!o.status().canMoveTo(OrderStatus.CANCELLED)) return false;
+        boolean kitchenHeld = o.status() == OrderStatus.CONFIRMED;
+        transition(o, OrderStatus.CANCELLED);
+        if (kitchenHeld) o.restaurant().releaseKitchen(o.itemCount());
+    }
+    refundIfPrepaid(o);
+    return true;
+}
+
+/** Runs after the order lock is released; a real gateway call is slow and must not block the order. */
+private void refundIfPrepaid(Order o) {
+    if (o.payment().paidUpfront()) System.out.println("    refund " + o.total() + " to " + o.payment().describe());
+}
+
+/** Hand waiting orders (oldest first) to free riders. CAS on the rider prevents double booking. */
+private synchronized void dispatchWaiting() {
+    Order o;
+    while ((o = awaitingRider.peek()) != null) {
+        List<DeliveryAgent> free = agents.stream().filter(DeliveryAgent::isAvailable).toList();
+        Optional<DeliveryAgent> got = Optional.empty();
+        for (DeliveryAgent a : strategy.rank(o, free)) if (a.tryClaim()) { got = Optional.of(a); break; }
+        if (got.isEmpty()) {
+            System.out.println("    (" + o.id() + " waiting for a free rider)");
+            return;
+        }
+        awaitingRider.poll();
+        o.assign(got.get());
+        transition(o, OrderStatus.OUT_FOR_DELIVERY);
+    }
+}
+// transition(o, s) = o.moveTo(s) (throws on an illegal edge) + notify every OrderListener
 ```
 
 Output:
@@ -4636,6 +2340,7 @@ Output:
     [OD103 PENDING] -> restaurant Dosa Corner: new order
     (Dosa Corner kitchen full: needs 2 item slots, free 1)
     [OD103 CANCELLED] -> customer Asha
+    refund 111.20 to card ****4242
 
 == 5. Only one rider free: second ready order waits ==
     [OD102 PREPARING] -> customer Vikram
@@ -4671,156 +2376,41 @@ Output:
   o1 history: [PENDING, CONFIRMED, PREPARING, READY_FOR_PICKUP, OUT_FOR_DELIVERY, DELIVERED]
 ```
 
-**Reading the output.** Step 1 hides the far-away grill (outside 10 km). Step 2 refuses a second restaurant in one cart. Step 3: the delivery fee is 20 + 8 × 1.4 km = 31.20; changing the dosa price afterwards does not change the order. Step 4: Dosa Corner holds 4 item slots; an order for 3 fits, the next order for 2 is auto-cancelled. Step 5: Meena takes OD102; OD104 waits because Ravi is still out; as soon as OD101 is delivered, Ravi is claimed for OD104. Step 6: an order out for delivery cannot be cancelled; a confirmed card order can, and is refunded. Step 7: with both riders at the same spot, the fair-share strategy picks Meena (1 delivery) over Ravi (2).
+**Reading the output.** Step 1 hides the far-away grill (outside 10 km). Step 2 refuses a second restaurant in one cart. Step 3: the delivery fee is 20 + 8 × 1.4 km = 31.20; changing the dosa price afterwards does not change the order. Step 4: Dosa Corner holds 4 item slots; an order for 3 fits, the next card order for 2 is auto-cancelled and refunded (the same refund path as a customer cancel). Step 5: Meena takes OD102; OD104 waits because Ravi is still out; as soon as OD101 is delivered, Ravi is claimed for OD104. Step 6: an order out for delivery cannot be cancelled; a confirmed card order can, and is refunded. Step 7: with both riders at the same spot, the fair-share strategy picks Meena (1 delivery) over Ravi (2).
 
 #### Part B — FoodKart (`lld.ch19.foodkart`)
 
 Files: `FoodKart.java` (gender, user, review, order, restaurant, sort, selection strategies, service), `Main.java` (driver replaying the problem's sample test case, then extras).
 
+The full runnable source (including the `Main` driver) is in [`code/lld/ch19/foodkart/`](code/lld/ch19/foodkart/); below are the lines that carry the design.
+
 ```java
 // File: lld/ch19/foodkart/FoodKart.java
-package lld.ch19.foodkart;
-
-import java.math.BigDecimal;
-import java.util.Comparator;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.TreeSet;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicInteger;
-
-enum Gender { M, F, OTHER }
-
-record User(String name, Gender gender, String phone, String pincode) { }
-
-record Review(String userPhone, int rating, String comment) {
-    Review {
-        if (rating < 1 || rating > 5) throw new IllegalArgumentException("rating must be 1..5");
-    }
-}
-
-record FoodOrder(int id, String userPhone, String restaurant, String item, int quantity, BigDecimal total) { }
-
-/** A restaurant serves ONE dish to MANY pincodes. Quantity is its remaining capacity. */
-final class Restaurant {
-    private final String name;
-    private final String ownerPhone;
-    private final String foodItem;
-    private final BigDecimal price;
-    private volatile Set<String> pincodes;
-    private int quantity;                                         // guarded by this
-    private final List<Review> reviews = new CopyOnWriteArrayList<>();
-
-    Restaurant(String name, String ownerPhone, Set<String> pincodes, String foodItem, BigDecimal price, int quantity) {
-        this.name = name; this.ownerPhone = ownerPhone; this.pincodes = Set.copyOf(pincodes);
-        this.foodItem = foodItem; this.price = price; this.quantity = quantity;
-    }
-
-    String name() { return name; }
-    String ownerPhone() { return ownerPhone; }
-    String foodItem() { return foodItem; }
-    BigDecimal price() { return price; }
-    Set<String> pincodes() { return pincodes; }
-    void setPincodes(Set<String> p) { pincodes = Set.copyOf(p); }
-    synchronized int quantity() { return quantity; }
-    synchronized void addQuantity(int q) { quantity += q; }
-
+final class Restaurant {                     // ONE dish, MANY pincodes; quantity = remaining capacity
     /** Check-and-take in one step, so two users cannot both get the last plates. */
     synchronized boolean take(int q) {
         if (q <= 0 || q > quantity) return false;
         quantity -= q;
         return true;
     }
-
     /** Serviceable = delivers to this pincode AND has non-zero quantity (from the problem statement). */
     boolean serviceableFor(String pincode) { return pincodes.contains(pincode) && quantity() > 0; }
-
-    void addReview(Review r) { reviews.add(r); }
-
-    double rating() { return reviews.stream().mapToInt(Review::rating).average().orElse(0.0); }
-
-    String describe() { return name + ", " + String.join("/", new TreeSet<>(pincodes)) + ", " + foodItem + " - " + quantity(); }
 }
 
 /** show_restaurant(rating|price): both sorted in DESCENDING order, as the problem states. */
 enum SortBy {
     RATING(Comparator.comparingDouble(Restaurant::rating).reversed()),
     PRICE(Comparator.comparing(Restaurant::price).reversed());
-
     final Comparator<Restaurant> comparator;
     SortBy(Comparator<Restaurant> c) { comparator = c.thenComparing(Restaurant::name); }
 }
 
 /** Strategy: when the user does not name a restaurant, which one should we pick? */
-interface RestaurantSelectionStrategy {
-    Optional<Restaurant> select(List<Restaurant> canFulfil);
-}
+interface RestaurantSelectionStrategy { Optional<Restaurant> select(List<Restaurant> canFulfil); }
+// HighestRatingStrategy (tie: most capacity left), LowestPriceStrategy (tie: higher rating)
 
-final class HighestRatingStrategy implements RestaurantSelectionStrategy {
-    @Override public Optional<Restaurant> select(List<Restaurant> c) {
-        return c.stream().max(Comparator.comparingDouble(Restaurant::rating)
-                .thenComparing(Restaurant::quantity));              // tie: the one with most capacity left
-    }
-}
-
-final class LowestPriceStrategy implements RestaurantSelectionStrategy {
-    @Override public Optional<Restaurant> select(List<Restaurant> c) {
-        return c.stream().min(Comparator.comparing(Restaurant::price)
-                .thenComparing(Comparator.comparingDouble(Restaurant::rating).reversed()));
-    }
-}
-
-/** The service behind every command in the machine-coding round. In-memory only. */
 final class FoodKartService {
-    private final Map<String, User> users = new ConcurrentHashMap<>();
-    private final Map<String, Restaurant> restaurants = new ConcurrentHashMap<>();
-    private final Map<String, List<FoodOrder>> history = new ConcurrentHashMap<>();
-    private final AtomicInteger orderSeq = new AtomicInteger();
     private volatile User current;                                // one logged-in user at a time
-
-    void registerUser(String name, Gender g, String phone, String pincode) {
-        if (users.putIfAbsent(phone, new User(name, g, phone, pincode)) != null)
-            throw new IllegalArgumentException("phone already registered: " + phone);
-    }
-
-    void loginUser(String phone) {
-        User u = users.get(phone);
-        if (u == null) throw new IllegalArgumentException("unknown user " + phone);
-        current = u;                                              // previous user is logged out
-    }
-
-    void registerRestaurant(String name, String pincodesSlashSeparated, String item, BigDecimal price, int qty) {
-        User owner = requireLogin();
-        Restaurant r = new Restaurant(name, owner.phone(), parsePincodes(pincodesSlashSeparated), item, price, qty);
-        if (restaurants.putIfAbsent(name, r) != null) throw new IllegalArgumentException("restaurant exists: " + name);
-    }
-
-    String updateQuantity(String name, int toAdd) {
-        Restaurant r = ownedByCurrentUser(name);
-        if (toAdd <= 0) throw new IllegalArgumentException("quantity to add must be positive");
-        r.addQuantity(toAdd);
-        return r.describe();
-    }
-
-    String updateLocation(String name, String pincodesSlashSeparated) {
-        Restaurant r = ownedByCurrentUser(name);
-        r.setPincodes(parsePincodes(pincodesSlashSeparated));
-        return r.describe();
-    }
-
-    void rateRestaurant(String name, int rating, String comment) {
-        restaurant(name).addReview(new Review(requireLogin().phone(), rating, comment == null ? "" : comment));
-    }
-
-    List<String> showRestaurants(SortBy sortBy) {
-        String pin = requireLogin().pincode();
-        return restaurants.values().stream().filter(r -> r.serviceableFor(pin))
-                .sorted(sortBy.comparator).map(r -> r.name() + ", " + r.foodItem()).toList();
-    }
 
     String placeOrder(String name, int qty) {
         User u = requireLogin();
@@ -4846,97 +2436,7 @@ final class FoodKartService {
         }
         return "Cannot place order";
     }
-
-    List<FoodOrder> orderHistory() { return List.copyOf(history.getOrDefault(requireLogin().phone(), List.of())); }
-
-    private void record(User u, Restaurant r, int qty) {
-        FoodOrder o = new FoodOrder(orderSeq.incrementAndGet(), u.phone(), r.name(), r.foodItem(), qty,
-                r.price().multiply(BigDecimal.valueOf(qty)));
-        history.computeIfAbsent(u.phone(), k -> new CopyOnWriteArrayList<>()).add(o);
-    }
-
-    private User requireLogin() {
-        User u = current;
-        if (u == null) throw new IllegalStateException("no user logged in");
-        return u;
-    }
-
-    private Restaurant restaurant(String name) {
-        Restaurant r = restaurants.get(name);
-        if (r == null) throw new IllegalArgumentException("no restaurant " + name);
-        return r;
-    }
-
-    private Restaurant ownedByCurrentUser(String name) {
-        Restaurant r = restaurant(name);
-        if (!r.ownerPhone().equals(requireLogin().phone())) throw new IllegalStateException("only the owner can update " + name);
-        return r;
-    }
-
-    private static Set<String> parsePincodes(String s) {
-        Set<String> out = new LinkedHashSet<>();
-        for (String p : s.split("/")) if (!p.isBlank()) out.add(p.trim());
-        if (out.isEmpty()) throw new IllegalArgumentException("at least one pincode needed");
-        return out;
-    }
-
-}
-```
-
-```java
-// File: lld/ch19/foodkart/Main.java
-package lld.ch19.foodkart;
-
-import java.math.BigDecimal;
-
-/** Driver: replays the sample test case from the problem statement, then the extras. */
-public class Main {
-    public static void main(String[] args) {
-        FoodKartService fk = new FoodKartService();
-
-        System.out.println("== Sample test case ==");
-        fk.registerUser("Pralove", Gender.M, "phoneNumber-1", "HSR");
-        fk.registerUser("Nitesh", Gender.M, "phoneNumber-2", "BTM");
-        fk.registerUser("Vatsal", Gender.M, "phoneNumber-3", "BTM");
-
-        fk.loginUser("phoneNumber-1");
-        fk.registerRestaurant("Food Court-1", "BTM/HSR", "NI Thali", new BigDecimal("100"), 5);
-        fk.registerRestaurant("Food Court-2", "BTM", "Burger", new BigDecimal("120"), 3);
-        fk.loginUser("phoneNumber-2");
-        fk.registerRestaurant("Food Court-3", "HSR", "SI Thali", new BigDecimal("150"), 1);
-        fk.loginUser("phoneNumber-3");
-
-        System.out.println("show_restaurant(price):");
-        fk.showRestaurants(SortBy.PRICE).forEach(s -> System.out.println("  " + s));
-        System.out.println("place_order(Food Court-1, 2): " + fk.placeOrder("Food Court-1", 2));
-        System.out.println("place_order(Food Court-2, 7): " + fk.placeOrder("Food Court-2", 7));
-        fk.rateRestaurant("Food Court-2", 3, "Good Food");
-        fk.rateRestaurant("Food Court-1", 5, "Nice Food");
-        System.out.println("show_restaurant(rating):");
-        fk.showRestaurants(SortBy.RATING).forEach(s -> System.out.println("  " + s));
-
-        fk.loginUser("phoneNumber-1");
-        System.out.println("update_quantity(Food Court-2, 5): " + fk.updateQuantity("Food Court-2", 5));
-        System.out.println("update_location(Food Court-2, BTM/HSR): " + fk.updateLocation("Food Court-2", "BTM/HSR"));
-
-        System.out.println("\n== Extras ==");
-        fk.loginUser("phoneNumber-2");
-        try { fk.updateQuantity("Food Court-1", 10); } catch (IllegalStateException e) { System.out.println("non-owner update: " + e.getMessage()); }
-        try { fk.rateRestaurant("Food Court-1", 6, null); } catch (IllegalArgumentException e) { System.out.println("rating 6: " + e.getMessage()); }
-        fk.rateRestaurant("Food Court-1", 4, null);             // rating without a comment
-        System.out.println("order from a restaurant that does not deliver to BTM: " + fk.placeOrder("Food Court-3", 1));
-        fk.registerRestaurant("Food Court-4", "BTM", "Dosa", new BigDecimal("80"), 4);
-
-        System.out.println("\n== Selection strategy variant (user in BTM, wants 4 plates) ==");
-        fk.loginUser("phoneNumber-3");
-        System.out.println("highest rating: " + fk.placeOrder(4, new HighestRatingStrategy()));
-        System.out.println("lowest price  : " + fk.placeOrder(4, new LowestPriceStrategy()));
-        System.out.println("lowest price  : " + fk.placeOrder(4, new LowestPriceStrategy()));
-        System.out.println("lowest price  : " + fk.placeOrder(4, new LowestPriceStrategy()) + "  (no one has 4 left)");
-
-        System.out.println("\n== Order history of phoneNumber-3 ==");
-        fk.orderHistory().forEach(o -> System.out.println("  " + o));
-    }
+    // updateQuantity / updateLocation go through ownedByCurrentUser(name): only the owner may change them
 }
 ```
 
@@ -5215,7 +2715,7 @@ flowchart TD
     B --> C["For each SKU: evaluate every item offer, keep the BEST one"]
     C --> D["Net per SKU = gross - item discount"]
     D --> E["Best basket coupon on the sum of nets"]
-    E --> F["Spread the coupon over SKUs in proportion to net; remainder to the largest"]
+    E --> F["Spread the coupon over SKUs in proportion to net, remainder to the largest"]
     F --> G["Tax per category from the discounted nets"]
     G --> H["Total = sum of nets (+ tax if added on top)"]
 ```
@@ -5262,87 +2762,10 @@ sequenceDiagram
 
 ### Java implementation
 
-Package `lld.ch19.grocery`.
+Package `lld.ch19.grocery`. Files: `Catalog.java` (products, EAN-13 check, catalog), `Promotions.java` (offer strategies), `Pricing.java` (tax policies, pricing engine), `Sale.java` (sale state machine, tenders, gateway port), `Register.java` (inventory, receipts, register facade), `Main.java`. The full runnable source is in [`code/lld/ch19/grocery/`](code/lld/ch19/grocery/); below are the lines that carry the design.
 
 ```java
-// File: lld/ch19/grocery/Catalog.java
-package lld.ch19.grocery;
-
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
-
-/** Money helpers: BigDecimal, 2 decimal places, HALF_UP (the usual retail rounding). Never double. */
-final class Money {
-    private Money() { }
-    static final BigDecimal ZERO = of("0");
-    static BigDecimal of(String s) { return new BigDecimal(s).setScale(2, RoundingMode.HALF_UP); }
-    static BigDecimal round(BigDecimal b) { return b.setScale(2, RoundingMode.HALF_UP); }
-    static String fmt(BigDecimal b) { return "Rs " + round(b).toPlainString(); }
-}
-
-enum Department { PRODUCE, DAIRY, SNACKS, HOUSEHOLD }
-
-/** How the shelf price is quoted: per piece, or per kilogram (weighed at the till). */
-enum PricingUnit { EACH, PER_KG }
-
-/** Tax slab. Rates are illustrative (loosely modelled on India's GST slabs), not tax advice. */
-enum TaxCategory {
-    EXEMPT("0"), REDUCED("5"), STANDARD("18");
-    final BigDecimal ratePercent;
-    TaxCategory(String r) { ratePercent = new BigDecimal(r); }
-}
-
-/** code = barcode (EAN-13) for packaged goods, or a 4-digit PLU for loose produce. */
-record Product(String sku, String code, String name, Department dept, PricingUnit unit,
-               BigDecimal unitPrice, TaxCategory tax) {
-    Product {
-        if (unitPrice.signum() <= 0) throw new PosException("Price must be positive: " + name);
-        unitPrice = Money.round(unitPrice);
-    }
-}
-
-/** Look-up by scanned code. Read far more than written, so a ConcurrentHashMap shared by all registers. */
-final class Catalog {
-    private final Map<String, Product> byCode = new ConcurrentHashMap<>();
-
-    void add(Product p) {
-        if (byCode.putIfAbsent(p.code(), p) != null) throw new PosException("Duplicate code " + p.code());
-    }
-
-    /** Price changes replace the record; open sales keep the price they already scanned. */
-    void reprice(String code, BigDecimal newPrice) {
-        byCode.computeIfPresent(code, (c, p) -> new Product(p.sku(), c, p.name(), p.dept(), p.unit(), newPrice, p.tax()));
-    }
-
-    Optional<Product> find(String code) { return Optional.ofNullable(byCode.get(code)); }
-}
-
-final class PosException extends RuntimeException {
-    PosException(String message) { super(message); }
-}
-```
-
-```java
-// File: lld/ch19/grocery/Promotions.java
-package lld.ch19.grocery;
-
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.util.Optional;
-import java.util.Set;
-
-/** One discount line on the receipt. sku == null means a basket-level discount. */
-record Discount(String description, String sku, BigDecimal amount) { }
-
-/** Strategy for an item-level offer. Called once per SKU with the total quantity of that SKU in the basket. */
-interface ItemPromotion {
-    Optional<Discount> evaluate(Product p, BigDecimal quantity);
-}
-
-/** "Buy 2, get 1 free": in every group of (buy + free) units, the free units cost nothing. */
+// File: lld/ch19/grocery/Promotions.java - one offer = one small Strategy class
 record BuyXGetYFree(String sku, int buy, int free) implements ItemPromotion {
     @Override public Optional<Discount> evaluate(Product p, BigDecimal qty) {
         if (!p.sku().equals(sku)) return Optional.empty();
@@ -5352,642 +2775,101 @@ record BuyXGetYFree(String sku, int buy, int free) implements ItemPromotion {
         return Optional.of(new Discount("Buy " + buy + " get " + free + " free: " + p.name(), sku, Money.round(off)));
     }
 }
+// MultiBuy ("3 for Rs 50"), PercentOffDepartment; BasketPromotion: SpendThresholdCoupon
 
-/** "3 for Rs 100": each full group of n units costs a fixed price. */
-record MultiBuy(String sku, int n, BigDecimal groupPrice) implements ItemPromotion {
-    @Override public Optional<Discount> evaluate(Product p, BigDecimal qty) {
-        if (!p.sku().equals(sku)) return Optional.empty();
-        int groups = qty.intValue() / n;
-        BigDecimal saving = p.unitPrice().multiply(BigDecimal.valueOf(n)).subtract(groupPrice);
-        if (groups == 0 || saving.signum() <= 0) return Optional.empty();
-        return Optional.of(new Discount(n + " for " + Money.fmt(groupPrice) + ": " + p.name(), sku,
-                Money.round(saving.multiply(BigDecimal.valueOf(groups)))));
-    }
-}
-
-/** "10% off all produce" — applies to weighed items too. */
-record PercentOffDepartment(Department dept, int percent) implements ItemPromotion {
-    @Override public Optional<Discount> evaluate(Product p, BigDecimal qty) {
-        if (p.dept() != dept) return Optional.empty();
-        BigDecimal gross = Money.round(p.unitPrice().multiply(qty));
-        BigDecimal off = gross.multiply(BigDecimal.valueOf(percent)).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
-        return Optional.of(new Discount(percent + "% off " + dept + ": " + p.name(), p.sku(), off));
-    }
-}
-
-/** Strategy for a basket-level offer, evaluated after item offers, on what the customer still owes. */
-interface BasketPromotion {
-    Optional<Discount> evaluate(BigDecimal subtotalAfterItemOffers, Set<String> couponsPresented);
-}
-
-/** "Rs 50 off when you spend Rs 500 or more" — needs the coupon code to be scanned. */
-record SpendThresholdCoupon(String code, BigDecimal minSpend, BigDecimal amountOff) implements BasketPromotion {
-    @Override public Optional<Discount> evaluate(BigDecimal subtotal, Set<String> coupons) {
-        if (!coupons.contains(code) || subtotal.compareTo(minSpend) < 0) return Optional.empty();
-        return Optional.of(new Discount("Coupon " + code, null, amountOff.min(subtotal)));
-    }
-}
-```
-
-```java
 // File: lld/ch19/grocery/Pricing.java
-package lld.ch19.grocery;
-
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.EnumMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-
-/** Strategy: are shelf prices tax-inclusive (India, EU, UK) or is tax added at the till (US sales tax)? */
-interface TaxPolicy {
-    BigDecimal tax(BigDecimal net, BigDecimal ratePercent);
-    boolean addedOnTop();
-}
-
-final class TaxInclusive implements TaxPolicy {
-    /** The price already contains the tax: tax = price x r / (100 + r). */
+final class TaxInclusive implements TaxPolicy {     /** The price already contains the tax: tax = price x r / (100 + r). */
     @Override public BigDecimal tax(BigDecimal net, BigDecimal r) {
         return net.multiply(r).divide(BigDecimal.valueOf(100).add(r), 2, RoundingMode.HALF_UP);
     }
-    @Override public boolean addedOnTop() { return false; }
+    @Override public boolean addedOnTop() { return false; }      // TaxExclusive: net x r / 100, true
 }
 
-final class TaxExclusive implements TaxPolicy {
-    @Override public BigDecimal tax(BigDecimal net, BigDecimal r) {
-        return net.multiply(r).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
-    }
-    @Override public boolean addedOnTop() { return true; }
-}
-
-/** All scanned lines of one SKU added together. */
-record SkuTotal(Product product, BigDecimal quantity, BigDecimal gross) { }
-
-/** Everything the receipt needs. netBySku = what the customer really paid per SKU, after every discount. */
-record PriceBreakdown(List<SkuTotal> items, List<Discount> discounts, Map<String, BigDecimal> netBySku,
-                      BigDecimal gross, BigDecimal discountTotal, Map<TaxCategory, BigDecimal> taxByCategory,
-                      BigDecimal total) { }
-
-/**
- * Pure function of (lines, coupons): no state, so every register can share one engine and
- * the same basket always prices the same way. Rules:
- *  1. each SKU gets at most ONE item offer — the best one for the customer;
- *  2. then the best basket coupon, on what is still owed;
- *  3. basket discounts are spread over SKUs in proportion to their value (needed for tax and refunds);
- *  4. tax is computed per tax category on the discounted amounts.
- */
-final class PricingEngine {
-    private final List<ItemPromotion> itemOffers;
-    private final List<BasketPromotion> basketOffers;
-    private final TaxPolicy taxPolicy;
-
-    PricingEngine(List<ItemPromotion> itemOffers, List<BasketPromotion> basketOffers, TaxPolicy taxPolicy) {
-        this.itemOffers = List.copyOf(itemOffers);
-        this.basketOffers = List.copyOf(basketOffers);
-        this.taxPolicy = taxPolicy;
-    }
-
-    PriceBreakdown price(List<LineItem> lines, Set<String> coupons) {
-        Map<String, SkuTotal> bySku = new LinkedHashMap<>();
-        for (LineItem l : lines) {
-            if (l.voided()) continue;
-            bySku.merge(l.product().sku(), new SkuTotal(l.product(), l.quantity(), l.gross()),
-                    (a, b) -> new SkuTotal(a.product(), a.quantity().add(b.quantity()), a.gross().add(b.gross())));
-        }
-        List<Discount> discounts = new ArrayList<>();
-        Map<String, BigDecimal> net = new LinkedHashMap<>();
-        for (SkuTotal t : bySku.values()) {
-            Optional<Discount> best = itemOffers.stream()
-                    .map(p -> p.evaluate(t.product(), t.quantity()))
-                    .flatMap(Optional::stream)
-                    .max(Comparator.comparing(Discount::amount));
-            BigDecimal off = best.map(d -> d.amount().min(t.gross())).orElse(Money.ZERO);
-            best.ifPresent(d -> discounts.add(new Discount(d.description(), d.sku(), off)));
-            net.put(t.product().sku(), t.gross().subtract(off));
-        }
-        BigDecimal subtotal = sum(net.values());
-        Optional<Discount> basket = basketOffers.stream()
-                .map(b -> b.evaluate(subtotal, coupons))
+PriceBreakdown price(List<LineItem> lines, Set<String> coupons) {  // PricingEngine: a pure function
+    // group non-voided lines by SKU -> bySku (total quantity, gross)
+    for (SkuTotal t : bySku.values()) {
+        Optional<Discount> best = itemOffers.stream()                 // rule 1: ONE best item offer per SKU
+                .map(p -> p.evaluate(t.product(), t.quantity()))
                 .flatMap(Optional::stream)
                 .max(Comparator.comparing(Discount::amount));
-        basket.ifPresent(d -> { discounts.add(d); spread(d.amount(), net); });
-
-        Map<TaxCategory, BigDecimal> netByTax = new EnumMap<>(TaxCategory.class);
-        bySku.values().forEach(t -> netByTax.merge(t.product().tax(), net.get(t.product().sku()), BigDecimal::add));
-        Map<TaxCategory, BigDecimal> taxByCategory = new EnumMap<>(TaxCategory.class);
-        netByTax.forEach((cat, amt) -> taxByCategory.put(cat, taxPolicy.tax(amt, cat.ratePercent)));
-
-        BigDecimal gross = sum(bySku.values().stream().map(SkuTotal::gross).toList());
-        BigDecimal netTotal = sum(net.values());
-        BigDecimal total = taxPolicy.addedOnTop() ? netTotal.add(sum(taxByCategory.values())) : netTotal;
-        return new PriceBreakdown(List.copyOf(bySku.values()), List.copyOf(discounts), Map.copyOf(net),
-                gross, gross.subtract(netTotal), taxByCategory, total);
+        BigDecimal off = best.map(d -> d.amount().min(t.gross())).orElse(Money.ZERO);
+        best.ifPresent(d -> discounts.add(new Discount(d.description(), d.sku(), off)));
+        net.put(t.product().sku(), t.gross().subtract(off));
     }
-
-    /** Proportional allocation; the rounding remainder goes to the largest SKU so the parts add up exactly. */
-    private static void spread(BigDecimal amount, Map<String, BigDecimal> net) {
-        BigDecimal base = sum(net.values());
-        if (base.signum() == 0) return;
-        BigDecimal given = Money.ZERO;
-        String largest = null;
-        for (var e : net.entrySet()) {
-            BigDecimal share = amount.multiply(e.getValue()).divide(base, 2, RoundingMode.HALF_UP);
-            e.setValue(e.getValue().subtract(share));
-            given = given.add(share);
-            if (largest == null || e.getValue().compareTo(net.get(largest)) > 0) largest = e.getKey();
-        }
-        net.merge(largest, given.subtract(amount), BigDecimal::add);
-    }
-
-    private static BigDecimal sum(Iterable<BigDecimal> xs) {
-        BigDecimal s = Money.ZERO;
-        for (BigDecimal x : xs) s = s.add(x);
-        return s;
-    }
+    BigDecimal subtotal = sum(net.values());
+    Optional<Discount> basket = basketOffers.stream()                 // rule 2: best basket coupon on what is owed
+            .map(b -> b.evaluate(subtotal, coupons))
+            .flatMap(Optional::stream)
+            .max(Comparator.comparing(Discount::amount));
+    basket.ifPresent(d -> { discounts.add(d); spread(d.amount(), net); });   // rule 3
+    // rule 4: tax per TaxCategory on the discounted nets; total = nets (+ tax if addedOnTop)
 }
-```
 
-```java
+/** Proportional allocation; the rounding remainder goes to the largest SKU so the parts add up exactly. */
+private static void spread(BigDecimal amount, Map<String, BigDecimal> net) {
+    BigDecimal base = sum(net.values());
+    if (base.signum() == 0) return;
+    BigDecimal given = Money.ZERO;
+    String largest = null;
+    for (var e : net.entrySet()) {
+        BigDecimal share = amount.multiply(e.getValue()).divide(base, 2, RoundingMode.HALF_UP);
+        e.setValue(e.getValue().subtract(share));
+        given = given.add(share);
+        if (largest == null || e.getValue().compareTo(net.get(largest)) > 0) largest = e.getKey();
+    }
+    net.merge(largest, given.subtract(amount), BigDecimal::add);
+}
+
 // File: lld/ch19/grocery/Sale.java
-package lld.ch19.grocery;
-
-import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
-
-/** One scan. The product (and so its price) is copied in at scan time; later reprices do not change it. */
-record LineItem(int lineNo, Product product, BigDecimal quantity, BigDecimal gross, boolean voided) {
-    LineItem asVoided() { return new LineItem(lineNo, product, quantity, gross, true); }
+boolean canMoveTo(SaleStatus next) {                           // SaleStatus
+    return switch (this) {
+        case OPEN -> next == TENDERING || next == CANCELLED;
+        case TENDERING -> next == COMPLETED || next == OPEN || next == CANCELLED;
+        case COMPLETED, CANCELLED -> false;
+    };
 }
-
-enum SaleStatus {
-    OPEN, TENDERING, COMPLETED, CANCELLED;
-
-    boolean canMoveTo(SaleStatus next) {
-        return switch (this) {
-            case OPEN -> next == TENDERING || next == CANCELLED;
-            case TENDERING -> next == COMPLETED || next == OPEN || next == CANCELLED;
-            case COMPLETED, CANCELLED -> false;
-        };
+/** Returns true when the bill is fully paid and the sale is complete. */
+boolean pay(Tender t, PaymentGateway gateway) {
+    require(SaleStatus.TENDERING, "pay");                      // beginTender() froze the breakdown
+    BigDecimal due = due();
+    if (t.amount().signum() <= 0) throw new PosException("Tender must be positive");
+    String auth = "CASH";
+    BigDecimal applied = t.amount();
+    if (t instanceof Cash) {
+        if (t.amount().compareTo(due) > 0) { change = t.amount().subtract(due); applied = due; }
+    } else {
+        if (t.amount().compareTo(due) > 0) throw new PosException("Card/UPI cannot be more than the amount due " + Money.fmt(due));
+        auth = gateway.authorize(t);                 // throws if declined: nothing recorded
     }
+    payments.add(new Payment(t, applied, auth));
+    if (due().signum() == 0) { move(SaleStatus.COMPLETED); return true; }
+    return false;
 }
+// cancel(gateway): reverses every non-cash payment, then CANCELLED
 
-/** How the customer pays. Sealed: the compiler knows every kind of tender. */
-sealed interface Tender permits Cash, Card, Upi { BigDecimal amount(); }
-record Cash(BigDecimal amount) implements Tender { }
-record Card(String last4, BigDecimal amount) implements Tender { }
-record Upi(String vpa, BigDecimal amount) implements Tender { }
-
-/** applied = the part of the tender that went towards the bill (cash can be more; the rest is change). */
-record Payment(Tender tender, BigDecimal applied, String authCode) { }
-
-/** Strategy / port to the card and UPI networks. Cash needs no gateway. */
-interface PaymentGateway {
-    String authorize(Tender t);          // returns an auth code or throws PosException("declined ...")
-    void refund(String authCode, BigDecimal amount);
-}
-
-/** One customer's basket at one register, from first scan to receipt. */
-final class Sale {
-    final String id;
-    private final List<LineItem> lines = new ArrayList<>();
-    private final Set<String> coupons = new LinkedHashSet<>();
-    private final List<Payment> payments = new ArrayList<>();
-    private SaleStatus status = SaleStatus.OPEN;
-    private PriceBreakdown frozen;       // prices are frozen when payment starts
-    private BigDecimal change = Money.ZERO;
-
-    Sale(String id) { this.id = id; }
-
-    SaleStatus status() { return status; }
-    List<LineItem> lines() { return List.copyOf(lines); }
-    List<Payment> payments() { return List.copyOf(payments); }
-    Set<String> coupons() { return Set.copyOf(coupons); }
-    BigDecimal change() { return change; }
-    PriceBreakdown breakdown() { return frozen; }
-
-    LineItem add(Product p, BigDecimal qty) {
-        require(SaleStatus.OPEN, "scan");
-        if (qty.signum() <= 0) throw new PosException("Quantity must be positive");
-        LineItem l = new LineItem(lines.size() + 1, p, qty, Money.round(p.unitPrice().multiply(qty)), false);
-        lines.add(l);
-        return l;
-    }
-
-    void voidLine(int lineNo) {
-        require(SaleStatus.OPEN, "void a line");
-        if (lineNo < 1 || lineNo > lines.size()) throw new PosException("No line " + lineNo);
-        LineItem l = lines.get(lineNo - 1);
-        if (l.voided()) throw new PosException("Line " + lineNo + " is already void");
-        lines.set(lineNo - 1, l.asVoided());          // keep the line: the audit trail shows the void
-    }
-
-    void addCoupon(String code) { require(SaleStatus.OPEN, "add a coupon"); coupons.add(code); }
-
-    PriceBreakdown beginTender(PricingEngine engine) {
-        require(SaleStatus.OPEN, "start payment");
-        if (lines.stream().allMatch(LineItem::voided)) throw new PosException("Nothing to pay for");
-        frozen = engine.price(lines, coupons);
-        move(SaleStatus.TENDERING);
-        return frozen;
-    }
-
-    /** Back to scanning ("I forgot the milk") — only while nothing has been paid. */
-    void reopen() {
-        if (!payments.isEmpty()) throw new PosException("Payments already taken; cancel them first");
-        frozen = null;
-        move(SaleStatus.OPEN);
-    }
-
-    BigDecimal due() {
-        BigDecimal paid = payments.stream().map(Payment::applied).reduce(Money.ZERO, BigDecimal::add);
-        return frozen.total().subtract(paid);
-    }
-
-    /** Returns true when the bill is fully paid and the sale is complete. */
-    boolean pay(Tender t, PaymentGateway gateway) {
-        require(SaleStatus.TENDERING, "pay");
-        BigDecimal due = due();
-        if (t.amount().signum() <= 0) throw new PosException("Tender must be positive");
-        String auth = "CASH";
-        BigDecimal applied = t.amount();
-        if (t instanceof Cash) {
-            if (t.amount().compareTo(due) > 0) { change = t.amount().subtract(due); applied = due; }
-        } else {
-            if (t.amount().compareTo(due) > 0) throw new PosException("Card/UPI cannot be more than the amount due " + Money.fmt(due));
-            auth = gateway.authorize(t);                 // throws if declined: nothing recorded
-        }
-        payments.add(new Payment(t, applied, auth));
-        if (due().signum() == 0) { move(SaleStatus.COMPLETED); return true; }
-        return false;
-    }
-
-    /** Cancel the whole sale; card/UPI payments already taken are reversed. */
-    void cancel(PaymentGateway gateway) {
-        if (!status.canMoveTo(SaleStatus.CANCELLED)) throw new PosException("Cannot cancel a " + status + " sale");
-        for (Payment p : payments) if (!(p.tender() instanceof Cash)) gateway.refund(p.authCode(), p.applied());
-        move(SaleStatus.CANCELLED);
-    }
-
-    private void require(SaleStatus s, String action) {
-        if (status != s) throw new PosException("Cannot " + action + " when the sale is " + status);
-    }
-
-    private void move(SaleStatus next) {
-        if (!status.canMoveTo(next)) throw new PosException(status + " -> " + next + " not allowed");
-        status = next;
-    }
-}
-```
-
-```java
 // File: lld/ch19/grocery/Register.java
-package lld.ch19.grocery;
-
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicLong;
-
-/** Observer: purchasing, the store manager's dashboard, shrinkage reports. */
-interface StockListener {
-    void stockAlert(String sku, BigDecimal onHand, String reason);
+/** delta < 0 for a sale, > 0 for a return. merge() is atomic per key, so registers never lose updates. */
+void adjust(String sku, BigDecimal delta) {                    // Inventory
+    BigDecimal after = onHand.merge(sku, delta, BigDecimal::add);
+    BigDecimal before = after.subtract(delta);
+    BigDecimal point = reorderPoint.getOrDefault(sku, BigDecimal.ZERO);
+    // edge-triggered: alert only when THIS change crosses the line, so each crossing alerts exactly once
+    if (before.compareTo(point) > 0 && after.compareTo(point) <= 0)
+        listeners.forEach(l -> l.stockAlert(sku, after, "LOW - reorder"));
+    if (before.signum() >= 0 && after.signum() < 0)
+        listeners.forEach(l -> l.stockAlert(sku, after, "NEGATIVE - recount the shelf"));
 }
 
-/**
- * Store stock shared by every register. A till never refuses a sale because the SYSTEM says zero:
- * the item is physically in the customer's hand, so the count is what is wrong. Stock may go
- * negative, and that is reported as a discrepancy for a recount.
- */
-final class Inventory {
-    private final Map<String, BigDecimal> onHand = new ConcurrentHashMap<>();
-    private final Map<String, BigDecimal> reorderPoint = new ConcurrentHashMap<>();
-    private final List<StockListener> listeners = new CopyOnWriteArrayList<>();
-
-    void set(String sku, String qty, String reorderAt) {
-        onHand.put(sku, new BigDecimal(qty));
-        reorderPoint.put(sku, new BigDecimal(reorderAt));
-    }
-    void addListener(StockListener l) { listeners.add(l); }
-    BigDecimal onHand(String sku) { return onHand.getOrDefault(sku, BigDecimal.ZERO); }
-
-    /** delta < 0 for a sale, > 0 for a return. merge() is atomic per key, so registers never lose updates. */
-    void adjust(String sku, BigDecimal delta) {
-        BigDecimal after = onHand.merge(sku, delta, BigDecimal::add);
-        BigDecimal before = after.subtract(delta);
-        BigDecimal point = reorderPoint.getOrDefault(sku, BigDecimal.ZERO);
-        // edge-triggered: alert only when THIS change crosses the line, so each crossing alerts exactly once
-        if (before.compareTo(point) > 0 && after.compareTo(point) <= 0)
-            listeners.forEach(l -> l.stockAlert(sku, after, "LOW - reorder"));
-        if (before.signum() >= 0 && after.signum() < 0)
-            listeners.forEach(l -> l.stockAlert(sku, after, "NEGATIVE - recount the shelf"));
-    }
-}
-
-/** Immutable proof of purchase. */
-record Receipt(String id, String registerId, List<LineItem> lines, PriceBreakdown breakdown,
-               List<Payment> payments, BigDecimal change) {
-
-    String render() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("  ---------------- RECEIPT ").append(id).append(" (").append(registerId).append(") ----------------\n");
-        for (LineItem l : lines) {
-            String qty = l.product().unit() == PricingUnit.PER_KG
-                    ? l.quantity().setScale(3, RoundingMode.UNNECESSARY) + " kg @ " + Money.fmt(l.product().unitPrice()) + "/kg"
-                    : l.quantity().toPlainString() + " x " + Money.fmt(l.product().unitPrice());
-            sb.append("  %2d %-18s %-24s %12s%s%n".formatted(l.lineNo(), l.product().name(), qty, Money.fmt(l.gross()),
-                    l.voided() ? "  VOID" : ""));
-        }
-        sb.append("  %-46s %12s%n".formatted("Gross", Money.fmt(breakdown.gross())));
-        for (Discount d : breakdown.discounts())
-            sb.append("  %-46s %12s%n".formatted("  " + d.description(), "-" + Money.fmt(d.amount())));
-        sb.append("  %-46s %12s%n".formatted("TOTAL", Money.fmt(breakdown.total())));
-        breakdown.taxByCategory().forEach((cat, tax) ->
-                sb.append("  %-46s %12s%n".formatted("  incl. tax " + cat + " @" + cat.ratePercent + "%", Money.fmt(tax))));
-        for (Payment p : payments) sb.append("  %-46s %12s%n".formatted("Paid " + describe(p.tender()), Money.fmt(p.tender().amount())));
-        if (change.signum() > 0) sb.append("  %-46s %12s%n".formatted("Change", Money.fmt(change)));
-        return sb.toString();
-    }
-
-    private static String describe(Tender t) {
-        return switch (t) {
-            case Cash c -> "cash";
-            case Card c -> "card **" + c.last4();
-            case Upi u -> "UPI " + u.vpa();
-        };
-    }
-}
-
-/** Receipts from every register, plus what has already been returned against each (shared, thread-safe). */
-final class ReceiptStore {
-    private final Map<String, Receipt> receipts = new ConcurrentHashMap<>();
-    private final Map<String, BigDecimal> returned = new ConcurrentHashMap<>();   // key receiptId/sku
-    private final AtomicLong nextId = new AtomicLong(1);
-
-    String newId() { return "R%05d".formatted(nextId.getAndIncrement()); }
-    void save(Receipt r) { receipts.put(r.id(), r); }
-    Receipt get(String id) {
-        Receipt r = receipts.get(id);
-        if (r == null) throw new PosException("Unknown receipt " + id);
-        return r;
-    }
-
-    /** Atomically claims qty units for return (two counters cannot refund the same unit twice); returns the total claimed so far. */
-    BigDecimal claimReturn(Receipt r, String sku, BigDecimal qty, BigDecimal bought) {
-        return returned.compute(r.id() + "/" + sku, (k, already) -> {
-            BigDecimal next = (already == null ? BigDecimal.ZERO : already).add(qty);
-            if (next.compareTo(bought) > 0)
-                throw new PosException("Only " + bought.subtract(next.subtract(qty)).stripTrailingZeros().toPlainString()
-                        + " of " + sku + " left to return on " + r.id());
-            return next;
-        });
-    }
-}
-
-/**
- * Facade for one checkout lane. A register is driven by one cashier (one thread); the things it
- * shares with other registers — catalog, inventory, receipts — are the thread-safe ones.
- */
-final class Register {
-    private final String id;
-    private final Catalog catalog;
-    private final PricingEngine engine;
-    private final Inventory inventory;
-    private final ReceiptStore receipts;
-    private final PaymentGateway gateway;
-    private Sale sale;
-    private int saleNo = 1;
-
-    Register(String id, Catalog catalog, PricingEngine engine, Inventory inventory, ReceiptStore receipts, PaymentGateway gateway) {
-        this.id = id; this.catalog = catalog; this.engine = engine;
-        this.inventory = inventory; this.receipts = receipts; this.gateway = gateway;
-    }
-
-    void startSale() {
-        if (sale != null && (sale.status() == SaleStatus.OPEN || sale.status() == SaleStatus.TENDERING))
-            throw new PosException("Finish or cancel sale " + sale.id + " first");
-        sale = new Sale(id + "-S" + saleNo++);
-    }
-
-    LineItem scan(String code) { return scan(code, 1); }
-
-    LineItem scan(String code, int count) {
-        Product p = lookup(code);
-        if (p.unit() != PricingUnit.EACH) throw new PosException(p.name() + " is sold by weight: put it on the scale");
-        return current().add(p, BigDecimal.valueOf(count));
-    }
-
-    /** Loose produce: the cashier keys the PLU and the scale sends the weight in grams. */
-    LineItem weigh(String plu, int grams) {
-        Product p = lookup(plu);
-        if (p.unit() != PricingUnit.PER_KG) throw new PosException(p.name() + " is not sold by weight");
-        if (grams <= 0) throw new PosException("Scale reading must be positive");
-        return current().add(p, BigDecimal.valueOf(grams).movePointLeft(3));
-    }
-
-    void voidLine(int lineNo) { current().voidLine(lineNo); }
-    void coupon(String code) { current().addCoupon(code); }
-    PriceBreakdown total() { return current().beginTender(engine); }
-    void backToScanning() { current().reopen(); }
-    void cancelSale() { current().cancel(gateway); }
-
-    /** Returns the receipt when the bill is fully paid, else null (more tenders needed). */
-    Receipt pay(Tender t) {
-        Sale s = current();
-        if (!s.pay(t, gateway)) return null;
-        for (SkuTotal item : s.breakdown().items()) inventory.adjust(item.product().sku(), item.quantity().negate());
-        Receipt r = new Receipt(receipts.newId(), id, s.lines(), s.breakdown(), s.payments(), s.change());
-        receipts.save(r);
-        return r;
-    }
-
-    /** Refund what the customer actually paid per unit (after offers and coupons), not the shelf price. */
-    BigDecimal refund(String receiptId, String sku, int qty) {
-        Receipt r = receipts.get(receiptId);
-        SkuTotal bought = r.breakdown().items().stream().filter(t -> t.product().sku().equals(sku)).findFirst()
-                .orElseThrow(() -> new PosException(sku + " is not on receipt " + receiptId));
-        BigDecimal q = BigDecimal.valueOf(qty);
-        BigDecimal after = receipts.claimReturn(r, sku, q, bought.quantity());
-        // refund = share(after) - share(before): the parts always add up to exactly what was paid
-        BigDecimal net = r.breakdown().netBySku().get(sku);
-        BigDecimal refund = share(net, after, bought.quantity()).subtract(share(net, after.subtract(q), bought.quantity()));
-        inventory.adjust(sku, q);
-        return refund;
-    }
-
-    private static BigDecimal share(BigDecimal net, BigDecimal units, BigDecimal of) {
-        return net.multiply(units).divide(of, 2, RoundingMode.HALF_UP);
-    }
-
-    private Product lookup(String code) {
-        if (code.length() == 13 && !Ean13.valid(code)) throw new PosException("Bad barcode " + code + ": check digit wrong, rescan");
-        return catalog.find(code).orElseThrow(() -> new PosException("Unknown code " + code + ": call a supervisor"));
-    }
-
-    private Sale current() {
-        if (sale == null) throw new PosException("No sale in progress");
-        return sale;
-    }
-}
-
-/** EAN-13 check digit: weights 1,3,1,3... on the first 12 digits; the 13th makes the sum a multiple of 10. */
-final class Ean13 {
-    private Ean13() { }
-    static String withCheckDigit(String first12) {
-        int sum = 0;
-        for (int i = 0; i < 12; i++) sum += (first12.charAt(i) - '0') * (i % 2 == 0 ? 1 : 3);
-        return first12 + (10 - sum % 10) % 10;
-    }
-    static boolean valid(String code) {
-        return code.chars().allMatch(Character::isDigit) && withCheckDigit(code.substring(0, 12)).equals(code);
-    }
-}
-```
-
-```java
-// File: lld/ch19/grocery/Main.java
-package lld.ch19.grocery;
-
-import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicInteger;
-
-public class Main {
-    /** Fake card/UPI network: declines one blocked card, approves everything else. */
-    static final class FakeGateway implements PaymentGateway {
-        private final AtomicInteger seq = new AtomicInteger(1000);
-        @Override public String authorize(Tender t) {
-            if (t instanceof Card c && c.last4().equals("0005")) throw new PosException("Card **0005 declined by issuer");
-            return "AUTH" + seq.incrementAndGet();
-        }
-        @Override public void refund(String auth, BigDecimal amount) {
-            System.out.println("   gateway: reversed " + Money.fmt(amount) + " on " + auth);
-        }
-    }
-
-    static final String MILK = Ean13.withCheckDigit("890100000001"), PANEER = Ean13.withCheckDigit("890100000002"),
-            CHIPS = Ean13.withCheckDigit("890100000003"), BISCUITS = Ean13.withCheckDigit("890100000004"),
-            DETERGENT = Ean13.withCheckDigit("890100000005"), BANANAS = "4011", TOMATOES = "4664";
-
-    public static void main(String[] args) throws Exception {
-        Catalog catalog = new Catalog();
-        catalog.add(new Product("BAN", BANANAS, "Bananas", Department.PRODUCE, PricingUnit.PER_KG, Money.of("60"), TaxCategory.EXEMPT));
-        catalog.add(new Product("TOM", TOMATOES, "Tomatoes", Department.PRODUCE, PricingUnit.PER_KG, Money.of("40"), TaxCategory.EXEMPT));
-        catalog.add(new Product("MLK", MILK, "Milk 1L", Department.DAIRY, PricingUnit.EACH, Money.of("68"), TaxCategory.EXEMPT));
-        catalog.add(new Product("PNR", PANEER, "Paneer 200g", Department.DAIRY, PricingUnit.EACH, Money.of("90"), TaxCategory.REDUCED));
-        catalog.add(new Product("CHP", CHIPS, "Chips 50g", Department.SNACKS, PricingUnit.EACH, Money.of("20"), TaxCategory.STANDARD));
-        catalog.add(new Product("BIS", BISCUITS, "Biscuits", Department.SNACKS, PricingUnit.EACH, Money.of("30"), TaxCategory.REDUCED));
-        catalog.add(new Product("DET", DETERGENT, "Detergent 1kg", Department.HOUSEHOLD, PricingUnit.EACH, Money.of("245"), TaxCategory.STANDARD));
-
-        List<ItemPromotion> offers = List.of(
-                new BuyXGetYFree("CHP", 2, 1),                       // saves 20 on 3 packs
-                new MultiBuy("CHP", 3, Money.of("50")),               // saves 10 on 3 packs: loses to the one above
-                new MultiBuy("BIS", 3, Money.of("80")),
-                new PercentOffDepartment(Department.PRODUCE, 10));
-        List<BasketPromotion> coupons = List.of(new SpendThresholdCoupon("SAVE50", Money.of("500"), Money.of("50")));
-        PricingEngine engine = new PricingEngine(offers, coupons, new TaxInclusive());
-
-        Inventory stock = new Inventory();
-        for (String sku : List.of("BAN", "TOM", "MLK", "CHP", "BIS", "DET")) stock.set(sku, "200", "20");
-        stock.set("PNR", "100", "20");
-        List<String> alerts = Collections.synchronizedList(new ArrayList<>());
-        stock.addListener((sku, left, why) -> alerts.add(sku + " " + why + " (on hand " + left.stripTrailingZeros().toPlainString() + ")"));
-        ReceiptStore receipts = new ReceiptStore();
-        FakeGateway gateway = new FakeGateway();
-        Register lane1 = new Register("LANE-1", catalog, engine, stock, receipts, gateway);
-
-        System.out.println("== 1. Scan a basket ==");
-        lane1.startSale();
-        lane1.weigh(BANANAS, 1245);
-        lane1.weigh(TOMATOES, 500);
-        lane1.scan(MILK);
-        lane1.scan(MILK);
-        lane1.scan(PANEER);
-        lane1.scan(CHIPS, 3);
-        lane1.scan(BISCUITS, 4);
-        lane1.scan(DETERGENT);
-        lane1.voidLine(4);                                          // customer puts one milk back
-        for (String bad : List.of(Ean13.withCheckDigit("890100000009"), "8901000000018", BANANAS)) {
-            try { lane1.scan(bad); } catch (PosException e) { System.out.println("   error: " + e.getMessage()); }
-        }
-        lane1.coupon("SAVE50");
-
-        System.out.println("\n== 2. Total, then split payment: declined card, UPI, cash with change ==");
-        PriceBreakdown bill = lane1.total();
-        System.out.println("   amount due " + Money.fmt(bill.total()));
-        try { lane1.scan(MILK); } catch (PosException e) { System.out.println("   error: " + e.getMessage()); }
-        try { lane1.pay(new Card("0005", Money.of("300"))); } catch (PosException e) { System.out.println("   error: " + e.getMessage()); }
-        try { lane1.pay(new Upi("asha@okbank", Money.of("5000"))); } catch (PosException e) { System.out.println("   error: " + e.getMessage()); }
-        System.out.println("   UPI 400 -> receipt? " + lane1.pay(new Upi("asha@okbank", Money.of("400"))));
-        Receipt r1 = lane1.pay(new Cash(Money.of("500")));
-        System.out.print(r1.render());
-
-        System.out.println("\n== 3. Returns refund what was really paid ==");
-        System.out.println("   return 1 of 3 chips -> refund " + Money.fmt(lane1.refund(r1.id(), "CHP", 1)));
-        System.out.println("   return 2 more chips -> refund " + Money.fmt(lane1.refund(r1.id(), "CHP", 2))
-                + "  (all three add up to the " + Money.fmt(r1.breakdown().netBySku().get("CHP")) + " paid)");
-        try { lane1.refund(r1.id(), "CHP", 1); } catch (PosException e) { System.out.println("   error: " + e.getMessage()); }
-        try { lane1.refund(r1.id(), "PNR", 2); } catch (PosException e) { System.out.println("   error: " + e.getMessage()); }
-
-        System.out.println("\n== 4. Price change during a sale; going back to scanning; cancelling ==");
-        lane1.startSale();
-        lane1.scan(MILK);
-        catalog.reprice(MILK, Money.of("72"));
-        lane1.scan(MILK);
-        SkuTotal milk = lane1.total().items().get(0);
-        System.out.println("   2 milk scanned around a reprice: gross " + Money.fmt(milk.gross()) + " = Rs 68 (old price kept) + Rs 72 (new)");
-        lane1.backToScanning();
-        lane1.scan(PANEER);
-        System.out.println("   after adding paneer, due " + Money.fmt(lane1.total().total()));
-        lane1.pay(new Card("4242", Money.of("100")));
-        try { lane1.backToScanning(); } catch (PosException e) { System.out.println("   error: " + e.getMessage()); }
-        lane1.cancelSale();
-        try { lane1.pay(new Cash(Money.of("10"))); } catch (PosException e) { System.out.println("   error: " + e.getMessage()); }
-
-        System.out.println("\n== 5. Same basket, US-style tax added at the till ==");
-        Sale same = new Sale("X");
-        r1.lines().forEach(l -> { if (!l.voided()) same.add(l.product(), l.quantity()); });
-        same.addCoupon("SAVE50");
-        PriceBreakdown us = same.beginTender(new PricingEngine(offers, coupons, new TaxExclusive()));
-        System.out.println("   inclusive total " + Money.fmt(r1.breakdown().total()) + " vs exclusive total " + Money.fmt(us.total())
-                + " (tax " + us.taxByCategory() + ")");
-
-        System.out.println("\n== 6. Four registers sell 30 paneer each at once; stock was 100 ==");
-        CountDownLatch go = new CountDownLatch(1);
-        try (ExecutorService pool = Executors.newFixedThreadPool(4)) {
-            for (int i = 1; i <= 4; i++) {
-                Register lane = new Register("LANE-" + (i + 1), catalog, engine, stock, receipts, gateway);
-                pool.submit(() -> {
-                    go.await();
-                    for (int k = 0; k < 30; k++) {
-                        lane.startSale();
-                        lane.scan(PANEER);
-                        lane.total();
-                        lane.pay(new Cash(Money.of("100")));
-                    }
-                    return null;
-                });
-            }
-            go.countDown();
-        }
-        System.out.println("   paneer on hand: " + stock.onHand("PNR") + "  (sold 120 + 1 earlier; the till never refuses a real item)");
-        alerts.stream().sorted().forEach(a -> System.out.println("   alert: " + a));
-    }
+/** Refund what the customer actually paid per unit (after offers and coupons), not the shelf price. */
+BigDecimal refund(String receiptId, String sku, int qty) {     // Register
+    // ... find the SKU on the receipt -> bought
+    BigDecimal q = BigDecimal.valueOf(qty);
+    BigDecimal after = receipts.claimReturn(r, sku, q, bought.quantity());   // ConcurrentHashMap.compute: atomic
+    // refund = share(after) - share(before): the parts always add up to exactly what was paid
+    BigDecimal net = r.breakdown().netBySku().get(sku);
+    BigDecimal refund = share(net, after, bought.quantity()).subtract(share(net, after.subtract(q), bought.quantity()));
+    inventory.adjust(sku, q);
+    return refund;
 }
 ```
 

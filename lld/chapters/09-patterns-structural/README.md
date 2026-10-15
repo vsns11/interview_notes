@@ -1,6 +1,6 @@
 # Chapter 9 — Structural Design Patterns
 
-> **Where this fits.** Chapter 8 was about *creating* objects. This chapter is about *putting objects together*: how to connect, wrap, nest and share them so that larger structures stay flexible. Chapters 10–11 then cover how objects *talk to each other* (behavioral patterns).
+> **Where this fits.** Chapter 8 was about *creating* objects. This chapter is about *putting objects together*: connecting, wrapping, nesting and sharing them so larger structures stay flexible. Chapters 10–11 cover how objects *talk to each other* (behavioral patterns).
 
 **What you will learn**
 
@@ -23,9 +23,9 @@ javac --release 21 -d /tmp/lld_09 $(find . -name '*.java')
 java -cp /tmp/lld_09 lld.ch09.adapter.Main     # or bridge, composite, decorator, facade, flyweight, proxy
 ```
 
-All seven `Main` classes compile with Java 21 (standard library only — the classes that ship with Java itself) and run. The output printed under each example is the real output of that program.
+All seven `Main` classes compile with Java 21 (standard library only) and run; each pasted output is that program's real output.
 
-> **Code-style note.** Every top-level type has its own file, as in a real codebase, and the types are package-private (visible only to classes in the same package — a package being a named folder of related classes) because each example lives in one package. Where a section shows several short files in a row, read them top to bottom: interface first, then implementations, then `Main`. The whole folder compiles with `javac --release 21 -Xlint:all` with **zero warnings**.
+> **Code-style note.** In `code/` every top-level type has its own file and is package-private (visible only within its package — a named folder of related classes). The folder compiles with `javac --release 21 -Xlint:all` with **zero warnings**. The listings below show the essential lines of those files; open the folder for the full runnable code.
 
 ---
 
@@ -33,7 +33,7 @@ All seven `Main` classes compile with Java 21 (standard library only — the cla
 
 ### What it is
 
-A **design pattern** is a named, reusable solution to a design problem that keeps coming back. The "Gang of Four" (GoF) book — *Design Patterns: Elements of Reusable Object-Oriented Software* (Gamma, Helm, Johnson, Vlissides, 1994) — sorted its 23 patterns into three families:
+A **design pattern** is a named, reusable solution to a recurring design problem. The "Gang of Four" (GoF) book — *Design Patterns: Elements of Reusable Object-Oriented Software* (Gamma, Helm, Johnson, Vlissides, 1994) — sorted its 23 patterns into three families:
 
 | Family | Question it answers | Examples |
 |---|---|---|
@@ -41,22 +41,15 @@ A **design pattern** is a named, reusable solution to a design problem that keep
 | **Structural (this chapter)** | **How do I combine classes and objects into bigger structures?** | **Adapter, Bridge, Composite, Decorator, Facade, Flyweight, Proxy** |
 | Behavioral (Ch. 10–11) | How do objects share work and talk? | Strategy, Observer, Command |
 
-**Structural patterns** help you combine small objects and classes into larger, more complex structures while keeping those structures flexible and efficient. Used well, they:
-
-- **simplify complex structures** (a Facade hides many steps; a Composite hides nesting),
-- **promote reuse** (an Adapter lets you reuse a class whose interface does not fit),
-- **improve flexibility by decoupling** classes from each other — i.e. reducing how much each one depends on the others' details (Bridge, Decorator, Proxy),
-- **improve maintainability**, because the relationships between entities are clear and each change stays local.
-
-There are many structural patterns, but the seven the GoF named — and that interviewers ask about — are **Adapter, Bridge, Composite, Decorator, Facade, Flyweight and Proxy**.
+**Structural patterns** combine small objects and classes into larger structures while keeping them flexible and efficient. Used well, they **simplify complex structures** (a Facade hides many steps; a Composite hides nesting), **promote reuse** (an Adapter reuses a class whose interface does not fit), **improve flexibility by decoupling** classes — reducing how much each depends on the others' details (Bridge, Decorator, Proxy) — and **improve maintainability**, since relationships are clear and changes stay local. The seven the GoF named, and interviewers ask about, are **Adapter, Bridge, Composite, Decorator, Facade, Flyweight and Proxy**.
 
 ### Three words you need first
 
-- **Composition** ("has-a"): an object holds a reference to another object and uses it. Almost every structural pattern is built on composition.
+- **Composition** ("has-a"): an object holds and uses a reference to another. Almost every structural pattern is built on it.
 - **Delegation**: forwarding a call to the object you hold. `wrapper.pay()` calls `inner.charge()`.
-- **Interface** (in the design sense): the set of methods a caller can use on an object. In Java this is often, but not always, an `interface` type.
+- **Interface** (design sense): the set of methods a caller can use on an object — often, not always, a Java `interface` type.
 
-> **Key insight.** Four of these patterns (Adapter, Decorator, Proxy, Facade) have the *same physical shape*: one object holds another and forwards calls to it. What tells them apart is **intent** — what changes as the call passes through. Keep this in mind; section 9.8 puts them side by side.
+> **Key insight.** Adapter, Decorator, Proxy and Facade have the *same physical shape*: one object holds another and forwards calls. **Intent** — what changes as the call passes through — tells them apart. Section 9.8 puts them side by side.
 
 ---
 
@@ -64,11 +57,7 @@ There are many structural patterns, but the seven the GoF named — and that int
 
 ### What it is
 
-The **Adapter** pattern lets your code use a class whose methods have the "wrong" shape — one you are not able to change — by placing a small translator class between the two. GoF's intent: *convert the interface of a class into another interface clients expect; Adapter lets classes work together that couldn't otherwise because of incompatible interfaces.*
-
-*Analogy:* your laptop charger has a US plug; the hotel wall in India has a different socket. You do not rewire the wall or cut the plug — you put a small travel adapter in between.
-
-GoF also calls it **Wrapper**. Vocabulary:
+The **Adapter** lets your code use a class whose methods have the "wrong" shape — one you cannot change — by placing a small translator between them, like a travel plug adapter between a US charger and an Indian socket. GoF's intent: *convert the interface of a class into another interface clients expect; Adapter lets classes work together that couldn't otherwise because of incompatible interfaces.* GoF also calls it **Wrapper**.
 
 | Term | Meaning |
 |---|---|
@@ -79,38 +68,38 @@ GoF also calls it **Wrapper**. Vocabulary:
 
 ### The problem it solves
 
-The shape your code calls and the shape the other component offers do not match. Typical cases:
+The shape your code calls and the shape the other side offers do not match:
 
-- your checkout wants to call `pay(Money)`, but the payment SDK (software development kit — the vendor's ready-made client library) only offers `charge(amountInCents, currencyCode)`;
-- an old service answers in XML, yet every consumer after it works with JSON (XML and JSON are two common text formats for structured data);
-- the analytics library asks for `track(String, Map)`, while your code naturally produces an `Event` object.
+- checkout wants `pay(Money)`, but the payment SDK (software development kit — the vendor's client library) offers `charge(amountInCents, currencyCode)`;
+- an old service answers in XML while every consumer works with JSON (two common text formats for structured data);
+- an analytics library wants `track(String, Map)` while your code produces an `Event`.
 
-The key constraint: **the other side is not yours to change.** It may be a third-party library (code written and owned by an outside company or project), a service owned by another team, or code with dozens of existing callers. Bending *your* code to its shape means touching every call site (each place in the code that calls the method) — and repeating the whole exercise the day that vendor is swapped out.
+The key constraint: **the other side is not yours to change** — a third-party library (owned by an outside company or project), another team's service, or code with dozens of callers. Bending *your* code to its shape touches every call site (each place that calls the method), and you repeat it the day the vendor is swapped.
 
-A concrete version: the checkout has to support Stripe now and perhaps PayPal in a few months (both are online payment providers). Stripe expects the amount as a whole number of **cents** plus a **lowercase** currency code; PayPal expects a **decimal string** such as "42.50" plus an **uppercase** code. Your own code would rather reason about a `Money` value than either of those.
+Concretely: checkout must support Stripe now and perhaps PayPal later (both online payment providers). Stripe wants whole **cents** plus a **lowercase** currency; PayPal a **decimal string** like "42.50" plus an **uppercase** code. Your code would rather reason in `Money`.
 
 ![Adapter Pattern - the vendor shape stops at the boundary](../../assets/P-adapter-pattern-1.svg)
 *Figure — Two adapters (StripeGateway, PayPalGateway) translate our `pay(Money)` into each vendor's own call; nothing on the application side knows which vendor exists (course diagram)*
 
-In the figure above, everything to the left of the dashed boundary talks only in `Money` and `Receipt`. Swapping vendors means writing one new class, not touching call sites.
+Left of the dashed boundary everything speaks `Money` and `Receipt`; swapping vendors means one new class, no call-site changes.
 
 ### How it works
 
-1. **Define the Target interface in your own vocabulary** (`PaymentGateway.pay(Money) -> Receipt`). It mentions no vendor.
-2. **Write one adapter class per adaptee.** It `implements` the Target and **holds** the vendor object.
-3. **Translate inputs**: your types into the vendor's types (`Money` → cents + lowercase code).
+1. **Define the Target in your own vocabulary** (`PaymentGateway.pay(Money) -> Receipt`), mentioning no vendor.
+2. **One adapter class per adaptee**: it `implements` the Target and **holds** the vendor object.
+3. **Translate inputs** (`Money` → cents + lowercase code).
 4. **Call the adaptee.**
 5. **Translate outputs and errors back**: vendor result → `Receipt`; vendor exception → *your* exception.
-6. **Client code depends only on the Target**, so it never learns which vendor answered.
+6. **Clients depend only on the Target** and never learn which vendor answered.
 
-> **The rule that makes it work:** the adapter's public methods mention **only your types** — parameters, return values *and* exceptions. The moment `pay` hands back a `StripeCharge`, or lets a `StripeCardException` propagate (travel up, uncaught, to the callers), callers depend on Stripe again and the adapter has decoupled nothing.
+> **The rule that makes it work:** the adapter's public methods mention **only your types** — parameters, return values *and* exceptions. Once `pay` returns a `StripeCharge`, or lets a `StripeCardException` propagate (travel up, uncaught, to callers), callers depend on Stripe again and nothing is decoupled.
 
 ### Structure
 
 ![Adapter Pattern - Class Diagram](../../assets/P-adapter-pattern-2.svg)
 *Figure — Adapter class diagram: `Checkout` holds a `PaymentGateway`; `StripeGateway` and `PayPalGateway` implement it and each wrap a vendor client, shown in grey because we do not own them (course diagram)*
 
-Reading the class diagram above: `PaymentGateway` is the Target, owned by your application; `StripeGateway` and `PayPalGateway` are the Adapters; `StripeClient` and `PayPalClient` are the Adaptees (third-party code); `Checkout` stands for any Client. Every mismatch — method names, parameter types, casing rules — is soaked up inside the two adapter classes, and nothing above them sees it.
+`PaymentGateway` is the Target (yours); `StripeGateway`/`PayPalGateway` the Adapters; `StripeClient`/`PayPalClient` the Adaptees (third-party); `Checkout` any Client. Every mismatch — names, parameter types, casing — is soaked up inside the adapters.
 
 Our Java design (including the class and two-way adapters):
 
@@ -169,120 +158,29 @@ classDiagram
 
 ### Java example
 
+Full code: `code/lld/ch09/adapter/` — our vocabulary (`Money`, `Receipt`, `PaymentGateway`, `PaymentFailedException`), the adaptees (`StripeClient` + `StripeCardException`, `PayPalClient`), the adapters, the temperature sensors, and `Main`.
+
 ```java
-// File: code/lld/ch09/adapter/Money.java
-package lld.ch09.adapter;
-
-import java.util.Locale;
-
-/** Our own vocabulary. No vendor type ever appears here. */
+// Money.java — our own vocabulary; no vendor type ever appears here.
 record Money(long cents, String currency) {
     Money {
         if (cents < 0) throw new IllegalArgumentException("negative amount");
         currency = currency.toUpperCase(Locale.ROOT);
     }
-
-    /** 4250 cents -> "42.50" */
-    String asDecimal() {
-        return String.format(Locale.ROOT, "%d.%02d", cents / 100, cents % 100);
-    }
+    String asDecimal() { return String.format(Locale.ROOT, "%d.%02d", cents / 100, cents % 100); }  // 4250 -> "42.50"
 }
-```
+interface PaymentGateway { Receipt pay(Money amount); }   // TARGET
 
-```java
-// File: code/lld/ch09/adapter/Receipt.java
-package lld.ch09.adapter;
+// ADAPTEES (pretend third-party jars we cannot edit):
+//   StripeClient.charge(long amountInCents, String currencyCode) -> charge id; throws StripeCardException over 100_000
+//   PayPalClient.sendPayment(String total, String currency) -> PayPalResponse(paymentId, state)
 
-record Receipt(String id, String status) { }
-```
-
-```java
-// File: code/lld/ch09/adapter/PaymentFailedException.java
-package lld.ch09.adapter;
-
-import java.io.Serial;
-
-/** Our exception type: callers never see a vendor exception. */
-class PaymentFailedException extends RuntimeException {
-    @Serial private static final long serialVersionUID = 1L;
-
-    PaymentFailedException(String message, Throwable cause) { super(message, cause); }
-}
-```
-
-```java
-// File: code/lld/ch09/adapter/PaymentGateway.java
-package lld.ch09.adapter;
-
-/** TARGET interface: the shape our application wants to talk to. */
-interface PaymentGateway {
-    Receipt pay(Money amount);
-}
-```
-
-```java
-// File: code/lld/ch09/adapter/StripeClient.java
-package lld.ch09.adapter;
-
-/*
- * ADAPTEES: pretend these come from third-party jars we cannot edit.
- * Note the different method names, argument types and conventions.
- */
-
-/** Stripe-like SDK: integer cents + lowercase currency, throws its own exception. */
-final class StripeClient {
-    private int next = 1001;
-
-    String charge(long amountInCents, String currencyCode) {
-        System.out.printf("  [stripe] charge(%d, \"%s\")%n", amountInCents, currencyCode);
-        if (amountInCents > 100_000) throw new StripeCardException("card_declined");
-        return "ch_" + next++;
-    }
-}
-```
-
-```java
-// File: code/lld/ch09/adapter/StripeCardException.java
-package lld.ch09.adapter;
-
-import java.io.Serial;
-
-final class StripeCardException extends RuntimeException {
-    @Serial private static final long serialVersionUID = 1L;
-
-    StripeCardException(String code) { super(code); }
-}
-```
-
-```java
-// File: code/lld/ch09/adapter/PayPalClient.java
-package lld.ch09.adapter;
-
-/** PayPal-like SDK: decimal string + uppercase currency, returns a response object. */
-final class PayPalClient {
-    record PayPalResponse(String paymentId, String state) { }
-
-    PayPalResponse sendPayment(String total, String currency) {
-        System.out.printf("  [paypal] sendPayment(\"%s\", \"%s\")%n", total, currency);
-        return new PayPalResponse("PAY-" + total.replace(".", ""), "approved");
-    }
-}
-```
-
-```java
-// File: code/lld/ch09/adapter/StripeGateway.java
-package lld.ch09.adapter;
-
-import java.util.Locale;
-
-/** OBJECT ADAPTER: implements our interface, HOLDS the vendor object (composition). */
+// StripeGateway.java — OBJECT ADAPTER: implements our interface, HOLDS the vendor object.
 final class StripeGateway implements PaymentGateway {
     private final StripeClient client;
-
     StripeGateway(StripeClient client) { this.client = client; }
 
-    @Override
-    public Receipt pay(Money amount) {
+    @Override public Receipt pay(Money amount) {
         try {
             String chargeId = client.charge(amount.cents(), amount.currency().toLowerCase(Locale.ROOT));
             return new Receipt(chargeId, "SUCCEEDED");
@@ -291,163 +189,42 @@ final class StripeGateway implements PaymentGateway {
         }
     }
 }
-```
 
-```java
-// File: code/lld/ch09/adapter/PayPalGateway.java
-package lld.ch09.adapter;
-
-final class PayPalGateway implements PaymentGateway {
-    private final PayPalClient client;
-
-    PayPalGateway(PayPalClient client) { this.client = client; }
-
-    @Override
-    public Receipt pay(Money amount) {
-        PayPalClient.PayPalResponse r = client.sendPayment(amount.asDecimal(), amount.currency());
-        String status = "approved".equals(r.state()) ? "SUCCEEDED" : "FAILED";
-        return new Receipt(r.paymentId(), status);
-    }
+// PayPalGateway.java
+@Override public Receipt pay(Money amount) {
+    PayPalClient.PayPalResponse r = client.sendPayment(amount.asDecimal(), amount.currency());
+    return new Receipt(r.paymentId(), "approved".equals(r.state()) ? "SUCCEEDED" : "FAILED");
 }
 ```
 
 ```java
-// File: code/lld/ch09/adapter/CelsiusSensor.java
-package lld.ch09.adapter;
-
-/** Target used by our new weather dashboard. */
-interface CelsiusSensor {
-    double celsius();
-}
-```
-
-```java
-// File: code/lld/ch09/adapter/FahrenheitSensor.java
-package lld.ch09.adapter;
-
-/** Interface used by an old US reporting module. */
-interface FahrenheitSensor {
-    double fahrenheit();
-}
-```
-
-```java
-// File: code/lld/ch09/adapter/LegacyFahrenheitThermometer.java
-package lld.ch09.adapter;
-
-/** A legacy class we cannot change. It is NOT final, so a class adapter can extend it. */
-class LegacyFahrenheitThermometer {
-    private final double reading;
-
-    LegacyFahrenheitThermometer(double reading) { this.reading = reading; }
-
-    public double readFahrenheit() { return reading; }
-}
-```
-
-```java
-// File: code/lld/ch09/adapter/ThermometerClassAdapter.java
-package lld.ch09.adapter;
-
-/**
- * CLASS ADAPTER: inherits from the adaptee and implements the target.
- * Works in Java only because the target is an interface (no multiple class inheritance).
- */
+// ThermometerClassAdapter.java — CLASS ADAPTER: inherits the adaptee, implements the target
+// (works in Java only because the target is an interface).
 final class ThermometerClassAdapter extends LegacyFahrenheitThermometer implements CelsiusSensor {
     ThermometerClassAdapter(double fahrenheit) { super(fahrenheit); }
-
-    @Override
-    public double celsius() { return (readFahrenheit() - 32) * 5.0 / 9.0; }
+    @Override public double celsius() { return (readFahrenheit() - 32) * 5.0 / 9.0; }
     // Downside: readFahrenheit() is still public on this object -> the adaptee's API leaks.
 }
-```
 
-```java
-// File: code/lld/ch09/adapter/TwoWayTemperatureAdapter.java
-package lld.ch09.adapter;
-
-/**
- * TWO-WAY ADAPTER: implements BOTH interfaces, so the same object can be handed to
- * new code (wants Celsius) and old code (wants Fahrenheit).
- */
+// TwoWayTemperatureAdapter.java — implements BOTH interfaces for new (Celsius) and old (Fahrenheit) code.
 final class TwoWayTemperatureAdapter implements CelsiusSensor, FahrenheitSensor {
     private final double celsius;
-
-    private TwoWayTemperatureAdapter(double celsius) { this.celsius = celsius; }
-
-    static TwoWayTemperatureAdapter from(CelsiusSensor s) {
-        return new TwoWayTemperatureAdapter(s.celsius());
-    }
-
-    static TwoWayTemperatureAdapter from(FahrenheitSensor s) {
-        return new TwoWayTemperatureAdapter((s.fahrenheit() - 32) * 5.0 / 9.0);
-    }
-
+    static TwoWayTemperatureAdapter from(CelsiusSensor s)    { return new TwoWayTemperatureAdapter(s.celsius()); }
+    static TwoWayTemperatureAdapter from(FahrenheitSensor s) { return new TwoWayTemperatureAdapter((s.fahrenheit() - 32) * 5.0 / 9.0); }
     @Override public double celsius()    { return celsius; }
     @Override public double fahrenheit() { return celsius * 9.0 / 5.0 + 32; }
 }
-```
 
-```java
-// File: code/lld/ch09/adapter/Main.java
-package lld.ch09.adapter;
-
-import java.io.BufferedReader;
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.List;
-
-public class Main {
-
-    /** Client code: talks only to OUR interface and never names a vendor. */
-    static void checkout(PaymentGateway gateway, Money amount) {
-        try {
-            Receipt r = gateway.pay(amount);
-            System.out.println("  receipt " + r.id() + " " + r.status());
-        } catch (PaymentFailedException e) {
-            System.out.println("  payment failed -> " + e.getMessage());
-        }
-    }
-
-    public static void main(String[] args) throws IOException {
-        System.out.println("== Object adapters (payment) ==");
-        Money amount = new Money(4250, "usd");
-        checkout(new StripeGateway(new StripeClient()), amount);
-        checkout(new PayPalGateway(new PayPalClient()), amount);
-        checkout(new StripeGateway(new StripeClient()), new Money(250_000, "USD"));
-
-        System.out.println("== Class adapter ==");
-        CelsiusSensor s = new ThermometerClassAdapter(98.6);
-        System.out.printf("  98.6F -> %.1fC%n", s.celsius());
-
-        System.out.println("== Two-way adapter ==");
-        FahrenheitSensor oldSensor = () -> 212.0;
-        TwoWayTemperatureAdapter both = TwoWayTemperatureAdapter.from(oldSensor);
-        CelsiusSensor forNewCode = both;
-        FahrenheitSensor forOldCode = both;
-        System.out.printf("  new code sees %.1fC, old code sees %.1fF%n",
-                forNewCode.celsius(), forOldCode.fahrenheit());
-
-        System.out.println("== JDK adapters ==");
-        String[] array = {"a", "b", "c"};
-        List<String> view = Arrays.asList(array);   // adapts array -> List, no copy
-        array[0] = "z";
-        System.out.println("  Arrays.asList sees array change: " + view);
-        try {
-            view.add("d");
-        } catch (UnsupportedOperationException e) {
-            System.out.println("  cannot resize an array-backed list: UnsupportedOperationException");
-        }
-        var bytes = new ByteArrayInputStream("héllo".getBytes(StandardCharsets.UTF_8));
-        // InputStreamReader adapts a byte stream (InputStream) to a char stream (Reader)
-        try (var reader = new BufferedReader(new InputStreamReader(bytes, StandardCharsets.UTF_8))) {
-            System.out.println("  InputStreamReader decoded: " + reader.readLine());
-        }
+// Main.java — the CLIENT talks only to OUR interface and never names a vendor.
+static void checkout(PaymentGateway gateway, Money amount) {
+    try {
+        Receipt r = gateway.pay(amount);
+        System.out.println("  receipt " + r.id() + " " + r.status());
+    } catch (PaymentFailedException e) {
+        System.out.println("  payment failed -> " + e.getMessage());
     }
 }
+// main also demos Arrays.asList (array -> List view, no copy) and InputStreamReader (bytes -> chars).
 ```
 
 **Output:**
@@ -472,88 +249,74 @@ public class Main {
 
 **What each part does**
 
-- `Money`, `Receipt`, `PaymentGateway`, `PaymentFailedException` — **our** vocabulary. The compact constructor (a constructor with no parameter list that runs on every creation) of the `Money` record (Java's short syntax for a data class whose fields cannot change) normalises the currency to upper case once, so every adapter can rely on it.
-- `StripeClient`, `PayPalClient` — the **adaptees**. Different method names, argument types, casing and error styles. We treat them as untouchable.
-- `StripeGateway` — an **object adapter**. It converts `Money` into `(cents, "usd")`, converts the returned charge id into a `Receipt`, and converts `StripeCardException` into `PaymentFailedException`. The third call in the output shows that translation: the client sees *our* error type.
-- `PayPalGateway` — the same idea with a different translation (`Money.asDecimal()` → "42.50"; `"approved"` → `"SUCCEEDED"`).
-- `checkout(...)` — the **client**. One function, two completely different vendors, and no `if (stripe)` branch anywhere.
-- The JDK section shows two adapters you already use: `Arrays.asList` and `InputStreamReader`.
+- `Money`, `Receipt`, `PaymentGateway`, `PaymentFailedException` — **our** vocabulary. The compact constructor (no parameter list, runs on every creation) of the `Money` record (short syntax for an immutable data class) upper-cases the currency once, so every adapter can rely on it.
+- `StripeGateway` — an **object adapter** converting `Money` → `(cents, "usd")`, charge id → `Receipt`, `StripeCardException` → `PaymentFailedException` (third output call: the client sees *our* error type). `PayPalGateway` translates differently (`Money.asDecimal()` → "42.50"; `"approved"` → `"SUCCEEDED"`).
+- `checkout(...)` — the **client**: one function, two vendors, no `if (stripe)` branch. The JDK section shows two adapters you already use: `Arrays.asList` and `InputStreamReader`.
 
 ### Object adapter vs class adapter
-
-GoF describes two ways to build an adapter:
 
 | | **Object adapter** (composition) | **Class adapter** (inheritance) |
 |---|---|---|
 | How | Adapter *holds* an adaptee instance and implements the Target | Adapter *extends* the adaptee class and implements the Target |
 | In our code | `StripeGateway`, `PayPalGateway` | `ThermometerClassAdapter extends LegacyFahrenheitThermometer implements CelsiusSensor` |
 | Works when adaptee is `final`? | Yes | **No** — you cannot extend a final class (our `StripeClient` is `final`) |
-| Can adapt a whole family (adaptee + subclasses)? | Yes — pass any subclass instance in | No — bound to one concrete class at compile time (fixed when the code is compiled) |
-| Can override adaptee behaviour? | Harder — you would have to subclass the adaptee and adapt that subclass | Yes (it is a subclass) |
+| Can adapt a whole family (adaptee + subclasses)? | Yes — pass any subclass instance in | No — bound to one concrete class at compile time |
+| Can override adaptee behaviour? | Harder — subclass the adaptee and adapt that subclass | Yes (it is a subclass) |
 | Leaks the adaptee's API (its public methods)? | No — only the Target methods are visible | **Yes** — every public adaptee method (e.g. `readFahrenheit()`) is also on the adapter |
 | Java constraint | none | Java has no multiple class inheritance (extending two classes at once), so the **Target must be an interface** |
 
-**Rule of thumb:** prefer the **object adapter**. It follows "favour composition over inheritance", works with final classes, can wrap several objects, and does not inherit methods you did not want. Use a class adapter only when you must override some adaptee behaviour and the adaptee is designed for extension.
+**Rule of thumb:** prefer the **object adapter** — composition over inheritance, works with final classes, can wrap several objects, inherits nothing unwanted. Use a class adapter only to override adaptee behaviour when the adaptee is designed for extension.
 
 ### Two-way adapter
 
-A **two-way adapter** implements *both* interfaces, so the same object can be given to clients of either side. GoF mentions it for the case where two different clients need to view one object in two different ways.
-
-In the code, `TwoWayTemperatureAdapter implements CelsiusSensor, FahrenheitSensor`. It can be built from either kind of sensor. New dashboard code sees `100.0C`; old US reporting code sees `212.0F` — the same object. This is handy during a **migration** (gradually moving code from an old system to a new one): old and new modules can share one object while you gradually move callers across.
+A **two-way adapter** implements *both* interfaces so one object serves clients of either side (GoF: two clients needing to view one object in two ways). `TwoWayTemperatureAdapter implements CelsiusSensor, FahrenheitSensor` is built from either kind of sensor; new dashboard code sees `100.0C`, old US reporting code `212.0F` — same object. Handy during a **migration** (gradually moving code from an old system to a new one).
 
 ### Adapter vs Facade vs Decorator vs Proxy (quick view)
 
-| Pattern | What happens to the interface | What happens to the behaviour |
-|---|---|---|
-| **Adapter** | **Translated** — the client sees your interface, the wrapped object keeps its own | Same work, just re-expressed |
-| **Decorator** | Kept identical on both sides | **Extended** — extra work runs around the call |
-| **Proxy** | Kept identical | Same work, but **gated** — it may be postponed, served from a cache (a store of earlier results kept for quick reuse) or rejected |
-| **Facade** | **Replaced** — a single simpler interface stands in for many | Same work, fewer calls for the client |
+In one line each (full table in [9.8](#98-putting-it-all-together--comparison)): **Adapter** *translates* the interface, same work; **Decorator** keeps the interface and *extends* the work; **Proxy** keeps interface and work but *gates* it (postponed, served from a cache — a store of earlier results for quick reuse — or rejected); **Facade** *replaces* many interfaces with one simpler one, fewer calls for the client.
 
-In one line each: translating shapes → **Adapter**; adding work, same shape → **Decorator**; guarding access, same shape and same work → **Proxy**; one simple door in front of several objects → **Facade**.
-
-A useful test: *adapters exist because someone else picked the interface.* Imagine the vendor rewrote its API tomorrow to match yours exactly — if your class would then have no reason to exist, it was an Adapter. The other three exist because you decided to add something. Bridge can be drawn with the same boxes, but its timing is reversed: a Bridge is planned *before* the classes exist so two hierarchies never fuse; an Adapter is bolted on *after* to reconcile two things that already exist.
+A useful test: *adapters exist because someone else picked the interface.* If the vendor rewrote its API to match yours tomorrow and your class would lose its reason to exist, it was an Adapter; the other three exist because you chose to add something. Bridge uses the same boxes with reversed timing: planned *before* the classes exist so two hierarchies never fuse; an Adapter is bolted on *after* to reconcile two existing things.
 
 ### Trade-offs
 
 | Pros | Cons |
 |---|---|
-| **The foreign format is contained** — only one class knows the vendor's conventions. | **An extra class and an extra call** — stack traces (the list of calls printed when an error happens) gain a frame (one entry in that list) whose only job is conversion. |
-| **Changing vendor is local** — supporting PayPal beside Stripe means adding a class, not editing callers (Open/Closed Principle — open for extension, closed for modification). | **Conversions can drop information**, and callers cannot see that anything was lost. |
-| **Easy to test** — faking your own one-method interface is far simpler than faking a vendor SDK. | **Two data models must stay aligned** — each vendor API change forces a mapping change. |
-| **Your code keeps its own language** (`Money`, `Receipt` rather than cents and charge ids); conversion has a single home (Single Responsibility — one reason to change per class). | **Logic tends to creep in** — retries (automatically re-trying a failed call) and pricing rules drift into the adapter unless reviews stop them. |
+| **The foreign format is contained** — one class knows the vendor's conventions. | **An extra class and call** — stack traces (calls listed when an error happens) gain a frame whose only job is conversion. |
+| **Changing vendor is local** — PayPal beside Stripe is a new class, not edited callers (Open/Closed Principle). | **Conversions can drop information** invisibly to callers. |
+| **Easy to test** — faking your one-method interface beats faking a vendor SDK. | **Two data models must stay aligned** — each vendor API change forces a mapping change. |
+| **Your code keeps its own language** (`Money`, `Receipt`); conversion has one home (Single Responsibility). | **Logic creeps in** — retries (automatic re-tries of failed calls) and pricing rules drift in unless reviews stop them. |
 
 ### When not to use it
 
-- **Both sides are yours.** Change one interface so they match. An adapter between two pieces of code you own is overhead you pay forever for a mismatch you could simply remove.
-- **The two models really disagree.** When mapping one to the other drops data or forces guesses, the "adapter" grows into a mini-application with bugs of its own; redraw the boundary instead.
-- **You want extra behaviour, not a translation.** That job belongs to a Decorator.
-- **The conversion happens in exactly one place.** A few inline lines read better than a new class.
+- **Both sides are yours** — change one interface; an adapter between your own code is overhead paid forever for a removable mismatch.
+- **The two models really disagree** — if mapping drops data or forces guesses, the "adapter" becomes a buggy mini-application; redraw the boundary.
+- **You want extra behaviour, not translation** — a Decorator's job.
+- **The conversion happens in exactly one place** — a few inline lines read better.
 
 ### Common mistakes
 
-- **Leaking vendor types** (`StripeCharge` return type, `StripeCardException` escaping). Then nothing is decoupled.
-- **Putting business logic in the adapter** (discount rules, retries). Adapters translate; they do not decide.
-- **Choosing a class adapter by default** — it exposes the adaptee's whole API and breaks on `final` classes.
-- **One giant adapter for many vendors** with `if (vendor == STRIPE)` inside — that is the branch the pattern was meant to remove. One adapter per adaptee.
-- **Silently dropping information** (e.g. vendor's "pending" state mapped to "SUCCEEDED"). Map every case deliberately.
+- **Leaking vendor types** (`StripeCharge` return type, `StripeCardException` escaping) — nothing is decoupled.
+- **Business logic in the adapter** (discounts, retries). Adapters translate; they do not decide.
+- **Class adapter by default** — exposes the adaptee's whole API and breaks on `final` classes.
+- **One giant adapter** with `if (vendor == STRIPE)` — the branch the pattern removes. One adapter per adaptee.
+- **Silently dropping information** (vendor "pending" mapped to "SUCCEEDED"). Map every case deliberately.
 
 ### Real-world examples
 
-- **`java.util.Arrays.asList(T...)`** adapts an array to the `List` interface *without copying* — writes go through to the array (as the output shows) and the list cannot grow, so `add` throws `UnsupportedOperationException`.
-- **`java.io.InputStreamReader` / `OutputStreamWriter`** adapt byte streams (raw bytes read one after another) to character streams (text) using a charset (the rule that maps bytes to characters, e.g. UTF-8).
-- **`java.util.Collections.enumeration(Collection)`** adapts a modern `Collection` to the legacy (old but still supported) `Enumeration` interface. (*Head First Design Patterns* builds the reverse, an Enumeration-to-Iterator adapter.)
-- **SLF4J providers/bindings** — SLF4J (Simple Logging Facade for Java) is one logging API, with an adapter module for each backend (the library that actually writes the log lines) (Logback, Log4j, `java.util.logging`).
-- **JDBC (and ODBC) drivers** (JDBC is Java's standard database API; a driver is the library for one particular database) adapt each database's own wire protocol (the exact bytes it sends over the network) to the standard `java.sql` interfaces, which is why the same application code runs on several databases.
-- **Spring MVC `HandlerAdapter`** lets the `DispatcherServlet` (the central object in Spring MVC, Spring's web framework, that receives every web request) invoke very different kinds of handlers (annotated controllers, `HttpRequestHandler`, etc.) through one interface.
-- **Almost every "client" wrapper around a vendor SDK** in a real codebase — if it exists so the rest of the code does not import the SDK, it is an adapter.
+- **`java.util.Arrays.asList(T...)`** adapts an array to `List` *without copying* — writes go through to the array and the list cannot grow (`add` throws `UnsupportedOperationException`).
+- **`java.io.InputStreamReader` / `OutputStreamWriter`** adapt byte streams to character streams using a charset (the byte↔character rule, e.g. UTF-8).
+- **`java.util.Collections.enumeration(Collection)`** adapts a `Collection` to the legacy `Enumeration` interface. (*Head First* builds the reverse, Enumeration-to-Iterator.)
+- **SLF4J providers/bindings** — SLF4J (Simple Logging Facade for Java) is one logging API with an adapter module per backend (the library that writes log lines: Logback, Log4j, `java.util.logging`).
+- **JDBC (and ODBC) drivers** adapt each database's wire protocol (the bytes it sends over the network) to the standard `java.sql` interfaces, so the same code runs on several databases.
+- **Spring MVC `HandlerAdapter`** lets the `DispatcherServlet` (Spring MVC's central object receiving every web request) invoke very different handlers (annotated controllers, `HttpRequestHandler`, etc.) through one interface.
+- **Almost every "client" wrapper around a vendor SDK** — if it exists so the rest of the code does not import the SDK, it is an adapter.
 
 ### In modern languages
 
-- **First-class functions** (functions that can be stored in variables and passed around like values): if the Target has a single method, a **lambda** (a short unnamed function) is a complete adapter — `PaymentGateway g = m -> new Receipt(stripe.charge(m.cents(), "usd"), "SUCCEEDED");` (our `FahrenheitSensor oldSensor = () -> 212.0;` is the same trick).
-- **Python**: duck typing ("if it has the right methods, it fits" — checked when the code runs, never declared) means any object with the expected method names fits, so a small wrapper class — or even a `types.SimpleNamespace` — is enough.
-- **TypeScript**: structural typing accepts anything of the right shape, so adapters are frequently plain object literals (objects written inline as `{ ... }`).
-- **Go**: interfaces are satisfied implicitly (a type that has the methods automatically counts — no `implements` needed), so the adapter is often just a small named type with one method.
+- **First-class functions** (functions stored and passed like values): for a single-method Target a **lambda** is a complete adapter — `PaymentGateway g = m -> new Receipt(stripe.charge(m.cents(), "usd"), "SUCCEEDED");` (our `FahrenheitSensor oldSensor = () -> 212.0;` is the same trick).
+- **Python**: duck typing ("if it has the right methods, it fits", checked at run time) — a small wrapper class or even a `types.SimpleNamespace` suffices.
+- **TypeScript**: structural typing accepts anything of the right shape; adapters are often plain object literals (`{ ... }`).
+- **Go**: interfaces are satisfied implicitly (no `implements`), so the adapter is often a small named type with one method.
 
 ### In the interview
 
@@ -561,12 +324,12 @@ A useful test: *adapters exist because someone else picked the interface.* Imagi
 
 **Follow-ups**
 
-- *Q: Adapter vs Decorator?* — A: Adapter changes the interface and keeps the behaviour. Decorator keeps the interface and changes (adds to) the behaviour.
-- *Q: Adapter vs Facade?* — A: An Adapter converts **one** interface to **one** other, usually because you only own one side. A Facade simplifies a **whole subsystem** of several objects into one entry point, usually over code you own.
-- *Q: Why not just change the other side?* — A: Say this up front, unprompted: it is a vendor library, another team's API, or code with many callers. That constraint is what justifies the pattern — without it you are pattern-matching out of habit.
-- *Q: What ruins an adapter?* — A: A vendor type or vendor exception in the adapter's public signature.
-- *Q: How does it help testing?* — A: The checkout depends on a small interface I own, so in tests I pass a fake `PaymentGateway`; I never have to fake the vendor SDK.
-- *Q: What is a two-way adapter?* — A: One class implementing both interfaces so it can serve clients of either side, useful during migrations.
+- *Q: Adapter vs Decorator?* — A: Adapter changes the interface, keeps behaviour. Decorator keeps the interface, adds behaviour.
+- *Q: Adapter vs Facade?* — A: Adapter converts **one** interface to **one** other, usually because you own only one side. Facade simplifies a **whole subsystem** into one entry point, usually over code you own.
+- *Q: Why not just change the other side?* — A: Say it unprompted: vendor library, another team's API, or many callers. That constraint justifies the pattern — without it you are pattern-matching out of habit.
+- *Q: What ruins an adapter?* — A: A vendor type or exception in its public signature.
+- *Q: How does it help testing?* — A: Checkout depends on a small interface I own, so tests pass a fake `PaymentGateway`; no faking the vendor SDK.
+- *Q: What is a two-way adapter?* — A: One class implementing both interfaces to serve either side, useful during migrations.
 
 ### Self-check
 
@@ -578,7 +341,7 @@ A useful test: *adapters exist because someone else picked the interface.* Imagi
 
 ### TL;DR
 
-- **Adapter = translator** between the interface you have and the interface you need.
+- **Adapter = translator** between the interface you have and the one you need.
 - Implements **your** interface, **holds** the vendor object, translates **in, out and errors**.
 - Prefer **object adapter** (composition) over **class adapter** (inheritance). Two-way adapters implement both sides.
 - Use at boundaries you **don't control**; skip it when you own both sides.
@@ -589,11 +352,9 @@ A useful test: *adapters exist because someone else picked the interface.* Imagi
 
 ### What it is
 
-The **Bridge** pattern splits one class that varies in *two independent ways* into **two separate hierarchies** connected by a reference (the "bridge"), so each side can grow on its own.
+The **Bridge** pattern splits one class that varies in *two independent ways* into **two separate hierarchies** connected by a reference (the "bridge"), so each side grows on its own — like universal TV remotes (basic, advanced with mute) and TV brands (Sony, Samsung): no "BasicSonyRemote"; any remote drives any TV through a common protocol (agreed set of signals).
 
-*Analogy:* a universal TV remote. Remotes come in kinds (basic, advanced with mute); TVs come in brands (Sony, Samsung). You do not buy a "BasicSonyRemote" — any remote works any TV through a common protocol (an agreed set of signals).
-
-GoF's intent: *decouple an abstraction from its implementation so that the two can vary independently.* GoF also lists **Handle/Body** as another name for it. Its names for the parts — the vocabulary interviewers expect:
+GoF's intent: *decouple an abstraction from its implementation so that the two can vary independently.* Also called **Handle/Body**. The vocabulary interviewers expect:
 
 | Term | Meaning | In our code |
 |---|---|---|
@@ -602,35 +363,35 @@ GoF's intent: *decouple an abstraction from its implementation so that the two c
 | **Implementor** | The interface of the low-level side that does the physical work | `Channel` |
 | **Concrete Implementor** | Real implementations of that low-level work | `EmailChannel`, `SmsChannel`, `PushChannel` |
 
-> **Naming trap.** In Bridge, "implementation" is *not* the everyday Java meaning ("a class that implements an interface"). It names the **low-level half of the split** — the side that does the platform-specific, physical work (sending bytes, drawing pixels). The GoF terms are awkward, but they are the ones you will be asked about.
+> **Naming trap.** In Bridge, "implementation" is *not* the everyday Java meaning ("a class that implements an interface"). It names the **low-level half of the split** — the platform-specific, physical work (sending bytes, drawing pixels). Awkward, but these are the terms you will be asked about.
 
 ### The problem it solves — the class explosion
 
-You have three kinds of notification (alert, reminder, digest) and three delivery channels (email, SMS, push). If both live in **one** inheritance hierarchy you need a class for every combination:
+Three notification kinds (alert, reminder, digest) × three channels (email, SMS, push) in **one** hierarchy need a class per combination:
 
 ![Bridge Pattern - nine classes become six, and either side can grow](../../assets/P-bridge-pattern-1.svg)
 *Figure — Top: one hierarchy needs 3 × 3 = 9 classes such as EmailAlert and SmsDigest. Bottom: two hierarchies joined by one `channel` reference need 3 + 3 = 6 (course diagram)*
 
-The figure shows the arithmetic. In a single hierarchy the concrete classes **multiply**: 3 × 3 = 9; one more channel gives 12; one more type on top gives 16. With a bridge they **add**: 3 + 3 = 6, and 4 + 4 = 8. (Counts are concrete classes; the `Notification` base and the `Channel` interface are the same in both designs.)
+In one hierarchy concrete classes **multiply**: 3 × 3 = 9; one more channel → 12; one more type too → 16. With a bridge they **add**: 3 + 3 = 6, 4 + 4 = 8. (Counts are concrete classes; the `Notification` base and `Channel` interface exist in both.)
 
-The **smell** (code smell: a surface symptom that hints at a deeper design problem) that points to a missing Bridge is **a class name made of two nouns** — `EmailAlert`, `SmsDigest`, `PushReminder`. Each such class repeats either the "build the message" code or the "send it" code, so changing how SMS delivery works means editing three classes that otherwise have nothing in common.
+The **smell** (code smell: a surface symptom of a deeper design problem) is **a class name made of two nouns** — `EmailAlert`, `SmsDigest`, `PushReminder`. Each repeats the "build the message" or "send it" code, so changing SMS delivery edits three otherwise unrelated classes.
 
-Splitting the two dimensions has one more pay-off: the pairing becomes a **run-time choice**. The same alert object can be built with an SMS channel in a test and an email channel in production (the live system real users depend on). The code is small; the genuinely hard part is deciding **which dimension is the abstraction and which is the implementation** (see "Getting the split wrong" below).
+Splitting also makes the pairing a **run-time choice**: the same alert with an SMS channel in a test, email in production (the live system). The code is small; the hard part is deciding **which dimension is the abstraction and which the implementation** (see "Getting the split wrong").
 
 ### How it works
 
-1. **Find the two dimensions** that vary independently (what the message *is* vs how it *goes out*).
-2. **Make the lower-level dimension an interface** — the Implementor (`Channel.deliver(title, body)`). Keep it small and general.
-3. **Make the higher-level dimension an abstract class** — the Abstraction — that **holds a reference** to the Implementor. That field is the bridge.
-4. **Refined abstractions** build their own content and **delegate** the physical work across the bridge. They never check which implementor they have.
-5. **Pair them at run time**: `new AlertNotification(new SmsChannel(...), ...)`. The same alert can go by SMS in a test and by email in production.
+1. **Find the two dimensions** varying independently (what the message *is* vs how it *goes out*).
+2. **Make the lower-level one an interface** — the Implementor (`Channel.deliver(title, body)`), small and general.
+3. **Make the higher-level one an abstract class** — the Abstraction — that **holds a reference** to the Implementor. That field is the bridge.
+4. **Refined abstractions** build their content and **delegate** the physical work across the bridge, never checking which implementor they have.
+5. **Pair at run time**: `new AlertNotification(new SmsChannel(...), ...)`.
 
 ### Structure
 
 ![Bridge Pattern - Class Diagram](../../assets/P-bridge-pattern-2.svg)
 *Figure — Bridge class diagram: `Notification` (abstraction) holds a `Channel` (implementor); alert/reminder notifications refine the abstraction; email/SMS channels implement the channel (course diagram)*
 
-In the class diagram above, the bridge is that one `channel` field: declared once in the base class, used by every subclass. The channel classes know nothing about notifications — neither what an alert is nor that alerts exist.
+The bridge is the one `channel` field, declared in the base class and used by every subclass. Channel classes know nothing about notifications.
 
 ```mermaid
 classDiagram
@@ -672,175 +433,50 @@ classDiagram
 
 ### Java example
 
-```java
-// File: code/lld/ch09/bridge/Channel.java
-package lld.ch09.bridge;
-
-/**
- * IMPLEMENTOR: the low-level "how it goes out" side.
- * Kept small and general: two plain strings, nothing channel-specific.
- */
-interface Channel {
-    void deliver(String title, String body);
-}
-```
+Full code: `code/lld/ch09/bridge/` (one file per type, plus `Main`).
 
 ```java
-// File: code/lld/ch09/bridge/EmailChannel.java
-package lld.ch09.bridge;
+// Channel.java — IMPLEMENTOR: the low-level "how it goes out" side; two plain strings, nothing channel-specific.
+interface Channel { void deliver(String title, String body); }
 
-/** CONCRETE IMPLEMENTORS: none of them knows what an alert or a digest is. */
-final class EmailChannel implements Channel {
-    private final String address;
-
-    EmailChannel(String address) { this.address = address; }
-
-    @Override
-    public void deliver(String title, String body) {
-        System.out.println("  [email to " + address + "] Subject: " + title + " | " + body);
-    }
-}
-```
-
-```java
-// File: code/lld/ch09/bridge/SmsChannel.java
-package lld.ch09.bridge;
-
+// SmsChannel.java — CONCRETE IMPLEMENTOR (EmailChannel, PushChannel likewise); knows nothing of alerts or digests.
 final class SmsChannel implements Channel {
     private static final int LIMIT = 40;           // tiny limit so the demo shows truncation
     private final String phone;
-
     SmsChannel(String phone) { this.phone = phone; }
-
-    @Override
-    public void deliver(String title, String body) {
+    @Override public void deliver(String title, String body) {
         String text = title + ": " + body;
         if (text.length() > LIMIT) text = text.substring(0, LIMIT - 3) + "...";
         System.out.println("  [sms to " + phone + "] " + text);
     }
 }
-```
 
-```java
-// File: code/lld/ch09/bridge/PushChannel.java
-package lld.ch09.bridge;
-
-final class PushChannel implements Channel {
-    private final String deviceId;
-
-    PushChannel(String deviceId) { this.deviceId = deviceId; }
-
-    @Override
-    public void deliver(String title, String body) {
-        System.out.println("  [push to " + deviceId + "] (" + title + ") " + body);
-    }
-}
-```
-
-```java
-// File: code/lld/ch09/bridge/Notification.java
-package lld.ch09.bridge;
-
-/**
- * ABSTRACTION: the high-level "what the message is" side.
- * The protected 'channel' field IS the bridge.
- */
+// Notification.java — ABSTRACTION: the protected 'channel' field IS the bridge.
 abstract class Notification {
     protected final Channel channel;
-
     protected Notification(Channel channel) { this.channel = channel; }
-
     /** Builds the message, then hands it across the bridge. Never branches on channel type. */
     abstract void send();
 }
-```
 
-```java
-// File: code/lld/ch09/bridge/AlertNotification.java
-package lld.ch09.bridge;
-
-/** REFINED ABSTRACTIONS */
+// AlertNotification.java — REFINED ABSTRACTION (ReminderNotification, DigestNotification likewise).
 final class AlertNotification extends Notification {
-    private final String system;
-    private final String problem;
-
+    private final String system, problem;
     AlertNotification(Channel channel, String system, String problem) {
-        super(channel);
-        this.system = system;
-        this.problem = problem;
+        super(channel); this.system = system; this.problem = problem;
     }
-
-    @Override
-    void send() { channel.deliver("ALERT " + system, problem + " - act now"); }
+    @Override void send() { channel.deliver("ALERT " + system, problem + " - act now"); }
 }
-```
+// Digest: channel.deliver("Daily digest (" + items.size() + ")", String.join("; ", items));
 
-```java
-// File: code/lld/ch09/bridge/ReminderNotification.java
-package lld.ch09.bridge;
-
-final class ReminderNotification extends Notification {
-    private final String what;
-    private final String when;
-
-    ReminderNotification(Channel channel, String what, String when) {
-        super(channel);
-        this.what = what;
-        this.when = when;
-    }
-
-    @Override
-    void send() { channel.deliver("Reminder", what + " at " + when); }
-}
-```
-
-```java
-// File: code/lld/ch09/bridge/DigestNotification.java
-package lld.ch09.bridge;
-
-import java.util.List;
-
-final class DigestNotification extends Notification {
-    private final List<String> items;
-
-    DigestNotification(Channel channel, List<String> items) {
-        super(channel);
-        this.items = List.copyOf(items);
-    }
-
-    @Override
-    void send() { channel.deliver("Daily digest (" + items.size() + ")", String.join("; ", items)); }
-}
-```
-
-```java
-// File: code/lld/ch09/bridge/Main.java
-package lld.ch09.bridge;
-
-import java.util.List;
-
-public class Main {
-    public static void main(String[] args) {
-        Channel email = new EmailChannel("ops@shop.com");
-        Channel sms = new SmsChannel("+1-555-0100");
-        Channel push = new PushChannel("pixel-7");
-
-        System.out.println("== Any type x any channel, paired at run time ==");
-        List<Notification> outbox = List.of(
-                new AlertNotification(email, "payments", "error rate 12%"),
-                new AlertNotification(sms, "payments", "error rate 12%"),
-                new ReminderNotification(push, "Stand-up", "09:30"),
-                new DigestNotification(email, List.of("3 orders", "1 refund", "0 incidents")),
-                new DigestNotification(sms, List.of("3 orders", "1 refund", "0 incidents")));
-        outbox.forEach(Notification::send);
-
-        System.out.println("== Class count ==");
-        int types = 3, channels = 3;
-        System.out.println("  one hierarchy (type x channel): " + types * channels + " classes");
-        System.out.println("  bridge (type + channel):        " + (types + channels) + " classes");
-        System.out.println("  with 4 types and 4 channels:    " + 4 * 4 + " vs " + (4 + 4));
-    }
-}
+// Main.java — any type x any channel, paired at run time.
+List<Notification> outbox = List.of(
+        new AlertNotification(email, "payments", "error rate 12%"),
+        new AlertNotification(sms, "payments", "error rate 12%"),
+        new ReminderNotification(push, "Stand-up", "09:30"),
+        new DigestNotification(email, List.of("3 orders", "1 refund", "0 incidents")),
+        new DigestNotification(sms, List.of("3 orders", "1 refund", "0 incidents")));
+outbox.forEach(Notification::send);
 ```
 
 **Output:**
@@ -860,15 +496,13 @@ public class Main {
 
 **What each part does**
 
-- `Channel` — the Implementor. Just `deliver(title, body)` with two plain strings, so every channel can support it.
-- `EmailChannel`, `SmsChannel`, `PushChannel` — each knows *only* how to deliver. `SmsChannel` truncates long text; that rule lives inside SMS, not in any notification.
-- `Notification` — the Abstraction, holding `protected final Channel channel` (the bridge).
-- `AlertNotification` etc. — each builds a title and body and calls `channel.deliver(...)`. No `instanceof` (Java's check of an object's concrete type), no `switch` on channel type.
-- Adding `SlackChannel` = one new class; adding `PromoNotification` = one new class. Nothing else changes.
+- Channels know *only* delivery (SMS truncation lives inside SMS, not in any notification); `deliver` takes plain strings so every channel can support it.
+- Notifications build title and body and call `channel.deliver(...)` — no `instanceof` (Java's concrete-type check), no `switch` on channel type.
+- `SlackChannel` = one new class; `PromoNotification` = one new class. Nothing else changes.
 
 ### Bridge vs Strategy
 
-Written down, the two are **indistinguishable** — an object keeps a reference to an interface and delegates through it. Interviewers and code reviewers both ask about this, so have an answer ready: the difference is the **reason the reference is there**, not how it looks.
+Written down they are **indistinguishable** — an object holds an interface reference and delegates. Interviewers and reviewers ask, so be ready: the difference is the **reason the reference is there**.
 
 | | **Bridge** | **Strategy** |
 |---|---|---|
@@ -878,62 +512,61 @@ Written down, the two are **indistinguishable** — an object keeps a reference 
 | When decided | Up front, as a structural decision | Later, when a second algorithm appears |
 | Example | `Notification` → `Channel` | `list.sort(comparator)` |
 
-**Practical test:** picture adding one more implementation. If it is *a new kind of thing the system supports* (another delivery channel), you have a Bridge. If it is *one more way to perform a single step* (another compression algorithm), you have a Strategy. When you truly can't decide, relax — the code is identical and either name will be understood. What does matter is not building either one while an axis has only a single member.
+**Practical test:** picture one more implementation. *A new kind of thing the system supports* (another delivery channel) → Bridge. *One more way to perform a single step* (another compression algorithm) → Strategy. If you truly can't decide, either name is understood since the code is identical; what matters is not building either while an axis has one member.
 
 ### Getting the split wrong
 
-Bridge is quick to write but costly to re-cut once both sides have several classes. Two ways it goes wrong:
+Quick to write, costly to re-cut once both sides have several classes:
 
-- **Low-level details leaking up.** An `if (channel instanceof SmsChannel)` inside `AlertNotification` means the bridge is no longer doing its job — that SMS-specific rule should move into `SmsChannel`.
-- **An implementor interface shaped around one implementation.** Add `setEmailReplyTo(...)` to `Channel` and every non-email channel must now implement a method it can only throw from. Keep the low-level interface minimal and generic; that is why `deliver` accepts two plain strings instead of a rich message type.
+- **Low-level details leaking up.** `if (channel instanceof SmsChannel)` inside `AlertNotification` means the bridge has failed — move that SMS rule into `SmsChannel`.
+- **An implementor interface shaped around one implementation.** Add `setEmailReplyTo(...)` to `Channel` and every non-email channel must implement a method it can only throw from. Keep it minimal and generic — why `deliver` takes two plain strings, not a rich message type.
 
 ### Trade-offs
 
 | Pros | Cons |
 |---|---|
 | **Class counts add rather than multiply** — 3 types and 3 channels need 6 classes, not 9. | **Two hierarchies** to understand instead of one. |
-| **Each side extends independently** (Open/Closed) — a new channel touches no notification class. | **More indirection** — following one call means reading two files. |
-| **Pairing picked at run time** — real channel in production, fake in tests, per-environment config. | **Hard to undo** — once both sides have implementations, moving the split line is a large refactor (restructuring code without changing what it does). |
-| **Platform code kept apart** — only one class knows about SMTP (the protocol for sending email) (Single Responsibility). | **Pointless with one member** — a bridge with a single implementor is just an interface plus ceremony. |
+| **Each side extends independently** (Open/Closed) — a new channel touches no notification class. | **More indirection** — one call spans two files. |
+| **Pairing picked at run time** — real channel in production, fake in tests, per-environment config. | **Hard to undo** — moving the split line later is a large refactor (restructuring without changing behaviour). |
+| **Platform code kept apart** — only one class knows SMTP (the email-sending protocol) (Single Responsibility). | **Pointless with one member** — a single implementor is an interface plus ceremony. |
 
 ### When not to use it
 
-- **An axis has only one member.** With a single channel the bridge abstracts nothing; introduce it when the second channel actually shows up, not in advance.
-- **The axes are not truly independent.** If some combinations are forbidden (e.g. digests must never be sent by SMS), Bridge happily lets you build them, and you end up adding run-time checks that separate subclasses would have made impossible.
-- **You can't state in one sentence which side is the abstraction.** Then the design isn't ready — picking the wrong split is more expensive than living with a few extra classes.
-- **The second axis is really a behaviour, not a kind of thing.** Use Strategy.
+- **An axis has one member** — introduce it when the second channel actually shows up.
+- **The axes are not truly independent.** If some combinations are forbidden (digests never by SMS), Bridge happily builds them and you add run-time checks that separate subclasses would have made impossible.
+- **You can't say in one sentence which side is the abstraction** — the design isn't ready; a wrong split costs more than a few extra classes.
+- **The second axis is a behaviour, not a kind of thing** — use Strategy.
 
 ### Common mistakes
 
 - Building the bridge "just in case" with a single implementor.
 - Letting the abstraction branch on the concrete implementor type.
 - Making the implementor interface mirror one specific implementation.
-- Confusing Bridge with Adapter: Adapter is **retrofitted** to make existing things fit; Bridge is **designed in** so the two sides never get fused into one hierarchy.
+- Confusing Bridge with Adapter: Adapter is **retrofitted** to make existing things fit; Bridge is **designed in** so the sides never fuse.
 
 ### Real-world examples
 
-- **JDBC**: your code uses `java.sql.Connection` / `Statement`; each database driver supplies the implementation. Application code and drivers evolve separately, which is why the same query code can run on PostgreSQL or MySQL. (JDBC is often cited as both Bridge — two independent hierarchies — and Adapter — each driver adapts a native protocol. Both views are fair.)
-- **SLF4J and similar logging APIs**: the logging API you call is one side and the backend that actually writes log lines is the other. (SLF4J calls itself a *facade*; the API/backend split underneath is Bridge-shaped.)
-- **Window systems and device/graphics drivers**: GoF's own motivating example is a `Window` abstraction whose `WindowImp` implementation is written once per platform (X Window System, IBM Presentation Manager). OS drawing APIs over per-card graphics drivers follow the same idea.
-- **`java.awt` peers** (the textbook Java example): each AWT component held a platform-specific peer object that did the actual native drawing.
-- **Notification / payment services in most apps**: a `NotificationService` interface with pluggable providers (SES, Twilio, FCM — Amazon's email service, an SMS provider, Google's push-notification service) is this pattern, whether or not anyone called it Bridge.
-- **Dependency-injection containers** (frameworks that create objects and hand each one the dependencies it needs) that bind an interface to a different implementation per environment give you Bridge-style pairing that is configured rather than coded.
+- **JDBC**: your code uses `java.sql.Connection` / `Statement`; each driver supplies the implementation, so the same query code runs on PostgreSQL or MySQL. (Often cited as both Bridge — two independent hierarchies — and Adapter — each driver adapts a native protocol. Both fair.)
+- **SLF4J and similar logging APIs**: the API you call is one side, the backend writing log lines the other. (SLF4J calls itself a *facade*; the API/backend split underneath is Bridge-shaped.)
+- **Window systems and device/graphics drivers**: GoF's motivating example — a `Window` abstraction whose `WindowImp` is written per platform (X Window System, IBM Presentation Manager); OS drawing APIs over per-card graphics drivers likewise.
+- **`java.awt` peers** (the textbook Java example): each AWT component held a platform-specific peer doing the native drawing.
+- **Notification / payment services**: a `NotificationService` interface with pluggable providers (SES, Twilio, FCM — Amazon's email service, an SMS provider, Google's push service) is this pattern, named or not.
+- **Dependency-injection containers** (frameworks that create objects and hand each its dependencies) binding an interface to a different implementation per environment give configured, not coded, Bridge pairing.
 
 ### In modern languages
 
-- **First-class functions**: if the implementor has one method, it can simply be a function — `Notification(channel = send_email)` is the same design without a `Channel` class.
-- **Python / JavaScript**: duck typing means the implementor side needs no declared interface — any object with a `deliver` method will do.
-- **Go**: a small interface declared by the *consumer*, with implementations in other packages, is ordinary idiomatic (natural, conventional-style) Go — Bridge without the name.
-- **DI containers** (Spring, Guice, .NET): the pairing is wired by configuration per environment.
+- **First-class functions**: a one-method implementor can be a function — `Notification(channel = send_email)`.
+- **Python / JavaScript**: duck typing — any object with a `deliver` method will do; no declared interface.
+- **Go**: a small interface declared by the *consumer*, implemented in other packages, is idiomatic (conventional-style) Go — Bridge without the name.
+- **DI containers** (Spring, Guice, .NET): pairing wired by configuration per environment.
 
 ### Other patterns it is confused with
 
 | Looks like | Actual difference |
 |---|---|
-| Strategy | Same code shape; Bridge separates a permanent structural dimension, Strategy makes one algorithm swappable. |
-| Adapter | The class diagrams can look alike, but the timing is reversed: an Adapter is retrofitted to reconcile two things that already exist; a Bridge is planned before the classes are written. |
-| Abstract Factory | Abstract Factory decides *which family of objects gets created*; Bridge describes *how an object hands off work once it exists*. They work well together — a factory commonly supplies the implementor a bridge receives. |
-| Decorator | A Decorator shares the interface of the object inside it and adds behaviour; in a Bridge the two sides have unrelated interfaces and neither one wraps the other. |
+| Strategy / Adapter | Same code shape — see [Bridge vs Strategy](#bridge-vs-strategy) and the Adapter timing point in Common mistakes. |
+| Abstract Factory | Decides *which family of objects gets created*; Bridge describes *how an object hands off work once it exists*. They combine well — a factory often supplies the implementor a bridge receives. |
+| Decorator | Shares the inner object's interface and adds behaviour; in a Bridge the two sides have unrelated interfaces and neither wraps the other. |
 
 ### In the interview
 
@@ -941,9 +574,9 @@ Bridge is quick to write but costly to re-cut once both sides have several class
 
 **Follow-ups**
 
-- *Q: How is it different from Strategy?* — A: The code is the same; the intent differs. Bridge splits a permanent dimension decided up front; Strategy makes one algorithm replaceable, often per call.
-- *Q: What is the smell that says you need it?* — A: Class names with two nouns (`SmsDigest`) and duplicated code across them.
-- *Q: When would you not use it?* — A: With only one channel today — I would add the bridge when the second one lands. Also when some combinations are invalid.
+- *Q: How is it different from Strategy?* — A: Same code, different intent. Bridge splits a permanent dimension decided up front; Strategy makes one algorithm replaceable, often per call.
+- *Q: What is the smell that says you need it?* — A: Two-noun class names (`SmsDigest`) with duplicated code.
+- *Q: When would you not use it?* — A: With one channel today — add it when the second lands. Also when some combinations are invalid.
 - *Q: Who decides which implementor a notification gets?* — A: Whoever builds it — often a factory or the DI container, configured per environment.
 
 ### Self-check
@@ -965,9 +598,7 @@ Bridge is quick to write but costly to re-cut once both sides have several class
 
 ### What it is
 
-The **Composite** pattern gives an individual item and a whole nested group of items **one common interface**, so code that uses them never needs to check whether it has a **single object** or an **entire tree**.
-
-*Analogy:* a company org chart. You can ask any manager "what is your team's total salary?" — a manager answers by asking each report and adding up; an individual contributor just answers with their own salary. The question is the same for both.
+The **Composite** pattern gives an individual item and a whole nested group **one common interface**, so code never checks whether it has a **single object** or an **entire tree** — like asking anyone on an org chart "what is your team's total salary?": a manager asks each report and sums; an individual answers with their own.
 
 | Term | Meaning | In our code |
 |---|---|---|
@@ -976,30 +607,30 @@ The **Composite** pattern gives an individual item and a whole nested group of i
 | **Composite** | A container that holds children (typed as Component) and delegates to them | `FolderNode`, `Menu` |
 | **Client** | Code that works with Components only | `report(...)` |
 
-GoF's intent in plain words: compose objects into tree structures that represent **part-whole hierarchies**, and let clients treat individual objects and compositions **uniformly**.
+GoF's intent: compose objects into tree structures representing **part-whole hierarchies**, and let clients treat individual objects and compositions **uniformly**.
 
 ### The problem it solves
 
-Plenty of data is nested: folders contain files *and* folders; an invoice contains line items *and* bundles that have their own items; a UI (user interface) panel contains widgets (buttons, text boxes and other screen controls) *and* sub-panels. Ask for a total size, a total price or a rendering of the whole thing, and — without the pattern — each operation (`size`, `print`, `search`, `copy`) opens with the same type test:
+Much data nests: folders hold files *and* folders; an invoice holds items *and* bundles of items; a UI (user interface) panel holds widgets (buttons, text boxes and other controls) *and* sub-panels. Without the pattern every operation (`size`, `print`, `search`, `copy`) opens with the same type test:
 
 ```java
 if (node instanceof Folder f) { /* loop over children, recurse */ }
 else if (node instanceof File f) { /* read the size */ }
 ```
 
-That test gets pasted into every operation. Introduce a third kind of node — say a symbolic link (a file-system entry that points to another file or folder) — and you have to hunt down each copy; overlook one and the new node type quietly gets the wrong answer.
+Add a third node kind — a symbolic link (an entry pointing to another file or folder) — and you hunt every copy; miss one and it quietly gets the wrong answer.
 
 ![Composite Pattern - one call, whatever it lands on](../../assets/P-composite-pattern-1.svg)
 *Figure — `size()` on the project folder (2150) is the sum of README.md (1200) and src/ (950), which itself sums main.js and util.js. The caller makes the same call on a tree or a single file (course diagram)*
 
-The figure shows the fix: a file answers `size()` with its own byte count, and a folder answers by asking each child and summing. Because a child may be a file or another folder and both respond to the same call, a single piece of recursive code (code that calls itself on the smaller parts) handles any depth. The caller writes `report(project)` or `report(readme)` and never asks which one it holds.
+A file answers `size()` with its byte count; a folder asks each child and sums. Since a child may be either and both answer the same call, one piece of recursive code (code calling itself on smaller parts) handles any depth; the caller writes `report(project)` or `report(readme)` alike.
 
 ### How it works
 
-1. **Define a Component interface** with operations that make sense for *both* leaves and containers (`name()`, `size()`, `print()`).
-2. **Leaf** implements them directly (a file returns its own byte count).
-3. **Composite** stores a `List<Component>` — the **interface type**, not the leaf type — and implements each operation by **asking each child and combining the results**.
-4. Because a child can itself be a composite, the recursion is written **once** and works to any depth.
+1. **Define a Component interface** with operations meaningful for *both* leaves and containers (`name()`, `size()`, `print()`).
+2. **Leaf** implements them directly.
+3. **Composite** stores a `List<Component>` — the **interface type**, not the leaf type — and implements each operation by **asking each child and combining results**.
+4. Because a child can be a composite, the recursion is written **once** and works at any depth.
 5. **Clients** hold a `Component` and never type-check.
 
 ### Structure
@@ -1007,7 +638,7 @@ The figure shows the fix: a file answers `size()` with its own byte count, and a
 ![Composite Pattern - Class Diagram](../../assets/P-composite-pattern-2.svg)
 *Figure — Composite class diagram: `FileNode` (leaf) and `FolderNode` (composite) implement `FileSystemNode`; the folder holds a list of `FileSystemNode` and has `add()` (course diagram)*
 
-Two details in the class diagram above matter: the folder's child list is typed as the **interface** — that is what lets folders hold folders — and `add()` is declared on `FolderNode` rather than on the shared interface. The second is a deliberate trade-off (the "safe" design), covered right after the code.
+Two details matter: the child list is typed as the **interface** (so folders hold folders), and `add()` is on `FolderNode`, not the shared interface — the deliberate "safe" design, covered after the code.
 
 ```mermaid
 classDiagram
@@ -1057,214 +688,70 @@ classDiagram
 
 ### Java example
 
-```java
-// File: code/lld/ch09/composite/FileSystemNode.java
-package lld.ch09.composite;
+Full code: `code/lld/ch09/composite/` (file-system tree, restaurant menu, `Main`).
 
-/**
- * COMPONENT (safe version): only operations that make sense for BOTH leaf and composite.
- * add/remove are NOT here - they live on FolderNode only.
- */
+```java
+// FileSystemNode.java — COMPONENT (safe version): only operations valid for BOTH; no add/remove here.
 interface FileSystemNode {
     String name();
     long size();
     void print(String indent);
-
     /** True if 'target' is this node or somewhere below it. Used for the cycle check. */
     default boolean contains(FileSystemNode target) { return this == target; }
 }
-```
 
-```java
-// File: code/lld/ch09/composite/FileNode.java
-package lld.ch09.composite;
-
-/** LEAF: no children, answers directly. */
+// FileNode.java — LEAF: no children, answers directly.
 record FileNode(String name, long size) implements FileSystemNode {
-    @Override
-    public void print(String indent) {
-        System.out.println(indent + "- " + name + " (" + size + " B)");
-    }
+    @Override public void print(String indent) { System.out.println(indent + "- " + name + " (" + size + " B)"); }
 }
-```
 
-```java
-// File: code/lld/ch09/composite/FolderNode.java
-package lld.ch09.composite;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-
-/** COMPOSITE: holds children typed as the INTERFACE, so folders can hold folders. */
+// FolderNode.java — COMPOSITE: children typed as the INTERFACE, so folders can hold folders.
 final class FolderNode implements FileSystemNode {
-    private final String name;
     private final List<FileSystemNode> children = new ArrayList<>();
-
-    FolderNode(String name) { this.name = name; }
 
     /** Returns this so trees can be built fluently. Rejects cycles at insert time. */
     FolderNode add(FileSystemNode child) {
-        if (child.contains(this)) {
-            throw new IllegalArgumentException("cycle: " + child.name() + " already contains " + name);
-        }
+        if (child.contains(this)) throw new IllegalArgumentException("cycle: " + child.name() + " already contains " + name);
         children.add(child);
         return this;
     }
-
-    boolean remove(FileSystemNode child) { return children.remove(child); }
-
     List<FileSystemNode> children() { return Collections.unmodifiableList(children); }
 
-    @Override public String name() { return name; }
-
-    /** The recursion lives in ONE place. */
-    @Override
-    public long size() {
+    @Override public long size() {                        // the recursion lives in ONE place
         long total = 0;
         for (FileSystemNode child : children) total += child.size();
         return total;
     }
-
-    @Override
-    public void print(String indent) {
+    @Override public void print(String indent) {
         System.out.println(indent + "+ " + name + "/ (" + size() + " B)");
         for (FileSystemNode child : children) child.print(indent + "   ");
     }
-
-    @Override
-    public boolean contains(FileSystemNode target) {
+    @Override public boolean contains(FileSystemNode target) {
         if (this == target) return true;
-        for (FileSystemNode child : children) {
-            if (child.contains(target)) return true;
-        }
+        for (FileSystemNode child : children) if (child.contains(target)) return true;
         return false;
     }
+    ...
 }
 ```
 
 ```java
-// File: code/lld/ch09/composite/MenuComponent.java
-package lld.ch09.composite;
-
-import java.math.BigDecimal;
-
-/**
- * COMPONENT (transparent version): child management is on the shared type,
- * so callers never cast - but a leaf must reject it at run time.
- */
+// MenuComponent.java — COMPONENT (transparent version): child management on the shared type,
+// so callers never cast - but a leaf must reject it at run time.
 abstract class MenuComponent {
     void add(MenuComponent c) { throw new UnsupportedOperationException(name() + " is a leaf"); }
-
     abstract String name();
-    abstract BigDecimal price();             // total price of everything under this node (money: BigDecimal, never double)
+    abstract BigDecimal price();      // total under this node (money: BigDecimal, never double)
     abstract int countVegetarian();
     abstract void print(String indent);
 }
-```
+// MenuItem: price = new BigDecimal("3.49") (from a String, so exactly 3.49).
+// Menu: overrides add(); price() = children.stream().map(MenuComponent::price).reduce(BigDecimal.ZERO, BigDecimal::add)
 
-```java
-// File: code/lld/ch09/composite/MenuItem.java
-package lld.ch09.composite;
-
-import java.math.BigDecimal;
-
-final class MenuItem extends MenuComponent {
-    private final String name;
-    private final BigDecimal price;
-    private final boolean vegetarian;
-
-    MenuItem(String name, String price, boolean vegetarian) {
-        this.name = name;
-        this.price = new BigDecimal(price);     // from a String, so "3.49" is exactly 3.49
-        this.vegetarian = vegetarian;
-    }
-
-    @Override String name() { return name; }
-    @Override BigDecimal price() { return price; }
-    @Override int countVegetarian() { return vegetarian ? 1 : 0; }
-    @Override void print(String indent) {
-        System.out.println(indent + name + (vegetarian ? " (v)" : "") + " $" + price);
-    }
-}
-```
-
-```java
-// File: code/lld/ch09/composite/Menu.java
-package lld.ch09.composite;
-
-import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.List;
-
-final class Menu extends MenuComponent {
-    private final String name;
-    private final List<MenuComponent> children = new ArrayList<>();
-
-    Menu(String name) { this.name = name; }
-
-    @Override void add(MenuComponent c) { children.add(c); }
-    @Override String name() { return name; }
-    @Override BigDecimal price() {
-        return children.stream().map(MenuComponent::price).reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
-    @Override int countVegetarian() { return children.stream().mapToInt(MenuComponent::countVegetarian).sum(); }
-    @Override void print(String indent) {
-        System.out.println(indent + "[" + name + "]");
-        children.forEach(c -> c.print(indent + "  "));
-    }
-}
-```
-
-```java
-// File: code/lld/ch09/composite/Main.java
-package lld.ch09.composite;
-
-public class Main {
-
-    /** Client: one parameter type, no instanceof anywhere. */
-    static void report(FileSystemNode node) {
-        System.out.println("  " + node.name() + " -> " + node.size() + " bytes");
-    }
-
-    public static void main(String[] args) {
-        System.out.println("== Safe composite: file system ==");
-        FileNode readme = new FileNode("README.md", 1200);
-        FolderNode src = new FolderNode("src")
-                .add(new FileNode("main.js", 600))
-                .add(new FileNode("util.js", 350));
-        FolderNode project = new FolderNode("project").add(readme).add(src);
-
-        project.print("  ");
-        report(project);   // a whole tree
-        report(readme);    // a single file - same call
-
-        try {
-            src.add(project);   // project already contains src -> would loop forever
-        } catch (IllegalArgumentException e) {
-            System.out.println("  rejected: " + e.getMessage());
-        }
-
-        System.out.println("== Transparent composite: restaurant menu ==");
-        MenuComponent all = new Menu("All menus");
-        MenuComponent breakfast = new Menu("Breakfast");
-        MenuComponent desserts = new Menu("Desserts");
-        breakfast.add(new MenuItem("Pancakes", "3.49", true));
-        breakfast.add(new MenuItem("Bacon & eggs", "4.99", false));
-        desserts.add(new MenuItem("Apple pie", "2.59", true));
-        breakfast.add(desserts);          // a menu inside a menu
-        all.add(breakfast);
-        all.add(new MenuItem("Coffee", "1.50", true));
-
-        all.print("  ");
-        System.out.println("  total $" + all.price() + ", vegetarian items: " + all.countVegetarian());
-        try {
-            new MenuItem("Tea", "1.00", true).add(new MenuItem("Milk", "0.20", true));
-        } catch (UnsupportedOperationException e) {
-            System.out.println("  transparent cost: " + e.getMessage());
-        }
-    }
-}
+// Main.java — client: one parameter type, no instanceof anywhere.
+static void report(FileSystemNode node) { System.out.println("  " + node.name() + " -> " + node.size() + " bytes"); }
+// report(project); report(readme); src.add(project) is rejected (project already contains src);
+// new MenuItem("Tea", "1.00", true).add(...) throws.
 ```
 
 **Output:**
@@ -1293,12 +780,9 @@ public class Main {
 
 **What each part does**
 
-- `FileSystemNode` — the Component. Only operations valid for both files and folders.
-- `FileNode` (a `record`) — the Leaf: immutable, answers `size()` directly.
-- `FolderNode` — the Composite. `size()` is the four-line recursion and the **only** place in the program that knows a tree can nest. `add()` returns `this` so trees build fluently.
-- `contains(...)` + the check in `add()` — **cycle protection** at insert time. Trying to put `project` inside its own child `src` is rejected (see output).
-- `MenuComponent`/`Menu`/`MenuItem` — the *transparent* variant (the restaurant-menu example popularised by *Head First Design Patterns*): `add` is on the shared abstract class and a leaf throws.
-- `report(...)` — the client, called with a whole tree and with a single file.
+- `FileSystemNode` (Component) / `FileNode` (immutable record Leaf) / `FolderNode` (Composite) — `FolderNode.size()` is the four-line recursion and the **only** place that knows a tree nests; `add()` returns `this` for fluent building.
+- `contains(...)` + the check in `add()` — **cycle protection** at insert time (putting `project` inside its own child `src` is rejected).
+- `MenuComponent`/`Menu`/`MenuItem` — the *transparent* variant (*Head First*'s restaurant menu): `add` on the shared abstract class, a leaf throws. `report(...)` is the client, called with a tree and a single file.
 
 ### Transparent vs safe composite
 
@@ -1312,65 +796,63 @@ Where do `add` and `remove` belong? GoF named both answers:
 | Our code | `MenuComponent` (`Tea is a leaf` in the output) | `FileSystemNode` / `FolderNode` |
 | Choose when | Callers add children to arbitrary nodes without knowing their type (e.g. a UI editor where anything might be a container) | The tree is built in one place and read in many (most cases) |
 
-The transparent version swaps a compile-time guarantee for a possible run-time exception. The safe version keeps the read-side interface small, but any code that builds or edits the tree must hold a `FolderNode` — and code that walks a tree and then wants to insert needs a cast or type check after all. Neither is wrong; in review, check that the choice was **made on purpose**. A throwing `add` that nobody intended is the real defect.
-
-*Head First Design Patterns* makes an interesting point here: the transparent composite knowingly bends the Single Responsibility Principle (the component both manages children and does work) to gain transparency. That is a conscious design trade-off, not an accident.
+Transparent trades a compile-time guarantee for a possible run-time exception. Safe keeps the read-side interface small, but building/editing code must hold a `FolderNode`, and code that walks then inserts needs a cast after all. Neither is wrong; in review check the choice was **made on purpose** — an unintended throwing `add` is the real defect. *Head First* notes the transparent composite knowingly bends Single Responsibility (the component both manages children and does work) to gain transparency.
 
 ### Two traps worth knowing
 
-- **Cycles.** If a folder is ever placed inside one of its own descendants, `size()` recurses forever (in Java: `StackOverflowError`, thrown when nested calls use up the call stack — the memory that tracks calls in progress). **Validate when inserting**, not during traversal (walking through every node) — once you are traversing, you are already stuck. Our `add()` does exactly this.
-- **Repeated work.** Our `print()` calls `size()` on every level, so the same subtotals are recomputed again and again — about quadratic (work grows with the square of the depth) for a deep chain. For big real trees, **store each subtree's total** and invalidate upward when a child changes (which needs a parent pointer).
+- **Cycles.** A folder placed inside its own descendant makes `size()` recurse forever (`StackOverflowError`, when nested calls exhaust the call stack — the memory tracking calls in progress). **Validate when inserting**, not during traversal (walking every node) — by then you are stuck. Our `add()` does this.
+- **Repeated work.** `print()` calls `size()` at every level, recomputing subtotals — roughly quadratic (work grows with the square of depth) for a deep chain. For big trees **store each subtree's total** and invalidate upward on change (needs a parent pointer).
 
 ### Trade-offs
 
 | Pros | Cons |
 |---|---|
-| **Callers never type-check** — the same call works on a leaf or a whole tree. | **The shared interface tends to bloat** with operations that only half-fit one of the two kinds. |
-| **The recursion lives in one place**, reused by each new operation. | **Weaker type safety** (transparent variant) — the compiler allows adding a child to a leaf. |
-| **Adding a node type doesn't touch callers** (Open/Closed) — e.g. a `SymlinkNode`. | **Deep trees mean deep call stacks**, and a cycle shows up as endless recursion instead of a clear error. |
-| **Nesting comes for free** — a composite that stores the interface can store other composites. | **Totals get recomputed** on every call unless you cache them. |
+| **Callers never type-check** — same call on a leaf or a tree. | **The shared interface bloats** with operations that half-fit one kind. |
+| **The recursion lives in one place**, reused by each new operation. | **Weaker type safety** (transparent) — adding a child to a leaf compiles. |
+| **New node types don't touch callers** (Open/Closed) — e.g. a `SymlinkNode`. | **Deep trees mean deep call stacks**; a cycle shows as endless recursion, not a clear error. |
+| **Nesting comes free** — a composite storing the interface stores composites. | **Totals recomputed** each call unless cached. |
 
 ### When not to use it
 
-- **Nothing nests.** A flat list gains nothing from a shared leaf/container interface.
-- **Leaves and containers share little.** A forced common interface fills up with methods that throw, which is worse than the type test it replaced.
-- **Deep tree on a hot path.** (A hot path is code that runs so often that its speed matters.) Each level costs a stack frame and likely CPU cache misses (fetching data from slow main memory instead of the processor's fast cache); precomputed totals, or a loop that manages its own work-list instead of recursing, can be faster.
-- **The tree is modified while being traversed.** Concurrent changes (made at the same time by another thread) during recursion are dangerous, and Composite offers no protection.
+- **Nothing nests** — a flat list gains nothing.
+- **Leaves and containers share little** — a forced interface fills with throwing methods, worse than the type test it replaced.
+- **Deep tree on a hot path** (code run so often its speed matters) — each level costs a stack frame and likely CPU cache misses (fetching from slow main memory instead of the processor's fast cache); precomputed totals or a loop with its own work-list can be faster.
+- **The tree is modified during traversal** — concurrent changes (by another thread at the same time) during recursion are dangerous; Composite offers no protection.
 
 ### Common mistakes
 
-- Typing the child list as the **leaf** type (`List<FileNode>`) — then folders cannot hold folders.
-- Returning the internal mutable child list — callers can bypass `add()` and its cycle check. We return `Collections.unmodifiableList(children)`.
-- Adding `add()` to the interface by accident (transparent without meaning to).
+- Typing the child list as the **leaf** type (`List<FileNode>`) — folders cannot hold folders.
+- Returning the internal mutable child list — callers bypass `add()` and its cycle check (we return `Collections.unmodifiableList(children)`).
+- Putting `add()` on the interface by accident (transparent without meaning to).
 - No cycle check.
-- Using Composite when a single recursive function with one type check would do — the pattern pays off when **operations multiply**.
+- Using Composite when one recursive function with one type check would do — it pays off when **operations multiply**.
 
 ### Real-world examples
 
-- **The HTML DOM** (Document Object Model — the browser's in-memory tree of page elements) — an element holds child nodes, each possibly an element with children; `textContent` walks the whole subtree.
-- **UI toolkits** — in Swing/AWT, `java.awt.Container` *is a* `Component` and holds `Component`s, which is why panels nest without limit. React (a JavaScript UI library) component trees and Android's `ViewGroup` (a `View` that holds `View`s) follow the same idea.
+- **The HTML DOM** (Document Object Model — the browser's in-memory tree of page elements) — elements hold child nodes; `textContent` walks the subtree.
+- **UI toolkits** — Swing/AWT's `java.awt.Container` *is a* `Component` and holds `Component`s, so panels nest without limit; React (a JavaScript UI library) component trees and Android's `ViewGroup` (a `View` holding `View`s) likewise.
 - **File systems** — the example used here.
-- **Abstract syntax trees** (the tree a compiler builds from source code) in compilers — an expression node holds sub-expressions; evaluating any node evaluates its subtree.
-- **`java.io.File`** represents both files and directories with one class — a fair illustration of the transparent cost: `listFiles()` returns `null` when called on a regular file.
-- **JUnit 3 test suites** (JUnit is the standard Java testing framework; a suite is a named group of tests) — `TestSuite` implements `Test` and holds `Test`s (cases or other suites); running a suite runs everything beneath it. (JUnit 5 keeps the idea as a tree of test descriptors.)
-- **Spring's `CompositeCacheManager`** delegates to a list of `CacheManager`s while itself being a `CacheManager`.
-- **Invoices / bundles** — an e-commerce "bundle" priced as the sum of its items, which may themselves be bundles.
+- **Abstract syntax trees** (the tree a compiler builds from source) — expression nodes hold sub-expressions; evaluating a node evaluates its subtree.
+- **`java.io.File`** represents files and directories with one class — the transparent cost: `listFiles()` returns `null` on a regular file.
+- **JUnit 3 test suites** (JUnit: the standard Java testing framework; a suite is a named group of tests) — `TestSuite` implements `Test` and holds `Test`s; running a suite runs everything beneath. (JUnit 5 keeps a tree of test descriptors.)
+- **Spring's `CompositeCacheManager`** delegates to a list of `CacheManager`s while being one.
+- **Invoices / bundles** — a "bundle" priced as the sum of items that may themselves be bundles.
 
 ### In modern languages
 
-- **Python / JavaScript**: duck typing — leaf and container just need the same method names; a composite is often a class with a `children` list.
-- **Sealed types + pattern matching** (Java 21, Kotlin, Scala, Rust) — a sealed type lists exactly which subtypes may exist, and pattern matching lets a `switch` branch on which subtype it has: a `sealed interface Node permits File, Folder` plus an exhaustive `switch` is a real alternative. The compiler then reports any node type a `switch` forgets — a guarantee Composite does not give. Prefer it when the set of node types is closed.
-- **Functional languages**: a recursive algebraic data type (a type defined as "one of these shapes", where a shape may contain the type itself) is Composite with language support; a `fold` (a function that combines all parts of a structure into one result) over it is the recursion written once.
-- **Java streams** (a pipeline API for processing collections): `flatMap` (turns each element into several and flattens the result) makes walking a composite read nicely once the structure exists.
+- **Python / JavaScript**: duck typing — leaf and container just share method names; a composite is often a class with a `children` list.
+- **Sealed types + pattern matching** (Java 21, Kotlin, Scala, Rust) — a sealed type lists exactly which subtypes exist and a `switch` branches on the subtype: `sealed interface Node permits File, Folder` plus an exhaustive `switch`. The compiler reports any node type a `switch` forgets — a guarantee Composite lacks. Prefer it when node types are closed.
+- **Functional languages**: a recursive algebraic data type ("one of these shapes", a shape may contain the type itself) is Composite with language support; a `fold` (combine all parts into one result) is the recursion written once.
+- **Java streams** (pipeline API for collections): `flatMap` (each element → several, flattened) makes walking a composite read nicely.
 
 ### Other patterns it is confused with
 
 | Looks like | Actual difference |
 |---|---|
-| Decorator | Both hold objects of their own interface. A Decorator wraps exactly **one** and adds behaviour; a Composite holds **many** and combines their results. |
-| Iterator | Composite gives the tree a uniform interface; Iterator gives a way to walk it without exposing its structure. Often used together. |
-| Visitor | Composite makes the structure uniform; Visitor adds new operations over it without editing node classes — the usual next step when operations keep multiplying. |
-| A plain recursive function | If one function with one type check does the job, you don't need the pattern. Composite pays off when **many** operations would each repeat that branch. |
+| Decorator | Both hold objects of their own interface; Decorator wraps **one** and adds behaviour, Composite holds **many** and combines results. |
+| Iterator | Composite gives the tree a uniform interface; Iterator walks it without exposing its structure. Often used together. |
+| Visitor | Composite makes the structure uniform; Visitor adds new operations without editing node classes — the usual next step when operations multiply. |
+| A plain recursive function | If one function with one type check does the job, skip the pattern. Composite pays off when **many** operations would repeat that branch. |
 
 ### In the interview
 
@@ -1378,11 +860,11 @@ The transparent version swaps a compile-time guarantee for a possible run-time e
 
 **Follow-ups**
 
-- *Q: Transparent or safe?* — A: Safe if the tree is built in one place and read in many; transparent if callers add children to arbitrary nodes and casts would spread everywhere.
+- *Q: Transparent or safe?* — A: Safe if built in one place and read in many; transparent if callers add children to arbitrary nodes and casts would spread.
 - *Q: What about cycles?* — A: Check on insert: reject `add(child)` if the child already contains the parent.
-- *Q: Performance on a big tree?* — A: Cache subtree totals, invalidate upward on change; or use an iterative walk to avoid deep recursion.
-- *Q: Composite vs Decorator?* — A: Both hold objects of their own interface. Decorator holds **one** and adds behaviour; Composite holds **many** and combines their results.
-- *Q: How do you add a new operation without touching every node?* — A: Use Visitor over the composite structure.
+- *Q: Performance on a big tree?* — A: Cache subtree totals, invalidate upward on change; or walk iteratively to avoid deep recursion.
+- *Q: Composite vs Decorator?* — A: Decorator holds **one** and adds behaviour; Composite holds **many** and combines results.
+- *Q: How do you add a new operation without touching every node?* — A: Visitor over the composite structure.
 
 ### Self-check
 
@@ -1403,9 +885,7 @@ The transparent version swaps a compile-time guarantee for a possible run-time e
 
 ### What it is
 
-The **Decorator** pattern extends what **a single object** does, **while the program runs**, by enclosing it in a wrapper that implements **the same interface**. The original class is never edited, and you don't need a separate subclass for each mix of extras.
-
-*Analogy:* ordering coffee. Start with an espresso, add milk, add mocha, add whipped cream. Each topping wraps the drink and adds to its price and description; the result is still "a drink".
+The **Decorator** pattern extends what **a single object** does, **while the program runs**, by enclosing it in a wrapper that implements **the same interface**. The original class is never edited and you need no subclass per mix of extras — like an espresso wrapped in milk, mocha and whipped cream, each topping adding to price and description while the result is still "a drink".
 
 | Term | Meaning | In our code |
 |---|---|---|
@@ -1414,26 +894,26 @@ The **Decorator** pattern extends what **a single object** does, **while the pro
 | **Decorator (base)** | Implements the Component, holds a Component, forwards everything | `RepositoryDecorator`, `java.io.FilterInputStream` |
 | **Concrete Decorator** | Adds one behaviour around the forwarded call | `LoggingRepository`, `CachingRepository`, `Mocha`, `UpperCaseInputStream` |
 
-GoF's intent: *attach additional responsibilities to an object dynamically — a flexible alternative to subclassing for extending functionality.* GoF also calls it **Wrapper** (the same nickname as Adapter).
+GoF's intent: *attach additional responsibilities to an object dynamically — a flexible alternative to subclassing for extending functionality.* Also called **Wrapper** (Adapter's nickname too).
 
-The key property: **a decorator IS-A Component and HAS-A Component.** Since it has the very type it wraps, a decorator can sit around the real object, around another decorator, or around a test double (any stand-in object used in tests — fake, stub or mock), and code that only sees the interface cannot tell which.
+The key property: **a decorator IS-A Component and HAS-A Component.** So it can wrap the real object, another decorator, or a test double (any test stand-in — fake, stub or mock), and interface-only code cannot tell which.
 
 ### The problem it solves
 
-First a repository (an object that loads and saves data, hiding the database behind methods) needs logging, then caching, later retries and metrics (counters and timings the app records about itself). Each caller wants its own mix of these, and sometimes in its own order.
+A repository (an object that loads and saves data, hiding the database behind methods) needs logging, then caching, later retries and metrics (counters and timings the app records). Each caller wants its own mix, sometimes in its own order.
 
-- **Subclassing can't keep up.** A `LoggingCachingRetryingUserRepository` serves one mix only. Four optional concerns give 2⁴ = **16** possible mixes, and the class count doubles with every new concern — a class explosion.
-- **One class with on/off flags** holds up until a caller wants "everything except the cache". One boolean turns into four, and you end with `new Repo(true, false, true, true)`, which nobody can read.
+- **Subclassing can't keep up.** `LoggingCachingRetryingUserRepository` serves one mix; four optional concerns give 2⁴ = **16** mixes, doubling per new concern — a class explosion.
+- **One class with on/off flags** lasts until someone wants "everything except the cache": `new Repo(true, false, true, true)`, unreadable.
 
-Decorator gives **each concern its own class** with the component's interface. Four concerns cost **four classes**, and each caller assembles exactly the stack it needs — by wrapping at run time rather than inheriting at compile time. That is the Open/Closed Principle at work: new behaviour arrives as new classes, and existing classes stay untouched.
+Decorator gives **each concern its own class** with the component's interface: four concerns, **four classes**, each caller assembling its stack by wrapping at run time rather than inheriting at compile time — Open/Closed: new behaviour as new classes, existing ones untouched.
 
 ### How it works
 
 1. Start from a **Component interface** (`UserRepository`).
-2. Write the **concrete component** that does the real work (`DatabaseUserRepository`).
-3. Write an **abstract base decorator** that implements the interface, holds an `inner` of the **interface type**, and **forwards every method** by default.
-4. Each **concrete decorator** extends the base and overrides only the methods it changes, doing something **before and/or after** calling `inner`.
-5. **Compose by wrapping**: `new Logging(new Caching(new Database()))`. The outermost object is what the caller holds.
+2. Write the **concrete component** doing the real work (`DatabaseUserRepository`).
+3. Write an **abstract base decorator** implementing the interface, holding an `inner` of the **interface type**, **forwarding every method** by default.
+4. Each **concrete decorator** extends the base and overrides only what it changes, acting **before and/or after** calling `inner`.
+5. **Compose by wrapping**: `new Logging(new Caching(new Database()))`; the caller holds the outermost.
 
 ![Decorator Pattern - same layers, different order, different behaviour](../../assets/P-decorator-pattern-1.svg)
 *Figure — The same three classes stacked in two orders. Logging outside caching logs every call; caching outside logging means the second call (a cache hit) is never logged (course diagram)*
@@ -1443,9 +923,9 @@ Decorator gives **each concern its own class** with the component's interface. F
 ![Decorator Pattern - Class Diagram](../../assets/P-decorator-pattern-2.svg)
 *Figure — Decorator class diagram: `DatabaseUserRepository`, `LoggingRepository` and `CachingRepository` all implement `UserRepository`; each decorator holds an `inner` UserRepository (course diagram)*
 
-In the diagram above, every class implements `UserRepository` — the one property everything else depends on. `DatabaseUserRepository` always sits at the bottom and wraps nothing. Because each decorator's `inner` field is typed as the interface, decorators can wrap each other in any combination and any order.
+Every class implements `UserRepository`; `DatabaseUserRepository` sits at the bottom wrapping nothing. Because `inner` is typed as the interface, decorators wrap each other in any combination and order.
 
-The implementation detail that bites in practice is **delegation**: a decorator must forward every method it is not deliberately changing. One that overrides `findName` but silently swallows `rename` changes behaviour in a way that is very hard to spot. In Java the usual guard is an abstract base decorator that forwards everything by default (our `RepositoryDecorator`).
+What bites in practice is **delegation**: a decorator must forward every method it is not deliberately changing. One overriding `findName` but silently swallowing `rename` changes behaviour invisibly. Java's usual guard is an abstract base decorator forwarding everything (`RepositoryDecorator`).
 
 ```mermaid
 classDiagram
@@ -1480,273 +960,68 @@ classDiagram
     RepositoryDecorator o-- UserRepository : inner
 ```
 
-A decorated call, logging outside caching:
-
-```mermaid
-sequenceDiagram
-    participant C as Caller
-    participant L as LoggingRepository
-    participant K as CachingRepository
-    participant D as DatabaseUserRepository
-    C->>L: findName(7)
-    L->>L: log the call
-    L->>K: findName(7)
-    K->>K: cache miss
-    K->>D: findName(7)
-    D-->>K: "Ada"
-    K->>K: store in cache
-    K-->>L: "Ada"
-    L-->>C: "Ada"
-```
+A decorated call, logging outside caching: `Logging.findName(7)` logs → `Caching.findName(7)` misses → `Database.findName(7)` returns "Ada" → caching stores it → "Ada" flows back to the caller (first block of the output below).
 
 ### Java example
 
-```java
-// File: code/lld/ch09/decorator/UserRepository.java
-package lld.ch09.decorator;
-
-/** COMPONENT interface: every box in the stack implements it. */
-interface UserRepository {
-    String findName(int id);
-    void rename(int id, String name);
-}
-```
+Full code: `code/lld/ch09/decorator/` (repository stack, coffee `Beverage` records, `UpperCaseInputStream`, `Main`).
 
 ```java
-// File: code/lld/ch09/decorator/DatabaseUserRepository.java
-package lld.ch09.decorator;
-
-import java.util.HashMap;
-import java.util.Map;
-
-/** CONCRETE COMPONENT: the real work, always at the bottom of the stack. */
-final class DatabaseUserRepository implements UserRepository {
-    private final Map<Integer, String> table = new HashMap<>(Map.of(7, "Ada", 8, "Linus"));
-
-    @Override
-    public String findName(int id) {
-        System.out.println("    [db]    query for user " + id);
-        return table.get(id);
-    }
-
-    @Override
-    public void rename(int id, String name) {
-        System.out.println("    [db]    update user " + id);
-        table.put(id, name);
-    }
-}
-```
-
-```java
-// File: code/lld/ch09/decorator/RepositoryDecorator.java
-package lld.ch09.decorator;
-
-/**
- * BASE DECORATOR: holds the INTERFACE (not a concrete class) and forwards everything.
- * Subclasses override only what they change, so no method is ever forgotten.
- */
+// RepositoryDecorator.java — BASE DECORATOR: holds the INTERFACE and forwards everything,
+// so subclasses override only what they change and no method is ever forgotten.
 abstract class RepositoryDecorator implements UserRepository {
     protected final UserRepository inner;
-
     protected RepositoryDecorator(UserRepository inner) { this.inner = inner; }
-
     @Override public String findName(int id)          { return inner.findName(id); }
     @Override public void rename(int id, String name) { inner.rename(id, name); }
 }
-```
 
-```java
-// File: code/lld/ch09/decorator/LoggingRepository.java
-package lld.ch09.decorator;
-
-/** CONCRETE DECORATOR 1 */
-final class LoggingRepository extends RepositoryDecorator {
-    LoggingRepository(UserRepository inner) { super(inner); }
-
-    @Override
-    public String findName(int id) {
-        System.out.println("    [log]   findName(" + id + ")");
-        return super.findName(id);
-    }
+// LoggingRepository.java — CONCRETE DECORATOR 1
+@Override public String findName(int id) {
+    System.out.println("    [log]   findName(" + id + ")");
+    return super.findName(id);
 }
-```
 
-```java
-// File: code/lld/ch09/decorator/CachingRepository.java
-package lld.ch09.decorator;
-
-import java.util.HashMap;
-import java.util.Map;
-
-/** CONCRETE DECORATOR 2 - note it must also invalidate on writes. */
-final class CachingRepository extends RepositoryDecorator {
-    private final Map<Integer, String> cache = new HashMap<>();
-
-    CachingRepository(UserRepository inner) { super(inner); }
-
-    @Override
-    public String findName(int id) {
-        if (cache.containsKey(id)) {
-            System.out.println("    [cache] hit for " + id);
-            return cache.get(id);
-        }
-        System.out.println("    [cache] miss for " + id);
-        String name = super.findName(id);
-        cache.put(id, name);
-        return name;
-    }
-
-    @Override
-    public void rename(int id, String name) {
-        cache.remove(id);
-        super.rename(id, name);
-    }
+// CachingRepository.java — CONCRETE DECORATOR 2: must also invalidate on writes.
+private final Map<Integer, String> cache = new HashMap<>();
+@Override public String findName(int id) {
+    if (cache.containsKey(id)) { System.out.println("    [cache] hit for " + id); return cache.get(id); }
+    System.out.println("    [cache] miss for " + id);
+    String name = super.findName(id);
+    cache.put(id, name);
+    return name;
 }
+@Override public void rename(int id, String name) { cache.remove(id); super.rename(id, name); }
 ```
 
 ```java
-// File: code/lld/ch09/decorator/Beverage.java
-package lld.ch09.decorator;
-
-/** A second, classic decorator example: a coffee order priced by stacking add-ons.
- *  Prices are whole cents (int), so no floating-point money anywhere. */
-interface Beverage {
-    String description();
-    int costCents();
-}
-```
-
-```java
-// File: code/lld/ch09/decorator/Espresso.java
-package lld.ch09.decorator;
-
-record Espresso() implements Beverage {
-    public String description() { return "Espresso"; }
-    public int costCents() { return 199; }
-}
-```
-
-```java
-// File: code/lld/ch09/decorator/HouseBlend.java
-package lld.ch09.decorator;
-
-record HouseBlend() implements Beverage {
-    public String description() { return "House Blend"; }
-    public int costCents() { return 89; }
-}
-```
-
-```java
-// File: code/lld/ch09/decorator/Milk.java
-package lld.ch09.decorator;
-
-/** Add-ons are decorators: they ARE a Beverage and HAVE a Beverage. */
-record Milk(Beverage inner) implements Beverage {
-    public String description() { return inner.description() + ", Milk"; }
-    public int costCents() { return inner.costCents() + 10; }
-}
-```
-
-```java
-// File: code/lld/ch09/decorator/Mocha.java
-package lld.ch09.decorator;
-
+// Beverage decorators — prices in whole cents (int), no floating-point money.
+interface Beverage { String description(); int costCents(); }
+record Espresso() implements Beverage { public String description() { return "Espresso"; } public int costCents() { return 199; } }
+/** Add-ons ARE a Beverage and HAVE a Beverage. (Milk +10, Whip +10 likewise; HouseBlend costs 89.) */
 record Mocha(Beverage inner) implements Beverage {
     public String description() { return inner.description() + ", Mocha"; }
     public int costCents() { return inner.costCents() + 20; }
 }
-```
 
-```java
-// File: code/lld/ch09/decorator/Whip.java
-package lld.ch09.decorator;
-
-record Whip(Beverage inner) implements Beverage {
-    public String description() { return inner.description() + ", Whip"; }
-    public int costCents() { return inner.costCents() + 10; }
-}
-```
-
-```java
-// File: code/lld/ch09/decorator/UpperCaseInputStream.java
-package lld.ch09.decorator;
-
-import java.io.FilterInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-
-/**
- * Our own java.io decorator. FilterInputStream is the JDK's "base decorator":
- * it holds an InputStream and forwards every call to it.
- * Works byte-by-byte, so it is only correct for ASCII text.
- */
+// UpperCaseInputStream.java — our own java.io decorator; FilterInputStream is the JDK's base decorator.
+// Works byte-by-byte, so only correct for ASCII text.
 final class UpperCaseInputStream extends FilterInputStream {
     UpperCaseInputStream(InputStream in) { super(in); }
-
-    @Override
-    public int read() throws IOException {
+    @Override public int read() throws IOException {
         int b = super.read();
         return b == -1 ? -1 : Character.toUpperCase((char) b);
     }
-
-    @Override
-    public int read(byte[] buf, int off, int len) throws IOException {
-        int n = super.read(buf, off, len);
-        for (int i = off; i < off + Math.max(n, 0); i++) {
-            buf[i] = (byte) Character.toUpperCase((char) buf[i]);
-        }
-        return n;
-    }
+    // read(byte[], int, int) upper-cases each byte read likewise
 }
-```
 
-```java
-// File: code/lld/ch09/decorator/Main.java
-package lld.ch09.decorator;
-
-import java.io.BufferedInputStream;
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
-
-public class Main {
-
-    static void lookUpTwice(String label, UserRepository repo) {
-        System.out.println("  " + label);
-        repo.findName(7);
-        repo.findName(7);
-    }
-
-    public static void main(String[] args) throws IOException {
-        System.out.println("== Same layers, different order ==");
-        lookUpTwice("Logging outside caching (logs every caller request):",
-                new LoggingRepository(new CachingRepository(new DatabaseUserRepository())));
-        lookUpTwice("Caching outside logging (logs only what reaches the db):",
-                new CachingRepository(new LoggingRepository(new DatabaseUserRepository())));
-
-        System.out.println("== Write goes through every layer and invalidates the cache ==");
-        UserRepository repo = new LoggingRepository(new CachingRepository(new DatabaseUserRepository()));
-        repo.findName(8);
-        repo.rename(8, "Linus T.");
-        System.out.println("  now: " + repo.findName(8));
-
-        System.out.println("== Coffee: stack add-ons at run time ==");
-        Beverage order = new Whip(new Mocha(new Mocha(new Espresso())));
-        System.out.println("  " + order.description() + " = $" + BigDecimal.valueOf(order.costCents(), 2));
-        Beverage latte = new Milk(new HouseBlend());
-        System.out.println("  " + latte.description() + " = $" + BigDecimal.valueOf(latte.costCents(), 2));
-
-        System.out.println("== java.io is built from decorators ==");
-        InputStream in = new UpperCaseInputStream(
-                new BufferedInputStream(
-                        new ByteArrayInputStream("decorators wrap streams".getBytes(StandardCharsets.US_ASCII))));
-        try (in) {
-            System.out.println("  " + new String(in.readAllBytes(), StandardCharsets.US_ASCII));
-        }
-    }
-}
+// Main.java
+lookUpTwice("Logging outside caching (logs every caller request):",
+        new LoggingRepository(new CachingRepository(new DatabaseUserRepository())));
+lookUpTwice("Caching outside logging (logs only what reaches the db):",
+        new CachingRepository(new LoggingRepository(new DatabaseUserRepository())));
+Beverage order = new Whip(new Mocha(new Mocha(new Espresso())));
+InputStream in = new UpperCaseInputStream(new BufferedInputStream(new ByteArrayInputStream(...)));
 ```
 
 **Output:**
@@ -1782,33 +1057,31 @@ public class Main {
 
 **What each part does**
 
-- `RepositoryDecorator` — the **abstract base decorator**. It forwards *every* method, so a concrete decorator that only cares about `findName` cannot accidentally drop `rename`. This is the standard Java defence against forgotten delegation.
+- `RepositoryDecorator` — the **abstract base decorator** forwarding *every* method, so a decorator caring only about `findName` cannot drop `rename` — the standard Java defence against forgotten delegation.
 - `LoggingRepository` — prints, then delegates.
-- `CachingRepository` — answers from its map on a hit (the value is already cached; a *miss* means it is not), otherwise delegates and stores. (More on caches in [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md).) It also overrides `rename` to **invalidate** (throw away the cached copy that is now out of date) — the third block of output shows the next read going to the database again.
-- `Beverage` records — the classic coffee example (from *Head First Design Patterns*, rewritten): `new Whip(new Mocha(new Mocha(new Espresso())))` costs 1.99 + 0.20 + 0.20 + 0.10 = **$2.49**. Double mocha is just wrapping twice — impossible with one subclass per combination.
-- `UpperCaseInputStream extends FilterInputStream` — our own `java.io` decorator. `FilterInputStream` is the JDK's base decorator: it holds an `InputStream` and forwards to it.
+- `CachingRepository` — answers from its map on a hit (value already cached; a *miss* means not), otherwise delegates and stores (more on caches in [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)). Its `rename` **invalidates** (throws away the now-stale copy) — the third output block shows the next read hitting the database.
+- `Beverage` records — *Head First*'s coffee example, rewritten: `new Whip(new Mocha(new Mocha(new Espresso())))` = 1.99 + 0.20 + 0.20 + 0.10 = **$2.49**. Double mocha is wrapping twice — impossible with one subclass per combination.
+- `UpperCaseInputStream extends FilterInputStream` — `FilterInputStream` holds an `InputStream` and forwards to it.
 
 ### Layer order changes behaviour
 
-Compare the two stacks in the output — they behave differently:
+- **Logger outside, cache inside**: every request is logged, even cache-served ones → the log records *what callers requested*.
+- **Cache outside, logger inside**: only misses are logged → the log records *what hit the database*.
 
-- **Logger on the outside, cache inside**: every request is logged, even those the cache serves → the log records *what callers requested*.
-- **Cache on the outside, logger inside**: only cache misses are logged → the log records *what hit the database*, and the repeat request is absent.
-
-Both are valid; they answer different questions. The mistake is picking one **without meaning to** and then reading the log as if it answered the other question. The same choice comes up wherever layers are stacked:
+Both are valid; they answer different questions. The mistake is choosing **without meaning to** and reading the log as answering the other. The same choice recurs wherever layers stack:
 
 | Pair | Outside | Inside |
 |---|---|---|
 | Retry vs cache | Repeats the entire lookup | Repeats only the database call, and a retry that succeeds populates the cache. Rule of thumb: put retry **next to the thing that fails**. |
-| Metrics vs cache | Times what the caller experiences | Times the database alone — the number an on-call engineer (whoever is currently responsible for answering alerts) is paged on. Many teams record both. |
+| Metrics vs cache | Times what the caller experiences | Times the database alone — the number an on-call engineer (whoever currently answers alerts) is paged on. Many teams record both. |
 | Authorization (checking the caller is allowed) vs cache | **Correct** — every request is checked | **Security bug** — a cached answer is returned without the check ever running |
 
-The type checker accepts every ordering. **Record the reason for the order in a comment where the stack is built**, or the next person adding a layer will guess.
+The type checker accepts every order. **Record why in a comment where the stack is built**, or the next person adding a layer will guess.
 
 ### Two related traps
 
-- **Stateful decorators that assume one wrap.** (Stateful means it keeps data between calls.) Apply a counting decorator twice to the same object and every call is counted twice.
-- **Lost identity.** The wrapper is a different object from what it wraps, so `==` (same object?), `equals` (equal value?) and `instanceof` give answers callers don't expect. Code that digs through layers to "reach the real object" is working against the pattern.
+- **Stateful decorators (keeping data between calls) that assume one wrap.** Apply a counting decorator twice and every call counts twice.
+- **Lost identity.** The wrapper is a different object, so `==` (same object?), `equals` (equal value?) and `instanceof` surprise callers. Code digging through layers to "reach the real object" fights the pattern.
 
 ### Decorator vs inheritance
 
@@ -1822,17 +1095,15 @@ The type checker accepts every ordering. **Record the reason for the order in a 
 
 ### Java I/O streams: the decorator you already use
 
-`java.io` is built almost entirely from decorators:
-
 ```java
 new BufferedReader(new InputStreamReader(new FileInputStream("data.txt"), UTF_8))
 ```
 
 - `FileInputStream` — concrete component (reads bytes from a file).
 - `InputStreamReader` — strictly an **adapter** (bytes → characters), not a decorator.
-- `BufferedReader` — a **decorator** on `Reader` (adds buffering — reading big chunks into memory to serve many small reads — and `readLine()`).
+- `BufferedReader` — a **decorator** on `Reader` (adds buffering — reading big chunks to serve many small reads — and `readLine()`).
 
-On the byte side, `FilterInputStream` is the abstract decorator, and `BufferedInputStream`, `DataInputStream`, `PushbackInputStream`, `java.util.zip.GZIPInputStream` (via `InflaterInputStream`) and `java.security.DigestInputStream` are concrete decorators. *Head First Design Patterns* notes the downside: the design produces many small classes, which can overwhelm newcomers until they see the pattern.
+On the byte side `FilterInputStream` is the abstract decorator; `BufferedInputStream`, `DataInputStream`, `PushbackInputStream`, `java.util.zip.GZIPInputStream` (via `InflaterInputStream`) and `java.security.DigestInputStream` are concrete decorators. *Head First* notes the downside: many small classes that overwhelm newcomers until they see the pattern.
 
 ### Trade-offs
 
@@ -1840,19 +1111,19 @@ On the byte side, `FilterInputStream` is the abstract decorator, and `BufferedIn
 |---|---|
 | **Any mix without a class per mix** — 4 concerns need 4 classes, not 16. | **Deeper stack traces** — the real work is buried under every layer. |
 | **Concerns tested in isolation** — logging without a database, caching without a logger (Single Responsibility). | **Identity surprises** — `equals`/`instanceof` on the wrapper don't match the wrapped object. |
-| **Assembled at run time** — different per caller, environment or feature flag (an on/off switch for a feature). | **Ordering matters for correctness**, and no compiler checks it. |
-| **The wrapped class is never edited** (Open/Closed) — works even on classes you don't own. | **Over-layering** — eight wrappers deep, nobody knows which one changed a value. |
+| **Assembled at run time** — per caller, environment or feature flag (an on/off feature switch). | **Ordering matters for correctness**, and no compiler checks it. |
+| **The wrapped class is never edited** (Open/Closed) — works on classes you don't own. | **Over-layering** — eight wrappers deep, nobody knows which changed a value. |
 
 ### When not to use it
 
-- **Exactly one concern, forever.** Just put it in the class; a decorator for one behaviour is a whole class wrapped around a single `if`.
-- **The concern needs private state.** A decorator can only use the public interface, so it is the wrong tool.
-- **The framework already offers it** — middleware and interceptors (code a framework runs around every request or call), Spring AOP aspects (aspect-oriented programming: extra code applied automatically around chosen methods) are decorators with tooling. Don't hand-write ten wrappers beside them.
-- **The stack would get deep.** Every extra layer is another frame in each stack trace, and with many layers "which one changed this value?" becomes a long debugging session.
+- **Exactly one concern, forever** — put it in the class; a decorator for one behaviour is a class wrapped around an `if`.
+- **The concern needs private state** — a decorator only sees the public interface.
+- **The framework already offers it** — middleware and interceptors (code a framework runs around every request or call), Spring AOP aspects (aspect-oriented programming: code applied automatically around chosen methods) are decorators with tooling.
+- **The stack would get deep** — each layer is another stack-trace frame and "which one changed this?" becomes a long debugging session.
 
 ### Common mistakes
 
-- Holding the **concrete class** instead of the interface (`private DatabaseUserRepository inner`) — then decorators cannot stack.
+- Holding the **concrete class** (`private DatabaseUserRepository inner`) — decorators cannot stack.
 - **Forgetting to forward** some methods (use an abstract base decorator).
 - A caching decorator that **doesn't invalidate on writes** (ours does in `rename`).
 - Putting authorization **inside** a cache.
@@ -1860,19 +1131,19 @@ On the byte side, `FilterInputStream` is the abstract decorator, and `BufferedIn
 
 ### Real-world examples
 
-- **`java.io` streams** — see above.
-- **`java.util.Collections.unmodifiableList/synchronizedList/checkedList`** — each returns a wrapper with the same interface and one changed behaviour (read-only, synchronized, type-checked). Some authors call `unmodifiableList` a protection **proxy**; both labels are defensible.
-- **`javax.servlet.http.HttpServletRequestWrapper`** (Jakarta: `jakarta.servlet...`) — a base decorator you subclass to change selected request methods in a filter (code that runs before and after each web request in a Java servlet — i.e. web — application).
-- **HTTP middleware** (HTTP is the web's request/response protocol) — the web frameworks Express, Django, ASP.NET and Go's `http.Handler` wrap a handler in layers (logging, auth, compression, rate limiting — capping how many requests a client may make per time window). Middleware is this pattern with framework support.
-- **Resilience4j (Java) and Polly (.NET)** — compose retry, circuit breaker (stops calling a failing service for a while), timeout and bulkhead (separate, limited resources so one slow dependency cannot use them all) as stacked wrappers, e.g. `Decorators.ofSupplier(...).withCircuitBreaker(...).withRetry(...).withBulkhead(...).decorate()`; both document the ordering carefully because it changes behaviour.
-- **Python's `@functools.lru_cache`** (and `@retry` from libraries such as tenacity) — function decorators (LRU = least recently used: a full cache drops the entry that has gone unused longest): the same idea applied to functions, and the reason Python uses the name.
+- **`java.io` streams** — above.
+- **`java.util.Collections.unmodifiableList/synchronizedList/checkedList`** — same interface, one changed behaviour (read-only, synchronized, type-checked). Some call `unmodifiableList` a protection **proxy**; both labels are defensible.
+- **`javax.servlet.http.HttpServletRequestWrapper`** (Jakarta: `jakarta.servlet...`) — a base decorator you subclass to change request methods in a filter (code running before and after each web request in a Java servlet application).
+- **HTTP middleware** — Express, Django, ASP.NET and Go's `http.Handler` wrap a handler in layers (logging, auth, compression, rate limiting — capping requests per client per time window): this pattern with framework support.
+- **Resilience4j (Java) and Polly (.NET)** — compose retry, circuit breaker (stops calling a failing service for a while), timeout and bulkhead (separate limited resources so one slow dependency cannot use them all) as stacked wrappers, e.g. `Decorators.ofSupplier(...).withCircuitBreaker(...).withRetry(...).withBulkhead(...).decorate()`; both document ordering carefully because it changes behaviour.
+- **Python's `@functools.lru_cache`** (and `@retry` from libraries such as tenacity) — function decorators (LRU = least recently used: a full cache drops the longest-unused entry): the same idea on functions, hence Python's name.
 
 ### In modern languages
 
-- **Java**: abstract forwarding base class (as here), or a dynamic proxy (a class generated at run time; see 9.7) that generates the forwarding.
-- **Python**: function decorators (`@lru_cache` and friends) are this pattern with syntax; for objects, `__getattr__` forwarding (and `functools.wraps` for functions) avoids hand-writing every delegating method.
-- **JavaScript / TypeScript**: a higher-order function (one that takes or returns functions) that returns a wrapped function; a `Proxy` object can forward every method automatically.
-- **Go**: a struct (Go's plain record-like type) that embeds the interface value gets delegation for free — why Go middleware reads so cleanly.
+- **Java**: abstract forwarding base class (as here), or a dynamic proxy (a class generated at run time; see 9.7) generating the forwarding.
+- **Python**: function decorators (`@lru_cache`) are this pattern with syntax; for objects, `__getattr__` forwarding (and `functools.wraps` for functions) avoids hand-writing every delegating method.
+- **JavaScript / TypeScript**: a higher-order function (takes or returns functions) returning a wrapped function; a `Proxy` object can forward every method automatically.
+- **Go**: a struct (Go's record-like type) embedding the interface value gets delegation free — why Go middleware reads so cleanly.
 - **C#**: `DelegatingHandler` in `HttpClient` is a framework-provided decorator chain.
 
 ### In the interview
@@ -1881,10 +1152,10 @@ On the byte side, `FilterInputStream` is the abstract decorator, and `BufferedIn
 
 **Follow-ups**
 
-- *Q: Decorator vs Proxy?* — A: Same structure; different intent. Decorator **adds behaviour** and normally forwards the call; the client hands it the object to wrap and often stacks several. Proxy **controls access** — it may defer, cache or refuse — often creates or locates the real object itself, and is usually handed to a client that doesn't know it isn't the real thing. The boundary is genuinely fuzzy (a caching wrapper is fairly called either), and saying so is a better answer than pretending it is sharp.
-- *Q: Decorator vs Adapter?* — A: Decorator keeps the interface and changes behaviour; Adapter changes the interface and keeps behaviour.
-- *Q: Decorator vs Chain of Responsibility?* — A: Both are chains of objects. In Decorator every layer normally does its extra work and passes the call on to the core (a caching layer answering a hit is the usual exception). In Chain of Responsibility, typically one handler handles the request and the rest never see it.
-- *Q: Decorator vs Composite?* — A: Decorator wraps exactly one child and adds behaviour; Composite holds many children and aggregates.
+- *Q: Decorator vs Proxy?* — A: Same structure; different intent. Decorator **adds behaviour** and normally forwards; the client hands it the object to wrap and often stacks several. Proxy **controls access** — may defer, cache or refuse — often creates or locates the real object itself, and is handed to a client that doesn't know it isn't the real thing. The boundary is genuinely fuzzy (a caching wrapper is fairly called either); saying so beats pretending it is sharp.
+- *Q: Decorator vs Adapter?* — A: Decorator keeps the interface, changes behaviour; Adapter changes the interface, keeps behaviour.
+- *Q: Decorator vs Chain of Responsibility?* — A: Both chain objects. In Decorator every layer normally does its work and passes the call to the core (a cache hit is the usual exception); in Chain of Responsibility typically one handler handles the request and the rest never see it.
+- *Q: Decorator vs Composite?* — A: Decorator wraps exactly one child and adds behaviour; Composite holds many and aggregates.
 - *Q: Give a JDK example.* — A: `new BufferedInputStream(new FileInputStream(f))`; `FilterInputStream` is the base decorator.
 
 ### Self-check
@@ -1906,9 +1177,7 @@ On the byte side, `FilterInputStream` is the abstract decorator, and `BufferedIn
 
 ### What it is
 
-The **Facade** pattern gives a complicated subsystem **one simple front door**, so that most callers never deal with the machinery behind it. GoF's intent: *provide a unified interface to a set of interfaces in a subsystem; the facade defines a higher-level interface that makes the subsystem easier to use.*
-
-*Analogy:* a hotel concierge. You say "book me dinner and a taxi"; the concierge calls the restaurant, the taxi company and the front desk in the right order. You can still phone the restaurant yourself if you want something unusual.
+The **Facade** pattern gives a complicated subsystem **one simple front door**, so most callers never touch the machinery. GoF's intent: *provide a unified interface to a set of interfaces in a subsystem; the facade defines a higher-level interface that makes the subsystem easier to use.* Like a hotel concierge: "book me dinner and a taxi" and they call restaurant, taxi and front desk in order — though you can still phone the restaurant yourself.
 
 | Term | Meaning | In our code |
 |---|---|---|
@@ -1918,22 +1187,20 @@ The **Facade** pattern gives a complicated subsystem **one simple front door**, 
 
 ### The problem it solves
 
-One useful action needs several objects, called in the right order. To place an order you must **reserve stock → charge the card → create a shipment → send a confirmation**. Every place in the code that places an order repeats those four calls — and each copy must also know what to do if the card is declined **after** the stock has been reserved.
+One useful action needs several objects in the right order: **reserve stock → charge the card → create a shipment → send a confirmation**. Every place that places an order repeats those four calls — and must know what to do if the card is declined **after** stock was reserved.
 
-That recovery step is where bugs live. Copying the success path is easy; copying the undo correctly is not. A caller that forgets to release the reservation leaves units locked for an order that was never placed.
-
-Nothing is wrong with the subsystem itself — it is **flexible**, and flexibility means many knobs. The trouble is that nearly every caller wants the same standard sequence and writes it out yet again.
+That recovery step is where bugs live: copying the success path is easy, copying the undo correctly is not. A caller forgetting to release the reservation leaves units locked for an order never placed. The subsystem is not wrong — it is **flexible**, meaning many knobs — but nearly every caller wants the same standard sequence and writes it out again.
 
 ![Facade Pattern - one entry point that knows the sequence and the cleanup](../../assets/P-facade-pattern-1.svg)
 *Figure — Top: each caller repeats the reserve/charge/release/ship/email sequence and may forget the release. Bottom: the checkout page calls `OrderFacade.placeOrder(...)`, which sequences the four services and undoes on failure; the services stay public (course diagram)*
 
 ### How it works
 
-1. **Identify the common path** that many callers repeat.
-2. **Create a facade class** that holds the subsystem objects.
-3. **Expose one intention-revealing method** (`placeOrder`) that calls them in the correct order.
-4. **Own the failure handling** — if payment fails, the facade releases the reservation (a *compensating action*).
-5. **Keep the subsystem public**, so unusual callers can still reach past the facade.
+1. **Identify the common path** many callers repeat.
+2. **Create a facade class** holding the subsystem objects.
+3. **Expose one intention-revealing method** (`placeOrder`) calling them in order.
+4. **Own the failure handling** — if payment fails, release the reservation (a *compensating action*).
+5. **Keep the subsystem public** for unusual callers.
 6. **Add no business rules** — the facade *sequences*, it does not *decide*.
 
 ### Structure
@@ -1941,7 +1208,7 @@ Nothing is wrong with the subsystem itself — it is **flexible**, and flexibili
 ![Facade Pattern - Class Diagram](../../assets/P-facade-pattern-2.svg)
 *Figure — Facade class diagram: `Checkout` depends only on `OrderFacade`, which holds the four services (shown in grey) and exposes `placeOrder`. The figure labels the payment service `PaymentGateway` and shows a shorter `placeOrder` signature; our code calls it `PaymentService` and also passes customer and address (course diagram)*
 
-In the class diagram above, dependencies run in **one direction** only: none of the services knows the facade exists, so they remain usable on their own. Note also that there is no interface: a facade is normally a concrete convenience class, not an abstraction. Introduce an interface only if you plan to substitute the entire subsystem — which is a different job.
+Dependencies run **one way**: no service knows the facade exists, so each stays usable alone. There is no interface — a facade is normally a concrete convenience class; add one only to substitute the entire subsystem, a different job.
 
 ```mermaid
 classDiagram
@@ -1973,163 +1240,35 @@ classDiagram
     OrderFacade --> EmailService
 ```
 
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant F as OrderFacade
-    participant I as InventoryService
-    participant P as PaymentService
-    C->>F: placeOrder(bob, BOOK-42, 1, 25000, Paris)
-    F->>I: reserve(BOOK-42, 1)
-    I-->>F: true
-    F->>P: charge(bob, 25000)
-    P-->>F: false (declined)
-    F->>I: release(BOOK-42, 1)
-    F-->>C: OrderResult(false, payment declined)
-```
-
 ### Java example
 
-```java
-// File: code/lld/ch09/facade/InventoryService.java
-package lld.ch09.facade;
-
-import java.util.HashMap;
-import java.util.Map;
-
-/*
- * SUBSYSTEM: four independent, still-public services.
- * None of them knows the facade exists.
- */
-
-final class InventoryService {
-    private final Map<String, Integer> stock = new HashMap<>(Map.of("BOOK-42", 5));
-
-    boolean reserve(String sku, int qty) {
-        int have = stock.getOrDefault(sku, 0);
-        if (have < qty) return false;
-        stock.put(sku, have - qty);
-        System.out.println("  [inventory] reserved " + qty + " x " + sku + " (left " + (have - qty) + ")");
-        return true;
-    }
-
-    void release(String sku, int qty) {
-        stock.merge(sku, qty, Integer::sum);
-        System.out.println("  [inventory] released " + qty + " x " + sku + " (left " + stock.get(sku) + ")");
-    }
-}
-```
+Full code: `code/lld/ch09/facade/` — four independent, still-public subsystem services (`InventoryService` starts with 5 × `BOOK-42`; `PaymentService` declines anything over $100 to show the failure path), `OrderResult`, `OrderFacade`, `Main`.
 
 ```java
-// File: code/lld/ch09/facade/PaymentService.java
-package lld.ch09.facade;
-
-final class PaymentService {
-    /** Declines anything over $100 so the demo can show the failure path. */
-    boolean charge(String customer, long cents) {
-        boolean ok = cents <= 10_000;
-        System.out.println("  [payment]   charge " + customer + " " + cents + "c -> " + (ok ? "OK" : "DECLINED"));
-        return ok;
-    }
-}
-```
-
-```java
-// File: code/lld/ch09/facade/ShippingService.java
-package lld.ch09.facade;
-
-final class ShippingService {
-    private int next = 1;
-
-    String createShipment(String sku, int qty, String address) {
-        String id = "SHP-" + next++;
-        System.out.println("  [shipping]  " + id + ": " + qty + " x " + sku + " to " + address);
-        return id;
-    }
-}
-```
-
-```java
-// File: code/lld/ch09/facade/EmailService.java
-package lld.ch09.facade;
-
-final class EmailService {
-    void sendConfirmation(String customer, String orderId) {
-        System.out.println("  [email]     confirmation for " + orderId + " sent to " + customer);
-    }
-}
-```
-
-```java
-// File: code/lld/ch09/facade/OrderResult.java
-package lld.ch09.facade;
-
-/** What callers get back: our own small result type. */
+// OrderResult.java — callers get our own small result type.
 record OrderResult(boolean success, String orderId, String message) { }
-```
 
-```java
-// File: code/lld/ch09/facade/OrderFacade.java
-package lld.ch09.facade;
-
-/**
- * FACADE: one method that knows the correct SEQUENCE and the CLEANUP.
- * It sequences; it does not decide business rules (no pricing, no fraud logic here).
- */
-final class OrderFacade {
-    private final InventoryService inventory;
-    private final PaymentService payments;
-    private final ShippingService shipping;
-    private final EmailService email;
-    private int orderSeq = 100;
-
-    OrderFacade(InventoryService inventory, PaymentService payments,
-                ShippingService shipping, EmailService email) {
-        this.inventory = inventory;
-        this.payments = payments;
-        this.shipping = shipping;
-        this.email = email;
+// OrderFacade.java — one method that knows the correct SEQUENCE and the CLEANUP.
+// It sequences; it does not decide business rules (no pricing, no fraud logic here).
+OrderResult placeOrder(String customer, String sku, int qty, long cents, String address) {
+    String orderId = "ORD-" + orderSeq++;
+    if (!inventory.reserve(sku, qty)) {
+        return new OrderResult(false, orderId, "out of stock");
     }
-
-    OrderResult placeOrder(String customer, String sku, int qty, long cents, String address) {
-        String orderId = "ORD-" + orderSeq++;
-        if (!inventory.reserve(sku, qty)) {
-            return new OrderResult(false, orderId, "out of stock");
-        }
-        if (!payments.charge(customer, cents)) {
-            inventory.release(sku, qty);            // compensating step callers used to forget
-            return new OrderResult(false, orderId, "payment declined");
-        }
-        String shipmentId = shipping.createShipment(sku, qty, address);
-        email.sendConfirmation(customer, orderId);
-        return new OrderResult(true, orderId, "shipped as " + shipmentId);
+    if (!payments.charge(customer, cents)) {
+        inventory.release(sku, qty);            // compensating step callers used to forget
+        return new OrderResult(false, orderId, "payment declined");
     }
+    String shipmentId = shipping.createShipment(sku, qty, address);
+    email.sendConfirmation(customer, orderId);
+    return new OrderResult(true, orderId, "shipped as " + shipmentId);
 }
-```
 
-```java
-// File: code/lld/ch09/facade/Main.java
-package lld.ch09.facade;
-
-public class Main {
-    public static void main(String[] args) {
-        InventoryService inventory = new InventoryService();
-        OrderFacade orders = new OrderFacade(inventory, new PaymentService(),
-                new ShippingService(), new EmailService());
-
-        System.out.println("== Happy path: one call instead of four ==");
-        System.out.println("  -> " + orders.placeOrder("ada@x.com", "BOOK-42", 2, 5_000, "London"));
-
-        System.out.println("== Declined card: the facade undoes the reservation ==");
-        System.out.println("  -> " + orders.placeOrder("bob@x.com", "BOOK-42", 1, 25_000, "Paris"));
-
-        System.out.println("== Out of stock ==");
-        System.out.println("  -> " + orders.placeOrder("cy@x.com", "BOOK-42", 99, 1_000, "Rome"));
-
-        System.out.println("== The subsystem is still reachable for unusual needs ==");
-        inventory.reserve("BOOK-42", 1);   // e.g. a warehouse tool holding stock manually
-    }
-}
+// Main.java
+orders.placeOrder("ada@x.com", "BOOK-42", 2, 5_000, "London");   // happy path
+orders.placeOrder("bob@x.com", "BOOK-42", 1, 25_000, "Paris");   // declined -> released
+orders.placeOrder("cy@x.com", "BOOK-42", 99, 1_000, "Rome");     // out of stock
+inventory.reserve("BOOK-42", 1);   // subsystem still reachable, e.g. a warehouse tool
 ```
 
 **Output:**
@@ -2155,9 +1294,9 @@ public class Main {
 **What each part does**
 
 - The four services are ordinary classes with their own responsibilities; none mention `OrderFacade`.
-- `OrderFacade.placeOrder` is the whole pattern: the correct **sequence** plus the **compensating step** (`inventory.release`) on a declined payment. Look at the second block of output — reserved, declined, released — without the caller writing any of it.
-- `OrderResult` — a small result type so callers don't need subsystem types.
-- The last line of `main` calls `inventory.reserve` directly: the facade is **a convenience, not a wall**.
+- `OrderFacade.placeOrder` is the whole pattern: the **sequence** plus the **compensating step** (`inventory.release`) on a declined payment — second output block: reserved, declined, released, with no caller code.
+- `OrderResult` — callers need no subsystem types.
+- The last line calls `inventory.reserve` directly: the facade is **a convenience, not a wall**.
 
 ### Facade vs Adapter vs Mediator
 
@@ -2171,56 +1310,54 @@ public class Main {
 | Direction of communication | Client → facade → subsystem | Client → adapter → adaptee | Client → proxy → real subject | Colleague ↔ mediator ↔ colleague (both ways) |
 | Example | `OrderFacade.placeOrder` | `StripeGateway.pay` | `LazyReport` | An air-traffic control tower; a chat room |
 
-The quickest way to spot a facade is the **"objects wrapped"** row: Adapter, Decorator and Proxy each stand in front of exactly one object; a Facade stands in front of **several**.
+Quickest tell is **"objects wrapped"**: Adapter, Decorator and Proxy front exactly one object; a Facade fronts **several**. Another test: if the subsystem changed its API to exactly what callers want, an **Adapter** becomes pointless but a **Facade** stays useful — its value was *simplification*, not translation.
 
-Another test: suppose the subsystem changed its API tomorrow to exactly what callers want. An **Adapter** would then be pointless; a **Facade** would still be useful, because its value was the *simplification*, not a translation.
-
-**Facade vs "service layer".** (A service layer is the set of classes that expose the app's use cases — such as placing an order — to its UI or API.) Most of the time these are the same thing under two names. A service class that only *sequences* calls is a facade; once it holds business rules it has become something else (a domain/application service with logic of its own).
+**Facade vs "service layer".** (A service layer is the classes exposing the app's use cases — like placing an order — to its UI or API.) Usually the same thing under two names: a service that only *sequences* is a facade; once it holds business rules it is a domain/application service with logic of its own.
 
 ### The failure mode to watch for
 
-Facades **pull in features**. Day one it is four calls in order; then a discount rule lands in it ("orders are placed here, after all"), then a fraud check, and a year later it is the **god object** (one class that knows and does almost everything) everyone is afraid to edit. Keep one rule: **a facade orchestrates; it does not decide.** If it is making a business decision instead of calling the thing that makes it, that logic belongs elsewhere — and moving it out later is far harder than keeping it out now.
+Facades **pull in features**: four calls on day one, then a discount rule ("orders are placed here, after all"), then a fraud check, and a year later a **god object** (one class that knows and does almost everything) everyone fears editing. One rule: **a facade orchestrates; it does not decide.** If it makes a business decision instead of calling the thing that does, that logic belongs elsewhere — and keeping it out now is far easier than moving it later.
 
-This connects to the **Principle of Least Knowledge** (Law of Demeter) that *Head First Design Patterns* pairs with Facade: "talk only to your immediate friends". Clients talk to the facade, not to a chain of subsystem objects, which reduces coupling.
+*Head First* pairs Facade with the **Principle of Least Knowledge** (Law of Demeter): "talk only to your immediate friends" — clients talk to the facade, not a chain of subsystem objects, reducing coupling.
 
 ### Trade-offs
 
 | Pros | Cons |
 |---|---|
-| **One call replaces a multi-step sequence**, so the common path is no longer duplicated. | **One more class to maintain** as the subsystem evolves. |
-| **The order and the undo logic live in one place** — exactly the part callers got wrong. | **Feature magnet** — grows into a god object unless someone pushes back. |
-| **One seam for swapping the subsystem later** — only the facade changes. | **Opinionated** — some caller will need an option the facade left out. |
-| **Smaller public surface** for the module; lower coupling. | **Can mask problems** — a neat front over a subsystem that still fails; everything funnels through it, so it can become a single point of failure (one part whose failure stops everything). |
+| **One call replaces a multi-step sequence**; the common path is no longer duplicated. | **One more class to maintain** as the subsystem evolves. |
+| **The order and the undo logic live in one place** — exactly what callers got wrong. | **Feature magnet** — grows into a god object unless someone pushes back. |
+| **One seam for swapping the subsystem later** — only the facade changes. | **Opinionated** — some caller will need an option it left out. |
+| **Smaller public surface** for the module; lower coupling. | **Can mask problems** — a neat front over a still-failing subsystem; everything funnels through it, so it can become a single point of failure. |
 
 ### When not to use it
 
-- **The subsystem is already simple** — wrapping two calls just adds a file to maintain.
-- **Callers need the full range** — if every caller bypasses the facade for some option, its shape is wrong: widen it on purpose or remove it.
-- **You are covering a mess instead of fixing it** — you get a neat front and the same failures behind it; sometimes the honest move is to repair the subsystem.
+- **The subsystem is already simple** — wrapping two calls adds a file.
+- **Callers need the full range** — if every caller bypasses it for some option, its shape is wrong: widen it on purpose or remove it.
+- **You are covering a mess instead of fixing it** — same failures behind a neat front; sometimes repair the subsystem.
 - **You want it to be the only entrance** — hiding the subsystem forces every unusual need into the facade, which is how god objects are born.
 
 ### Common mistakes
 
-- Putting business rules (pricing, fraud) in the facade.
+- Business rules (pricing, fraud) in the facade.
 - Making the subsystem inaccessible.
-- Returning subsystem types from the facade so callers are still coupled to them.
-- Forgetting the failure path — a facade that only does the happy path (the path where nothing goes wrong) misses its biggest value.
+- Returning subsystem types, so callers stay coupled to them.
+- Forgetting the failure path — a happy-path-only (nothing-goes-wrong) facade misses its biggest value.
 - Confusing it with Mediator (see table).
 
 ### Real-world examples
 
 - **Application service layers** — almost every `OrderService` or `RegistrationService` is a facade over repositories, gateways and notifiers (as long as it only sequences).
-- **`java.net.URL`** — `url.openStream()` hides protocol handlers, connection setup and content handlers behind one call. (Since Java 20 the `URL` constructors are deprecated (officially discouraged and due for removal); create one with `URI.create(s).toURL()`. The facade idea is unchanged.)
-- **SLF4J `LoggerFactory.getLogger(...)`** — hides configuration, appenders (log destinations such as files or the console) and formatters behind one call. (SLF4J literally calls itself a "Simple Logging Facade".)
-- **`javax.faces.context.FacesContext`**, **jQuery** (historically the clearest example: one `$` function in front of DOM, events, animation and XHR (the browser's API for sending HTTP requests from JavaScript), each still usable directly), and Python's **`requests`**, which covers the common "just fetch this URL" cases on top of `urllib3`.
-- **E-commerce checkout**: when you press "Place order" on Amazon or Flipkart, one backend (server-side) call orchestrates (coordinates) inventory, payment, shipping and notifications — a facade (often called an orchestrator or backend-for-frontend — a server layer built for one particular UI).
+- **`java.net.URL`** — `url.openStream()` hides protocol handlers, connection setup and content handlers. (Since Java 20 the `URL` constructors are deprecated — officially discouraged, due for removal; use `URI.create(s).toURL()`. The facade idea is unchanged.)
+- **SLF4J `LoggerFactory.getLogger(...)`** — hides configuration, appenders (log destinations: files, console) and formatters. SLF4J literally calls itself a "Simple Logging Facade".
+- **`javax.faces.context.FacesContext`**, **jQuery** (historically the clearest: one `$` in front of DOM, events, animation and XHR — the browser's API for HTTP requests from JavaScript — each still usable directly), and Python's **`requests`** covering common "just fetch this URL" cases over `urllib3`.
+- **E-commerce checkout**: "Place order" on Amazon or Flipkart is one backend (server-side) call orchestrating inventory, payment, shipping and notifications — often called an orchestrator or backend-for-frontend (a server layer built for one particular UI).
 
 ### In modern languages
 
-- **Python / JavaScript**: a module exporting one function and keeping the rest private is a facade with no class at all.
+- **Python / JavaScript**: a module exporting one function, the rest private — a facade with no class.
 - **Go**: a package's exported functions are the facade; lowercase identifiers stay internal.
-- **Java**: a package with one public class (package-private subsystem), or a JPMS (Java Platform Module System) module that exports only the facade's package.
-- **Any language**: a single well-named function is often the whole pattern — if `placeOrder` needs no state of its own, it does not have to be a class.
+- **Java**: a package with one public class (package-private subsystem), or a JPMS (Java Platform Module System) module exporting only the facade's package.
+- **Any language**: if `placeOrder` needs no state of its own, one well-named function is the whole pattern.
 
 ### In the interview
 
@@ -2228,8 +1365,8 @@ This connects to the **Principle of Least Knowledge** (Law of Demeter) that *Hea
 
 **Follow-ups**
 
-- *Q: How is it different from Adapter?* — A: Adapter converts one interface because someone else chose it; Facade simplifies many objects behind a new interface you chose.
-- *Q: And from Mediator?* — A: Subsystem classes don't know the facade exists; colleagues in a Mediator know it and communicate through it, in both directions.
+- *Q: How is it different from Adapter?* — A: Adapter converts one interface someone else chose; Facade simplifies many objects behind a new interface you chose.
+- *Q: And from Mediator?* — A: Subsystem classes don't know the facade exists; Mediator colleagues know it and communicate through it, both ways.
 - *Q: Risk?* — A: God object. A facade should sequence, not decide.
 - *Q: Should the subsystem be hidden?* — A: Usually no; leave it reachable for unusual needs.
 - *Q: Can a system have several facades?* — A: Yes — e.g. one per use case, or layered facades over sub-subsystems.
@@ -2253,9 +1390,7 @@ This connects to the **Principle of Least Knowledge** (Law of Demeter) that *Hea
 
 ### What it is
 
-The **Flyweight** pattern **shares** the portion of each object's state that is the same across many objects, so that huge numbers of them fit in memory. GoF's intent: *use sharing to support large numbers of fine-grained objects efficiently.*
-
-*Analogy:* a printed book. Every letter "e" on every page uses the same metal type design (shared), placed at a different position (unique). You don't carve a new "e" for every occurrence.
+The **Flyweight** pattern **shares** the part of each object's state that is the same across many objects, so huge numbers of them fit in memory. GoF's intent: *use sharing to support large numbers of fine-grained objects efficiently.* Like printing: every "e" uses the same type design (shared) at a different position (unique).
 
 Two terms carry the whole pattern:
 
@@ -2264,7 +1399,7 @@ Two terms carry the whole pattern:
 | **Intrinsic state** | Part of the thing's own identity and **identical for every holder**. Lives inside the shared flyweight. | icon bitmap, colour, size |
 | **Extrinsic state** | **Varies with the context** the object is used in; different for each holder. Stays outside and is **handed in** as method arguments. | latitude, longitude |
 
-The words are GoF's and interviewers use them, even though on their own they explain little — remember "intrinsic = inside the shared object", "extrinsic = supplied from outside".
+Remember: "intrinsic = inside the shared object", "extrinsic = supplied from outside" — GoF's words, used by interviewers.
 
 | Role | In our code |
 |---|---|
@@ -2273,13 +1408,11 @@ The words are GoF's and interviewers use them, even though on their own they exp
 | **Context** (one per logical object: extrinsic state + reference to a flyweight) | `Marker` |
 | **Client** (asks the factory, supplies extrinsic state) | `Main` |
 
-GoF's own participant list is *Flyweight* (the interface that accepts extrinsic state), *ConcreteFlyweight* (the shared implementation — our `MarkerStyle` plays both roles since we need no interface), *UnsharedConcreteFlyweight* (objects of the same interface that are **not** shared, e.g. a row object holding its own children), *FlyweightFactory* and *Client*. "Context" is the name later sources (such as refactoring.guru) give to the object that stores the extrinsic state.
+GoF's participants are *Flyweight* (interface accepting extrinsic state), *ConcreteFlyweight* (shared implementation — `MarkerStyle` plays both since we need no interface), *UnsharedConcreteFlyweight* (same interface but **not** shared, e.g. a row object holding its own children), *FlyweightFactory* and *Client*. "Context" is later sources' (e.g. refactoring.guru) name for the object storing extrinsic state.
 
 ### The problem it solves
 
-Picture a map app showing **100,000 markers**. Every marker stores its latitude and longitude — plus an icon bitmap, a colour and a size. Positions are all different, but the icon is the same for thousands of markers, and the icon is by far the largest field. Keeping 100,000 copies of a 2 MB bitmap is not "a bit slow": it needs ~195 GB, so **the program simply runs out of memory.**
-
-The same situation shows up in a game with a million trees that all use one mesh and texture (a 3D shape and the image painted onto it), in a text editor that would otherwise store font data for every character, and anywhere many objects **differ slightly but share a large common part**.
+A map app shows **100,000 markers**, each with latitude and longitude — plus icon bitmap, colour and size. Positions differ, but thousands share an icon, by far the largest field. 100,000 copies of a 2 MB bitmap need ~195 GB: **the program simply runs out of memory.** Likewise a game's million trees sharing one mesh and texture (3D shape and the image painted on it), a text editor's per-character font data — anywhere many objects **differ slightly but share a large common part**.
 
 ![Flyweight Pattern - split the state, and share the half that repeats](../../assets/P-flyweight-pattern-1.svg)
 *Figure — Top: every marker carries its own 2 MB icon. Bottom: each marker keeps only lat/lon and a style reference; one immutable `MarkerStyle` holds the icon, colour and size (course diagram)*
@@ -2287,22 +1420,22 @@ The same situation shows up in a game with a million trees that all use one mesh
 ### How it works
 
 1. **Split the state**: intrinsic (shared, invariant) vs extrinsic (per holder).
-2. **Move intrinsic state into an immutable flyweight class** — all fields `final`, no setters.
-3. **Pass extrinsic state as method arguments** (`draw(lat, lon)`) instead of storing it in the flyweight.
-4. **Create a factory that owns the pool**, keyed by the intrinsic values. `get(...)` returns the existing object or creates it the first time.
-5. **Clients must go through the factory**, never the constructor (enforce with package-private/private constructors).
-6. **Context objects** keep only extrinsic state plus a **reference** (not a copy) to the flyweight.
+2. **Move intrinsic state into an immutable flyweight** — all fields `final`, no setters.
+3. **Pass extrinsic state as method arguments** (`draw(lat, lon)`), never stored in the flyweight.
+4. **A factory owns the pool**, keyed by intrinsic values; `get(...)` returns the existing object or creates it once.
+5. **Clients must go through the factory**, never the constructor (package-private/private constructors).
+6. **Context objects** keep extrinsic state plus a **reference** (not a copy) to the flyweight.
 
 > **Two rules — break either and the pattern silently stops working.**
-> 1. **Flyweights never change.** Many holders point at the same object, so a modification made for one is seen by every other.
-> 2. **Only the factory creates them.** If callers can use the constructor directly, identical copies appear and the memory saving is gone.
+> 1. **Flyweights never change.** Many holders point at one object, so a change for one is seen by all.
+> 2. **Only the factory creates them.** Direct construction creates identical copies and the saving is gone.
 
 ### Structure
 
 ![Flyweight Pattern - Class Diagram](../../assets/P-flyweight-pattern-2.svg)
 *Figure — Flyweight class diagram: `MarkerStyle` (final fields, `draw(lat, lon)`), `MarkerStyleFactory` with a pool and `get()`, and `Marker` holding position plus a style reference (course diagram)*
 
-In the diagram above, `draw` receives the position as arguments rather than keeping it in a field, `Marker` holds a *reference* to a style rather than its own copy, and clients obtain styles from the factory, never from the constructor. That last rule has to be enforced — by a package-private (or private) constructor, or at least by convention and code review.
+`draw` receives position as arguments; `Marker` holds a *reference* to a style; clients get styles only from the factory — enforced by a package-private (or private) constructor, or at least convention and review.
 
 ```mermaid
 classDiagram
@@ -2331,128 +1464,43 @@ classDiagram
 
 ### Java example
 
-```java
-// File: code/lld/ch09/flyweight/MarkerStyle.java
-package lld.ch09.flyweight;
+Full code: `code/lld/ch09/flyweight/` (`MarkerStyle`, `MarkerStyleFactory`, `Marker`, `Main`).
 
-/**
- * FLYWEIGHT: holds only INTRINSIC state (same for every marker using this style).
- * Immutable: all fields final, no setters, and the bitmap array never leaves the object.
- * The constructor is package-private, so code outside this package cannot bypass the
- * factory. (Inside the package it is a convention: only MarkerStyleFactory calls it.)
- */
+```java
+// MarkerStyle.java — FLYWEIGHT: INTRINSIC state only. Immutable: final fields, no setters, bitmap never leaves.
+// Package-private constructor: outside code cannot bypass the factory (inside the package it is a convention).
 final class MarkerStyle {
     static final int ICON_BYTES = 2 * 1024 * 1024;   // pretend every icon bitmap is 2 MB
-
-    private final String icon;
-    private final String colour;
+    private final String icon, colour;
     private final int size;
-    private final byte[] bitmap;   // the heavy part we want exactly one copy of
+    private final byte[] bitmap;                     // the heavy part we want exactly one copy of
 
     MarkerStyle(String icon, String colour, int size) {
         System.out.println("  loading icon '" + icon + "' (" + colour + ", " + size + "px)");
-        this.icon = icon;
-        this.colour = colour;
-        this.size = size;
+        this.icon = icon; this.colour = colour; this.size = size;
         this.bitmap = new byte[ICON_BYTES];
     }
-
     /** EXTRINSIC state (the position) is passed in, never stored. */
     String draw(double lat, double lon) {
         return String.format("%s %s marker at (%.4f, %.4f)", colour, icon, lat, lon);
     }
-
-    int bitmapBytes() { return bitmap.length; }
 }
-```
 
-```java
-// File: code/lld/ch09/flyweight/MarkerStyleFactory.java
-package lld.ch09.flyweight;
-
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
-/** FLYWEIGHT FACTORY: owns the pool. Thread-safe via ConcurrentHashMap.computeIfAbsent. */
+// MarkerStyleFactory.java — owns the pool; thread-safe via ConcurrentHashMap.computeIfAbsent.
 final class MarkerStyleFactory {
-    /** The pool key is the combination of intrinsic values. */
-    private record Key(String icon, String colour, int size) { }
-
+    private record Key(String icon, String colour, int size) { }   // the combination of intrinsic values
     private final Map<Key, MarkerStyle> pool = new ConcurrentHashMap<>();
-
     MarkerStyle get(String icon, String colour, int size) {
-        return pool.computeIfAbsent(new Key(icon, colour, size),
-                k -> new MarkerStyle(k.icon(), k.colour(), k.size()));
+        return pool.computeIfAbsent(new Key(icon, colour, size), k -> new MarkerStyle(k.icon(), k.colour(), k.size()));
     }
-
     int poolSize() { return pool.size(); }
 }
-```
 
-```java
-// File: code/lld/ch09/flyweight/Marker.java
-package lld.ch09.flyweight;
-
-/** CONTEXT: one per marker. Holds extrinsic state + a REFERENCE to a shared style. */
+// Marker.java — CONTEXT: one per marker; extrinsic state + a REFERENCE to a shared style.
 record Marker(double lat, double lon, MarkerStyle style) {
     String draw() { return style.draw(lat, lon); }
 }
-```
-
-```java
-// File: code/lld/ch09/flyweight/Main.java
-package lld.ch09.flyweight;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
-
-public class Main {
-    public static void main(String[] args) {
-        MarkerStyleFactory styles = new MarkerStyleFactory();
-
-        System.out.println("== Five markers, three styles ==");
-        List<Marker> few = List.of(
-                new Marker(51.5074, -0.1278, styles.get("cafe", "brown", 24)),
-                new Marker(48.8566, 2.3522, styles.get("cafe", "brown", 24)),
-                new Marker(40.7128, -74.0060, styles.get("fuel", "green", 24)),
-                new Marker(35.6762, 139.6503, styles.get("hospital", "red", 32)),
-                new Marker(52.5200, 13.4050, styles.get("fuel", "green", 24)));
-        few.forEach(m -> System.out.println("  " + m.draw()));
-        System.out.println("  same shared object? " + (few.get(0).style() == few.get(1).style()));
-
-        System.out.println("== Scale to 100,000 markers ==");
-        String[] icons = {"cafe", "fuel", "hospital"};
-        String[] colours = {"brown", "green", "red"};
-        int[] sizes = {24, 24, 32};
-        Random rnd = new Random(42);
-        List<Marker> many = new ArrayList<>();
-        for (int i = 0; i < 100_000; i++) {
-            int t = rnd.nextInt(3);
-            many.add(new Marker(rnd.nextDouble() * 180 - 90, rnd.nextDouble() * 360 - 180,
-                    styles.get(icons[t], colours[t], sizes[t])));
-        }
-        long withoutMb = (long) many.size() * MarkerStyle.ICON_BYTES / (1024 * 1024);
-        long withMb = (long) styles.poolSize() * MarkerStyle.ICON_BYTES / (1024 * 1024);
-        System.out.println("  markers: " + many.size() + ", styles in pool: " + styles.poolSize());
-        System.out.println("  icon memory without flyweight: ~" + withoutMb + " MB");
-        System.out.println("  icon memory with flyweight:    ~" + withMb + " MB");
-
-        System.out.println("== Flyweights already in the JDK ==");
-        Integer a = 127, b = 127;          // autoboxing calls Integer.valueOf
-        Integer c = 128, d = 128;
-        System.out.println("  Integer 127 == 127 -> " + (a == b) + "  (cached -128..127)");
-        System.out.println("  Integer 128 == 128 -> " + (c == d) + " (outside default cache)");
-        System.out.println("  equals() is always right -> " + c.equals(d));
-        System.out.println("  Boolean.valueOf(true) == Boolean.TRUE -> " + (Boolean.valueOf(true) == Boolean.TRUE));
-
-        String lit = "hello";
-        String built = new String("hello");
-        System.out.println("  \"hello\" == \"hel\" + \"lo\" -> " + (lit == "hel" + "lo") + " (compile-time constant, pooled)");
-        System.out.println("  \"hello\" == new String(\"hello\") -> " + (lit == built));
-        System.out.println("  \"hello\" == built.intern() -> " + (lit == built.intern()));
-    }
-}
+// Main: 5 markers over 3 styles, then 100,000 random markers; then JDK flyweight checks (Integer, Boolean, String).
 ```
 
 **Output:**
@@ -2484,22 +1532,19 @@ public class Main {
 
 **What each part does**
 
-- `MarkerStyle` — the flyweight. Final fields, no setters, package-private constructor, and `draw(lat, lon)` receives extrinsic state.
-- `MarkerStyleFactory` — the pool. `ConcurrentHashMap.computeIfAbsent` makes "get or create once" **thread-safe and atomic** (correct when many threads — independent paths of execution running at once — use it, and done as one indivisible step), so two threads can't create two copies of the same style.
-- `Key` record — the intrinsic values as a value object (an object defined only by its values); records give correct `equals`/`hashCode` (the methods a hash map uses to find a key) for free.
-- `Marker` record — the context: two doubles plus one reference.
-- Output: "loading icon" is printed **3 times for 5 markers**, and still only 3 styles for 100,000 markers — about 6 MB of icon data instead of ~200,000 MB (≈195 GB).
-- JDK section: `Integer.valueOf` caching and the `String` pool (below).
+- `MarkerStyleFactory` — `ConcurrentHashMap.computeIfAbsent` makes "get or create once" **thread-safe and atomic** (correct when many threads — independent paths of execution — use it, done as one indivisible step), so two threads can't create duplicate styles.
+- `Key` record — intrinsic values as a value object (defined only by its values); records give correct `equals`/`hashCode` (what a hash map uses to find a key) free.
+- "loading icon" prints **3 times for 5 markers**, still 3 styles for 100,000 markers — ~6 MB of icons instead of ~200,000 MB (≈195 GB).
 
 ### Flyweights already in Java
 
-- **`Integer.valueOf(int)`** (used by autoboxing — Java's automatic wrapping of an `int` into an `Integer` object) returns cached objects for **−128 to 127** — the Java Language Specification requires that range to be cached. That is why `Integer a = 127, b = 127; a == b` is `true` but the same with 128 is `false` on a default JVM (Java Virtual Machine, the program that runs Java code; the upper bound can be raised with `-XX:AutoBoxCacheMax`, so never rely on it). **Always compare boxed numbers with `equals`.** `Short`, `Byte`, `Long` (same range) and `Character` (0–127) have similar caches; `Boolean.valueOf` returns the two shared constants `Boolean.TRUE` / `Boolean.FALSE`.
-- **The String pool**: string literals and compile-time constant expressions (`"hel" + "lo"`) are interned (stored once in a shared pool and reused), so equal literals share one object. `new String("hello")` always creates a new object; `intern()` returns the pooled one.
+- **`Integer.valueOf(int)`** (used by autoboxing — automatic wrapping of an `int` into an `Integer`) returns cached objects for **−128 to 127**, a range the Java Language Specification requires. Hence `Integer a = 127, b = 127; a == b` is `true` but with 128 is `false` on a default JVM (the upper bound can be raised with `-XX:AutoBoxCacheMax`, so never rely on it). **Always compare boxed numbers with `equals`.** `Short`, `Byte`, `Long` (same range) and `Character` (0–127) have similar caches; `Boolean.valueOf` returns the shared `Boolean.TRUE` / `Boolean.FALSE`.
+- **The String pool**: literals and compile-time constant expressions (`"hel" + "lo"`) are interned (stored once in a shared pool and reused). `new String("hello")` always creates a new object; `intern()` returns the pooled one.
 - **Enums**: exactly one instance per constant, shared everywhere.
 
 ### Flyweight is not a cache
 
-The two are mixed up all the time — even in code reviews — and the difference decides what you may do with the pool:
+Mixed up constantly — and the difference decides what you may do with the pool:
 
 | | **Flyweight** | **Cache** |
 |---|---|---|
@@ -2508,25 +1553,25 @@ The two are mixed up all the time — even in code reviews — and the differenc
 | May entries be removed? | Not while any holder still points to one | Yes, at any moment |
 | Effect of removing one | Holders lose their shared object, or duplicates get created | None, apart from a slower next request |
 
-So an LRU cache in front of a database is not a flyweight, and a pool of shared marker styles is not a cache.
+An LRU cache in front of a database is not a flyweight; a pool of shared marker styles is not a cache.
 
 ### Two mistakes that undo the pattern
 
-- **A flyweight that can change.** One caller updates a colour and every marker on the map changes with it — the classic failure, and hard to debug because the effect shows up far from the cause. Fix: `final` fields, no setters, no leaking of internal arrays.
-- **An ever-growing pool keyed by open-ended input.** If users decide the keys, the pool never stops growing — a memory leak (memory that is never released) disguised as an optimisation. Flyweight is safe when the set of intrinsic values is **small and bounded** (3 styles, a few hundred glyphs). An open key space needs weak references (references the garbage collector is allowed to clear) and eviction (removing entries), and at that point you have built a cache — so call it a cache.
+- **A flyweight that can change.** One caller updates a colour and every marker changes — the classic failure, hard to debug because the effect appears far from the cause. Fix: `final` fields, no setters, no leaked internal arrays.
+- **An ever-growing pool keyed by open-ended input.** User-chosen keys mean the pool never stops growing — a memory leak (memory never released) disguised as optimisation. Flyweight is safe when intrinsic values are **small and bounded** (3 styles, a few hundred glyphs). An open key space needs weak references (which the garbage collector may clear) and eviction — at which point it is a cache, so call it one.
 
 ### Measure first
 
-Flyweight trades readability for memory, so using it without profiling (measuring where a program really spends time or memory) is textbook premature optimisation (optimising before you know it is needed). A thousand objects never need it; a million might. Answer two questions **with numbers** first: *how many of these objects will exist at once*, and *how much of each one is identical across all of them?* If you can't put numbers on both, it is too early; if most of each object is unique, there is nothing worth sharing.
+Flyweight trades readability for memory, so using it without profiling (measuring where a program spends time or memory) is textbook premature optimisation. A thousand objects never need it; a million might. Answer **with numbers**: *how many of these objects exist at once*, and *how much of each is identical across all?* No numbers → too early; mostly-unique objects → nothing to share.
 
 ### Trade-offs
 
 | Pros | Cons |
 |---|---|
-| **Memory use can fall by orders of magnitude** — sometimes the difference between running and not running. | **State is split across two places**, which is harder to follow and change than one class. |
-| **Costly construction happens once per distinct value**, not once per object. | **The pool keeps strong references (ordinary references, which stop the garbage collector from freeing an object)**, so it can leak memory itself. |
-| **Friendlier to CPU caches** — the shared data stays hot (recently used, so fast to reach) instead of being scattered. | **Thread safety is on you** — the pool must be thread-safe and the flyweight immutable. |
-| **"Load once" logic gets one obvious home** instead of being spread across callers. | **Tempting to apply too early**, and callers must pass extrinsic state on every call (some CPU cost). |
+| **Memory can fall by orders of magnitude** — sometimes the difference between running and not. | **State is split across two places** — harder to follow and change than one class. |
+| **Costly construction once per distinct value**, not per object. | **The pool keeps strong references** (ordinary references that stop the garbage collector freeing an object), so it can leak itself. |
+| **Friendlier to CPU caches** — shared data stays hot (recently used, fast to reach). | **Thread safety is on you** — thread-safe pool, immutable flyweight. |
+| **"Load once" logic gets one obvious home.** | **Tempting too early**, and callers pass extrinsic state on every call (some CPU cost). |
 
 ### When not to use it
 
@@ -2548,25 +1593,25 @@ Flyweight trades readability for memory, so using it without profiling (measurin
 | Looks like | Actual difference |
 |---|---|
 | Cache | See table above. |
-| Singleton | Singleton = exactly one instance of a class. Flyweight = one instance **per distinct intrinsic value** (3, or 300). A flyweight pool that happens to hold one entry only *looks* like a Singleton. |
+| Singleton | Singleton = exactly one instance of a class. Flyweight = one instance **per distinct intrinsic value** (3, or 300). A pool that happens to hold one entry only *looks* like a Singleton. |
 | Object pool | An object pool **lends out mutable** objects and takes them back (e.g. DB connections). Flyweights are **immutable**, shared, never returned. |
-| Prototype | Prototype makes many objects by copying; Flyweight avoids making them at all — opposite answers to the same "many similar objects" observation. |
+| Prototype | Prototype makes many objects by copying; Flyweight avoids making them at all — opposite answers to "many similar objects". |
 
 ### Real-world examples
 
-- **`Integer.valueOf`, `Boolean.valueOf`, `String.intern()`, enums** — see above. (Python also interns small integers and many short strings automatically.)
-- **Text rendering / word processors** — one glyph object per character in a font, shared by every occurrence on the page (the classic GoF example).
-- **Game engines and map renderers** — meshes, textures and sprite atlases are loaded once and referenced by every entity (e.g. a forest of identical tree models, rendered with GPU *instancing* — the graphics card drawing one model many times in a single pass).
-- **Map apps** — thousands of pins typically share a handful of icon styles (the example in this section).
+- **`Integer.valueOf`, `Boolean.valueOf`, `String.intern()`, enums** — above. (Python also interns small integers and many short strings automatically.)
+- **Text rendering / word processors** — one glyph object per font character, shared by every occurrence (the classic GoF example).
+- **Game engines and map renderers** — meshes, textures and sprite atlases loaded once and referenced by every entity (a forest of identical trees, rendered with GPU *instancing* — the graphics card drawing one model many times in one pass).
+- **Map apps** — thousands of pins share a handful of icon styles (this section's example).
 - **`java.time.ZoneOffset`** caches offsets that are whole multiples of 15 minutes, so `ZoneOffset.ofHours(5)` returns a shared instance.
 
 ### In modern languages
 
-- **Java**: `Integer.valueOf`, `String.intern` and enums are built-in flyweights; a `record` is an immutable flyweight in one line, and a `Map` plus `computeIfAbsent` is the whole factory (as in our code).
-- **Python**: small ints and many short strings are interned automatically; `functools.lru_cache` on a factory function gives a pool with a size bound built in.
-- **JavaScript**: `Object.freeze` on the shared object plus a `Map` for the pool — freezing makes immutability enforced rather than a convention.
-- **C++**: `std::shared_ptr<const Style>` expresses both the sharing and the immutability in the type.
-- **Any language with value types**: an immutable value object plus a memoising (remembers results it already produced) factory is this pattern, usually unnamed.
+- **Java**: `Integer.valueOf`, `String.intern` and enums are built-in flyweights; a `record` is an immutable flyweight in one line, and `Map` + `computeIfAbsent` is the whole factory.
+- **Python**: small ints and short strings interned automatically; `functools.lru_cache` on a factory function gives a size-bounded pool.
+- **JavaScript**: `Object.freeze` on the shared object plus a `Map` pool — freezing enforces immutability.
+- **C++**: `std::shared_ptr<const Style>` expresses sharing and immutability in the type.
+- **Any language with value types**: an immutable value object plus a memoising (remembers results already produced) factory is this pattern, usually unnamed.
 
 ### In the interview
 
@@ -2577,7 +1622,7 @@ Flyweight trades readability for memory, so using it without profiling (measurin
 - *Q: Why must the flyweight be immutable?* — A: It is shared; mutating it changes every holder.
 - *Q: How do you make the factory thread-safe?* — A: `ConcurrentHashMap.computeIfAbsent`, which runs the creation function at most once per key.
 - *Q: Flyweight vs cache?* — A: A cache may evict anything and exists for speed; a flyweight exists because otherwise the program doesn't fit, and entries can't be dropped while referenced.
-- *Q: Why is `Integer 128 == 128` false?* — A: Autoboxing uses `Integer.valueOf`, which only guarantees caching for −128..127; outside that range you get distinct objects on a default JVM. Use `equals`.
+- *Q: Why is `Integer 128 == 128` false?* — A: Autoboxing uses `Integer.valueOf`, which only guarantees caching for −128..127; outside it you get distinct objects on a default JVM. Use `equals`.
 - *Q: Flyweight vs Singleton?* — A: One instance per distinct value vs one instance total.
 
 ### Self-check
@@ -2599,9 +1644,7 @@ Flyweight trades readability for memory, so using it without profiling (measurin
 
 ### What it is
 
-The **Proxy** pattern places a **stand-in with the identical interface** in front of a real object in order to control **who** may use it, **when** it gets created, or **how much** each use costs. GoF's intent: *provide a surrogate or placeholder for another object to control access to it.* (GoF also lists the name **Surrogate**.)
-
-*Analogy:* a credit card is a proxy for your bank account. Shops accept it wherever cash is accepted (same "interface"), but it adds control — limits, fraud checks — and the money only moves when needed.
+The **Proxy** pattern places a **stand-in with the identical interface** in front of a real object to control **who** may use it, **when** it is created, or **how much** each use costs. GoF's intent: *provide a surrogate or placeholder for another object to control access to it* (also called **Surrogate**). Like a credit card standing in for your bank account: accepted wherever cash is (same "interface"), but adding limits and fraud checks, moving money only when needed.
 
 | Term | Meaning | In our code |
 |---|---|---|
@@ -2611,24 +1654,24 @@ The **Proxy** pattern places a **stand-in with the identical interface** in fron
 
 ### The problem it solves
 
-There are times when callers should **not touch the real object directly — or not yet**:
+Sometimes callers should **not touch the real object directly — or not yet**:
 
-- **Building it is costly and usually unnecessary.** Loading a 100 MB report during start-up is wasted work on the many runs that never display it — most screens only show its title.
-- **Only some callers are permitted** to use it, and the permission logic has no business living inside the object.
-- **It runs on a different machine**, and callers should not have to write networking code.
+- **Building it is costly and usually unnecessary** — loading a 100 MB report at start-up wastes work on runs that only show its title.
+- **Only some callers are permitted**, and permission logic doesn't belong inside the object.
+- **It runs on another machine**, and callers shouldn't write networking code.
 - **Each call must be logged or counted**, but the class belongs to someone else.
 
-Since the proxy offers **the very same interface**, callers can't tell it apart from the real thing, so you can insert one **without editing any caller**. That is also its danger: a slow or remote call now **looks just like a cheap local one**.
+With **the very same interface**, a proxy can be inserted **without editing any caller**. That is also its danger: a slow or remote call **looks just like a cheap local one**.
 
 ![Proxy Pattern - same interface, different timing](../../assets/P-proxy-pattern-1.svg)
 *Figure — The caller holds a `Report`. Creating the `LazyReport` and calling `title()` cost nothing; the 100 MB load happens once on the first `render()`, and later renders reuse it (course diagram)*
 
 ### How it works
 
-1. **Define (or reuse) the Subject interface** that callers already use.
-2. **Write a proxy class implementing that interface** and holding a reference to the real subject — or the information needed to create it later.
-3. In each method, **do the proxy's job first** — create lazily, check permission, look in a cache, marshal (convert into a message that can be sent) over a network, count references — then **delegate** (or refuse).
-4. **Give callers the proxy** in place of the real object (often via a factory or DI container so they never see the difference).
+1. **Define (or reuse) the Subject interface** callers already use.
+2. **Write a proxy implementing it**, holding the real subject — or the information to create it later.
+3. In each method, **do the proxy's job first** — create lazily, check permission, look in a cache, marshal (convert into a sendable message) over a network, count references — then **delegate** (or refuse).
+4. **Give callers the proxy** in place of the real object (often via a factory or DI container, so they never see the difference).
 
 ### Kinds of proxy
 
@@ -2641,14 +1684,14 @@ Since the proxy offers **the very same interface**, callers can't tell it apart 
 | **Logging / monitoring proxy** | Records each call before/after forwarding | `LoggingHandler` (dynamic proxy) |
 | **Smart reference** | Bookkeeping on access — reference counting, locking, loading on first use | `SharedDevice` handles close the device when the last one closes |
 
-GoF names four kinds — remote, virtual, protection and smart reference; they differ only in what the proxy does before delegating. Caching and logging proxies are widely used variants described by later sources such as refactoring.guru (GoF would file logging/counting under smart reference).
+GoF names four kinds — remote, virtual, protection, smart reference — differing only in what the proxy does before delegating. Caching and logging proxies are widely used variants from later sources such as refactoring.guru (GoF would file logging/counting under smart reference).
 
 ### Structure
 
 ![Proxy Pattern - Class Diagram](../../assets/P-proxy-pattern-2.svg)
 *Figure — Proxy class diagram: `RealReport`, `LazyReport` (virtual proxy) and `AuditedReport` (protection proxy) all implement `Report`; `LazyReport` creates the `RealReport` itself, `AuditedReport` wraps any `Report` (course diagram)*
 
-In the class diagram above, `RealReport` does the expensive work in its constructor; `LazyReport` keeps only the name, answers `title()` itself and constructs the `RealReport` the first time `render()` is called; `AuditedReport` checks a role before letting a call through. Because `AuditedReport` holds the **interface**, it can guard the real report, the lazy proxy or another protection proxy — our demo wraps the lazy one. Strip `LazyReport` down and only one line is special — the null check that triggers construction; the rest simply forwards calls.
+`RealReport` does the expensive work in its constructor; `LazyReport` keeps only the name, answers `title()` itself and builds the `RealReport` on the first `render()`; `AuditedReport` checks a role first. Holding the **interface**, `AuditedReport` can guard the real report, the lazy proxy or another protection proxy (our demo wraps the lazy one). Stripped down, only one line of `LazyReport` is special — the null check that triggers construction; the rest forwards.
 
 ```mermaid
 classDiagram
@@ -2705,443 +1748,111 @@ classDiagram
     RateServer --> RateService
 ```
 
-```mermaid
-sequenceDiagram
-    participant C as Caller
-    participant P as LazyReport
-    participant R as RealReport
-    C->>P: new LazyReport("Q3 revenue")
-    C->>P: title()
-    P-->>C: "Q3 revenue" (no load)
-    C->>P: render()
-    P->>R: new RealReport(name) - expensive, once
-    P->>R: render()
-    R-->>P: text
-    P-->>C: text
-    C->>P: render()
-    P->>R: render() - reuses existing object
-    R-->>P: text
-    P-->>C: text
-```
-
 ### Java example
 
-```java
-// File: code/lld/ch09/proxy/Report.java
-package lld.ch09.proxy;
-
-/** SUBJECT interface: callers only ever hold this type. */
-interface Report {
-    String title();
-    String render();
-}
-```
+Full code: `code/lld/ch09/proxy/` — `Report`/`RealReport`/`LazyReport`/`AuditedReport`/`Role`; `RateService`/`LiveRateService`/`CachingRateProxy`; `Network`/`RateServer`/`RemoteRateProxy`; `Device`/`RealDevice`/`SharedDevice`; `LoggingHandler`; `Main`.
 
 ```java
-// File: code/lld/ch09/proxy/RealReport.java
-package lld.ch09.proxy;
-
-/** REAL SUBJECT: expensive constructor. */
-final class RealReport implements Report {
-    private final String name;
-    private final int rows;
-
-    RealReport(String name) {
-        System.out.println("    [real] loading 100 MB of data for '" + name + "'...");
-        this.name = name;
-        this.rows = 1_000_000;
-    }
-
-    @Override public String title()  { return name; }
-    @Override public String render() { return name + " (" + rows + " rows)"; }
-}
-```
-
-```java
-// File: code/lld/ch09/proxy/LazyReport.java
-package lld.ch09.proxy;
-
-/**
- * VIRTUAL PROXY: answers title() itself, builds the RealReport on first render().
- * Thread-safe lazy init with double-checked locking (field must be volatile).
- */
+// LazyReport.java — VIRTUAL PROXY: answers title() itself, builds the RealReport on first render().
+// Thread-safe lazy init with double-checked locking (field must be volatile).
 final class LazyReport implements Report {
     private final String name;
     private volatile RealReport real;      // created by the proxy itself, not handed in
-
     LazyReport(String name) { this.name = name; }
 
-    @Override public String title() { return name; }   // no load needed
-
-    @Override
-    public String render() { return realReport().render(); }
+    @Override public String title()  { return name; }   // no load needed
+    @Override public String render() { return realReport().render(); }
 
     private RealReport realReport() {
         RealReport r = real;
         if (r == null) {
             synchronized (this) {
                 r = real;
-                if (r == null) real = r = new RealReport(name);
+                if (r == null) real = r = new RealReport(name);   // prints "[real] loading 100 MB..."
             }
         }
         return r;
     }
 }
-```
 
-```java
-// File: code/lld/ch09/proxy/Role.java
-package lld.ch09.proxy;
-
-enum Role { VIEWER, FINANCE, ADMIN }
-```
-
-```java
-// File: code/lld/ch09/proxy/AuditedReport.java
-package lld.ch09.proxy;
-
-import java.util.Set;
-
-/** PROTECTION PROXY: checks permission, may REFUSE the call. */
-final class AuditedReport implements Report {
-    private final Report inner;
-    private final Role callerRole;
-    private final Set<Role> allowed;
-
-    AuditedReport(Report inner, Role callerRole, Set<Role> allowed) {
-        this.inner = inner;
-        this.callerRole = callerRole;
-        this.allowed = Set.copyOf(allowed);
-    }
-
-    @Override public String title() { return inner.title(); }  // titles are public
-
-    @Override
-    public String render() {
-        if (!allowed.contains(callerRole)) {
-            throw new SecurityException(callerRole + " may not render " + inner.title());
-        }
-        return inner.render();
-    }
+// AuditedReport.java — PROTECTION PROXY: checks permission, may REFUSE the call.
+@Override public String title() { return inner.title(); }  // titles are public
+@Override public String render() {
+    if (!allowed.contains(callerRole)) throw new SecurityException(callerRole + " may not render " + inner.title());
+    return inner.render();
 }
 ```
 
 ```java
-// File: code/lld/ch09/proxy/RateService.java
-package lld.ch09.proxy;
-
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-
-/** Subject for the caching, remote and dynamic-proxy demos. Money and rates are BigDecimal, never double. */
+// RateService.java — money and rates are BigDecimal, never double; amounts rounded to 2 dp (HALF_EVEN).
 interface RateService {
     BigDecimal rate(String from, String to);
     BigDecimal convert(BigDecimal amount, String from, String to);
-
-    /** Shared rounding rule: amounts are returned to 2 decimal places. */
     static BigDecimal toMoney(BigDecimal value) { return value.setScale(2, RoundingMode.HALF_EVEN); }
 }
-```
+// LiveRateService (real subject, counts lookups):
+public BigDecimal convert(BigDecimal amount, String from, String to) {
+    return RateService.toMoney(amount.multiply(rate(from, to)));   // self-call: goes to THIS object, not through any proxy
+}
 
-```java
-// File: code/lld/ch09/proxy/LiveRateService.java
-package lld.ch09.proxy;
+// CachingRateProxy.java — bounded (LRU) and time-limited, because an unbounded cache is a leak.
+this.cache = new LinkedHashMap<>(16, 0.75f, true) {   // access order = LRU
+    @Override protected boolean removeEldestEntry(Map.Entry<String, CachedRate> eldest) { return size() > maxEntries; }
+};
+@Override public synchronized BigDecimal rate(String from, String to) {
+    String key = from + "->" + to;
+    CachedRate e = cache.get(key);
+    long now = System.currentTimeMillis();
+    if (e != null && e.expiresAt() > now) return e.value();
+    BigDecimal v = inner.rate(from, to);
+    cache.put(key, new CachedRate(v, now + ttlMillis));
+    return v;
+}
 
-import java.math.BigDecimal;
-import java.math.MathContext;
-import java.util.Map;
-
-/** Real subject: pretend each call is a slow lookup. */
-class LiveRateService implements RateService {
-    private static final Map<String, BigDecimal> PER_USD = Map.of(
-            "USD", new BigDecimal("1"), "EUR", new BigDecimal("0.92"), "INR", new BigDecimal("83"));
-    int lookups = 0;
-
-    @Override
-    public BigDecimal rate(String from, String to) {
-        lookups++;
-        return PER_USD.get(to).divide(PER_USD.get(from), MathContext.DECIMAL64);
-    }
-
-    @Override
-    public BigDecimal convert(BigDecimal amount, String from, String to) {
-        return RateService.toMoney(amount.multiply(rate(from, to)));   // self-call: goes to THIS object, not through any proxy
-    }
+// REMOTE PROXY over a simulated in-process Network { String send(String request); }
+// RateServer (server "skeleton"): unmarshals "rate|FROM|TO", returns real.rate(...).toPlainString()
+// RemoteRateProxy (client "stub"):
+@Override public BigDecimal rate(String from, String to) {
+    String request = "rate|" + from + "|" + to;
+    System.out.println("    [stub] sending '" + request + "' over the wire");
+    return new BigDecimal(network.send(request));
 }
 ```
 
 ```java
-// File: code/lld/ch09/proxy/CachingRateProxy.java
-package lld.ch09.proxy;
+// SharedDevice.java — SMART REFERENCE: each client gets its own handle (a proxy); the real device
+// opens on the first handle and closes when the LAST closes. All of refs, real and each handle's
+// 'closed' flag are read/written under the SharedDevice lock.
+synchronized Device acquire() {
+    if (refs++ == 0) real = new RealDevice();
+    System.out.println("    [ref] handle acquired, count=" + refs);
+    return new Handle();
+}
+// Handle.close():
+synchronized (SharedDevice.this) {
+    if (closed) return;          // closing a handle twice must not double-decrement
+    closed = true;
+    refs--;
+    System.out.println("    [ref] handle released, count=" + refs);
+    if (refs == 0) { real.close(); real = null; }
+}
 
-import java.math.BigDecimal;
-import java.util.LinkedHashMap;
-import java.util.Map;
-
-/** CACHING PROXY: bounded (LRU) and time-limited, because an unbounded cache is a leak. */
-final class CachingRateProxy implements RateService {
-    private record CachedRate(BigDecimal value, long expiresAt) { }
-
-    private final RateService inner;
-    private final long ttlMillis;
-    private final Map<String, CachedRate> cache;
-
-    CachingRateProxy(RateService inner, int maxEntries, long ttlMillis) {
-        this.inner = inner;
-        this.ttlMillis = ttlMillis;
-        this.cache = new LinkedHashMap<>(16, 0.75f, true) {   // access order = LRU
-            @Override
-            protected boolean removeEldestEntry(Map.Entry<String, CachedRate> eldest) {
-                return size() > maxEntries;
-            }
-        };
-    }
-
-    @Override
-    public synchronized BigDecimal rate(String from, String to) {
-        String key = from + "->" + to;
-        CachedRate e = cache.get(key);
-        long now = System.currentTimeMillis();
-        if (e != null && e.expiresAt() > now) return e.value();
-        BigDecimal v = inner.rate(from, to);
-        cache.put(key, new CachedRate(v, now + ttlMillis));
-        return v;
-    }
-
-    @Override
-    public BigDecimal convert(BigDecimal amount, String from, String to) {
-        return RateService.toMoney(amount.multiply(rate(from, to)));
+// LoggingHandler.java — DYNAMIC PROXY: one InvocationHandler that logs calls on ANY interface.
+static <T> T wrap(T target, Class<T> iface) {
+    return (T) Proxy.newProxyInstance(iface.getClassLoader(), new Class<?>[] {iface}, new LoggingHandler(target));
+}
+@Override public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+    String call = method.getName() + (args == null ? "()" : Arrays.toString(args));
+    System.out.println("    [proxy] -> " + call);
+    try {
+        Object result = method.invoke(target, args);   // forward to the real object
+        System.out.println("    [proxy] <- " + call + " returned " + result);
+        return result;
+    } catch (InvocationTargetException e) {
+        throw e.getCause();          // rethrow the real exception, not the reflection wrapper
     }
 }
-```
-
-```java
-// File: code/lld/ch09/proxy/Network.java
-package lld.ch09.proxy;
-
-/*
- * REMOTE PROXY: looks like a local RateService, but marshals each call into a
- * message and sends it across a "network". Here the network is simulated in-process.
- */
-interface Network {
-    String send(String request);
-}
-```
-
-```java
-// File: code/lld/ch09/proxy/RateServer.java
-package lld.ch09.proxy;
-
-import java.math.BigDecimal;
-
-/** Server side "skeleton": unmarshals the request and calls the real object. */
-final class RateServer implements Network {
-    private final RateService real;
-
-    RateServer(RateService real) { this.real = real; }
-
-    @Override
-    public String send(String request) {                  // format: "rate|FROM|TO"
-        String[] p = request.split("\\|");
-        return real.rate(p[1], p[2]).toPlainString();       // BigDecimal -> exact text on the wire
-    }
-}
-```
-
-```java
-// File: code/lld/ch09/proxy/RemoteRateProxy.java
-package lld.ch09.proxy;
-
-import java.math.BigDecimal;
-
-/** Client side "stub" = the remote proxy. */
-final class RemoteRateProxy implements RateService {
-    private final Network network;
-
-    RemoteRateProxy(Network network) { this.network = network; }
-
-    @Override
-    public BigDecimal rate(String from, String to) {
-        String request = "rate|" + from + "|" + to;
-        System.out.println("    [stub] sending '" + request + "' over the wire");
-        return new BigDecimal(network.send(request));
-    }
-
-    @Override
-    public BigDecimal convert(BigDecimal amount, String from, String to) {
-        return RateService.toMoney(amount.multiply(rate(from, to)));
-    }
-}
-```
-
-```java
-// File: code/lld/ch09/proxy/Device.java
-package lld.ch09.proxy;
-
-/** A heavyweight resource, e.g. a connection to a device. */
-interface Device extends AutoCloseable {
-    String query(String command);
-    @Override void close();
-}
-```
-
-```java
-// File: code/lld/ch09/proxy/RealDevice.java
-package lld.ch09.proxy;
-
-final class RealDevice implements Device {
-    RealDevice() { System.out.println("    [device] opened (expensive)"); }
-    @Override public String query(String command) { return "ok:" + command; }
-    @Override public void close() { System.out.println("    [device] closed"); }
-}
-```
-
-```java
-// File: code/lld/ch09/proxy/SharedDevice.java
-package lld.ch09.proxy;
-
-/**
- * SMART REFERENCE PROXY: reference counting. Each client gets its own handle (a proxy).
- * The real device opens on the first handle and closes when the LAST handle closes.
- * Thread-safe: every read or write of 'refs', 'real' and a handle's 'closed' flag
- * happens while holding the SharedDevice's lock, so the count can never go wrong.
- */
-final class SharedDevice {
-    private int refs;              // guarded by 'this'
-    private RealDevice real;       // guarded by 'this'
-
-    synchronized Device acquire() {
-        if (refs++ == 0) real = new RealDevice();
-        System.out.println("    [ref] handle acquired, count=" + refs);
-        return new Handle();
-    }
-
-    private final class Handle implements Device {
-        private boolean closed;    // guarded by SharedDevice.this
-
-        @Override
-        public String query(String command) {
-            synchronized (SharedDevice.this) {
-                if (closed) throw new IllegalStateException("handle already closed");
-                return real.query(command);
-            }
-        }
-
-        @Override
-        public void close() {
-            synchronized (SharedDevice.this) {
-                if (closed) return;          // closing a handle twice must not double-decrement
-                closed = true;
-                refs--;
-                System.out.println("    [ref] handle released, count=" + refs);
-                if (refs == 0) {
-                    real.close();
-                    real = null;
-                }
-            }
-        }
-    }
-}
-```
-
-```java
-// File: code/lld/ch09/proxy/LoggingHandler.java
-package lld.ch09.proxy;
-
-import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
-import java.util.Arrays;
-
-/**
- * DYNAMIC PROXY: one InvocationHandler that logs calls on ANY interface.
- * java.lang.reflect.Proxy generates the implementing class at run time.
- */
-final class LoggingHandler implements InvocationHandler {
-    private final Object target;
-
-    private LoggingHandler(Object target) { this.target = target; }
-
-    @SuppressWarnings("unchecked")
-    static <T> T wrap(T target, Class<T> iface) {
-        return (T) Proxy.newProxyInstance(
-                iface.getClassLoader(), new Class<?>[] {iface}, new LoggingHandler(target));
-    }
-
-    @Override
-    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-        String call = method.getName() + (args == null ? "()" : Arrays.toString(args));
-        System.out.println("    [proxy] -> " + call);
-        try {
-            Object result = method.invoke(target, args);   // forward to the real object
-            System.out.println("    [proxy] <- " + call + " returned " + result);
-            return result;
-        } catch (InvocationTargetException e) {
-            throw e.getCause();          // rethrow the real exception, not the reflection wrapper
-        }
-    }
-}
-```
-
-```java
-// File: code/lld/ch09/proxy/Main.java
-package lld.ch09.proxy;
-
-import java.lang.reflect.Proxy;
-import java.math.BigDecimal;
-import java.util.Set;
-
-public class Main {
-    public static void main(String[] args) {
-        System.out.println("== Virtual proxy: pay only when needed ==");
-        Report report = new LazyReport("Q3 revenue");
-        System.out.println("  created proxy; title = " + report.title());
-        System.out.println("  render #1 -> " + report.render());
-        System.out.println("  render #2 -> " + report.render());
-
-        System.out.println("== Protection proxy wrapping the virtual proxy ==");
-        Set<Role> allowed = Set.of(Role.FINANCE, Role.ADMIN);
-        Report forFinance = new AuditedReport(new LazyReport("Payroll"), Role.FINANCE, allowed);
-        Report forViewer = new AuditedReport(new LazyReport("Payroll"), Role.VIEWER, allowed);
-        System.out.println("  finance -> " + forFinance.render());
-        try {
-            forViewer.render();
-        } catch (SecurityException e) {
-            System.out.println("  viewer  -> refused: " + e.getMessage() + " (nothing was loaded)");
-        }
-
-        System.out.println("== Caching proxy (LRU, max 2 entries, 60 s TTL) ==");
-        LiveRateService live = new LiveRateService();
-        RateService cached = new CachingRateProxy(live, 2, 60_000);
-        cached.rate("USD", "EUR");
-        cached.rate("USD", "EUR");
-        cached.rate("USD", "INR");
-        cached.rate("EUR", "INR");   // evicts USD->EUR (least recently used)
-        cached.rate("USD", "EUR");
-        System.out.println("  5 calls, real lookups = " + live.lookups);
-
-        System.out.println("== Remote proxy (stub) ==");
-        RateService remote = new RemoteRateProxy(new RateServer(new LiveRateService()));
-        System.out.println("  100 USD = " + remote.convert(new BigDecimal("100"), "USD", "INR") + " INR");
-
-        System.out.println("== Smart reference (reference counting) ==");
-        SharedDevice printer = new SharedDevice();
-        try (Device a = printer.acquire(); Device b = printer.acquire()) {
-            System.out.println("  a -> " + a.query("status") + ", b -> " + b.query("print"));
-        }
-
-        System.out.println("== Dynamic proxy: one handler, any interface ==");
-        Report loggedReport = LoggingHandler.wrap(new LazyReport("Q4 plan"), Report.class);
-        loggedReport.title();
-        loggedReport.render();
-        RateService loggedRates = LoggingHandler.wrap(new LiveRateService(), RateService.class);
-        loggedRates.convert(new BigDecimal("100"), "USD", "EUR");
-        System.out.println("  ^ convert() called rate() on 'this', so the inner rate() call was NOT logged");
-        System.out.println("  generated at run time: isProxyClass = "
-                + Proxy.isProxyClass(loggedRates.getClass()));
-    }
-}
+// Main: CachingRateProxy(live, 2, 60_000) gets USD>EUR, USD>EUR, USD>INR, EUR>INR (evicts USD>EUR), USD>EUR.
 ```
 
 **Output:**
@@ -3183,14 +1894,12 @@ public class Main {
 
 **What each part does**
 
-- `LazyReport` — **virtual proxy**. `title()` is answered locally; `render()` creates the `RealReport` on first use. The "loading" line appears **once**, only at the first render.
-- **Thread-safe lazy init.** Without care, two threads calling `render()` at the same time both build the expensive object (harmless for a report, but a real bug if construction opens a connection or charges a card). We use **double-checked locking** (check without a lock, then lock and check again — see Chapter 8); the field **must be `volatile`** (a Java keyword that makes a write immediately visible to every thread) so a second thread never sees a half-constructed object.
-- `AuditedReport` — **protection proxy**, wrapping a virtual proxy. The viewer is refused **before** anything is loaded — notice no second "loading 'Payroll'" line for the viewer.
-- `RateService` works in `BigDecimal` (Java's exact decimal number type) — rates and money are never `double` — and `convert` rounds to 2 decimal places (`HALF_EVEN`, "banker's rounding": an exact half goes to the even digit).
-- `CachingRateProxy` — **caching proxy**, **bounded** (LRU via `LinkedHashMap` in access order with `removeEldestEntry`) and **time-limited** (TTL). 5 calls → 4 real lookups: the second USD→EUR is a hit, the last one is a miss because it was evicted.
-- `RemoteRateProxy` + `RateServer` — **remote proxy** (client "stub") and server "skeleton". The caller just calls `convert`; the stub turns it into a message and sends it over a (simulated) network.
-- `SharedDevice` — **smart reference**. Each `acquire()` returns a lightweight handle proxy; the real device opens with the first handle and closes when the last handle closes. All bookkeeping (`refs`, `real`, each handle's `closed` flag) happens under the `SharedDevice` lock, and `close()` is idempotent (calling it twice has the same effect as calling it once), so concurrent or double closes can't corrupt the count.
-- `LoggingHandler` — a **dynamic proxy** (next section).
+- `LazyReport` — **virtual proxy**: `title()` answered locally; "loading" appears **once**, at the first render.
+- **Thread-safe lazy init.** Otherwise two threads calling `render()` together both build the object (harmless for a report, a real bug if construction opens a connection or charges a card). **Double-checked locking** (check without a lock, then lock and check again — Chapter 8) with a **`volatile`** field (makes a write immediately visible to all threads) so no thread sees a half-built object.
+- `AuditedReport` — **protection proxy** wrapping a virtual proxy; the viewer is refused **before** anything loads (no second "loading 'Payroll'" line).
+- `RateService` uses `BigDecimal` (Java's exact decimal type) — never `double` for money — rounding to 2 places with `HALF_EVEN` ("banker's rounding": an exact half goes to the even digit).
+- `CachingRateProxy` — **bounded** (LRU via access-ordered `LinkedHashMap` + `removeEldestEntry`) and **time-limited** (TTL). 5 calls → 4 lookups: the second USD→EUR hits, the last misses because it was evicted.
+- `SharedDevice` — **smart reference**; all bookkeeping under one lock and `close()` is idempotent (twice = once), so concurrent or double closes can't corrupt the count.
 
 ### Static vs dynamic proxies
 
@@ -3205,26 +1914,24 @@ public class Main {
 
 How the JDK dynamic proxy works:
 
-1. `Proxy.newProxyInstance(classLoader, new Class<?>[]{Report.class}, handler)` generates a class (named like `$Proxy0`) that implements `Report`.
-2. **Every** method call on that object is routed to `handler.invoke(proxy, method, args)`.
-3. The handler does its extra work and calls `method.invoke(target, args)` to forward.
+1. `Proxy.newProxyInstance(classLoader, new Class<?>[]{Report.class}, handler)` generates a class (named like `$Proxy0`) implementing `Report`.
+2. **Every** call on it is routed to `handler.invoke(proxy, method, args)`.
+3. The handler does its extra work and forwards with `method.invoke(target, args)`.
 4. If the target throws, reflection wraps it in `InvocationTargetException` — **unwrap it** (`e.getCause()`) so callers see the real exception.
 
 ### The self-invocation trap (and Spring AOP)
 
-Look at the last lines of the proxy output: we called `convert` through the logging proxy, and `convert` internally called `rate(...)` on **`this`** — the real object — so that inner call **bypassed the proxy** and was never logged.
+In the output, `convert` went through the logging proxy, but internally called `rate(...)` on **`this`** — the real object — so that inner call **bypassed the proxy** and was not logged. This is exactly **Spring AOP**:
 
-This is exactly how **Spring AOP** behaves:
-
-- Spring implements annotations (`@` tags on code that it reads) such as `@Transactional` (run this method inside a database transaction — all its changes succeed or fail together), `@Cacheable`, `@Async`, `@PreAuthorize` and custom `@Aspect` advice (the extra code AOP runs around a method) by wrapping your bean (an object the Spring container creates and manages) in a **proxy**. Callers get the proxy injected, not your object.
-- Spring uses a **JDK dynamic proxy** when the target implements at least one interface, and a **CGLIB** subclass proxy otherwise (or when `proxyTargetClass = true`; Spring Boot 2.0+ defaults to CGLIB class-based proxies).
-- **Self-invocation is not intercepted**: if `placeOrder()` calls `this.saveAudit()` which is `@Transactional(propagation = REQUIRES_NEW)`, the annotation is silently ignored because the call never leaves the object.
-- With CGLIB proxies, **`final` classes cannot be proxied and `final`/`private` methods cannot be advised**.
-- Fixes, in order of preference: move the method into another bean; inject the bean's own proxy (e.g. a lazily injected self-reference); or (discouraged) `AopContext.currentProxy()`, which also requires `exposeProxy = true`. AspectJ weaving (inserting the extra code directly into the compiled classes, at compile or load time) avoids the problem because it doesn't use proxies.
+- Spring implements annotations (`@` tags it reads) such as `@Transactional` (run inside a database transaction — all changes succeed or fail together), `@Cacheable`, `@Async`, `@PreAuthorize` and custom `@Aspect` advice (the code AOP runs around a method) by wrapping your bean (an object the Spring container manages) in a **proxy**; callers get the proxy injected.
+- Spring uses a **JDK dynamic proxy** when the target implements at least one interface, a **CGLIB** subclass proxy otherwise (or when `proxyTargetClass = true`; Spring Boot 2.0+ defaults to CGLIB class-based proxies).
+- **Self-invocation is not intercepted**: if `placeOrder()` calls `this.saveAudit()` annotated `@Transactional(propagation = REQUIRES_NEW)`, the annotation is silently ignored — the call never leaves the object.
+- With CGLIB, **`final` classes cannot be proxied and `final`/`private` methods cannot be advised**.
+- Fixes, in order of preference: move the method into another bean; inject the bean's own proxy (e.g. a lazily injected self-reference); or (discouraged) `AopContext.currentProxy()`, which also needs `exposeProxy = true`. AspectJ weaving (inserting the code into compiled classes at compile or load time) avoids the problem — no proxies.
 
 ### Proxy vs Decorator
 
-This is the hardest pair in the catalogue to tell apart: both implement an interface, hold another object of that interface and forward calls to it. GoF itself says the implementations can be similar and that the difference is **purpose**: a decorator *adds responsibilities*, a proxy *controls access*.
+The hardest pair to tell apart: both implement an interface, hold another object of it and forward. GoF says implementations can be similar and the difference is **purpose**: a decorator *adds responsibilities*, a proxy *controls access*.
 
 | | **Proxy** | **Decorator** |
 |---|---|---|
@@ -3234,30 +1941,30 @@ This is the hardest pair in the catalogue to tell apart: both implement an inter
 | Does the client know it has a wrapper? | Usually not — a factory/DI container hands it the proxy as if it were the real object | Usually yes — the client (or its configuration) builds the stack |
 | How many layers? | Usually one | Often several, stacked recursively on purpose |
 
-The **creation test** is the most practical, because you can check it in the constructor: `LazyReport(String name)` builds its own subject; `LoggingRepository(UserRepository inner)` is given an existing one. A protection proxy such as `AuditedReport` *is* handed its subject, and is structurally identical to a decorator — there, only intent separates them. A caching wrapper genuinely sits on the line — both names are defensible — so the more useful question in review is whether its cache is bounded and invalidated.
+The **creation test** is most practical — check the constructor: `LazyReport(String name)` builds its own subject; `LoggingRepository(UserRepository inner)` is given one. A protection proxy like `AuditedReport` *is* handed its subject and is structurally identical to a decorator — only intent separates them. A caching wrapper genuinely sits on the line; the more useful review question is whether its cache is bounded and invalidated.
 
 ### Where proxies go wrong
 
-- **Unsynchronised lazy creation** — two threads call `render()` together and both construct the expensive object: sometimes harmless, sometimes a duplicate connection or a double charge.
-- **A caching proxy with no size limit or expiry** — a caching proxy *is* a cache, and every cache needs a bound and an invalidation story; without them it leaks memory and serves stale data. (Ours has both.)
-- **Concealing a real cost** — a remote proxy that looks local tempts callers to use it inside loops. Network calls disguised as field access cause some of the nastiest distributed-system (many machines cooperating over a network) performance bugs; the cure is usually to make the cost visible again (batch APIs that fetch many items in one call, explicit `fetch...` names), not to tune the proxy.
-- **ORM N+1 queries** (an ORM, or object-relational mapper, turns database rows into objects; N+1 means one query for the list plus one more per item) — iterating 100 orders and touching `order.getCustomer().getName()` fires one query per lazy proxy.
+- **Unsynchronised lazy creation** — two threads both construct the expensive object: sometimes harmless, sometimes a duplicate connection or double charge.
+- **A caching proxy with no size limit or expiry** — it *is* a cache and needs a bound and invalidation story, or it leaks memory and serves stale data. (Ours has both.)
+- **Concealing a real cost** — a local-looking remote proxy invites use inside loops. Network calls disguised as field access cause some of the nastiest distributed-system (many machines cooperating over a network) performance bugs; the cure is making the cost visible (batch APIs fetching many items per call, explicit `fetch...` names), not tuning the proxy.
+- **ORM N+1 queries** (an ORM maps database rows to objects; N+1 = one query for the list plus one per item) — iterating 100 orders and touching `order.getCustomer().getName()` fires one query per lazy proxy.
 
 ### Trade-offs
 
 | Pros | Cons |
 |---|---|
-| **Pay later** — costly construction happens only if something needs it. | **Extra indirection**; stack traces show the proxy, not the real class. |
-| **No caller changes** — the interface is identical (Open/Closed). | **Latency and failures are disguised** (latency = how long a call takes) as an ordinary method call. |
-| **Somewhere to put cross-cutting rules** for a class you cannot edit. | **Lazy creation brings a thread-safety question** that is easy to get wrong. |
-| **Permission checks stay outside the object**, which keeps to its own job. | **A cache with no eviction** leaks memory and returns stale data. |
+| **Pay later** — costly construction only if something needs it. | **Extra indirection**; stack traces show the proxy, not the real class. |
+| **No caller changes** — identical interface (Open/Closed). | **Latency (how long a call takes) and failures disguised** as an ordinary method call. |
+| **A home for cross-cutting rules** on a class you cannot edit. | **Lazy creation raises a thread-safety question** easy to get wrong. |
+| **Permission checks stay outside the object**, which keeps to its job. | **A cache with no eviction** leaks memory and returns stale data. |
 
 ### When not to use it
 
-- **The real object is cheap** — making something small lazy only adds a null check to every call.
-- **Callers need to see the cost** — sometimes the honest interface is a method literally named `fetchOverNetwork()`.
-- **The framework already generates one** — ORMs, DI containers and service meshes (a layer of proxies placed next to every service to manage the traffic between them) create proxies; stacking a hand-written one on top of those just doubles the hidden behaviour.
-- **You mean to add behaviour, not guard access** — that is a Decorator.
+- **The real object is cheap** — laziness only adds a null check per call.
+- **Callers need to see the cost** — sometimes the honest interface is a method named `fetchOverNetwork()`.
+- **The framework already generates one** — ORMs, DI containers and service meshes (proxies placed next to every service to manage traffic between them) create proxies; stacking a hand-written one doubles the hidden behaviour.
+- **You mean to add behaviour, not guard access** — a Decorator.
 
 ### Common mistakes
 
@@ -3269,27 +1976,27 @@ The **creation test** is the most practical, because you can check it in the con
 
 ### Real-world examples
 
-- **ORM lazy loading** (Hibernate/JPA — JPA is Java's standard ORM API — also Entity Framework and Django) — `entityManager.getReference(...)` and lazy associations return proxy objects; the SQL (database query) runs the first time you touch a non-id field. The most widely used virtual proxy — and the source of the N+1 problem and, in Hibernate, `LazyInitializationException` when the session (Hibernate's open unit of work with the database) is already closed.
-- **Spring AOP** — `@Transactional`, `@Cacheable`, `@Async`, method security: all proxies. Spring's `@Configuration` classes are also CGLIB-enhanced subclasses so that calling one `@Bean` method from another returns the container's singleton (unless `proxyBeanMethods = false`).
+- **ORM lazy loading** (Hibernate/JPA — Java's standard ORM API — also Entity Framework and Django) — `entityManager.getReference(...)` and lazy associations return proxies; the SQL runs the first time you touch a non-id field. The most used virtual proxy — and the source of N+1 and, in Hibernate, `LazyInitializationException` when the session (its open unit of work with the database) is already closed.
+- **Spring AOP** — `@Transactional`, `@Cacheable`, `@Async`, method security: all proxies. `@Configuration` classes are CGLIB-enhanced subclasses so calling one `@Bean` method from another returns the container's singleton (unless `proxyBeanMethods = false`).
 - **Remote stubs** — Java RMI stubs, gRPC and Thrift generated clients, SOAP clients: a network call behind an ordinary method.
-- **`java.lang.reflect.Proxy`** — JDK support for dynamic proxies (used by many frameworks, e.g. Spring Data repositories and MyBatis mappers are interfaces whose implementations are generated proxies).
-- **`Collections.unmodifiableList`** — a protection proxy that refuses mutation (also seen as a decorator).
-- **Service meshes / sidecars** (Envoy in Istio) — intercept traffic for retries, mTLS (mutual TLS: both sides prove their identity and the traffic is encrypted) and telemetry (metrics and traces sent for monitoring): the proxy idea at infrastructure level. **Reverse proxies / CDNs** (Nginx, Cloudflare) cache and protect origin servers (your own servers holding the original content). A reverse proxy is a server that sits in front of yours and receives requests on their behalf; a CDN (content delivery network) caches content on servers close to users — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md).
+- **`java.lang.reflect.Proxy`** — used by many frameworks; e.g. Spring Data repositories and MyBatis mappers are interfaces whose implementations are generated proxies.
+- **`Collections.unmodifiableList`** — a protection proxy refusing mutation (also seen as a decorator).
+- **Service meshes / sidecars** (Envoy in Istio) — intercept traffic for retries, mTLS (mutual TLS: both sides prove identity, traffic encrypted) and telemetry (metrics and traces sent for monitoring): the proxy idea at infrastructure level. **Reverse proxies / CDNs** (Nginx, Cloudflare) cache and protect origin servers (your servers holding the original content); a reverse proxy receives requests on your servers' behalf, a CDN (content delivery network) caches content close to users — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md).
 - **C++ `shared_ptr`** — a smart-reference proxy doing reference counting.
 
 ### In modern languages
 
 - **Java**: `java.lang.reflect.Proxy`, plus bytecode generation (CGLIB, ByteBuddy) for classes.
 - **JavaScript/TypeScript**: built-in `Proxy` intercepts property access and calls.
-- **Python**: `__getattr__` forwards anything not defined locally, so a proxy only writes the methods it intercepts; `functools.cached_property` is a virtual proxy for one field.
+- **Python**: `__getattr__` forwards anything not defined locally, so a proxy writes only what it intercepts; `functools.cached_property` is a virtual proxy for one field.
 - **C#**: `DispatchProxy`, and `Lazy<T>` — a virtual proxy for one value.
-- **C++**: `std::shared_ptr` and other smart pointers are smart-reference proxies that count references behind `operator->`.
+- **C++**: `std::shared_ptr` and other smart pointers count references behind `operator->`.
 
 ### Other patterns it is confused with
 
 | Looks like | Actual difference |
 |---|---|
-| Decorator | Same structure; see the table above. Decorator adds behaviour to an object it is handed; Proxy controls access and often creates or locates the real object itself. |
+| Decorator | Same structure — see [Proxy vs Decorator](#proxy-vs-decorator). |
 | Adapter | An Adapter has a **different** interface on purpose — it exists to translate. A Proxy has the **same** interface — it exists to substitute. |
 | Facade | A Facade offers a new, simpler interface over **several** objects. A Proxy offers the same interface over **one**. |
 | A cache | A caching proxy is a cache with a proxy's shape. Calling it a proxy does not remove the need to design its size bound and eviction. |
@@ -3301,10 +2008,10 @@ The **creation test** is the most practical, because you can check it in the con
 **Follow-ups**
 
 - *Q: Proxy vs Decorator?* — A: Proxy controls access and often creates the real object; Decorator adds behaviour to an object handed to it and normally forwards every call. Check the constructor.
-- *Q: Make the virtual proxy thread-safe.* — A: Double-checked locking with a `volatile` field (as in `LazyReport`), or simply make the getter `synchronized` if contention (threads waiting on each other for the lock) is low. (The static holder-class idiom only works for a *static* lazy field, so it does not fit a per-instance proxy.)
-- *Q: Why doesn't `@Transactional` work when I call the method from the same class?* — A: Spring's proxy only intercepts calls that come through the proxy; `this.method()` goes straight to the target.
-- *Q: JDK proxy vs CGLIB?* — A: JDK proxies implement interfaces only; CGLIB creates a subclass, so it works without interfaces but can't handle `final` classes/methods.
-- *Q: How does lazy loading cause N+1?* — A: Loading N parents and then touching each parent's lazy child proxy triggers N extra queries; fix with fetch joins / entity graphs / batch fetching (ways to load the children together with their parents).
+- *Q: Make the virtual proxy thread-safe.* — A: Double-checked locking with a `volatile` field (as in `LazyReport`), or a `synchronized` getter if contention (threads waiting on each other for the lock) is low. (The static holder idiom only fits a *static* lazy field, not a per-instance proxy.)
+- *Q: Why doesn't `@Transactional` work when I call the method from the same class?* — A: Spring's proxy only intercepts calls coming through the proxy; `this.method()` goes straight to the target.
+- *Q: JDK proxy vs CGLIB?* — A: JDK proxies implement interfaces only; CGLIB subclasses, so it works without interfaces but can't handle `final` classes/methods.
+- *Q: How does lazy loading cause N+1?* — A: Loading N parents then touching each one's lazy child proxy triggers N extra queries; fix with fetch joins / entity graphs / batch fetching (loading children together with parents).
 
 ### Self-check
 

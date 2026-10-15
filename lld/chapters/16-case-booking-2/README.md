@@ -1,34 +1,32 @@
 # Chapter 16 — Case Studies: Booking & Inventory (Part 2)
 
-> **Where this fits.** Chapter 15 covered the first group of booking problems. This chapter finishes the family with four more: a car rental company, a restaurant, an airline and a university's course registration. They look different on the surface, but they are the same problem underneath: **a limited resource, a calendar, and many people trying to claim it at once.** Once you see that shared skeleton, each new booking problem takes minutes to set up in an interview.
+> **Where this fits.** Chapter 15 covered the first group of booking problems. This chapter finishes the family with five more: a car rental company, a restaurant, an airline, a university's course registration and a meeting-room scheduler. They look different on the surface, but they are the same problem underneath: **a limited resource, a calendar, and many people trying to claim it at once.** Once you see that shared skeleton, each new booking problem takes minutes to set up in an interview.
 
 **The shared skeleton of every booking problem**
 
-| Idea | Car rental | Restaurant | Airline | Course registration |
-|---|---|---|---|---|
-| The thing being booked | a vehicle | a table | a seat on one flight instance | a seat in one section |
-| The "calendar" it is booked on | days | hourly time slots | the flight instance (route + date) | the term |
-| The check-then-claim step that must be atomic | `Vehicle.tryBook` | `Table.tryHold` | `FlightInstance.holdSeats` | `Section.enroll` |
-| What happens when it is full | search another car | try the next table | pick another seat or flight | waitlist |
-| Money | bill with lines + late fee | check split by seat + tax | fare per seat class, paid per itinerary | none (fees are an extension) |
+| Idea | Car rental | Restaurant | Airline | Course registration | Meeting scheduler |
+|---|---|---|---|---|---|
+| The thing being booked | a vehicle | a table | a seat on one flight instance | a seat in one section | a room for a time range |
+| The "calendar" it is booked on | days | hourly time slots | the flight instance (route + date) | the term | continuous time (half-open intervals) |
+| The check-then-claim step that must be atomic | `Vehicle.tryBook` | `Table.tryHold` | `FlightInstance.holdSeats` | `Section.enroll` | `Room.tryReserve` |
+| What happens when it is full | search another car | try the next table | pick another seat or flight | waitlist | try the next fitting room |
+| Money | bill with lines + late fee | check split by seat + tax | fare per seat class, paid per itinerary | none (fees are an extension) | none |
 
-A **resource** is anything with a limited supply (a car, a table, a seat). A **race condition** is a bug where the result depends on which of two threads runs first — here, two people both "win" the same seat because both checked "free?" before either wrote "taken".
-
-A **thread** is one independent line of execution inside a running program; a server handles many requests at once by running many threads side by side. A step is **atomic** when it happens as one indivisible unit: no other thread can see it half-done or slip in between its parts. **Concurrency** simply means several things are in progress at the same time.
+A **resource** is anything with a limited supply (a car, a table, a seat). A **thread** is one independent line of execution; a server runs many side by side (**concurrency**: several things in progress at once). A **race condition** is a bug where the result depends on which thread runs first — here, two people both "win" the same seat because both checked "free?" before either wrote "taken". A step is **atomic** when no other thread can see it half-done or slip in between its parts.
 
 **How to run every example in this chapter**
 
 ```bash
 cd chapters/16-case-booking-2/code
 javac --release 21 -d /tmp/lld_16 $(find . -name '*.java')
-java -cp /tmp/lld_16 lld.ch16.carrental.Main          # or restaurant, airline, courseregistration
+java -cp /tmp/lld_16 lld.ch16.carrental.Main          # or restaurant, airline, courseregistration, meetingscheduler
 ```
 
-`javac` is the Java compiler (it turns `.java` source files into runnable `.class` files), `--release 21` targets Java version 21, and `-cp` (the **classpath**) tells `java` which folder to load compiled classes from. All four `Main` classes compile with Java 21 (standard library only — the classes that ship with Java itself, no extra downloads) and run. The output printed under each program is its real output. Where threads race, the *counts* are always the same, but *which* racer wins can differ from run to run.
+`javac` compiles `.java` files to `.class` files, `--release 21` targets Java 21, and `-cp` (the **classpath**) tells `java` where the compiled classes are. All five `Main` classes use only the standard library; the output under each is its real output. Where threads race, the *counts* are fixed but *which* racer wins varies per run. The listings below show only the essential lines; the complete files are in each design's `code/` folder.
 
-> **Code-style note.** To keep each design readable, one file sometimes holds several small package-private types (visible only to other classes in the same package, i.e. the same folder of code) — for example `Types.java` holds the enums and records. An **enum** is a type with a fixed list of named values (`CAR`, `TRUCK` …); a **record** is a compact Java class that just holds a few fixed values and gets `equals`, `hashCode` and `toString` for free. That is legal Java. In production you would usually give each top-level type its own file.
+> **Code-style note.** One file sometimes holds several small package-private types (visible only within the same package) — e.g. `Types.java` holds the enums and records. An **enum** is a type with a fixed list of named values (`CAR`, `TRUCK` …); a **record** is a compact class holding a few fixed values, with `equals`, `hashCode` and `toString` generated. In production each top-level type would usually get its own file.
 
-> **Money.** All prices use `java.math.BigDecimal`, never `double`. A `double` is a binary floating-point number (it stores values in base 2 with limited precision); it cannot represent 0.1 exactly, so sums of prices drift by fractions of a cent. `BigDecimal` stores exact decimal digits.
+> **Money.** All prices use `java.math.BigDecimal`, never `double`: a binary floating-point `double` cannot represent 0.1 exactly, so sums of prices drift by fractions of a cent; `BigDecimal` stores exact decimal digits.
 
 ---
 
@@ -58,18 +56,13 @@ Questions worth asking in the first two minutes, with the answers we assume:
 
 **Functional**
 
-1. Rent different vehicle types: car, truck, SUV, van, motorcycle.
-2. Each vehicle is added with a unique barcode and details, including the parking stall number that tells staff where it is parked.
+1. Rent cars, trucks, SUVs, vans and motorcycles; each vehicle has a unique barcode (read by a scanner) and details including its parking stall number.
+2. Members search the inventory, reserve any available vehicle and can cancel.
 3. Answer "which member took this vehicle?" and "which vehicles has this member rented?".
-4. Charge a late fee when a vehicle comes back after its due date.
-5. Members search the inventory and reserve any available vehicle.
-6. Send notifications when a pick-up date is near, when a vehicle is near its due date, and when it is overdue.
-7. Read vehicle barcodes.
-8. Members can cancel reservations.
-9. Keep a vehicle log of all events on a vehicle.
-10. Members can add rental insurance.
-11. Members can rent extra equipment (navigation, child seat, ski rack).
-12. Members can add services (roadside assistance, additional driver, wifi).
+4. Charge a late fee after the due date.
+5. Notify when a pick-up date is near, a vehicle is near its due date, and when it is overdue.
+6. Keep a vehicle log of all events on a vehicle.
+7. Add-ons: rental insurance, equipment (navigation, child seat, ski rack), services (roadside assistance, additional driver, wifi).
 
 **Non-functional**
 
@@ -113,18 +106,12 @@ A **use case diagram** is a UML (Unified Modeling Language, a standard set of so
 
 ### Class diagram
 
-A **class diagram** shows the classes, their fields and methods, and how they relate (owns, refers to, inherits from). The course builds its model in seven stages: money and messages, add-ons, vehicles, search, reservations, actors, and finally the system and its branches.
-
-![Car rental vehicles stage](../../assets/O-design-a-car-rental-system-8.svg)
-*Figure — Vehicle, its log and the vehicle sub-types (course diagram)*
-
-![Car rental reservation stage](../../assets/O-design-a-car-rental-system-10.svg)
-*Figure — The reservation owns its bill and refers to the vehicle, add-ons, drivers and notifications (course diagram)*
+A **class diagram** shows the classes, their fields and methods, and how they relate (owns, refers to, inherits from). The course builds its model in seven stages (money and messages, add-ons, vehicles, search, reservations, actors, the system and its branches); the finished result:
 
 ![Car rental finished class diagram](../../assets/O-design-a-car-rental-system-13.svg)
 *Figure — The finished class diagram of the car rental system (course diagram)*
 
-In the finished figure above, two ownership chains matter: the system owns its branches and each branch owns its inventory (filled diamonds, **composition** — the part dies with the whole), while the inventory only *refers to* vehicles (plain arrow, **association**). A reservation owns its bill but only refers to the vehicle.
+Two ownership chains matter: the system owns its branches and each branch owns its inventory (filled diamonds, **composition** — the part dies with the whole), while the inventory only *refers to* vehicles (plain arrow, **association**). A vehicle owns its log; a reservation owns its bill but only refers to the vehicle, add-ons, drivers and notifications.
 
 Our Java design follows the same shape, with two deliberate differences: vehicle kinds are an enum (`VehicleType`) rather than five empty subclasses (classes that inherit from a parent class), because the subclasses add no behaviour; and pricing is a strategy object (an object you plug in to decide one varying rule) rather than a constant.
 
@@ -273,97 +260,21 @@ sequenceDiagram
 
 ### Java implementation
 
-Package `lld.ch16.carrental`.
+Package `lld.ch16.carrental`. Full runnable code is in `code/lld/ch16/carrental/`: `Types.java` (the enums `VehicleType`, `VehicleStatus`, `ReservationStatus`, `BillItemType`, `VehicleLogType` and the records `DateRange`, `Member`, `Location`, `VehicleLogEntry`, `AdditionalDriver`), `Vehicle.java`, `Billing.java` (`Bill`, `BillItem`, `PaymentMethod` with `CardPayment`/`CashPayment`, the add-ons), `Pricing.java` (`DailyRatePricing`, `WeeklyDiscountPricing`, `FlatLateFee`, `Notifier`), `Reservation.java`, `RentalSystem.java` (`VehicleInventory`, `CarRentalLocation`, `ReservationService`, `CarRentalSystem`) and `Main.java`. The essential lines (`/* ... */` and `//` summary comments stand for code left out):
 
 ```java
-// File: code/lld/ch16/carrental/Types.java
-package lld.ch16.carrental;
-
-import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
-import java.util.stream.Stream;
-
-enum VehicleType { CAR, TRUCK, SUV, VAN, MOTORCYCLE }
-
-/** Where the vehicle physically is RIGHT NOW. Future availability is answered by booked days, not by this. */
-enum VehicleStatus { AVAILABLE, LOANED, BEING_SERVICED, LOST }
-
-enum ReservationStatus { CONFIRMED, ACTIVE, COMPLETED, CANCELLED }
-
-enum BillItemType { BASE_CHARGE, ADD_ON, LATE_FEE }
-
-enum VehicleLogType { RESERVED, PICKED_UP, RETURNED, CANCELLED, FUELING, CLEANING, DAMAGE, REPAIR }
-
 /** Half-open range [start, end): 10 Oct to 13 Oct is 3 rental days and the car is due back on 13 Oct. */
 record DateRange(LocalDate start, LocalDate end) {
-    DateRange {
-        if (!end.isAfter(start)) throw new IllegalArgumentException("end must be after start");
-    }
+    DateRange { if (!end.isAfter(start)) throw new IllegalArgumentException("end must be after start"); }
     long days() { return ChronoUnit.DAYS.between(start, end); }
     Stream<LocalDate> dates() { return start.datesUntil(end); }
-    @Override public String toString() { return start + ".." + end; }
 }
 
-record Member(String id, String name, String email) {}
+final class Vehicle {                       // barcode, plate, make, model, type, seats, parkingStall, mileage, log ...
+    private VehicleStatus status = VehicleStatus.AVAILABLE;      // where it is RIGHT NOW
+    private final Set<LocalDate> bookedDays = new HashSet<>();   // future availability
 
-record Location(String code, String name) {}
-
-record VehicleLogEntry(LocalDate date, VehicleLogType type, String note) {}
-
-record AdditionalDriver(String name, String licenseNumber) {}
-```
-
-```java
-// File: code/lld/ch16/carrental/Vehicle.java
-package lld.ch16.carrental;
-
-import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-
-/** One physical vehicle. It owns its booked days and its log. */
-final class Vehicle {
-    private final String barcode;
-    private final String licensePlate;
-    private final String make;
-    private final String model;
-    private final VehicleType type;
-    private final int passengerCapacity;
-    private final String parkingStall;
-    private VehicleStatus status = VehicleStatus.AVAILABLE;
-    private int mileage;
-    private final Set<LocalDate> bookedDays = new HashSet<>();
-    private final List<VehicleLogEntry> log = new ArrayList<>();
-
-    Vehicle(String barcode, String licensePlate, String make, String model,
-            VehicleType type, int passengerCapacity, String parkingStall, int mileage) {
-        this.barcode = barcode;
-        this.licensePlate = licensePlate;
-        this.make = make;
-        this.model = model;
-        this.type = type;
-        this.passengerCapacity = passengerCapacity;
-        this.parkingStall = parkingStall;
-        this.mileage = mileage;
-    }
-
-    String barcode() { return barcode; }
-    String model() { return model; }
-    VehicleType type() { return type; }
-    String parkingStall() { return parkingStall; }
-    synchronized VehicleStatus status() { return status; }
-    synchronized int mileage() { return mileage; }
-    synchronized void setStatus(VehicleStatus s) { status = s; }
-    synchronized void setMileage(int m) {
-        if (m < mileage) throw new IllegalArgumentException("odometer cannot go backwards");
-        mileage = m;
-    }
-
-    synchronized boolean isFreeFor(DateRange r) {
-        return r.dates().noneMatch(bookedDays::contains);
-    }
+    synchronized boolean isFreeFor(DateRange r) { return r.dates().noneMatch(bookedDays::contains); }
 
     /** Check AND book inside one lock, so two members can never both win the same days. */
     synchronized boolean tryBook(DateRange r) {
@@ -371,47 +282,21 @@ final class Vehicle {
         r.dates().forEach(bookedDays::add);
         return true;
     }
-
     synchronized void release(DateRange r) { r.dates().forEach(bookedDays::remove); }
-
-    synchronized void addLog(LocalDate date, VehicleLogType type, String note) {
-        log.add(new VehicleLogEntry(date, type, note));
-    }
-
-    synchronized List<VehicleLogEntry> history() { return List.copyOf(log); }
-
-    String describe() {
-        return make + " " + model + " (" + type + ", " + passengerCapacity + " seats, plate " + licensePlate + ")";
+    synchronized void setMileage(int m) {
+        if (m < mileage) throw new IllegalArgumentException("odometer cannot go backwards");
+        mileage = m;
     }
 }
 ```
 
 ```java
-// File: code/lld/ch16/carrental/Billing.java
-package lld.ch16.carrental;
-
-import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.List;
-
-record BillItem(String description, BillItemType type, BigDecimal amount) {}
-
-/**
- * The ONLY place that knows what a rental costs: every charge becomes a line here.
- * Every method is synchronized on the bill, so a line can never be added while it is being settled.
- */
+/** The ONLY place that knows what a rental costs. Every method is synchronized on the bill. */
 final class Bill {
-    private final List<BillItem> items = new ArrayList<>();
-    private boolean paid;
-
     synchronized void add(BillItem item) {
         if (paid) throw new IllegalStateException("bill already settled");
         items.add(item);
     }
-    synchronized List<BillItem> items() { return List.copyOf(items); }
-    synchronized BigDecimal total() { return items.stream().map(BillItem::amount).reduce(BigDecimal.ZERO, BigDecimal::add); }
-    synchronized boolean isPaid() { return paid; }
-
     /** Idempotent: settling a bill that is already paid does not charge the member a second time. */
     synchronized boolean settle(PaymentMethod method) {
         if (paid) return true;
@@ -420,182 +305,36 @@ final class Bill {
     }
 }
 
-/** Strategy for how money is taken. */
-interface PaymentMethod { boolean charge(BigDecimal amount); }
-
-record CardPayment(String cardToken) implements PaymentMethod {
-    public boolean charge(BigDecimal amount) {
-        System.out.println("    charged " + amount + " to card token " + cardToken);
-        return true;
-    }
-}
-
-record CashPayment(BigDecimal tendered) implements PaymentMethod {
-    public boolean charge(BigDecimal amount) { return tendered.compareTo(amount) >= 0; }
-}
-
-/**
- * Template Method: toBillItem() is fixed; subclasses only say what kind of add-on they are
- * and may override how the price is computed (the hook).
- */
+/** Template Method: toBillItem() is fixed; subclasses say what they are and may override the price hook. */
 abstract class ReservationAddOn {
-    private final String name;
-    protected final BigDecimal price;
-
-    protected ReservationAddOn(String name, BigDecimal price) {
-        this.name = name;
-        this.price = price;
-    }
-
     final BillItem toBillItem(long rentalDays) {
         return new BillItem(kind() + ": " + name, BillItemType.ADD_ON, priceFor(rentalDays));
     }
-
     protected abstract String kind();
-
-    /** Hook: by default an add-on is charged per rental day. */
-    protected BigDecimal priceFor(long rentalDays) { return price.multiply(BigDecimal.valueOf(rentalDays)); }
+    protected BigDecimal priceFor(long rentalDays) { return price.multiply(BigDecimal.valueOf(rentalDays)); } // hook: per day
 }
-
-final class RentalInsurance extends ReservationAddOn {
-    RentalInsurance(String name, BigDecimal perDay) { super(name, perDay); }
-    protected String kind() { return "Insurance"; }
-}
-
-final class Equipment extends ReservationAddOn {
-    Equipment(String name, BigDecimal perDay) { super(name, perDay); }
-    protected String kind() { return "Equipment"; }
-}
-
-/** A service such as roadside assistance or wifi is a flat fee per rental. */
-final class Service extends ReservationAddOn {
-    Service(String name, BigDecimal flatFee) { super(name, flatFee); }
+final class Service extends ReservationAddOn {   // RentalInsurance and Equipment keep the per-day default
     protected String kind() { return "Service"; }
-    @Override protected BigDecimal priceFor(long rentalDays) { return price; }
-}
-```
-
-```java
-// File: code/lld/ch16/carrental/Pricing.java
-package lld.ch16.carrental;
-
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.util.EnumMap;
-import java.util.Map;
-
-/** Strategy: how the base charge for a rental is computed. */
-interface PricingStrategy { BigDecimal baseCharge(Vehicle v, DateRange period); }
-
-final class DailyRatePricing implements PricingStrategy {
-    private final Map<VehicleType, BigDecimal> dailyRate;
-    DailyRatePricing(Map<VehicleType, BigDecimal> dailyRate) { this.dailyRate = new EnumMap<>(dailyRate); }
-    public BigDecimal baseCharge(Vehicle v, DateRange p) {
-        return dailyRate.get(v.type()).multiply(BigDecimal.valueOf(p.days()));
-    }
+    @Override protected BigDecimal priceFor(long rentalDays) { return price; }   // flat fee per rental
 }
 
-/** Decorator over any pricing: 10% off rentals of 7 days or more. */
+/** Decorator over any PricingStrategy: 10% off rentals of 7 days or more. */
 final class WeeklyDiscountPricing implements PricingStrategy {
-    private final PricingStrategy inner;
-    WeeklyDiscountPricing(PricingStrategy inner) { this.inner = inner; }
     public BigDecimal baseCharge(Vehicle v, DateRange p) {
         BigDecimal base = inner.baseCharge(v, p);
         return p.days() >= 7 ? base.multiply(new BigDecimal("0.90")).setScale(2, RoundingMode.HALF_UP) : base;
     }
 }
-
-/** Strategy: what a late return costs. */
-interface LateFeePolicy { BigDecimal fee(Vehicle v, long daysLate); }
-
-record FlatLateFee(BigDecimal perDay) implements LateFeePolicy {
-    public BigDecimal fee(Vehicle v, long daysLate) { return perDay.multiply(BigDecimal.valueOf(daysLate)); }
-}
-
-/** Observer-style port: the service announces events, the notifier decides the channel. */
-interface Notifier { void send(Member to, String message); }
-
-final class ConsoleNotifier implements Notifier {
-    public void send(Member to, String message) { System.out.println("    [notify " + to.email() + "] " + message); }
-}
 ```
 
 ```java
-// File: code/lld/ch16/carrental/Reservation.java
-package lld.ch16.carrental;
-
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.List;
-
-/** One rental. The rules (add-ons, late fee, freeing days) live here, not in the actors. */
-final class Reservation {
-    private final String id;
-    private final Member member;
-    private final Vehicle vehicle;
-    private final DateRange period;
-    private final Location pickupLocation;
-    private final Location returnLocation;
-    private final Bill bill = new Bill();
-    private final List<ReservationAddOn> addOns = new ArrayList<>();
-    private final List<AdditionalDriver> drivers = new ArrayList<>();
-    private ReservationStatus status = ReservationStatus.CONFIRMED;
-
-    Reservation(String id, Member member, Vehicle vehicle, DateRange period,
-                Location pickup, Location dropoff, BigDecimal baseCharge) {
-        this.id = id;
-        this.member = member;
-        this.vehicle = vehicle;
-        this.period = period;
-        this.pickupLocation = pickup;
-        this.returnLocation = dropoff;
-        bill.add(new BillItem("Base: " + vehicle.model() + " x " + period.days() + " days",
-                BillItemType.BASE_CHARGE, baseCharge));
-    }
-
-    String id() { return id; }
-    Member member() { return member; }
-    Vehicle vehicle() { return vehicle; }
-    DateRange period() { return period; }
-    Location pickupLocation() { return pickupLocation; }
-    Location returnLocation() { return returnLocation; }
-    Bill bill() { return bill; }
-    synchronized List<AdditionalDriver> drivers() { return List.copyOf(drivers); }
-    synchronized ReservationStatus status() { return status; }
-
-    private void require(ReservationStatus expected, String action) {
-        if (status != expected)
-            throw new IllegalStateException("cannot " + action + " reservation " + id + " in state " + status);
-    }
-
-    synchronized void addAddOn(ReservationAddOn addOn) {
-        require(ReservationStatus.CONFIRMED, "add an add-on to");
-        addOns.add(addOn);
-        bill.add(addOn.toBillItem(period.days()));
-    }
-
-    synchronized void addDriver(AdditionalDriver d) {
-        require(ReservationStatus.CONFIRMED, "add a driver to");
-        drivers.add(d);
-    }
-
-    synchronized void pickUp(LocalDate on) {
-        require(ReservationStatus.CONFIRMED, "pick up");
-        status = ReservationStatus.ACTIVE;
-        vehicle.setStatus(VehicleStatus.LOANED);
-        vehicle.addLog(on, VehicleLogType.PICKED_UP, id + " by " + member.name() + " at " + pickupLocation.code());
-    }
-
+final class Reservation {   // the rules live here, not in the actors
     /** Returns the number of late days charged. The due date is period.end(). */
     synchronized long returnVehicle(LocalDate on, int odometer, LateFeePolicy lateFee) {
         require(ReservationStatus.ACTIVE, "return");
         long daysLate = Math.max(0, ChronoUnit.DAYS.between(period.end(), on));
-        if (daysLate > 0) {
-            bill.add(new BillItem("Late fee: " + daysLate + " day(s)", BillItemType.LATE_FEE,
-                    lateFee.fee(vehicle, daysLate)));
-        }
+        if (daysLate > 0)
+            bill.add(new BillItem("Late fee: " + daysLate + " day(s)", BillItemType.LATE_FEE, lateFee.fee(vehicle, daysLate)));
         vehicle.setMileage(odometer);
         vehicle.setStatus(VehicleStatus.AVAILABLE);
         vehicle.release(period);
@@ -603,70 +342,14 @@ final class Reservation {
         status = ReservationStatus.COMPLETED;
         return daysLate;
     }
-
     synchronized void cancel(LocalDate on) {
         require(ReservationStatus.CONFIRMED, "cancel");
         status = ReservationStatus.CANCELLED;
         vehicle.release(period);   // a cancelled rental must give its days back
-        vehicle.addLog(on, VehicleLogType.CANCELLED, id);
-    }
-}
-```
-
-```java
-// File: code/lld/ch16/carrental/RentalSystem.java
-package lld.ch16.carrental;
-
-import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicInteger;
-
-/** Per-branch indexes over vehicles. All three are filled by add(), so they cannot drift apart. */
-final class VehicleInventory {
-    private final Map<String, Vehicle> byBarcode = new ConcurrentHashMap<>();
-    private final Map<VehicleType, List<Vehicle>> byType = new ConcurrentHashMap<>();
-    private final Map<String, List<Vehicle>> byModel = new ConcurrentHashMap<>();
-
-    void add(Vehicle v) {
-        if (byBarcode.putIfAbsent(v.barcode(), v) != null)
-            throw new IllegalArgumentException("duplicate barcode " + v.barcode());
-        byType.computeIfAbsent(v.type(), t -> new CopyOnWriteArrayList<>()).add(v);
-        byModel.computeIfAbsent(v.model(), m -> new CopyOnWriteArrayList<>()).add(v);
-    }
-
-    Optional<Vehicle> scan(String barcode) { return Optional.ofNullable(byBarcode.get(barcode)); }
-
-    List<Vehicle> search(VehicleType type, DateRange period) {
-        return byType.getOrDefault(type, List.of()).stream()
-                .filter(v -> v.status() != VehicleStatus.LOST && v.isFreeFor(period)).toList();
-    }
-
-    List<Vehicle> searchByModel(String model, DateRange period) {
-        return byModel.getOrDefault(model, List.of()).stream().filter(v -> v.isFreeFor(period)).toList();
     }
 }
 
-record CarRentalLocation(Location location, VehicleInventory inventory) {}
-
-/** Creates and tracks reservations. Answers "what did this member rent" and "who took this car". */
 final class ReservationService {
-    private final PricingStrategy pricing;
-    private final LateFeePolicy lateFee;
-    private final Notifier notifier;
-    private final Map<String, Reservation> reservations = new ConcurrentHashMap<>();
-    private final AtomicInteger seq = new AtomicInteger(1000);
-
-    ReservationService(PricingStrategy pricing, LateFeePolicy lateFee, Notifier notifier) {
-        this.pricing = pricing;
-        this.lateFee = lateFee;
-        this.notifier = notifier;
-    }
-
     Optional<Reservation> reserve(Member m, Vehicle v, DateRange period, Location pickup, Location dropoff, LocalDate today) {
         if (!v.tryBook(period)) return Optional.empty();
         var r = new Reservation("R" + seq.incrementAndGet(), m, v, period, pickup, dropoff, pricing.baseCharge(v, period));
@@ -675,176 +358,12 @@ final class ReservationService {
         notifier.send(m, "Reservation " + r.id() + " confirmed: " + v.model() + " " + period);
         return Optional.of(r);
     }
-
-    Reservation get(String id) {
-        var r = reservations.get(id);
-        if (r == null) throw new IllegalArgumentException("no reservation " + id);
-        return r;
-    }
-
-    void cancel(String id, LocalDate on) {
-        var r = get(id);
-        r.cancel(on);
-        notifier.send(r.member(), "Reservation " + id + " cancelled");
-    }
-
-    void pickUp(String id, LocalDate on) { get(id).pickUp(on); }
-
-    void returnVehicle(String id, LocalDate on, int odometer) {
-        var r = get(id);
-        long late = r.returnVehicle(on, odometer, lateFee);
-        if (late > 0) notifier.send(r.member(), "Returned " + late + " day(s) late, late fee added to " + id);
-    }
-
-    List<Reservation> byMember(String memberId) {
-        return reservations.values().stream().filter(r -> r.member().id().equals(memberId)).toList();
-    }
-
-    List<Reservation> byVehicle(String barcode) {
-        return reservations.values().stream().filter(r -> r.vehicle().barcode().equals(barcode)).toList();
-    }
-
-    /** Requirement: remind before pick-up, before the due date, and when overdue. Run once a day by a scheduler. */
-    void sendReminders(LocalDate today) {
-        for (var r : reservations.values()) {
-            var status = r.status();
-            if (status == ReservationStatus.CONFIRMED && r.period().start().equals(today.plusDays(1)))
-                notifier.send(r.member(), "Pick-up tomorrow for " + r.id() + " at " + r.pickupLocation().name());
-            else if (status == ReservationStatus.ACTIVE && r.period().end().equals(today.plusDays(1)))
-                notifier.send(r.member(), "Vehicle for " + r.id() + " is due tomorrow");
-            else if (status == ReservationStatus.ACTIVE && r.period().end().isBefore(today))
-                notifier.send(r.member(), "OVERDUE: " + r.id() + " was due " + r.period().end());
-        }
-    }
-}
-
-/** Top-level object: owns branches (each owning its inventory) and the reservation service. */
-final class CarRentalSystem {
-    private final Map<String, CarRentalLocation> locations = new ConcurrentHashMap<>();
-    private final ReservationService reservations;
-
-    CarRentalSystem(ReservationService reservations) { this.reservations = reservations; }
-
-    CarRentalLocation addLocation(Location l) {
-        return locations.computeIfAbsent(l.code(), c -> new CarRentalLocation(l, new VehicleInventory()));
-    }
-    CarRentalLocation location(String code) { return locations.get(code); }
-    ReservationService reservations() { return reservations; }
-
-    List<Vehicle> searchAll(VehicleType type, DateRange period) {
-        List<Vehicle> out = new ArrayList<>();
-        locations.values().forEach(l -> out.addAll(l.inventory().search(type, period)));
-        return out;
-    }
+    // byMember(id), byVehicle(barcode): filters over the one reservations map.
+    // sendReminders(today): pick-up tomorrow / due tomorrow / OVERDUE - run once a day by a scheduler.
 }
 ```
 
-```java
-// File: code/lld/ch16/carrental/Main.java
-package lld.ch16.carrental;
-
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicInteger;
-
-public class Main {
-    static BigDecimal usd(String s) { return new BigDecimal(s); }
-
-    public static void main(String[] args) throws Exception {
-        var pricing = new WeeklyDiscountPricing(new DailyRatePricing(Map.of(
-                VehicleType.CAR, usd("50.00"), VehicleType.SUV, usd("80.00"), VehicleType.TRUCK, usd("100.00"),
-                VehicleType.VAN, usd("90.00"), VehicleType.MOTORCYCLE, usd("35.00"))));
-        var service = new ReservationService(pricing, new FlatLateFee(usd("40.00")), new ConsoleNotifier());
-        var system = new CarRentalSystem(service);
-
-        var sfo = new Location("SFO", "SFO Airport");
-        var dtn = new Location("DTN", "Downtown");
-        var sfoInv = system.addLocation(sfo).inventory();
-        sfoInv.add(new Vehicle("VH-001", "7ABC123", "Toyota", "RAV4", VehicleType.SUV, 5, "A-12", 20_100));
-        sfoInv.add(new Vehicle("VH-002", "7ABC124", "Honda", "CR-V", VehicleType.SUV, 5, "A-13", 15_400));
-        sfoInv.add(new Vehicle("VH-003", "8XYZ001", "Honda", "Civic", VehicleType.CAR, 5, "B-02", 9_800));
-        system.addLocation(dtn).inventory().add(new Vehicle("VH-010", "9VAN555", "Ford", "Transit", VehicleType.VAN, 12, "C-01", 30_000));
-
-        var alice = new Member("M1", "Alice", "alice@example.com");
-        var today = LocalDate.of(2026, 10, 1);
-        var trip = new DateRange(LocalDate.of(2026, 10, 10), LocalDate.of(2026, 10, 13));
-
-        System.out.println("1) Search SUVs at SFO for " + trip);
-        sfoInv.search(VehicleType.SUV, trip).forEach(v -> System.out.println("   " + v.barcode() + " " + v.describe() + " stall " + v.parkingStall()));
-
-        System.out.println("2) Alice reserves VH-001 (pick up SFO, return Downtown) and adds extras");
-        var rav4 = sfoInv.scan("VH-001").orElseThrow();
-        var r1 = service.reserve(alice, rav4, trip, sfo, dtn, today).orElseThrow();
-        r1.addAddOn(new RentalInsurance("Collision damage waiver", usd("15.00")));
-        r1.addAddOn(new Equipment("Child seat", usd("8.00")));
-        r1.addAddOn(new Service("Roadside assistance", usd("25.00")));
-        r1.addDriver(new AdditionalDriver("Sam", "D1234567"));
-
-        System.out.println("3) 8 members race for VH-002 on the same dates");
-        var crv = sfoInv.scan("VH-002").orElseThrow();
-        var wins = new AtomicInteger();
-        var winnerId = new String[1];
-        var start = new CountDownLatch(1);
-        try (ExecutorService pool = Executors.newFixedThreadPool(8)) {
-            for (int i = 0; i < 8; i++) {
-                var m = new Member("M" + (10 + i), "Racer" + i, "racer" + i + "@example.com");
-                pool.submit(() -> {
-                    start.await();
-                    service.reserve(m, crv, new DateRange(LocalDate.of(2026, 10, 11), LocalDate.of(2026, 10, 14)), sfo, sfo, today)
-                           .ifPresent(r -> { wins.incrementAndGet(); synchronized (winnerId) { winnerId[0] = r.id(); } });
-                    return null;
-                });
-            }
-            start.countDown();
-        }
-        System.out.println("   successful reservations for VH-002: " + wins.get());
-        System.out.println("   SUVs free for " + trip + " now: " + sfoInv.search(VehicleType.SUV, trip).size());
-
-        System.out.println("4) Daily reminder job on 2026-10-09");
-        service.sendReminders(LocalDate.of(2026, 10, 9));
-
-        System.out.println("5) Pick up on 10 Oct, return at Downtown on 15 Oct (due 13 Oct)");
-        service.pickUp(r1.id(), LocalDate.of(2026, 10, 10));
-        System.out.println("   VH-001 status while out: " + rav4.status());
-        service.sendReminders(LocalDate.of(2026, 10, 14));
-        service.returnVehicle(r1.id(), LocalDate.of(2026, 10, 15), 20_640);
-        rav4.addLog(LocalDate.of(2026, 10, 15), VehicleLogType.CLEANING, "interior clean by worker W7");
-
-        System.out.println("6) Alice's bill");
-        r1.bill().items().forEach(i -> System.out.printf("   %-40s %-10s %8s%n", i.description(), i.type(), i.amount()));
-        System.out.println("   TOTAL " + r1.bill().total());
-        r1.bill().settle(new CardPayment("tok_alice_visa"));
-        System.out.println("   paid: " + r1.bill().isPaid() + ", settle again (double click) -> "
-                + r1.bill().settle(new CardPayment("tok_alice_visa")) + ", no second charge");
-
-        System.out.println("7) Who rented VH-001? What has Alice rented?");
-        service.byVehicle("VH-001").forEach(r -> System.out.println("   " + r.id() + " -> " + r.member().name() + " " + r.period() + " " + r.status()));
-        service.byMember("M1").forEach(r -> System.out.println("   Alice: " + r.id() + " " + r.vehicle().model()));
-
-        System.out.println("8) Vehicle log for VH-001");
-        rav4.history().forEach(e -> System.out.println("   " + e.date() + " " + e.type() + " " + e.note()));
-
-        System.out.println("9) The VH-002 winner cancels; the days come back");
-        service.cancel(winnerId[0], LocalDate.of(2026, 10, 2));
-        System.out.println("   SUVs free for " + trip + ": " + sfoInv.search(VehicleType.SUV, trip).size());
-
-        System.out.println("10) A 7-day Civic rental gets the weekly discount");
-        var week = new DateRange(LocalDate.of(2026, 11, 1), LocalDate.of(2026, 11, 8));
-        var r3 = service.reserve(alice, sfoInv.scan("VH-003").orElseThrow(), week, sfo, sfo, today).orElseThrow();
-        System.out.println("   base charge " + r3.bill().total() + " (7 x 50 = 350, minus 10%)");
-
-        System.out.println("11) Rules are enforced");
-        try { r1.addAddOn(new Equipment("Ski rack", usd("10.00"))); }
-        catch (IllegalStateException e) { System.out.println("   rejected: " + e.getMessage()); }
-        try { new DateRange(LocalDate.of(2026, 10, 5), LocalDate.of(2026, 10, 5)); }
-        catch (IllegalArgumentException e) { System.out.println("   rejected: " + e.getMessage()); }
-    }
-}
-```
+`VehicleInventory.add` fills all three indexes (`byBarcode`, `byType`, `byModel`) in one call so they cannot drift apart, and rejects a duplicate barcode. `Main.java` builds two branches (SFO Airport, Downtown), prices with `WeeklyDiscountPricing(DailyRatePricing(...))` and a `FlatLateFee` of 40.00/day, and in step 3 releases 8 threads at once with a `CountDownLatch` to race for VH-002.
 
 Output:
 
@@ -896,7 +415,7 @@ What to notice in the output: step 3 has eight threads racing for one car and ex
 
 ### Concurrency & edge cases
 
-> **Key term — lock:** A **lock** (also called a mutex) is a token only one thread can hold at a time; any other thread that wants it waits until it is released. In Java, a `synchronized` method uses the object itself as the lock. A *global lock* guards everything with one token (simple, but everyone queues), while a *per-object lock* (one per vehicle here) lets work on different objects run in parallel.
+> **Key term — lock:** a **lock** (mutex) is a token only one thread can hold at a time; others wait for it ([§12.7](../12-concurrency-concepts/README.md#127-mutex-mutual-exclusion-and-synchronized)). A `synchronized` method locks the object itself. A *global lock* makes everyone queue; a *per-object lock* (one per vehicle here) lets different objects proceed in parallel ([§12.11](../12-concurrency-concepts/README.md#1211-coarse-grained-vs-fine-grained-locking)).
 
 - **Double booking.** The course lists this as an open gap in its own design (checking the days and booking them are two separate steps there). Two members call `reserve` for the same car at the same moment. Because `tryBook` is `synchronized` on the vehicle, the check "are all days free?" and the write "mark them booked" happen as one step, so the second caller sees the first caller's days. Locking per vehicle (not one global lock) lets different cars be booked in parallel. In a database-backed system the same idea becomes a unique constraint on `(vehicle_id, day)` (the database refuses a second row with the same pair) or a `SELECT … FOR UPDATE` (a read that also locks the rows it returns) in one transaction (a group of database changes that succeed or fail together).
 - **Search is advisory.** `search` may say a car is free and then `reserve` fails because someone else won. That is correct: the client (the app or web page the member is using) simply shows "no longer available". Never reserve based on a stale (out-of-date) search result without re-checking.
@@ -978,19 +497,13 @@ A **restaurant management system** runs the day-to-day of a restaurant from one 
 
 **Functional**
 
-1. The restaurant has several branches.
-2. Each branch has a menu.
-3. A menu has sections; sections have menu items.
-4. A waiter creates an order for a table and adds meals for each seat.
-5. Each meal has meal items; each meal item corresponds to a menu item.
-6. Show which tables are free now for walk-in customers.
-7. Support table reservations.
-8. The receptionist searches free tables by date and time and reserves one.
-9. Customers can cancel a reservation.
-10. Send a notification when the reservation time is approaching.
-11. Customers pay by credit card, cheque or cash.
-12. A branch can have several seating arrangements of tables.
-13. (Added) Orders go to a kitchen queue; chefs take them one at a time and the waiter is notified when an order is ready.
+1. Several branches, each with a menu of sections → menu items.
+2. A waiter creates an order for a table with meals per seat; each meal item corresponds to a menu item.
+3. Show tables free now for walk-ins.
+4. Reservations: the receptionist searches free tables by date and time and reserves one; customers can cancel; a notification goes out as the time approaches.
+5. Pay by credit card, cheque or cash.
+6. A branch can have several seating arrangements of tables.
+7. (Added) Orders go to a kitchen queue; chefs take them one at a time and the waiter is notified when an order is ready.
 
 **Non-functional**
 
@@ -1036,18 +549,12 @@ In the figure above, each role has a small, separate set of use cases. That is a
 
 ### Class diagram
 
-The course grows the model in seven stages: payments and notifications, the menu, tables, reservations, orders, staff, and finally the branch that ties it together.
-
-![Restaurant tables stage](../../assets/O-design-a-restaurant-management-system-9.svg)
-*Figure — Table, TableSeat and TableChart: a table owns its seats; a chart only refers to tables (course diagram)*
-
-![Restaurant order stage](../../assets/O-design-a-restaurant-management-system-11.svg)
-*Figure — Order, Meal and MealItem: one order per table, one meal per seat (course diagram)*
+The course grows the model in seven stages (payments and notifications, menu, tables, reservations, orders, staff, the branch); the finished result:
 
 ![Restaurant finished class diagram](../../assets/O-design-a-restaurant-management-system-14.svg)
 *Figure — The finished class diagram of the restaurant management system (course diagram)*
 
-In the finished figure above, the branch is the hub: its menu, kitchen and seating charts are composition (they do not exist without the branch), while staff are only associated, because staff can move between branches. Note also what is *not* there: no separate `Bill` class that stores a total. The course's argument is that the order already holds every priced line, so storing the total again would create a second copy that could disagree. Our `Check` follows that rule — it is computed from the order on demand.
+A table owns its seats while a chart only refers to tables; an order (one per table) owns one meal per seat, and each meal owns its meal items. The branch is the hub: its menu, kitchen and seating charts are composition (they do not exist without the branch), while staff are only associated, because staff can move between branches. Note also what is *not* there: no separate `Bill` class that stores a total. The course's argument is that the order already holds every priced line, so storing the total again would create a second copy that could disagree. Our `Check` follows that rule — it is computed from the order on demand.
 
 ```mermaid
 classDiagram
@@ -1221,284 +728,53 @@ sequenceDiagram
 
 ### Java implementation
 
-Package `lld.ch16.restaurant`.
+Package `lld.ch16.restaurant`. Full runnable code is in `code/lld/ch16/restaurant/`: `Types.java` (enums `TableStatus`, `SeatType`, `ReservationStatus`, `OrderStatus`, `PaymentStatus`; records `MenuItem`, `Customer`, `TableSeat`), `Menu.java` (`Menu` → `MenuSection` → `MenuItem`; prices live only on `MenuItem`), `Tables.java` (`Table`, `TableChart`), `Reservations.java`, `Orders.java` (`MealItem`, `Meal`, `Order`, `OrderListener`), `Kitchen.java`, `Staff.java` (`Employee` roles, `Check`, payments, `Branch`, `Restaurant`) and `Main.java`. The essential lines (`/* ... */` and `//` summary comments stand for code left out):
 
 ```java
-// File: code/lld/ch16/restaurant/Types.java
-package lld.ch16.restaurant;
-
-import java.math.BigDecimal;
-
-enum TableStatus { FREE, RESERVED, OCCUPIED }
-enum SeatType { REGULAR, KID, ACCESSIBLE }
-enum ReservationStatus { CONFIRMED, CHECKED_IN, CANCELLED, NO_SHOW }
-enum OrderStatus { RECEIVED, PREPARING, READY, SERVED, CANCELLED }
-enum PaymentStatus { COMPLETED, PENDING, DECLINED }
-
-record MenuItem(String id, String title, BigDecimal price) {}
-record Customer(String name, String phone) {}
-record TableSeat(int number, SeatType type) {}
-```
-
-```java
-// File: code/lld/ch16/restaurant/Menu.java
-package lld.ch16.restaurant;
-
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-
-/** A branch's menu: Menu -> sections -> items (composition). Prices live ONLY on MenuItem. */
-final class Menu {
-    private final Map<String, MenuSection> sections = new LinkedHashMap<>();
-
-    synchronized MenuSection section(String title) { return sections.computeIfAbsent(title, MenuSection::new); }
-
-    synchronized Optional<MenuItem> find(String itemId) {
-        return sections.values().stream().flatMap(s -> s.items().stream())
-                .filter(i -> i.id().equals(itemId)).findFirst();
-    }
-
-    synchronized List<MenuSection> sections() { return List.copyOf(sections.values()); }
-}
-
-final class MenuSection {
-    private final String title;
-    private final List<MenuItem> items = new ArrayList<>();
-    MenuSection(String title) { this.title = title; }
-    String title() { return title; }
-    synchronized void add(MenuItem item) { items.add(item); }
-    synchronized boolean remove(String itemId) { return items.removeIf(i -> i.id().equals(itemId)); }
-    synchronized List<MenuItem> items() { return List.copyOf(items); }
-}
-```
-
-```java
-// File: code/lld/ch16/restaurant/Tables.java
-package lld.ch16.restaurant;
-
-import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-
-/**
- * status answers "what is this table doing NOW" (for walk-ins).
- * heldSlots answers "is it free at 19:00 on Friday" (for reservations).
- */
+/** status answers "what is this table doing NOW" (walk-ins); heldSlots answers "is it free at 19:00 on Friday". */
 final class Table {
     static final int SLOTS_PER_BOOKING = 2;   // a booking holds the table for two hourly slots
-
-    private final String id;
-    private final int capacity;
-    private final List<TableSeat> seats = new ArrayList<>();
     private final Set<LocalDateTime> heldSlots = new HashSet<>();
     private TableStatus status = TableStatus.FREE;
 
-    Table(String id, int capacity) {
-        this.id = id;
-        this.capacity = capacity;
-        for (int i = 1; i <= capacity; i++) seats.add(new TableSeat(i, SeatType.REGULAR));
-    }
-
-    String id() { return id; }
-    int capacity() { return capacity; }
-    List<TableSeat> seats() { return List.copyOf(seats); }
-    synchronized TableStatus status() { return status; }
-    synchronized void setStatus(TableStatus s) { status = s; }
-
-    private static List<LocalDateTime> slots(LocalDateTime start) {
-        var first = start.truncatedTo(ChronoUnit.HOURS);
-        List<LocalDateTime> out = new ArrayList<>();
-        for (int i = 0; i < SLOTS_PER_BOOKING; i++) out.add(first.plusHours(i));
-        return out;
-    }
-
-    synchronized boolean isFreeAt(LocalDateTime start) { return slots(start).stream().noneMatch(heldSlots::contains); }
-
     /** Atomic check-then-hold. */
     synchronized boolean tryHold(LocalDateTime start) {
-        if (!isFreeAt(start)) return false;
+        if (!isFreeAt(start)) return false;          // none of slots(start) already held
         heldSlots.addAll(slots(start));
         return true;
     }
-
-    synchronized void release(LocalDateTime start) { slots(start).forEach(heldSlots::remove); }
 }
-
 /** A named seating arrangement. It REFERS to tables (association); a table can appear in several charts. */
 record TableChart(String name, List<Table> tables) {}
-```
-
-```java
-// File: code/lld/ch16/restaurant/Reservations.java
-package lld.ch16.restaurant;
-
-import java.time.LocalDateTime;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
-
-final class Reservation {
-    private final String id;
-    private final Customer customer;
-    private int partySize;
-    private final LocalDateTime time;
-    private final Table table;
-    private ReservationStatus status = ReservationStatus.CONFIRMED;
-    private boolean reminded;
-
-    Reservation(String id, Customer customer, int partySize, LocalDateTime time, Table table) {
-        this.id = id; this.customer = customer; this.partySize = partySize; this.time = time; this.table = table;
-    }
-    String id() { return id; }
-    Customer customer() { return customer; }
-    synchronized int partySize() { return partySize; }
-
-    /** The party grew or shrank. Refused if the reserved table cannot seat the new number. */
-    synchronized void updatePeopleCount(int n) {
-        if (status != ReservationStatus.CONFIRMED) throw new IllegalStateException(id + " is " + status);
-        if (n < 1 || n > table.capacity())
-            throw new IllegalArgumentException("table " + table.id() + " seats " + table.capacity() + ", not " + n);
-        partySize = n;
-    }
-    LocalDateTime time() { return time; }
-    Table table() { return table; }
-    synchronized ReservationStatus status() { return status; }
-
-    synchronized void cancel() {
-        if (status != ReservationStatus.CONFIRMED) throw new IllegalStateException(id + " is " + status);
-        status = ReservationStatus.CANCELLED;
-        table.release(time);
-    }
-
-    synchronized void checkIn() {
-        if (status != ReservationStatus.CONFIRMED) throw new IllegalStateException(id + " is " + status);
-        status = ReservationStatus.CHECKED_IN;
-        table.setStatus(TableStatus.OCCUPIED);
-    }
-
-    synchronized boolean markReminded() { boolean first = !reminded; reminded = true; return first; }
-}
-
-interface Notifier { void send(Customer to, String message); }
-
-final class SmsNotifier implements Notifier {
-    public void send(Customer to, String message) { System.out.println("    [sms " + to.phone() + "] " + message); }
-}
 
 /** Searching belongs here, not on Table: one table only knows about itself. */
 final class ReservationService {
-    private final List<Table> tables;
-    private final Notifier notifier;
-    private final Map<String, Reservation> reservations = new ConcurrentHashMap<>();
-    private final AtomicInteger seq = new AtomicInteger();
-
-    ReservationService(List<Table> tables, Notifier notifier) { this.tables = List.copyOf(tables); this.notifier = notifier; }
-
     /** Best fit first: the smallest table that seats the party, so big tables stay free for big parties. */
     List<Table> search(LocalDateTime time, int partySize) {
         return tables.stream().filter(t -> t.capacity() >= partySize && t.isFreeAt(time))
                 .sorted(Comparator.comparingInt(Table::capacity)).toList();
     }
-
     Optional<Reservation> reserve(Customer c, int partySize, LocalDateTime time) {
-        for (Table t : search(time, partySize)) {
+        for (Table t : search(time, partySize))
             if (t.tryHold(time)) {     // another receptionist may have taken it since search(): try the next one
                 var r = new Reservation("RES-" + seq.incrementAndGet(), c, partySize, time, t);
                 reservations.put(r.id(), r);
                 notifier.send(c, "Table " + t.id() + " booked for " + partySize + " at " + time);
                 return Optional.of(r);
             }
-        }
         return Optional.empty();
     }
-
-    Reservation get(String id) {
-        var r = reservations.get(id);
-        if (r == null) throw new IllegalArgumentException("no reservation " + id);
-        return r;
-    }
-
-    void cancel(String id) {
-        var r = get(id);
-        r.cancel();
-        notifier.send(r.customer(), "Reservation " + id + " cancelled");
-    }
-
-    Table checkIn(String id) {
-        var r = get(id);
-        r.checkIn();
-        return r.table();
-    }
-
-    List<Table> freeForWalkIn(int partySize) {
-        return tables.stream().filter(t -> t.status() == TableStatus.FREE && t.capacity() >= partySize)
-                .sorted(Comparator.comparingInt(Table::capacity)).toList();
-    }
-
-    /** Run by a scheduler every few minutes: remind reservations starting within the next hour, once. */
-    void sendReminders(LocalDateTime now) {
-        reservations.values().stream()
-                .filter(r -> r.status() == ReservationStatus.CONFIRMED)
-                .filter(r -> !r.time().isBefore(now) && r.time().isBefore(now.plusHours(1)))
-                .filter(Reservation::markReminded)
-                .forEach(r -> notifier.send(r.customer(), "Reminder: your table " + r.table().id() + " at " + r.time().toLocalTime()));
-    }
+    // sendReminders(now): run every few minutes; reminds CONFIRMED bookings starting within the next hour,
+    // once each (Reservation.markReminded returns true only the first time).
 }
+// Reservation.updatePeopleCount(n) refuses n larger than the reserved table; cancel() releases the slots;
+// checkIn() marks the table OCCUPIED. freeForWalkIn(size) picks FREE tables by status, best fit.
 ```
 
 ```java
-// File: code/lld/ch16/restaurant/Orders.java
-package lld.ch16.restaurant;
-
-import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-
-record MealItem(MenuItem item, int quantity) {
-    MealItem {
-        if (quantity <= 0) throw new IllegalArgumentException("quantity must be positive");
-    }
-    BigDecimal subtotal() { return item.price().multiply(BigDecimal.valueOf(quantity)); }
-}
-
-/** One meal per seat: lets the kitchen plate per guest and lets the bill be split. */
-final class Meal {
-    private final int seat;
-    private final List<MealItem> items = new ArrayList<>();
-    Meal(int seat) { this.seat = seat; }
-    int seat() { return seat; }
-    synchronized void add(MealItem i) { items.add(i); }
-    synchronized List<MealItem> items() { return List.copyOf(items); }
-    synchronized BigDecimal subtotal() { return items.stream().map(MealItem::subtotal).reduce(BigDecimal.ZERO, BigDecimal::add); }
-}
-
-/** Observer: whoever cares about an order's progress (the waiter, a display screen). */
-interface OrderListener { void onStatusChange(Order order, OrderStatus newStatus); }
-
 final class Order {
-    private final String id;
-    private final Table table;
-    private final Map<Integer, Meal> meals = new TreeMap<>();
+    private final Map<Integer, Meal> meals = new TreeMap<>();      // one meal per seat
     private final List<OrderListener> listeners = new CopyOnWriteArrayList<>();
-    private OrderStatus status = OrderStatus.RECEIVED;
-
-    Order(String id, Table table) { this.id = id; this.table = table; }
-    String id() { return id; }
-    Table table() { return table; }
-    synchronized OrderStatus status() { return status; }
-    void subscribe(OrderListener l) { listeners.add(l); }
 
     /** Items can only be added before the kitchen starts cooking. */
     synchronized void add(int seat, MenuItem item, int qty) {
@@ -1506,11 +782,6 @@ final class Order {
         if (seat < 1 || seat > table.capacity()) throw new IllegalArgumentException("table " + table.id() + " has no seat " + seat);
         meals.computeIfAbsent(seat, Meal::new).add(new MealItem(item, qty));
     }
-
-    synchronized List<Meal> meals() { return List.copyOf(meals.values()); }
-
-    BigDecimal subtotal() { return meals().stream().map(Meal::subtotal).reduce(BigDecimal.ZERO, BigDecimal::add); }
-
     void moveTo(OrderStatus next) {
         synchronized (this) {
             boolean ok = switch (status) {
@@ -1525,116 +796,19 @@ final class Order {
         listeners.forEach(l -> l.onStatusChange(this, next));   // notify outside the lock
     }
 }
-```
 
-```java
-// File: code/lld/ch16/restaurant/Kitchen.java
-package lld.ch16.restaurant;
-
-import java.util.ArrayDeque;
-import java.util.Comparator;
-import java.util.Deque;
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-
-final class Chef extends Employee {
-    private final Deque<Order> queue = new ArrayDeque<>();
-    private Order current;
-
-    Chef(String id, String name) { super(id, name); }
-
-    synchronized void enqueue(Order o) { queue.addLast(o); }
-    synchronized int load() { return queue.size() + (current == null ? 0 : 1); }
-
-    /** Take the next order in FIFO order and start cooking it. */
-    synchronized Order startNext() {
-        if (current != null) throw new IllegalStateException(name() + " is still cooking " + current.id());
-        current = queue.pollFirst();
-        if (current != null) current.moveTo(OrderStatus.PREPARING);
-        return current;
-    }
-
-    synchronized void finishCurrent() {
-        if (current == null) throw new IllegalStateException(name() + " has nothing on the stove");
-        current.moveTo(OrderStatus.READY);
-        current = null;
-    }
-}
-
-/** Strategy: which chef gets the next order. */
-interface ChefAssignment { Chef pick(List<Chef> chefs); }
-
+interface ChefAssignment { Chef pick(List<Chef> chefs); }          // Strategy
 final class RoundRobinAssignment implements ChefAssignment {
-    private int next;
     public synchronized Chef pick(List<Chef> chefs) { return chefs.get(next++ % chefs.size()); }
 }
-
 final class LeastLoadedAssignment implements ChefAssignment {
     public Chef pick(List<Chef> chefs) { return chefs.stream().min(Comparator.comparingInt(Chef::load)).orElseThrow(); }
 }
-
-final class Kitchen {
-    private final List<Chef> chefs = new CopyOnWriteArrayList<>();
-    private final ChefAssignment assignment;
-
-    Kitchen(ChefAssignment assignment) { this.assignment = assignment; }
-    void addChef(Chef c) { chefs.add(c); }
-
-    Chef submit(Order o) {
-        if (chefs.isEmpty()) throw new IllegalStateException("no chef on shift");
-        Chef c = assignment.pick(chefs);
-        c.enqueue(o);
-        return c;
-    }
-}
+// Chef keeps a FIFO queue: startNext() -> PREPARING, finishCurrent() -> READY. Waiter implements OrderListener.
 ```
 
 ```java
-// File: code/lld/ch16/restaurant/Staff.java
-package lld.ch16.restaurant;
-
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
-
-abstract class Employee {
-    private final String id;
-    private final String name;
-    protected Employee(String id, String name) { this.id = id; this.name = name; }
-    String id() { return id; }
-    String name() { return name; }
-}
-
-final class Receptionist extends Employee {
-    Receptionist(String id, String name) { super(id, name); }
-}
-
-/** A waiter opens orders and is told (Observer) when a dish is ready. */
-final class Waiter extends Employee implements OrderListener {
-    private static final AtomicInteger SEQ = new AtomicInteger();
-    Waiter(String id, String name) { super(id, name); }
-
-    Order openOrder(Table t) {
-        t.setStatus(TableStatus.OCCUPIED);
-        var o = new Order("O" + SEQ.incrementAndGet(), t);
-        o.subscribe(this);
-        return o;
-    }
-
-    public void onStatusChange(Order o, OrderStatus s) {
-        if (s == OrderStatus.READY) System.out.println("    [" + name() + "'s pager] order " + o.id() + " for table " + o.table().id() + " is READY");
-    }
-}
-
-final class Manager extends Employee {
-    Manager(String id, String name) { super(id, name); }
-    void addMenuItem(Menu menu, String section, MenuItem item) { menu.section(section).add(item); }
-    void hire(Branch b, Employee e) { b.hire(e); }
-}
-
-/** The bill ("check"). It is computed from the order's lines, never stored separately. */
+/** The check is computed from the order's lines, never stored separately. */
 record Check(Order order, BigDecimal subtotal, BigDecimal tax, BigDecimal total) {
     static final BigDecimal TAX_RATE = new BigDecimal("0.08");
     static Check of(Order o) {
@@ -1643,30 +817,12 @@ record Check(Order order, BigDecimal subtotal, BigDecimal tax, BigDecimal total)
         return new Check(o, sub, tax, sub.add(tax));
     }
 }
-
 /** Strategy: three ways to pay, three behaviours. */
 sealed interface Payment permits CardPayment, CashPayment, CheckPayment { PaymentStatus pay(BigDecimal amount); }
-
-record CardPayment(String cardToken) implements Payment {
-    public PaymentStatus pay(BigDecimal amount) { return PaymentStatus.COMPLETED; }
-}
-
-record CashPayment(BigDecimal tendered) implements Payment {
-    public PaymentStatus pay(BigDecimal amount) {
-        if (tendered.compareTo(amount) < 0) return PaymentStatus.DECLINED;
-        System.out.println("    change due: " + tendered.subtract(amount));
-        return PaymentStatus.COMPLETED;
-    }
-}
-
-/** A paper check has to clear at the bank, so it is not money yet. */
-record CheckPayment(String bank, String checkNumber) implements Payment {
-    public PaymentStatus pay(BigDecimal amount) { return PaymentStatus.PENDING; }
-}
+// CardPayment -> COMPLETED; CashPayment -> DECLINED if short, else prints change and COMPLETED;
+// CheckPayment -> PENDING (a paper check has to clear at the bank, so it is not money yet).
 
 final class Cashier extends Employee {
-    Cashier(String id, String name) { super(id, name); }
-
     PaymentStatus settle(Check check, Payment payment) {
         // Check the order state BEFORE taking money: a refused state change after payment would leave the guest charged.
         if (check.order().status() != OrderStatus.READY)
@@ -1679,143 +835,9 @@ final class Cashier extends Employee {
         return status;
     }
 }
-
-/** A branch owns its menu, kitchen and charts; staff are associated (they can move branches). */
-final class Branch {
-    private final String name;
-    private final Menu menu = new Menu();
-    private final Kitchen kitchen;
-    private final List<TableChart> charts = new ArrayList<>();
-    private final List<Employee> staff = new ArrayList<>();
-    private final ReservationService reservations;
-
-    Branch(String name, List<Table> tables, ChefAssignment assignment, Notifier notifier) {
-        this.name = name;
-        this.kitchen = new Kitchen(assignment);
-        this.reservations = new ReservationService(tables, notifier);
-        charts.add(new TableChart("Default", tables));
-    }
-    String name() { return name; }
-    Menu menu() { return menu; }
-    Kitchen kitchen() { return kitchen; }
-    ReservationService reservations() { return reservations; }
-    synchronized void addChart(TableChart c) { charts.add(c); }
-    synchronized List<TableChart> charts() { return List.copyOf(charts); }
-    synchronized void hire(Employee e) {
-        staff.add(e);
-        if (e instanceof Chef c) kitchen.addChef(c);
-    }
-    synchronized List<Employee> staff() { return List.copyOf(staff); }
-}
-
-final class Restaurant {
-    private final String name;
-    private final List<Branch> branches = new ArrayList<>();
-    Restaurant(String name) { this.name = name; }
-    Branch open(Branch b) { branches.add(b); return b; }
-    String name() { return name; }
-}
 ```
 
-```java
-// File: code/lld/ch16/restaurant/Main.java
-package lld.ch16.restaurant;
-
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.util.List;
-
-public class Main {
-    static MenuItem item(String id, String title, String price) { return new MenuItem(id, title, new BigDecimal(price)); }
-
-    public static void main(String[] args) {
-        var t1 = new Table("T1", 2);
-        var t2 = new Table("T2", 4);
-        var t3 = new Table("T3", 4);
-        var t4 = new Table("T4", 6);
-        var tables = List.of(t1, t2, t3, t4);
-
-        var restaurant = new Restaurant("Spice Route");
-        var branch = restaurant.open(new Branch("Downtown", tables, new RoundRobinAssignment(), new SmsNotifier()));
-        branch.addChart(new TableChart("Banquet", List.of(t4)));
-
-        var manager = new Manager("E1", "Maya");
-        var reception = new Receptionist("E2", "Ravi");
-        var wendy = new Waiter("E3", "Wendy");
-        var cashier = new Cashier("E4", "Carl");
-        for (var e : List.of(manager, reception, wendy, cashier, new Chef("E5", "Chen"), new Chef("E6", "Maria")))
-            manager.hire(branch, e);
-
-        System.out.println("1) Manager builds the menu");
-        var menu = branch.menu();
-        manager.addMenuItem(menu, "Starters", item("S1", "Tomato soup", "6.50"));
-        manager.addMenuItem(menu, "Starters", item("S2", "Garlic bread", "4.00"));
-        manager.addMenuItem(menu, "Mains", item("M1", "Margherita pizza", "12.00"));
-        manager.addMenuItem(menu, "Mains", item("M2", "Pasta arrabbiata", "14.50"));
-        manager.addMenuItem(menu, "Drinks", item("D1", "Lemonade", "3.00"));
-        menu.sections().forEach(s -> System.out.println("   " + s.title() + ": " + s.items().stream().map(MenuItem::title).toList()));
-        System.out.println("   charts: " + branch.charts().stream().map(TableChart::name).toList());
-
-        var rs = branch.reservations();
-        var seven = LocalDateTime.of(2026, 10, 9, 19, 0);
-        var eight = seven.plusHours(1);
-        System.out.println("2) " + reception.name() + " searches tables for 4 at 19:00: "
-                + rs.search(seven, 4).stream().map(Table::id).toList());
-        var asha = rs.reserve(new Customer("Asha", "555-0101"), 4, seven).orElseThrow();
-        var ben = rs.reserve(new Customer("Ben", "555-0102"), 4, eight).orElseThrow();
-        System.out.println("   Asha -> " + asha.table().id() + ", Ben -> " + ben.table().id() + " (T2 is held 19:00-21:00)");
-        System.out.println("   party of 8 at 19:00: " + rs.reserve(new Customer("Big group", "555-0199"), 8, seven)
-                .map(Reservation::id).orElse("no single table fits"));
-        try { asha.updatePeopleCount(6); }
-        catch (IllegalArgumentException e) { System.out.println("   Asha's party grows to 6: rejected, " + e.getMessage()); }
-        rs.cancel(ben.id());
-        System.out.println("   after Ben cancels, free for 4 at 20:00: " + rs.search(eight, 4).stream().map(Table::id).toList());
-
-        System.out.println("3) Reminder job at 18:15");
-        rs.sendReminders(seven.minusMinutes(45));
-        rs.sendReminders(seven.minusMinutes(30));   // second run does not spam
-
-        System.out.println("4) Asha checks in; a couple walks in");
-        var table = rs.checkIn(asha.id());
-        var walkIn = rs.freeForWalkIn(2).getFirst();
-        System.out.println("   Asha seated at " + table.id() + ", walk-in couple seated at " + walkIn.id());
-
-        System.out.println("5) Wendy takes two orders, one meal per seat");
-        var o1 = wendy.openOrder(table);
-        o1.add(1, menu.find("S1").orElseThrow(), 1);
-        o1.add(1, menu.find("M1").orElseThrow(), 1);
-        o1.add(2, menu.find("M2").orElseThrow(), 1);
-        o1.add(2, menu.find("D1").orElseThrow(), 2);
-        o1.add(3, menu.find("S2").orElseThrow(), 1);
-        var o2 = wendy.openOrder(walkIn);
-        o2.add(1, menu.find("M1").orElseThrow(), 2);
-        var kitchen = branch.kitchen();
-        var c1 = kitchen.submit(o1);
-        var c2 = kitchen.submit(o2);
-        System.out.println("   " + o1.id() + " -> chef " + c1.name() + ", " + o2.id() + " -> chef " + c2.name());
-
-        System.out.println("6) Kitchen works the queues");
-        c1.startNext();
-        try { o1.add(4, menu.find("D1").orElseThrow(), 1); }
-        catch (IllegalStateException e) { System.out.println("   rejected: " + e.getMessage()); }
-        c2.startNext();
-        c1.finishCurrent();
-        c2.finishCurrent();
-
-        System.out.println("7) Check for " + o1.id() + " (split by seat)");
-        for (var meal : o1.meals()) {
-            System.out.println("   seat " + meal.seat() + ": " + meal.items().stream()
-                    .map(i -> i.quantity() + "x " + i.item().title()).toList() + " = " + meal.subtotal());
-        }
-        var check1 = Check.of(o1);
-        System.out.println("   subtotal " + check1.subtotal() + ", tax " + check1.tax() + ", total " + check1.total());
-        System.out.println("   paid cash: " + cashier.settle(check1, new CashPayment(new BigDecimal("60.00"))));
-        var check2 = Check.of(o2);
-        System.out.println("   " + o2.id() + " total " + check2.total() + " paid by check: " + cashier.settle(check2, new CheckPayment("First Bank", "000123")));
-        System.out.println("   table statuses: " + tables.stream().map(t -> t.id() + "=" + t.status()).toList());
-    }
-}
-```
+A `Branch` owns its menu, kitchen and charts; staff are associated (they can move branches), and `Branch.hire` adds a `Chef` to the kitchen. `Main.java` opens a "Spice Route" Downtown branch with tables T1 (2 seats), T2 and T3 (4), T4 (6), round-robin chefs Chen and Maria, and an SMS notifier.
 
 Output:
 
@@ -1936,15 +958,12 @@ An **airline management system** runs an airline's operations: scheduling flight
 
 **Functional**
 
-1. Search flights by date and by source and destination airport.
-2. Reserve a ticket on any scheduled flight; build an itinerary of several flights.
-3. View flight schedules: departure, arrival, available seats and other details.
-4. Reserve seats for several passengers under one itinerary.
-5. Only the admin adds aircraft, flights and schedules; the admin can cancel a scheduled flight and everyone affected is notified.
-6. Customers can cancel a reservation or a whole itinerary.
-7. Assign pilots and crew to flights.
-8. Take payment for reservations.
-9. Send the customer a message whenever a booking is created or modified, and whenever the status of one of their flights changes.
+1. Search flights by date, source and destination; view schedules (departure, arrival, free seats).
+2. Reserve seats for several passengers on any scheduled flight; build an itinerary of several flights.
+3. Only the admin adds aircraft, flights and schedules, and can cancel a flight (everyone affected is notified).
+4. Customers cancel a reservation or a whole itinerary; payment is taken for reservations.
+5. Assign pilots and crew to flights.
+6. Message the customer whenever a booking is created or modified, and whenever one of their flights changes status.
 
 **Non-functional**
 
@@ -2000,18 +1019,12 @@ The one distinction that makes this design work is **four different "seat-ish" a
 
 ### Class diagram
 
-The course builds six stages: money and messages, people, what the airline owns, flights and the seats on one flight, reservations and itineraries, and the actors.
-
-![Airline flights stage](../../assets/O-design-an-airline-management-system-9.svg)
-*Figure — Flight, FlightInstance and FlightSeat: the route, the route on a day, and a seat on that day (course diagram)*
-
-![Airline reservations stage](../../assets/O-design-an-airline-management-system-10.svg)
-*Figure — FlightReservation maps passengers to flight seats; an Itinerary owns its reservations (course diagram)*
+The course builds six stages (money and messages, people, what the airline owns, flights and their seats, reservations and itineraries, the actors); the finished result:
 
 ![Airline finished class diagram](../../assets/O-design-an-airline-management-system-12.svg)
 *Figure — The finished class diagram of the airline management system (course diagram)*
 
-In the first figure above, all the ownership (filled-diamond) arrows run in one direction: schedules and instances belong to their flight, and flight seats belong to their instance. Airports, the aircraft and the crew are only referred to — cancelling a flight does not destroy an airport. Notice also in the finished diagram that `Passenger` sits outside the `Person`/account tree: the course's reason is that a passenger may never log in, and a customer can book for other people.
+`Flight` is the route, `FlightInstance` the route on a day, `FlightSeat` a seat on that day; a `FlightReservation` maps passengers to flight seats and an `Itinerary` owns its reservations. All the ownership (filled-diamond) arrows run one way: schedules and instances belong to their flight, and flight seats belong to their instance. Airports, the aircraft and the crew are only referred to — cancelling a flight does not destroy an airport. `Passenger` sits outside the `Person`/account tree: the course's reason is that a passenger may never log in, and a customer can book for other people.
 
 ```mermaid
 classDiagram
@@ -2157,141 +1170,13 @@ flowchart TD
 
 ### Java implementation
 
-Package `lld.ch16.airline`.
+Package `lld.ch16.airline`. Full runnable code is in `code/lld/ch16/airline/`: `Types.java` (enums `FlightStatus`, `ReservationStatus`, `SeatClass`, `SeatType`, `CrewRole`; records `Airport`, `Seat` — the physical seat, which knows nothing about bookings — `Passenger` — a name on a ticket, not an account — `Customer`, `CrewMember`, `Admin`, `FrontDeskOfficer`), `Fleet.java` (`Aircraft`, `WeeklySchedule`, `Flight` — the route, which generates one `FlightInstance` per scheduled day; all times in UTC), `FlightInstance.java` (`FlightSeat`, `FlightInstance`), `Booking.java` (fares, `FlightReservation`, `Itinerary`), `Airline.java` (the facade) and `Main.java`. The essential lines (`/* ... */` and `//` summary comments stand for code left out):
 
 ```java
-// File: code/lld/ch16/airline/Types.java
-package lld.ch16.airline;
-
-enum FlightStatus { SCHEDULED, DELAYED, DEPARTED, LANDED, CANCELLED }
-enum ReservationStatus { CONFIRMED, CANCELLED }
-enum SeatClass { ECONOMY, ECONOMY_PLUS, PREFERRED_ECONOMY, BUSINESS, FIRST_CLASS }
-enum SeatType { REGULAR, ACCESSIBLE, EMERGENCY_EXIT, EXTRA_LEG_ROOM }
-enum CrewRole { PILOT, CO_PILOT, CABIN_CREW }
-
-record Airport(String code, String city) {}
-
-/** The PHYSICAL seat bolted to an aircraft. It knows nothing about bookings. */
-record Seat(String number, SeatType type, SeatClass seatClass) {}
-
-/** A name on a ticket. Not an account holder: a customer can book for other people. */
-record Passenger(String name, String passportRef) {}
-
-record Customer(String id, String name, String email) {}
-
-record CrewMember(String id, String name, CrewRole role) {}
-
-/** Staff actors. Admin-only operations take an Admin parameter, so the compiler enforces "only the admin". */
-record Admin(String id, String name) {}
-record FrontDeskOfficer(String id, String name) {}
-```
-
-```java
-// File: code/lld/ch16/airline/Fleet.java
-package lld.ch16.airline;
-
-import java.math.BigDecimal;
-import java.time.DayOfWeek;
-import java.time.Duration;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.util.ArrayList;
-import java.util.List;
-
-record Aircraft(String registration, String model, List<Seat> seats) {
-    Aircraft { seats = List.copyOf(seats); }
-}
-
-/** A recurring slot: "every Tuesday at 10:00". */
-record WeeklySchedule(DayOfWeek day, LocalTime departure) {}
-
-/**
- * A Flight is the ROUTE (GA212 LHR->NRT). It creates one FlightInstance per scheduled day.
- * All times are in one reference zone (UTC) to keep the example small.
- */
-final class Flight {
-    private final String number;
-    private final Airport from;
-    private final Airport to;
-    private final Duration duration;
-    private final Aircraft aircraft;
-    private final BigDecimal baseFare;
-    private final List<WeeklySchedule> schedules = new ArrayList<>();
-
-    Flight(String number, Airport from, Airport to, Duration duration, Aircraft aircraft, BigDecimal baseFare) {
-        this.number = number; this.from = from; this.to = to;
-        this.duration = duration; this.aircraft = aircraft; this.baseFare = baseFare;
-    }
-    String number() { return number; }
-    Airport from() { return from; }
-    Airport to() { return to; }
-    Duration duration() { return duration; }
-    Aircraft aircraft() { return aircraft; }
-    BigDecimal baseFare() { return baseFare; }
-
-    void addSchedule(WeeklySchedule s) { schedules.add(s); }
-
-    List<FlightInstance> generateInstances(LocalDate fromDate, LocalDate toDateExclusive) {
-        List<FlightInstance> out = new ArrayList<>();
-        fromDate.datesUntil(toDateExclusive).forEach(d -> schedules.stream()
-                .filter(s -> s.day() == d.getDayOfWeek())
-                .forEach(s -> out.add(new FlightInstance(this, LocalDateTime.of(d, s.departure())))));
-        return out;
-    }
-}
-```
-
-```java
-// File: code/lld/ch16/airline/FlightInstance.java
-package lld.ch16.airline;
-
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-
 /** One seat on one flight instance: 12A can be free on Tuesday and taken on Thursday. */
-final class FlightSeat {
-    private final Seat seat;
-    private String reservationNumber;   // null = free
-    FlightSeat(Seat seat) { this.seat = seat; }
-    Seat seat() { return seat; }
-    String reservationNumber() { return reservationNumber; }
-    boolean isFree() { return reservationNumber == null; }
-    void assign(String resNo) { reservationNumber = resNo; }
-    void free() { reservationNumber = null; }
-}
+final class FlightSeat { private String reservationNumber; /* null = free */ }
 
-/** The route flown on one date: owns its seats, its crew list and its status. */
-final class FlightInstance {
-    private final Flight flight;
-    private final LocalDateTime departure;
-    private final Map<String, FlightSeat> seats = new LinkedHashMap<>();
-    private final List<CrewMember> crew = new ArrayList<>();
-    private FlightStatus status = FlightStatus.SCHEDULED;
-
-    FlightInstance(Flight flight, LocalDateTime departure) {
-        this.flight = flight;
-        this.departure = departure;
-        flight.aircraft().seats().forEach(s -> seats.put(s.number(), new FlightSeat(s)));
-    }
-
-    Flight flight() { return flight; }
-    LocalDateTime departure() { return departure; }
-    LocalDateTime arrival() { return departure.plus(flight.duration()); }
-    synchronized FlightStatus status() { return status; }
-    synchronized List<CrewMember> crew() { return List.copyOf(crew); }
-    String key() { return flight.number() + "@" + departure.toLocalDate(); }
-
-    synchronized List<Seat> availableSeats(SeatClass c) {
-        return seats.values().stream().filter(FlightSeat::isFree).map(FlightSeat::seat)
-                .filter(s -> s.seatClass() == c).toList();
-    }
-
-    synchronized int freeSeatCount() { return (int) seats.values().stream().filter(FlightSeat::isFree).count(); }
-
+final class FlightInstance {   // the route flown on one date: owns its seats, crew list and status
     /** All-or-nothing: a family of three either gets all three seats or none. */
     synchronized Map<Passenger, Seat> holdSeats(Map<Passenger, String> request, String reservationNumber) {
         if (status != FlightStatus.SCHEDULED && status != FlightStatus.DELAYED)
@@ -2307,14 +1192,6 @@ final class FlightInstance {
         request.forEach((p, no) -> { var fs = seats.get(no); fs.assign(reservationNumber); out.put(p, fs.seat()); });
         return out;
     }
-
-    synchronized void releaseSeats(String reservationNumber) {
-        seats.values().stream().filter(fs -> reservationNumber.equals(fs.reservationNumber())).forEach(FlightSeat::free);
-    }
-
-    synchronized void addCrew(CrewMember m) { crew.add(m); }
-    synchronized void setStatus(FlightStatus s) { status = s; }
-
     boolean overlaps(FlightInstance other) {
         return departure.isBefore(other.arrival()) && other.departure().isBefore(arrival());
     }
@@ -2322,36 +1199,8 @@ final class FlightInstance {
 ```
 
 ```java
-// File: code/lld/ch16/airline/Booking.java
-package lld.ch16.airline;
-
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.Duration;
-import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.EnumMap;
-import java.util.List;
-import java.util.Map;
-
-/** Strategy: what one seat on one flight instance costs, booked on a given day. */
-interface FareStrategy { BigDecimal price(FlightInstance fi, Seat seat, LocalDate bookedOn); }
-
-final class ClassMultiplierFare implements FareStrategy {
-    private static final Map<SeatClass, BigDecimal> MULTIPLIER = new EnumMap<>(Map.of(
-            SeatClass.ECONOMY, new BigDecimal("1.0"), SeatClass.ECONOMY_PLUS, new BigDecimal("1.3"),
-            SeatClass.PREFERRED_ECONOMY, new BigDecimal("1.5"), SeatClass.BUSINESS, new BigDecimal("2.5"),
-            SeatClass.FIRST_CLASS, new BigDecimal("4.0")));
-    public BigDecimal price(FlightInstance fi, Seat seat, LocalDate bookedOn) {
-        return fi.flight().baseFare().multiply(MULTIPLIER.get(seat.seatClass())).setScale(2, RoundingMode.HALF_UP);
-    }
-}
-
 /** Decorator on any fare: +25% when booked less than 3 days before departure. */
-final class LastMinuteFare implements FareStrategy {
-    private final FareStrategy inner;
-    LastMinuteFare(FareStrategy inner) { this.inner = inner; }
+final class LastMinuteFare implements FareStrategy {      // ClassMultiplierFare: baseFare x 1.0/1.3/1.5/2.5/4.0
     public BigDecimal price(FlightInstance fi, Seat seat, LocalDate bookedOn) {
         var p = inner.price(fi, seat, bookedOn);
         long daysBefore = ChronoUnit.DAYS.between(bookedOn, fi.departure().toLocalDate());
@@ -2359,46 +1208,9 @@ final class LastMinuteFare implements FareStrategy {
     }
 }
 
-/** One leg: one flight instance, several passengers, each with a seat. */
-final class FlightReservation {
-    private final String number;
-    private final FlightInstance instance;
-    private final Map<Passenger, Seat> seatMap;
-    private final BigDecimal amount;
-    private ReservationStatus status = ReservationStatus.CONFIRMED;
-
-    FlightReservation(String number, FlightInstance instance, Map<Passenger, Seat> seatMap, BigDecimal amount) {
-        this.number = number; this.instance = instance; this.seatMap = Map.copyOf(seatMap); this.amount = amount;
-    }
-    String number() { return number; }
-    FlightInstance instance() { return instance; }
-    Map<Passenger, Seat> seatMap() { return seatMap; }
-    BigDecimal amount() { return amount; }
-    synchronized ReservationStatus status() { return status; }
-
-    /** Returns true if this call did the cancelling (idempotent). */
-    synchronized boolean cancel() {
-        if (status == ReservationStatus.CANCELLED) return false;
-        status = ReservationStatus.CANCELLED;
-        instance.releaseSeats(number);
-        return true;
-    }
-}
-
-/** A trip of one or more legs. The itinerary, not each leg, is what gets paid for. */
+/** A trip of one or more legs (FlightReservations). The itinerary, not each leg, is what gets paid for. */
 final class Itinerary {
     static final Duration MIN_CONNECTION = Duration.ofMinutes(45);
-
-    private final String id;
-    private final Customer customer;
-    private final List<FlightReservation> legs = new ArrayList<>();
-    private boolean paid;
-
-    Itinerary(String id, Customer customer) { this.id = id; this.customer = customer; }
-    String id() { return id; }
-    Customer customer() { return customer; }
-    synchronized List<FlightReservation> legs() { return List.copyOf(legs); }
-
     /** Rule the itinerary owns: the next leg must leave from where the last one landed, with time to change. */
     synchronized void checkConnection(FlightInstance next) {
         if (legs.isEmpty()) return;
@@ -2408,109 +1220,15 @@ final class Itinerary {
         if (next.departure().isBefore(last.arrival().plus(MIN_CONNECTION)))
             throw new IllegalArgumentException("connection too short: " + next.key() + " leaves before " + last.key() + " lands + 45 min");
     }
-
-    synchronized void addLeg(FlightReservation r) { legs.add(r); }
-
-    synchronized BigDecimal total() {
-        return legs.stream().filter(l -> l.status() == ReservationStatus.CONFIRMED)
-                .map(FlightReservation::amount).reduce(new BigDecimal("0.00"), BigDecimal::add);
-    }
-
     /** Idempotent: a second pay() (double click, retry) does not charge again. */
-    synchronized void pay(String cardToken) {
-        if (paid) return;
-        System.out.println("    charged " + total() + " to " + cardToken + " for itinerary " + id);
-        paid = true;
-    }
-    synchronized boolean isPaid() { return paid; }
+    synchronized void pay(String cardToken) { if (paid) return; /* charge total() */ paid = true; }
 }
+// FlightReservation.cancel() is idempotent: returns true only for the call that did the cancelling, then releases seats.
 ```
 
 ```java
-// File: code/lld/ch16/airline/Airline.java
-package lld.ch16.airline;
-
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicInteger;
-
-interface Notifier { void send(String to, String message); }
-
-final class EmailNotifier implements Notifier {
-    public void send(String to, String message) { System.out.println("    [email " + to + "] " + message); }
-}
-
-/**
- * Facade over the airline's data: admin operations, search, booking, crew and cancellation.
- * Keeps an index flight-instance -> reservations so a cancelled flight can reach every passenger.
- */
+/** Facade. Keeps an index flight-instance -> reservations so a cancelled flight can reach every passenger. */
 final class Airline {
-    private final String name;
-    private final FareStrategy fares;
-    private final Notifier notifier;
-    private final Map<String, Aircraft> fleet = new ConcurrentHashMap<>();
-    private final List<FlightInstance> instances = new CopyOnWriteArrayList<>();
-    private final Map<FlightInstance, List<FlightReservation>> byInstance = new ConcurrentHashMap<>();
-    private final Map<FlightReservation, Itinerary> owner = new ConcurrentHashMap<>();
-    private final AtomicInteger seq = new AtomicInteger(100);
-
-    Airline(String name, FareStrategy fares, Notifier notifier) {
-        this.name = name; this.fares = fares; this.notifier = notifier;
-    }
-
-    // ---- admin operations ----
-    void addAircraft(Admin by, Aircraft a) { fleet.put(a.registration(), a); }
-
-    List<FlightInstance> publish(Admin by, Flight f, LocalDate from, LocalDate toExclusive) {
-        var created = f.generateInstances(from, toExclusive);
-        instances.addAll(created);
-        return created;
-    }
-
-    /** A crew member cannot be on two instances whose times overlap. */
-    synchronized void assignCrew(Admin by, FlightInstance fi, CrewMember m) {
-        for (var other : instances) {
-            if (other != fi && other.crew().contains(m) && other.overlaps(fi))
-                throw new IllegalStateException(m.name() + " already flies " + other.key() + " at that time");
-        }
-        if (fi.crew().contains(m)) throw new IllegalStateException(m.name() + " already on " + fi.key());
-        fi.addCrew(m);
-    }
-
-    List<FlightInstance> scheduleFor(CrewMember m) {
-        return instances.stream().filter(fi -> fi.crew().contains(m)).toList();
-    }
-
-    void cancelFlight(Admin by, FlightInstance fi) {
-        List<FlightReservation> affected;
-        synchronized (fi) {        // same lock as the hold+index step in book(): no booking can slip past the cancel
-            fi.setStatus(FlightStatus.CANCELLED);
-            affected = List.copyOf(byInstance.getOrDefault(fi, List.of()));
-        }
-        for (var r : affected) {
-            if (r.cancel()) {
-                var it = owner.get(r);
-                notifier.send(it.customer().email(), fi.key() + " is cancelled. Reservation " + r.number()
-                        + " refunded " + r.amount() + ". Itinerary " + it.id() + " now totals " + it.total());
-            }
-        }
-        fi.crew().forEach(c -> notifier.send(c.id() + "@crew", "Stand down: " + fi.key() + " cancelled"));
-    }
-
-    // ---- customer operations ----
-    List<FlightInstance> search(Airport from, Airport to, LocalDate date) {
-        return instances.stream().filter(fi -> fi.flight().from().equals(from) && fi.flight().to().equals(to)
-                && fi.departure().toLocalDate().equals(date) && fi.status() != FlightStatus.CANCELLED).toList();
-    }
-
-    Itinerary newItinerary(Customer c) { return new Itinerary("IT-" + seq.incrementAndGet(), c); }
-
-    /** Books one leg for several passengers. Throws if the connection is invalid; returns null if a seat is taken. */
     FlightReservation book(Itinerary it, FlightInstance fi, Map<Passenger, String> seatRequest, LocalDate bookedOn) {
         it.checkConnection(fi);
         String resNo = "PNR" + seq.incrementAndGet();
@@ -2524,151 +1242,30 @@ final class Airline {
             byInstance.computeIfAbsent(fi, k -> new CopyOnWriteArrayList<>()).add(r);
         }
         it.addLeg(r);
-        var seatMap = r.seatMap();
-        var amount = r.amount();
-        notifier.send(it.customer().email(), "Booked " + fi.key() + " seats " + seatMap.values().stream().map(Seat::number).sorted().toList() + " (" + resNo + ", " + amount + ")");
+        // notifier.send(... "Booked <key> seats [...] (<PNR>, <amount>)")
         return r;
     }
-
-    /** The front desk books for a walk-in customer: the same call, made by a different actor. */
-    FlightReservation bookFor(FrontDeskOfficer by, Itinerary it, FlightInstance fi, Map<Passenger, String> seatRequest, LocalDate bookedOn) {
-        return book(it, fi, seatRequest, bookedOn);
-    }
-
-    void cancelItinerary(Itinerary it) {
-        it.legs().forEach(FlightReservation::cancel);
-        notifier.send(it.customer().email(), "Itinerary " + it.id() + " cancelled");
-    }
-
-    String name() { return name; }
-}
-```
-
-```java
-// File: code/lld/ch16/airline/Main.java
-package lld.ch16.airline;
-
-import java.math.BigDecimal;
-import java.time.DayOfWeek;
-import java.time.Duration;
-import java.time.LocalDate;
-import java.time.LocalTime;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicInteger;
-
-public class Main {
-    public static void main(String[] args) throws Exception {
-        var airline = new Airline("Global Air", new LastMinuteFare(new ClassMultiplierFare()), new EmailNotifier());
-        var lhr = new Airport("LHR", "London");
-        var nrt = new Airport("NRT", "Tokyo");
-        var jfk = new Airport("JFK", "New York");
-
-        var seats = List.of(
-                new Seat("1A", SeatType.REGULAR, SeatClass.BUSINESS), new Seat("1B", SeatType.REGULAR, SeatClass.BUSINESS),
-                new Seat("10A", SeatType.REGULAR, SeatClass.ECONOMY), new Seat("10B", SeatType.REGULAR, SeatClass.ECONOMY),
-                new Seat("10C", SeatType.ACCESSIBLE, SeatClass.ECONOMY), new Seat("12A", SeatType.EXTRA_LEG_ROOM, SeatClass.ECONOMY_PLUS));
-        var a1 = new Aircraft("G-GAAA", "A350-900", seats);
-        var a2 = new Aircraft("G-GAAB", "B787-9", seats);
-        var admin = new Admin("AD1", "Olga");
-        airline.addAircraft(admin, a1);
-        airline.addAircraft(admin, a2);
-
-        System.out.println("1) Admin adds flights (routes) and weekly schedules, then publishes instances");
-        var ga212 = new Flight("GA212", lhr, nrt, Duration.ofHours(14), a1, new BigDecimal("500.00"));
-        ga212.addSchedule(new WeeklySchedule(DayOfWeek.TUESDAY, LocalTime.of(10, 0)));
-        ga212.addSchedule(new WeeklySchedule(DayOfWeek.THURSDAY, LocalTime.of(10, 0)));
-        var ga100 = new Flight("GA100", jfk, lhr, Duration.ofHours(7), a2, new BigDecimal("400.00"));
-        ga100.addSchedule(new WeeklySchedule(DayOfWeek.WEDNESDAY, LocalTime.of(20, 0)));
-        var ga300 = new Flight("GA300", lhr, jfk, Duration.ofHours(8), a2, new BigDecimal("450.00"));
-        ga300.addSchedule(new WeeklySchedule(DayOfWeek.THURSDAY, LocalTime.of(12, 0)));
-        var from = LocalDate.of(2026, 10, 5);
-        var to = LocalDate.of(2026, 10, 19);
-        var ga212Instances = airline.publish(admin, ga212, from, to);
-        airline.publish(admin, ga100, from, to);
-        airline.publish(admin, ga300, from, to);
-        System.out.println("   GA212 instances: " + ga212Instances.stream().map(FlightInstance::key).toList());
-
-        System.out.println("2) Search JFK->LHR on 7 Oct and LHR->NRT on 8 Oct");
-        var leg1 = airline.search(jfk, lhr, LocalDate.of(2026, 10, 7)).getFirst();
-        var leg2 = airline.search(lhr, nrt, LocalDate.of(2026, 10, 8)).getFirst();
-        for (var fi : List.of(leg1, leg2))
-            System.out.println("   " + fi.key() + " dep " + fi.departure() + " arr " + fi.arrival() + ", free seats " + fi.freeSeatCount());
-
-        System.out.println("3) Priya books a two-leg itinerary for herself and her son");
-        var priya = new Customer("C1", "Priya", "priya@example.com");
-        var me = new Passenger("Priya Shah", "P-001");
-        var son = new Passenger("Arjun Shah", "P-002");
-        var bookedOn = LocalDate.of(2026, 10, 1);
-        var it = airline.newItinerary(priya);
-        airline.book(it, leg1, ordered(me, "10A", son, "10B"), bookedOn);
-        airline.book(it, leg2, ordered(me, "1A", son, "1B"), bookedOn);
-        System.out.println("   itinerary total " + it.total() + " (2 x 400 economy + 2 x 1250 business)");
-        it.pay("tok_priya_card");
-        it.pay("tok_priya_card");   // double click: no second charge
-
-        System.out.println("4) Bad connection is rejected");
-        var it2 = airline.newItinerary(priya);
-        airline.book(it2, leg1, Map.of(me, "12A"), bookedOn);
-        try { airline.book(it2, ga212Instances.getFirst(), Map.of(me, "10A"), bookedOn); }
-        catch (IllegalArgumentException e) { System.out.println("   rejected: " + e.getMessage()); }
-        airline.cancelItinerary(it2);
-
-        System.out.println("5) 20 customers race for seat 10C on " + leg2.key());
-        var winners = new AtomicInteger();
-        var go = new CountDownLatch(1);
-        var raceAirline = airline;   // effectively-final alias for the lambdas
-        try (var pool = Executors.newFixedThreadPool(20)) {
-            for (int i = 0; i < 20; i++) {
-                int n = i;
-                pool.submit(() -> {
-                    go.await();
-                    var c = new Customer("R" + n, "Racer" + n, "racer" + n + "@example.com");
-                    var r = raceAirline.book(raceAirline.newItinerary(c), leg2, Map.of(new Passenger("Racer" + n, "X" + n), "10C"), bookedOn);
-                    if (r != null) winners.incrementAndGet();
-                    return null;
-                });
-            }
-            go.countDown();
+    void cancelFlight(Admin by, FlightInstance fi) {
+        List<FlightReservation> affected;
+        synchronized (fi) {        // same lock as book(): no booking can slip past the cancel
+            fi.setStatus(FlightStatus.CANCELLED);
+            affected = List.copyOf(byInstance.getOrDefault(fi, List.of()));
         }
-        System.out.println("   successful bookings of 10C: " + winners.get() + ", free seats left: " + leg2.freeSeatCount());
-
-        System.out.println("6) Walk-in at the front desk, last-minute (booked 7 Oct for 8 Oct): pays +25%");
-        var desk = new FrontDeskOfficer("FD1", "Tom");
-        var late = airline.newItinerary(new Customer("C2", "Leo", "leo@example.com"));
-        var r = airline.bookFor(desk, late, leg2, Map.of(new Passenger("Leo Park", "P-003"), "12A"), LocalDate.of(2026, 10, 7));
-        System.out.println("   economy-plus fare 500 x 1.3 = 650.00, charged " + r.amount());
-
-        System.out.println("7) Admin assigns crew");
-        var kim = new CrewMember("K1", "Capt. Kim", CrewRole.PILOT);
-        var lee = new CrewMember("L1", "F/O Lee", CrewRole.CO_PILOT);
-        var ana = new CrewMember("A1", "Ana", CrewRole.CABIN_CREW);
-        for (var m : List.of(kim, lee, ana)) airline.assignCrew(admin, leg2, m);
-        var ga300Oct8 = airline.search(lhr, jfk, LocalDate.of(2026, 10, 8)).getFirst();
-        try { airline.assignCrew(admin, ga300Oct8, kim); }
-        catch (IllegalStateException e) { System.out.println("   rejected: " + e.getMessage()); }
-        System.out.println("   Kim's schedule: " + airline.scheduleFor(kim).stream().map(FlightInstance::key).toList());
-
-        System.out.println("8) Admin cancels " + leg2.key() + ": every passenger and crew member is told");
-        airline.cancelFlight(admin, leg2);
-        System.out.println("   search LHR->NRT on 8 Oct now returns " + airline.search(lhr, nrt, LocalDate.of(2026, 10, 8)).size() + " flights");
-
-        System.out.println("9) Priya cancels the rest of her trip; seats on " + leg1.key() + " come back");
-        airline.cancelItinerary(it);
-        System.out.println("   free economy seats on " + leg1.key() + ": " + leg1.availableSeats(SeatClass.ECONOMY).stream().map(Seat::number).toList());
+        for (var r : affected)
+            if (r.cancel()) { /* email the itinerary's customer: refunded amount, new itinerary total */ }
+        fi.crew().forEach(c -> notifier.send(c.id() + "@crew", "Stand down: " + fi.key() + " cancelled"));
     }
-
-    static Map<Passenger, String> ordered(Passenger a, String sa, Passenger b, String sb) {
-        var m = new LinkedHashMap<Passenger, String>();
-        m.put(a, sa);
-        m.put(b, sb);
-        return m;
+    /** A crew member cannot be on two instances whose times overlap. */
+    synchronized void assignCrew(Admin by, FlightInstance fi, CrewMember m) { /* scan instances with overlaps(), then add */ }
+    /** The front desk books for a walk-in customer: the same call, made by a different actor. */
+    FlightReservation bookFor(FrontDeskOfficer by, Itinerary it, FlightInstance fi, Map<Passenger, String> req, LocalDate on) {
+        return book(it, fi, req, on);
     }
+    // also: addAircraft(Admin, ...), publish(Admin, Flight, from, to), search(from, to, date), scheduleFor(crew), cancelItinerary(it)
 }
 ```
+
+`Main.java` sets up Global Air with `LastMinuteFare(ClassMultiplierFare)`, one six-seat layout (1A/1B business, 10A–10C economy, 12A economy-plus) on two aircraft, and flights GA212 LHR→NRT (Tue/Thu 10:00, 14 h, base 500), GA100 JFK→LHR (Wed 20:00, 7 h, base 400) and GA300 LHR→JFK (Thu 12:00, 8 h); step 5 races 20 threads for seat 10C.
 
 Output:
 
@@ -2846,7 +1443,7 @@ flowchart LR
 
 ### Class diagram
 
-There is no course lesson for this problem. The problem statement comes from the *awesome-low-level-design* problem set: students register for courses and view their enrolments; a course has a code, name, instructor and maximum capacity; search by code or name; no enrolment past capacity; many students registering at once without race conditions; room to extend. Every one of those is covered above (the instructor and capacity sit on the `Section`). Here is the diagram of our Java design.
+There is no course lesson for this problem; the statement comes from the *awesome-low-level-design* problem set, and every requirement in it is covered above (instructor and capacity sit on the `Section`). The diagram of our Java design:
 
 ```mermaid
 classDiagram
@@ -2983,43 +1580,16 @@ flowchart TD
 
 ### Java implementation
 
-Package `lld.ch16.courseregistration`.
+Package `lld.ch16.courseregistration`. Full runnable code is in `code/lld/ch16/courseregistration/`: `Types.java` (records `Course` — a catalogue entry whose prerequisites are course codes — `Instructor`, `TimeSlot`, `Student`, `RegistrationWindow`, `RegistrationResult`; enum `Outcome` = `ENROLLED`/`WAITLISTED`/`REJECTED`), `Section.java`, `Rules.java`, `Registrar.java` and `Main.java`. The essential lines (`/* ... */` and `//` summary comments stand for code left out):
 
 ```java
-// File: code/lld/ch16/courseregistration/Types.java
-package lld.ch16.courseregistration;
-
-import java.time.DayOfWeek;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.util.EnumSet;
-import java.util.Map;
-import java.util.Set;
-
-/** A catalog entry: what is taught. Prerequisites are course codes. */
-record Course(String code, String title, int credits, Set<String> prerequisites) {
-    Course { prerequisites = Set.copyOf(prerequisites); }
-}
-
-record Instructor(String id, String name) {}
-
 /** When a section meets, e.g. Mon+Wed 10:00-11:30. */
 record TimeSlot(Set<DayOfWeek> days, LocalTime start, LocalTime end) {
-    TimeSlot {
-        days = EnumSet.copyOf(days);
-        if (!end.isAfter(start)) throw new IllegalArgumentException("end must be after start");
-    }
     boolean overlaps(TimeSlot o) {
         boolean sharedDay = days.stream().anyMatch(o.days::contains);
         return sharedDay && start.isBefore(o.end) && o.start.isBefore(end);
     }
-    @Override public String toString() { return days + " " + start + "-" + end; }
 }
-
-record Student(String id, String name, int year, Set<String> completedCourses, int maxCredits) {
-    Student { completedCourses = Set.copyOf(completedCourses); }
-}
-
 /** Priority registration: each class year opens at its own time; everyone closes together. */
 record RegistrationWindow(Map<Integer, LocalDateTime> opensByYear, LocalDateTime closes) {
     boolean isOpenFor(Student s, LocalDateTime now) {
@@ -3028,49 +1598,11 @@ record RegistrationWindow(Map<Integer, LocalDateTime> opensByYear, LocalDateTime
     }
 }
 
-enum Outcome { ENROLLED, WAITLISTED, REJECTED }
-
-record RegistrationResult(Outcome outcome, String message) {
-    static RegistrationResult rejected(String why) { return new RegistrationResult(Outcome.REJECTED, why); }
-}
-```
-
-```java
-// File: code/lld/ch16/courseregistration/Section.java
-package lld.ch16.courseregistration;
-
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.locks.ReentrantLock;
-
-/**
- * One offering of a course (CS201 section A). Capacity and waitlist live HERE and are
- * guarded by the section's own lock, so thousands of students can hit different sections in parallel.
- */
+/** One offering of a course. Capacity and waitlist live HERE, guarded by the section's own lock. */
 final class Section {
-    private final String id;
-    private final Course course;
-    private final Instructor instructor;
-    private final TimeSlot slot;
-    private final int capacity;
-    private final int waitlistCapacity;
     private final Set<String> enrolled = new LinkedHashSet<>();
-    private final Deque<String> waitlist = new ArrayDeque<>();
+    private final Deque<String> waitlist = new ArrayDeque<>();     // FIFO, bounded by waitlistCapacity
     private final ReentrantLock lock = new ReentrantLock();
-
-    Section(String id, Course course, Instructor instructor, TimeSlot slot, int capacity, int waitlistCapacity) {
-        this.id = id; this.course = course; this.instructor = instructor; this.slot = slot;
-        this.capacity = capacity; this.waitlistCapacity = waitlistCapacity;
-    }
-
-    String id() { return id; }
-    Course course() { return course; }
-    Instructor instructor() { return instructor; }
-    TimeSlot slot() { return slot; }
 
     /** The only place a seat is taken: check-and-add in one critical section. */
     RegistrationResult enroll(String studentId) {
@@ -3091,79 +1623,16 @@ final class Section {
             lock.unlock();
         }
     }
-
     /** Removes the student; if a seat opened, moves the head of the waitlist in and returns who it was. */
-    Optional<String> drop(String studentId) {
-        lock.lock();
-        try {
-            if (waitlist.remove(studentId)) return Optional.empty();
-            if (!enrolled.remove(studentId)) throw new IllegalArgumentException(studentId + " is not in " + id);
-            String next = waitlist.pollFirst();
-            if (next != null) enrolled.add(next);
-            return Optional.ofNullable(next);
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    boolean isEnrolled(String studentId) {
-        lock.lock();
-        try { return enrolled.contains(studentId); } finally { lock.unlock(); }
-    }
-
-    List<String> roster() {
-        lock.lock();
-        try { return List.copyOf(enrolled); } finally { lock.unlock(); }
-    }
-
-    List<String> waitlist() {
-        lock.lock();
-        try { return List.copyOf(waitlist); } finally { lock.unlock(); }
-    }
+    Optional<String> drop(String studentId) { /* under lock: remove; enrolled.add(waitlist.pollFirst()) */ }
 }
 ```
 
 ```java
-// File: code/lld/ch16/courseregistration/Rules.java
-package lld.ch16.courseregistration;
-
-import java.time.LocalDateTime;
-import java.util.Optional;
-import java.util.Set;
-
-/** What a rule may look at: who, which section, what they already have, and when. */
-record RegistrationContext(Student student, Section section, Set<Section> currentSchedule, LocalDateTime now,
-                           RegistrationWindow window) {}
-
-/**
- * Specification-style rule: returns a reason when the request breaks it.
- * The registrar runs the rules as a chain and stops at the first violation.
- */
+/** Specification-style rule: returns a reason when the request breaks it. Run as a chain; first violation wins. */
 interface RegistrationRule { Optional<String> violation(RegistrationContext c); }
-
-final class WindowRule implements RegistrationRule {
-    public Optional<String> violation(RegistrationContext c) {
-        return c.window().isOpenFor(c.student(), c.now()) ? Optional.empty()
-                : Optional.of("registration window is closed for year " + c.student().year() + " at " + c.now());
-    }
-}
-
-final class PrerequisiteRule implements RegistrationRule {
-    public Optional<String> violation(RegistrationContext c) {
-        var missing = c.section().course().prerequisites().stream()
-                .filter(p -> !c.student().completedCourses().contains(p)).sorted().toList();
-        return missing.isEmpty() ? Optional.empty() : Optional.of("missing prerequisites " + missing);
-    }
-}
-
-final class DuplicateCourseRule implements RegistrationRule {
-    public Optional<String> violation(RegistrationContext c) {
-        return c.currentSchedule().stream()
-                .filter(s -> s.course().code().equals(c.section().course().code())).findFirst()
-                .map(s -> "already registered for " + s.course().code() + " in section " + s.id());
-    }
-}
-
+// RegistrationContext(student, section, currentSchedule, now, window)
+// WindowRule, PrerequisiteRule (lists missing codes), DuplicateCourseRule, CreditLimitRule, TimeConflictRule
 final class CreditLimitRule implements RegistrationRule {
     public Optional<String> violation(RegistrationContext c) {
         int current = c.currentSchedule().stream().mapToInt(s -> s.course().credits()).sum();
@@ -3173,73 +1642,11 @@ final class CreditLimitRule implements RegistrationRule {
     }
 }
 
-final class TimeConflictRule implements RegistrationRule {
-    public Optional<String> violation(RegistrationContext c) {
-        return c.currentSchedule().stream().filter(s -> s.slot().overlaps(c.section().slot())).findFirst()
-                .map(s -> "time conflict with " + s.id() + " " + s.slot());
-    }
-}
-```
-
-```java
-// File: code/lld/ch16/courseregistration/Registrar.java
-package lld.ch16.courseregistration;
-
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Consumer;
-
-/**
- * The service. Lock order is ALWAYS student-then-section, which rules out deadlock:
- *  - the student lock makes "check my credits/time clashes, then take the seat" atomic per student
- *    (stops one student double-registering from two browser tabs);
- *  - the section lock (inside Section) makes the seat count atomic across students.
- */
+/** Lock order is ALWAYS student-then-section, which rules out deadlock. */
 final class Registrar {
-    private final Map<String, Student> students = new ConcurrentHashMap<>();
-    private final Map<String, Section> sections = new ConcurrentHashMap<>();
-    private final Map<String, Set<Section>> schedules = new ConcurrentHashMap<>();
-    private final RegistrationWindow window;
-    private final List<RegistrationRule> fullChecks;
-    private final List<RegistrationRule> promotionChecks;
-    private final Consumer<String> notifier;
-
-    Registrar(RegistrationWindow window, Consumer<String> notifier) {
-        this.window = window;
-        this.notifier = notifier;
-        this.fullChecks = List.of(new WindowRule(), new PrerequisiteRule(), new DuplicateCourseRule(),
-                new CreditLimitRule(), new TimeConflictRule());
-        this.promotionChecks = List.of(new DuplicateCourseRule(), new CreditLimitRule(), new TimeConflictRule());
-    }
-
-    void addStudent(Student s) { students.put(s.id(), s); schedules.put(s.id(), ConcurrentHashMap.newKeySet()); }
-    void addSection(Section s) { sections.put(s.id(), s); }
-    Section section(String id) { return sections.get(id); }
-
-    List<Section> search(String text) {
-        var q = text.toLowerCase();
-        return sections.values().stream().filter(s -> s.course().code().toLowerCase().contains(q)
-                || s.course().title().toLowerCase().contains(q)).sorted((a, b) -> a.id().compareTo(b.id())).toList();
-    }
-
-    Set<Section> schedule(String studentId) { return Set.copyOf(schedules.get(studentId)); }
-
-    private Optional<String> firstViolation(List<RegistrationRule> rules, RegistrationContext ctx) {
-        for (var r : rules) {
-            var v = r.violation(ctx);
-            if (v.isPresent()) return v;
-        }
-        return Optional.empty();
-    }
-
+    // fullChecks = Window, Prerequisite, DuplicateCourse, CreditLimit, TimeConflict
+    // promotionChecks = DuplicateCourse, CreditLimit, TimeConflict   (a subset of the same rules)
     RegistrationResult register(String studentId, String sectionId, LocalDateTime now) {
-        var student = students.get(studentId);
-        var section = sections.get(sectionId);
-        if (student == null || section == null) return RegistrationResult.rejected("unknown student or section");
         var schedule = schedules.get(studentId);
         synchronized (schedule) {                                    // 1st lock: the student
             var ctx = new RegistrationContext(student, section, Set.copyOf(schedule), now, window);
@@ -3250,141 +1657,19 @@ final class Registrar {
             return result;
         }
     }
-
     void drop(String studentId, String sectionId) {
-        var section = sections.get(sectionId);
-        var schedule = schedules.get(studentId);
         Optional<String> promoted;
-        synchronized (schedule) {
-            promoted = section.drop(studentId);
-            schedule.remove(section);
-        }
+        synchronized (schedule) { promoted = section.drop(studentId); schedule.remove(section); }
         notifier.accept(studentId + " dropped " + sectionId);
         // Finish promotions OUTSIDE the dropper's lock, one student lock at a time (no nested student locks).
         while (promoted.isPresent()) promoted = finishPromotion(promoted.get(), section);
     }
-
-    /** The promoted student's timetable may have changed while waiting, so re-check. Returns the next promotion, if any. */
-    private Optional<String> finishPromotion(String studentId, Section section) {
-        var schedule = schedules.get(studentId);
-        synchronized (schedule) {
-            var ctx = new RegistrationContext(students.get(studentId), section, Set.copyOf(schedule), null, window);
-            var v = firstViolation(promotionChecks, ctx);
-            if (v.isEmpty()) {
-                schedule.add(section);
-                notifier.accept(studentId + " promoted from waitlist into " + section.id());
-                return Optional.empty();
-            }
-            notifier.accept(studentId + " skipped for " + section.id() + ": " + v.get());
-            return section.drop(studentId);
-        }
-    }
+    // finishPromotion: under the promoted student's lock, re-run promotionChecks (their timetable may have
+    // changed while waiting); on success add to schedule, otherwise notify "skipped" and promote the next one.
 }
 ```
 
-```java
-// File: code/lld/ch16/courseregistration/Main.java
-package lld.ch16.courseregistration;
-
-import java.time.DayOfWeek;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.util.EnumSet;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
-
-public class Main {
-    public static void main(String[] args) throws Exception {
-        var window = new RegistrationWindow(Map.of(
-                4, LocalDateTime.of(2026, 11, 2, 9, 0),     // seniors first
-                3, LocalDateTime.of(2026, 11, 3, 9, 0),
-                2, LocalDateTime.of(2026, 11, 4, 9, 0),
-                1, LocalDateTime.of(2026, 11, 5, 9, 0)),
-                LocalDateTime.of(2026, 11, 20, 17, 0));
-        var reg = new Registrar(window, msg -> System.out.println("    [notify] " + msg));
-
-        var cs101 = new Course("CS101", "Intro to Programming", 4, Set.of());
-        var cs201 = new Course("CS201", "Data Structures", 4, Set.of("CS101"));
-        var math201 = new Course("MATH201", "Discrete Math", 3, Set.of());
-        var cs301 = new Course("CS301", "Algorithms", 4, Set.of("CS201", "MATH201"));
-        var drLee = new Instructor("I1", "Dr. Lee");
-        var mw = EnumSet.of(DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY);
-        var tt = EnumSet.of(DayOfWeek.TUESDAY, DayOfWeek.THURSDAY);
-        reg.addSection(new Section("CS201-A", cs201, drLee, new TimeSlot(mw, LocalTime.of(10, 0), LocalTime.of(11, 30)), 2, 2));
-        reg.addSection(new Section("CS201-B", cs201, drLee, new TimeSlot(tt, LocalTime.of(14, 0), LocalTime.of(15, 30)), 30, 5));
-        reg.addSection(new Section("MATH201-A", math201, new Instructor("I2", "Dr. Rao"), new TimeSlot(mw, LocalTime.of(11, 0), LocalTime.of(12, 0)), 30, 5));
-        reg.addSection(new Section("CS301-A", cs301, drLee, new TimeSlot(tt, LocalTime.of(9, 0), LocalTime.of(10, 30)), 30, 5));
-        reg.addSection(new Section("CS101-A", cs101, new Instructor("I3", "Dr. Kim"), new TimeSlot(tt, LocalTime.of(11, 0), LocalTime.of(12, 0)), 30, 10));
-
-        reg.addStudent(new Student("ana", "Ana", 4, Set.of("CS101"), 12));
-        reg.addStudent(new Student("ben", "Ben", 3, Set.of("CS101"), 4));
-        reg.addStudent(new Student("cy", "Cy", 2, Set.of(), 16));
-        reg.addStudent(new Student("dee", "Dee", 3, Set.of("CS101"), 12));
-        reg.addStudent(new Student("eve", "Eve", 3, Set.of("CS101"), 12));
-        reg.addStudent(new Student("fay", "Fay", 3, Set.of("CS101"), 12));
-
-        var nov2 = LocalDateTime.of(2026, 11, 2, 10, 0);
-        var nov3 = LocalDateTime.of(2026, 11, 3, 10, 0);
-        System.out.println("1) Search 'cs2': " + reg.search("cs2").stream().map(s -> s.id() + " " + s.slot()).toList());
-
-        System.out.println("2) Rules");
-        show("ben  CS201-A on Nov 2 ", reg.register("ben", "CS201-A", nov2));
-        show("ana  CS201-A on Nov 2 ", reg.register("ana", "CS201-A", nov2));
-        show("ana  MATH201-A        ", reg.register("ana", "MATH201-A", nov2));
-        show("ana  CS201-B          ", reg.register("ana", "CS201-B", nov2));
-        show("ana  CS301-A          ", reg.register("ana", "CS301-A", nov2));
-        show("cy   CS201-B on Nov 4 ", reg.register("cy", "CS201-B", LocalDateTime.of(2026, 11, 4, 9, 30)));
-        show("ana  after close      ", reg.register("ana", "CS201-B", LocalDateTime.of(2026, 11, 21, 9, 0)));
-
-        System.out.println("3) Capacity 2 + waitlist 2 on CS201-A (juniors open Nov 3)");
-        show("ben  CS201-A          ", reg.register("ben", "CS201-A", nov3));
-        show("dee  CS201-A          ", reg.register("dee", "CS201-A", nov3));
-        show("eve  CS201-A          ", reg.register("eve", "CS201-A", nov3));
-        show("fay  CS201-A          ", reg.register("fay", "CS201-A", nov3));
-        show("ben  MATH201-A        ", reg.register("ben", "MATH201-A", nov3));
-
-        System.out.println("4) Ana drops CS201-A: the head of the waitlist is promoted");
-        reg.drop("ana", "CS201-A");
-        var a = reg.section("CS201-A");
-        System.out.println("   roster " + a.roster() + ", waitlist " + a.waitlist());
-
-        System.out.println("5) 50 first-years grab 30 seats (+10 waitlist) in CS101-A at 09:00 sharp");
-        var opening = LocalDateTime.of(2026, 11, 5, 9, 0);
-        for (int i = 0; i < 50; i++) reg.addStudent(new Student("fy" + i, "Fresher" + i, 1, Set.of(), 16));
-        var counts = new ConcurrentHashMap<Outcome, Integer>();
-        var go = new CountDownLatch(1);
-        try (var pool = Executors.newFixedThreadPool(16)) {
-            for (int i = 0; i < 50; i++) {
-                String id = "fy" + i;
-                pool.submit(() -> {
-                    go.await();
-                    counts.merge(reg.register(id, "CS101-A", opening).outcome(), 1, Integer::sum);
-                    return null;
-                });
-            }
-            go.countDown();
-        }
-        System.out.println("   ENROLLED=" + counts.get(Outcome.ENROLLED) + " WAITLISTED=" + counts.get(Outcome.WAITLISTED)
-                + " REJECTED=" + counts.get(Outcome.REJECTED) + ", roster size " + reg.section("CS101-A").roster().size());
-
-        System.out.println("6) One student double-clicks: two threads, same request");
-        reg.addStudent(new Student("gus", "Gus", 3, Set.of("CS101"), 12));
-        var outcomes = new ConcurrentHashMap<Outcome, Integer>();
-        try (var pool = Executors.newFixedThreadPool(2)) {
-            for (int i = 0; i < 2; i++)
-                pool.submit(() -> outcomes.merge(reg.register("gus", "CS201-B", nov3).outcome(), 1, Integer::sum));
-        }
-        System.out.println("   " + new java.util.TreeMap<>(outcomes) + ", gus schedule " + reg.schedule("gus").stream().map(Section::id).toList());
-    }
-
-    static void show(String label, RegistrationResult r) {
-        System.out.println("   " + label + " -> " + r.outcome() + ": " + r.message());
-    }
-}
-```
+`Main.java` opens seniors (year 4) on Nov 2, juniors Nov 3, sophomores Nov 4, first-years Nov 5 at 09:00, closing Nov 20 17:00; CS201-A has capacity 2 and waitlist 2, CS101-A has 30 + 10.
 
 Output:
 
@@ -3425,16 +1710,16 @@ Step 2 shows each rule firing with a clear reason. Step 3 fills two seats and tw
 - **Registration closes while on the waitlist** — promotion does not re-check the window (it is the drop that triggers it). Many universities stop automatic promotion after a deadline; add `WindowRule` to `promotionChecks` if that is the policy.
 - **Dropping a section you are not in** → `IllegalArgumentException`.
 - **Rules with time** — the window uses half-open time (`opens ≤ now < closes`).
-- **Scaling beyond one JVM** (Java Virtual Machine — the running program that executes Java code) — the in-memory locks work for one process (one running copy of the program). With several app servers (copies of the application on different machines, usually behind a load balancer that spreads requests among them), the seat count moves to the database: `UPDATE section SET enrolled = enrolled + 1 WHERE id = ? AND enrolled < capacity` succeeds for exactly `capacity` requests (an atomic conditional update), or use optimistic locking with a version column. A queue in front of hot sections smooths the 09:00 spike. (Load balancers, queues and databases at scale are covered in [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md).)
+- **Scaling beyond one JVM** (Java Virtual Machine, one running copy of the program) — in-memory locks cover one process. With several app servers behind a load balancer, the seat count moves to the database: `UPDATE section SET enrolled = enrolled + 1 WHERE id = ? AND enrolled < capacity` succeeds for exactly `capacity` requests (an atomic conditional update), or use optimistic locking with a version column. A queue in front of hot sections smooths the 09:00 spike. (Load balancers, queues and databases at scale are covered in [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md).)
 
 ### Extensions & follow-up questions
 
-- **"Co-requisites or 'prerequisite OR instructor permission'?"** — Model prerequisites as a small expression tree (a tree whose inner nodes are operators like `And`/`Or` and whose leaves are simple checks: `And`, `Or`, `CourseCompleted`, `Permission`) — the Composite pattern, where a group of objects is treated exactly like a single one — and evaluate it in `PrerequisiteRule`.
+- **"Co-requisites or 'prerequisite OR instructor permission'?"** — Model prerequisites as a small expression tree (`And`, `Or` operator nodes over `CourseCompleted`, `Permission` leaves) — the Composite pattern ([§9.3](../09-patterns-structural/README.md#93-composite-pattern)), where a group is treated like a single object — evaluated in `PrerequisiteRule`.
 - **"Holds (unpaid fees, advising)?"** — A `HoldRule` that rejects if the student has an active hold.
 - **"Priority waitlists (seniors first)?"** — Replace the `Deque` with a `PriorityQueue` (a queue that always hands out the smallest item by some ordering, not the oldest) ordered by (year, time joined).
 - **"Seat reservations for majors?"** — Split capacity into buckets (majors 20, others 10) and check the bucket in `Section.enroll`.
 - **"Linked sections (lecture + lab)?"** — Register both atomically: lock both sections in a fixed order (by id), check both, enrol both.
-- **"Notify by email/SMS?"** — The registrar takes a `Consumer<String>` notifier (Java's built-in "function that takes a value and returns nothing"); swap for an email service or publish an event to a message queue (a service such as Kafka or RabbitMQ that stores messages until another program reads them).
+- **"Notify by email/SMS?"** — The registrar takes a `Consumer<String>` notifier (a function that takes a value and returns nothing); swap in an email service or publish to a message queue (Kafka, RabbitMQ: stores messages until another program reads them).
 - **"Course fees and billing?"** — Add a `Bill` per student per term, a line per enrolled section, recomputed on drop.
 
 ### In the interview
@@ -3468,6 +1753,529 @@ Step 2 shows each rule firing with a clear reason. Step 3 fills two seats and tw
 
 ---
 
+## Design a Meeting Scheduler
+
+### Problem & clarifying questions
+
+A **meeting scheduler** is the part of a company calendar that books meeting rooms: an organizer picks a time and the people to invite, the system finds a room that is large enough and free, sends the invitations, and collects the answers. It is the fifth booking problem in this chapter, with two twists the others do not have:
+
+- **The calendar is continuous time, not slots.** A car is booked by the day and a restaurant table by the hour, but a meeting may run 10:15–10:40. Conflict detection must work on arbitrary time ranges.
+- **People are booked as well as rooms, but differently.** Two meetings in one room at the same time is impossible. One *person* in two meetings at the same time is merely unwise, and real calendars allow it.
+
+Terms: an **organizer** creates a meeting and **invitees** are asked to attend. An **RSVP** ("please reply") is an invitee's answer — accepted, tentative or declined — and is **pending** until given. A **half-open interval** `[start, end)` includes its start and excludes its end, so 10:00–11:00 and 11:00–12:00 do **not** overlap; two such intervals overlap exactly when `a.start < b.end && b.start < a.end`. A **hard conflict** blocks the booking (room taken); a **soft conflict** only warns (invitee busy). A **recurring meeting** is a **series** of **occurrences** generated by a rule such as "weekly, 4 times".
+
+| Question | Assumed answer |
+|---|---|
+| What is booked? | A room for a time interval. A meeting always has exactly one room in the core design (virtual meetings are an extension). |
+| Who picks the room? | Either the organizer names a room, or the system picks one that fits. |
+| What does "fits" mean? | Capacity ≥ organizer + invitees, and the room has the required equipment (video, projector, whiteboard). |
+| Is an invitee's double-booking an error? | No: it is reported as a warning to the organizer; the invitee decides by RSVP. |
+| Can invitees change their answer? | Yes, until the meeting is cancelled. |
+| Who can reschedule or cancel? | Only the organizer. Rescheduling resets every RSVP to pending. |
+| Notifications? | On invite, RSVP (to the organizer), reschedule and cancel. Channel (e-mail, push) is pluggable. |
+| Recurring meetings? | An extension: daily or weekly, N times, all occurrences in the same room or not at all. |
+| Concurrency? | Many organizers book at the same time; a room must never hold two overlapping meetings. |
+
+### Requirements
+
+**Functional**
+
+1. Register rooms with an id, name, capacity and equipment.
+2. Book a meeting: organizer, title, interval, invitees, required equipment, and optionally a named room.
+3. If no room is named, choose one automatically among the rooms that fit and are free.
+4. Reject a booking whose room is taken for any part of the interval (hard conflict); allow back-to-back meetings.
+5. Warn (but do not block) when the organizer or an invitee is already in another meeting at that time.
+6. Send invitations; let invitees accept, decline or reply tentative; tell the organizer.
+7. Let the organizer reschedule (same room) or cancel; notify invitees; free the room on cancel.
+8. Show a person's agenda for a day and search for free rooms.
+9. Extension: book a recurring series and cancel a whole series.
+
+**Non-functional**
+
+- **No double-booking** of a room, even when many requests arrive at the same instant.
+- **Unrelated bookings do not wait for each other** (two different rooms never share a lock).
+- **Extensible:** a new room-selection policy or a new notification channel is a new class, not an edit to the scheduler.
+
+### Use cases
+
+Room choice, conflict detection and notification are steps the system performs inside other use cases, so they appear as *included* use cases, not as a "System" actor (notation: [§3.10](../03-relationships-and-uml/README.md#310-use-case-diagrams)).
+
+```mermaid
+flowchart LR
+    O(["Actor: Organizer"])
+    I(["Actor: Invitee"])
+    A(["Actor: Facilities admin"])
+    subgraph SYS["Meeting scheduler"]
+        U1(["Book meeting"])
+        U2(["Reschedule meeting"])
+        U3(["Cancel meeting"])
+        U4(["Book recurring series"])
+        U5(["Search free rooms"])
+        U6(["RSVP"])
+        U7(["View agenda"])
+        U8(["Add room"])
+        U9(["Pick room and detect conflicts"])
+        U10(["Notify people"])
+    end
+    O --- U1
+    O --- U2
+    O --- U3
+    O --- U5
+    I --- U6
+    I --- U7
+    A --- U8
+    U4 -. "extend (repeat rule given)" .-> U1
+    U1 -. "include" .-> U9
+    U1 -. "include" .-> U10
+    U2 -. "include" .-> U10
+    U3 -. "include" .-> U10
+    U6 -. "include" .-> U10
+```
+
+### Core entities
+
+| Class | Responsibility |
+|---|---|
+| `Interval` | Half-open `[start, end)`; knows whether it overlaps another. |
+| `Room` | Capacity, equipment and **its own calendar** of reservations. The **only place a time range is claimed**, under the room's lock. |
+| `Meeting` | Id, title, organizer, room, interval, status (`SCHEDULED` / `CANCELLED`) and the invitations. Optional series id. |
+| `Invitation` | One invitee and their `RsvpStatus` (`PENDING`, `ACCEPTED`, `TENTATIVE`, `DECLINED`). |
+| `MeetingRequest` | What the organizer asks for (people, time, needs, optional room). |
+| `RoomSelectionStrategy` (+ `SmallestFitStrategy`, `LeastBusyStrategy`) | Orders the rooms that fit; the scheduler tries them in that order. |
+| `MeetingObserver` (+ `InboxNotifier`, `EventCounter`) | Listens to `MeetingEvent`s (invited, RSVP, rescheduled, cancelled). |
+| `Recurrence` | Extension: frequency + count; expands one interval into occurrences. |
+| `MeetingScheduler` | The service: book, book a series, RSVP, reschedule, cancel, agenda, soft-conflict warnings. Defines the lock order. |
+| `BookingResult` | Success with the meeting(s) and any warnings, or failure with a reason. |
+
+### Class diagram
+
+Whiteboard order: `Room` and its calendar, then `Meeting` with its `Invitation`s, then `MeetingScheduler` with its strategy and observers.
+
+```mermaid
+classDiagram
+    class MeetingScheduler {
+        -rooms Map
+        -meetings Map
+        -observers List
+        -strategy RoomSelectionStrategy
+        +book(MeetingRequest) BookingResult
+        +bookRecurring(MeetingRequest, Recurrence) BookingResult
+        +respond(meetingId, userId, RsvpStatus)
+        +reschedule(meetingId, byUser, Interval) BookingResult
+        +cancel(meetingId, byUser)
+        +agenda(userId, day) List
+    }
+    class Room {
+        -capacity int
+        -equipment Set
+        -calendar NavigableMap
+        -lock ReentrantLock
+        +fits(people, needs) boolean
+        +tryReserve(meetingId, Interval) boolean
+        +tryReserveAll(Map) boolean
+        +move(meetingId, from, to) boolean
+        +release(meetingId, Interval)
+    }
+    class Meeting {
+        -status MeetingStatus
+        -when Interval
+        +respond(userId, RsvpStatus)
+        +movedTo(Interval)
+        +markCancelled() boolean
+        +attends(userId) boolean
+    }
+    class Invitation {
+        -status RsvpStatus
+    }
+    class Interval {
+        <<record>>
+        start
+        end
+        +overlaps(Interval) boolean
+    }
+    class RoomSelectionStrategy {
+        <<interface>>
+        +rank(rooms, request) List
+    }
+    class MeetingObserver {
+        <<interface>>
+        +onEvent(MeetingEvent)
+    }
+    MeetingScheduler o-- Room
+    MeetingScheduler o-- Meeting
+    MeetingScheduler --> RoomSelectionStrategy
+    MeetingScheduler --> MeetingObserver
+    Room *-- Reservation
+    Reservation --> Interval
+    Meeting --> Room
+    Meeting *-- Invitation
+    Meeting --> Interval
+    Invitation --> User
+    Meeting --> User : organizer
+    RoomSelectionStrategy <|.. SmallestFitStrategy
+    RoomSelectionStrategy <|.. LeastBusyStrategy
+    MeetingObserver <|.. InboxNotifier
+    MeetingObserver <|.. EventCounter
+```
+
+`Meeting --> Room` is plain association (cancelling a meeting does not destroy the room). `Room *-- Reservation` is composition: a reservation lives only in its room's calendar, and the room, not the meeting, owns the truth about which times are taken.
+
+### Key flows
+
+**Book a meeting** (sequence diagram; the "try the next room" loop is where the race is decided):
+
+```mermaid
+sequenceDiagram
+    participant O as Organizer
+    participant S as MeetingScheduler
+    participant St as RoomSelectionStrategy
+    participant R as Room
+    participant N as Observers
+    O->>S: book(request)
+    S->>S: filter rooms by capacity and equipment
+    S->>St: rank(fitting rooms, request)
+    St-->>S: ordered candidates
+    loop each candidate until one succeeds
+        S->>R: tryReserve(meetingId, interval)
+        Note over R: room lock - find clash, insert if none
+        R-->>S: true or false
+    end
+    alt a room was claimed
+        S->>S: create Meeting with PENDING invitations
+        S->>N: INVITED event per invitee
+        S->>S: compute soft conflicts (busy people)
+        S-->>O: OK + meeting + warnings
+    else every candidate failed
+        S-->>O: FAIL + reason
+    end
+```
+
+**Reschedule or cancel** (activity diagram; both start by taking the meeting's lock, so they cannot interleave):
+
+```mermaid
+flowchart TD
+    A["organizer calls reschedule or cancel"] --> B["lock the meeting"]
+    B --> C{"caller is organizer?"}
+    C -- "no" --> X["reject: not the organizer"]
+    C -- "yes" --> D{"meeting still SCHEDULED?"}
+    D -- "no" --> Y["no-op or fail: already cancelled"]
+    D -- "yes" --> E{"which action?"}
+    E -- "cancel" --> F["mark CANCELLED, room.release(slot)"]
+    E -- "reschedule" --> G["room.move(old, new) under the room lock"]
+    G --> H{"new slot free?"}
+    H -- "no" --> Z["old slot restored, fail"]
+    H -- "yes" --> I["set new time, reset every RSVP to PENDING"]
+    F --> J["unlock the meeting, notify invitees"]
+    I --> J
+```
+
+**Lifecycle of one invitation, inside its meeting** (state diagram). The meeting itself has only two states, `SCHEDULED` and `CANCELLED`; cancelling ends every invitation at once.
+
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING : meeting booked
+    PENDING --> ACCEPTED : rsvp yes
+    PENDING --> TENTATIVE : rsvp maybe
+    PENDING --> DECLINED : rsvp no
+    ACCEPTED --> DECLINED : changes mind
+    DECLINED --> ACCEPTED : changes mind
+    TENTATIVE --> ACCEPTED : rsvp yes
+    TENTATIVE --> DECLINED : rsvp no
+    ACCEPTED --> PENDING : meeting rescheduled
+    TENTATIVE --> PENDING : meeting rescheduled
+    DECLINED --> PENDING : meeting rescheduled
+    PENDING --> [*] : meeting cancelled
+    ACCEPTED --> [*] : meeting cancelled
+    TENTATIVE --> [*] : meeting cancelled
+    DECLINED --> [*] : meeting cancelled
+```
+
+### Design decisions & patterns used
+
+The generic patterns here are already taught elsewhere in the book: notifications use **Observer** ([§11.1](../11-patterns-behavioral-2/README.md#111-observer)) and room ranking uses **Strategy** ([§11.3](../11-patterns-behavioral-2/README.md#113-strategy)), exactly as in the earlier booking cases. The table spends its words on the choices specific to this problem.
+
+| Decision | Why | Alternative rejected |
+|---|---|---|
+| **The room owns its calendar** (`Room.calendar`), and the room's lock guards it | The invariant "no two overlapping reservations" is about one room, so the room is the object that can enforce it. Different rooms use different locks and never wait on each other. | A global list of meetings scanned for clashes under one global lock (every booking in the company waits in one line). |
+| **Calendar = `TreeMap` keyed by start time** (a `NavigableMap`: a map kept sorted by key that can answer "the greatest key below x" in O(log n) time) | Because stored reservations never overlap, **only one entry can clash**: the one with the latest start before the new end (`lowerEntry(end)`). If that one ends at or before the new start, every earlier one does too. One lookup instead of a scan. | A `List` scanned from start to end (O(n) per booking); a per-minute bitmap (wastes memory, fixes the granularity). |
+| **Half-open intervals everywhere** | Back-to-back meetings (10:00–11:00, 11:00–11:30) are legal without special cases, and the overlap test is one line. | Closed intervals `[start, end]` (every back-to-back booking becomes a false conflict, or needs a "minus one minute" hack). |
+| **Rank, then *try*, rooms in order** | The strategy ranks rooms from a snapshot that can be stale a microsecond later. Instead of trusting it, the scheduler asks each room to claim the slot atomically and moves on if the claim fails. Ranking can be wrong without ever causing a double-booking. | "Find a free room, then book it" (check-then-act across two calls: two organizers find the same free room). |
+| **Default strategy is smallest fit** | A 3-person call should not take the 20-seat room. `LeastBusyStrategy` spreads load instead; swapping is one constructor argument. | Always the first free room by id. |
+| **Room conflicts are hard, people conflicts are soft** | A room physically holds one meeting. People routinely double-book themselves and choose by RSVP. The organizer gets a warning list; an invitee who declined the other meeting is not counted as busy (`Meeting.attends`). | Rejecting a meeting because one invitee is busy. |
+| **Reschedule resets RSVPs to `PENDING`** | "Yes" to Monday 10:00 is not "yes" to Monday 14:00. | Keeping old answers (people silently "accept" a time they never saw). |
+| **Reschedule is an atomic move inside the room** (`Room.move`) | Remove old slot, test new slot, insert, or restore the old slot — all under one room lock. The meeting is never left with no room, and the old slot is never lost on failure. A meeting may overlap its *own* old slot (moving 10:00–11:00 to 10:30–11:30 works). | Cancel then re-book (another organizer can grab the slot in between, and invitees get a cancel plus a new invite). |
+| **Only the organizer may reschedule or cancel; cancel is idempotent** (doing it twice has the same effect as once) | A double-clicked "cancel" sends one round of notifications. | Throwing on the second cancel, or notifying twice. |
+| **Notify after unlocking** | Observers may be slow (e-mail); holding the meeting or room lock while sending would block other bookings. | Publishing inside the critical section. |
+
+### Java implementation
+
+Package `lld.ch16.meetingscheduler`. Files: `Types.java` (`Interval`, `User`, enums, `Recurrence`, `MeetingRequest`, `BookingResult`), `Room.java`, `Meeting.java` (`Meeting`, `Invitation`), `RoomSelection.java` (the two strategies), `Notifications.java` (events and the two observers), `MeetingScheduler.java`, `Main.java`. Only the parts that carry the design are shown; the rest is ordinary getters and the observer and strategy classes described above.
+
+The interval and its overlap test:
+
+```java
+// File: code/lld/ch16/meetingscheduler/Types.java (excerpt)
+/** A half-open time range [start, end): includes start, excludes end, so 10:00-11:00 and 11:00-12:00 do not clash. */
+record Interval(LocalDateTime start, LocalDateTime end) {
+    Interval {
+        Objects.requireNonNull(start);
+        Objects.requireNonNull(end);
+        if (!end.isAfter(start)) throw new IllegalArgumentException("end must be after start");
+    }
+
+    boolean overlaps(Interval o) { return start.isBefore(o.end) && o.start.isBefore(end); }
+
+    Interval shiftedBy(Duration d) { return new Interval(start.plus(d), end.plus(d)); }
+}
+```
+
+The room's calendar — the heart of the design. Every method that changes the calendar does its check and its write under the same lock:
+
+```java
+// File: code/lld/ch16/meetingscheduler/Room.java (excerpt)
+final class Room {
+    record Reservation(String meetingId, Interval interval) {}
+
+    /** Bookings keyed by start time. They never overlap, which makes the conflict check one lookup. */
+    private final NavigableMap<LocalDateTime, Reservation> calendar = new TreeMap<>();
+    private final ReentrantLock lock = new ReentrantLock();
+
+    /**
+     * The booking with the latest start before iv.end is the only one that can overlap iv: bookings are
+     * disjoint and sorted, so if that one ends at or before iv.start, every earlier one does too. O(log n).
+     */
+    private Optional<Reservation> clash(Interval iv) {
+        var e = calendar.lowerEntry(iv.end());
+        return e != null && e.getValue().interval().end().isAfter(iv.start()) ? Optional.of(e.getValue()) : Optional.empty();
+    }
+
+    /** Atomic check-then-claim. */
+    boolean tryReserve(String meetingId, Interval iv) {
+        lock.lock();
+        try {
+            if (clash(iv).isPresent()) return false;
+            calendar.put(iv.start(), new Reservation(meetingId, iv));
+            return true;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /** All-or-nothing claim of several slots (a recurring series): check every one, then insert every one. */
+    boolean tryReserveAll(Map<String, Interval> byMeetingId) {
+        lock.lock();
+        try {
+            for (var iv : byMeetingId.values()) if (clash(iv).isPresent()) return false;
+            byMeetingId.forEach((mid, iv) -> calendar.put(iv.start(), new Reservation(mid, iv)));
+            return true;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /** Moves a booking inside this room atomically: the old slot is restored if the new one is taken. */
+    boolean move(String meetingId, Interval from, Interval to) {
+        lock.lock();
+        try {
+            var old = calendar.get(from.start());
+            if (old == null || !old.meetingId().equals(meetingId)) throw new IllegalStateException(meetingId + " not booked at " + from);
+            calendar.remove(from.start());
+            if (clash(to).isPresent()) {
+                calendar.put(from.start(), old);
+                return false;
+            }
+            calendar.put(to.start(), new Reservation(meetingId, to));
+            return true;
+        } finally {
+            lock.unlock();
+        }
+    }
+    // release(meetingId, iv) removes the entry only if it still belongs to that meeting.
+}
+```
+
+A worked example of `clash`: the room holds A = 09:00–10:00 and B = 10:30–11:00. A request for 09:30–10:45 looks up `lowerEntry(10:45)` = B; B ends at 11:00, after 09:30, so it clashes. A request for 10:00–10:30 looks up `lowerEntry(10:30)` = A (B starts *at* 10:30, not before); A ends at 10:00, not after 10:00, so the slot is free — the half-open rule at work.
+
+The scheduler: rank, then try each room; and the meeting-then-room lock order for reschedule and cancel:
+
+```java
+// File: code/lld/ch16/meetingscheduler/MeetingScheduler.java (excerpt)
+BookingResult book(MeetingRequest r) {
+    var rooms = candidates(r);   // the named room if it fits, else strategy.rank(every room that fits)
+    if (rooms.isEmpty()) return BookingResult.failure("no room fits " + r.headcount() + " people with " + r.needs());
+    String id = "M" + ids.incrementAndGet();
+    for (var room : rooms) {
+        if (!room.tryReserve(id, r.when())) continue;          // lost this room: try the next one
+        var m = new Meeting(id, null, r.title(), r.organizer(), room, r.when(), r.invitees());
+        meetings.put(id, m);
+        for (var u : r.invitees()) publish(EventType.INVITED, m, u, "");
+        return BookingResult.success(List.of(m), "booked " + m, busyPeople(m));
+    }
+    // ... failure message: who holds the named room, or "all N fitting rooms are taken"
+}
+
+BookingResult reschedule(String meetingId, String byUserId, Interval to) {
+    var m = meetings.get(meetingId);
+    Interval from;
+    synchronized (m) {                                          // 1st lock: the meeting
+        requireOrganizer(m, byUserId);
+        if (!m.isScheduled()) return BookingResult.failure(meetingId + " is cancelled");
+        from = m.when();
+        if (!m.room().move(meetingId, from, to))                // 2nd lock: the room
+            return BookingResult.failure(m.room().name() + " is not free at " + to);
+        m.movedTo(to);                                          // new time, every RSVP back to PENDING
+    }
+    for (var u : m.invitees()) publish(EventType.RESCHEDULED, m, u, from + " -> " + to);
+    return BookingResult.success(List.of(m), "moved " + m, busyPeople(m));
+}
+
+void cancel(String meetingId, String byUserId) {
+    var m = meetings.get(meetingId);
+    synchronized (m) {
+        requireOrganizer(m, byUserId);
+        if (!m.markCancelled()) return;                         // second cancel is a no-op
+        m.room().release(meetingId, m.when());
+    }
+    for (var u : m.invitees()) publish(EventType.CANCELLED, m, u, "");
+}
+
+/** Soft conflict: people who are expected somewhere else at the same time. Reported, not blocked. */
+List<String> busyPeople(Meeting m) {
+    var people = new ArrayList<User>(m.invitees());
+    people.add(m.organizer());
+    var out = new ArrayList<String>();
+    for (var u : people)
+        for (var other : meetings.values())
+            if (other != m && other.isScheduled() && other.attends(u.id()) && other.when().overlaps(m.when()))
+                out.add(u.id() + " is busy in " + other.id());
+    return out;
+}
+```
+
+`Meeting`'s own methods (`respond`, `movedTo`, `markCancelled`, `attends`) are `synchronized` on the meeting, so an RSVP cannot interleave with a reschedule that is resetting the answers. `bookRecurring` follows the same shape as `book` with `tryReserveAll`: generate the occurrences, allocate one id each, and try the ranked rooms until one room accepts the whole series.
+
+`Main` exercises every requirement, then races threads at one room and at the whole building:
+
+```text
+1) Ana books a 5-person video call; the scheduler picks the smallest room that fits
+    [to ben] ana invited you to M1 'Design review' Mon 11-02 10:00-11:00 in Maple
+    [to cy] ana invited you to M1 'Design review' Mon 11-02 10:00-11:00 in Maple
+    [to dee] ana invited you to M1 'Design review' Mon 11-02 10:00-11:00 in Maple
+    [to eve] ana invited you to M1 'Design review' Mon 11-02 10:00-11:00 in Maple
+   OK   booked M1 'Design review' Mon 11-02 10:00-11:00 in Maple
+2) Conflicts in a named room (half-open intervals)
+   FAIL R2 is taken by M1 Mon 11-02 10:00-11:00
+    [to cy] ben invited you to M3 'Back-to-back' Mon 11-02 11:00-11:30 in Maple
+   OK   booked M3 'Back-to-back' Mon 11-02 11:00-11:30 in Maple
+3) Capacity
+   FAIL no room fits 12 people with []
+   OK   booked M4 'All hands' Mon 11-02 15:00-16:00 in Atrium
+4) RSVPs go back to the organizer
+    [to ana] ben ACCEPTED for M1
+    [to ana] cy DECLINED for M1
+    [to ana] dee TENTATIVE for M1
+   M1 [ben=ACCEPTED, cy=DECLINED, dee=TENTATIVE, eve=PENDING]
+5) Soft conflict: Eve is double-booked, which is allowed but reported
+    [to eve] dee invited you to M5 'Hiring sync' Mon 11-02 10:30-11:00 in Huddle
+   OK   booked M5 'Hiring sync' Mon 11-02 10:30-11:00 in Huddle warnings=[eve is busy in M1, dee is busy in M1]
+    [to cy] dee invited you to M6 'Coffee' Mon 11-02 10:30-11:00 in Oak
+   OK   booked M6 'Coffee' Mon 11-02 10:30-11:00 in Oak warnings=[dee is busy in M1, dee is busy in M5]
+6) Ana moves the design review to 14:00: same room, RSVPs reset
+    [to ben] M1 moved: Mon 11-02 10:00-11:00 -> Mon 11-02 14:00-15:00 - please RSVP again
+    [to cy] M1 moved: Mon 11-02 10:00-11:00 -> Mon 11-02 14:00-15:00 - please RSVP again
+    [to dee] M1 moved: Mon 11-02 10:00-11:00 -> Mon 11-02 14:00-15:00 - please RSVP again
+    [to eve] M1 moved: Mon 11-02 10:00-11:00 -> Mon 11-02 14:00-15:00 - please RSVP again
+   OK   moved M1 'Design review' Mon 11-02 14:00-15:00 in Maple
+   M1 [ben=PENDING, cy=PENDING, dee=PENDING, eve=PENDING]
+   ben cancels -> ben is not the organizer of M1
+7) Ana cancels; the slot is free again
+    [to ben] M1 'Design review' was cancelled
+    [to cy] M1 'Design review' was cancelled
+    [to dee] M1 'Design review' was cancelled
+    [to eve] M1 'Design review' was cancelled
+    [to cy] ben invited you to M7 'Retro' Mon 11-02 14:00-15:00 in Maple
+    [to dee] ben invited you to M7 'Retro' Mon 11-02 14:00-15:00 in Maple
+   OK   booked M7 'Retro' Mon 11-02 14:00-15:00 in Maple
+8) Recurring weekly stand-up x4 in Huddle; a later series must be all-or-nothing
+   OK   booked series S8 in Huddle
+     M9 'Stand-up' Mon 11-02 09:30-09:45 in Huddle
+     M10 'Stand-up' Mon 11-09 09:30-09:45 in Huddle
+     M11 'Stand-up' Mon 11-16 09:30-09:45 in Huddle
+     M12 'Stand-up' Mon 11-23 09:30-09:45 in Huddle
+   FAIL no single fitting room is free for all 3 occurrences
+   OK   booked series S17 in Maple
+   after cancelSeries, Huddle bookings: 1
+9) Race: 20 organizers want Oak at Tue 10:00 at the same instant
+   winners=1, Oak bookings at that time=1
+10) Race: 20 organizers, any room, Wed 10:00 - 4 rooms exist, so exactly 4 win
+   per room {Atrium=1, Huddle=1, Maple=1, Oak=1}, rejected=16
+11) Inboxes and event counts
+   eve's inbox: 10 messages, first: ana invited you to M1 'Design review' Mon 11-02 10:00-11:00 in Maple
+   ana's inbox: [ben ACCEPTED for M1, cy DECLINED for M1, dee TENTATIVE for M1]
+   events {INVITED=23, RSVP=3, RESCHEDULED=4, CANCELLED=12}
+   ben's Monday: [M3 'Back-to-back' Mon 11-02 11:00-11:30 in Maple, M7 'Retro' Mon 11-02 14:00-15:00 in Maple, M4 'All hands' Mon 11-02 15:00-16:00 in Atrium]
+```
+
+Reading the output:
+
+- **Step 1:** only Maple (8) and Atrium (20) fit five people with video; smallest fit picks Maple. (M2 is the id used by step 2's failed attempt: ids are allocated before claiming.)
+- **Step 2:** 10:30–11:30 overlaps M1 and fails with the blocker named; 11:00–11:30 is back-to-back and succeeds (half-open).
+- **Step 3:** twelve people cannot use Huddle (4 seats), so the named-room request fails before any lock is taken; the automatic request lands in Atrium.
+- **Step 5:** Eve and Dee are already in M1, so M5 books with warnings. In M6, Cy is *not* flagged, because Cy declined M1.
+- **Step 6–7:** the move keeps Maple, resets RSVPs and notifies; Ben cannot cancel Ana's meeting; the second cancel sends nothing; the freed 14:00 slot is immediately bookable.
+- **Step 8:** the daily "Planning" series in week 3 clashes with the 09:30 stand-up on its first day, so the named-room request fails as a whole (no half-booked series). With automatic choice, Huddle fails its all-or-nothing claim and the series lands in Maple. After `cancelSeries`, Huddle keeps only M5.
+- **Steps 9–10:** the counts are exact every run: one winner for one room, and four winners — one per room — when 20 threads may use any room. *Which* thread wins varies.
+
+### Concurrency & edge cases
+
+The basic technique — one lock per bookable resource, check and claim inside it — is the one used for show seats in BookMyShow ([§15.2](../15-case-booking-1/README.md#152-design-a-movie-ticket-booking-system-bookmyshow)) and for hotel rooms ([§15.4](../15-case-booking-1/README.md#154-design-a-hotel-management-system)). What is specific to meetings:
+
+- **Overlap, not equality.** Seats and hotel nights are discrete keys ("seat 12F", "night of the 3rd"), so a concurrent set rejects a duplicate key. Meetings are ranges: 10:00–11:00 and 10:30–11:15 have different keys but still collide. A `ConcurrentHashMap.putIfAbsent` on the start time would *not* catch this. That is why the check (`lowerEntry`) and the insert must sit inside one lock on the room's sorted map.
+- **Automatic room choice under a race.** The ranked list is a snapshot. In step 10, all 20 threads rank Huddle first; one wins it and the other 19 fail their claim and move on to Maple, and so on. Correctness comes from the per-room claim, not from the ranking.
+- **Lock order: meeting, then room; never two rooms.** `reschedule` and `cancel` take the meeting's monitor and then the room's lock. Nothing takes them the other way round (a `Room` never calls back into a `Meeting`), and no code holds two room locks at once, so deadlock (two threads each waiting for a lock the other holds; see [§12.17](../12-concurrency-concepts/README.md#1217-deadlock)) cannot happen. `book` takes only a room lock, because the new meeting is not visible to anyone yet.
+- **Cancel racing reschedule.** Both run under the meeting's monitor; whichever runs second sees the first's result (a cancelled meeting cannot be moved; a moved meeting is cancelled at its new time, and `release` frees the correct slot).
+- **RSVP racing reschedule.** Both are `synchronized` on the meeting. If the RSVP runs first, the reschedule resets it to pending; if it runs second, it is an answer to the new time. Either outcome is consistent.
+- **Recurring series.** All occurrences are checked and inserted under one room lock, so a competing one-off booking cannot slip into week 3 between the checks and the inserts.
+- **Soft-conflict warnings are advisory.** `busyPeople` reads other meetings without a global lock; a meeting booked a millisecond later may be missed. That is acceptable because it is a warning, not an invariant. The room calendar is the only invariant, and it is always exact.
+- **Validation:** `end` after `start`; an occurrence must be shorter than its repeat period (a 25-hour "daily" meeting would overlap its own next occurrence); no RSVP to a cancelled meeting.
+- **Time zones.** The code uses `LocalDateTime` for readability. A real system stores `Instant` (an absolute point on the UTC timeline) and converts to each person's zone for display, and expands recurring series in the organizer's zone so "09:30 every Monday" survives a daylight-saving change.
+- **Beyond one process.** With several app servers the in-memory lock no longer covers every request. Two standard ways: PostgreSQL's **exclusion constraint** (`EXCLUDE USING gist (room_id WITH =, slot WITH &&)` on a `tstzrange` column, with the `btree_gist` extension installed, which makes the database itself reject any overlapping row for the same room), or a row lock on the room (`SELECT ... FROM room WHERE id = ? FOR UPDATE`) held while checking and inserting the booking.
+
+### Extensions & follow-up questions
+
+- **"Find a time when everyone is free."** Merge the busy intervals of all attendees (sort by start, merge overlapping ones), then walk the gaps inside working hours and return the first gap at least as long as the meeting. The same sweep over the room calendars answers "earliest time with a free room".
+- **"Virtual meetings with no room?"** Make the room optional: a `Location` interface with `Room` and `VideoLink` implementations; only `Room` has a calendar to claim.
+- **"Edit one occurrence of a series?"** Store the rule plus **exceptions** (moved or cancelled occurrences by date) instead of one row per occurrence; that is how calendar standards such as iCalendar (RFC 5545) model it. Our extension expands occurrences eagerly, which is simpler but cannot express "forever".
+- **"Reminders 10 minutes before?"** A scheduled job (or a `ScheduledExecutorService`, Java's timer-backed thread pool) that publishes a `REMINDER` event to the same observers; nothing in booking changes.
+
+### In the interview
+
+**30-second pitch:** "Each room owns its calendar, a sorted map of half-open intervals keyed by start time. Booking is an atomic check-then-insert under that room's lock, and because stored bookings never overlap, one `lowerEntry(end)` lookup detects any clash. If no room is named, a strategy ranks the rooms that fit, and the scheduler tries to claim them in order, so ranking can be stale without double-booking. Room clashes are hard errors; people clashes are warnings. Invitations carry RSVP state, reschedule resets it, and observers deliver notifications after the locks are released. Recurring meetings are claimed all-or-nothing in one room."
+
+**Time plan:** clarify (5 min) → entities and diagram (7) → code `overlaps`, `tryReserve`, `book` (16) → RSVP, reschedule, cancel, lock order (7) → concurrency, series, scale, "common free time" (10).
+
+### Self-check
+
+1. **Q:** Why does `lowerEntry(end)` find any clash with one lookup? **A:** Stored bookings are disjoint and sorted, so the one with the latest start before the new end has the latest end of all candidates; if it ends at or before the new start, every earlier booking does too.
+2. **Q:** Why can't `putIfAbsent` on a concurrent map prevent double-booking here? **A:** Overlapping meetings usually have different start times, so their keys differ; the conflict is about ranges, which needs a check and an insert under one lock.
+3. **Q:** The strategy said Huddle was free, yet booking failed over to Maple. Is that a bug? **A:** No. The ranking is a snapshot; another thread claimed Huddle first. The scheduler tries the next room, and the per-room claim keeps the result correct.
+4. **Q:** How do you prevent double-booking with several servers? **A:** Let the database enforce it: an exclusion constraint on (room, time range) or a row lock on the room while checking and inserting.
+
+### TL;DR
+
+- Room owns its calendar: a `TreeMap` of half-open intervals; claim = check + insert under the room's lock.
+- One `lowerEntry(end)` lookup detects any overlap.
+- Auto room choice: strategy ranks, scheduler tries each room's atomic claim in order.
+- Room conflicts block; people conflicts warn; declined invitees are free.
+- Reschedule = atomic move inside the room + RSVPs reset; cancel is idempotent; notify after unlocking.
+- Lock order: meeting, then room; never two rooms. Recurring series: all-or-nothing in one room.
+
+**Real-world example.** Outlook/Exchange and Google Calendar model rooms as bookable resources with their own calendars that can decline conflicting invitations, while people may be double-booked; recurring meetings are a rule plus exceptions (iCalendar).
+
+For a lighter, timetable-only version of the same interval logic (user and team availability without rooms), see the machine-coding Event Calendar in [§21.3](../21-case-machine-coding/README.md#213-design-an-event-calendar-flipkart).
+
+---
+
 ## Chapter summary
 
 | Problem | Key insight | Atomic claim | Patterns |
@@ -3476,5 +2284,6 @@ Step 2 shows each rule firing with a clear reason. Step 3 fills two seats and tw
 | Restaurant | **Meal per seat**; table = status (now) + slots (later) | `Table.tryHold(time)` | Observer (order ready), Strategy (chef assignment, payment), state machine |
 | Airline | **Flight ≠ FlightInstance, Seat ≠ FlightSeat** | `FlightInstance.holdSeats(map)` (all or nothing) | Strategy + Decorator (fares), Facade, index for cancellation |
 | Course registration | **Course ≠ Section**; rules as objects | `Section.enroll` under a section lock, inside a student lock | Specification / Chain of rules, lock ordering |
+| Meeting scheduler | **Room owns a calendar of half-open intervals**; room clash blocks, people clash warns | `Room.tryReserve(interval)` (one `lowerEntry` lookup under the room lock) | Strategy (room ranking), Observer (notifications), meeting-then-room lock order |
 
-The four problems share one lesson: **find the calendar, find the atomic check-then-claim, and put the rules on the object that owns the data.**
+The five problems share one lesson: **find the calendar, find the atomic check-then-claim, and put the rules on the object that owns the data.**

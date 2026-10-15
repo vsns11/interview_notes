@@ -39,9 +39,9 @@ javac --release 21 -d /tmp/lld_15 $(find . -name '*.java')
 java -cp /tmp/lld_15 lld.ch15.library.Main        # or moviebooking, concert, hotel
 ```
 
-All four `Main` classes compile with Java 21 (standard library only) and run. The output under each implementation is the real output of that program. In the concurrency demos, *which* thread wins a race changes from run to run; the *number* of winners never does.
+All four `Main` classes compile with Java 21 (standard library only) and run; the output under each implementation is real. Listings below keep the essential classes and methods — imports, getters and the `Main` demos are in `code/lld/ch15/<case>/`. In the concurrency demos, *which* thread wins a race changes from run to run; the *number* of winners never does.
 
-> **Code-style note.** To keep each design readable in one place, a file sometimes holds several small package-private types (types declared without `public`, visible only inside their own package) (for example `Model.java` holds the enums and records of the library). That is legal Java. In a production codebase you would usually give each public type its own file. (If you compile with `-Xlint:all` — the switch that turns on every optional compiler warning — javac, the Java compiler, prints `[auxiliaryclass]` warnings for exactly this: a package-private type declared in one file and used from another. They are style warnings, not errors.)
+> **Code-style note.** A file sometimes holds several small package-private types (declared without `public`, visible only in their package) — e.g. the library's `Model.java` holds its enums and records. Legal Java; production code would give each public type its own file. Compiling with `-Xlint:all` (every optional warning) makes javac print `[auxiliaryclass]` style warnings for exactly this — not errors.
 
 > **Money.** Every amount (prices, fines, deposits, refunds) is a `java.math.BigDecimal` (Java's exact decimal-number type) built from a string such as `new BigDecimal("0.50")`, never a `double`: binary floating point cannot store 0.10 exactly, so sums drift. Comparisons use `compareTo`/`signum()`, not `equals` (which also compares the number of decimal places), and every rounding step names its `RoundingMode` (the rounding rule, for example half-up).
 
@@ -312,340 +312,97 @@ stateDiagram-v2
 
 ### Java implementation
 
-Package `lld.ch15.library`. Files: `Model.java` (enums, records, entities), `Catalog.java`, `Support.java` (fine policy, notifier, clock, money formatting), `LendingService.java`, `Library.java`, `Main.java`.
+Package `lld.ch15.library`. Files: `Model.java` (enums, records, entities), `Catalog.java`, `Support.java` (fine policy, notifier, `SimClock`, money formatting), `LendingService.java`, `Library.java`, `Main.java`. Essential lines:
 
 ```java
-// File: lld/ch15/library/Model.java
-package lld.ch15.library;
-
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.util.List;
-
+// Model.java
 enum BookFormat { HARDCOVER, PAPERBACK, AUDIO_BOOK, EBOOK, NEWSPAPER, MAGAZINE, JOURNAL }
-
 enum BookStatus { AVAILABLE, RESERVED, LOANED, LOST }
-
 enum AccountStatus { ACTIVE, CLOSED, CANCELED, BLACKLISTED }
-
 record Author(String name) {}
+record Rack(int number, String location) {}                     // where a copy physically sits
 
-/** Where a copy physically sits. */
-record Rack(int number, String location) {}
-
-/** The TITLE: one per ISBN, however many copies the library owns. Immutable. */
+/** The TITLE: one per ISBN, however many copies. Immutable. */
 record Book(String isbn, String title, String subject, String publisher,
             LocalDate publicationDate, List<Author> authors) {
     Book { authors = List.copyOf(authors); }
 }
 
-/** One PHYSICAL COPY of a Book: own barcode, own rack, own status. Guarded by its own monitor. */
+/** One PHYSICAL COPY: own barcode, rack, status. Guarded by its own monitor. */
 final class BookItem {
     private final String barcode;
-    private final Book book;
-    private final BookFormat format;
-    private final Rack rack;
-    private final BigDecimal price;          // money: BigDecimal, never double
+    private final Book book;                       // composition: the copy HAS a title
+    private final BigDecimal price;                // money: BigDecimal, never double
     private BookStatus status = BookStatus.AVAILABLE;
-    private String heldForMemberId;          // set only while status == RESERVED
-
-    BookItem(String barcode, Book book, BookFormat format, Rack rack, BigDecimal price) {
-        this.barcode = barcode; this.book = book; this.format = format;
-        this.rack = rack; this.price = price;
-    }
-    String barcode()               { return barcode; }
-    Book book()                    { return book; }
-    Rack rack()                    { return rack; }
-    BookFormat format()            { return format; }
-    BigDecimal price()             { return price; }
-    synchronized BookStatus status()      { return status; }
-    synchronized String heldForMemberId() { return heldForMemberId; }
-
-    // State changes are package-private: only LendingService calls them, while holding this monitor.
-    void markLoaned()               { status = BookStatus.LOANED;    heldForMemberId = null; }
-    void markAvailable()            { status = BookStatus.AVAILABLE; heldForMemberId = null; }
-    void holdFor(String memberId)   { status = BookStatus.RESERVED;  heldForMemberId = memberId; }
-    void markLost()                 { status = BookStatus.LOST;      heldForMemberId = null; }
+    private String heldForMemberId;                // set only while status == RESERVED
+    // state changes: only LendingService calls them, while holding this monitor
+    void markLoaned()             { status = BookStatus.LOANED;    heldForMemberId = null; }
+    void markAvailable()          { status = BookStatus.AVAILABLE; heldForMemberId = null; }
+    void holdFor(String memberId) { status = BookStatus.RESERVED;  heldForMemberId = memberId; }
 }
 
-/** Each account owns exactly one card (composition): the card's barcode identifies the person at the desk. */
-record LibraryCard(String cardNumber, String barcode, LocalDate issuedOn) {}
+record LibraryCard(String cardNumber, String barcode, LocalDate issuedOn) {}   // owned by its account
+abstract sealed class Account permits Member, Librarian { /* id, name, card, volatile status */ }
+final class Member extends Account { private int booksCheckedOut; /* guarded by the member's monitor */ }
+final class Librarian extends Account { }
 
-abstract sealed class Account permits Member, Librarian {
-    private final String id;
-    private final String name;
-    private final LibraryCard card;
-    private volatile AccountStatus status = AccountStatus.ACTIVE;
-
-    Account(String id, String name, LibraryCard card) { this.id = id; this.name = name; this.card = card; }
-    String id()                { return id; }
-    String name()              { return name; }
-    LibraryCard card()         { return card; }
-    AccountStatus status()     { return status; }
-    void setStatus(AccountStatus s) { status = s; }
-}
-
-/** A member is a person with a quota. The count is guarded by the member's monitor. */
-final class Member extends Account {
-    private int booksCheckedOut;
-    Member(String id, String name, LibraryCard card) { super(id, name, card); }
-    int booksCheckedOut()   { return booksCheckedOut; }
-    void incrementLoans()   { booksCheckedOut++; }
-    void decrementLoans()   { booksCheckedOut--; }
-}
-
-final class Librarian extends Account {
-    Librarian(String id, String name, LibraryCard card) { super(id, name, card); }
-}
-
-/** One checkout of one copy by one member. Answers "who has this copy?" and "what does this member have?". */
-final class BookLending {
-    private final String barcode;
-    private final String memberId;
+final class BookLending {                          // "who has this copy, since when, due when"
+    private final String barcode, memberId;
     private final LocalDate creationDate;
-    private volatile LocalDate dueDate;      // volatile: read by the overdue job without the item lock
+    private volatile LocalDate dueDate;            // volatile: read by the overdue job without the item lock
     private volatile LocalDate returnDate;
-
-    BookLending(String barcode, String memberId, LocalDate creationDate, LocalDate dueDate) {
-        this.barcode = barcode; this.memberId = memberId;
-        this.creationDate = creationDate; this.dueDate = dueDate;
-    }
-    String barcode()        { return barcode; }
-    String memberId()       { return memberId; }
-    LocalDate creationDate(){ return creationDate; }
-    LocalDate dueDate()     { return dueDate; }
-    LocalDate returnDate()  { return returnDate; }
-    void renewUntil(LocalDate d) { dueDate = d; }
-    void close(LocalDate d)      { returnDate = d; }
 }
-
 record Fine(String memberId, String barcode, BigDecimal amount, LocalDate date) {}
-
-final class LibraryException extends RuntimeException {
-    private static final long serialVersionUID = 1L;
-    LibraryException(String msg) { super(msg); }
-}
 ```
 
 ```java
-// File: lld/ch15/library/Catalog.java
-package lld.ch15.library;
-
-import java.time.LocalDate;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-
-/** The four searches the requirements ask for. */
+// Catalog.java - one index per search, so every lookup is a map read; also knows every copy.
+// Reads vastly outnumber writes: concurrent maps + copy-on-write lists fit well.
 interface Search {
     List<Book> searchByTitle(String title);
     List<Book> searchByAuthor(String author);
     List<Book> searchBySubject(String subject);
     List<Book> searchByPublicationDate(LocalDate date);
 }
-
-/**
- * Keeps one index per search so every lookup is a map read, not a scan.
- * It also knows every copy of every title, which answers "how many copies are free?".
- * Reads vastly outnumber writes in a library, so concurrent maps + copy-on-write lists fit well.
- */
 final class Catalog implements Search {
-    private final Map<String, List<Book>> byTitle   = new ConcurrentHashMap<>();
-    private final Map<String, List<Book>> byAuthor  = new ConcurrentHashMap<>();
-    private final Map<String, List<Book>> bySubject = new ConcurrentHashMap<>();
-    private final Map<LocalDate, List<Book>> byDate = new ConcurrentHashMap<>();
-    private final Map<String, Book> books = new ConcurrentHashMap<>();                  // isbn -> title
-    private final Map<String, List<BookItem>> copies = new ConcurrentHashMap<>();        // isbn -> copies
+    private final Map<String, List<Book>> byTitle = new ConcurrentHashMap<>();   // byAuthor, bySubject, byDate alike
+    private final Map<String, List<BookItem>> copies = new ConcurrentHashMap<>(); // isbn -> copies
     private final Map<String, BookItem> itemsByBarcode = new ConcurrentHashMap<>();
-
-    void addBook(Book b) {
-        if (books.putIfAbsent(b.isbn(), b) != null) return;       // already indexed
-        index(byTitle, key(b.title()), b);
-        b.authors().forEach(a -> index(byAuthor, key(a.name()), b));
-        index(bySubject, key(b.subject()), b);
-        byDate.computeIfAbsent(b.publicationDate(), d -> new CopyOnWriteArrayList<>()).add(b);
-    }
-
-    void addItem(BookItem item) {
-        addBook(item.book());
-        if (itemsByBarcode.putIfAbsent(item.barcode(), item) != null)
-            throw new LibraryException("duplicate barcode " + item.barcode());
-        copies.computeIfAbsent(item.book().isbn(), k -> new CopyOnWriteArrayList<>()).add(item);
-    }
-
-    /** Take a copy out of stock (weeded, damaged beyond repair). A copy that is out on loan or held cannot go. */
-    void removeItem(String barcode) {
-        BookItem item = item(barcode);
-        synchronized (item) {
-            if (item.status() == BookStatus.LOANED || item.status() == BookStatus.RESERVED)
-                throw new LibraryException(barcode + " is " + item.status() + ", cannot remove it now");
-            itemsByBarcode.remove(barcode);
-            copies.getOrDefault(item.book().isbn(), List.of()).remove(item);
-        }
-    }
-
-    BookItem item(String barcode) {
-        BookItem i = itemsByBarcode.get(barcode);
-        if (i == null) throw new LibraryException("unknown barcode " + barcode);
-        return i;
-    }
-
-    List<BookItem> copiesOf(String isbn) { return copies.getOrDefault(isbn, List.of()); }
-
-    long availableCopies(String isbn) {
+    long availableCopies(String isbn) {            // derived, never a counter that can drift
         return copiesOf(isbn).stream().filter(c -> c.status() == BookStatus.AVAILABLE).count();
     }
-
-    @Override public List<Book> searchByTitle(String t)     { return find(byTitle, key(t)); }
-    @Override public List<Book> searchByAuthor(String a)    { return find(byAuthor, key(a)); }
-    @Override public List<Book> searchBySubject(String s)   { return find(bySubject, key(s)); }
-    @Override public List<Book> searchByPublicationDate(LocalDate d) { return List.copyOf(byDate.getOrDefault(d, List.of())); }
-
-    private static String key(String s) { return s.trim().toLowerCase(Locale.ROOT); }
-
-    private static void index(Map<String, List<Book>> idx, String k, Book b) {
-        idx.computeIfAbsent(k, x -> new CopyOnWriteArrayList<>()).add(b);
-    }
-
-    private static List<Book> find(Map<String, List<Book>> idx, String k) {
-        return idx.getOrDefault(k, List.of()).stream().sorted(Comparator.comparing(Book::title)).toList();
-    }
+    // addItem: indexes the title once (keys lower-cased), rejects a duplicate barcode;
+    // removeItem: under the item's monitor, refuses a LOANED or RESERVED copy
 }
 ```
 
 ```java
-// File: lld/ch15/library/Support.java
-package lld.ch15.library;
-
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.Clock;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
-import java.time.temporal.ChronoUnit;
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-
-/** Strategy: how much a late return costs. Swappable without touching LendingService. */
-interface FinePolicy {
-    BigDecimal fine(LocalDate dueDate, LocalDate returnDate);
-}
-
-/** Flat amount per day late (the classic rule: $0.50 a day). */
-final class PerDayFine implements FinePolicy {
-    private final BigDecimal perDay;
-    PerDayFine(BigDecimal perDay) { this.perDay = perDay; }
+// Support.java
+interface FinePolicy { BigDecimal fine(LocalDate dueDate, LocalDate returnDate); }   // Strategy
+final class PerDayFine implements FinePolicy {                    // the classic $0.50 a day
     @Override public BigDecimal fine(LocalDate due, LocalDate returned) {
         long daysLate = Math.max(0, ChronoUnit.DAYS.between(due, returned));
         return perDay.multiply(BigDecimal.valueOf(daysLate));
     }
 }
-
-/** Observer-style outlet for "your reserved book is back" and "your book is overdue". */
-interface Notifier {
-    void send(String memberId, String message);
-}
-
-final class ConsoleNotifier implements Notifier {
-    private final List<String> sent = new CopyOnWriteArrayList<>();
-    @Override public void send(String memberId, String message) {
-        String line = "  [notify " + memberId + "] " + message;
-        sent.add(line);
-        System.out.println(line);
-    }
-    List<String> sent() { return sent; }
-}
-
-/** A clock we can move forward in tests and demos, so "10 days later" needs no sleeping. */
-final class SimClock extends Clock {
-    private volatile Instant now;
-    SimClock(Instant start) { this.now = start; }
-    void advance(Duration d) { now = now.plus(d); }
-    @Override public ZoneId getZone() { return ZoneOffset.UTC; }
-    @Override public Clock withZone(ZoneId zone) { return this; }
-    @Override public Instant instant() { return now; }
-}
-
-final class Money {
-    private Money() {}
-    /** Money is BigDecimal (exact decimals); shown with exactly two decimal places. */
-    static String fmt(BigDecimal amount) { return "$" + amount.setScale(2, RoundingMode.UNNECESSARY).toPlainString(); }
-}
+interface Notifier { void send(String memberId, String message); }  // ConsoleNotifier prints "[notify M2] ..."
+// SimClock extends Clock: advance(Duration) moves time forward. Money.fmt: "$" + two decimals.
 ```
 
 ```java
-// File: lld/ch15/library/LendingService.java
-package lld.ch15.library;
-
-import java.math.BigDecimal;
-import java.time.Clock;
-import java.time.LocalDate;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Deque;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
-/**
- * The three core flows (check out, return, renew) plus reservations.
- * Lives apart from Member so a Member stays "a person", and the rules live in one place.
- *
- * Locking rule (prevents deadlock): always lock the MEMBER first, then the BOOK ITEM.
- */
+// LendingService.java - Locking rule (prevents deadlock): always lock the MEMBER first, then the BOOK ITEM.
 public final class LendingService {
     static final int MAX_BOOKS_PER_MEMBER = 5;
     static final int MAX_LENDING_DAYS = 10;
+    private final Map<String, BookLending> activeLoans = new ConcurrentHashMap<>();   // barcode -> loan
+    private final Map<String, Deque<String>> waitlists = new ConcurrentHashMap<>();   // isbn -> member ids (FIFO)
 
-    private final Catalog catalog;
-    private final Clock clock;
-    private final FinePolicy finePolicy;
-    private final Notifier notifier;
-    private final Map<String, Member> members = new ConcurrentHashMap<>();
-    private final Map<String, BookLending> activeLoans = new ConcurrentHashMap<>();    // barcode -> loan
-    private final Map<String, Deque<String>> waitlists = new ConcurrentHashMap<>();    // isbn -> member ids (FIFO)
-    private final List<Fine> fines = Collections.synchronizedList(new ArrayList<>());
-
-    LendingService(Catalog catalog, Clock clock, FinePolicy finePolicy, Notifier notifier) {
-        this.catalog = catalog; this.clock = clock; this.finePolicy = finePolicy; this.notifier = notifier;
-    }
-
-    void register(Member m) { members.put(m.id(), m); }
-
-    /** Cancel a membership. Refused while the member still has books out; drops them from every waitlist. */
-    void cancelMembership(String memberId) {
-        Member m = member(memberId);
-        synchronized (m) {
-            if (m.booksCheckedOut() > 0)
-                throw new LibraryException(memberId + " must return " + m.booksCheckedOut() + " book(s) first");
-            m.setStatus(AccountStatus.CANCELED);
-        }
-        for (Deque<String> q : waitlists.values()) synchronized (q) { q.remove(memberId); }
-    }
-
-    private LocalDate today() { return LocalDate.now(clock); }
-
-    private Member member(String id) {
-        Member m = members.get(id);
-        if (m == null) throw new LibraryException("unknown member " + id);
-        return m;
-    }
-
-    // ---------------------------------------------------------------- check out
     BookLending checkout(String memberId, String barcode) {
         Member m = member(memberId);
         BookItem item = catalog.item(barcode);
         synchronized (m) {
             synchronized (item) {
-                if (m.status() != AccountStatus.ACTIVE)
-                    throw new LibraryException(memberId + " account is " + m.status());
+                if (m.status() != AccountStatus.ACTIVE) throw new LibraryException(memberId + " account is " + m.status());
                 if (m.booksCheckedOut() >= MAX_BOOKS_PER_MEMBER)
                     throw new LibraryException(memberId + " already has " + MAX_BOOKS_PER_MEMBER + " books");
                 switch (item.status()) {
@@ -667,95 +424,43 @@ public final class LendingService {
         }
     }
 
-    // ---------------------------------------------------------------- return
     BigDecimal returnBook(String barcode) {
-        BookLending loan = activeLoans.get(barcode);
+        BookLending loan = activeLoans.get(barcode);              // read first to find the member...
         if (loan == null) throw new LibraryException(barcode + " is not checked out");
         Member m = member(loan.memberId());
         BookItem item = catalog.item(barcode);
         synchronized (m) {
-            synchronized (item) {
-                if (activeLoans.get(barcode) != loan)                // someone returned it meanwhile
-                    throw new LibraryException(barcode + " is not checked out");
+            synchronized (item) {                                 // ...then lock in the same order and re-check
+                if (activeLoans.get(barcode) != loan) throw new LibraryException(barcode + " is not checked out");
                 LocalDate today = today();
                 loan.close(today);
                 activeLoans.remove(barcode);
                 m.decrementLoans();
-                BigDecimal fine = chargeFineIfLate(loan, today);
+                BigDecimal fine = chargeFineIfLate(loan, today);  // records a Fine and notifies when > 0
                 handToNextInLine(item);
                 return fine;
             }
         }
     }
 
-    // ---------------------------------------------------------------- renew
-    BookLending renew(String memberId, String barcode) {
-        Member m = member(memberId);
-        BookItem item = catalog.item(barcode);
-        synchronized (m) {
-            synchronized (item) {
-                BookLending loan = activeLoans.get(barcode);
-                if (loan == null || !loan.memberId().equals(memberId))
-                    throw new LibraryException(memberId + " does not have " + barcode);
-                if (waitingCount(item.book().isbn()) > 0)
-                    throw new LibraryException("cannot renew " + barcode + ": another member reserved this title");
-                LocalDate today = today();
-                chargeFineIfLate(loan, today);                       // a late renewal still pays the fine
-                loan.renewUntil(today.plusDays(MAX_LENDING_DAYS));
-                return loan;
-            }
-        }
+    BookLending renew(String memberId, String barcode) {          // same locks; refused while anyone waits
+        // ... loan must belong to memberId
+        if (waitingCount(item.book().isbn()) > 0)
+            throw new LibraryException("cannot renew " + barcode + ": another member reserved this title");
+        chargeFineIfLate(loan, today);                            // a late renewal still pays the fine
+        loan.renewUntil(today.plusDays(MAX_LENDING_DAYS));
     }
 
-    // ---------------------------------------------------------------- reserve
-    /** Join the FIFO waitlist for a TITLE that has no free copy. Returns the 1-based position. */
-    int reserve(String memberId, String isbn) {
-        Member m = member(memberId);
-        if (m.status() != AccountStatus.ACTIVE) throw new LibraryException(memberId + " account is " + m.status());
-        if (catalog.copiesOf(isbn).isEmpty()) throw new LibraryException("unknown isbn " + isbn);
-        if (catalog.availableCopies(isbn) > 0)
-            throw new LibraryException("a copy is on the shelf, just check it out");
+    int reserve(String memberId, String isbn) {                   // join the title's FIFO waitlist
+        if (catalog.availableCopies(isbn) > 0) throw new LibraryException("a copy is on the shelf, just check it out");
         Deque<String> q = waitlist(isbn);
         synchronized (q) {
-            if (!q.contains(memberId)) q.addLast(memberId);
+            if (!q.contains(memberId)) q.addLast(memberId);       // joining twice keeps your place
             return new ArrayList<>(q).indexOf(memberId) + 1;
         }
     }
 
-    // ---------------------------------------------------------------- system jobs & queries
-    void sendOverdueNotices() {
-        LocalDate today = today();
-        activeLoans.values().stream()
-                .filter(l -> l.dueDate().isBefore(today))
-                .sorted((a, b) -> a.barcode().compareTo(b.barcode()))
-                .forEach(l -> notifier.send(l.memberId(), "'" + catalog.item(l.barcode()).book().title()
-                        + "' (" + l.barcode() + ") was due " + l.dueDate()));
-    }
-
-    String whoHas(String barcode) {
-        BookLending l = activeLoans.get(barcode);
-        return l == null ? null : l.memberId();
-    }
-
-    List<String> loansOf(String memberId) {
-        return activeLoans.values().stream().filter(l -> l.memberId().equals(memberId))
-                .map(BookLending::barcode).sorted().toList();
-    }
-
-    List<Fine> fines() { synchronized (fines) { return List.copyOf(fines); } }
-
-    // ---------------------------------------------------------------- helpers
-    private BigDecimal chargeFineIfLate(BookLending loan, LocalDate today) {
-        BigDecimal amount = finePolicy.fine(loan.dueDate(), today);
-        if (amount.signum() > 0) {
-            fines.add(new Fine(loan.memberId(), loan.barcode(), amount, today));
-            notifier.send(loan.memberId(), "fine of " + Money.fmt(amount) + " for late " + loan.barcode());
-        }
-        return amount;
-    }
-
-    /** Caller holds the item's monitor. Give the copy to the first waiting member, or shelve it. */
-    private void handToNextInLine(BookItem item) {
+    private void handToNextInLine(BookItem item) {                // caller holds the item's monitor
         Deque<String> q = waitlist(item.book().isbn());
         String next;
         synchronized (q) { next = q.pollFirst(); }
@@ -763,187 +468,22 @@ public final class LendingService {
         item.holdFor(next);
         notifier.send(next, "'" + item.book().title() + "' copy " + item.barcode() + " is held for you");
     }
-
-    private Deque<String> waitlist(String isbn) {
-        return waitlists.computeIfAbsent(isbn, k -> new ArrayDeque<>());
-    }
-
-    int waitingCount(String isbn) {
-        Deque<String> q = waitlist(isbn);
-        synchronized (q) { return q.size(); }
-    }
-
-    private void removeFromWaitlist(String isbn, String memberId) {
-        Deque<String> q = waitlist(isbn);
-        synchronized (q) { q.remove(memberId); }
-    }
+    // cancelMembership (refused while books are out; drops the member from every waitlist),
+    // sendOverdueNotices, whoHas(barcode), loansOf(memberId), fines()
 }
 ```
 
 ```java
-// File: lld/ch15/library/Library.java
-package lld.ch15.library;
-
-import java.time.Clock;
-
-/** Facade: the one object the desk software talks to. Owns the catalog and the lending rules. */
+// Library.java - Facade: the one object the desk software talks to
 final class Library {
-    private final String name;
-    private final String address;
-    private final Catalog catalog = new Catalog();
-    private final LendingService lending;
-
-    Library(String name, String address, Clock clock, FinePolicy finePolicy, Notifier notifier) {
-        this.name = name; this.address = address;
-        this.lending = new LendingService(catalog, clock, finePolicy, notifier);
-    }
-
-    /** Only a librarian may add stock (the use-case diagram's "Add book item"). */
-    void addBookItem(Account by, BookItem item) {
+    void addBookItem(Account by, BookItem item) {                 // only a librarian may add stock
         if (!(by instanceof Librarian)) throw new LibraryException(by.id() + " is not a librarian");
         catalog.addItem(item);
     }
-
-    void removeBookItem(Account by, String barcode) {
-        if (!(by instanceof Librarian)) throw new LibraryException(by.id() + " is not a librarian");
-        catalog.removeItem(barcode);
-    }
-
-    void registerMember(Account by, Member m) {
-        if (!(by instanceof Librarian)) throw new LibraryException(by.id() + " is not a librarian");
-        lending.register(m);
-    }
-
-    void cancelMembership(Account by, String memberId) {
-        if (!(by instanceof Librarian)) throw new LibraryException(by.id() + " is not a librarian");
-        lending.cancelMembership(memberId);
-    }
-
-    String name()            { return name; }
-    String address()         { return address; }
-    Catalog catalog()        { return catalog; }
-    LendingService lending() { return lending; }
+    // removeBookItem, registerMember, cancelMembership: same role check, then delegate
 }
-```
-
-```java
-// File: lld/ch15/library/Main.java
-package lld.ch15.library;
-
-import java.math.BigDecimal;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.util.List;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicInteger;
-
-public class Main {
-    public static void main(String[] args) throws Exception {
-        SimClock clock = new SimClock(Instant.parse("2026-03-01T10:00:00Z"));
-        ConsoleNotifier notifier = new ConsoleNotifier();
-        Library lib = new Library("City Library", "1 Main Street", clock,
-                new PerDayFine(new BigDecimal("0.50")), notifier);
-        LendingService desk = lib.lending();
-        LocalDate today = LocalDate.of(2026, 3, 1);
-
-        Librarian lucy = new Librarian("L1", "Lucy", new LibraryCard("C-L1", "BC-L1", today));
-        Book dune = new Book("978-0441013593", "Dune", "Science Fiction", "Ace",
-                LocalDate.of(1965, 8, 1), List.of(new Author("Frank Herbert")));
-        Book hobbit = new Book("978-0547928227", "The Hobbit", "Fantasy", "Mariner",
-                LocalDate.of(1937, 9, 21), List.of(new Author("J.R.R. Tolkien")));
-        Book lotr = new Book("978-0544003415", "The Lord of the Rings", "Fantasy", "Mariner",
-                LocalDate.of(1954, 7, 29), List.of(new Author("J.R.R. Tolkien")));
-        Rack r1 = new Rack(1, "Aisle A");
-        lib.addBookItem(lucy, new BookItem("B-DUNE-1", dune, BookFormat.PAPERBACK, r1, new BigDecimal("9.99")));
-        for (int i = 1; i <= 6; i++)
-            lib.addBookItem(lucy, new BookItem("B-HOB-" + i, hobbit, BookFormat.HARDCOVER, r1, new BigDecimal("14.99")));
-        lib.addBookItem(lucy, new BookItem("B-LOTR-1", lotr, BookFormat.HARDCOVER, r1, new BigDecimal("29.99")));
-
-        for (int i = 1; i <= 9; i++)
-            lib.registerMember(lucy, new Member("M" + i, "Member " + i, new LibraryCard("C-M" + i, "BC-M" + i, today)));
-
-        System.out.println("== 1. Search the catalog ==");
-        System.out.println("  author 'j.r.r. tolkien' -> " + titles(lib.catalog().searchByAuthor("j.r.r. tolkien")));
-        System.out.println("  subject 'Fantasy'       -> " + titles(lib.catalog().searchBySubject("Fantasy")));
-        System.out.println("  published 1965-08-01    -> " + titles(lib.catalog().searchByPublicationDate(LocalDate.of(1965, 8, 1))));
-        System.out.println("  free copies of Hobbit   -> " + lib.catalog().availableCopies(hobbit.isbn()));
-
-        System.out.println("\n== 2. Checkout limit (max 5 books per member) ==");
-        for (int i = 1; i <= 6; i++) {
-            try {
-                BookLending l = desk.checkout("M1", "B-HOB-" + i);
-                System.out.println("  M1 took " + l.barcode() + ", due " + l.dueDate());
-            } catch (LibraryException e) {
-                System.out.println("  REFUSED: " + e.getMessage());
-            }
-        }
-        System.out.println("  M1 has " + desk.loansOf("M1"));
-
-        System.out.println("\n== 3. 8 members race for the ONLY copy of Dune ==");
-        AtomicInteger winners = new AtomicInteger(), losers = new AtomicInteger();
-        CountDownLatch start = new CountDownLatch(1);
-        try (ExecutorService pool = Executors.newFixedThreadPool(8)) {
-            for (int i = 2; i <= 9; i++) {
-                String id = "M" + i;
-                pool.submit(() -> {
-                    start.await();
-                    try { desk.checkout(id, "B-DUNE-1"); winners.incrementAndGet(); }
-                    catch (LibraryException e) { losers.incrementAndGet(); }
-                    return null;
-                });
-            }
-            start.countDown();                    // release all threads at once
-        }                                         // close() waits for every task
-        String holder = desk.whoHas("B-DUNE-1");
-        System.out.println("  winners=" + winners + " losers=" + losers + " (exactly one copy was lent)");
-        System.out.println("  holder = " + holder + "  (which member wins varies from run to run)");
-
-        System.out.println("\n== 4. Reserve a title with no free copy (FIFO waitlist) ==");
-        String first = holder.equals("M2") ? "M3" : "M2";
-        String second = holder.equals("M4") ? "M5" : "M4";
-        System.out.println("  " + first + " position " + desk.reserve(first, dune.isbn()));
-        System.out.println("  " + second + " position " + desk.reserve(second, dune.isbn()));
-        try { desk.reserve("M6", hobbit.isbn()); }
-        catch (LibraryException e) { System.out.println("  M6 reserve Hobbit REFUSED: " + e.getMessage()); }
-
-        System.out.println("\n== 5. Renew is blocked while someone waits ==");
-        try { desk.renew(holder, "B-DUNE-1"); }
-        catch (LibraryException e) { System.out.println("  REFUSED: " + e.getMessage()); }
-
-        System.out.println("\n== 6. 13 days later: overdue notices, late return, fine, hand-over ==");
-        clock.advance(Duration.ofDays(13));
-        desk.sendOverdueNotices();
-        BigDecimal fine = desk.returnBook("B-DUNE-1");
-        System.out.println("  fine charged = " + Money.fmt(fine) + " (3 days late x $0.50)");
-        try { desk.checkout(second, "B-DUNE-1"); }
-        catch (LibraryException e) { System.out.println("  " + second + " REFUSED: " + e.getMessage()); }
-        System.out.println("  " + first + " checks out held copy, due " + desk.checkout(first, "B-DUNE-1").dueDate());
-        System.out.println("  who has B-DUNE-1? " + desk.whoHas("B-DUNE-1"));
-
-        System.out.println("\n== 7. Renew on time with nobody waiting ==");
-        desk.returnBook("B-HOB-1");                     // 13 days: late, fine charged
-        desk.checkout("M6", "B-HOB-1");
-        clock.advance(Duration.ofDays(4));
-        System.out.println("  M6 renewed B-HOB-1, new due " + desk.renew("M6", "B-HOB-1").dueDate());
-        System.out.println("  fines on record: " + desk.fines().size());
-
-        System.out.println("\n== 8. Librarian housekeeping: remove a copy, cancel a membership ==");
-        try { lib.removeBookItem(lucy, "B-DUNE-1"); }
-        catch (LibraryException e) { System.out.println("  REFUSED: " + e.getMessage()); }
-        lib.removeBookItem(lucy, "B-LOTR-1");
-        System.out.println("  copies of LOTR left: " + lib.catalog().copiesOf(lotr.isbn()).size());
-        try { lib.cancelMembership(lucy, "M6"); }
-        catch (LibraryException e) { System.out.println("  REFUSED: " + e.getMessage()); }
-        lib.cancelMembership(lucy, "M8");
-        try { desk.checkout("M8", "B-HOB-6"); }
-        catch (LibraryException e) { System.out.println("  REFUSED: " + e.getMessage()); }
-    }
-
-    private static List<String> titles(List<Book> books) { return books.stream().map(Book::title).toList(); }
-}
+// Main.java: SimClock at 2026-03-01; PerDayFine($0.50); Dune x1, The Hobbit x6, LOTR x1; members M1-M9;
+// section 3 releases 8 threads with a CountDownLatch to race for the only Dune.
 ```
 
 **Output:**
@@ -1033,14 +573,6 @@ Open-source integrated library systems such as **Koha** and **Evergreen** implem
 **30–45 minute plan.** (1) 3 min — clarify: copies, limits (5 books, 10 days), fines, reservations, notifications. (2) 5 min — actors and use cases. (3) 10 min — entities, *starting with the `Book`/`BookItem` split*, then accounts, lending records, catalog. (4) 10 min — code `checkout` and `returnBook` with the locking; mention lock ordering. (5) 5 min — the reservation hand-over and fines (Strategy). (6) Remaining — follow-ups: concurrency across servers, fine payment, hold expiry.
 
 **30-second answer:** "The key split is `Book` (the title) vs `BookItem` (a physical copy with a barcode and rack). Members borrow copies; search works on titles through a `Catalog` with one index per search type. A `LendingService` enforces 5 books and 10 days, records `BookLending`s, charges fines via a `FinePolicy` strategy, and passes returned copies to a FIFO waitlist per title with a notification. Checkout locks member then copy so the last copy can't be double-lent."
-
-### Self-check
-
-- **Q:** Why is `Book` separate from `BookItem`? **A:** Search and metadata are per title; status, rack, barcode and loans are per physical copy. One title has many copies.
-- **Q:** What guarantees a member can't get a 6th book when two desks scan at once? **A:** The quota check and increment happen inside `synchronized (member)`.
-- **Q:** Why a fixed lock order? **A:** Without it, thread A could hold member→wait item while B holds item→wait member: deadlock.
-- **Q:** Which pattern lets the library change its fine rules without touching lending code? **A:** Strategy (`FinePolicy`).
-- **Q:** When can't a book be renewed? **A:** When another member is waiting for that title.
 
 ### TL;DR
 
@@ -1342,153 +874,56 @@ A show seat, as the customer sees it on the map: **free** (`.`), **held** by som
 
 ### Java implementation
 
-Package `lld.ch15.moviebooking`. Files: `Venue.java` (city, cinema, hall, seats, movie, show), `SeatLockProvider.java` (interface + in-memory TTL implementation), `Payments.java` (payment types, gateway, coupon, cancellation policy, notifier, clock), `Catalog.java` (five searches), `BookingService.java` (actors, booking, the booking path), `Main.java`.
+Package `lld.ch15.moviebooking`. Files: `Venue.java` (city, cinema, hall, seats, movie, show), `SeatLockProvider.java` (interface + in-memory TTL implementation), `Payments.java` (payment types, gateway, coupon, cancellation policy, notifier, clock), `Catalog.java` (five searches), `BookingService.java` (actors, booking, the booking path), `Main.java`. Essential lines:
 
 ```java
-// File: lld/ch15/moviebooking/Venue.java
-package lld.ch15.moviebooking;
-
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-
+// Venue.java
 enum SeatType { REGULAR, PREMIUM, ACCESSIBLE, EMERGENCY_EXIT, OTHER }
-
 record City(String name, String state) {}
-
-/** The physical seat bolted to the floor. It has NO booking state: that depends on which show you ask about. */
-record HallSeat(String id, SeatType type) {}
+record HallSeat(String id, SeatType type) {}      // physical seat: NO booking state
 
 final class CinemaHall {
-    private final String name;
-    private final List<HallSeat> seats;
-    private final List<Show> shows = new ArrayList<>();
-
-    CinemaHall(String name, List<HallSeat> seats) { this.name = name; this.seats = List.copyOf(seats); }
-    String name()            { return name; }
-    List<HallSeat> seats()   { return seats; }
-
-    /** A hall runs one show at a time, so an overlapping show is refused. */
-    synchronized boolean addShow(Show show) {
+    synchronized boolean addShow(Show show) {     // one show at a time: refuse an overlap
         for (Show s : shows) if (s.overlaps(show)) return false;
         shows.add(show);
         return true;
     }
-    synchronized List<Show> shows() { return List.copyOf(shows); }
 }
-
-final class Cinema {
-    private final String name;
-    private final City city;                       // association: the city exists without the cinema
-    private final List<CinemaHall> halls = new ArrayList<>();   // composition: halls die with the cinema
-    Cinema(String name, City city) { this.name = name; this.city = city; }
-    String name()                 { return name; }
-    City city()                   { return city; }
-    void addHall(CinemaHall h)    { halls.add(h); }
-    List<CinemaHall> halls()      { return Collections.unmodifiableList(halls); }
-}
-
+// Cinema: name, City (association), owns its halls (composition)
 record Movie(String id, String title, String language, String genre, LocalDate releaseDate, int durationMinutes) {}
 
-/** One screening. Owns one ShowSeat per physical seat, so the same seat can be free at 6pm and taken at 9pm. */
-final class Show {
-    private final String id;
-    private final Movie movie;
-    private final Cinema cinema;
-    private final CinemaHall hall;
-    private final LocalDateTime start;
-    private final Map<String, ShowSeat> seats = new LinkedHashMap<>();
-
+final class Show {                                 // owns one ShowSeat per physical seat
     Show(String id, Movie movie, Cinema cinema, CinemaHall hall, LocalDateTime start, Map<SeatType, BigDecimal> prices) {
-        this.id = id; this.movie = movie; this.cinema = cinema; this.hall = hall; this.start = start;
+        // ...
         for (HallSeat hs : hall.seats())
             seats.put(hs.id(), new ShowSeat(hs, prices.getOrDefault(hs.type(), BigDecimal.ZERO)));
     }
-    String id()                 { return id; }
-    Movie movie()               { return movie; }
-    Cinema cinema()             { return cinema; }
-    CinemaHall hall()           { return hall; }
-    LocalDateTime start()       { return start; }
-    LocalDateTime end()         { return start.plusMinutes(movie.durationMinutes()); }
-    Map<String, ShowSeat> seats() { return Collections.unmodifiableMap(seats); }
-
-    ShowSeat seat(String seatId) {
-        ShowSeat s = seats.get(seatId);
-        if (s == null) throw new IllegalArgumentException("no seat " + seatId + " in show " + id);
-        return s;
-    }
-    boolean overlaps(Show o) { return start.isBefore(o.end()) && o.start().isBefore(end()); }
+    boolean overlaps(Show o) { return start.isBefore(o.end()) && o.start().isBefore(end()); }   // end = start + duration
 }
-
-/** A seat for one show: its own price and its booked flag. Only SeatLockProvider flips `booked`. */
-final class ShowSeat {
+final class ShowSeat {                             // what gets booked; only SeatLockProvider flips `booked`
     private final HallSeat seat;
-    private final BigDecimal price;          // money: BigDecimal, never double
+    private final BigDecimal price;
     private volatile boolean booked;
-    ShowSeat(HallSeat seat, BigDecimal price) { this.seat = seat; this.price = price; }
-    HallSeat seat()        { return seat; }
-    BigDecimal price()     { return price; }
-    boolean isBooked()     { return booked; }
-    void setBooked(boolean b) { booked = b; }
 }
 ```
 
 ```java
-// File: lld/ch15/moviebooking/SeatLockProvider.java
-package lld.ch15.moviebooking;
-
-import java.time.Clock;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeSet;
-import java.util.concurrent.ConcurrentHashMap;
-
-/**
- * Temporary, expiring holds on seats while the customer pays.
- * An interface so the in-memory version can be swapped for Redis (SET NX PX) or a DB row lock.
- */
+// SeatLockProvider.java - an interface so the in-memory version can be swapped for Redis (SET NX PX) or a DB row lock
 interface SeatLockProvider {
-    /** All-or-nothing: either every seat is locked for this user, or none is. */
-    boolean lock(Show show, List<String> seatIds, String userId);
-    /** Release this user's holds (payment failed, user gave up). */
-    void unlock(Show show, List<String> seatIds, String userId);
-    /** True while this user still holds every one of these seats and no hold has expired. */
-    boolean holds(Show show, List<String> seatIds, String userId);
-    /** Atomically: verify holds are still valid, mark seats BOOKED, drop the holds. */
-    boolean commit(Show show, List<String> seatIds, String userId);
-    /** Make booked seats sellable again (cancellation). */
-    void releaseBooked(Show show, List<String> seatIds);
+    boolean lock(Show show, List<String> seatIds, String userId);     // all-or-nothing
+    void unlock(Show show, List<String> seatIds, String userId);      // payment failed, user gave up
+    boolean holds(Show show, List<String> seatIds, String userId);    // still mine, none expired?
+    boolean commit(Show show, List<String> seatIds, String userId);   // atomically: verify, mark BOOKED, drop holds
+    void releaseBooked(Show show, List<String> seatIds);              // cancellation
     Set<String> lockedSeats(Show show);
 }
-
 record SeatLock(String userId, Instant expiresAt) {
     boolean expired(Instant now) { return !now.isBefore(expiresAt); }
 }
 
-/**
- * One monitor per show: two shows never block each other, but every decision about one show's
- * seats (lock, commit, release) is made by one thread at a time. That is what makes
- * check-then-act safe and prevents double booking.
- */
+/** One monitor per show: shows never block each other; within a show every decision is serialized. */
 final class InMemorySeatLockProvider implements SeatLockProvider {
-    private final Duration ttl;
-    private final Clock clock;
-    private final Map<String, Map<String, SeatLock>> locksByShow = new ConcurrentHashMap<>();
-
-    InMemorySeatLockProvider(Duration ttl, Clock clock) { this.ttl = ttl; this.clock = clock; }
-
-    private Map<String, SeatLock> table(Show show) {
-        return locksByShow.computeIfAbsent(show.id(), k -> new HashMap<>());
-    }
+    private final Map<String, Map<String, SeatLock>> locksByShow = new ConcurrentHashMap<>();   // show id -> seat -> lock
 
     @Override public boolean lock(Show show, List<String> seatIds, String userId) {
         Map<String, SeatLock> t = table(show);
@@ -1504,166 +939,49 @@ final class InMemorySeatLockProvider implements SeatLockProvider {
             return true;
         }
     }
-
-    @Override public void unlock(Show show, List<String> seatIds, String userId) {
-        Map<String, SeatLock> t = table(show);
-        synchronized (t) {
-            for (String id : seatIds) {
-                SeatLock l = t.get(id);
-                if (l != null && l.userId().equals(userId)) t.remove(id);
-            }
-        }
-    }
-
-    @Override public boolean holds(Show show, List<String> seatIds, String userId) {
-        Map<String, SeatLock> t = table(show);
-        synchronized (t) { return holdsLocked(t, seatIds, userId, clock.instant()); }
-    }
-
     @Override public boolean commit(Show show, List<String> seatIds, String userId) {
         Map<String, SeatLock> t = table(show);
         synchronized (t) {
-            if (!holdsLocked(t, seatIds, userId, clock.instant())) return false;
+            if (!holdsLocked(t, seatIds, userId, clock.instant())) return false;   // every seat: mine and not expired
             for (String id : seatIds) { show.seat(id).setBooked(true); t.remove(id); }
             return true;
         }
     }
-
-    @Override public void releaseBooked(Show show, List<String> seatIds) {
-        Map<String, SeatLock> t = table(show);
-        synchronized (t) { for (String id : seatIds) show.seat(id).setBooked(false); }
-    }
-
-    @Override public Set<String> lockedSeats(Show show) {
-        Map<String, SeatLock> t = table(show);
-        synchronized (t) {
-            Instant now = clock.instant();
-            Set<String> out = new TreeSet<>();
-            t.forEach((id, l) -> { if (!l.expired(now)) out.add(id); });
-            return out;
-        }
-    }
-
-    private static boolean holdsLocked(Map<String, SeatLock> t, List<String> ids, String userId, Instant now) {
-        for (String id : ids) {
-            SeatLock l = t.get(id);
-            if (l == null || l.expired(now) || !l.userId().equals(userId)) return false;
-        }
-        return true;
-    }
+    // unlock removes only this user's locks; releaseBooked clears `booked`; lockedSeats lists unexpired holds -
+    // all under the same per-show monitor
 }
 ```
 
 ```java
-// File: lld/ch15/moviebooking/Payments.java
-package lld.ch15.moviebooking;
-
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.Clock;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
-
+// Payments.java
 enum PaymentStatus { UNPAID, PENDING, COMPLETED, DECLINED, CANCELLED, REFUNDED }
-
-/** How the customer pays. Sealed: the system supports exactly these two (credit card or cash). */
-sealed interface PaymentMethod permits CardPayment, CashPayment {}
+sealed interface PaymentMethod permits CardPayment, CashPayment {}   // exactly card or cash
 record CardPayment(String cardNumberLast4) implements PaymentMethod {}
 record CashPayment() implements PaymentMethod {}
+record Payment(String txnId, BigDecimal amount, PaymentMethod method, PaymentStatus status) {}
 
-record Payment(String txnId, BigDecimal amount, PaymentMethod method, PaymentStatus status) {
-    Payment withStatus(PaymentStatus s) { return new Payment(txnId, amount, method, s); }
-}
-
-/** Adapter boundary to the real payment provider. */
-interface PaymentGateway {
+interface PaymentGateway {                         // adapter boundary to the real provider
     Payment charge(String bookingId, BigDecimal amount, PaymentMethod method);
     Payment refund(Payment p);
 }
+// FakeGateway: declines listed cards and can run a hook "while the bank is thinking" (setDuringCharge)
 
-/** Test double: declines listed cards, and can run a hook "while the bank is thinking". */
-final class FakeGateway implements PaymentGateway {
-    private final Set<String> declinedCards;
-    private final AtomicInteger seq = new AtomicInteger();
-    private volatile Runnable duringCharge = () -> {};
-
-    FakeGateway(Set<String> declinedCards) { this.declinedCards = declinedCards; }
-    void setDuringCharge(Runnable r) { duringCharge = r; }
-
-    @Override public Payment charge(String bookingId, BigDecimal amount, PaymentMethod m) {
-        duringCharge.run();
-        String txn = "TXN-" + seq.incrementAndGet();
-        boolean declined = m instanceof CardPayment c && declinedCards.contains(c.cardNumberLast4());
-        return new Payment(txn, amount, m, declined ? PaymentStatus.DECLINED : PaymentStatus.COMPLETED);
-    }
-    @Override public Payment refund(Payment p) { return p.withStatus(PaymentStatus.REFUNDED); }
-}
-
-/** A percentage off. Applied to the booking amount BEFORE payment, so every payment type sees the right total. */
-record Coupon(String code, int percentOff) {
-    Coupon {
-        if (percentOff < 0 || percentOff > 100) throw new IllegalArgumentException("bad percent " + percentOff);
-    }
-    /** Amount after the discount, rounded to whole paise/cents (half-up). */
-    BigDecimal apply(BigDecimal amount) {
+record Coupon(String code, int percentOff) {       // applied to the booking amount BEFORE payment
+    BigDecimal apply(BigDecimal amount) {          // rounded to whole paise/cents, half-up
         BigDecimal off = amount.multiply(BigDecimal.valueOf(percentOff)).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
         return amount.subtract(off).setScale(2, RoundingMode.HALF_UP);
     }
 }
-
-/** Strategy: how much of the money comes back on cancellation. */
-interface CancellationPolicy {
-    BigDecimal refund(BigDecimal paid, LocalDateTime now, LocalDateTime showStart);
-}
-
-/** Full refund up to `cutoff` before the show, nothing after. */
-record CutoffRefundPolicy(Duration cutoff) implements CancellationPolicy {
+interface CancellationPolicy { BigDecimal refund(BigDecimal paid, LocalDateTime now, LocalDateTime showStart); }
+record CutoffRefundPolicy(Duration cutoff) implements CancellationPolicy {   // full refund up to cutoff, nothing after
     @Override public BigDecimal refund(BigDecimal paid, LocalDateTime now, LocalDateTime showStart) {
         return now.plus(cutoff).isAfter(showStart) ? BigDecimal.ZERO : paid;
     }
 }
-
-interface Notifier { void send(String userId, String message); }
-
-final class ConsoleNotifier implements Notifier {
-    @Override public void send(String userId, String message) {
-        System.out.println("  [notify " + userId + "] " + message);
-    }
-}
-
-final class SimClock extends Clock {
-    private volatile Instant now;
-    SimClock(Instant start) { this.now = start; }
-    void advance(Duration d) { now = now.plus(d); }
-    @Override public ZoneId getZone() { return ZoneOffset.UTC; }
-    @Override public Clock withZone(ZoneId zone) { return this; }
-    @Override public Instant instant() { return now; }
-}
-
-final class Money {
-    private Money() {}
-    static String fmt(BigDecimal amount) { return "Rs." + amount.setScale(2, RoundingMode.UNNECESSARY).toPlainString(); }
-}
 ```
 
 ```java
-// File: lld/ch15/moviebooking/Catalog.java
-package lld.ch15.moviebooking;
-
-import java.time.LocalDate;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-
-/** The five searches. Four are indexed when a movie is added; "by city" is answered from the shows. */
+// Catalog.java - four searches indexed when a movie is added; "by city" answered from the shows
 interface MovieSearch {
     List<Movie> searchByTitle(String title);
     List<Movie> searchByLanguage(String language);
@@ -1671,155 +989,32 @@ interface MovieSearch {
     List<Movie> searchByReleaseDate(LocalDate date);
     List<Movie> searchByCity(String cityName);
 }
-
 final class Catalog implements MovieSearch {
-    private final Map<String, List<Movie>> byTitle = new ConcurrentHashMap<>();
-    private final Map<String, List<Movie>> byLanguage = new ConcurrentHashMap<>();
-    private final Map<String, List<Movie>> byGenre = new ConcurrentHashMap<>();
-    private final Map<LocalDate, List<Movie>> byRelease = new ConcurrentHashMap<>();
-    private final List<Show> shows = new CopyOnWriteArrayList<>();
-    private final Notifier notifier;
-
-    Catalog(Notifier notifier) { this.notifier = notifier; }
-
-    /** Admin adds a movie: index it four ways and announce it (requirement: notify on a new movie). */
-    void addMovie(Movie m) {
-        put(byTitle, key(m.title()), m);
-        put(byLanguage, key(m.language()), m);
-        put(byGenre, key(m.genre()), m);
-        byRelease.computeIfAbsent(m.releaseDate(), d -> new CopyOnWriteArrayList<>()).add(m);
+    void addMovie(Movie m) {                       // index four ways, then announce it
+        // put(byTitle/byLanguage/byGenre/byRelease, ...)
         notifier.send("subscribers", "new movie: " + m.title() + " (" + m.language() + ", " + m.genre() + ")");
     }
-
-    /** Admin schedules a show; the hall refuses it if it overlaps another. */
-    boolean addShow(Show s) {
-        if (!s.hall().addShow(s)) return false;
-        shows.add(s);
-        return true;
-    }
-
-    /** After picking a movie: which shows play in my city? */
-    List<Show> showsOf(Movie m, String cityName) {
-        return shows.stream()
-                .filter(s -> s.movie().equals(m) && s.cinema().city().name().equalsIgnoreCase(cityName))
-                .sorted(Comparator.comparing(Show::start)).toList();
-    }
-
-    @Override public List<Movie> searchByTitle(String t)    { return get(byTitle, key(t)); }
-    @Override public List<Movie> searchByLanguage(String l) { return get(byLanguage, key(l)); }
-    @Override public List<Movie> searchByGenre(String g)    { return get(byGenre, key(g)); }
-    @Override public List<Movie> searchByReleaseDate(LocalDate d) { return List.copyOf(byRelease.getOrDefault(d, List.of())); }
+    boolean addShow(Show s) { if (!s.hall().addShow(s)) return false; shows.add(s); return true; }
     @Override public List<Movie> searchByCity(String city) {
         return shows.stream().filter(s -> s.cinema().city().name().equalsIgnoreCase(city))
                 .map(Show::movie).distinct().sorted(Comparator.comparing(Movie::title)).toList();
     }
-
-    private static String key(String s) { return s.trim().toLowerCase(Locale.ROOT); }
-    private static void put(Map<String, List<Movie>> idx, String k, Movie m) {
-        idx.computeIfAbsent(k, x -> new CopyOnWriteArrayList<>()).add(m);
-    }
-    private static List<Movie> get(Map<String, List<Movie>> idx, String k) {
-        return idx.getOrDefault(k, List.of()).stream().sorted(Comparator.comparing(Movie::title)).toList();
-    }
+    // showsOf(movie, city): that movie's shows in that city, by start time
 }
 ```
 
 ```java
-// File: lld/ch15/moviebooking/BookingService.java
-package lld.ch15.moviebooking;
-
-import java.math.BigDecimal;
-import java.time.Clock;
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
-
+// BookingService.java - HOLD seats (TTL) -> PAY -> COMMIT; refund if the hold was lost mid-charge
 enum BookingStatus { PENDING, CONFIRMED, CHECKED_IN, CANCELED, ABANDONED }
-
 enum AccountStatus { ACTIVE, BLOCKED, BANNED, COMPROMISED, ARCHIVED, UNKNOWN }
-
-/** Only registered customers can book. A guest has no type that BookingService accepts. */
-final class Customer {
-    private final String id;
-    private final String name;
-    private volatile AccountStatus status = AccountStatus.ACTIVE;
-    Customer(String id, String name) { this.id = id; this.name = name; }
-    String id()                 { return id; }
-    String name()               { return name; }
-    AccountStatus status()      { return status; }
-    void setStatus(AccountStatus s) { status = s; }
-}
-
-record Guest(String sessionId) {
-    Customer register(String id, String name) { return new Customer(id, name); }
-}
-
+final class Customer { /* id, name, volatile status */ }          // only customers can book
+record Guest(String sessionId) { Customer register(String id, String name) { return new Customer(id, name); } }
 record FrontDeskOfficer(String id, String name) {}
+record Admin(String id, String name) { void block(Customer c) { c.setStatus(AccountStatus.BLOCKED); } }
+// Booking: customerId, show, seatIds, baseAmount, status, payment, coupon - transitions under its own monitor
 
-record Admin(String id, String name) {
-    void block(Customer c)   { c.setStatus(AccountStatus.BLOCKED); }
-    void unblock(Customer c) { c.setStatus(AccountStatus.ACTIVE); }
-}
-
-final class SeatUnavailableException extends RuntimeException {
-    private static final long serialVersionUID = 1L;
-    SeatUnavailableException(String msg) { super(msg); }
-}
-
-/** A booking points at the show and seats; it owns none of them. Transitions run under its own monitor. */
-final class Booking {
-    private final String id;
-    private final String customerId;
-    private final Show show;
-    private final List<String> seatIds;
-    private final BigDecimal baseAmount;
-    private BookingStatus status = BookingStatus.PENDING;
-    private Payment payment;
-    private Coupon coupon;
-
-    Booking(String id, String customerId, Show show, List<String> seatIds, BigDecimal baseAmount) {
-        this.id = id; this.customerId = customerId; this.show = show;
-        this.seatIds = List.copyOf(seatIds); this.baseAmount = baseAmount;
-    }
-    String id()               { return id; }
-    String customerId()       { return customerId; }
-    Show show()               { return show; }
-    List<String> seatIds()    { return seatIds; }
-    BigDecimal baseAmount()   { return baseAmount; }
-    synchronized BookingStatus status() { return status; }
-    synchronized Payment payment()      { return payment; }
-    synchronized Coupon coupon()        { return coupon; }
-    void setStatus(BookingStatus s)     { status = s; }          // called with the monitor held
-    void setPayment(Payment p)          { payment = p; }
-    void setCoupon(Coupon c)            { coupon = c; }
-    @Override public synchronized String toString() {
-        return id + " " + seatIds + " " + status + (payment == null ? "" : " " + payment.status() + " " + Money.fmt(payment.amount()));
-    }
-}
-
-/**
- * The booking path: HOLD seats (TTL) -> PAY -> COMMIT seats. If the hold was lost while the bank
- * was charging, the money is refunded (compensation) instead of double-selling the seat.
- */
 final class BookingService {
-    private final SeatLockProvider locks;
-    private final PaymentGateway gateway;
-    private final CancellationPolicy cancellationPolicy;
-    private final Notifier notifier;
-    private final Clock clock;
-    private final Map<String, Booking> bookings = new ConcurrentHashMap<>();
-    private final AtomicInteger seq = new AtomicInteger();
-
-    BookingService(SeatLockProvider locks, PaymentGateway gateway, CancellationPolicy policy, Notifier notifier, Clock clock) {
-        this.locks = locks; this.gateway = gateway; this.cancellationPolicy = policy;
-        this.notifier = notifier; this.clock = clock;
-    }
-
-    /** Step 1: hold the seats. All-or-nothing. Throws if any seat is booked or held by someone else. */
-    Booking hold(Customer c, Show show, List<String> seatIds) {
+    Booking hold(Customer c, Show show, List<String> seatIds) {      // step 1, all-or-nothing
         if (c.status() != AccountStatus.ACTIVE) throw new IllegalStateException(c.id() + " is " + c.status());
         if (seatIds.isEmpty()) throw new IllegalArgumentException("no seats");
         List<String> sorted = seatIds.stream().distinct().sorted().toList();
@@ -1830,14 +1025,9 @@ final class BookingService {
         bookings.put(b.id(), b);
         return b;
     }
+    // holdFor(FrontDeskOfficer, Customer, ...): same flow for a walk-in
 
-    /** The front desk books for a walk-in customer: same flow, different actor. */
-    Booking holdFor(FrontDeskOfficer officer, Customer c, Show show, List<String> seatIds) {
-        return hold(c, show, seatIds);
-    }
-
-    /** Step 2 + 3: pay, then commit. Idempotent: paying a confirmed booking again returns it unchanged. */
-    Booking pay(String bookingId, PaymentMethod method, Coupon coupon) {
+    Booking pay(String bookingId, PaymentMethod method, Coupon coupon) {   // steps 2 + 3; idempotent
         Booking b = get(bookingId);
         synchronized (b) {
             if (b.status() != BookingStatus.PENDING) return b;
@@ -1869,166 +1059,16 @@ final class BookingService {
         }
     }
 
-    /** Cancel: release seats and refund according to the policy. */
-    Booking cancel(String bookingId) {
-        Booking b = get(bookingId);
-        synchronized (b) {
-            switch (b.status()) {
-                case PENDING -> {
-                    locks.unlock(b.show(), b.seatIds(), b.customerId());
-                    b.setStatus(BookingStatus.CANCELED);
-                }
-                case CONFIRMED -> {
-                    locks.releaseBooked(b.show(), b.seatIds());
-                    BigDecimal refund = cancellationPolicy.refund(b.payment().amount(),
-                            LocalDateTime.now(clock), b.show().start());
-                    if (refund.signum() > 0) b.setPayment(gateway.refund(b.payment()));
-                    b.setStatus(BookingStatus.CANCELED);
-                    notifier.send(b.customerId(), b.id() + " canceled, refund " + Money.fmt(refund));
-                }
-                default -> throw new IllegalStateException(b.id() + " cannot be canceled from " + b.status());
-            }
-            return b;
-        }
+    Booking cancel(String bookingId) {             // under the booking's monitor
+        // PENDING   -> unlock the holds, CANCELED
+        // CONFIRMED -> releaseBooked; refund = cancellationPolicy.refund(paid, now, showStart);
+        //              refund via gateway if > 0; CANCELED; notify
+        // otherwise -> IllegalStateException ("cannot be canceled from ...")
     }
-
-    Booking get(String id) {
-        Booking b = bookings.get(id);
-        if (b == null) throw new IllegalArgumentException("no booking " + id);
-        return b;
-    }
-
-    /** "." free, "L" held by someone paying, "X" booked. */
-    String seatMap(Show show) {
-        Set<String> held = locks.lockedSeats(show);
-        StringBuilder sb = new StringBuilder();
-        char row = 0;
-        for (ShowSeat s : show.seats().values()) {
-            String id = s.seat().id();
-            if (id.charAt(0) != row) { if (row != 0) sb.append('\n'); row = id.charAt(0); sb.append("  ").append(row).append(' '); }
-            sb.append(s.isBooked() ? 'X' : held.contains(id) ? 'L' : '.').append(' ');
-        }
-        return sb.toString();
-    }
+    // seatMap(show): "." free, "L" held by someone paying, "X" booked
 }
-```
-
-```java
-// File: lld/ch15/moviebooking/Main.java
-package lld.ch15.moviebooking;
-
-import java.math.BigDecimal;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
-public class Main {
-    public static void main(String[] args) throws Exception {
-        SimClock clock = new SimClock(Instant.parse("2026-05-01T12:00:00Z"));
-        FakeGateway bank = new FakeGateway(Set.of("0002"));
-        SeatLockProvider locks = new InMemorySeatLockProvider(Duration.ofMinutes(5), clock);
-        Notifier notifier = new ConsoleNotifier();
-        BookingService svc = new BookingService(locks, bank, new CutoffRefundPolicy(Duration.ofHours(2)),
-                notifier, clock);
-        Catalog catalog = new Catalog(notifier);
-
-        // ---- venue: 2 rows x 5 seats; row A regular, row B premium
-        City blr = new City("Bengaluru", "KA");
-        Cinema pvr = new Cinema("PVR Forum", blr);
-        List<HallSeat> seats = new ArrayList<>();
-        for (char row : new char[]{'A', 'B'})
-            for (int n = 1; n <= 5; n++) seats.add(new HallSeat("" + row + n, row == 'A' ? SeatType.REGULAR : SeatType.PREMIUM));
-        CinemaHall audi1 = new CinemaHall("Audi 1", seats);
-        pvr.addHall(audi1);
-
-        Movie inception = new Movie("MV1", "Inception", "English", "Sci-Fi", LocalDate.of(2010, 7, 16), 148);
-        Movie rrr = new Movie("MV2", "RRR", "Telugu", "Action", LocalDate.of(2022, 3, 25), 187);
-        Map<SeatType, BigDecimal> prices = Map.of(SeatType.REGULAR, new BigDecimal("200.00"),
-                SeatType.PREMIUM, new BigDecimal("350.00"));
-        Show evening = new Show("SH1", inception, pvr, audi1, LocalDateTime.of(2026, 5, 1, 18, 0), prices);
-        Show clash = new Show("SH2", rrr, pvr, audi1, LocalDateTime.of(2026, 5, 1, 19, 0), prices);
-
-        System.out.println("== 1. Admin adds movies (subscribers told) and schedules shows; the hall refuses an overlap ==");
-        catalog.addMovie(inception);
-        catalog.addMovie(rrr);
-        System.out.println("  add SH1 Inception 18:00 -> " + catalog.addShow(evening));
-        System.out.println("  add SH2 RRR 19:00 same hall -> " + catalog.addShow(clash));
-
-        System.out.println("\n== 2. Search ==");
-        System.out.println("  city Bengaluru -> " + titles(catalog.searchByCity("bengaluru")));
-        System.out.println("  genre Action   -> " + titles(catalog.searchByGenre("action")) + " (no show yet, but indexed)");
-        System.out.println("  Inception shows in Bengaluru -> "
-                + catalog.showsOf(inception, "Bengaluru").stream().map(s -> s.id() + "@" + s.start()).toList());
-
-        System.out.println("\n== 3. 10 customers click B3+B4 at the same instant ==");
-        List<Customer> crowd = new ArrayList<>();
-        for (int i = 1; i <= 10; i++) crowd.add(new Customer("U" + i, "User " + i));
-        ConcurrentLinkedQueue<Booking> won = new ConcurrentLinkedQueue<>();
-        CountDownLatch go = new CountDownLatch(1);
-        try (ExecutorService pool = Executors.newFixedThreadPool(10)) {
-            for (Customer c : crowd)
-                pool.submit(() -> {
-                    go.await();
-                    try { won.add(svc.hold(c, evening, List.of("B3", "B4"))); }
-                    catch (SeatUnavailableException ignored) { }
-                    return null;
-                });
-            go.countDown();
-        }
-        Booking first = won.peek();
-        System.out.println("  holds granted = " + won.size() + " (the other 9 saw 'not available')");
-        System.out.println(svc.seatMap(evening));
-
-        System.out.println("\n== 4. The winner pays by card with a 10% coupon ==");
-        svc.pay(first.id(), new CardPayment("4242"), new Coupon("FIRST10", 10));
-        System.out.println("  paying twice is harmless -> " + svc.pay(first.id(), new CardPayment("4242"), null).status());
-        System.out.println(svc.seatMap(evening));
-
-        System.out.println("\n== 5. Hold expires (TTL 5 min) before paying ==");
-        Customer asha = new Customer("ASHA", "Asha"), ravi = new Customer("RAVI", "Ravi");
-        Booking slow = svc.hold(asha, evening, List.of("A1", "A2"));
-        clock.advance(Duration.ofMinutes(6));
-        Booking fast = svc.hold(ravi, evening, List.of("A1", "A2"));
-        System.out.println("  Ravi re-held A1,A2 after Asha's hold expired -> " + fast.id());
-        svc.pay(slow.id(), new CardPayment("4242"), null);
-        svc.pay(fast.id(), new CashPayment(), null);
-
-        System.out.println("\n== 6. Hold expires WHILE the bank is charging -> refund (compensation) ==");
-        Customer meena = new Customer("MEENA", "Meena"), kiran = new Customer("KIRAN", "Kiran");
-        Booking victim = svc.hold(meena, evening, List.of("A5"));
-        bank.setDuringCharge(() -> {                       // bank is slow: 6 minutes pass, Kiran grabs A5
-            clock.advance(Duration.ofMinutes(6));
-            svc.hold(kiran, evening, List.of("A5"));
-        });
-        svc.pay(victim.id(), new CardPayment("4242"), null);
-        bank.setDuringCharge(() -> {});
-        System.out.println("  " + victim);
-
-        System.out.println("\n== 7. Declined card releases the seats immediately ==");
-        Booking declined = svc.hold(new Customer("NEHA", "Neha"), evening, List.of("B1"));
-        svc.pay(declined.id(), new CardPayment("0002"), null);
-        System.out.println("  B1 held by anyone now? " + locks.lockedSeats(evening).contains("B1"));
-
-        System.out.println("\n== 8. Blocked customer, then cancellation with refund ==");
-        new Admin("AD1", "Admin").block(crowd.get(9));
-        try { svc.hold(crowd.get(9), evening, List.of("B5")); }
-        catch (IllegalStateException e) { System.out.println("  REFUSED: " + e.getMessage()); }
-        svc.cancel(first.id());                            // 12:06+ vs 18:00 show: more than 2h before
-        System.out.println("  " + first);
-        System.out.println(svc.seatMap(evening));
-    }
-
-    private static List<String> titles(List<Movie> ms) { return ms.stream().map(Movie::title).toList(); }
-}
+// Main.java: Bengaluru / PVR Forum / Audi 1 = 2 rows x 5 seats (A regular Rs.200, B premium Rs.350);
+// TTL 5 min; FakeGateway declines card "0002"; CutoffRefundPolicy(2 h); 10 threads race for B3+B4.
 ```
 
 **Output:**
@@ -2116,14 +1156,6 @@ On **BookMyShow**, after you pick seats the app shows a **countdown timer** on t
 **30-second answer:** "Venue hierarchy is City → Cinema → Hall → HallSeat. A Show owns a ShowSeat per hall seat, and that's what's booked. Booking is hold → pay → commit: a SeatLockProvider takes all requested seats atomically with a 5-minute TTL; payment goes through a gateway interface; commit re-checks the hold and marks seats booked atomically, and if the hold was lost we refund. In one process a per-show monitor guarantees no double booking; across servers the database's conditional update or a unique constraint is the real guarantee, with Redis TTL keys for holds."
 
 **Follow-ups with answers:** *Why not lock the whole show table?* Fine for one cinema, but a global lock serializes all shows. *Why TTL?* Without it an abandoned checkout blocks seats forever. *Optimistic or pessimistic?* Pessimistic/conditional-update for hot shows (conflicts common); optimistic when conflicts are rare.
-
-### Self-check
-
-- **Q:** Why is `ShowSeat` separate from `HallSeat`? **A:** Booking state and price are per show; the physical seat is shared by every show in the hall.
-- **Q:** What does "all-or-nothing" mean in `lock`? **A:** Check every requested seat first; take them all only if all are free — never a partial set.
-- **Q:** A payment succeeded but `commit` returned false. What now? **A:** Refund (compensation) and mark the booking abandoned.
-- **Q:** How does an expired hold get cleaned up here? **A:** Lazily: any lock/holds check treats an expired lock as absent.
-- **Q:** What makes `pay` safe to call twice? **A:** It runs under the booking's monitor and returns immediately unless the booking is `PENDING`.
 
 ### TL;DR
 
@@ -2321,115 +1353,47 @@ When inventory is released (expired hold, cancellation), `TicketingService` **of
 
 ### Java implementation
 
-Package `lld.ch15.concert`. Files: `Model.java` (tiers, seat states, hold, ticket, interfaces, clock), `Inventory.java` (CAS seat inventory, GA pool, purchase limiter, waiting room), `TicketingService.java`, `Main.java`. The demos use Java 21 **virtual threads** (lightweight threads managed by the JVM rather than the operating system) (`Executors.newVirtualThreadPerTaskExecutor()`), which make 1,000 concurrent buyers cheap.
+Package `lld.ch15.concert`. Files: `Model.java` (tiers, seat states, hold, ticket, interfaces, clock), `Inventory.java` (CAS seat inventory, GA pool, purchase limiter, waiting room), `TicketingService.java`, `Main.java`. The demos use Java 21 **virtual threads** (lightweight threads managed by the JVM rather than the operating system; `Executors.newVirtualThreadPerTaskExecutor()`), which make 1,000 concurrent buyers cheap. Essential lines:
 
 ```java
-// File: lld/ch15/concert/Model.java
-package lld.ch15.concert;
-
-import java.math.BigDecimal;
-import java.time.Clock;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
-import java.util.List;
-
-/** Seated tiers have numbered seats; general admission (GA) is just a count of standing places. */
-enum Tier {
+// Model.java
+enum Tier {                                          // seated tiers have numbered seats; GA is a count
     VIP(true, "5000.00"), PREMIUM(true, "2500.00"), GENERAL_ADMISSION(false, "800.00");
     final boolean seated;
-    final BigDecimal price;                       // money: BigDecimal, never double
-    Tier(boolean seated, String price) { this.seated = seated; this.price = new BigDecimal(price); }
+    final BigDecimal price;                          // money: BigDecimal, never double
     BigDecimal priceFor(int qty) { return price.multiply(BigDecimal.valueOf(qty)); }
 }
-
 record Concert(String id, String artist, String venue, LocalDateTime startsAt) {}
 
-/** A seat's whole life in one immutable value, swapped atomically with compare-and-set (CAS). */
-sealed interface SeatState permits Free, Held, Sold {}
+sealed interface SeatState permits Free, Held, Sold {}   // a seat's whole life in one immutable value
 record Free() implements SeatState {}
 record Held(String holdId, String userId, Instant expiresAt) implements SeatState {
     boolean expired(Instant now) { return !now.isBefore(expiresAt); }
 }
 record Sold(String holdId, String userId) implements SeatState {}
 
-/** A temporary claim on inventory: either specific seats or a GA quantity. */
-record Hold(String id, String userId, Tier tier, List<String> seatIds, int quantity, BigDecimal amount, Instant expiresAt) {
-    boolean expired(Instant now) { return !now.isBefore(expiresAt); }
-}
-
+record Hold(String id, String userId, Tier tier, List<String> seatIds, int quantity, BigDecimal amount, Instant expiresAt) {}
 record Ticket(String id, String concertId, String userId, Tier tier, String seatOrGa) {}
-
-final class SoldOutException extends RuntimeException {
-    private static final long serialVersionUID = 1L;
-    SoldOutException(String msg) { super(msg); }
-}
-
-interface PaymentGateway {
-    boolean charge(String userId, BigDecimal amount);
-    void refund(String userId, BigDecimal amount);
-}
-
-interface Notifier { void send(String userId, String message); }
-
-final class SimClock extends Clock {
-    private volatile Instant now;
-    SimClock(Instant start) { this.now = start; }
-    void advance(Duration d) { now = now.plus(d); }
-    @Override public ZoneId getZone() { return ZoneOffset.UTC; }
-    @Override public Clock withZone(ZoneId zone) { return this; }
-    @Override public Instant instant() { return now; }
-}
+interface PaymentGateway { boolean charge(String userId, BigDecimal amount); void refund(String userId, BigDecimal amount); }
+// SoldOutException, Notifier, SimClock as before
 ```
 
 ```java
-// File: lld/ch15/concert/Inventory.java
-package lld.ch15.concert;
-
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
-
-/**
- * Numbered seats, lock-free. Each seat is an AtomicReference<SeatState>; a claim is one CAS.
- * Many buyers on DIFFERENT seats never wait for each other; on the SAME seat exactly one CAS wins.
- */
-final class SeatedInventory {
-    private final Map<String, Tier> tierOf = new LinkedHashMap<>();
+// Inventory.java
+final class SeatedInventory {                        // lock-free: one AtomicReference<SeatState> per seat
     private final Map<String, AtomicReference<SeatState>> seats = new ConcurrentHashMap<>();
 
-    void addSeat(String id, Tier tier) {
-        tierOf.put(id, tier);
-        seats.put(id, new AtomicReference<>(new Free()));
-    }
-    Tier tierOf(String id) { return tierOf.get(id); }
-
-    /** All-or-nothing over several seats: claim in sorted order, roll back our own claims on failure. */
+    /** All-or-nothing: claim in sorted order, roll back our own claims on failure. */
     boolean tryHold(List<String> ids, String holdId, String userId, Instant now, Instant expiresAt) {
         List<String> taken = new ArrayList<>();
         for (String id : ids.stream().sorted().toList()) {
-            if (!tryHoldOne(id, holdId, userId, now, expiresAt)) {
-                taken.forEach(t -> release(t, holdId));
-                return false;
-            }
+            if (!tryHoldOne(id, holdId, userId, now, expiresAt)) { taken.forEach(t -> release(t, holdId)); return false; }
             taken.add(id);
         }
         return true;
     }
-
     private boolean tryHoldOne(String id, String holdId, String userId, Instant now, Instant expiresAt) {
         AtomicReference<SeatState> ref = seats.get(id);
-        if (ref == null) throw new IllegalArgumentException("no seat " + id);
         while (true) {
             SeatState cur = ref.get();
             boolean claimable = cur instanceof Free || (cur instanceof Held h && h.expired(now));
@@ -2438,44 +1402,24 @@ final class SeatedInventory {
             // CAS lost: someone changed the seat between get() and CAS. Re-read and decide again.
         }
     }
-
-    /** Held-by-this-hold and not expired -> Sold. Fails if the hold was lost. */
-    boolean confirm(String id, String holdId, Instant now) {
+    boolean confirm(String id, String holdId, Instant now) {   // Held-by-this-hold, not expired -> Sold
         AtomicReference<SeatState> ref = seats.get(id);
         SeatState cur = ref.get();
         return cur instanceof Held h && h.holdId().equals(holdId) && !h.expired(now)
                 && ref.compareAndSet(cur, new Sold(holdId, h.userId()));
     }
-
-    /** Give the seat back only if it is still ours (held or sold by this hold). */
-    boolean release(String id, String holdId) {
+    boolean release(String id, String holdId) {      // back to Free only if still ours (held or sold by this hold)
         AtomicReference<SeatState> ref = seats.get(id);
         SeatState cur = ref.get();
         boolean ours = (cur instanceof Held h && h.holdId().equals(holdId))
                 || (cur instanceof Sold s && s.holdId().equals(holdId));
         return ours && ref.compareAndSet(cur, new Free());
     }
-
-    /** Seats of a tier a fan could claim right now (Free, or Held but expired), in seat order. */
-    List<String> freeSeats(Tier tier, Instant now) {
-        List<String> out = new ArrayList<>();
-        tierOf.forEach((id, t) -> {
-            SeatState s = seats.get(id).get();
-            if (t == tier && (s instanceof Free || (s instanceof Held h && h.expired(now)))) out.add(id);
-        });
-        return out;
-    }
-
-    long soldCount() { return seats.values().stream().filter(r -> r.get() instanceof Sold).count(); }
-
-    SeatState stateOf(String id) { return seats.get(id).get(); }
+    // freeSeats(tier, now): Free or expired-Held seats of a tier, in seat order
 }
 
-/** General admission: no seat numbers, just a counter. A CAS loop means it can never go below zero. */
-final class GaPool {
+final class GaPool {                                 // a counter; the CAS loop can never go below zero
     private final AtomicInteger available;
-    GaPool(int capacity) { available = new AtomicInteger(capacity); }
-
     boolean tryTake(int qty) {
         while (true) {
             int cur = available.get();
@@ -2484,20 +1428,15 @@ final class GaPool {
         }
     }
     void giveBack(int qty) { available.addAndGet(qty); }
-    int available()        { return available.get(); }
 }
 
-/** Anti-scalping: at most `max` tickets per user per concert, checked-and-updated atomically. */
-final class PurchaseLimiter {
-    private final int max;
+final class PurchaseLimiter {                        // anti-scalping: at most `max` per user, atomically
     private final ConcurrentHashMap<String, Integer> used = new ConcurrentHashMap<>();
-    PurchaseLimiter(int max) { this.max = max; }
-
     boolean tryUse(String userId, int qty) {
         boolean[] ok = {false};
         used.compute(userId, (u, cur) -> {
             int c = cur == null ? 0 : cur;
-            if (c + qty > max) return cur;             // unchanged
+            if (c + qty > max) return cur;           // unchanged
             ok[0] = true;
             return c + qty;
         });
@@ -2506,91 +1445,31 @@ final class PurchaseLimiter {
     void giveBack(String userId, int qty) { used.computeIfPresent(userId, (u, c) -> c - qty <= 0 ? null : c - qty); }
 }
 
-/**
- * Virtual waiting room. Everyone who arrives gets a strictly increasing number; the system admits
- * people in that order, a batch at a time. First come, first served, and bots gain nothing by
- * hammering the buy button, because only admitted users may hold inventory.
- */
-final class VirtualWaitingRoom {
-    private final AtomicLong nextNumber = new AtomicLong();
-    private final ConcurrentLinkedQueue<String> line = new ConcurrentLinkedQueue<>();
-    private final Set<String> admitted = ConcurrentHashMap.newKeySet();
-    private final Map<String, Long> numberOf = new ConcurrentHashMap<>();
-
-    /** synchronized so the number order and the line order can never disagree. */
-    synchronized long join(String userId) {
+final class VirtualWaitingRoom {                     // strictly increasing numbers; admitted in order, in batches
+    synchronized long join(String userId) {          // synchronized: number order == line order
         Long n = numberOf.get(userId);
-        if (n != null) return n;                        // joining twice keeps your place
+        if (n != null) return n;                     // joining twice keeps your place
         long mine = nextNumber.incrementAndGet();
         numberOf.put(userId, mine);
         line.add(userId);
         return mine;
     }
-    synchronized List<String> admitNext(int k) {
-        List<String> out = new ArrayList<>();
-        for (int i = 0; i < k; i++) {
-            String u = line.poll();
-            if (u == null) break;
-            admitted.add(u);
-            out.add(u);
-        }
-        return out;
-    }
+    synchronized List<String> admitNext(int k) { /* poll up to k from the line into `admitted` */ }
     boolean isAdmitted(String userId) { return admitted.contains(userId); }
-    void admitDirectly(String userId) { admitted.add(userId); }
+    void admitDirectly(String userId) { admitted.add(userId); }      // used for waitlist offers
 }
 ```
 
 ```java
-// File: lld/ch15/concert/TicketingService.java
-package lld.ch15.concert;
-
-import java.math.BigDecimal;
-import java.time.Clock;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.EnumMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.atomic.AtomicInteger;
-
-/**
- * Flow: join waiting room -> get admitted -> HOLD (seats or GA qty, with TTL) -> PURCHASE.
- * Released inventory (expired hold, cancellation) is offered to the tier's waitlist first.
- */
+// TicketingService.java - join room -> admitted -> HOLD (seats or GA qty, TTL) -> PURCHASE;
+// released inventory is offered to the tier's waitlist first
 final class TicketingService {
-    private final Concert concert;
-    private final SeatedInventory seated;
-    private final GaPool ga;
-    private final PurchaseLimiter limiter;
-    private final VirtualWaitingRoom room;
-    private final PaymentGateway payments;
-    private final Notifier notifier;
-    private final Clock clock;
-    private final Duration holdTtl;
     private final Map<String, Hold> holds = new ConcurrentHashMap<>();           // active holds
-    private final Map<String, List<Ticket>> orders = new ConcurrentHashMap<>();  // holdId -> tickets
     private final Map<Tier, Queue<String>> waitlists = new EnumMap<>(Tier.class);
-    private final AtomicInteger seq = new AtomicInteger();
 
-    TicketingService(Concert concert, SeatedInventory seated, GaPool ga, PurchaseLimiter limiter,
-                     VirtualWaitingRoom room, PaymentGateway payments, Notifier notifier, Clock clock, Duration holdTtl) {
-        this.concert = concert; this.seated = seated; this.ga = ga; this.limiter = limiter; this.room = room;
-        this.payments = payments; this.notifier = notifier; this.clock = clock; this.holdTtl = holdTtl;
-        for (Tier t : Tier.values()) waitlists.put(t, new ConcurrentLinkedQueue<>());
-    }
-
-    // ------------------------------------------------------------------ hold
     Hold holdSeats(String userId, List<String> seatIds) {
-        requireAdmitted(userId);
-        if (seatIds.isEmpty()) throw new IllegalArgumentException("no seats");
-        Tier tier = seated.tierOf(seatIds.get(0));
-        if (seatIds.stream().anyMatch(id -> seated.tierOf(id) != tier))
-            throw new IllegalArgumentException("one hold = one tier");
+        requireAdmitted(userId);                     // "... is still in the waiting room"
+        // ... one hold = one tier
         if (!limiter.tryUse(userId, seatIds.size()))
             throw new IllegalStateException(userId + " would exceed the per-user ticket limit");
         Instant now = clock.instant();
@@ -2603,74 +1482,25 @@ final class TicketingService {
         holds.put(h.id(), h);
         return h;
     }
+    // holdGa(userId, qty): same shape with ga.tryTake(qty) -> "general admission sold out"
 
-    Hold holdGa(String userId, int qty) {
-        requireAdmitted(userId);
-        if (!limiter.tryUse(userId, qty))
-            throw new IllegalStateException(userId + " would exceed the per-user ticket limit");
-        if (!ga.tryTake(qty)) {
-            limiter.giveBack(userId, qty);
-            throw new SoldOutException("general admission sold out");
-        }
-        Hold h = new Hold("H" + seq.incrementAndGet(), userId, Tier.GENERAL_ADMISSION, List.of(), qty,
-                Tier.GENERAL_ADMISSION.priceFor(qty), clock.instant().plus(holdTtl));
-        holds.put(h.id(), h);
-        return h;
-    }
-
-    // ------------------------------------------------------------------ purchase
     List<Ticket> purchase(String holdId) {
-        Hold h = holds.remove(holdId);                    // atomic claim: a hold is purchased at most once
+        Hold h = holds.remove(holdId);               // atomic claim: purchased at most once
         if (h == null) throw new IllegalStateException(holdId + " unknown, expired or already used");
         if (h.expired(clock.instant())) { releaseInventory(h); throw new IllegalStateException(holdId + " expired"); }
         if (!payments.charge(h.userId(), h.amount())) { releaseInventory(h); throw new IllegalStateException("payment declined"); }
-
-        List<Ticket> tickets = new ArrayList<>();
-        if (h.tier().seated) {
-            Instant now = clock.instant();
-            List<String> confirmed = new ArrayList<>();
-            for (String id : h.seatIds()) {
-                if (!seated.confirm(id, h.id(), now)) {   // hold lost during payment -> compensate
-                    confirmed.forEach(c -> seated.release(c, h.id()));
-                    h.seatIds().forEach(s -> seated.release(s, h.id()));
-                    limiter.giveBack(h.userId(), h.quantity());
-                    payments.refund(h.userId(), h.amount());
-                    throw new IllegalStateException("seat " + id + " lost during payment, refunded");
-                }
-                confirmed.add(id);
-                tickets.add(new Ticket("T" + seq.incrementAndGet(), concert.id(), h.userId(), h.tier(), id));
-            }
-        } else {
-            for (int i = 0; i < h.quantity(); i++)
-                tickets.add(new Ticket("T" + seq.incrementAndGet(), concert.id(), h.userId(), h.tier(), "GA"));
-        }
-        orders.put(h.id(), List.copyOf(tickets));
-        return tickets;
+        // seated: confirm each seat; if one fails (hold lost during payment) -> release all, give back the
+        //         limit, refund, throw "seat ... lost during payment, refunded". GA: one ticket per unit.
     }
 
-    // ------------------------------------------------------------------ release paths
-    /** The reaper: run every few seconds in production. Returns how many holds it expired. */
-    int expireHolds() {
+    int expireHolds() {                              // the reaper: every few seconds in production
         Instant now = clock.instant();
         int n = 0;
         for (Hold h : holds.values())
             if (h.expired(now) && holds.remove(h.id(), h)) { releaseInventory(h); n++; }
         return n;
     }
-
-    /** Cancel a whole order (all tickets bought with one hold). */
-    void cancelOrder(String holdId) {
-        List<Ticket> tickets = orders.remove(holdId);
-        if (tickets == null) throw new IllegalStateException("no order " + holdId);
-        Tier tier = tickets.get(0).tier();
-        BigDecimal refund = tier.priceFor(tickets.size());
-        payments.refund(tickets.get(0).userId(), refund);
-        Hold asIfHeld = new Hold(holdId, tickets.get(0).userId(), tier,
-                tier.seated ? tickets.stream().map(Ticket::seatOrGa).toList() : List.of(), tickets.size(), refund, clock.instant());
-        releaseInventory(asIfHeld);
-    }
-
-    void joinWaitlist(String userId, Tier tier) { waitlists.get(tier).add(userId); }
+    // cancelOrder(holdId): refund the order, then releaseInventory as if held
 
     private void releaseInventory(Hold h) {
         limiter.giveBack(h.userId(), h.quantity());
@@ -2682,9 +1512,7 @@ final class TicketingService {
             offerGa();
         }
     }
-
-    /** Waitlist first: freed inventory goes to the person who has waited longest, as a fresh hold. */
-    private void offerGa() {
+    private void offerGa() {                         // waitlist first: a fresh hold for the longest-waiting fan
         Queue<String> q = waitlists.get(Tier.GENERAL_ADMISSION);
         String next;
         while (ga.available() > 0 && (next = q.poll()) != null) {
@@ -2695,138 +1523,10 @@ final class TicketingService {
             } catch (RuntimeException e) { /* over their limit or lost the race: try the next person */ }
         }
     }
-
-    private void offerSeat(Tier tier, String seatId) {
-        String next = waitlists.get(tier).poll();
-        if (next == null) return;
-        room.admitDirectly(next);
-        try {
-            Hold h = holdSeats(next, List.of(seatId));
-            notifier.send(next, "seat " + seatId + " freed up, held for you as " + h.id());
-        } catch (RuntimeException e) { /* someone else took it first */ }
-    }
-
-    private void requireAdmitted(String userId) {
-        if (!room.isAdmitted(userId)) throw new IllegalStateException(userId + " is still in the waiting room");
-    }
-
-    int gaAvailable() { return ga.available(); }
-
-    /** What a fan sees before choosing: free places per tier (requirement: view seating and availability). */
-    String availability() {
-        StringBuilder sb = new StringBuilder();
-        for (Tier t : Tier.values()) {
-            if (t.seated) sb.append(t).append(" free ").append(seated.freeSeats(t, clock.instant())).append(", ");
-            else sb.append(t).append(" free ").append(ga.available());
-        }
-        return sb.toString();
-    }
+    // offerSeat(tier, seatId): same idea for one seat; availability(): free seats per tier + GA count
 }
-```
-
-```java
-// File: lld/ch15/concert/Main.java
-package lld.ch15.concert;
-
-import java.math.BigDecimal;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
-
-public class Main {
-    public static void main(String[] args) throws Exception {
-        SimClock clock = new SimClock(Instant.parse("2026-06-01T09:00:00Z"));
-        AtomicReference<BigDecimal> collected = new AtomicReference<>(BigDecimal.ZERO);
-        PaymentGateway bank = new PaymentGateway() {
-            public boolean charge(String u, BigDecimal a) { collected.accumulateAndGet(a, BigDecimal::add); return true; }
-            public void refund(String u, BigDecimal a)    { collected.accumulateAndGet(a, BigDecimal::subtract); }
-        };
-        Notifier notifier = (u, m) -> System.out.println("  [notify " + u + "] " + m);
-
-        Concert show = new Concert("C1", "The Band", "Stadium", LocalDateTime.of(2026, 8, 15, 19, 30));
-        SeatedInventory seated = new SeatedInventory();
-        for (int i = 1; i <= 4; i++) seated.addSeat("VIP-" + i, Tier.VIP);
-        for (int i = 1; i <= 6; i++) seated.addSeat("P-" + i, Tier.PREMIUM);
-        GaPool ga = new GaPool(100);
-        VirtualWaitingRoom room = new VirtualWaitingRoom();
-        TicketingService svc = new TicketingService(show, seated, ga, new PurchaseLimiter(4), room,
-                bank, notifier, clock, Duration.ofMinutes(10));
-
-        System.out.println("== 1. Seating and availability, then the virtual waiting room ==");
-        System.out.println("  availability: " + svc.availability());
-        for (String u : List.of("ana", "ben", "cai", "dev", "eli")) System.out.println("  " + u + " got number " + room.join(u));
-        System.out.println("  ben joins again, keeps number " + room.join("ben"));
-        System.out.println("  admitted batch 1: " + room.admitNext(3));
-        try { svc.holdGa("eli", 1); } catch (IllegalStateException e) { System.out.println("  REFUSED: " + e.getMessage()); }
-
-        System.out.println("\n== 2. 40 admitted fans CAS for the same seat VIP-1 ==");
-        AtomicInteger vipWins = new AtomicInteger();
-        CountDownLatch go = new CountDownLatch(1);
-        try (ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
-            for (int i = 0; i < 40; i++) {
-                String u = "vip-fan-" + i;
-                room.admitDirectly(u);
-                pool.submit(() -> {
-                    go.await();
-                    try { svc.holdSeats(u, List.of("VIP-1")); vipWins.incrementAndGet(); }
-                    catch (SoldOutException ignored) { }
-                    return null;
-                });
-            }
-            go.countDown();
-        }
-        System.out.println("  holds on VIP-1 = " + vipWins.get());
-
-        System.out.println("\n== 3. Flash sale: 1,000 fans, 100 GA places (98 left after test buys) ==");
-        Hold anaHold = svc.holdGa("ana", 2);
-        svc.purchase(anaHold.id());
-        AtomicInteger sold = new AtomicInteger(), soldOut = new AtomicInteger();
-        CountDownLatch go2 = new CountDownLatch(1);
-        try (ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
-            for (int i = 0; i < 1000; i++) {
-                String u = "fan-" + i;
-                room.admitDirectly(u);
-                pool.submit(() -> {
-                    go2.await();
-                    try { svc.purchase(svc.holdGa(u, 1).id()); sold.incrementAndGet(); }
-                    catch (SoldOutException e) { soldOut.incrementAndGet(); }
-                    return null;
-                });
-            }
-            go2.countDown();
-        }
-        System.out.println("  sold=" + sold + " soldOut=" + soldOut + " gaLeft=" + svc.gaAvailable() + " (never negative)");
-
-        System.out.println("\n== 4. Per-user limit (4) stops a scalper ==");
-        Hold p = svc.holdSeats("ben", List.of("P-1", "P-2", "P-3"));
-        System.out.println("  ben holds " + p.seatIds() + " = " + p.amount());
-        try { svc.holdSeats("ben", List.of("P-4", "P-5")); } catch (IllegalStateException e) { System.out.println("  REFUSED: " + e.getMessage()); }
-        List<Ticket> benTickets = svc.purchase(p.id());
-        System.out.println("  ben bought " + benTickets.stream().map(Ticket::seatOrGa).toList());
-
-        System.out.println("\n== 5. Sold out -> waitlist -> a cancellation is offered to the waitlist ==");
-        try { svc.holdGa("cai", 1); } catch (SoldOutException e) { System.out.println("  cai: " + e.getMessage() + ", joins waitlist"); }
-        svc.joinWaitlist("cai", Tier.GENERAL_ADMISSION);
-        svc.cancelOrder(anaHold.id());                  // ana returns her 2 GA tickets
-        System.out.println("  GA left after offers = " + svc.gaAvailable());
-
-        System.out.println("\n== 6. Unpaid holds expire; the reaper returns them ==");
-        System.out.println("  admitted batch 2: " + room.admitNext(3));
-        Hold forgotten = svc.holdSeats("dev", List.of("P-6"));
-        clock.advance(Duration.ofMinutes(11));
-        System.out.println("  expired holds reaped = " + svc.expireHolds() + " (VIP-1, cai's unpaid offer, dev's P-6)");
-        try { svc.purchase(forgotten.id()); } catch (IllegalStateException e) { System.out.println("  dev: " + e.getMessage()); }
-        System.out.println("  P-6 now " + seated.stateOf("P-6") + ", GA left " + svc.gaAvailable());
-        System.out.println("  availability: " + svc.availability());
-        System.out.println("  money collected = " + collected.get());
-    }
-}
+// Main.java: VIP-1..4, P-1..6, GA 100; limit 4; TTL 10 min; payment gateway sums collected money;
+// 40 virtual threads race for VIP-1; 1,000 virtual threads buy GA.
 ```
 
 **Output:**
@@ -2899,14 +1599,6 @@ What to notice: section 1 admits the first three in arrival order and refuses so
 **30-second answer:** "Seated tiers are an `AtomicReference<SeatState>` per seat, claimed by compare-and-set — one winner, no locks. GA is an `AtomicInteger` decremented by a CAS loop so it can't go negative. Everyone enters through a virtual waiting room that admits in arrival order, and a per-user limit is enforced atomically. Holds expire after 10 minutes; a reaper returns expired GA holds; released tickets go to a FIFO waitlist first. If a hold is lost during payment we refund."
 
 **Follow-ups with answers:** *Lock-free vs locks?* Lock-free wins when contention is high and critical sections are tiny (one field swap); locks are simpler when an operation must update many things together. *What if the queue service fails?* Fail closed (on failure, deny rather than allow): pause admissions, don't open the floodgates. *How do you stop one person with 50 accounts?* Verified identity, payment-card fingerprinting (recognising the same card across accounts), and limits keyed on those.
-
-### Self-check
-
-- **Q:** Why is GA modeled as a counter, not seats? **A:** Standing places are interchangeable; a counter with CAS is simpler and can't oversell.
-- **Q:** What does `compareAndSet` guarantee? **A:** The update happens only if the value is still the one you read; otherwise it fails and you retry or give up.
-- **Q:** Why must `join` be synchronized? **A:** So the number handed out and the position in the line are assigned together; otherwise two joiners could get numbers in one order and queue slots in the other.
-- **Q:** How is a hold prevented from being purchased *and* reaped? **A:** Both paths remove it from the `holds` map first; only one removal succeeds.
-- **Q:** What happens to a released ticket when fans are waitlisted? **A:** It becomes a fresh hold for the first fan in the waitlist, who is notified.
 
 ### TL;DR
 
@@ -3176,314 +1868,97 @@ The room's *current* status cycles independently: `AVAILABLE` → `OCCUPIED` (ch
 
 ### Java implementation
 
-Package `lld.ch15.hotel`. Files: `Billing.java` (invoice, payments, room charges), `Rooms.java` (room, key, housekeeping, search, hotel, clock, money), `Stay.java` (booking, actors, front desk), `Main.java`.
+Package `lld.ch15.hotel`. Files: `Billing.java` (invoice, payments, room charges), `Rooms.java` (room, key, housekeeping, search, hotel, clock, money), `Stay.java` (booking, actors, front desk), `Main.java`. Essential lines:
 
 ```java
-// File: lld/ch15/hotel/Billing.java
-package lld.ch15.hotel;
-
-import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.List;
-
+// Billing.java
 enum PaymentStatus { UNPAID, PENDING, COMPLETED, DECLINED, CANCELLED, REFUNDED }
-
 record InvoiceItem(String description, BigDecimal amount) {}   // money: BigDecimal, never double
 
-/** A bill is a list of lines; the total is always computed, so it can never disagree with the lines. */
-final class Invoice {
-    private final String number;
-    private final List<InvoiceItem> items = new ArrayList<>();
-    Invoice(String number) { this.number = number; }
-    String number()                        { return number; }
+final class Invoice {                              // a list of lines; the total is always computed
     synchronized void addItem(InvoiceItem i) { items.add(i); }
-    synchronized List<InvoiceItem> items()   { return List.copyOf(items); }
-    synchronized BigDecimal total()          { return items.stream().map(InvoiceItem::amount).reduce(BigDecimal.ZERO, BigDecimal::add); }
+    synchronized BigDecimal total() { return items.stream().map(InvoiceItem::amount).reduce(BigDecimal.ZERO, BigDecimal::add); }
 }
 
-/** Three ways to pay, which really behave differently: a check does not clear at once. */
 abstract sealed class Payment permits CreditCardTransaction, CheckTransaction, CashTransaction {
-    private final BigDecimal amount;
-    private PaymentStatus status = PaymentStatus.UNPAID;
-    Payment(BigDecimal amount) { this.amount = amount; }
-    BigDecimal amount()      { return amount; }
-    PaymentStatus status()   { return status; }
-    protected void setStatus(PaymentStatus s) { status = s; }
     /** Take the money. Returns true when the hotel may release the guest. */
     abstract boolean initiateTransaction();
 }
-
 final class CreditCardTransaction extends Payment {
-    private final String nameOnCard;
-    CreditCardTransaction(BigDecimal amount, String nameOnCard) { super(amount); this.nameOnCard = nameOnCard; }
     @Override boolean initiateTransaction() { setStatus(PaymentStatus.COMPLETED); return true; }
-    @Override public String toString() { return "card(" + nameOnCard + ")"; }
 }
-
-final class CheckTransaction extends Payment {
-    private final String bankName, checkNumber;
-    CheckTransaction(BigDecimal amount, String bankName, String checkNumber) {
-        super(amount); this.bankName = bankName; this.checkNumber = checkNumber;
-    }
+final class CheckTransaction extends Payment {      // bank name, check number
     @Override boolean initiateTransaction() { setStatus(PaymentStatus.PENDING); return true; }   // clears in days
-    @Override public String toString() { return "check(" + bankName + " #" + checkNumber + ")"; }
 }
-
 final class CashTransaction extends Payment {
-    private final BigDecimal tendered;
-    CashTransaction(BigDecimal amount, BigDecimal tendered) { super(amount); this.tendered = tendered; }
     @Override boolean initiateTransaction() {
         if (tendered.compareTo(amount()) < 0) { setStatus(PaymentStatus.DECLINED); return false; }
         setStatus(PaymentStatus.COMPLETED);
         return true;
     }
-    BigDecimal change() { return tendered.subtract(amount()); }
-    @Override public String toString() { return "cash"; }
 }
 
-/**
- * TEMPLATE METHOD. addInvoiceItem() is the fixed algorithm (describe, price, write a line);
- * each subclass fills in only description(). A new kind of charge = a new subclass, no edit to Invoice.
- */
+/** TEMPLATE METHOD: addInvoiceItem() is the fixed algorithm; subclasses fill in only description(). */
 abstract class RoomCharge {
     private final BigDecimal amount;
-    RoomCharge(BigDecimal amount) { this.amount = amount; }
     protected abstract String description();                 // the one step that varies
-    final void addInvoiceItem(Invoice invoice) {             // the template: final, so the order can't change
+    final void addInvoiceItem(Invoice invoice) {             // final, so the order can't change
         invoice.addItem(new InvoiceItem(description(), amount));
     }
 }
-
-final class Amenity extends RoomCharge {
-    private final String name;
-    Amenity(String name, BigDecimal amount) { super(amount); this.name = name; }
-    @Override protected String description() { return "Amenity: " + name; }
-}
-
-final class RoomService extends RoomCharge {
-    private final String request;
-    RoomService(String request, BigDecimal amount) { super(amount); this.request = request; }
-    @Override protected String description() { return "Room service: " + request; }
-}
-
-final class KitchenService extends RoomCharge {
-    private final String dish;
-    KitchenService(String dish, BigDecimal amount) { super(amount); this.dish = dish; }
-    @Override protected String description() { return "Kitchen: " + dish; }
-}
+final class Amenity extends RoomCharge { @Override protected String description() { return "Amenity: " + name; } }
+// RoomService -> "Room service: " + request; KitchenService -> "Kitchen: " + dish
 ```
 
 ```java
-// File: lld/ch15/hotel/Rooms.java
-package lld.ch15.hotel;
-
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.Clock;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeMap;
-import java.util.concurrent.ConcurrentHashMap;
-
+// Rooms.java
 enum RoomStyle { STANDARD, DELUXE, FAMILY_SUITE, BUSINESS_SUITE }
+enum RoomStatus { AVAILABLE, RESERVED, OCCUPIED, NOT_AVAILABLE, BEING_SERVICED, OTHER }   // what it does NOW
+final class RoomKey { /* keyId, barcode, issuedAt, master flag, volatile active; deactivate() at checkout */ }
+record RoomHouseKeeping(LocalDateTime at, String housekeeper, String description, int minutes) {}   // append-only
 
-/** What the room is doing RIGHT NOW. It cannot answer "is it free for 3 nights from the 10th?". */
-enum RoomStatus { AVAILABLE, RESERVED, OCCUPIED, NOT_AVAILABLE, BEING_SERVICED, OTHER }
-
-/** An electronic key card. Deactivated at checkout so it stops opening the door. */
-final class RoomKey {
-    private final String keyId, barcode;
-    private final LocalDateTime issuedAt;
-    private final boolean master;
-    private volatile boolean active = true;
-    RoomKey(String keyId, String barcode, LocalDateTime issuedAt, boolean master) {
-        this.keyId = keyId; this.barcode = barcode; this.issuedAt = issuedAt; this.master = master;
-    }
-    String keyId()        { return keyId; }
-    boolean isActive()    { return active; }
-    boolean isMaster()    { return master; }
-    void deactivate()     { active = false; }
-}
-
-/** Append-only log line: nothing is overwritten, so a room's history can be read back. */
-record RoomHouseKeeping(LocalDateTime at, String housekeeper, String description, int minutes) {}
-
-/**
- * A room owns its keys and its housekeeping log (composition), and the SET OF NIGHTS it is committed to.
- * Reserving nights is check-then-act, so it runs under the room's monitor: two guests can never
- * both get the night of the 10th.
- */
+/** Owns its keys and housekeeping log (composition) and the SET OF NIGHTS it is committed to. */
 final class Room {
-    private final String number;
-    private final RoomStyle style;
-    private final BigDecimal pricePerNight;
-    private final boolean smoking;
     private final Set<LocalDate> bookedNights = new HashSet<>();
-    private final List<RoomKey> keys = new ArrayList<>();
-    private final List<RoomHouseKeeping> housekeeping = new ArrayList<>();
     private RoomStatus status = RoomStatus.AVAILABLE;
-
-    Room(String number, RoomStyle style, BigDecimal pricePerNight, boolean smoking) {
-        this.number = number; this.style = style; this.pricePerNight = pricePerNight; this.smoking = smoking;
-    }
-    String number()             { return number; }
-    RoomStyle style()           { return style; }
-    BigDecimal pricePerNight()  { return pricePerNight; }
 
     /** Nights are [checkIn, checkOut): the checkout day itself is free for the next guest. */
     synchronized boolean isFree(LocalDate checkIn, LocalDate checkOut) {
         for (LocalDate d = checkIn; d.isBefore(checkOut); d = d.plusDays(1)) if (bookedNights.contains(d)) return false;
         return true;
     }
-    synchronized boolean tryReserve(LocalDate checkIn, LocalDate checkOut) {
+    synchronized boolean tryReserve(LocalDate checkIn, LocalDate checkOut) {   // check-then-act, atomic
         if (!isFree(checkIn, checkOut)) return false;              // re-entrant monitor: same lock
         for (LocalDate d = checkIn; d.isBefore(checkOut); d = d.plusDays(1)) bookedNights.add(d);
         return true;
     }
-    synchronized void release(LocalDate checkIn, LocalDate checkOut) {
-        for (LocalDate d = checkIn; d.isBefore(checkOut); d = d.plusDays(1)) bookedNights.remove(d);
-    }
-
-    synchronized RoomStatus status()          { return status; }
-    synchronized void setStatus(RoomStatus s) { status = s; }
-
-    synchronized RoomKey issueKey(String keyId, LocalDateTime at) {
-        RoomKey k = new RoomKey(keyId, "BC-" + keyId, at, false);
-        keys.add(k);
-        return k;
-    }
-    synchronized int deactivateGuestKeys() {
-        int n = 0;
-        for (RoomKey k : keys) if (!k.isMaster() && k.isActive()) { k.deactivate(); n++; }
-        return n;
-    }
-    synchronized void addHousekeeping(RoomHouseKeeping h) { housekeeping.add(h); }
-    synchronized List<RoomHouseKeeping> housekeepingLog()  { return List.copyOf(housekeeping); }
+    synchronized void release(LocalDate checkIn, LocalDate checkOut) { /* remove those nights */ }
+    synchronized int deactivateGuestKeys() { /* deactivate every active non-master key, return how many */ }
+    // issueKey(keyId, at), addHousekeeping(h), housekeepingLog()
 }
 
-/** Search belongs to the LOCATION: a single room only knows about itself. */
-interface Search {
-    List<Room> search(RoomStyle style, LocalDate checkIn, LocalDate checkOut);
-}
-
+interface Search { List<Room> search(RoomStyle style, LocalDate checkIn, LocalDate checkOut); }   // on the LOCATION
 final class HotelLocation implements Search {
-    private final String name;
-    private final Map<String, Room> rooms = new ConcurrentHashMap<>();
-    HotelLocation(String name) { this.name = name; }
-    String name()           { return name; }
-    void addRoom(Room r)    { rooms.put(r.number(), r); }
-    Room room(String n)     { return rooms.get(n); }
-
     @Override public List<Room> search(RoomStyle style, LocalDate in, LocalDate out) {
         return rooms.values().stream().filter(r -> r.style() == style && r.isFree(in, out))
                 .sorted(Comparator.comparing(Room::number)).toList();
     }
 }
-
-final class Hotel {
-    private final String name;
-    private final List<HotelLocation> locations = new ArrayList<>();
-    Hotel(String name) { this.name = name; }
-    void addLocation(HotelLocation l) { locations.add(l); }
-    /** Asks every location in turn. */
-    Map<String, List<Room>> search(RoomStyle style, LocalDate checkIn, LocalDate checkOut) {
-        Map<String, List<Room>> result = new TreeMap<>();
-        for (HotelLocation l : locations) result.put(l.name(), l.search(style, checkIn, checkOut));
-        return result;
-    }
-}
-
-final class SimClock extends Clock {
-    private volatile Instant now;
-    SimClock(Instant start) { this.now = start; }
-    void advance(Duration d) { now = now.plus(d); }
-    @Override public ZoneId getZone() { return ZoneOffset.UTC; }
-    @Override public Clock withZone(ZoneId zone) { return this; }
-    @Override public Instant instant() { return now; }
-}
-
-final class Money {
-    private Money() {}
-    static String fmt(BigDecimal amount) {
-        String digits = amount.abs().setScale(2, RoundingMode.UNNECESSARY).toPlainString();
-        return (amount.signum() < 0 ? "-$" : "$") + digits;
-    }
-}
+// Hotel.search(style, in, out): asks every location in turn (TreeMap location -> rooms)
+// Money.fmt prints negatives as "-$120.00"
 ```
 
 ```java
-// File: lld/ch15/hotel/Stay.java
-package lld.ch15.hotel;
-
-import java.math.BigDecimal;
-import java.time.Clock;
-import java.time.Duration;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
-
+// Stay.java
 enum BookingStatus { REQUESTED, PENDING, CONFIRMED, CHECKED_IN, CHECKED_OUT, CANCELLED, ABANDONED }
-
-/** The actors. Each service method takes the actor type allowed to call it, so roles are enforced by types. */
 sealed interface Person permits Guest, Receptionist, Server, Housekeeper, Manager { String name(); }
-record Guest(String id, String name, String email) implements Person {}
-record Receptionist(String id, String name) implements Person {}
-record Server(String id, String name) implements Person {}
-record Housekeeper(String id, String name) implements Person {}
-record Manager(String id, String name) implements Person {}
+record Guest(String id, String name, String email) implements Person {}     // others: (id, name)
 
-interface Notifier { void send(String guestId, String message); }
-
-/**
- * One stay in one room. Owns its invoice (composition); only points at the room (association).
- * Records the guest by id, which answers "who booked this room?" and "which rooms did this guest book?".
- */
-final class RoomBooking {
+final class RoomBooking {                          // owns its invoice; points at the room; guest by id
     static final LocalTime CHECK_IN_TIME = LocalTime.of(14, 0);
     static final Duration FULL_REFUND_NOTICE = Duration.ofHours(24);
 
-    private final String reservationNumber;
-    private final String guestId;
-    private final Room room;
-    private final LocalDate checkIn, checkOut;
-    private final Invoice invoice;
-    private BookingStatus status = BookingStatus.CONFIRMED;
-    private BigDecimal deposit = BigDecimal.ZERO;
-
-    RoomBooking(String reservationNumber, String guestId, Room room, LocalDate checkIn, LocalDate checkOut) {
-        this.reservationNumber = reservationNumber; this.guestId = guestId; this.room = room;
-        this.checkIn = checkIn; this.checkOut = checkOut; this.invoice = new Invoice("INV-" + reservationNumber);
-    }
-    String reservationNumber() { return reservationNumber; }
-    String guestId()           { return guestId; }
-    Room room()                { return room; }
-    LocalDate checkIn()        { return checkIn; }
-    LocalDate checkOut()       { return checkOut; }
-    Invoice invoice()          { return invoice; }
-    long nights()              { return checkIn.until(checkOut).getDays(); }
-    synchronized BookingStatus status()        { return status; }
-    synchronized void setStatus(BookingStatus s) { status = s; }
-    synchronized BigDecimal deposit()             { return deposit; }
-    synchronized void setDeposit(BigDecimal d)    { deposit = d; }
-
-    /** The refund rule lives in exactly ONE method: full refund if cancelled more than 24h before check-in. */
+    /** The refund rule lives in exactly ONE method. */
     BigDecimal refundDue(LocalDateTime now) {
         Duration notice = Duration.between(now, checkIn.atTime(CHECK_IN_TIME));
         // compareTo, not toHours(): toHours() truncates, so 24h30m would wrongly count as "24, not more than 24".
@@ -3491,37 +1966,17 @@ final class RoomBooking {
     }
 }
 
-/** The front desk: every flow of a stay, from booking to checkout. */
 final class FrontDesk {
-    private final HotelLocation location;
-    private final Clock clock;
-    private final Notifier notifier;
-    private final Map<String, RoomBooking> bookings = new ConcurrentHashMap<>();
-    private final List<Person> staff = new CopyOnWriteArrayList<>();
-    private final AtomicInteger seq = new AtomicInteger(), keySeq = new AtomicInteger();
-
-    FrontDesk(HotelLocation location, Clock clock, Notifier notifier) {
-        this.location = location; this.clock = clock; this.notifier = notifier;
-    }
-
-    private LocalDateTime now() { return LocalDateTime.now(clock); }
-
-    void addRoom(Manager by, Room r) { location.addRoom(r); }
-
-    /** The manager adds new workers (receptionists, servers, housekeepers). */
-    void hire(Manager by, Person worker) {
+    void hire(Manager by, Person worker) {         // the manager adds new workers
         if (worker instanceof Guest) throw new IllegalArgumentException("a guest is not a worker");
         staff.add(worker);
     }
-    List<String> staff() { return staff.stream().map(Person::name).toList(); }
-
-    /** Guest or receptionist books: same call, two actors. The room's monitor makes it race-free. */
     RoomBooking book(Guest guest, Room room, LocalDate checkIn, LocalDate checkOut, Payment deposit) {
         if (!checkIn.isBefore(checkOut)) throw new IllegalArgumentException("check-out must be after check-in");
         if (!room.tryReserve(checkIn, checkOut))
             throw new IllegalStateException("room " + room.number() + " is not free " + checkIn + ".." + checkOut);
         RoomBooking b = new RoomBooking("R" + seq.incrementAndGet(), guest.id(), room, checkIn, checkOut);
-        if (!deposit.initiateTransaction()) {                  // payment failed: give the nights back
+        if (!deposit.initiateTransaction()) {      // payment failed: give the nights back
             room.release(checkIn, checkOut);
             throw new IllegalStateException("deposit " + deposit.status());
         }
@@ -3530,203 +1985,53 @@ final class FrontDesk {
         notifier.send(guest.id(), b.reservationNumber() + " confirmed: room " + room.number() + " " + checkIn + ".." + checkOut);
         return b;
     }
-
-    RoomBooking bookFor(Receptionist by, Guest guest, Room room, LocalDate in, LocalDate out, Payment deposit) {
-        return book(guest, room, in, out, deposit);
-    }
-
-    RoomKey checkIn(Receptionist by, String reservationNumber) {
-        RoomBooking b = get(reservationNumber);
-        synchronized (b) {
-            if (b.status() != BookingStatus.CONFIRMED) throw new IllegalStateException(reservationNumber + " is " + b.status());
-            if (now().toLocalDate().isBefore(b.checkIn())) throw new IllegalStateException("too early to check in");
-            b.setStatus(BookingStatus.CHECKED_IN);
-            b.room().setStatus(RoomStatus.OCCUPIED);
-            return b.room().issueKey("K" + keySeq.incrementAndGet(), now());
-        }
-    }
+    // bookFor(Receptionist, Guest, ...): same call, second actor
+    // checkIn(Receptionist, resNo): under the booking's monitor; CONFIRMED and not too early ->
+    //   CHECKED_IN, room OCCUPIED, issue a key
 
     void addCharge(Server by, String reservationNumber, RoomCharge charge) {
         RoomBooking b = get(reservationNumber);
-        synchronized (b) {                     // same monitor as checkOut: no charge can slip in after the bill is totalled
+        synchronized (b) {                         // same monitor as checkOut: no charge after the bill is totalled
             if (b.status() != BookingStatus.CHECKED_IN) throw new IllegalStateException("guest not in house");
             charge.addInvoiceItem(b.invoice());
         }
     }
 
-    /** Adds the room nights, credits the deposit, takes payment for the balance, kills the keys. */
     Invoice checkOut(Receptionist by, String reservationNumber, Function<BigDecimal, Payment> payWith) {
         RoomBooking b = get(reservationNumber);
         synchronized (b) {
-            if (b.status() != BookingStatus.CHECKED_IN) throw new IllegalStateException(reservationNumber + " is " + b.status());
-            Invoice inv = b.invoice();
+            // ... must be CHECKED_IN
             BigDecimal price = b.room().pricePerNight();
             List<InvoiceItem> finalLines = new ArrayList<>(List.of(
                     new InvoiceItem(b.nights() + " nights x " + Money.fmt(price), price.multiply(BigDecimal.valueOf(b.nights()))),
                     new InvoiceItem("Deposit paid", b.deposit().negate())));
             BigDecimal balance = finalLines.stream().map(InvoiceItem::amount).reduce(inv.total(), BigDecimal::add);
             Payment p = payWith.apply(balance);
-            // Write the final lines only once payment succeeds, so a declined payment can be retried
-            // without the nights and deposit lines being added to the invoice twice.
+            // final lines are written only once payment succeeds, so a declined payment can be retried
+            // without the nights and deposit lines being added twice
             if (!p.initiateTransaction()) throw new IllegalStateException("payment " + p.status() + ", guest still checked in");
             finalLines.forEach(inv::addItem);
             int killed = b.room().deactivateGuestKeys();
             b.setStatus(BookingStatus.CHECKED_OUT);
             b.room().setStatus(RoomStatus.BEING_SERVICED);
-            notifier.send(b.guestId(), "checked out, paid " + Money.fmt(inv.total()) + " by " + p + " [" + p.status()
-                    + "], " + killed + " key(s) deactivated");
+            // notify "checked out, paid ... by ... [status], N key(s) deactivated"
             return inv;
         }
     }
 
-    void logHousekeeping(Housekeeper by, Room room, String description, int minutes) {
-        room.addHousekeeping(new RoomHouseKeeping(now(), by.name(), description, minutes));
-        room.setStatus(RoomStatus.AVAILABLE);
+    BigDecimal cancel(Person by, String reservationNumber) {   // only from CONFIRMED, under the booking's monitor
+        BigDecimal refund = b.refundDue(now());
+        b.room().release(b.checkIn(), b.checkOut());
+        b.setStatus(BookingStatus.CANCELLED);
+        // notify "... cancelled by <name>, refund ..."
+        return refund;
     }
-
-    BigDecimal cancel(Person by, String reservationNumber) {
-        RoomBooking b = get(reservationNumber);
-        synchronized (b) {
-            if (b.status() != BookingStatus.CONFIRMED) throw new IllegalStateException(reservationNumber + " is " + b.status());
-            BigDecimal refund = b.refundDue(now());
-            b.room().release(b.checkIn(), b.checkOut());
-            b.setStatus(BookingStatus.CANCELLED);
-            notifier.send(b.guestId(), reservationNumber + " cancelled by " + by.name() + ", refund " + Money.fmt(refund));
-            return refund;
-        }
-    }
-
-    /** System job: remind guests whose check-in or check-out is within the next 24 hours. */
-    void sendReminders() {
-        LocalDateTime now = now(), soon = now.plusHours(24);
-        bookings.values().stream().sorted((x, y) -> x.reservationNumber().compareTo(y.reservationNumber())).forEach(b -> {
-            LocalDateTime in = b.checkIn().atTime(RoomBooking.CHECK_IN_TIME), out = b.checkOut().atTime(11, 0);
-            if (b.status() == BookingStatus.CONFIRMED && in.isAfter(now) && !in.isAfter(soon))
-                notifier.send(b.guestId(), "reminder: check-in for " + b.reservationNumber() + " at " + in);
-            if (b.status() == BookingStatus.CHECKED_IN && out.isAfter(now) && !out.isAfter(soon))
-                notifier.send(b.guestId(), "reminder: check-out for " + b.reservationNumber() + " at " + out);
-        });
-    }
-
-    List<String> roomsBookedBy(String guestId) {
-        return bookings.values().stream().filter(b -> b.guestId().equals(guestId) && b.status() != BookingStatus.CANCELLED)
-                .map(b -> b.room().number()).sorted().toList();
-    }
-
-    List<String> whoBooked(String roomNumber) {
-        return bookings.values().stream().filter(b -> b.room().number().equals(roomNumber) && b.status() != BookingStatus.CANCELLED)
-                .map(b -> b.guestId() + "@" + b.checkIn()).sorted().toList();
-    }
-
-    RoomBooking get(String n) {
-        RoomBooking b = bookings.get(n);
-        if (b == null) throw new IllegalArgumentException("no booking " + n);
-        return b;
-    }
+    // logHousekeeping(Housekeeper, room, text, minutes): append a log line, room AVAILABLE
+    // sendReminders(): check-in (14:00) or check-out (11:00) within the next 24 hours
+    // roomsBookedBy(guestId), whoBooked(roomNumber): queries over bookings, cancelled ones excluded
 }
-```
-
-```java
-// File: lld/ch15/hotel/Main.java
-package lld.ch15.hotel;
-
-import java.math.BigDecimal;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
-public class Main {
-    public static void main(String[] args) throws Exception {
-        SimClock clock = new SimClock(Instant.parse("2026-07-01T09:00:00Z"));
-        Notifier notifier = (g, m) -> System.out.println("  [notify " + g + "] " + m);
-        Hotel hotel = new Hotel("Seaside Hotels");
-        HotelLocation goa = new HotelLocation("Goa"), kochi = new HotelLocation("Kochi");
-        hotel.addLocation(goa);
-        hotel.addLocation(kochi);
-        FrontDesk desk = new FrontDesk(goa, clock, notifier);
-        Manager boss = new Manager("MG1", "Maya");
-        desk.addRoom(boss, new Room("101", RoomStyle.DELUXE, usd("120.00"), false));
-        desk.addRoom(boss, new Room("102", RoomStyle.DELUXE, usd("120.00"), false));
-        desk.addRoom(boss, new Room("201", RoomStyle.FAMILY_SUITE, usd("250.00"), false));
-        kochi.addRoom(new Room("K-1", RoomStyle.DELUXE, usd("90.00"), true));
-        Room r101 = goa.room("101");
-        Receptionist rita = new Receptionist("RC1", "Rita");
-        desk.hire(boss, rita);
-        desk.hire(boss, new Server("SV1", "Sam"));
-        desk.hire(boss, new Housekeeper("HK1", "Hari"));
-        System.out.println("== 0. Manager adds rooms and hires staff: " + desk.staff() + " ==\n");
-
-        LocalDate jul10 = LocalDate.of(2026, 7, 10), jul13 = LocalDate.of(2026, 7, 13);
-        System.out.println("== 1. Search DELUXE for Jul 10-13 across locations ==");
-        hotel.search(RoomStyle.DELUXE, jul10, jul13).forEach((loc, rooms) ->
-                System.out.println("  " + loc + " -> " + rooms.stream().map(Room::number).toList()));
-
-        System.out.println("\n== 2. 6 guests try to book room 101 for overlapping dates at once ==");
-        ConcurrentLinkedQueue<String> results = new ConcurrentLinkedQueue<>();
-        CountDownLatch go = new CountDownLatch(1);
-        try (ExecutorService pool = Executors.newFixedThreadPool(6)) {
-            for (int i = 1; i <= 6; i++) {
-                Guest g = new Guest("G" + i, "Guest " + i, "g" + i + "@mail.com");
-                LocalDate out = jul10.plusDays(2 + i % 2);     // Jul 10-12 or Jul 10-13: all overlap
-                pool.submit(() -> {
-                    go.await();
-                    try { desk.book(g, r101, jul10, out, new CreditCardTransaction(usd("120.00"), g.name())); results.add("OK"); }
-                    catch (IllegalStateException e) { results.add("NO"); }
-                    return null;
-                });
-            }
-            go.countDown();
-        }
-        System.out.println("  successful bookings = " + results.stream().filter("OK"::equals).count() + " of 6");
-        System.out.println("  who booked 101? " + desk.whoBooked("101"));
-
-        System.out.println("\n== 3. Back-to-back stays share the changeover day ==");
-        Guest asha = new Guest("ASHA", "Asha", "asha@mail.com");
-        RoomBooking stay = desk.bookFor(rita, asha, goa.room("102"), jul10, jul13, new CashTransaction(usd("120.00"), usd("200.00")));
-        RoomBooking next = desk.book(new Guest("BEN", "Ben", "ben@mail.com"), goa.room("102"), jul13,
-                LocalDate.of(2026, 7, 15), new CheckTransaction(usd("120.00"), "HDFC", "000123"));
-        System.out.println("  rooms booked by ASHA: " + desk.roomsBookedBy("ASHA"));
-
-        System.out.println("\n== 4. Cancellation: >24h before check-in = full refund, later = none ==");
-        RoomBooking suite = desk.book(asha, goa.room("201"), jul10, jul13, new CreditCardTransaction(usd("250.00"), "Asha"));
-        Guest carl = new Guest("CARL", "Carl", "carl@mail.com");
-        RoomBooking lastMinute = desk.book(carl, goa.room("201"), LocalDate.of(2026, 7, 2), LocalDate.of(2026, 7, 3),
-                new CreditCardTransaction(usd("250.00"), "Carl"));
-        clock.advance(Duration.ofHours(10));               // Jul 1 19:00: Carl's check-in (Jul 2 14:00) is 19h away
-        desk.cancel(carl, lastMinute.reservationNumber());
-        desk.cancel(asha, suite.reservationNumber());      // Asha's is 8+ days away
-
-        System.out.println("\n== 5. Reminders, check-in (key), room service, check-out (invoice) ==");
-        clock.advance(Duration.ofDays(8).plusHours(13));   // Jul 10 08:00
-        desk.sendReminders();
-        clock.advance(Duration.ofHours(6));                // Jul 10 14:00
-        RoomKey key = desk.checkIn(rita, stay.reservationNumber());
-        System.out.println("  issued key " + key.keyId() + " active=" + key.isActive());
-        Server sam = new Server("SV1", "Sam");
-        desk.addCharge(sam, stay.reservationNumber(), new RoomService("Extra towels", usd("5.00")));
-        desk.addCharge(sam, stay.reservationNumber(), new KitchenService("Fish curry dinner", usd("24.00")));
-        desk.addCharge(sam, stay.reservationNumber(), new Amenity("Spa access", usd("30.00")));
-        clock.advance(Duration.ofDays(2).plusHours(19));   // Jul 13 09:00: checkout at 11:00 today
-        desk.sendReminders();
-        try { desk.checkOut(rita, stay.reservationNumber(), total -> new CashTransaction(total, usd("100.00"))); }
-        catch (IllegalStateException e) { System.out.println("  cash short: " + e.getMessage()); }
-        Invoice inv = desk.checkOut(rita, stay.reservationNumber(), total -> new CreditCardTransaction(total, "Asha"));
-        inv.items().forEach(i -> System.out.printf("    %-28s %10s%n", i.description(), Money.fmt(i.amount())));
-        System.out.printf("    %-28s %10s%n", "TOTAL", Money.fmt(inv.total()));
-        System.out.println("  key active after checkout? " + key.isActive() + ", room 102 is " + goa.room("102").status());
-
-        System.out.println("\n== 6. Housekeeping log ==");
-        desk.logHousekeeping(new Housekeeper("HK1", "Hari"), goa.room("102"), "Full clean, linen change", 40);
-        goa.room("102").housekeepingLog().forEach(h -> System.out.println("  " + h));
-        System.out.println("  room 102 is " + goa.room("102").status());
-    }
-
-    private static BigDecimal usd(String amount) { return new BigDecimal(amount); }
-}
+// Main.java: Seaside Hotels (Goa: 101, 102 DELUXE $120; 201 FAMILY_SUITE $250 / Kochi: K-1 DELUXE $90);
+// SimClock at 2026-07-01T09:00Z; 6 threads race for room 101 (Jul 10-12 or Jul 10-13).
 ```
 
 **Output:**
@@ -3805,14 +2110,6 @@ Property management systems such as **Oracle Hospitality OPERA** run the front d
 **30–45 minute plan.** (1) Clarify: room types, date-range search, 24-hour refund, charges, payment types, keys, housekeeping. (2) Actors and use cases. (3) Entities, stating early: **"a status field is not availability"** — rooms keep booked nights. (4) Code `tryReserve` (synchronized), `book`, `checkIn`, `checkOut` with the invoice. (5) Template Method for charges; payment subclasses; refund rule. (6) Follow-ups: two rooms per booking, chain-wide inventory, overbooking.
 
 **30-second answer:** "A `Hotel` has `HotelLocation`s which own `Room`s and implement search by type and date range. Each room keeps the set of nights it's committed to, and reserving nights is a synchronized check-then-act so two guests can't get the same night. A `RoomBooking` owns an `Invoice` made of lines; room service, kitchen and amenities are `RoomCharge` subclasses using Template Method to add a line. Payment is credit card, check or cash subclasses. Cancellation refunds in full if more than 24 hours before check-in — one method. Check-in issues a key card; check-out totals the invoice, takes payment, kills the keys and hands the room to housekeeping."
-
-### Self-check
-
-- **Q:** Why isn't `RoomStatus` enough to know if a room can be booked? **A:** It only says what the room is doing now; a booking asks about a range of future nights.
-- **Q:** Why are nights half-open `[checkIn, checkOut)`? **A:** The checkout day's night is not used, so the next guest can check in that day.
-- **Q:** Which pattern lets a new charge type be added without touching `Invoice`? **A:** Template Method (`RoomCharge.addInvoiceItem` is fixed; subclasses supply `description()`).
-- **Q:** Where does the refund rule live, and why? **A:** In `RoomBooking.refundDue` — one place to change when the policy changes.
-- **Q:** How is it guaranteed only a server can add a room-service charge? **A:** `addCharge` takes a `Server` parameter; other actor types don't compile.
 
 ### TL;DR
 

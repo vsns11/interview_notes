@@ -95,20 +95,21 @@ final class FoodDeliveryService {
         return o;
     }
 
-    /** The restaurant accepts only if its kitchen has room; otherwise the order is auto-cancelled. */
+    /** The restaurant accepts only if its kitchen has room; otherwise the order is auto-cancelled and refunded. */
     boolean restaurantAccepts(String orderId) {
         Order o = orders.get(orderId);
         synchronized (o) {                              // same lock as cancel(): capacity can never leak
             if (o.status() != OrderStatus.PENDING) return false;
-            if (!o.restaurant().tryReserveKitchen(o.itemCount())) {
-                System.out.println("    (" + o.restaurant().name() + " kitchen full: needs " + o.itemCount()
-                        + " item slots, free " + o.restaurant().freeCapacity() + ")");
-                transition(o, OrderStatus.CANCELLED);
-                return false;
+            if (o.restaurant().tryReserveKitchen(o.itemCount())) {
+                transition(o, OrderStatus.CONFIRMED);
+                return true;
             }
-            transition(o, OrderStatus.CONFIRMED);
-            return true;
+            System.out.println("    (" + o.restaurant().name() + " kitchen full: needs " + o.itemCount()
+                    + " item slots, free " + o.restaurant().freeCapacity() + ")");
+            transition(o, OrderStatus.CANCELLED);
         }
+        refundIfPrepaid(o);                             // like cancel(): a prepaid order gets its money back
+        return false;
     }
 
     void startPreparing(String orderId) { transition(orders.get(orderId), OrderStatus.PREPARING); }
@@ -139,8 +140,13 @@ final class FoodDeliveryService {
             transition(o, OrderStatus.CANCELLED);
             if (kitchenHeld) o.restaurant().releaseKitchen(o.itemCount());
         }
-        if (o.payment().paidUpfront()) System.out.println("    refund " + o.total() + " to " + o.payment().describe());
+        refundIfPrepaid(o);
         return true;
+    }
+
+    /** Runs after the order lock is released; a real gateway call is slow and must not block the order. */
+    private void refundIfPrepaid(Order o) {
+        if (o.payment().paidUpfront()) System.out.println("    refund " + o.total() + " to " + o.payment().describe());
     }
 
     Order order(String id) { return orders.get(id); }

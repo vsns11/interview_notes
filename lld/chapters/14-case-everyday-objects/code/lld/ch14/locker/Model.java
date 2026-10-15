@@ -57,14 +57,18 @@ final class Compartment {
     @Override public String toString() { return id + "(" + size + ")"; }
 }
 
+/** Why a door is booked: a delivery to the customer, or a parcel the customer sends back. */
+enum BookingKind { DELIVERY, CUSTOMER_RETURN }
+
 /** Lifecycle of one parcel's stay in a locker. */
 enum BookingStatus {
-    RESERVED,      // carrier booked a door, parcel not yet inside
-    DEPOSITED,     // parcel inside, pickup code sent
+    RESERVED,      // door held; delivery: parcel not yet inside / return: drop-off code sent
+    DEPOSITED,     // delivery parcel inside, pickup code sent
     PICKED_UP,     // customer opened the door with the code (final)
     EXPIRED,       // not collected in time; waiting for the carrier to take it back
-    RETURNED,      // carrier removed the expired parcel (final)
-    CANCELLED      // reservation hold ran out before the deposit (final)
+    DROPPED_OFF,   // customer put a return inside; waiting for the carrier
+    RETURNED,      // carrier removed the parcel: an expired delivery or a customer return (final)
+    CANCELLED      // hold ran out before the deposit or the drop-off (final)
 }
 
 /** One parcel's use of one compartment. */
@@ -72,19 +76,21 @@ final class Booking {
     final String id;
     final Parcel parcel;
     final Compartment compartment;
+    final BookingKind kind;
     BookingStatus status = BookingStatus.RESERVED;
-    long holdUntil;          // epoch seconds: deposit must happen before this
+    long holdUntil;          // epoch seconds: deposit (or customer drop-off) must happen before this
     long pickupBy;           // epoch seconds: set at deposit
-    String codeHash;         // only a hash of the pickup code is stored
+    String codeHash;         // only a hash of the pickup (or drop-off) code is stored
 
-    Booking(String id, Parcel parcel, Compartment compartment, long holdUntil) {
-        this.id = id; this.parcel = parcel; this.compartment = compartment; this.holdUntil = holdUntil;
+    Booking(String id, Parcel parcel, Compartment compartment, BookingKind kind, long holdUntil) {
+        this.id = id; this.parcel = parcel; this.compartment = compartment; this.kind = kind; this.holdUntil = holdUntil;
     }
 }
 
 /** What the customer's keypad entry produced. */
-sealed interface PickupResult permits DoorOpened, WrongCode, KeypadLocked, ParcelExpired { }
+sealed interface PickupResult permits DoorOpened, DropOffDoorOpened, WrongCode, KeypadLocked, ParcelExpired { }
 record DoorOpened(String compartmentId, String parcelId) implements PickupResult { }
+record DropOffDoorOpened(String compartmentId, String parcelId) implements PickupResult { }   // empty door for a return
 record WrongCode(int attemptsLeft) implements PickupResult { }
 record KeypadLocked(long secondsLeft) implements PickupResult { }
 record ParcelExpired(String parcelId) implements PickupResult { }
@@ -93,6 +99,7 @@ record ParcelExpired(String parcelId) implements PickupResult { }
 interface LockerListener {
     void parcelReady(String stationId, Parcel parcel, String pickupCode, long pickupBy);
     default void parcelExpired(String stationId, Parcel parcel) { }
+    default void returnCodeIssued(String stationId, Parcel parcel, String dropOffCode, long dropOffBy) { }
 }
 
 final class LockerException extends RuntimeException {
