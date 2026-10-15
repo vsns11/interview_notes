@@ -60,7 +60,7 @@ flowchart LR
 ## What's in here
 | Path | Purpose |
 |---|---|
-| `Java-Handbook.pdf` | The whole book as one PDF, with a cover and a table of contents (built by `tools/regen_pdfs.sh`). |
+| `Java-Handbook-Vol1.pdf`, `Java-Handbook-Vol2.pdf` | The whole book in two PDFs (each under 350 pages), with cover and clickable contents. Vol 1: the language — JVM, types, control flow, methods and arrays, OOP, core APIs, exceptions, generics, collections, lambdas, streams (Ch 1–12). Vol 2: I/O, concurrency, JVM internals, modern Java 17–25, testing and tooling, coding interviews, cheat sheet, question bank, multithreading interview problems (Ch 13–22). |
 | `interview/INTERVIEW.md` + `interview/Java-Interview-Edition.pdf` | **Interview Edition**: the whole book in ~44 pages for fast revision — per chapter must-know facts, key tables, likely questions with short answers, gotchas, plus a top-25 question list and a last-minute checklist. |
 | `capstones/CAPSTONES.md` + `capstones/Java-Capstone-Projects.pdf` | **Capstone Projects**: 40 build-it-yourself design briefs for plain Java 25 (no Spring), beginner to advanced — from a number-guessing game and a bank CLI to an HTTP server on virtual threads, a JSON parser, a Java agent profiler with the Class-File API, a B-tree database with a WAL, an FFM native binding and a Raft key-value store. Each has requirements, architecture and data-model diagrams, milestones, the hard parts, testing (JUnit 6, AssertJ, Mockito, JMH), trade-offs and interview questions. |
 | `chapters/NN-name/README.md` + `ChapterNN-Notes.pdf` | One chapter (Markdown source and its PDF). |
@@ -96,7 +96,8 @@ flowchart LR
 | 18 | [Testing, Build and Tooling](chapters/18-testing-build-and-tooling/README.md) | Project layout, Maven, Gradle, JUnit 6, parameterized tests, Mockito, AssertJ, reading failures, test design, logging, JDBC, JAR packaging, everyday tools, Spring Boot and friends | `Chapter18-Notes.pdf` |
 | 19 | [Java for Coding Interviews](chapters/19-java-for-coding-interviews/README.md) | The Java DSA toolkit and its pitfalls, a complexity table, twenty patterns with runnable checked solutions, talking through a solution, 42 Java interview questions answered | `Chapter19-Notes.pdf` |
 | 20 | [Cheat Sheets and Glossary](chapters/20-cheatsheet-and-glossary/README.md) | One sheet per area (values machine-checked by `CheatsheetChecks`), JVM flags and tools, version table 17 → 25, build and test commands, interview-question index, where next, 344-term glossary | `Chapter20-Notes.pdf` |
-| 21 | [Interview Question Bank](chapters/21-interview-question-bank/README.md) | 274 commonly asked Java interview questions (★ = very frequent) with say-it-out-loud answers and links to the full explanation: OOP, strings, equals/hashCode, exceptions, generics, collections internals, lambdas and streams, Java 9–25, concurrency, JVM and GC, I/O and serialization, testing, scenarios, output puzzles, coding tasks | `Chapter21-Notes.pdf` |
+| 21 | [Interview Question Bank](chapters/21-interview-question-bank/README.md) | 280 commonly asked Java interview questions (★ = very frequent) with say-it-out-loud answers and links to the full explanation: OOP, strings, equals/hashCode, exceptions, generics, collections internals, lambdas and streams, Java 9–25, concurrency, JVM and GC, I/O and serialization, testing, scenarios, output puzzles, coding tasks, multithreading problems | `Chapter21-Notes.pdf` |
+| 22 | [Multithreading Interview Problems](chapters/22-multithreading-interview-problems/README.md) | Build-it-yourself concurrency problems with runnable code: blocking queue four ways, semaphore, read-write lock, reusable barrier, deferred callback executor, async-to-sync, ordered printing, token bucket, unisex bathroom, Uber ride, sleeping barber, multithreaded merge sort | `Chapter22-Notes.pdf` |
 
 Each chapter's PDF sits next to its README: `chapters/NN-name/ChapterNN-Notes.pdf`.
 
@@ -142,7 +143,7 @@ Timings, GC pauses, memory sizes and stack depths depend on the machine; the cha
 Requires Node 18+ and Google Chrome (the path is set in `tools/md2pdf.mjs`).
 
 ```bash
-bash tools/regen_pdfs.sh      # every ChapterNN-Notes.pdf + Java-Handbook.pdf (cover title "Java Handbook")
+bash tools/regen_pdfs.sh      # every ChapterNN-Notes.pdf + Java-Handbook-Vol1.pdf + Java-Handbook-Vol2.pdf (cover title "Java Handbook")
 
 # one chapter only
 node tools/md2pdf.mjs chapters/12-streams/Chapter12-Notes.pdf chapters/12-streams/README.md

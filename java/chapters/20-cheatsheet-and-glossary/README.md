@@ -1,12 +1,8 @@
 # Chapter 20 — Cheat Sheets and Glossary
 
-This last chapter compresses Chapters 1–19 into pages you can scan in a minute. There is one **cheat sheet** per area of the language and platform, a **feature-by-version table** for Java 17 → 25, the build and test **commands** you type every day, an **index of the interview questions** answered in Chapter 19, a short **"where next"** guide, and an alphabetical **glossary** of 700+ terms, each linked to the section that explains it properly.
+This chapter compresses Chapters 1–19 into pages you can scan in a minute: one **cheat sheet** per area, a **feature-by-version table** for Java 17 → 25, everyday build and test **commands**, an **interview question index**, a **"where next"** guide, and an alphabetical **glossary** of 685 terms ([§20.19](#2019-glossary-az)) — every technical term on the sheets is defined there once, linked to the section that teaches it. References like **§10.5** mean Chapter 10, section 5. To revise, cover the right-hand column of a sheet and say the answer before you look.
 
-Nothing here is new. If a line doesn't make sense, follow its link back to the full explanation — and every technical term used on these sheets has a one-sentence definition in the glossary at the end ([§20.19](#2019-glossary-az)). References look like **§10.5**, meaning Chapter 10, section 5.
-
-**What you'll learn:** how to use this chapter as a revision tool. Read a sheet, cover the right-hand column, and try to say the answer before you look. The glossary is a good last check before an interview: if you can't define a term in one sentence, follow its link.
-
-**Every concrete value on the sheets is tested.** Primitive ranges, the `Integer` cache, the string pool, collection behaviours, stream results, `BigDecimal` and `java.time` edge cases, concurrency results and more are asserted by [`code/ch20/CheatsheetChecks.java`](code/ch20/CheatsheetChecks.java) (package `ch20` — a package is a named group of classes, like a folder), compiled with `javac --release 25` and run on JDK 26 by the book's runner (`bash tools_run_java.sh java`). A failed check throws `AssertionError`. Real output:
+**Every concrete value on the sheets is tested.** Primitive ranges, the `Integer` cache, the string pool, collection behaviours, stream results, `BigDecimal` and `java.time` edge cases, concurrency results and more are asserted by [`code/ch20/CheatsheetChecks.java`](code/ch20/CheatsheetChecks.java) (package `ch20`), compiled with `javac --release 25` and run on JDK 26 by the book's runner (`bash tools_run_java.sh java`). A failed check throws `AssertionError`. Real output:
 
 ```text
 OK   20.1 syntax, types, primitives           29 checks
@@ -38,30 +34,6 @@ throwsA(IllegalStateException.class, () -> emps.stream().collect(Collectors.toMa
 eq(LocalDate.of(2024, 1, 31).plusMonths(1), LocalDate.of(2024, 2, 29), "plusMonths clamps to month end");
 ```
 
-**What's inside**
-
-| § | Sheet | Built from |
-|---|---|---|
-| [20.1](#201-syntax-types-and-primitive-ranges) | Syntax, types and primitive ranges | Ch 1, 2 |
-| [20.2](#202-operators-and-precedence) | Operators and precedence | Ch 2 |
-| [20.3](#203-control-flow-switch-and-patterns) | Control flow, `switch` and patterns | Ch 3 |
-| [20.4](#204-methods-and-arrays) | Methods and arrays | Ch 4 |
-| [20.5](#205-oop-classes-interfaces-records-enums-and-sealed-types) | OOP: classes, interfaces, records, enums, sealed types | Ch 5, 6 |
-| [20.6](#206-core-apis-string-numbers-dates) | Core APIs: strings, numbers, dates | Ch 7 |
-| [20.7](#207-exceptions) | Exceptions | Ch 8 |
-| [20.8](#208-generics-and-pecs) | Generics and PECS | Ch 9 |
-| [20.9](#209-collections-big-o-and-which-to-choose) | Collections: big-O and which to choose | Ch 10 |
-| [20.10](#2010-functional-interfaces-lambdas-and-optional) | Functional interfaces, lambdas and `Optional` | Ch 11 |
-| [20.11](#2011-streams-and-collectors) | Streams and collectors | Ch 12 |
-| [20.12](#2012-io-and-nio2) | I/O and NIO.2 | Ch 13 |
-| [20.13](#2013-concurrency) | Concurrency | Ch 14, 15 |
-| [20.14](#2014-the-jvm-memory-gc-flags-and-tools) | The JVM: memory, GC, flags, tools | Ch 1, 16 |
-| [20.15](#2015-modern-java-by-version-17-to-25) | Modern Java by version, 17 → 25 | Ch 17 |
-| [20.16](#2016-testing-build-and-tooling-commands) | Testing, build and tooling commands | Ch 1, 18 |
-| [20.17](#2017-interview-question-index) | Interview question index | Ch 19 |
-| [20.18](#2018-where-next) | Where next | Ch 18 |
-| [20.19](#2019-glossary-az) | Glossary A–Z | all |
-
 ---
 
 ## 20.1 Syntax, types and primitive ranges
@@ -81,13 +53,13 @@ void main() { IO.println("Hi"); }
 | Command | Does | Since |
 |---|---|---|
 | `javac Hello.java` → `java Hello` | compile to `Hello.class`, then run it on the JVM | 1.0 |
-| `javac -d out $(find src -name '*.java')` → `java -cp out pkg.Main` | compile a tree into `out/`, run with a class path (the folders and JARs searched for classes) | — |
+| `javac -d out $(find src -name '*.java')` → `java -cp out pkg.Main` | compile a tree into `out/`, run with a class path | — |
 | `java Hello.java` | compile in memory and run a single source file | 11 |
 | `java Main.java` (other files next to it) | launch a multi-file source program | 22 |
-| `jshell` | interactive REPL (read-eval-print loop): type expressions, see results | 9 |
-| `javap -c Hello` | disassemble bytecode (list the JVM instructions in a `.class` file) | — |
+| `jshell` | interactive REPL: type expressions, see results | 9 |
+| `javap -c Hello` | disassemble bytecode | — |
 
-**Basic rules** ([§2.1](../02-basics-types-and-operators/README.md#21-statements-identifiers-keywords-and-comments)): statements end with `;`; blocks use `{}`; Java is case-sensitive; identifiers (the names you give variables, methods and classes) start with a letter, `_` or `$` (a lone `_` is not a name — since 22 it means "unnamed"); comments are `//`, `/* */` and `/** Javadoc */` (documentation comments turned into HTML API docs) (Markdown `///` doc comments since 23). Naming: `ClassName`, `methodAndVariable`, `CONSTANT_NAME`, `com.example.pkg`. Contextual keywords — `var`, `record`, `sealed`, `non-sealed`, `permits`, `yield`, `when`, `module` — are keywords only in their positions.
+**Basic rules** ([§2.1](../02-basics-types-and-operators/README.md#21-statements-identifiers-keywords-and-comments)): statements end with `;`; blocks use `{}`; Java is case-sensitive; identifiers start with a letter, `_` or `$` (a lone `_` is not a name — since 22 it means "unnamed"); comments are `//`, `/* */` and `/** Javadoc */` (Markdown `///` doc comments since 23). Naming: `ClassName`, `methodAndVariable`, `CONSTANT_NAME`, `com.example.pkg`. Contextual keywords — `var`, `record`, `sealed`, `non-sealed`, `permits`, `yield`, `when`, `module` — are keywords only in their positions.
 
 **The eight primitives** ([§2.3](../02-basics-types-and-operators/README.md#23-primitive-types)) — everything else is a reference type ([§2.5](../02-basics-types-and-operators/README.md#25-reference-types-and-null)):
 
@@ -99,12 +71,12 @@ void main() { IO.println("Hi"); }
 | `long` | 64 | −9 223 372 036 854 775 808 … 9 223 372 036 854 775 807 (±9.2 × 10¹⁸) | `0L` | `42L` |
 | `float` | 32 | ±3.4028235 × 10³⁸, ~7 significant digits | `0.0f` | `3.14f` |
 | `double` | 64 | ±1.7976931348623157 × 10³⁰⁸, ~15–16 digits | `0.0` | `3.14`, `1e-9` |
-| `char` | 16 | 0 … 65 535 (unsigned UTF-16 code unit: one 16-bit piece of text) | `'\u0000'` | `'A'`, `'\n'`, `'\u0041'` |
+| `char` | 16 | 0 … 65 535 (unsigned UTF-16 code unit) | `'\u0000'` | `'A'`, `'\n'`, `'\u0041'` |
 | `boolean` | — | `true`, `false` | `false` | `true` |
 
 - `Double.MIN_VALUE` (4.9E-324) is the smallest **positive** double; the most negative is `-Double.MAX_VALUE`.
 - Fields get defaults (`0`, `false`, `null`); **local variables don't** — reading one before assigning it is a compile error ([§2.2](../02-basics-types-and-operators/README.md#22-variables)).
-- Money: `long` cents or `BigDecimal` (an exact decimal-number class), never `double` ([§2.11](../02-basics-types-and-operators/README.md#211-floating-point-numbers)).
+- Money: `long` cents or `BigDecimal`, never `double` ([§2.11](../02-basics-types-and-operators/README.md#211-floating-point-numbers)).
 
 **Conversions** ([§2.7](../02-basics-types-and-operators/README.md#27-type-conversion-widening-narrowing-casting-promotion)):
 
@@ -126,14 +98,14 @@ void main() { IO.println("Hi"); }
 | `-7 % 3` / `Math.floorMod(-7, 3)` | `-1` / `2` | `%` takes the dividend's sign |
 | `7 / 2.0` | `3.5` | one `double` operand → `double` arithmetic |
 | `0.1 + 0.2` | `0.30000000000000004` | binary fractions can't represent 0.1 exactly |
-| `1.0 / 0`, `0.0 / 0`, `1 / 0` | `Infinity`, `NaN` (Not a Number), `ArithmeticException` | floats have special values; ints throw |
+| `1.0 / 0`, `0.0 / 0`, `1 / 0` | `Infinity`, `NaN`, `ArithmeticException` | floats have special values; ints throw |
 | `Double.NaN == Double.NaN` | `false` | test with `Double.isNaN` |
 
-**`var`** (Java 10, [§2.6](../02-basics-types-and-operators/README.md#26-var--local-variable-type-inference-java-10)): local variables with an initializer only (also in `for` loops and lambda parameters); not for fields, parameters or return types; `var x = null;` and `var a = {1, 2};` don't compile. The type is fixed at compile time — `var` is not dynamic typing (types decided while the program runs, as in Python).
+**`var`** (Java 10, [§2.6](../02-basics-types-and-operators/README.md#26-var--local-variable-type-inference-java-10)): local variables with an initializer only (also in `for` loops and lambda parameters); not for fields, parameters or return types; `var x = null;` and `var a = {1, 2};` don't compile. The type is fixed at compile time — `var` is not dynamic typing.
 
 **Text blocks** (Java 15, [§2.12](../02-basics-types-and-operators/README.md#212-strings-and-text-blocks)): `"""` + newline opens; common indentation is stripped (the closing `"""` position counts); a closing delimiter on its own line adds a trailing `\n`; `\` at line end joins lines; `\s` keeps a trailing space.
 
-**Console I/O** ([§2.13](../02-basics-types-and-operators/README.md#213-console-output-and-input), [§13.8](../13-io-and-nio/README.md#138-console-and-standard-streams)): `System.out.println/print/printf`; input with `Scanner(System.in)` (`nextInt`, `nextLine` — beware the leftover newline), `BufferedReader`, or `IO.readln("prompt")` in Java 25. `System.console()` returns `null` without an interactive terminal (IDEs, pipes) — always check it (Java 22–24 briefly returned a JLine-based console (JLine is a library for rich terminal input) even then; 25 reverted).
+**Console I/O** ([§2.13](../02-basics-types-and-operators/README.md#213-console-output-and-input), [§13.8](../13-io-and-nio/README.md#138-console-and-standard-streams)): `System.out.println/print/printf`; input with `Scanner(System.in)` (`nextInt`, `nextLine` — beware the leftover newline), `BufferedReader`, or `IO.readln("prompt")` in Java 25. `System.console()` returns `null` without an interactive terminal (IDEs, pipes) — always check it (Java 22–24 briefly returned a JLine-based console even then; 25 reverted).
 
 ---
 
@@ -151,7 +123,7 @@ From highest to lowest ([§2.8](../02-basics-types-and-operators/README.md#28-op
 | 6 Relational | `<` `>` `<=` `>=` `instanceof` | left |
 | 7 Equality | `==` `!=` | left |
 | 8–10 Bitwise | `&` then `^` then `\|` | left |
-| 11–12 Logical | `&&` then `\|\|` (short-circuit: stop once the answer is known) | left |
+| 11–12 Logical | `&&` then `\|\|` (short-circuit) | left |
 | 13 Ternary | `? :` | right |
 | 14 Assignment, lambda | `=` `+=` `-=` `*=` `/=` `%=` `&=` `\|=` `^=` `<<=` `>>=` `>>>=` `->` | right |
 
@@ -190,7 +162,7 @@ Memory hook: **unary → multiply → add → shift → compare → equal → bi
 
 **The four `switch` shapes** ([§3.2](../03-control-flow/README.md#32-the-classic-switch-statement), [§3.3](../03-control-flow/README.md#33-arrow-labels-and-switch-expressions-java-14), [§3.4](../03-control-flow/README.md#34-choosing-between-if-ternary-and-switch)):
 
-| Shape | Falls through (runs on into the next case)? | Produces a value? | Must be exhaustive? |
+| Shape | Falls through? | Produces a value? | Must be exhaustive? |
 |---|---|---|---|
 | Statement, `case X:` | **yes** — until `break` | no | no (unless it uses patterns or `null`) |
 | Statement, `case X ->` (14) | no | no | no (same exception) |
@@ -205,7 +177,7 @@ String type = switch (day) {
 };
 ```
 
-Selector types (the type of the value being switched on): `int` and smaller (`char`, `byte`, `short`) and their wrappers, `String`, enums — and, with patterns (21), **any reference type**. `long`, `float`, `double` and `boolean` selectors need *primitive patterns*, which are still **preview** (shipped but switched off by default, and may still change) in Java 25.
+Selector types: `int` and smaller (`char`, `byte`, `short`) and their wrappers, `String`, enums — and, with patterns (21), **any reference type**. `long`, `float`, `double` and `boolean` selectors need *primitive patterns*, which are still **preview** in Java 25.
 
 **Pattern matching** ([§3.5](../03-control-flow/README.md#35-pattern-matching-for-instanceof-java-16), [§3.6](../03-control-flow/README.md#36-pattern-matching-for-switch-java-21), [§3.7](../03-control-flow/README.md#37-record-patterns-java-21-and-unnamed-patterns-java-22)):
 
@@ -249,7 +221,7 @@ static double area(Shape s) {
 | Overload resolution | phase 1: exact match or widening; phase 2: boxing/unboxing; phase 3: varargs. `over(5)` with `over(long)`, `over(Integer)`, `over(int...)` picks `long` |
 | Varargs | `int... nums` is an `int[]`; must be the last parameter; one per method; zero arguments allowed |
 | `return` | a non-`void` method must return on every path |
-| Recursion | needs a base case; each call adds a stack frame → `StackOverflowError` if too deep (Java has no tail-call elimination — reusing the current frame when a method's last act is to call itself) |
+| Recursion | needs a base case; each call adds a stack frame → `StackOverflowError` if too deep (Java has no tail-call elimination) |
 | `static` | called on the class, has no `this` ([§5.5](../05-oop-classes-and-objects/README.md#55-static-members)) |
 
 **Arrays** ([§4.6](../04-methods-and-arrays/README.md#46-arrays), [§4.7](../04-methods-and-arrays/README.md#47-multidimensional-and-jagged-arrays)):
@@ -277,7 +249,7 @@ Index `0 … length − 1`; anything else → `ArrayIndexOutOfBoundsException`. 
 | `fill(a, v)`, `setAll(a, i -> …)` | set every element | |
 | `asList(…)` | fixed-size `List` **view** of the array — `add` throws, `set` writes through | |
 | `stream(a)` | `IntStream` / `Stream<T>` | |
-| `mismatch(a, b)`, `compare(a, b)` | first differing index / lexicographic (dictionary) order (9) | |
+| `mismatch(a, b)`, `compare(a, b)` | first differing index / lexicographic order (9) | |
 
 **Command-line arguments**: `args` is never `null` (empty array when none); all elements are `String`s; the program name is not included ([§4.9](../04-methods-and-arrays/README.md#49-main-command-line-arguments-and-simpler-main-java-25)).
 
@@ -298,7 +270,7 @@ Top-level classes can only be `public` or package-private; one `public` top-leve
 
 **Constructors and initialisation** ([§5.3](../05-oop-classes-and-objects/README.md#53-constructors), [§5.10](../05-oop-classes-and-objects/README.md#510-initialisation-order)):
 - If you write no constructor, the compiler adds a no-argument one; write any constructor and it doesn't.
-- `this(...)` calls another constructor of the same class, `super(...)` the parent's; if you write neither, `super()` is inserted. Since **Java 25** (JEP 513 — a JEP, JDK Enhancement Proposal, is the numbered design document for a Java feature) statements that don't use `this` — validation, computing arguments, assigning the class's own fields — may appear **before** `super(...)`/`this(...)`.
+- `this(...)` calls another constructor of the same class, `super(...)` the parent's; if you write neither, `super()` is inserted. Since **Java 25** (JEP 513) statements that don't use `this` — validation, computing arguments, assigning the class's own fields — may appear **before** `super(...)`/`this(...)`.
 - Order: static fields and `static {}` blocks run **once**, in source order, when the class is initialised → for each `new`: parent constructor → instance field initialisers and `{}` blocks in source order → the rest of the constructor body.
 
 **`static` and `final`** ([§5.5](../05-oop-classes-and-objects/README.md#55-static-members), [§5.8](../05-oop-classes-and-objects/README.md#58-the-final-keyword)): `static` = one per class, shared; a static method has no `this`. `final` variable = assigned once; `final` method = can't be overridden; `final` class = can't be extended. `final` on a reference doesn't freeze the object.
@@ -326,7 +298,7 @@ new Derived().call()   // "Derived/Base"
 
 | Need | Use | Key facts |
 |---|---|---|
-| Mutable object with identity and lifecycle | **class** (`final` unless designed for extension) | full control of encapsulation (hiding state behind methods) |
+| Mutable object with identity and lifecycle | **class** (`final` unless designed for extension) | full control of encapsulation |
 | Shared state/code for a family of related classes | **abstract class** | fields, constructors, any access; single inheritance; can't be instantiated ([§6.5](../06-oop-inheritance-interfaces-and-more/README.md#65-abstract-classes)) |
 | A capability many unrelated types can have | **interface** | many per class; `abstract`, `default` (8), `static` (8), `private` (9) methods; fields are `public static final` constants; no instance state ([§6.6](../06-oop-inheritance-interfaces-and-more/README.md#66-interfaces)) |
 | Immutable data where equal values are interchangeable | **record** (16) | private final fields, canonical constructor, accessors `x()`, `equals`/`hashCode`/`toString`; implicitly `final`; extends `Record`; no extra instance fields; compact constructor for validation ([§6.8](../06-oop-inheritance-interfaces-and-more/README.md#68-records)) |
@@ -374,7 +346,7 @@ Nested records, enums and interfaces are implicitly `static`.
 | `" ".isBlank()` / `" ".isEmpty()` | `true` / `false` |
 | `compareTo` | negative, zero or positive — not necessarily −1/1 |
 
-Everyday methods: `length`, `charAt`, `indexOf` (−1 if absent), `contains`, `startsWith`/`endsWith`, `substring`, `strip` (Unicode-aware; prefer to `trim`), `toLowerCase(Locale.ROOT)` (a `Locale` is a language/region setting), `equalsIgnoreCase`, `split`, `String.join`, `repeat` (11), `lines` (11), `formatted` (15), `chars`, `codePoints`.
+Everyday methods: `length`, `charAt`, `indexOf` (−1 if absent), `contains`, `startsWith`/`endsWith`, `substring`, `strip` (Unicode-aware; prefer to `trim`), `toLowerCase(Locale.ROOT)` , `equalsIgnoreCase`, `split`, `String.join`, `repeat` (11), `lines` (11), `formatted` (15), `chars`, `codePoints`.
 
 **Builders** ([§7.3](../07-core-apis/README.md#73-stringbuilder-stringbuffer-and-stringjoiner)): `StringBuilder` (mutable, not synchronised — use it for loops: `append`, `insert`, `reverse`, `deleteCharAt`, `setLength(0)`); `StringBuffer` (synchronised, legacy); `StringJoiner` / `String.join` / `Collectors.joining` for delimited lists. `s += x` in a loop is O(n²).
 
@@ -403,24 +375,24 @@ Everyday methods: `length`, `charAt`, `indexOf` (−1 if absent), `contains`, `s
 | `Integer.parseInt("ff", 16)` | `255`; bad input → `NumberFormatException` |
 | `Boolean.parseBoolean("YES")` | `false` — only `"true"` (any case) is true |
 
-**`BigInteger` / `BigDecimal`** ([§7.7](../07-core-apis/README.md#77-biginteger-and-bigdecimal)): immutable, arbitrary precision (as many digits as needed).
+**`BigInteger` / `BigDecimal`** ([§7.7](../07-core-apis/README.md#77-biginteger-and-bigdecimal)): immutable, arbitrary precision.
 
 | Rule | Example |
 |---|---|
 | Build from a `String` (or `BigDecimal.valueOf(double)`) | `new BigDecimal("0.1").add(new BigDecimal("0.2"))` = `0.3`; `new BigDecimal(0.1)` = `0.1000000000000000055511…` |
-| `equals` checks value **and scale** (digits after the point); `compareTo` checks value only | `2.0` vs `2.00`: `equals` false, `compareTo` 0 — so `HashSet<BigDecimal>` can hold both |
+| `equals` checks value **and scale**; `compareTo` checks value only | `2.0` vs `2.00`: `equals` false, `compareTo` 0 — so `HashSet<BigDecimal>` can hold both |
 | Non-terminating division needs a scale or `MathContext` | `ONE.divide(valueOf(3))` → `ArithmeticException`; `divide(valueOf(3), 4, HALF_UP)` = `0.3333` |
 | Rounding modes | `2.345` → `HALF_UP` `2.35`, `HALF_EVEN` (banker's) `2.34` |
 | `BigInteger` | `BigInteger.TWO.pow(100)` has 31 digits |
 
-**`java.time`** ([§7.8](../07-core-apis/README.md#78-the-javatime-model)–[§7.11](../07-core-apis/README.md#711-formatting-and-parsing-dates)) — immutable, thread-safe (safe to share between threads); months are 1–12:
+**`java.time`** ([§7.8](../07-core-apis/README.md#78-the-javatime-model)–[§7.11](../07-core-apis/README.md#711-formatting-and-parsing-dates)) — immutable, thread-safe; months are 1–12:
 
 | Class | Represents | Example |
 |---|---|---|
 | `LocalDate` / `LocalTime` / `LocalDateTime` | wall-calendar date/time, **no zone** | birthdays, opening hours |
-| `ZonedDateTime` | date-time in a region (`ZoneId.of("Europe/Paris")`), DST-aware (handles daylight-saving clock changes) | meetings |
+| `ZonedDateTime` | date-time in a region (`ZoneId.of("Europe/Paris")`), DST-aware | meetings |
 | `OffsetDateTime` | date-time with a fixed offset (`+02:00`) | API timestamps |
-| `Instant` | a point on the UTC (world reference time) time-line | logs, DB timestamps |
+| `Instant` | a point on the UTC time-line | logs, DB timestamps |
 | `Duration` | seconds + nanos (machine time) | `Duration.ofMinutes(90)` → `PT1H30M` |
 | `Period` | years, months, days (calendar) | 2024-01-15 → 2025-03-20 = `P1Y2M5D` |
 | `DateTimeFormatter` | format/parse, thread-safe | `ofPattern("yyyy-MM-dd HH:mm")` |
@@ -454,7 +426,7 @@ flowchart TD
 
 | Common exception | Thrown when | Kind |
 |---|---|---|
-| `NullPointerException` | dereferencing `null` (using it to reach a field or method; helpful messages name the `null` part: Java 14, on by default since 15) | unchecked |
+| `NullPointerException` | dereferencing `null` (helpful messages name the `null` part: Java 14, on by default since 15) | unchecked |
 | `IllegalArgumentException` / `NumberFormatException` | bad argument / unparsable number | unchecked |
 | `IllegalStateException` | object not in the right state (stream reused, `toMap` duplicate key) | unchecked |
 | `ArrayIndexOutOfBoundsException`, `StringIndexOutOfBoundsException` | bad index | unchecked |
@@ -463,7 +435,7 @@ flowchart TD
 | `ConcurrentModificationException` | structural change during iteration | unchecked |
 | `IOException`, `FileNotFoundException`, `NoSuchFileException` | I/O failure | **checked** |
 | `InterruptedException` | a blocked thread was interrupted | **checked** |
-| `SQLException` | JDBC (Java's database API) failure | **checked** |
+| `SQLException` | JDBC failure | **checked** |
 | `UncheckedIOException` | an `IOException` wrapped for lambdas/streams | unchecked |
 
 **Syntax rules** ([§8.4](../08-exceptions/README.md#84-try--catch--finally-and-control-flow)–[§8.6](../08-exceptions/README.md#86-try-with-resources)):
@@ -487,7 +459,7 @@ try (Res a = new Res("A", log); Res b = new Res("B", log)) {
 
 **Custom exceptions** ([§8.7](../08-exceptions/README.md#87-throwing-exceptions-and-writing-custom-ones)): extend `Exception` (checked) or `RuntimeException` (unchecked); provide `(String message)` and `(String message, Throwable cause)` constructors; add fields for context.
 
-**Best practices** ([§8.10](../08-exceptions/README.md#810-best-practices-and-anti-patterns)): throw early (validate arguments with `Objects.requireNonNull`, `IllegalArgumentException`), catch late (where you can really handle it); never swallow (`catch (Exception e) {}`); don't use exceptions for control flow; catch the most specific type; translate low-level exceptions at layer boundaries (where, say, database code hands over to business code) and keep the cause; log **or** rethrow, not both; clean up with try-with-resources. Reading traces: the first line is the type and message, then frames newest-first; read `Caused by:` sections bottom-up to find the root ([§8.9](../08-exceptions/README.md#89-reading-stack-traces)).
+**Best practices** ([§8.10](../08-exceptions/README.md#810-best-practices-and-anti-patterns)): throw early (validate arguments with `Objects.requireNonNull`, `IllegalArgumentException`), catch late (where you can really handle it); never swallow (`catch (Exception e) {}`); don't use exceptions for control flow; catch the most specific type; translate low-level exceptions at layer boundaries and keep the cause; log **or** rethrow, not both; clean up with try-with-resources. Reading traces: the first line is the type and message, then frames newest-first; read `Caused by:` sections bottom-up to find the root ([§8.9](../08-exceptions/README.md#89-reading-stack-traces)).
 
 ---
 
@@ -508,7 +480,7 @@ try (Res a = new Res("A", log); Res b = new Res("B", log)) {
 
 Naming convention: `T` type, `E` element, `K`/`V` key/value, `R` result, `ID` identifier.
 
-**Invariance and PECS** ([§9.6](../09-generics/README.md#96-invariance-wildcards-and-pecs)): `List<Integer>` is **not** a `List<Number>` (arrays are covariant — a `String[]` counts as an `Object[]` — and fail at run time with `ArrayStoreException`; generics refuse at compile time).
+**Invariance and PECS** ([§9.6](../09-generics/README.md#96-invariance-wildcards-and-pecs)): `List<Integer>` is **not** a `List<Number>` (arrays are covariant — a `String[]` is an `Object[]` — and fail at run time with `ArrayStoreException`; generics refuse at compile time).
 
 | Wildcard | You can read as | You can add | Use when the parameter… | Example |
 |---|---|---|---|---|
@@ -540,7 +512,7 @@ flowchart TD
     M --> SM["SequencedMap (21): LinkedHashMap, TreeMap via NavigableMap"]
 ```
 
-**Big-O** ([§10.12](../10-collections/README.md#1012-big-o-cheat-sheet-and-a-measured-demo)) — `*` amortised (averaged over many calls), `†` average (worst case O(log n) in a tree-ified bucket):
+**Big-O** ([§10.12](../10-collections/README.md#1012-big-o-cheat-sheet-and-a-measured-demo)) — `*` amortised, `†` average (worst case O(log n) in a tree-ified bucket):
 
 | Collection | add at end | add/remove at front | `get(i)` | `contains` / `get(key)` | remove element | Order | `null`? |
 |---|---|---|---|---|---|---|---|
@@ -555,9 +527,9 @@ flowchart TD
 | `CopyOnWriteArrayList` | O(n) | O(n) | O(1) | O(n) | O(n) | index | yes |
 | `ConcurrentHashMap` | O(1)† | — | — | O(1)† | O(1)† | none | **no** |
 
-**Which one?** ([§10.13](../10-collections/README.md#1013-choosing-a-collection)) Key → value: `HashMap`; insertion order or LRU (least-recently-used eviction): `LinkedHashMap`; sorted or range queries: `TreeMap`. Unique elements: `HashSet` / `LinkedHashSet` / `TreeSet` by the same rule. Indexed or append: `ArrayList` (the default list). Stack or queue: `ArrayDeque` (not `Stack`, not `LinkedList`). "Smallest next": `PriorityQueue`. Enum keys: `EnumMap`/`EnumSet`. Fixed data: `List.of`/`Set.of`/`Map.of`. Shared between threads: `ConcurrentHashMap`, `CopyOnWriteArrayList`, `BlockingQueue`.
+**Which one?** ([§10.13](../10-collections/README.md#1013-choosing-a-collection)) Key → value: `HashMap`; insertion order or LRU: `LinkedHashMap`; sorted or range queries: `TreeMap`. Unique elements: `HashSet` / `LinkedHashSet` / `TreeSet` by the same rule. Indexed or append: `ArrayList` (the default list). Stack or queue: `ArrayDeque` (not `Stack`, not `LinkedList`). "Smallest next": `PriorityQueue`. Enum keys: `EnumMap`/`EnumSet`. Fixed data: `List.of`/`Set.of`/`Map.of`. Shared between threads: `ConcurrentHashMap`, `CopyOnWriteArrayList`, `BlockingQueue`.
 
-**`HashMap` internals** ([§10.5](../10-collections/README.md#105-hashmap-internals)): table of buckets, default capacity 16, load factor 0.75 (resize — double — when size > capacity × 0.75); index = `(h ^ (h >>> 16)) & (capacity − 1)`; collisions chain in a list that turns into a red-black tree (a self-balancing sorted tree) past 8 entries once the table has ≥ 64 buckets; lookup = hash, then `equals`. Keys must have consistent `equals`/`hashCode` and must not change while in the map.
+**`HashMap` internals** ([§10.5](../10-collections/README.md#105-hashmap-internals)): table of buckets, default capacity 16, load factor 0.75 (resize — double — when size > capacity × 0.75); index = `(h ^ (h >>> 16)) & (capacity − 1)`; collisions chain in a list that turns into a red-black tree past 8 entries once the table has ≥ 64 buckets; lookup = hash, then `equals`. Keys must have consistent `equals`/`hashCode` and must not change while in the map.
 
 **Unmodifiable vs views** ([§10.10](../10-collections/README.md#1010-unmodifiable-and-immutable-collections)):
 
@@ -602,11 +574,11 @@ flowchart TD
 | `Predicate<T>` / `BiPredicate<T,U>` | `T → boolean` | `test` | `filter`, `removeIf` |
 | `Function<T,R>` / `BiFunction<T,U,R>` | `T → R` / `(T,U) → R` | `apply` | `map`, `computeIfAbsent`, `merge` |
 | `UnaryOperator<T>` / `BinaryOperator<T>` | `T → T` / `(T,T) → T` | `apply` | `replaceAll`, `reduce` |
-| `IntPredicate`, `IntFunction<R>`, `ToIntFunction<T>`, `IntUnaryOperator`, `IntBinaryOperator`, `IntSupplier`, `ObjIntConsumer<T>` … | primitive versions (also `Long…`, `Double…`) | `test`, `apply`, `applyAsInt`, `getAsInt` … | avoid boxing in hot code (code that runs very often) |
+| `IntPredicate`, `IntFunction<R>`, `ToIntFunction<T>`, `IntUnaryOperator`, `IntBinaryOperator`, `IntSupplier`, `ObjIntConsumer<T>` … | primitive versions (also `Long…`, `Double…`) | `test`, `apply`, `applyAsInt`, `getAsInt` … | avoid boxing in hot code |
 | `Runnable` / `Callable<V>` | `() → void` / `() → V`, may throw | `run` / `call` | tasks |
 | `Comparator<T>` | `(T,T) → int` | `compare` | sorting |
 
-**Lambda syntax**: `() -> 42`, `x -> x * 2`, `(a, b) -> a + b`, `(String s) -> s.length()`, `(var x, var y) -> …`, block form `x -> { …; return r; }`. Captured local variables must be **effectively final** (assigned once) ([§11.5](../11-lambdas-and-functional-programming/README.md#115-variable-capture-and-effectively-final)); fields can change. `this` in a lambda is the enclosing object (in an anonymous class it's the anonymous object).
+**Lambda syntax**: `() -> 42`, `x -> x * 2`, `(a, b) -> a + b`, `(String s) -> s.length()`, `(var x, var y) -> …`, block form `x -> { …; return r; }`. Captured local variables must be **effectively final** ([§11.5](../11-lambdas-and-functional-programming/README.md#115-variable-capture-and-effectively-final)); fields can change. `this` in a lambda is the enclosing object (in an anonymous class it's the anonymous object).
 
 **Method references** ([§11.4](../11-lambdas-and-functional-programming/README.md#114-method-references)):
 
@@ -668,7 +640,7 @@ Stream.of(1, 2, 3, 4).peek(x -> trace.add("saw " + x)).filter(x -> x > 1).findFi
 
 **Gatherers** (Java 24, [§12.9](../12-streams/README.md#129-stream-gatherers-java-24)): `stream.gather(g)` is a custom intermediate operation. Built-ins in `Gatherers`: `windowFixed(2)` on 1..5 → `[[1, 2], [3, 4], [5]]`; `windowSliding(n)`; `scan(() -> 0, Integer::sum)` on 1, 2, 3 → `[1, 3, 6]`; `fold`; `mapConcurrent(n, f)` (runs `f` on virtual threads, keeps order).
 
-**Rules and mistakes** ([§12.7](../12-streams/README.md#127-streams-optional-and-nulls), [§12.8](../12-streams/README.md#128-parallel-streams), [§12.10](../12-streams/README.md#1210-common-mistakes), [§12.11](../12-streams/README.md#1211-streams-vs-loops-and-a-real-world-pipeline)): lambdas in a pipeline should be stateless (not depend on anything that changes while the stream runs) and must not modify the source; don't use `peek`/`forEach` to fill an outside list — collect instead; `sorted`/`distinct` on infinite streams never finish; close streams from `Files.lines`/`list`/`walk`. Parallel streams pay off only for large, CPU-bound, easily split, stateless work (they use the common `ForkJoinPool`, the JVM's shared work-stealing thread pool); never for I/O. Loops remain better for early exits with complex state, checked exceptions and index arithmetic.
+**Rules and mistakes** ([§12.7](../12-streams/README.md#127-streams-optional-and-nulls), [§12.8](../12-streams/README.md#128-parallel-streams), [§12.10](../12-streams/README.md#1210-common-mistakes), [§12.11](../12-streams/README.md#1211-streams-vs-loops-and-a-real-world-pipeline)): lambdas in a pipeline should be stateless and must not modify the source; don't use `peek`/`forEach` to fill an outside list — collect instead; `sorted`/`distinct` on infinite streams never finish; close streams from `Files.lines`/`list`/`walk`. Parallel streams pay off only for large, CPU-bound, easily split, stateless work (they use the common `ForkJoinPool`); never for I/O. Loops remain better for early exits with complex state, checked exceptions and index arithmetic.
 
 ---
 
@@ -691,13 +663,13 @@ Stream.of(1, 2, 3, 4).peek(x -> trace.add("saw " + x)).filter(x -> x > 1).findFi
 
 **`Files`** ([§13.3](../13-io-and-nio/README.md#133-files-managing-files-and-directories), [§13.4](../13-io-and-nio/README.md#134-reading-and-writing-whole-files)): `exists`, `isDirectory`, `createDirectories` (no error if present), `createFile` (fails if the file exists — `FileAlreadyExistsException`), `createTempFile`/`createTempDirectory`, `copy`/`move` (add `REPLACE_EXISTING`, `ATOMIC_MOVE`), `delete` (throws if missing or a non-empty directory) / `deleteIfExists`, `size`, `mismatch` (12), `list` / `walk` / `find` (lazy `Stream<Path>` — **close them**). `Files.size` counts **bytes**: `"ünï\n"` is 6 bytes in UTF-8.
 
-**Streams and decorators** (wrappers that add a feature, such as buffering, around another stream) ([§13.5](../13-io-and-nio/README.md#135-byte-streams-and-character-streams), [§13.6](../13-io-and-nio/README.md#136-buffering)): byte streams (`InputStream`/`OutputStream`) vs character streams (`Reader`/`Writer`); bridge with `InputStreamReader`/`OutputStreamWriter` and a charset; wrap in `BufferedReader`/`BufferedWriter`/`BufferedInputStream` (8 KB buffer by default) — unbuffered byte-at-a-time I/O is very slow, and a writer you forget to `flush`/`close` loses data. Always use try-with-resources.
+**Streams and decorators** ([§13.5](../13-io-and-nio/README.md#135-byte-streams-and-character-streams), [§13.6](../13-io-and-nio/README.md#136-buffering)): byte streams (`InputStream`/`OutputStream`) vs character streams (`Reader`/`Writer`); bridge with `InputStreamReader`/`OutputStreamWriter` and a charset; wrap in `BufferedReader`/`BufferedWriter`/`BufferedInputStream` (8 KB buffer by default) — unbuffered byte-at-a-time I/O is very slow, and a writer you forget to `flush`/`close` loses data. Always use try-with-resources.
 
 **Charsets** ([§13.7](../13-io-and-nio/README.md#137-charsets-and-encodings)): the default charset is **UTF-8** since Java 18 (`Charset.defaultCharset()`); still pass `StandardCharsets.UTF_8` explicitly for files other systems produce. Mojibake = bytes decoded with the wrong charset.
 
 **Binary data** ([§13.9](../13-io-and-nio/README.md#139-binary-data-channels-and-buffers)): `DataInputStream`/`DataOutputStream` for primitives; `FileChannel`, `ByteBuffer` (`flip` before reading what you wrote), memory-mapped files; `WatchService` for directory change events.
 
-**Serialization** ([§13.10](../13-io-and-nio/README.md#1310-serialization-and-why-to-avoid-it)): `implements Serializable`, `transient` fields are skipped, declare `serialVersionUID`. Deserialising untrusted data is a **security risk** (gadget chains: existing classes an attacker strings together to run code) — prefer JSON (a common text format for data) or protobuf (Protocol Buffers, Google's compact binary format); if you must, use deserialization filters (`ObjectInputFilter`, 9; context-specific filters, 17).
+**Serialization** ([§13.10](../13-io-and-nio/README.md#1310-serialization-and-why-to-avoid-it)): `implements Serializable`, `transient` fields are skipped, declare `serialVersionUID`. Deserialising untrusted data is a **security risk** (gadget chains) — prefer JSON or protobuf; if you must, use deserialization filters (`ObjectInputFilter`, 9; context-specific filters, 17).
 
 **Also** ([§13.8](../13-io-and-nio/README.md#138-console-and-standard-streams), [§13.11](../13-io-and-nio/README.md#1311-properties-files)–[§13.13](../13-io-and-nio/README.md#1313-best-practices-and-common-mistakes-checklist)): `Properties` for `key=value` config (`load`, `getProperty(k, default)`); JSON needs a library (Jackson, Gson) — the JDK has none; `System.in`/`out`/`err`, `Console`, `Scanner`, `IO` (25).
 
@@ -714,27 +686,27 @@ Thread v = Thread.ofVirtual().start(task);                       // Java 21
 t.join();                                                        // wait for it to finish
 ```
 
-Call `start()`, not `run()` (which runs on the *current* thread). States: `NEW` → `RUNNABLE` → (`BLOCKED` on a monitor — the lock built into every object · `WAITING` on `wait`/`join`/`park` · `TIMED_WAITING` on `sleep`/timeouts) → `TERMINATED`. Interruption is cooperative: `t.interrupt()` sets a flag; blocking methods throw `InterruptedException` — rethrow it or restore the flag with `Thread.currentThread().interrupt()`, never swallow it. There is no safe way to kill a thread: `Thread.stop()` threw `UnsupportedOperationException` from Java 20 and was removed in JDK 26. The JVM exits when only daemon threads (background threads) remain.
+Call `start()`, not `run()` (which runs on the *current* thread). States: `NEW` → `RUNNABLE` → (`BLOCKED` on a monitor · `WAITING` on `wait`/`join`/`park` · `TIMED_WAITING` on `sleep`/timeouts) → `TERMINATED`. Interruption is cooperative: `t.interrupt()` sets a flag; blocking methods throw `InterruptedException` — rethrow it or restore the flag with `Thread.currentThread().interrupt()`, never swallow it. There is no safe way to kill a thread: `Thread.stop()` threw `UnsupportedOperationException` from Java 20 and was removed in JDK 26. The JVM exits when only daemon threads remain.
 
 **The primitives** ([§14.5](../14-concurrency-1/README.md#145-race-conditions)–[§14.13](../14-concurrency-1/README.md#1413-synchronizers-countdownlatch-cyclicbarrier-semaphore-phaser)):
 
 | Tool | Gives you | Use for | Remember |
 |---|---|---|---|
-| `synchronized` (method or block) | mutual exclusion **and** visibility; reentrant (the holder may lock again) | protecting shared mutable state, multi-variable invariants | instance method locks `this`, static method locks the `Class` object; released automatically |
+| `synchronized` (method or block) | mutual exclusion **and** visibility; reentrant | protecting shared mutable state, multi-variable invariants | instance method locks `this`, static method locks the `Class` object; released automatically |
 | `volatile` field | visibility and ordering only | a stop flag, safely publishing a reference | `count++` on a volatile is **still a race** |
-| `AtomicInteger`, `AtomicLong`, `AtomicReference` | lock-free single-variable updates via CAS (compare-and-set) | counters, sequence numbers | `compareAndSet(expected, new)` → `true` only if the value matched; `LongAdder` for very hot counters |
+| `AtomicInteger`, `AtomicLong`, `AtomicReference` | lock-free single-variable updates via CAS | counters, sequence numbers | `compareAndSet(expected, new)` → `true` only if the value matched; `LongAdder` for very hot counters |
 | `ReentrantLock` | `tryLock`, timeouts, interruptible, fair mode, several `Condition`s | when `synchronized` isn't flexible enough | **`unlock()` in `finally`** |
 | `ReadWriteLock` / `StampedLock` | many readers or one writer / optimistic reads | read-mostly data | `StampedLock` is not reentrant |
 | `wait` / `notifyAll` | guarded blocks | legacy code — prefer `java.util.concurrent` | call in a `while` loop, holding the lock |
 | `ConcurrentHashMap` | thread-safe map with atomic `merge`, `compute`, `computeIfAbsent`, `putIfAbsent` | shared caches, counters | no `null` keys/values; iterators weakly consistent |
 | `CopyOnWriteArrayList` | snapshot iteration, never throws CME | listeners, read-mostly lists | every write copies the array |
-| `BlockingQueue` (`ArrayBlockingQueue`, `LinkedBlockingQueue`) | `put` waits when full, `take` waits when empty | producer–consumer (one thread makes items, another uses them) | prefer bounded queues |
+| `BlockingQueue` (`ArrayBlockingQueue`, `LinkedBlockingQueue`) | `put` waits when full, `take` waits when empty | producer–consumer | prefer bounded queues |
 | `CountDownLatch(n)` | wait until n `countDown()` calls | start/finish gates | one-shot |
 | `CyclicBarrier(n)` | n threads wait for each other, repeatedly | phased algorithms | reusable |
 | `Semaphore(k)` | at most k holders at a time | limit concurrent DB/API calls (also with virtual threads) | `release` in `finally` |
 | `ThreadLocal` / `ScopedValue` (25) | per-thread value / immutable per-call context | request context | remove `ThreadLocal`s on pooled threads |
 
-**Executors** ([§14.11](../14-concurrency-1/README.md#1411-executors-and-thread-pools)): `try (ExecutorService pool = Executors.newFixedThreadPool(n)) { Future<T> f = pool.submit(callable); }` — `ExecutorService` is `AutoCloseable` since Java 19, and `close()` waits for submitted tasks. Factories: `newFixedThreadPool(n)` (unbounded queue!), `newCachedThreadPool()` (unbounded threads!), `newSingleThreadExecutor()`, `newScheduledThreadPool(n)`, `newWorkStealingPool()`, `newVirtualThreadPerTaskExecutor()` (21). For full control use `new ThreadPoolExecutor(core, max, keepAlive, unit, boundedQueue, factory, rejectionPolicy)`. Size CPU-bound pools (work limited by computation, not waiting) ≈ number of cores.
+**Executors** ([§14.11](../14-concurrency-1/README.md#1411-executors-and-thread-pools)): `try (ExecutorService pool = Executors.newFixedThreadPool(n)) { Future<T> f = pool.submit(callable); }` — `ExecutorService` is `AutoCloseable` since Java 19, and `close()` waits for submitted tasks. Factories: `newFixedThreadPool(n)` (unbounded queue!), `newCachedThreadPool()` (unbounded threads!), `newSingleThreadExecutor()`, `newScheduledThreadPool(n)`, `newWorkStealingPool()`, `newVirtualThreadPerTaskExecutor()` (21). For full control use `new ThreadPoolExecutor(core, max, keepAlive, unit, boundedQueue, factory, rejectionPolicy)`. Size CPU-bound pools ≈ number of cores.
 
 **`CompletableFuture`** ([§15.1](../15-concurrency-2-modern/README.md#151-future-and-its-limits), [§15.2](../15-concurrency-2-modern/README.md#152-completablefuture)):
 
@@ -752,9 +724,9 @@ Call `start()`, not `run()` (which runs on the *current* thread). States: `NEW` 
 
 **Virtual threads** (Java 21, [§15.4](../15-concurrency-2-modern/README.md#154-virtual-threads), [§15.5](../15-concurrency-2-modern/README.md#155-pinning-and-jep-491)): cheap threads scheduled by the JVM onto a few carrier (platform) threads; blocking I/O unmounts them. Use one per task (`newVirtualThreadPerTaskExecutor()`) for **I/O-bound**, high-concurrency work; they don't speed up CPU-bound work. Don't pool them; cap scarce resources with a `Semaphore`; avoid big `ThreadLocal` caches. They are always daemon threads. Since **Java 24** (JEP 491) blocking inside `synchronized` no longer pins the carrier; native calls that call back into blocking Java code, and class initialisation, still do.
 
-**Also modern** ([§15.3](../15-concurrency-2-modern/README.md#153-forkjoin), [§15.6](../15-concurrency-2-modern/README.md#156-threadlocal-and-scoped-values), [§15.7](../15-concurrency-2-modern/README.md#157-structured-concurrency-preview)): Fork/Join (`RecursiveTask`, work stealing — idle threads take queued tasks from busy ones — used by parallel streams); **scoped values** are final in Java 25 (`ScopedValue.where(USER, "alice").call(() -> USER.get())` → `"alice"`, and unbound again afterwards); **structured concurrency** (`StructuredTaskScope.open()` plus a `Joiner` policy) is still **preview** in 25 (JEP 505) and kept changing in 26 (JEP 525) and 27 (JEP 533: built-in joiners make `join()` throw `ExecutionException`, `awaitAll()` removed) — don't write production code against it yet.
+**Also modern** ([§15.3](../15-concurrency-2-modern/README.md#153-forkjoin), [§15.6](../15-concurrency-2-modern/README.md#156-threadlocal-and-scoped-values), [§15.7](../15-concurrency-2-modern/README.md#157-structured-concurrency-preview)): Fork/Join (`RecursiveTask`, work stealing, used by parallel streams); **scoped values** are final in Java 25 (`ScopedValue.where(USER, "alice").call(() -> USER.get())` → `"alice"`, and unbound again afterwards); **structured concurrency** (`StructuredTaskScope.open()` plus a `Joiner` policy) is still **preview** in 25 (JEP 505) and kept changing in 26 (JEP 525) and 27 (JEP 533: built-in joiners make `join()` throw `ExecutionException`, `awaitAll()` removed) — don't write production code against it yet.
 
-**Java Memory Model** ([§15.8](../15-concurrency-2-modern/README.md#158-the-java-memory-model-and-happens-before)): without a *happens-before* edge another thread may never see your write. Edges: program order in one thread; unlock → later lock of the same monitor; volatile write → later read of that field; `Thread.start()` → actions in the thread; actions in a thread → a successful `join()`; `java.util.concurrent` hand-offs (queue put → take, `countDown` → `await`, task submit → run, task → `Future.get`); transitivity. Safe publication (making a new object visible to other threads only once fully built): `final` fields, volatile, locks, concurrent collections, static initialisers.
+**Java Memory Model** ([§15.8](../15-concurrency-2-modern/README.md#158-the-java-memory-model-and-happens-before)): without a *happens-before* edge another thread may never see your write. Edges: program order in one thread; unlock → later lock of the same monitor; volatile write → later read of that field; `Thread.start()` → actions in the thread; actions in a thread → a successful `join()`; `java.util.concurrent` hand-offs (queue put → take, `countDown` → `await`, task submit → run, task → `Future.get`); transitivity. Safe publication: `final` fields, volatile, locks, concurrent collections, static initialisers.
 
 **Liveness** ([§15.9](../15-concurrency-2-modern/README.md#159-liveness-deadlock-livelock-starvation)): **deadlock** (threads wait for each other's locks forever — fix with one global lock order, `tryLock` with timeout, fewer locks; diagnose with `jstack`/`jcmd Thread.print`), **livelock** (threads keep reacting to each other without progress — add randomised back-off), **starvation** (a thread never gets CPU or a lock — fair locks, bounded work).
 
@@ -764,13 +736,13 @@ Call `start()`, not `run()` (which runs on the *current* thread). States: `NEW` 
 
 ## 20.14 The JVM: memory, GC, flags and tools
 
-**How code runs** ([§1.6](../01-java-and-the-jvm/README.md#16-bytecode-and-class-files), [§1.7](../01-java-and-the-jvm/README.md#17-how-the-jvm-runs-your-code-class-loading-interpreter-jit), [§16.1](../16-jvm-internals-and-performance/README.md#161-the-jvms-architecture), [§16.2](../16-jvm-internals-and-performance/README.md#162-class-loading-in-depth), [§16.8](../16-jvm-internals-and-performance/README.md#168-jit-compilation-inlining-and-escape-analysis)): `javac` → bytecode in `.class` files → class loaders load classes lazily (bootstrap → platform → application, **parent-first delegation**) → verify, prepare, resolve, initialise (static initialisers run once) → the interpreter runs bytecode; hot methods are compiled by the tiered JIT (**C1** fast, then **C2** heavily optimising: inlining (copying a called method into its caller), devirtualisation (calling the one known implementation directly), escape analysis, loop optimisations, deoptimisation when assumptions break). Hence "warm-up". Class loaders in the checks: `String.class.getClassLoader()` is `null` (bootstrap), `java.sql` classes use the `platform` loader, your classes the `app` loader.
+**How code runs** ([§1.6](../01-java-and-the-jvm/README.md#16-bytecode-and-class-files), [§1.7](../01-java-and-the-jvm/README.md#17-how-the-jvm-runs-your-code-class-loading-interpreter-jit), [§16.1](../16-jvm-internals-and-performance/README.md#161-the-jvms-architecture), [§16.2](../16-jvm-internals-and-performance/README.md#162-class-loading-in-depth), [§16.8](../16-jvm-internals-and-performance/README.md#168-jit-compilation-inlining-and-escape-analysis)): `javac` → bytecode in `.class` files → class loaders load classes lazily (bootstrap → platform → application, **parent-first delegation**) → verify, prepare, resolve, initialise (static initialisers run once) → the interpreter runs bytecode; hot methods are compiled by the tiered JIT (**C1** fast, then **C2** heavily optimising: inlining, devirtualisation, escape analysis, loop optimisations, deoptimisation when assumptions break). Hence "warm-up". Class loaders in the checks: `String.class.getClassLoader()` is `null` (bootstrap), `java.sql` classes use the `platform` loader, your classes the `app` loader.
 
 **Memory areas** ([§16.3](../16-jvm-internals-and-performance/README.md#163-runtime-memory-areas), [§1.8](../01-java-and-the-jvm/README.md#18-memory-and-garbage-collection--an-overview)):
 
 | Area | Per thread? | Holds | Size flag | When it runs out |
 |---|---|---|---|---|
-| Heap (young: eden, where new objects start, + survivors; old) | shared | all objects and arrays | `-Xms`, `-Xmx`, `-XX:MaxRAMPercentage` | `OutOfMemoryError: Java heap space` |
+| Heap (young: eden + survivors; old) | shared | all objects and arrays | `-Xms`, `-Xmx`, `-XX:MaxRAMPercentage` | `OutOfMemoryError: Java heap space` |
 | Java stack | per thread | frames: locals, operand stack | `-Xss` | `StackOverflowError` |
 | Metaspace (native memory; replaced PermGen in 8) | shared | class metadata | `-XX:MaxMetaspaceSize` (unlimited by default) | `OutOfMemoryError: Metaspace` |
 | Code cache | shared | JIT-compiled code | `-XX:ReservedCodeCacheSize` | JIT stops compiling (slow, not a crash) |
@@ -784,7 +756,7 @@ Object size basics ([§16.4](../16-jvm-internals-and-performance/README.md#164-o
 |---|---|---|---|
 | **G1** (default since 9 on machines with ≥ 2 CPUs and ≥ 1792 MB; in all environments from JDK 27, JEP 523) | `-XX:+UseG1GC` | goal `-XX:MaxGCPauseMillis` (200 ms default); typically a few–tens of ms | most services — the default for a reason |
 | Parallel | `-XX:+UseParallelGC` | longer, grows with live data | batch jobs: maximum throughput |
-| Serial | `-XX:+UseSerialGC` | stop-the-world (all app threads paused), single thread | tiny heaps, 1 CPU, CLI tools (before JDK 27 the JVM picked it on machines with < 2 CPUs or < 1792 MB) |
+| Serial | `-XX:+UseSerialGC` | stop-the-world, single thread | tiny heaps, 1 CPU, CLI tools (before JDK 27 the JVM picked it on machines with < 2 CPUs or < 1792 MB) |
 | **ZGC** (generational; generational-only since 24) | `-XX:+UseZGC` | typically < 1 ms, independent of heap size | latency-sensitive services, huge heaps |
 | Shenandoah (generational mode product in 25) | `-XX:+UseShenandoahGC` | sub-ms to a few ms | low latency; in most OpenJDK builds, not Oracle's |
 | Epsilon | `-XX:+UnlockExperimentalVMOptions -XX:+UseEpsilonGC` | none — never collects | benchmarks, ultra-short jobs |
@@ -797,7 +769,7 @@ Object size basics ([§16.4](../16-jvm-internals-and-performance/README.md#164-o
 | `-XX:MaxRAMPercentage=75` | heap as % of container memory (default 25) |
 | `-Xss1m` | thread stack size (default platform-dependent: about 1 MB on 64-bit Linux, 2 MB on macOS/AArch64) |
 | `-Xlog:gc*` (or `-Xlog:gc:file=gc.log`) | unified GC logging (9+) |
-| `-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/dumps` | heap dump on OOM (`OutOfMemoryError`) |
+| `-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/dumps` | heap dump on `OutOfMemoryError` |
 | `-XX:+PrintFlagsFinal` | print every flag's final value |
 | `-XX:StartFlightRecording=duration=60s,filename=app.jfr` | record with JDK Flight Recorder at start-up |
 | `-XX:TieredStopAtLevel=1` | C1 only: faster start-up, lower peak speed |
@@ -809,18 +781,18 @@ Object size basics ([§16.4](../16-jvm-internals-and-performance/README.md#164-o
 
 | Tool | Use |
 |---|---|
-| `jps -l` | list running JVMs and PIDs (process IDs) |
+| `jps -l` | list running JVMs and PIDs |
 | `jcmd <pid> help` | the Swiss-army knife: `VM.flags`, `GC.heap_info`, `GC.class_histogram`, `Thread.print`, `GC.heap_dump file.hprof`, `JFR.start` / `JFR.dump`, `VM.native_memory` |
 | `jstat -gcutil <pid> 1000` | heap occupancy and GC counts every second |
 | `jstack <pid>` | thread dump — look for `BLOCKED` and "Found one Java-level deadlock" |
 | JFR + `jfr view hot-methods app.jfr` / JDK Mission Control | low-overhead production profiling |
-| VisualVM, Eclipse MAT, async-profiler | GUI monitoring, heap-dump analysis (dominator tree), flame graphs (charts of where CPU time goes) |
+| VisualVM, Eclipse MAT, async-profiler | GUI monitoring, heap-dump analysis (dominator tree), flame graphs |
 | JMH | micro-benchmarks that avoid warm-up and dead-code traps ([§16.9](../16-jvm-internals-and-performance/README.md#169-benchmarking-why-naive-timing-lies-and-jmh)) |
 | `jdeps`, `jlink` | module dependencies / build a trimmed runtime ([§16.12](../16-jvm-internals-and-performance/README.md#1612-modules-jpms-basics)) |
 
-Symptom → first tool: high CPU → JFR hot methods; latency spikes → GC log pauses; hangs → two or three thread dumps; memory growth → `jstat` old-gen trend + class histogram twice, then a heap dump; RSS (resident set size — the memory the OS says the process uses) far above heap → native memory tracking. Classic leaks: unbounded static caches, unregistered listeners, `ThreadLocal`s on pooled threads, mutated `HashMap` keys, class-loader leaks.
+Symptom → first tool: high CPU → JFR hot methods; latency spikes → GC log pauses; hangs → two or three thread dumps; memory growth → `jstat` old-gen trend + class histogram twice, then a heap dump; RSS far above heap → native memory tracking. Classic leaks: unbounded static caches, unregistered listeners, `ThreadLocal`s on pooled threads, mutated `HashMap` keys, class-loader leaks.
 
-**Modules (JPMS)** ([§16.12](../16-jvm-internals-and-performance/README.md#1612-modules-jpms-basics)): `module-info.java` with `requires`, `exports`, `opens` (for reflection — code inspecting classes at run time), `uses`/`provides` (services); the class path is the *unnamed module*; `import module java.base;` (25) imports every exported package of a module.
+**Modules (JPMS)** ([§16.12](../16-jvm-internals-and-performance/README.md#1612-modules-jpms-basics)): `module-info.java` with `requires`, `exports`, `opens` (for reflection), `uses`/`provides` (services); the class path is the *unnamed module*; `import module java.base;` (25) imports every exported package of a module.
 
 ---
 
@@ -828,16 +800,16 @@ Symptom → first tool: high CPU → JFR hot methods; latency spikes → GC log 
 
 Final features only — the version that **finalised** each one ([§17.2](../17-modern-java-17-to-25/README.md#172-the-version-table); JEP numbers in parentheses). The book's baseline before 17: `var` (10), `HttpClient` and `java Hello.java` (11), switch expressions and helpful NPE messages (14; the messages on by default since 15), text blocks (15), records, `instanceof` patterns and `Stream.toList()` (16).
 
-| Release | GA (general availability) | Language and libraries | JVM and tools |
-|---|---|---|---|
-| **17 LTS** (long-term support) | Sep 2021 | sealed classes (409), enhanced pseudo-random generators (356), always-strict floating point (306), context-specific deserialization filters (415) | strong encapsulation of JDK internals (403), macOS/AArch64 port (391) |
-| **18** | Mar 2022 | UTF-8 by default (400), `@snippet` in Javadoc (413) | simple web server `jwebserver` (408); finalization deprecated for removal (421) |
-| **19, 20** | Sep 2022, Mar 2023 | previews and incubators (experimental API modules) only | Linux/RISC-V port (422, in 19) |
-| **21 LTS** | Sep 2023 | record patterns (440), pattern matching for `switch` (441), **virtual threads** (444), sequenced collections (431), key encapsulation mechanism API (452) | generational ZGC (439), warnings for dynamically loaded agents (451) |
-| **22** | Mar 2024 | unnamed variables and patterns `_` (456), Foreign Function & Memory API (454), multi-file source launch (458) | region pinning for G1 (423) |
-| **23** | Sep 2024 | Markdown documentation comments `///` (467) | ZGC generational by default (474); `sun.misc.Unsafe` memory access deprecated for removal (471) |
-| **24** | Mar 2025 | **stream gatherers** (485), Class-File API (484), ML-KEM (496) and ML-DSA (497) post-quantum crypto | virtual threads without `synchronized` pinning (491), AOT class loading and linking (483), non-generational ZGC removed (490), Security Manager permanently disabled (486) |
-| **25 LTS** | Sep 2025 | compact source files and instance `main` (512), module import declarations (511), flexible constructor bodies (513), **scoped values** (506), key derivation function API (510) | compact object headers (519, opt-in), generational Shenandoah (521), AOT ergonomics (514) and method profiling (515), JFR cooperative sampling (518) and method timing (520) |
+| Release | Final features (JEP numbers and the JVM/tool changes: [§17.2](../17-modern-java-17-to-25/README.md#172-the-version-table)) |
+|---|---|
+| **17 LTS** (Sep 2021) | sealed classes, enhanced pseudo-random generators, always-strict floating point, context-specific deserialization filters; strong encapsulation of JDK internals |
+| **18** (Mar 2022) | UTF-8 by default, `@snippet` in Javadoc, `jwebserver`; finalization deprecated for removal |
+| **19, 20** | previews and incubators only (Linux/RISC-V port in 19) |
+| **21 LTS** (Sep 2023) | record patterns, pattern matching for `switch`, **virtual threads**, sequenced collections, KEM API; generational ZGC |
+| **22** (Mar 2024) | unnamed variables and patterns `_`, Foreign Function & Memory API, multi-file source launch |
+| **23** (Sep 2024) | Markdown doc comments `///`; ZGC generational by default; `Unsafe` memory access deprecated for removal |
+| **24** (Mar 2025) | **stream gatherers**, Class-File API, ML-KEM/ML-DSA; no `synchronized` pinning, AOT class loading, non-generational ZGC removed, Security Manager disabled |
+| **25 LTS** (Sep 2025) | compact source files and instance `main`, module imports, flexible constructor bodies, **scoped values**, KDF API; compact object headers (opt-in), generational Shenandoah, AOT ergonomics and method profiling |
 
 **Still not final in Java 25** ([§17.11](../17-modern-java-17-to-25/README.md#1711-still-preview-or-incubating-in-java-25--and-what-came-next)): structured concurrency (fifth preview, 505; sixth in 26, seventh in 27), primitive types in patterns (third preview, 507), stable values (preview, 502; renamed *lazy constants* in 26), PEM encodings (preview, 470), Vector API (tenth incubator, 508), JFR CPU-time profiling (experimental, 509). **Withdrawn**: string templates (previewed in 21 and 22, removed in 23). Try a preview with `javac --release 25 --enable-preview` and `java --enable-preview`. After 25 ([§17.11](../17-modern-java-17-to-25/README.md#1711-still-preview-or-incubating-in-java-25--and-what-came-next)): JDK 26 (Mar 2026) finalised HTTP/3 in `HttpClient` (517) and removed the Applet API (504) and `Thread.stop`; JDK 27 (Sep 2026) made G1 the default everywhere (523) and compact object headers the default (534). LTS releases: 8, 11, 17, 21, 25 (every two years); the next is expected to be 29 in September 2027 ([§1.12](../01-java-and-the-jvm/README.md#112-java-releases-lts-and-jeps)).
 
@@ -863,7 +835,7 @@ Upgrading 17 → 25 ([§17.12](../17-modern-java-17-to-25/README.md#1712-upgradi
 
 | Command | Does |
 |---|---|
-| `mvn clean verify` | full build with all checks (what CI — continuous integration, the server that builds every change — runs) |
+| `mvn clean verify` | full build with all checks (what CI runs) |
 | `mvn test`, `mvn -Dtest=CartTest test` | run all / one test class (`CartTest#method` for one method) |
 | `mvn package -DskipTests` | build the JAR without running tests |
 | `mvn dependency:tree` | print the resolved dependency tree |
@@ -896,17 +868,17 @@ Assertions: `assertEquals(expected, actual)` (expected first), `assertTrue`, `as
 
 **AssertJ** ([§18.7](../18-testing-build-and-tooling/README.md#187-assertj-fluent-assertions)): `assertThat(list).hasSize(3).containsExactly("a", "b", "c")`; `assertThat(s).startsWith("J").contains("av")`; `assertThatThrownBy(() -> …).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("negative")`; `extracting(Order::id)`; `usingRecursiveComparison()`.
 
-**Test design** ([§18.9](../18-testing-build-and-tooling/README.md#189-test-design)): Arrange–Act–Assert; one behaviour per test; name tests after behaviour; FIRST (fast, independent, repeatable, self-validating, timely); inject clocks and random seeds; test pyramid (many unit, some integration — Testcontainers — few end-to-end — whole-system tests). Testcontainers starts throwaway real services (such as a database) in Docker containers for tests.
+**Test design** ([§18.9](../18-testing-build-and-tooling/README.md#189-test-design)): Arrange–Act–Assert; one behaviour per test; name tests after behaviour; FIRST (fast, independent, repeatable, self-validating, timely); inject clocks and random seeds; test pyramid (many unit, some integration — Testcontainers — few end-to-end). Testcontainers starts throwaway real services (such as a database) in Docker containers for tests.
 
 **Logging** ([§18.10](../18-testing-build-and-tooling/README.md#1810-logging)): code against SLF4J (`private static final Logger log = LoggerFactory.getLogger(Foo.class); log.info("order {} placed", id);` — placeholders, not concatenation), with Logback or Log4j 2 as the backend; levels `TRACE < DEBUG < INFO < WARN < ERROR`; `java.util.logging` is built in (`FINE`, `INFO`, `WARNING`, `SEVERE`). Pass the exception as the last argument to keep the stack trace.
 
-**JDBC** ([§18.11](../18-testing-build-and-tooling/README.md#1811-jdbc-basics)): `try (Connection c = dataSource.getConnection(); PreparedStatement ps = c.prepareStatement("SELECT … WHERE id = ?")) { ps.setLong(1, id); try (ResultSet rs = ps.executeQuery()) { while (rs.next()) … } }` — always `PreparedStatement` (prevents SQL injection — attackers smuggling SQL commands inside input values), a connection pool (HikariCP; a set of open database connections reused across requests) in real apps, `setAutoCommit(false)` + `commit`/`rollback` for transactions (groups of changes that succeed or fail together). SQL itself: the [SQL handbook](../../../sql/).
+**JDBC** ([§18.11](../18-testing-build-and-tooling/README.md#1811-jdbc-basics)): `try (Connection c = dataSource.getConnection(); PreparedStatement ps = c.prepareStatement("SELECT … WHERE id = ?")) { ps.setLong(1, id); try (ResultSet rs = ps.executeQuery()) { while (rs.next()) … } }` — always `PreparedStatement` (prevents SQL injection), a connection pool (HikariCP) in real apps, `setAutoCommit(false)` + `commit`/`rollback` for transactions. SQL itself: the [SQL handbook](../../../sql/).
 
 ---
 
 ## 20.17 Interview question index
 
-All 42 questions are answered in [Chapter 19 §19.29](../19-java-for-coding-interviews/README.md#1929-java-interview-qa), each with links back to the teaching section; claims marked ✔ there are proven by a runnable program. The coding side — the Java DSA toolkit ([§19.1](../19-java-for-coding-interviews/README.md#191-testing-your-solutions-assert-is-off-use-a-helper)–[§19.7](../19-java-for-coding-interviews/README.md#197-complexity-cheat-table)) and twenty patterns from two pointers to math and geometry ([§19.8](../19-java-for-coding-interviews/README.md#198-two-pointers)–[§19.27](../19-java-for-coding-interviews/README.md#1927-math-and-geometry)) — is in the same chapter. Pattern finder:
+The coding side — the Java DSA toolkit ([§19.1](../19-java-for-coding-interviews/README.md#191-testing-your-solutions-assert-is-off-use-a-helper)–[§19.7](../19-java-for-coding-interviews/README.md#197-complexity-cheat-table)) and twenty patterns from two pointers to math and geometry ([§19.8](../19-java-for-coding-interviews/README.md#198-two-pointers)–[§19.27](../19-java-for-coding-interviews/README.md#1927-math-and-geometry)) — is in the same chapter. Pattern finder:
 
 | Problem says… | Pattern | Section |
 |---|---|---|
@@ -931,26 +903,7 @@ All 42 questions are answered in [Chapter 19 §19.29](../19-java-for-coding-inte
 | appears twice except one, count 1-bits, subsets of ≤ 20 | bit manipulation | [§19.26](../19-java-for-coding-interviews/README.md#1926-bit-manipulation) |
 | spiral matrix, reverse digits, points on a line, Josephus | math and geometry | [§19.27](../19-java-for-coding-interviews/README.md#1927-math-and-geometry) |
 
-**Strings, objects and the language → [§19.29](../19-java-for-coding-interviews/README.md#strings-objects-and-the-language)**
-
-| Q | Topic | Q | Topic |
-|---|---|---|---|
-| 1 | why `String` is immutable | 7 | `final` vs `finally` vs `finalize` |
-| 2 | the string pool; objects made by `new String("hi")` | 8 | making a class immutable |
-| 3 | `String` vs `StringBuilder` vs `StringBuffer` | 9 | interface vs abstract class |
-| 4 | the `equals`/`hashCode` contract | 10 | records and their limits |
-| 5 | `==` vs `equals`, the `Integer` cache | 11 | sealed classes |
-| 6 | pass-by-value | 12 | overloading vs overriding |
-
-**Collections → [§19.29](../19-java-for-coding-interviews/README.md#collections)**: Q13 `HashMap` internals · Q14 mutating a key · Q15 `HashMap` vs `Hashtable` vs `synchronizedMap` vs `ConcurrentHashMap` · Q16 how `ConcurrentHashMap` is thread-safe · Q17 `ArrayList` vs `LinkedList` · Q18 map orderings and an LRU cache · Q19 `Comparable` vs `Comparator` · Q20 fail-fast vs weakly consistent iterators · Q21 `ArrayDeque` vs `Stack` · Q22 `List.of` vs `Arrays.asList` vs `unmodifiableList`.
-
-**Exceptions → [§19.29](../19-java-for-coding-interviews/README.md#exceptions)**: Q23 checked vs unchecked · Q24 how try-with-resources works · Q25 when `finally` doesn't run.
-
-**Generics, lambdas and streams → [§19.29](../19-java-for-coding-interviews/README.md#generics-lambdas-and-streams)**: Q26 type erasure and its limits · Q27 PECS · Q28 streams vs loops · Q29 misusing `Optional` · Q30 functional interfaces and effectively final.
-
-**Concurrency → [§19.29](../19-java-for-coding-interviews/README.md#concurrency)**: Q31 `volatile` vs `synchronized` · Q32 happens-before · Q33 deadlock · Q34 virtual threads · Q35 `Runnable`/`Callable`, `Future`/`CompletableFuture` · Q36 why executors.
-
-**The JVM → [§19.29](../19-java-for-coding-interviews/README.md#the-jvm)**: Q37 memory areas · Q38 GC and the default collector · Q39 memory leaks · Q40 class loading, interpreter and JIT · Q41 `static` and static initialisers · Q42 modern Java features to use in interviews.
+**Language questions.** The full bank is [Chapter 21](../21-interview-question-bank/README.md) (Q1–Q280 by topic: basics, OOP, strings, `equals`/`hashCode`, exceptions, generics, collections, lambdas, streams, modern Java, concurrency, JVM, I/O, testing, scenarios, output puzzles, coding tasks, DSA and multithreading problems). [§19.29](../19-java-for-coding-interviews/README.md#1929-java-interview-qa) condenses the 42 most-asked into short answers keyed to that bank: Q1–12 strings, objects and the language · Q13–22 collections · Q23–25 exceptions · Q26–30 generics, lambdas and streams · Q31–36 concurrency · Q37–42 the JVM.
 
 More interview material: each chapter's **In the interview** sections, the modern-Java round in [§17.13](../17-modern-java-17-to-25/README.md#1713-in-the-interview), and exam-level traps in the [OCP Java 21 study notes](../../../../ocp-java21-study/README.md).
 
@@ -958,20 +911,17 @@ More interview material: each chapter's **In the interview** sections, the moder
 
 ## 20.18 Where next
 
-You now know the language, the core library, the JVM and the tools. What to learn next depends on the job you want:
-
-| Direction | What it is | First step |
-|---|---|---|
-| **Spring Boot** | the dominant framework for Java back-ends (Boot 4.0, Nov 2025, on Spring Framework 7; 4.1 in 2026; Java 17+): dependency injection, auto-configuration, starters for web, data, security, and Actuator for operations ([§18.14](../18-testing-build-and-tooling/README.md#1814-where-next-spring-boot-and-friends)) | generate a project at start.spring.io, build a small REST API (a web API of URLs answered over HTTP) with JDBC or JPA (Jakarta Persistence, which maps objects to database tables), test it with JUnit, Mockito and Testcontainers |
-| **Jakarta EE** (formerly Java EE) | the standard enterprise specifications — Servlet, CDI, JPA, JAX-RS (Jakarta REST), Bean Validation — implemented by WildFly, Open Liberty, Payara | learn JPA and CDI; much of Spring uses the same specifications (e.g. JPA via Hibernate) |
-| **Quarkus, Micronaut, Helidon** | cloud-native frameworks with fast start-up and small memory, strong GraalVM native-image support (compiling Java ahead of time into a stand-alone executable) | port your Spring REST API to compare |
-| **Kotlin** | a JetBrains language on the JVM, fully interoperable with Java: null-safe types, data classes, coroutines; Google's preferred language for Android since 2019 | rewrite one small program; call it from Java |
-| **Other JVM languages** | Scala (functional + OO, Spark), Groovy (Gradle scripts, scripting), Clojure (Lisp) | only if a job needs them |
-| **Android** | mobile apps with the Android SDK (Kotlin-first today, Java supported) | Android Developers' basic course |
-| **Data and messaging** | JDBC/JPA, Kafka (a distributed message log) clients, Spark, Flink (big-data processing engines) | the [SQL handbook](../../../sql/) and the [DDIA notes](../../../ddia/) |
-| **Design** | SOLID (five class-design principles), patterns, low-level design case studies in Java | the [LLD handbook](../../../lld/) |
-| **Certification** | Oracle Certified Professional: Java SE 21 Developer (1Z0-830) | the [OCP Java 21 study notes](../../../../ocp-java21-study/README.md) |
-| **Performance** | JFR, JMH, GC tuning, async-profiler | revisit [Chapter 16](../16-jvm-internals-and-performance/README.md) with a real service |
+| Direction | First step |
+|---|---|
+| **Spring Boot** (4.0, Nov 2025, on Spring Framework 7; Java 17+: DI, auto-configuration, starters, Actuator — [§18.14](../18-testing-build-and-tooling/README.md#1814-where-next-spring-boot-and-friends)) | build a small REST API at start.spring.io with JDBC or JPA, tested with JUnit, Mockito and Testcontainers |
+| **Jakarta EE** (formerly Java EE: Servlet, CDI, JPA, JAX-RS, Bean Validation on WildFly, Open Liberty, Payara) | learn JPA and CDI — Spring uses many of the same specifications |
+| **Quarkus, Micronaut, Helidon** (fast start-up, small memory, GraalVM native images) | port your Spring REST API to compare |
+| **Kotlin** (JetBrains JVM language, Java-interoperable; null-safe types, data classes, coroutines; Android's preferred language since 2019); also Scala, Groovy, Clojure if a job needs them | rewrite one small program; call it from Java |
+| **Android** (Kotlin-first, Java supported) | Android Developers' basic course |
+| **Data and messaging** (JDBC/JPA, Kafka clients, Spark, Flink) | the [SQL handbook](../../../sql/) and the [DDIA notes](../../../ddia/) |
+| **Design** (SOLID, patterns, LLD case studies in Java) | the [LLD handbook](../../../lld/) |
+| **Certification** (Oracle Certified Professional: Java SE 21 Developer, 1Z0-830) | the [OCP Java 21 study notes](../../../../ocp-java21-study/README.md) |
+| **Performance** (JFR, JMH, GC tuning, async-profiler) | revisit [Chapter 16](../16-jvm-internals-and-performance/README.md) with a real service |
 
 Keep up to date by reading the JEP list for each release on openjdk.org and the dev.java articles; a new feature release ships every March and September.
 
@@ -979,7 +929,7 @@ Keep up to date by reading the JEP list for each release on openjdk.org and the 
 
 ## 20.19 Glossary (A–Z)
 
-Each term has a short definition and a link to the section that teaches it. Backticks and symbols are ignored when sorting; *italic* names point to another entry. 706 terms.
+Each term has a short definition and a link to the section that teaches it. Backticks and symbols are ignored when sorting; *italic* names point to another entry. 685 terms.
 
 
 **A**
@@ -1014,7 +964,7 @@ Each term has a short definition and a link to the section that teaches it. Back
 - **Asynchronous** — Started now and finished later without the caller waiting; the result arrives through a `Future`, a callback or a `CompletableFuture`. [§15.1](../15-concurrency-2-modern/README.md#151-future-and-its-limits), [§15.2](../15-concurrency-2-modern/README.md#152-completablefuture)
 - **Atomic variable** — A class such as `AtomicInteger` whose single-variable updates are atomic without locks, using CAS. [§14.10](../14-concurrency-1/README.md#1410-atomic-variables)
 - **Atomicity** — An operation is atomic when other threads can see it only as not started or fully done, never half-done. [§14.5](../14-concurrency-1/README.md#145-race-conditions)
-- **Autoboxing** — Automatic conversion from a primitive to its wrapper (`int` → `Integer`); unboxing is the reverse. [§7.6](../07-core-apis/README.md#76-wrapper-classes-and-autoboxing)
+- **Autoboxing / boxing / unboxing** — Automatic conversion from a primitive to its *wrapper class* (`int` → `Integer`, boxing) and back (unboxing); unboxing `null` throws `NullPointerException`. [§7.6](../07-core-apis/README.md#76-wrapper-classes-and-autoboxing)
 - **`AutoCloseable`** — The interface with `close()` that try-with-resources calls automatically. [§8.6](../08-exceptions/README.md#86-try-with-resources)
 
 **B**
@@ -1040,13 +990,11 @@ Each term has a short definition and a link to the section that teaches it. Back
 - **BOM** — (1) Byte order mark: optional bytes at the start of a text file that announce its encoding. (2) In Maven, a "bill of materials" POM that pins versions for a family of libraries. [§13.7](../13-io-and-nio/README.md#137-charsets-and-encodings), [§18.2](../18-testing-build-and-tooling/README.md#182-maven)
 - **Bootstrap class loader** — The JVM's built-in loader for core modules such as `java.base`; shown as `null` by `getClassLoader()`. [§16.2](../16-jvm-internals-and-performance/README.md#162-class-loading-in-depth)
 - **Bounded type parameter** — A type parameter with a limit, e.g. `<T extends Number>`. [§9.5](../09-generics/README.md#95-bounded-type-parameters)
-- **Boxing** — Wrapping a primitive value in its wrapper object. [§7.6](../07-core-apis/README.md#76-wrapper-classes-and-autoboxing)
 - **`break`** — Leaves the innermost loop or `switch` (or a labelled statement with `break label`). [§3.9](../03-control-flow/README.md#39-break-continue-and-labels)
 - **Bridge method** — A hidden method `javac` generates so that overriding still works after generic types are erased. [§9.7](../09-generics/README.md#97-type-erasure-how-generics-really-work)
 - **Brute force** — Solving a problem by trying every possibility; usually too slow, but a good first answer to improve on. [§19.28](../19-java-for-coding-interviews/README.md#1928-talking-through-a-solution-in-java)
 - **Bucket** — One slot of a hash table's array, holding the entries whose hashes map to that index. [§10.5](../10-collections/README.md#105-hashmap-internals)
-- **Buffer** — A block of memory that collects data so it can be read or written in large chunks rather than byte by byte. [§13.6](../13-io-and-nio/README.md#136-buffering), [§13.9](../13-io-and-nio/README.md#139-binary-data-channels-and-buffers)
-- **Buffering** — Reading or writing data in blocks through an in-memory buffer to avoid many slow system calls. [§13.6](../13-io-and-nio/README.md#136-buffering)
+- **Buffer / buffering** — A block of memory that collects data so it is read or written in large chunks, avoiding many slow system calls. [§13.6](../13-io-and-nio/README.md#136-buffering), [§13.9](../13-io-and-nio/README.md#139-binary-data-channels-and-buffers)
 - **Build tool** — Software (Maven, Gradle) that resolves dependencies, compiles, tests and packages a project. [§18.2](../18-testing-build-and-tooling/README.md#182-maven), [§18.3](../18-testing-build-and-tooling/README.md#183-gradle)
 - **Byte Buddy** — A library for generating and changing classes at run time; Mockito uses it to build mocks. [§17.12](../17-modern-java-17-to-25/README.md#1712-upgrading-17--21--25-removals-and-deprecations)
 - **Byte stream** — `InputStream`/`OutputStream`: I/O in raw 8-bit bytes. [§13.5](../13-io-and-nio/README.md#135-byte-streams-and-character-streams)
@@ -1070,7 +1018,7 @@ Each term has a short definition and a link to the section that teaches it. Back
 - **Channel** — An NIO connection to a file or socket (such as `FileChannel`) that reads and writes through `ByteBuffer`s. [§13.9](../13-io-and-nio/README.md#139-binary-data-channels-and-buffers)
 - **`char`** — The 16-bit unsigned primitive holding one UTF-16 code unit (0 … 65 535). [§2.3](../02-basics-types-and-operators/README.md#23-primitive-types)
 - **Character stream** — `Reader`/`Writer`: I/O in 16-bit characters, decoded with a charset. [§13.5](../13-io-and-nio/README.md#135-byte-streams-and-character-streams)
-- **Charset** — A mapping between characters and bytes, such as UTF-8; the JDK default since Java 18 is UTF-8. [§13.7](../13-io-and-nio/README.md#137-charsets-and-encodings)
+- **Charset (encoding)** — The rules mapping characters to bytes and back, such as UTF-8; the JDK default since Java 18 is UTF-8. [§13.7](../13-io-and-nio/README.md#137-charsets-and-encodings)
 - **Checked exception** — An `Exception` outside the `RuntimeException` branch; must be caught or declared with `throws`. [§8.2](../08-exceptions/README.md#82-the-throwable-hierarchy-checked-unchecked-and-errors), [§8.3](../08-exceptions/README.md#83-handle-or-declare-checked-exceptions-and-throws)
 - **Check-then-act** — Testing a condition and then acting on it as two separate steps; another thread can change things in between, so the pair must be made atomic. [§14.5](../14-concurrency-1/README.md#145-race-conditions)
 - **CI (continuous integration)** — A server that automatically builds and tests every change pushed to a shared repository. [§18.1](../18-testing-build-and-tooling/README.md#181-the-shape-of-a-real-java-project), [§18.2](../18-testing-build-and-tooling/README.md#182-maven)
@@ -1083,7 +1031,6 @@ Each term has a short definition and a link to the section that teaches it. Back
 - **Class-File API** — The `java.lang.classfile` API (final in Java 24) for reading and writing class files. [§17.9](../17-modern-java-17-to-25/README.md#179-java-24)
 - **`Clock`** — `java.time.Clock`: a replaceable source of "now"; inject it so tests can fix the time. [§7.8](../07-core-apis/README.md#78-the-javatime-model), [§18.9](../18-testing-build-and-tooling/README.md#189-test-design)
 - **Closure** — A function together with the variables it captured from its surrounding scope; lambdas capture effectively final locals. [§11.5](../11-lambdas-and-functional-programming/README.md#115-variable-capture-and-effectively-final)
-- **CME** — Short for `ConcurrentModificationException`. [§10.7](../10-collections/README.md#107-iterators-and-fail-fast-behaviour)
 - **Code cache** — Memory where the JIT stores compiled machine code. [§16.3](../16-jvm-internals-and-performance/README.md#163-runtime-memory-areas)
 - **Code coverage** — The share of lines or branches that the tests execute, measured with tools such as JaCoCo; high coverage doesn't prove good tests. [§18.9](../18-testing-build-and-tooling/README.md#189-test-design)
 - **Code point** — The number Unicode gives one character; a code point above U+FFFF needs two `char`s (a *surrogate pair*) in Java. [§7.2](../07-core-apis/README.md#72-the-string-api-toolkit)
@@ -1109,7 +1056,7 @@ Each term has a short definition and a link to the section that teaches it. Back
 - **Concurrency** — Several tasks in progress over the same period, possibly interleaved on one core. [§14.1](../14-concurrency-1/README.md#141-concurrency-basics)
 - **Concurrent collection** — A collection from `java.util.concurrent`, such as `ConcurrentHashMap` or `BlockingQueue`, designed for safe use by many threads at once. [§14.12](../14-concurrency-1/README.md#1412-concurrent-collections)
 - **`ConcurrentHashMap`** — A thread-safe, highly scalable hash map with atomic `merge`/`compute`; no `null` keys or values. [§14.12](../14-concurrency-1/README.md#1412-concurrent-collections)
-- **`ConcurrentModificationException`** — Thrown by fail-fast iterators when a collection is structurally changed during iteration. [§10.7](../10-collections/README.md#107-iterators-and-fail-fast-behaviour)
+- **`ConcurrentModificationException` (CME)** — Thrown by fail-fast iterators when a collection is structurally changed during iteration. [§10.7](../10-collections/README.md#107-iterators-and-fail-fast-behaviour)
 - **`Condition`** — A waiting queue tied to an explicit `Lock` (`await`, `signal`); one lock can have several conditions. [§14.9](../14-concurrency-1/README.md#149-explicit-locks-reentrantlock-condition-readwritelock-stampedlock)
 - **Connected component** — A group of graph nodes that can all reach each other; counted with DFS, BFS or union-find. [§19.16](../19-java-for-coding-interviews/README.md#1916-bfs-and-dfs-trees-grids-and-graphs), [§19.18](../19-java-for-coding-interviews/README.md#1918-union-find-disjoint-set-union)
 - **Connection pool** — A set of open database connections reused across requests, because opening one is slow (e.g. HikariCP). [§18.11](../18-testing-build-and-tooling/README.md#1811-jdbc-basics)
@@ -1119,7 +1066,6 @@ Each term has a short definition and a link to the section that teaches it. Back
 - **Constructor chaining** — Calling another constructor with `this(...)` or the parent's with `super(...)`. [§5.3](../05-oop-classes-and-objects/README.md#53-constructors), [§6.1](../06-oop-inheritance-interfaces-and-more/README.md#61-inheritance-and-super)
 - **Container** — A lightweight, isolated package of an application with its own CPU and memory limits (e.g. Docker); the JVM reads those limits to size itself. [§16.3](../16-jvm-internals-and-performance/README.md#163-runtime-memory-areas), [§16.7](../16-jvm-internals-and-performance/README.md#167-gc-tuning-basics)
 - **Context switch** — The OS pausing one thread and running another on the same CPU core. [§14.1](../14-concurrency-1/README.md#141-concurrency-basics)
-- **Contiguous** — Stored or taken next to each other with no gaps, like the elements of an array or a subarray. [§4.6](../04-methods-and-arrays/README.md#46-arrays), [§19.9](../19-java-for-coding-interviews/README.md#199-sliding-window)
 - **`continue`** — Skips to the next iteration of the innermost (or labelled) loop. [§3.9](../03-control-flow/README.md#39-break-continue-and-labels)
 - **`CopyOnWriteArrayList`** — A thread-safe list that copies its array on every write; iterators see a snapshot. [§14.12](../14-concurrency-1/README.md#1412-concurrent-collections)
 - **`CountDownLatch`** — A one-shot synchronizer: threads `await()` until `countDown()` has been called n times. [§14.13](../14-concurrency-1/README.md#1413-synchronizers-countdownlatch-cyclicbarrier-semaphore-phaser)
@@ -1168,7 +1114,7 @@ Each term has a short definition and a link to the section that teaches it. Back
 - **DSA** — Data structures and algorithms — the subject of coding interviews. [Ch 19](../19-java-for-coding-interviews/README.md)
 - **DSL** — Domain-specific language: a small language for one job, such as Gradle's Kotlin build scripts. [§18.3](../18-testing-build-and-tooling/README.md#183-gradle)
 - **DTO** — Data transfer object: a plain data carrier passed between layers or over the network; a record is a natural fit. [§6.8](../06-oop-inheritance-interfaces-and-more/README.md#68-records)
-- **Dummy (sentinel) node** — A placeholder node in front of a linked list's head, so changing the head needs no special case. [§19.22](../19-java-for-coding-interviews/README.md#1922-linked-lists-and-fastslow-pointers)
+- **Dummy node / sentinel** — A special marker value (such as −1 for "not seen") or a placeholder node in front of a linked list's head that removes a special case from the code. [§19.11](../19-java-for-coding-interviews/README.md#1911-prefix-sums), [§19.22](../19-java-for-coding-interviews/README.md#1922-linked-lists-and-fastslow-pointers)
 - **`Duration`** — A `java.time` amount of time in seconds and nanoseconds (e.g. `PT1H30M`). [§7.10](../07-core-apis/README.md#710-zones-instants-duration-and-daylight-saving)
 - **Dutch national flag** — Splitting an array into three regions (less than, equal to, greater than a value) in one pass. [§19.25](../19-java-for-coding-interviews/README.md#1925-sort-and-search-quicksort-quickselect-dutch-flag-merge-sort-on-a-list)
 - **Dynamic dispatch** — Choosing which overridden method to run from the object's run-time class. [§6.4](../06-oop-inheritance-interfaces-and-more/README.md#64-polymorphism-and-casting)
@@ -1180,7 +1126,6 @@ Each term has a short definition and a link to the section that teaches it. Back
 - **Eden** — The part of the young generation where new objects are first allocated. [§16.5](../16-jvm-internals-and-performance/README.md#165-garbage-collection-algorithms)
 - **Effectively final** — A local variable that is never reassigned after initialisation; lambdas may capture only these. [§11.5](../11-lambdas-and-functional-programming/README.md#115-variable-capture-and-effectively-final)
 - **Encapsulation** — Hiding an object's state behind methods so its invariants can't be broken from outside. [§5.7](../05-oop-classes-and-objects/README.md#57-encapsulation)
-- **Encoding** — The rules that turn characters into bytes and back; see *charset*. [§13.7](../13-io-and-nio/README.md#137-charsets-and-encodings)
 - **Encounter order** — The order in which a stream meets its elements: a `List` has one, a `HashSet` does not. [§12.4](../12-streams/README.md#124-terminal-operations-and-reduce)
 - **Endianness** — The byte order of multi-byte numbers: big-endian (Java's default) stores the most significant byte first. [§13.9](../13-io-and-nio/README.md#139-binary-data-channels-and-buffers)
 - **End-to-end test** — A test of the whole running system through its real entry points, as a user would use it. [§18.9](../18-testing-build-and-tooling/README.md#189-test-design)
@@ -1192,7 +1137,6 @@ Each term has a short definition and a link to the section that teaches it. Back
 - **Epsilon GC** — A no-op collector that never frees memory; for testing. [§16.5](../16-jvm-internals-and-performance/README.md#165-garbage-collection-algorithms)
 - **`equals`** — The method that defines logical equality; must be consistent with `hashCode`. [§6.13](../06-oop-inheritance-interfaces-and-more/README.md#613-object-methods-equals-hashcode-and-tostring)
 - **Equivalence class** — A group of inputs that the code treats the same way, so one test (plus the boundaries) covers it. [§18.9](../18-testing-build-and-tooling/README.md#189-test-design)
-- **Erasure** — See *type erasure*. [§9.7](../09-generics/README.md#97-type-erasure-how-generics-really-work)
 - **`Error`** — The `Throwable` branch for serious JVM problems such as `OutOfMemoryError`; unchecked, normally not caught. [§8.2](../08-exceptions/README.md#82-the-throwable-hierarchy-checked-unchecked-and-errors)
 - **Escape analysis** — A JIT analysis proving an object doesn't leave a method, enabling scalar replacement and lock elision. [§16.8](../16-jvm-internals-and-performance/README.md#168-jit-compilation-inlining-and-escape-analysis)
 - **Escape sequence** — A backslash code for a special character in a literal: `\n`, `\t`, `\"`, `\\`, `A`. [§2.4](../02-basics-types-and-operators/README.md#24-literals)
@@ -1213,7 +1157,7 @@ Each term has a short definition and a link to the section that teaches it. Back
 - **Fair lock** — A lock that grants access in waiting order, avoiding starvation at some cost in speed. [§14.9](../14-concurrency-1/README.md#149-explicit-locks-reentrantlock-condition-readwritelock-stampedlock)
 - **Fake** — A working but simplified test double, such as an in-memory repository. [§18.6](../18-testing-build-and-tooling/README.md#186-test-doubles-and-mockito)
 - **Fall-through** — In a classic `case X:` switch, execution running on into the next case when there is no `break`. [§3.2](../03-control-flow/README.md#32-the-classic-switch-statement)
-- **Fast and slow pointers** — Two references moving through a list at different speeds, used to find the middle or detect a cycle. [§19.22](../19-java-for-coding-interviews/README.md#1922-linked-lists-and-fastslow-pointers)
+- **Fast and slow pointers (Floyd's cycle-finding algorithm)** — Two references moving through a list at different speeds (1 and 2 steps): fast reaching the end puts slow at the middle; they meet only if there is a cycle. [§19.22](../19-java-for-coding-interviews/README.md#1922-linked-lists-and-fastslow-pointers)
 - **Fat JAR** — A single JAR containing the application and all of its dependencies (also "uber JAR"). [§18.12](../18-testing-build-and-tooling/README.md#1812-packaging-jar-files)
 - **Feature release** — One of the two Java versions released every year, in March and September. [§1.12](../01-java-and-the-jvm/README.md#112-java-releases-lts-and-jeps)
 - **Field** — A variable declared in a class that holds an object's state (or, if `static`, the class's). [§5.1](../05-oop-classes-and-objects/README.md#51-classes-and-objects)
@@ -1226,7 +1170,6 @@ Each term has a short definition and a link to the section that teaches it. Back
 - **Flexible constructor bodies** — Java 25 feature allowing statements that don't use `this` before `super(...)` or `this(...)`. [§17.10](../17-modern-java-17-to-25/README.md#1710-java-25-lts)
 - **`float`** — The 32-bit IEEE 754 floating-point primitive (~7 significant digits). [§2.3](../02-basics-types-and-operators/README.md#23-primitive-types)
 - **Floating-point error** — Rounding error because binary fractions can't represent most decimals exactly (`0.1 + 0.2`). [§2.11](../02-basics-types-and-operators/README.md#211-floating-point-numbers)
-- **Floyd's cycle-finding algorithm** — Detecting a loop with a slow pointer (1 step) and a fast pointer (2 steps): they meet only if there is a cycle. [§19.22](../19-java-for-coding-interviews/README.md#1922-linked-lists-and-fastslow-pointers)
 - **Foreign Function & Memory API** — The `java.lang.foreign` API (final in Java 22) to call native code and manage off-heap memory, replacing JNI. [§17.7](../17-modern-java-17-to-25/README.md#177-java-22)
 - **Fork/Join** — A framework for recursive divide-and-conquer tasks run by a work-stealing `ForkJoinPool`. [§15.3](../15-concurrency-2-modern/README.md#153-forkjoin)
 - **Formatter specifier** — A pattern such as `%5.2f` or `%-10s` in `String.format`/`printf`. [§7.4](../07-core-apis/README.md#74-formatting-text-and-numbers)
@@ -1243,7 +1186,7 @@ Each term has a short definition and a link to the section that teaches it. Back
 - **GA (general availability)** — The official release of a Java version for production use. [§20.15](#2015-modern-java-by-version-17-to-25)
 - **Garbage collection (GC)** — Automatic reclamation of memory used by objects that are no longer reachable. [§1.8](../01-java-and-the-jvm/README.md#18-memory-and-garbage-collection--an-overview), [§16.5](../16-jvm-internals-and-performance/README.md#165-garbage-collection-algorithms)
 - **Garbage-First (G1)** — The default collector since Java 9 (in all environments from JDK 27); region-based, with a pause-time goal. [§16.5](../16-jvm-internals-and-performance/README.md#165-garbage-collection-algorithms)
-- **Gatherer** — A custom intermediate stream operation used with `stream.gather(...)` (final in Java 24). [§12.9](../12-streams/README.md#129-stream-gatherers-java-24)
+- **Gatherer (stream gatherers)** — A custom intermediate stream operation used with `stream.gather(...)` (final in Java 24). [§12.9](../12-streams/README.md#129-stream-gatherers-java-24)
 - **GC roots** — Starting points for reachability: thread stacks, static fields, JNI references. [§16.5](../16-jvm-internals-and-performance/README.md#165-garbage-collection-algorithms)
 - **GCD / LCM** — Greatest common divisor (the largest number dividing both) / least common multiple (the smallest number both divide). [§19.27](../19-java-for-coding-interviews/README.md#1927-math-and-geometry)
 - **Generational hypothesis** — Most objects die young, so collectors split the heap into young and old generations. [§16.5](../16-jvm-internals-and-performance/README.md#165-garbage-collection-algorithms)
@@ -1269,7 +1212,7 @@ Each term has a short definition and a link to the section that teaches it. Back
 - **`HashMap`** — An unordered hash-table map with average O(1) operations; allows one `null` key. [§10.4](../10-collections/README.md#104-maps-hashmap-linkedhashmap-treemap), [§10.5](../10-collections/README.md#105-hashmap-internals)
 - **`HashSet`** — A set backed by a `HashMap`; unordered, average O(1). [§10.3](../10-collections/README.md#103-sets-hashset-linkedhashset-treeset)
 - **Heap** — The JVM memory area where all objects and arrays live, shared by all threads and garbage-collected. [§16.3](../16-jvm-internals-and-performance/README.md#163-runtime-memory-areas)
-- **Heap (data structure)** — A tree kept in an array where each parent is ≤ its children (a min-heap), so the smallest item is always at the root; O(log n) insert and remove. Unrelated to the JVM *heap*. [§10.6](../10-collections/README.md#106-queues-deques-and-priority-queues), [§19.13](../19-java-for-coding-interviews/README.md#1913-heaps-and-top-k)
+- **Heap (data structure)** — A tree kept in an array whose root is always the smallest (min-heap) or largest (max-heap) item; O(log n) insert and remove; `PriorityQueue` is a min-heap by default. Unrelated to the JVM *heap*. [§10.6](../10-collections/README.md#106-queues-deques-and-priority-queues), [§19.13](../19-java-for-coding-interviews/README.md#1913-heaps-and-top-k)
 - **Heap dump** — A snapshot of every object in the heap, analysed with Eclipse MAT or VisualVM. [§16.10](../16-jvm-internals-and-performance/README.md#1610-profiling-and-diagnostic-tools), [§16.11](../16-jvm-internals-and-performance/README.md#1611-memory-leaks)
 - **Heap pollution** — A variable of a parameterized type referring to an object of the wrong type, caused by unchecked operations. [§9.8](../09-generics/README.md#98-restrictions-and-workarounds-consequences-of-erasure)
 - **Helpful NullPointerException** — NPE messages that name exactly which expression was `null` (Java 14, on by default since 15). [§8.1](../08-exceptions/README.md#81-what-an-exception-is)
@@ -1290,7 +1233,7 @@ Each term has a short definition and a link to the section that teaches it. Back
 - **IEEE 754** — The international standard for binary floating-point numbers that `float` and `double` follow. [§2.11](../02-basics-types-and-operators/README.md#211-floating-point-numbers)
 - **`IllegalArgumentException`** — Unchecked exception for a method argument that violates a precondition. [§8.7](../08-exceptions/README.md#87-throwing-exceptions-and-writing-custom-ones)
 - **`IllegalStateException`** — Unchecked exception for a call made when the object is in the wrong state. [§8.7](../08-exceptions/README.md#87-throwing-exceptions-and-writing-custom-ones)
-- **Immutable object** — An object whose state can't change after construction, such as `String` or a record of immutable values. [§5.9](../05-oop-classes-and-objects/README.md#59-immutability-basics)
+- **Immutable object** — An object whose state can't change after construction (the opposite of **mutable**), such as `String` or a record of immutable values. [§5.9](../05-oop-classes-and-objects/README.md#59-immutability-basics)
 - **Incidental indentation** — The common leading whitespace that a text block strips from every line. [§2.12](../02-basics-types-and-operators/README.md#212-strings-and-text-blocks)
 - **Incubator module** — An experimental API in a `jdk.incubator.*` module, e.g. the Vector API. [§17.1](../17-modern-java-17-to-25/README.md#171-reading-a-features-status)
 - **In-degree** — The number of edges pointing into a node; Kahn's algorithm starts from the nodes with in-degree 0. [§19.17](../19-java-for-coding-interviews/README.md#1917-topological-sort)
@@ -1316,7 +1259,6 @@ Each term has a short definition and a link to the section that teaches it. Back
 - **Interpreter** — The JVM component that executes bytecode instruction by instruction before the JIT compiles hot code. [§1.7](../01-java-and-the-jvm/README.md#17-how-the-jvm-runs-your-code-class-loading-interpreter-jit)
 - **Interruption** — Cooperative cancellation: `interrupt()` sets a flag that blocking methods answer with `InterruptedException`. [§14.4](../14-concurrency-1/README.md#144-interruption-cooperative-cancellation)
 - **Interval** — A range with a start and an end, such as a meeting `[9, 11)`; interval problems usually sort by start and sweep. [§19.15](../19-java-for-coding-interviews/README.md#1915-intervals)
-- **Intrinsic lock** — Another name for an object's *monitor*. [§14.6](../14-concurrency-1/README.md#146-synchronized-and-intrinsic-locks)
 - **Invariance (generics)** — `List<Integer>` is not a `List<Number>` even though `Integer` is a `Number`; wildcards add the flexibility back. [§9.6](../09-generics/README.md#96-invariance-wildcards-and-pecs)
 - **Invariant** — A condition that must always hold — for an object after every public method, or for a loop on every iteration. [§5.7](../05-oop-classes-and-objects/README.md#57-encapsulation)
 - **Inverse Ackermann function** — α(n), a function that grows so slowly it is below 5 for any realistic n; union-find costs O(α(n)) per operation. [§19.18](../19-java-for-coding-interviews/README.md#1918-union-find-disjoint-set-union)
@@ -1359,8 +1301,7 @@ Each term has a short definition and a link to the section that teaches it. Back
 - **JSON** — JavaScript Object Notation: a common text format of objects, arrays, strings and numbers for exchanging data. [§13.12](../13-io-and-nio/README.md#1312-working-with-json)
 - **`jstack`** — Prints a thread dump of a running JVM. [§16.10](../16-jvm-internals-and-performance/README.md#1610-profiling-and-diagnostic-tools)
 - **JUL** — Short for `java.util.logging`, the JDK's built-in logging API. [§18.10](../18-testing-build-and-tooling/README.md#1810-logging)
-- **JUnit** — The standard Java testing framework; tests are methods annotated `@Test`. [§18.4](../18-testing-build-and-tooling/README.md#184-junit-your-first-automated-tests)
-- **JUnit Platform / Jupiter / Vintage** — The parts of JUnit: the Platform discovers and launches tests, Jupiter is the modern test API, Vintage runs old JUnit 4 tests. [§18.4](../18-testing-build-and-tooling/README.md#184-junit-your-first-automated-tests)
+- **JUnit** — The standard Java testing framework (tests are `@Test` methods): the Platform discovers and launches tests, Jupiter is the modern test API, Vintage runs old JUnit 4 tests. [§18.4](../18-testing-build-and-tooling/README.md#184-junit-your-first-automated-tests)
 - **JVM** — Java Virtual Machine: loads, verifies and runs bytecode, manages memory and threads. [§1.3](../01-java-and-the-jvm/README.md#13-jdk-jre-and-jvm), [§16.1](../16-jvm-internals-and-performance/README.md#161-the-jvms-architecture)
 
 **K**
@@ -1396,7 +1337,6 @@ Each term has a short definition and a link to the section that teaches it. Back
 - **Load barrier** — A tiny piece of code ZGC adds to every reference read so it can move objects while the application keeps running. [§16.5](../16-jvm-internals-and-performance/README.md#165-garbage-collection-algorithms)
 - **Load factor** — The fullness ratio (default 0.75) at which a `HashMap` doubles its table. [§10.5](../10-collections/README.md#105-hashmap-internals)
 - **Local class** — A class declared inside a method body. [§6.11](../06-oop-inheritance-interfaces-and-more/README.md#611-local-classes-anonymous-classes-and-lambdas)
-- **Local variable type inference** — `var` (Java 10): the compiler infers a local variable's type from its initializer. [§2.6](../02-basics-types-and-operators/README.md#26-var--local-variable-type-inference-java-10)
 - **`LocalDate`** — A date without time or zone, e.g. `2025-03-09`. [§7.9](../07-core-apis/README.md#79-local-dates-times-adjusters-and-period)
 - **`LocalDateTime`** — A date and time without a zone. [§7.9](../07-core-apis/README.md#79-local-dates-times-adjusters-and-period)
 - **Locale** — A language-and-region setting (`Locale.US`, `Locale.ROOT`) that controls number, date and case formatting. [§7.2](../07-core-apis/README.md#72-the-string-api-toolkit), [§7.4](../07-core-apis/README.md#74-formatting-text-and-numbers)
@@ -1438,7 +1378,6 @@ Each term has a short definition and a link to the section that teaches it. Back
 - **Method reference** — Shorthand for a lambda that calls one method: `String::length`, `System.out::println`, `ArrayList::new`. [§11.4](../11-lambdas-and-functional-programming/README.md#114-method-references)
 - **Method signature** — A method's name plus its parameter types. [§4.1](../04-methods-and-arrays/README.md#41-methods--declaring-and-calling)
 - **Microbenchmark** — A timing of a tiny piece of code; easy to get wrong without a harness such as JMH. [§16.9](../16-jvm-internals-and-performance/README.md#169-benchmarking-why-naive-timing-lies-and-jmh)
-- **Min-heap / max-heap** — A heap whose root is always the smallest / largest element; `PriorityQueue` is a min-heap by default. [§19.4](../19-java-for-coding-interviews/README.md#194-arraydeque-priorityqueue-and-treemap), [§19.13](../19-java-for-coding-interviews/README.md#1913-heaps-and-top-k)
 - **Minimum spanning tree** — The cheapest set of edges that connects every node of a weighted graph without a cycle (Kruskal's algorithm). [§19.18](../19-java-for-coding-interviews/README.md#1918-union-find-disjoint-set-union)
 - **Mock** — A test double that records calls and returns programmed answers (e.g. with Mockito). [§18.6](../18-testing-build-and-tooling/README.md#186-test-doubles-and-mockito)
 - **Mockito** — The most widely used Java mocking library: `mock`, `when(...).thenReturn`, `verify`. [§18.6](../18-testing-build-and-tooling/README.md#186-test-doubles-and-mockito)
@@ -1448,12 +1387,11 @@ Each term has a short definition and a link to the section that teaches it. Back
 - **Module import declaration** — `import module java.base;` (Java 25): imports every package a module exports. [§17.10](../17-modern-java-17-to-25/README.md#1710-java-25-lts)
 - **Module path** — Where the JVM looks for modules (`--module-path`), as opposed to the class path. [§16.12](../16-jvm-internals-and-performance/README.md#1612-modules-jpms-basics)
 - **Mojibake** — Garbled text produced by decoding bytes with the wrong charset. [§13.7](../13-io-and-nio/README.md#137-charsets-and-encodings)
-- **Monitor** — The lock every Java object has, used by `synchronized`, `wait` and `notify`. [§14.6](../14-concurrency-1/README.md#146-synchronized-and-intrinsic-locks)
+- **Monitor (intrinsic lock)** — The lock every Java object has, used by `synchronized`, `wait` and `notify`. [§14.6](../14-concurrency-1/README.md#146-synchronized-and-intrinsic-locks)
 - **Monotonic stack** — A stack kept in increasing or decreasing order by popping out-of-order items first; finds each "next greater element" in O(n). [§19.12](../19-java-for-coding-interviews/README.md#1912-stacks-and-monotonic-stacks)
 - **Mounting / unmounting** — A virtual thread being attached to, or detached from, a carrier thread; blocking I/O unmounts it. [§15.4](../15-concurrency-2-modern/README.md#154-virtual-threads)
 - **Multi-catch** — `catch (A \| B e)` — one handler for several unrelated exception types. [§8.5](../08-exceptions/README.md#85-multi-catch-catch-order-and-rethrowing)
 - **Multi-release JAR** — A JAR that holds different versions of some classes for different Java releases. [§18.12](../18-testing-build-and-tooling/README.md#1812-packaging-jar-files)
-- **Mutable** — Able to change state after creation. [§5.9](../05-oop-classes-and-objects/README.md#59-immutability-basics)
 - **Mutable reduction** — Accumulating stream elements into a mutable container such as a list or map — what `collect` does. [§12.5](../12-streams/README.md#125-collectors)
 - **Mutation testing** — Judging tests by planting small bugs ("mutants") and checking that the tests fail. [§18.9](../18-testing-build-and-tooling/README.md#189-test-design)
 - **Mutual exclusion** — Letting only one thread at a time into a critical section. [§14.6](../14-concurrency-1/README.md#146-synchronized-and-intrinsic-locks)
@@ -1471,9 +1409,8 @@ Each term has a short definition and a link to the section that teaches it. Back
 - **NIO.2** — The `java.nio.file` API (Java 7): `Path`, `Files`, `FileSystem`, `WatchService`. [§13.1](../13-io-and-nio/README.md#131-the-big-picture-javaio-vs-nio2)
 - **Node** — One element of a linked structure (list, tree or graph) holding a value and references to its neighbours. [§19.16](../19-java-for-coding-interviews/README.md#1916-bfs-and-dfs-trees-grids-and-graphs), [§19.22](../19-java-for-coding-interviews/README.md#1922-linked-lists-and-fastslow-pointers)
 - **Non-blocking** — An operation that returns immediately instead of making the thread wait, such as a CAS update. [§14.10](../14-concurrency-1/README.md#1410-atomic-variables)
-- **NPE** — Short for `NullPointerException`. [§8.1](../08-exceptions/README.md#81-what-an-exception-is)
 - **`null`** — The reference value meaning "no object". [§2.5](../02-basics-types-and-operators/README.md#25-reference-types-and-null)
-- **`NullPointerException`** — Thrown when code uses a `null` reference as if it pointed to an object. [§8.1](../08-exceptions/README.md#81-what-an-exception-is)
+- **`NullPointerException` (NPE)** — Thrown when code uses a `null` reference as if it pointed to an object. [§8.1](../08-exceptions/README.md#81-what-an-exception-is)
 
 **O**
 
@@ -1485,7 +1422,6 @@ Each term has a short definition and a link to the section that teaches it. Back
 - **Off-by-one error** — A loop or index that goes one step too far or stops one too short (`<=` instead of `<`). [§3.10](../03-control-flow/README.md#310-loop-pitfalls)
 - **Old generation** — The heap area for objects that survived several young collections. [§16.5](../16-jvm-internals-and-performance/README.md#165-garbage-collection-algorithms)
 - **On-stack replacement (OSR)** — Switching a long-running loop from interpreted to compiled code while it is still running. [§16.8](../16-jvm-internals-and-performance/README.md#168-jit-compilation-inlining-and-escape-analysis)
-- **OOM** — Short for `OutOfMemoryError`. [§16.3](../16-jvm-internals-and-performance/README.md#163-runtime-memory-areas)
 - **OOP** — Object-oriented programming: organising code as objects that combine state and behaviour, using encapsulation, inheritance and polymorphism. [§5.1](../05-oop-classes-and-objects/README.md#51-classes-and-objects)
 - **OpenJDK** — The open-source project and code base from which every mainstream Java distribution is built. [§1.2](../01-java-and-the-jvm/README.md#12-the-java-ecosystem-se-ee-openjdk-and-vendors)
 - **Operating system (OS)** — The software (Linux, Windows, macOS) that manages hardware, processes, memory and files for programs. [§16.13](../16-jvm-internals-and-performance/README.md#1613-operating-system-fundamentals-for-engineers)
@@ -1493,7 +1429,7 @@ Each term has a short definition and a link to the section that teaches it. Back
 - **Optimal substructure** — The best answer is built from the best answers to subproblems — one of the two conditions for dynamic programming. [§19.19](../19-java-for-coding-interviews/README.md#1919-dynamic-programming)
 - **`Optional`** — A container holding one value or none; a return type for "maybe no result". [§11.7](../11-lambdas-and-functional-programming/README.md#117-optional)
 - **Ordinal** — An enum constant's zero-based position in its declaration (`ordinal()`). [§6.9](../06-oop-inheritance-interfaces-and-more/README.md#69-enums)
-- **`OutOfMemoryError`** — Thrown when the JVM can't allocate memory in the heap, metaspace or native memory. [§16.3](../16-jvm-internals-and-performance/README.md#163-runtime-memory-areas)
+- **`OutOfMemoryError` (OOM)** — Thrown when the JVM can't allocate memory in the heap, metaspace or native memory. [§16.3](../16-jvm-internals-and-performance/README.md#163-runtime-memory-areas)
 - **Overlapping subproblems** — Plain recursion would solve the same subproblem many times — the other condition for dynamic programming. [§19.19](../19-java-for-coding-interviews/README.md#1919-dynamic-programming)
 
 **P**
@@ -1517,13 +1453,11 @@ Each term has a short definition and a link to the section that teaches it. Back
 - **Pattern variable** — The variable a pattern binds when it matches, such as `s` in `o instanceof String s`. [§3.5](../03-control-flow/README.md#35-pattern-matching-for-instanceof-java-16)
 - **PECS** — "Producer `extends`, consumer `super`": the wildcard rule for flexible generic APIs. [§9.6](../09-generics/README.md#96-invariance-wildcards-and-pecs)
 - **`Period`** — A `java.time` amount in years, months and days (e.g. `P1Y2M5D`). [§7.9](../07-core-apis/README.md#79-local-dates-times-adjusters-and-period)
-- **Permitted subclass** — A class listed in a sealed type's `permits` clause. [§6.7](../06-oop-inheritance-interfaces-and-more/README.md#67-sealed-classes-and-interfaces-java-17)
 - **`Phaser`** — A reusable barrier-like synchronizer whose number of parties can change between phases. [§14.13](../14-concurrency-1/README.md#1413-synchronizers-countdownlatch-cyclicbarrier-semaphore-phaser)
 - **Pinning** — A virtual thread blocking without unmounting, holding its carrier; `synchronized` no longer pins since Java 24. [§15.5](../15-concurrency-2-modern/README.md#155-pinning-and-jep-491)
 - **Pivot** — The value a partition splits around; picking it at random avoids quicksort's O(n²) worst case. [§19.25](../19-java-for-coding-interviews/README.md#1925-sort-and-search-quicksort-quickselect-dutch-flag-merge-sort-on-a-list)
 - **Platform thread** — A Java thread backed one-to-one by an OS thread. [§15.4](../15-concurrency-2-modern/README.md#154-virtual-threads)
 - **Plugin (build)** — An add-on that gives Maven or Gradle a job to do, such as compiling, running tests or packaging. [§18.2](../18-testing-build-and-tooling/README.md#182-maven)
-- **Pointer (in algorithms)** — An index or reference that marks a position while an algorithm walks the data, such as `left` and `right`. [§19.8](../19-java-for-coding-interviews/README.md#198-two-pointers)
 - **Poison pill** — A special item put on a queue to tell its consumer to stop. [§14.8](../14-concurrency-1/README.md#148-wait--notify-guarded-blocks), [§14.12](../14-concurrency-1/README.md#1412-concurrent-collections)
 - **Polymorphism** — One reference type, many run-time behaviours: a call runs the implementation of the object's actual class. [§6.4](../06-oop-inheritance-interfaces-and-more/README.md#64-polymorphism-and-casting)
 - **Precedence** — The order in which operators bind (`*` before `+`, `&&` before `\|\|`). [§2.9](../02-basics-types-and-operators/README.md#29-operator-precedence-and-associativity)
@@ -1593,12 +1527,11 @@ Each term has a short definition and a link to the section that teaches it. Back
 - **Scheduler** — The part of the OS (or, for virtual threads, of the JVM) that decides which thread runs on which core next. [§15.4](../15-concurrency-2-modern/README.md#154-virtual-threads), [§16.13](../16-jvm-internals-and-performance/README.md#1613-operating-system-fundamentals-for-engineers)
 - **Scoped value** — An immutable value bound for the duration of a call and readable by code it invokes (final in Java 25). [§15.6](../15-concurrency-2-modern/README.md#156-threadlocal-and-scoped-values)
 - **SDKMAN!** — A command-line tool for installing and switching between JDK versions. [§1.4](../01-java-and-the-jvm/README.md#14-installing-a-jdk-and-checking-it-works)
-- **Sealed class** — A class or interface (Java 17) that lists its permitted subclasses with `permits`. [§6.7](../06-oop-inheritance-interfaces-and-more/README.md#67-sealed-classes-and-interfaces-java-17)
+- **Sealed class** — A class or interface (Java 17) that lists its *permitted subclasses* with `permits`. [§6.7](../06-oop-inheritance-interfaces-and-more/README.md#67-sealed-classes-and-interfaces-java-17)
 - **`SecureRandom`** — A random-number generator strong enough for passwords, keys and tokens. [§7.12](../07-core-apis/README.md#712-random-numbers)
 - **Seed** — The starting value of a pseudo-random generator; the same seed reproduces the same sequence. [§7.12](../07-core-apis/README.md#712-random-numbers)
 - **Selector** — The value a `switch` examines. [§3.2](../03-control-flow/README.md#32-the-classic-switch-statement)
 - **`Semaphore`** — A synchronizer handing out a fixed number of permits to limit concurrent access. [§14.13](../14-concurrency-1/README.md#1413-synchronizers-countdownlatch-cyclicbarrier-semaphore-phaser)
-- **Sentinel** — A special marker value (such as −1 for "not seen") or dummy element that removes a special case from the code. [§19.11](../19-java-for-coding-interviews/README.md#1911-prefix-sums), [§19.22](../19-java-for-coding-interviews/README.md#1922-linked-lists-and-fastslow-pointers)
 - **Sequenced collection** — Java 21 interfaces (`SequencedCollection`, `SequencedSet`, `SequencedMap`) with `getFirst`, `getLast`, `reversed`. [§10.11](../10-collections/README.md#1011-sequenced-collections-java-21)
 - **Serial GC** — A single-threaded, stop-the-world collector for small heaps. [§16.5](../16-jvm-internals-and-performance/README.md#165-garbage-collection-algorithms)
 - **Serialization** — Converting objects to bytes with `ObjectOutputStream`; risky with untrusted data. [§13.10](../13-io-and-nio/README.md#1310-serialization-and-why-to-avoid-it)
@@ -1637,9 +1570,8 @@ Each term has a short definition and a link to the section that teaches it. Back
 - **Stateless / stateful operation** — A stateless stream step (`map`, `filter`) looks at one element at a time; a stateful one (`sorted`, `distinct`) must remember others. [§12.3](../12-streams/README.md#123-intermediate-operations)
 - **`static`** — Belonging to the class rather than to an instance; one copy shared by all. [§5.5](../05-oop-classes-and-objects/README.md#55-static-members)
 - **Static nested class** — A nested class declared `static`; it has no enclosing instance. [§6.10](../06-oop-inheritance-interfaces-and-more/README.md#610-nested-classes-static-nested-and-inner)
-- **Stop-the-world pause** — A GC phase during which all application threads are paused. [§16.5](../16-jvm-internals-and-performance/README.md#165-garbage-collection-algorithms)
+- **Stop-the-world (STW) pause** — A GC phase during which all application threads are paused. [§16.5](../16-jvm-internals-and-performance/README.md#165-garbage-collection-algorithms)
 - **Stream** — A lazy, one-shot pipeline of operations over a source of elements (`java.util.stream`). [§12.1](../12-streams/README.md#121-what-a-stream-is)
-- **Stream gatherers** — See *gatherer*. [§12.9](../12-streams/README.md#129-stream-gatherers-java-24)
 - **`String`** — An immutable sequence of UTF-16 characters. [§2.12](../02-basics-types-and-operators/README.md#212-strings-and-text-blocks), [§7.1](../07-core-apis/README.md#71-strings-immutability-the-pool-and-memory)
 - **String pool** — The JVM table of shared `String` objects for literals and interned strings. [§7.1](../07-core-apis/README.md#71-strings-immutability-the-pool-and-memory)
 - **String templates** — A preview feature in Java 21 and 22 that was withdrawn in Java 23. [§17.8](../17-modern-java-17-to-25/README.md#178-java-23)
@@ -1648,8 +1580,7 @@ Each term has a short definition and a link to the section that teaches it. Back
 - **Structured concurrency** — Treating a group of concurrent subtasks as one unit (`StructuredTaskScope`); still preview in Java 25. [§15.7](../15-concurrency-2-modern/README.md#157-structured-concurrency-preview)
 - **Structured logging** — Logging events as named fields (often JSON) that machines can search, rather than only free text. [§18.10](../18-testing-build-and-tooling/README.md#1810-logging)
 - **Stub** — A test double that returns canned answers. [§18.6](../18-testing-build-and-tooling/README.md#186-test-doubles-and-mockito)
-- **STW** — Short for *stop-the-world pause*. [§16.5](../16-jvm-internals-and-performance/README.md#165-garbage-collection-algorithms)
-- **Subarray / subsequence** — A subarray (or substring) is a contiguous slice; a subsequence keeps the original order but may skip elements. [§19.9](../19-java-for-coding-interviews/README.md#199-sliding-window), [§19.19](../19-java-for-coding-interviews/README.md#1919-dynamic-programming)
+- **Subarray / subsequence** — A subarray (or substring) is a **contiguous** slice (no gaps); a subsequence keeps the original order but may skip elements. [§19.9](../19-java-for-coding-interviews/README.md#199-sliding-window), [§19.19](../19-java-for-coding-interviews/README.md#1919-dynamic-programming)
 - **`super`** — Refers to the parent class: `super.method()` calls the parent's version, `super(...)` its constructor. [§6.1](../06-oop-inheritance-interfaces-and-more/README.md#61-inheritance-and-super)
 - **Suppressed exception** — An exception from `close()` attached to the primary exception in try-with-resources. [§8.6](../08-exceptions/README.md#86-try-with-resources)
 - **Surefire** — The Maven plugin that runs unit tests (its sibling Failsafe runs integration tests). [§18.2](../18-testing-build-and-tooling/README.md#182-maven)
@@ -1700,9 +1631,9 @@ Each term has a short definition and a link to the section that teaches it. Back
 - **`TreeMap` / `TreeSet`** — Red-black-tree map/set kept in sorted order, O(log n), with navigation methods such as `floorKey`. [§10.4](../10-collections/README.md#104-maps-hashmap-linkedhashmap-treemap), [§10.3](../10-collections/README.md#103-sets-hashset-linkedhashset-treeset)
 - **Trie** — A prefix tree that stores strings character by character, so prefix lookups cost O(length of the prefix). [§19.21](../19-java-for-coding-interviews/README.md#1921-tries)
 - **try-with-resources** — `try (Resource r = …)`, which closes every declared `AutoCloseable` automatically, in reverse order. [§8.6](../08-exceptions/README.md#86-try-with-resources)
-- **Two pointers** — Two indexes moving through data in a coordinated way, so one pass replaces a nested loop. [§19.8](../19-java-for-coding-interviews/README.md#198-two-pointers)
+- **Two pointers** — Two indexes or references ("pointers", such as `left` and `right`) moving through data in a coordinated way, so one pass replaces a nested loop. [§19.8](../19-java-for-coding-interviews/README.md#198-two-pointers)
 - **Two's complement** — How Java stores signed integers: the top bit is the sign and −x equals `~x + 1`. [§2.10](../02-basics-types-and-operators/README.md#210-integer-overflow), [§19.26](../19-java-for-coding-interviews/README.md#1926-bit-manipulation)
-- **Type erasure** — Compiling generics by checking types and then removing type arguments, inserting casts. [§9.7](../09-generics/README.md#97-type-erasure-how-generics-really-work)
+- **Type erasure (erasure)** — Compiling generics by checking types and then removing type arguments, inserting casts. [§9.7](../09-generics/README.md#97-type-erasure-how-generics-really-work)
 - **Type inference** — The compiler deducing types (`var`, diamond, generic method arguments, lambda parameters). [§2.6](../02-basics-types-and-operators/README.md#26-var--local-variable-type-inference-java-10), [§9.4](../09-generics/README.md#94-generic-methods-and-type-inference)
 - **Type parameter** — A placeholder type such as `T` in `class Box<T>`. [§9.2](../09-generics/README.md#92-generic-classes-and-records)
 - **Type pattern** — A pattern that tests a type and binds a variable: `instanceof String s`, `case Integer i`. [§3.5](../03-control-flow/README.md#35-pattern-matching-for-instanceof-java-16)
@@ -1710,7 +1641,6 @@ Each term has a short definition and a link to the section that teaches it. Back
 
 **U**
 
-- **Unboxing** — Converting a wrapper object back to its primitive; unboxing `null` throws `NullPointerException`. [§7.6](../07-core-apis/README.md#76-wrapper-classes-and-autoboxing)
 - **Unchecked exception** — `RuntimeException`, `Error` and their subclasses — not checked by the compiler. [§8.2](../08-exceptions/README.md#82-the-throwable-hierarchy-checked-unchecked-and-errors)
 - **Unchecked warning** — A compiler warning that a generic operation can't be type-checked (raw types, unchecked casts). [§9.8](../09-generics/README.md#98-restrictions-and-workarounds-consequences-of-erasure)
 - **`UncheckedIOException`** — An unchecked wrapper for `IOException`, used inside lambdas and streams. [§13.4](../13-io-and-nio/README.md#134-reading-and-writing-whole-files)
@@ -1721,7 +1651,6 @@ Each term has a short definition and a link to the section that teaches it. Back
 - **Unnamed module** — The module that holds everything loaded from the class path. [§16.12](../16-jvm-internals-and-performance/README.md#1612-modules-jpms-basics)
 - **Unnamed variable `_`** — An underscore for a variable or pattern you don't use (Java 22). [§3.7](../03-control-flow/README.md#37-record-patterns-java-21-and-unnamed-patterns-java-22), [§17.7](../17-modern-java-17-to-25/README.md#177-java-22)
 - **`UnsupportedOperationException`** — Thrown by an operation a collection or object doesn't support. [§10.10](../10-collections/README.md#1010-unmodifiable-and-immutable-collections)
-- **Upcasting** — See *downcasting / upcasting*. [§6.4](../06-oop-inheritance-interfaces-and-more/README.md#64-polymorphism-and-casting)
 - **UTC** — Coordinated Universal Time: the world reference time, with no time-zone or daylight-saving shifts. [§7.10](../07-core-apis/README.md#710-zones-instants-duration-and-daylight-saving)
 - **UTF-16** — The encoding Java strings use: each character is one or two 16-bit `char`s. [§2.3](../02-basics-types-and-operators/README.md#23-primitive-types), [§7.2](../07-core-apis/README.md#72-the-string-api-toolkit)
 - **UTF-8** — A variable-length encoding using 1–4 bytes per character; the Java default charset since 18. [§13.7](../13-io-and-nio/README.md#137-charsets-and-encodings)
@@ -1729,7 +1658,7 @@ Each term has a short definition and a link to the section that teaches it. Back
 **V**
 
 - **Value object** — A small immutable object defined only by its values (an amount of money, a date range); records fit well. [§6.8](../06-oop-inheritance-interfaces-and-more/README.md#68-records), [§18.6](../18-testing-build-and-tooling/README.md#186-test-doubles-and-mockito)
-- **`var`** — Local variable type inference (Java 10). [§2.6](../02-basics-types-and-operators/README.md#26-var--local-variable-type-inference-java-10)
+- **`var` (local variable type inference)** — Java 10: the compiler infers a local variable's type from its initializer. [§2.6](../02-basics-types-and-operators/README.md#26-var--local-variable-type-inference-java-10)
 - **Varargs** — A parameter `T... values` accepting zero or more arguments as an array. [§4.4](../04-methods-and-arrays/README.md#44-varargs)
 - **Vector API** — An incubating API for SIMD calculations — one instruction applied to many numbers at once. [§17.11](../17-modern-java-17-to-25/README.md#1711-still-preview-or-incubating-in-java-25--and-what-came-next)
 - **Virtual memory** — Each process sees its own large address space, which the OS maps onto physical RAM page by page. [§16.13](../16-jvm-internals-and-performance/README.md#1613-operating-system-fundamentals-for-engineers)

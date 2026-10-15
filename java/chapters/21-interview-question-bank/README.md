@@ -1349,6 +1349,26 @@ Java rounds usually include one or two classic LeetCode problems. Chapter 19 sol
 **Q274. Which Java-specific pitfalls cost points in coding rounds?**
 `==` on `Integer`/`String`, `int` overflow in sums and midpoints, `Arrays.sort` on `int[]` with a comparator (needs `Integer[]`), comparators written as `a - b`, using `Stack`/`LinkedList` instead of `ArrayDeque`, string `+=` in loops, and forgetting `assert` is disabled by default. → [§19.6 Pitfalls](../19-java-for-coding-interviews/README.md#196-numeric-and-equality-pitfalls)
 
+## 19. Multithreading problems (Chapter 22)
+
+**Q275. ★ Implement a counting semaphore without `java.util.concurrent`.**
+One `int permits` under the object's monitor: `acquire` = `while (permits == 0) wait(); permits--`, `release` = `permits++; notifyAll()`. An interrupted waiter takes nothing; a timed version loops on a fixed `nanoTime` deadline; FIFO fairness needs a queue where only the head may take a permit. → [§22.2](../22-multithreading-interview-problems/README.md#222-implement-a-counting-semaphore)
+
+**Q276. Build a read-write lock with writer preference.**
+State `readers`, `writing`, `waitingWriters`. Readers wait `while (writing || waitingWriters > 0)`; writers increment `waitingWriters`, wait `while (writing || readers > 0)`, and must decrement it again if interrupted. The last reader and every leaving writer call `notifyAll()`. Writer preference can starve readers; the fair `ReentrantReadWriteLock` bounds both. → [§22.3](../22-multithreading-interview-problems/README.md#223-implement-a-read-write-lock)
+
+**Q277. Why does a naive barrier break when reused, and how do you fix it?**
+Without a reset, round 2 sees `count >= N` and nobody waits; resetting while waiters loop on `count < N` strands them. Use a **generation** number: waiters loop `while (myGeneration == generation)`, and the last arriver resets the count, bumps the generation and calls `notifyAll()`. → [§22.4](../22-multithreading-interview-problems/README.md#224-implement-a-reusable-barrier)
+
+**Q278. Design a deferred callback executor (run each callback after its delay).**
+A min-heap of `(nanoTime deadline, seq, callback)` under a lock and one worker that `awaitNanos(head − now)`. `schedule()` signals only when the new task becomes the head; the worker re-reads the head after every wake-up, so no signal can be missed. Run callbacks outside the lock and catch their exceptions. → [§22.5](../22-multithreading-interview-problems/README.md#225-thread-safe-deferred-callback-executor)
+
+**Q279. ★ Turn a callback-based async API into a blocking call.**
+Create a per-call mailbox, let the callback record the outcome *in state* (first completion wins) and wake the caller, who waits `while (!done)` with a timeout. Simplest: complete a `CompletableFuture` in the callback and call `get(timeout)`. Never block on the library's own callback thread. → [§22.6](../22-multithreading-interview-problems/README.md#226-asynchronous-to-synchronous)
+
+**Q280. Three threads call `first()`, `second()`, `third()` in any order; print them in order.**
+Two one-shot gates that remember being opened: a `CountDownLatch(1)` or `Semaphore(0)` per gate, or a monitor with an `int stage` and `while (stage != mine) wait()` + `notifyAll()`. A bare `notify()` sent before the waiter arrives would be lost. → [§22.7](../22-multithreading-interview-problems/README.md#227-ordered-printing-three-threads-print-in-order)
+
 ## Sources of the question lists
 Question wording and frequency were taken from these public lists and reports (answers are this book's own):
 - teamlead/java-interview-questions (GitHub) — questions ranked by how often they were asked in real interviews (high/moderate/low occurrence)

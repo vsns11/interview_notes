@@ -1305,6 +1305,14 @@ Heavy get() { var r = h; if (r == null) synchronized (this) { r = h; if (r == nu
 ### TL;DR
 I/O-bound → virtual threads (no pooling, semaphores for limits); CPU-bound → Fork/Join/parallel streams; fan-out → `CompletableFuture` with your own executor. Visibility needs a happens-before edge; prevent deadlock with lock ordering or `tryLock`.
 
+### Build-it-yourself problems (Chapter 22)
+- **Bounded buffer**: ring buffer + `while` guards; monitor + `notifyAll`, two `Condition`s + `signal`, or `freeSlots`/`filledSlots` semaphores before the mutex; busy-wait is correct but burns a core.
+- **Semaphore / RW lock / barrier**: `while (permits == 0) wait()`; writer preference via `waitingWriters` (undo on interrupt); barrier waits on a **generation**, not the count.
+- **Deferred callbacks**: min-heap by `nanoTime` deadline + `awaitNanos(head − now)`; signal only for a new head.
+- **Async → sync**: per-call state + timed wait, or `CompletableFuture.get(timeout)`; never block the callback thread.
+- **Ordered printing / token bucket**: gates that remember (`CountDownLatch`, `Semaphore(0)`); lazy refill from elapsed time, a refiller thread started by a factory, not the constructor.
+- **Puzzles** (unisex bathroom, Uber ride, sleeping barber): one predicate under one lock, `notifyAll` when waiters differ, batching against starvation.
+
 ## 16. JVM Internals and Performance
 Class loading, memory areas, object layout, GC algorithms and collectors, tuning, JIT and escape analysis, JMH, diagnostics, leaks, modules.
 

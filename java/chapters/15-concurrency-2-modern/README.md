@@ -2,22 +2,7 @@
 
 [Chapter 14](../14-concurrency-1/README.md) gave you threads, locks, atomics, thread pools and concurrent collections. This chapter covers how concurrent Java is written **today**: composing **asynchronous** results (results of work that finishes later, while the caller carries on) with `CompletableFuture`, splitting CPU work with Fork/Join, handling huge numbers of **blocking** tasks (tasks that spend time waiting, e.g. for a network reply) with **virtual threads** (Java 21), passing context safely with **scoped values** (final in Java 25), and grouping related tasks with **structured concurrency** (still a **preview** feature — shipped in the JDK for feedback but switched off unless you pass `--enable-preview`, and still allowed to change). It then goes underneath all of them — the **Java Memory Model** (the rules for when one thread's writes become visible to another) and *happens-before* (the ordering guarantee those rules are built on), which explain *why* the Chapter 14 tools work — and ends with the ways concurrent programs stop making progress: deadlock, livelock and starvation.
 
-**What you'll learn**
-
-| § | Topic | You'll be able to… |
-|---|---|---|
-| 15.1 | `Future` and its limits | say why `Future.get()` isn't enough for real pipelines |
-| 15.2 | `CompletableFuture` | create, transform, compose, combine and time out async results; handle errors properly |
-| 15.3 | Fork/Join | split CPU-bound work recursively and understand work stealing (and parallel streams) |
-| 15.4 | Virtual threads | explain how they work, measure the win, and know when they help and when they don't |
-| 15.5 | Pinning and JEP 491 | know what pinning was, what Java 24 fixed, and what still pins |
-| 15.6 | `ThreadLocal` and scoped values | pass request context implicitly, and choose between the two |
-| 15.7 | Structured concurrency (preview) | read and write `StructuredTaskScope` code and know its status |
-| 15.8 | The Java Memory Model and happens-before | reason about visibility; publish objects safely; write correct lazy initialisation |
-| 15.9 | Liveness: deadlock, livelock, starvation | produce, detect and prevent each one |
-| 15.10 | Best practices and choosing a model | pick the right concurrency tool for a job |
-
-All runnable code is in [`code/`](code/) (package `ch15.*`), compiled with `javac --release 25` (the Java compiler, targeting Java 25) and run on JDK 26 (the Java Development Kit) on a 14-core Apple-silicon (Apple's own ARM-based processors) laptop. As in Chapter 14, lines tagged `[nondeterministic]` vary between runs and `[machine-dependent]` lines depend on your hardware; timing numbers are rounded. The structured-concurrency example (§15.7) uses a **preview** API, so it lives only in this README and was run separately with `--enable-preview` on JDK 25 and JDK 26.
+All runnable code is in [`code/`](code/) (package `ch15.*`), compiled with `javac --release 25` and run on JDK 26 on a 14-core Apple-silicon laptop. As in Chapter 14, lines tagged `[nondeterministic]` vary between runs and `[machine-dependent]` lines depend on your hardware; timing numbers are rounded. The programs added in §15.6.1 and §15.10.1 were compiled with `javac --release 21` and run on JDK 21 on a 4-core Linux machine. The structured-concurrency example (§15.7) uses a **preview** API, so it lives only in this README and was run separately with `--enable-preview` on JDK 25 and JDK 26.
 
 > **Related material — linked, not repeated.** Virtual threads, `Future`, parallel-stream and thread-problem exam traps: [OCP Chapter 13 — Concurrency](../../../../ocp-java21-study/chapters/13-concurrency/README.md). Deadlock, livelock and starvation with more diagrams and the dining philosophers: [LLD §12.17–12.19](../../../lld/chapters/12-concurrency-concepts/README.md#1217-deadlock) and [LLD §13.5](../../../lld/chapters/13-concurrency-problems/README.md#135-dining-philosophers-leetcode-1226). Fork/Join merge sort: [LLD §13.10](../../../lld/chapters/13-concurrency-problems/README.md#1310-multi-threaded-merge-sort-forkjoin). Parallel streams: [Chapter 12](../12-streams/README.md).
 
@@ -42,7 +27,7 @@ Real work is a *pipeline* (a chain of steps, each feeding the next): "fetch the 
 ## 15.2 `CompletableFuture`
 
 ### What it is
-**`CompletableFuture<T>`** implements both `Future<T>` and **`CompletionStage<T>`**, an interface of ~40 methods for saying *what should happen when this completes* — without blocking. Analogy: instead of standing at the counter waiting for your coffee (`get()`), you leave your phone number and a list of instructions: "when it's ready, add milk, then bring it to table 5; if they're out of beans, bring tea".
+**`CompletableFuture<T>`** implements both `Future<T>` and **`CompletionStage<T>`**, an interface of ~40 methods for saying *what should happen when this completes* — without blocking.
 
 ### How it works
 1. **Start** async work: `supplyAsync(supplier[, executor])` (returns a value) or `runAsync(runnable[, executor])`. Or create an already-finished one with `completedFuture(v)` / `failedFuture(ex)` (9), or an empty one with `new CompletableFuture<>()` that you later `complete(v)` / `completeExceptionally(ex)` — a **promise** (a placeholder for a result that some code promises to fill in later).
@@ -185,7 +170,7 @@ Output:
 ## 15.3 Fork/Join
 
 ### What it is
-The **Fork/Join framework** (Java 7) runs **divide-and-conquer** algorithms (split a problem into smaller copies of itself, solve those, combine the answers) in parallel: split a big problem into halves recursively until pieces are small, solve the pieces, and combine the answers. Its **`ForkJoinPool`** uses **work stealing**: each worker thread has its own double-ended queue (deque) of tasks; when a worker runs out, it **steals** tasks from the other end of a busy worker's deque, keeping all cores busy with little **contention** (threads competing for the same lock or data). Analogy: a team splitting a stack of exam papers — whoever finishes their pile grabs half of a colleague's remaining pile.
+The **Fork/Join framework** (Java 7) runs **divide-and-conquer** algorithms (split a problem into smaller copies of itself, solve those, combine the answers) in parallel: split a big problem into halves recursively until pieces are small, solve the pieces, and combine the answers. Its **`ForkJoinPool`** uses **work stealing**: each worker thread has its own double-ended queue (deque) of tasks; when a worker runs out, it **steals** tasks from the other end of a busy worker's deque, keeping all cores busy with little **contention** (threads competing for the same lock or data).
 
 ### How it works
 1. Extend **`RecursiveTask<V>`** (returns a value) or **`RecursiveAction`** (no value) and implement `compute()`.
@@ -237,8 +222,6 @@ tasks stolen between workers so far > 0: true
 
 ### What it is
 A **virtual thread** (final in **Java 21, JEP 444** — a JEP, *JDK Enhancement Proposal*, is the numbered design document for a Java feature; previews in 19 and 20) is a `java.lang.Thread` that is **not tied to an operating-system thread**. The JVM schedules many virtual threads onto a small pool of OS threads called **carrier threads**. When a virtual thread performs a blocking operation (sleep, socket read, `BlockingQueue.take`, lock wait…), the JVM **unmounts** it — saves its stack to the **heap** (the JVM's memory area for objects) — and the carrier is free to run another virtual thread. When the operation completes, the virtual thread is **mounted** again on some carrier and continues.
-
-Analogy: platform threads are like giving every restaurant customer a dedicated waiter who stands by the table even while the customer reads the menu. Virtual threads are like a few waiters serving hundreds of tables, going to whichever table actually needs something.
 
 | | Platform thread | Virtual thread |
 |---|---|---|
@@ -375,8 +358,6 @@ Problems:
 ### Scoped values (final in Java 25, JEP 506)
 A **`ScopedValue<T>`** is an **immutable** value **bound for the duration of a method call**. You bind it with `ScopedValue.where(KEY, value).run(runnable)` (or `.call(callable)` for a result); any code called — directly or indirectly — from inside that call can `KEY.get()` it; when the call returns, the binding is gone automatically. There is no `set`. Code can **rebind** it for a nested call, which shadows the outer value only inside that call. History: **incubator** in Java 20 (JEP 429; an incubator module is an even earlier experimental stage than preview), previews in 21–24 (JEPs 446, 464, 481, 487), **final in Java 25 (JEP 506)** — so it's usable without flags in Java 25 LTS.
 
-Analogy: a `ThreadLocal` is a whiteboard in each worker's office — anyone can scribble on it and it stays until someone wipes it. A scoped value is a visitor badge handed out at the door for one meeting: everyone in the meeting can read it, nobody can change it, and it's collected when the meeting ends.
-
 [`code/ch15/scoped/ScopedValuesDemo.java`](code/ch15/scoped/ScopedValuesDemo.java) (key parts):
 ```java
 static final ThreadLocal<String> REQUEST_ID_TL = new ThreadLocal<>();
@@ -432,6 +413,27 @@ Output:
 
 ### In the interview
 **30-second answer:** "`ThreadLocal` gives each thread its own mutable copy; it's easy to leak across pooled tasks and costly with millions of virtual threads. Scoped values, final in Java 25, bind an immutable value for the duration of a call; callees read it, it disappears when the call returns, and structured-concurrency subtasks share it. I use scoped values for request context and keep `ThreadLocal` for legacy integration and per-thread caches."
+
+### 15.6.1 `ThreadLocalRandom`
+A shared `java.util.Random` is thread-safe, but every `nextInt` CASes its single 48-bit seed, so many threads fight over one variable (its Javadoc warns of "contention and consequent poor performance"). **`ThreadLocalRandom`** (Java 7) keeps the seed **in each `Thread` object**:
+- Always call it as **`ThreadLocalRandom.current().nextInt(...)`**, at the point of use. Don't store the result of `current()` in a field or pass it to other threads; the Javadoc recommends this usage form so that an instance can never be shared by accident.
+- It offers range helpers (`nextInt(origin, bound)`, `nextLong(bound)`, `nextDouble(a, b)`) and, since Java 17, implements `RandomGenerator`.
+- It **cannot be seeded** (`setSeed` throws `UnsupportedOperationException`), so tests that need repeatable numbers inject a seeded `Random` or `SplittableRandom` instead. It is not cryptographically secure: for tokens and keys use `SecureRandom`.
+- It works the same on virtual threads (each has its own seed).
+
+[`code/ch15/random/RandomContention.java`](code/ch15/random/RandomContention.java): one thread per core, 5 million `nextInt(100)` calls each:
+```java
+long shared = time(threads, () -> SHARED.nextInt(100));                       // static final Random
+long local  = time(threads, () -> ThreadLocalRandom.current().nextInt(100));
+```
+```text
+4 threads x 5,000,000 nextInt(100)   [machine-dependent]
+shared Random      : 1983 ms
+ThreadLocalRandom  : 53 ms  (37x faster)
+range helper       : nextInt(10, 20) in [10,20): true
+setSeed            : UnsupportedOperationException (not reproducible by design)
+```
+The gap (17× to 60× across runs) is pure contention: both generators do the same arithmetic. Sources: `ThreadLocalRandom`, `Random`, `RandomGenerator` Javadoc (JEP 356).
 
 ---
 
@@ -731,6 +733,42 @@ Detailed walk-throughs and the dining philosophers: [LLD §12.17 Deadlock](../..
 - **Caches**: Caffeine (a popular in-memory caching library) builds on `ConcurrentHashMap` and `CompletableFuture` (async loading).
 - **Observability** (being able to see what a running system is doing through logs, metrics and traces): request ids carried in logging context (MDC, `ThreadLocal`-based today, scoped values in newer designs).
 
+### 15.10.1 Concurrency exceptions quick reference
+| Exception | Package · checked? | Thrown when | What to do |
+|---|---|---|---|
+| `InterruptedException` | `java.lang` · checked | a thread is interrupted while in (or on entering) `sleep`, `wait`, `join`, `BlockingQueue.take/put`, `lockInterruptibly`, `Condition.await`, `Future.get`…; the interrupt flag is **cleared** | rethrow, or restore the flag with `Thread.currentThread().interrupt()` ([§14.4](../14-concurrency-1/README.md#144-interruption-cooperative-cancellation)) |
+| `ExecutionException` | `j.u.c` · checked | `Future.get()` (and `CompletableFuture.get()`) when the task threw; the real error is `getCause()` | unwrap the cause and decide: retry, fall back or fail |
+| `CompletionException` | `j.u.c` · unchecked | `CompletableFuture.join()`, and the exception passed to dependent stages, when a stage failed; wraps the cause | unwrap in `exceptionally`/`handle` (§15.2) |
+| `TimeoutException` | `j.u.c` · checked | `Future.get(t, unit)`, `CyclicBarrier.await(t, unit)`, `Exchanger.exchange(x, t, unit)` ran out of time. A `get` timeout does **not** cancel the task | `cancel(true)` the task if its result is no longer wanted |
+| `CancellationException` | `j.u.c` · unchecked (a subclass of `IllegalStateException`) | `get()`/`join()` on a future that was `cancel`led | usually expected after your own `cancel`; check `isCancelled()` |
+| `BrokenBarrierException` | `j.u.c` · checked | waiting at a `CyclicBarrier` when another party was interrupted or timed out, the barrier was `reset()`, or the barrier action threw | treat the round as failed; `reset()` or build a new barrier |
+| `RejectedExecutionException` | `j.u.c` · unchecked | `execute`/`submit` after `shutdown()`, or when threads and queue are full under `AbortPolicy` | back-pressure: retry later, `CallerRunsPolicy`, or shed load ([§14.11](../14-concurrency-1/README.md#1411-executors-and-thread-pools)) |
+| `IllegalMonitorStateException` | `java.lang` · unchecked | `wait`/`notify` without holding that object's monitor; `unlock()` by a non-owner; `Condition.await/signal` without the lock | a bug: fix the locking |
+| `IllegalThreadStateException` | `java.lang` · unchecked | `start()` on a thread that was already started | create a new `Thread` (or use an executor) |
+
+Timed waits that don't throw report the timeout through their return value: `tryLock(t, u)` and `Semaphore.tryAcquire(t, u)` → `false`, `CountDownLatch.await(t, u)` and `awaitTermination` → `false`, `BlockingQueue.poll(t, u)` → `null`. `ConcurrentModificationException`, despite its name, is mostly a *single*-thread error (changing a collection while iterating it, [§14.12](../14-concurrency-1/README.md#1412-concurrent-collections)). [`code/ch15/exceptions/ExceptionsTour.java`](code/ch15/exceptions/ExceptionsTour.java) triggers each one:
+```java
+show("Future.get(), task threw", () -> pool.submit(() -> { throw new IllegalArgumentException("bad"); }).get());
+show("unlock() by a non-owner", () -> new ReentrantLock().unlock());
+show("submit() after shutdown()", () -> pool.submit(() -> 1));
+```
+```text
+sleep() on an interrupted thread           -> InterruptedException
+Future.get(), task threw                   -> ExecutionException (cause: IllegalArgumentException)
+Future.get(50 ms), task too slow           -> TimeoutException
+Future.get(), task was cancelled           -> CancellationException
+CompletableFuture.join(), stage threw      -> CompletionException (cause: IllegalArgumentException)
+CyclicBarrier, another party timed out     -> BrokenBarrierException
+Object.wait() without the monitor          -> IllegalMonitorStateException
+unlock() by a non-owner                    -> IllegalMonitorStateException
+Condition.await() without the lock         -> IllegalMonitorStateException
+Thread.start() twice                       -> IllegalThreadStateException
+submit() after shutdown()                  -> RejectedExecutionException
+submit() to a saturated pool (AbortPolicy) -> RejectedExecutionException
+interrupt flag after InterruptedException was thrown: false
+```
+The last line shows why §14.4's "restore the flag" rule exists: throwing `InterruptedException` cleared the flag. Sources: Javadoc of each exception class and of `Future`, `CyclicBarrier`, `ThreadPoolExecutor`, `Object.wait`, `ReentrantLock.unlock`.
+
 ---
 
 ## Chapter TL;DR
@@ -742,10 +780,11 @@ Detailed walk-throughs and the dining philosophers: [LLD §12.17 Deadlock](../..
 | Fork/Join | Recursive split + work stealing; `RecursiveTask`; fork one half, compute the other, join; powers parallel streams; CPU-bound only |
 | Virtual threads (21) | Cheap JVM-managed threads on ~#cores carriers; unmount on blocking; huge throughput for waiting tasks; don't pool; limit with `Semaphore`; no help for CPU work |
 | Pinning | Java 21–23: blocking in `synchronized` pinned carriers; Java 24 (JEP 491) fixed it; native callbacks and class initialisation still pin; `jdk.VirtualThreadPinned` JFR event |
-| Context | `ThreadLocal`: per-thread, mutable, leaks with pools; `ScopedValue` (final 25): immutable, bounded to a call, inherited by structured subtasks |
+| Context | `ThreadLocal`: per-thread, mutable, leaks with pools; `ScopedValue` (final 25): immutable, bounded to a call, inherited by structured subtasks; `ThreadLocalRandom.current()` instead of a shared `Random` |
 | Structured concurrency | Preview in 25 (JEP 505), 26 (JEP 525), 27 (JEP 533): scope = unit of work, auto-cancel on failure, no leaked threads |
 | JMM | Happens-before via program order, monitor unlock→lock, volatile write→read, start/join, j.u.c hand-offs; data race = stale/reordered reads; safe publication; DCL needs `volatile`; holder idiom |
 | Liveness | Deadlock (Coffman; lock ordering, `tryLock`+timeouts; detect with thread dumps), livelock (random back-off), starvation (fairness, bulkheads) |
 | Choosing | I/O-bound → virtual threads; CPU-bound → parallel streams/Fork/Join; fan-out → `CompletableFuture` (structured concurrency later) |
+| Exceptions | `ExecutionException`/`CompletionException` wrap the cause; `get` timeout doesn't cancel; `CancellationException` after `cancel`; broken barrier, rejected task, monitor not held (§15.10.1) |
 
 **Where next:** what the JVM does underneath — memory areas, garbage collectors, JIT, profiling with JFR and benchmarking with JMH — in [Chapter 16 — JVM internals and performance](../16-jvm-internals-and-performance/README.md); the version-by-version feature tour in [Chapter 17 — Modern Java 17 to 25](../17-modern-java-17-to-25/README.md). Practise with [LLD Chapter 13 — Concurrency problems](../../../lld/chapters/13-concurrency-problems/README.md); exam traps in [OCP Chapter 13](../../../../ocp-java21-study/chapters/13-concurrency/README.md); compare with Python's `asyncio` and GIL in [Python Chapter 16](../../../python/chapters/16-concurrency-and-async/README.md).

@@ -1,27 +1,8 @@
 # Chapter 17 — Modern Java: 17 to 25
 
-Java changes every six months, and a lot changed between the two **long-term-support** (LTS) releases — versions that vendors keep patching for years, so most companies standardise on them — most teams run today: **Java 17** (September 2021) and **Java 25** (September 2025). This chapter is a **concise tour**: one table of everything that became final in each release, one tiny runnable example per final feature that the rest of the book doesn't already teach, and an exact list of what is still *preview* or *incubating* — so you know what you can use in **production** code (the real system serving real users) today and what you can't.
+Java ships every six months, and a lot changed between the two **long-term-support** (LTS) releases — versions vendors patch for years, so most companies standardise on them — most teams run today: **Java 17** (September 2021) and **Java 25** (September 2025). This chapter is a **concise tour**: one table of everything finalised in each release, one tiny runnable example per final feature the rest of the book doesn't already teach, and an exact list of what is still *preview* or *incubating* — what you can and can't use in production today. Features taught elsewhere get a two-line reminder and a link: this chapter is the map, the linked sections the territory.
 
-Most of the big language features already have full sections elsewhere in the book; here they get a two-line reminder and a link. Read this chapter as the map, the linked sections as the territory.
-
-**What you'll learn**
-
-| # | Topic |
-|---|---|
-| 17.1 | How to read feature status (final, preview, incubator, experimental, withdrawn) |
-| 17.2 | The version table: every release 17 → 25 at a glance |
-| 17.3 | The Java 17 baseline (features finalised in 14–17) |
-| 17.4 | Java 18: UTF-8 by default, the simple web server, code snippets in Javadoc |
-| 17.5 | Java 19 and 20: the preview years |
-| 17.6 | Java 21 LTS: virtual threads, pattern matching for `switch`, record patterns, sequenced collections |
-| 17.7 | Java 22: unnamed variables, the Foreign Function & Memory API, multi-file launch |
-| 17.8 | Java 23: Markdown documentation comments; string templates withdrawn |
-| 17.9 | Java 24: stream gatherers, the Class-File API, virtual threads without pinning |
-| 17.10 | Java 25 LTS: compact source files, module imports, flexible constructors, scoped values, KDF API |
-| 17.11 | Still preview or incubating in Java 25 — exact list, and what JDK 26/27 did next |
-| 17.12 | Removals and deprecations that matter when upgrading 17 → 21 → 25 |
-
-**How the code was run.** Programs are in [`code/`](code/) (package `ch17.v17` … `ch17.v25`, one sub-package per release), compiled with `javac --release 25` (the Java compiler, targeting Java 25) **without** `--enable-preview`, and run on OpenJDK 26 (the open-source reference build of the Java Development Kit). Only **final** features appear in runnable code. Every JEP number and status in this chapter was checked against the release pages on openjdk.org (`openjdk.org/projects/jdk/<N>/`) and the individual JEP pages.
+**How the code was run.** Programs are in [`code/`](code/) (package `ch17.v17` … `ch17.v25`, one sub-package per release), compiled with `javac --release 25` **without** `--enable-preview`, and run on OpenJDK 26. Only **final** features appear in runnable code. Every JEP number and status was checked against the release pages on openjdk.org (`openjdk.org/projects/jdk/<N>/`) and the individual JEP pages.
 
 ---
 
@@ -34,7 +15,7 @@ Each change to the JDK is described in a **JEP** (JDK Enhancement Proposal) — 
 | nothing (e.g. *JEP 444: Virtual Threads*) | **Final / permanent** | Yes |
 | *(Preview)*, *(Second Preview)* … | **Preview**: complete, but may still change | Only with `--enable-preview` on both `javac` and `java`, for experiments |
 | *(Incubator)* | **Incubating API** in a `jdk.incubator.*` module | Only with `--add-modules jdk.incubator.…`; API will change |
-| *(Experimental)* | **Experimental VM feature** (a JVM — Java Virtual Machine — feature still being tried out) | Needs `-XX:+UnlockExperimentalVMOptions`; not for production |
+| *(Experimental)* | **Experimental VM feature** | Needs `-XX:+UnlockExperimentalVMOptions`; not for production |
 | status *Closed / Withdrawn* | **Withdrawn** | No — removed before finalisation |
 
 A feature usually goes preview → preview → … → final, and sometimes gets renamed along the way (e.g. *Statements before super(...)* became *Flexible Constructor Bodies*). This book marks every feature with the release that **finalised** it.
@@ -47,7 +28,7 @@ GA = general availability date. "Final" rows list what you can rely on; previews
 
 | Release | GA | Language and library — final | JVM, GC and tools — final |
 |---|---|---|---|
-| **17 LTS** | 2021-09-14 | Sealed classes (409), enhanced pseudo-random generators (356), always-strict floating point (306), context-specific deserialization filters (415) | Strong encapsulation of JDK internals (403), macOS/AArch64 port (391; a *port* is a build for another OS/CPU), new macOS rendering pipeline (382); experimental AOT/Graal JIT removed (410); RMI activation removed (407) |
+| **17 LTS** | 2021-09-14 | Sealed classes (409), enhanced pseudo-random generators (356), always-strict floating point (306), context-specific deserialization filters (415) | Strong encapsulation of JDK internals (403), macOS/AArch64 port (391), new macOS rendering pipeline (382); experimental AOT/Graal JIT removed (410); RMI activation removed (407) |
 | **18** | 2022-03-22 | UTF-8 by default (400), code snippets in Javadoc `@snippet` (413), internet-address resolution SPI (418) | Simple web server `jwebserver` (408), core reflection reimplemented with method handles (416); finalization deprecated for removal (421) |
 | **19** | 2022-09-20 | *(no final language/API features)* | Linux/RISC-V port (422) |
 | **20** | 2023-03-21 | *(no final features — previews and incubators only)* | — |
@@ -57,18 +38,7 @@ GA = general availability date. "Final" rows list what you can rely on; previews
 | **24** | 2025-03-18 | Stream gatherers (485), Class-File API (484), quantum-resistant ML-KEM (496) and ML-DSA (497) | Virtual threads synchronize without pinning (491), ahead-of-time class loading and linking (483), ZGC non-generational mode removed (490), Security Manager permanently disabled (486), linking run-time images without JMODs (493), late barrier expansion for G1 (475), JNI restriction warnings (472), `Unsafe` memory-access warnings (498), Windows 32-bit port removed (479), 32-bit x86 port deprecated (501) |
 | **25 LTS** | 2025-09-16 | Compact source files and instance `main` methods (512), module import declarations (511), flexible constructor bodies (513), scoped values (506), key derivation function API (510) | Compact object headers (519, opt-in), generational Shenandoah (521), AOT command-line ergonomics (514) and method profiling (515), JFR cooperative sampling (518) and method timing and tracing (520); 32-bit x86 port removed (503) |
 
-Numbers in parentheses are JEP numbers. Short glosses for the less obvious entries: **sealed** classes restrict which classes may extend them; **deserialization filters** reject unwanted classes when turning bytes back into objects; **SPI** = *service provider interface*, a plug-in point; **method handles** are fast, typed references to methods; **finalization** is the old `finalize()` clean-up hook; **RISC-V** is an open CPU architecture; **agents** are JARs that instrument (modify) classes as they load; **ZGC/G1/Shenandoah** are garbage collectors; **ML-KEM/ML-DSA** are *quantum-resistant* algorithms designed to stay secure even against future quantum computers; the **Security Manager** was an old in-process sandbox; **JMODs** are the JDK's module packaging files; **x86** is the Intel/AMD CPU family. In three words each: **21** = virtual threads + patterns, **22** = FFM + `_`, **24** = gatherers, **25** = simpler Java (compact source files, module imports, flexible constructors) + scoped values.
-
-```mermaid
-flowchart LR
-    J17["17 LTS: sealed"] --> J18["18: UTF-8 default"]
-    J18 --> J19["19, 20: previews only"]
-    J19 --> J21["21 LTS: virtual threads, patterns, sequenced"]
-    J21 --> J22["22: FFM, unnamed _"]
-    J22 --> J23["23: Markdown docs"]
-    J23 --> J24["24: gatherers, Class-File API"]
-    J24 --> J25["25 LTS: compact source, module import, scoped values"]
-```
+Numbers in parentheses are JEP numbers. Glosses for the less obvious entries: **sealed** classes restrict which classes may extend them; **deserialization filters** reject unwanted classes when turning bytes back into objects; **SPI** = *service provider interface*, a plug-in point; **method handles** are fast, typed references to methods; **finalization** is the old `finalize()` clean-up hook; a *port* is a build for another OS/CPU (**RISC-V** is an open CPU architecture, **x86** the Intel/AMD family); **agents** are JARs that instrument (modify) classes as they load; **ML-KEM/ML-DSA** are *quantum-resistant* algorithms meant to stay secure against future quantum computers; the **Security Manager** was an old in-process sandbox; **JMODs** are the JDK's module packaging files. In three words each: **21** = virtual threads + patterns, **22** = FFM + `_`, **24** = gatherers, **25** = simpler Java (compact source files, module imports, flexible constructors) + scoped values.
 
 ---
 
@@ -115,10 +85,10 @@ switch     : weekend, weekday
 record     : Circle[r=1.5]
 NPE says   : Cannot invoke "ch17.v17.Java17Baseline$Address.city()" because the return value of "ch17.v17.Java17Baseline$Customer.address()" is null
 ```
-The **helpful NPE** (`NullPointerException`, thrown when you use a reference that points to no object) message names exactly which part of a chain was `null` — no more guessing which of three calls on one line failed.
+The **helpful NPE** message names exactly which part of a chain was `null` — no more guessing which of three calls on one line failed.
 
 ### Enhanced pseudo-random generators (JEP 356, Java 17)
-**What it is:** a common interface `java.util.random.RandomGenerator` for every random source (old `Random`, `SplittableRandom`, `ThreadLocalRandom` and new *LXM* algorithms — a family that mixes a linear congruential generator with an XOR-based one), selectable by name. (*Pseudo-random* = generated by a deterministic formula that only looks random; a **seed** is its starting value, so the same seed gives the same sequence.) **Why it matters:** code can accept "any generator", and you can pick algorithms with better statistical quality or splitting support for parallel work. [`code/ch17/v17/RandomGenerators.java`](code/ch17/v17/RandomGenerators.java):
+**What it is:** a common interface `java.util.random.RandomGenerator` for every random source (old `Random`, `SplittableRandom`, `ThreadLocalRandom` and new *LXM* algorithms — mixing a linear congruential generator with an XOR-based one), selectable by name. (*Pseudo-random* = from a deterministic formula; the same **seed** gives the same sequence.) **Why it matters:** code can accept "any generator", and you can pick algorithms with better statistical quality or splitting support for parallel work. [`code/ch17/v17/RandomGenerators.java`](code/ch17/v17/RandomGenerators.java):
 ```java
 RandomGenerator g = RandomGeneratorFactory.of("L64X128MixRandom").create(42); // seeded: repeatable
 System.out.println("L64X128MixRandom dice: " + g.ints(8, 1, 7).boxed().toList());
@@ -134,14 +104,14 @@ a few algorithms     : [L128X1024MixRandom, L128X128MixRandom, L128X256MixRandom
 For everyday use `ThreadLocalRandom.current()` or `RandomGenerator.getDefault()` is fine; for security use `SecureRandom` (unpredictable, suitable for passwords and keys; [Chapter 7 §7.12](../07-core-apis/README.md#712-random-numbers)).
 
 ### Strong encapsulation (JEP 403, Java 17)
-The JDK's internal packages (`sun.*`, `jdk.internal.*`) are closed to **reflection** (code inspecting or calling classes' private parts at run time) by default — the `--illegal-access` escape hatch was removed. Old libraries that poked at internals fail with `InaccessibleObjectException` unless you add `--add-opens`. This is the #1 upgrade issue from Java 8/11; see [Chapter 16 §16.12](../16-jvm-internals-and-performance/README.md#1612-modules-jpms-basics).
+The JDK's internal packages (`sun.*`, `jdk.internal.*`) are closed to reflection by default — the `--illegal-access` escape hatch was removed. Old libraries that poke at internals fail with `InaccessibleObjectException` unless you add `--add-opens`. This is the #1 upgrade issue from Java 8/11; see [Chapter 16 §16.12](../16-jvm-internals-and-performance/README.md#1612-modules-jpms-basics).
 
 ---
 
 ## 17.4 Java 18
 
 ### UTF-8 by default (JEP 400)
-**The problem it solved:** before 18, APIs such as `FileReader`, `FileWriter`, `InputStreamReader`, `PrintStream` and `String.getBytes()` used the **platform** charset (the operating system's text encoding — the rule for turning characters into bytes) — UTF-8 on Linux/macOS but often Windows-1252 on Windows — so a file written on one machine could be garbled on another. Since 18 the default is **UTF-8 everywhere**; the OS encoding is still available as the `native.encoding` property. (Console output uses `stdout.encoding`, which still follows the terminal.)
+**The problem it solved:** before 18, APIs such as `FileReader`, `FileWriter`, `InputStreamReader`, `PrintStream` and `String.getBytes()` used the **platform** charset — UTF-8 on Linux/macOS but often Windows-1252 on Windows — so a file written on one machine could be garbled on another. Since 18 the default is **UTF-8 everywhere**; the OS encoding is still available as the `native.encoding` property. (Console output uses `stdout.encoding`, which still follows the terminal.) Full treatment: [§13.7](../13-io-and-nio/README.md#137-charsets-and-encodings).
 
 [`code/ch17/v18/Utf8Default.java`](code/ch17/v18/Utf8Default.java):
 ```java
@@ -157,16 +127,16 @@ file.encoding           : UTF-8
 native.encoding (OS)    : UTF-8
 read back               : café ☕ (9 bytes)
 ```
-9 bytes for 6 characters: `é` takes 2 bytes and `☕` 3 in UTF-8. Still best practice: pass a charset explicitly when reading data you did not write ([Chapter 13](../13-io-and-nio/README.md)).
+9 bytes for 6 characters: `é` takes 2 bytes and `☕` 3 in UTF-8. Still best practice: pass a charset explicitly when reading data you did not write.
 
 ### Simple web server (JEP 408)
-`jwebserver` serves the current directory as **static files** (files sent as-is, with no server-side code) over HTTP — handy for testing HTML or sharing files on a LAN (local network), **not** for production (HTTP/1.1 only, no HTTPS — the encrypted version of HTTP). `jwebserver -p 8000` (`-p` = port, the numbered door a server listens on) then open `http://localhost:8000/` (`localhost` = your own machine) (not run here — the book's programs don't use the network). The same server is available as an API: `com.sun.net.httpserver.SimpleFileServer`.
+`jwebserver` serves the current directory as **static files** over HTTP — handy for testing HTML or sharing files on a LAN, **not** for production (HTTP/1.1 only, no HTTPS). Run `jwebserver -p 8000` (`-p` = port) then open `http://localhost:8000/` (not run here — the book's programs don't use the network). The same server is available as an API: `com.sun.net.httpserver.SimpleFileServer`.
 
 ### Code snippets in Javadoc (JEP 413)
-`{@snippet : …}` replaces `<pre>{@code …}</pre>` for examples in documentation (Javadoc — the API docs generated from `/** … */` comments); it supports highlighting, regions and snippets pulled from real, compiled source files — so documentation examples can be tested.
+`{@snippet : …}` replaces `<pre>{@code …}</pre>` for examples in Javadoc; it supports highlighting, regions and snippets pulled from real, compiled source files — so documentation examples can be tested.
 
 ### Finalization deprecated for removal (JEP 421)
-`Object.finalize()` still works but is on its way out (*deprecated for removal* = officially discouraged and scheduled to be deleted); use try-with-resources (automatic closing with `try (…) { }`) and `java.lang.ref.Cleaner` (registers clean-up code to run after an object becomes unreachable) instead ([Chapter 8](../08-exceptions/README.md)).
+`Object.finalize()` still works but is *deprecated for removal* (discouraged and scheduled for deletion); use try-with-resources and `java.lang.ref.Cleaner` (registers clean-up code to run after an object becomes unreachable) instead ([Chapter 8](../08-exceptions/README.md)).
 
 ---
 
@@ -191,7 +161,7 @@ Java 19 also added the Linux/RISC-V port (JEP 422). If you are on 17 and skippin
 ## 17.6 Java 21 LTS
 
 ### Pattern matching for `switch` and record patterns (JEPs 441, 440)
-`switch` can match on **types** and **deconstruct records** (pull a record's components out into variables), with `when` **guards** (extra boolean conditions on a case), explicit `case null`, and **exhaustiveness** checking (the compiler verifies every possible subtype is handled) over sealed hierarchies — no `default` needed. Full treatment: [Chapter 3 §3.6](../03-control-flow/README.md#36-pattern-matching-for-switch-java-21) and [§3.7](../03-control-flow/README.md#37-record-patterns-java-21-and-unnamed-patterns-java-22). [`code/ch17/v21/PatternsDemo.java`](code/ch17/v21/PatternsDemo.java) evaluates a small expression tree:
+`switch` can match on **types** and **deconstruct records** (pull components into variables), with `when` **guards**, explicit `case null`, and **exhaustiveness** checking over sealed hierarchies — no `default` needed. Full treatment: [Chapter 3 §3.6](../03-control-flow/README.md#36-pattern-matching-for-switch-java-21) and [§3.7](../03-control-flow/README.md#37-record-patterns-java-21-and-unnamed-patterns-java-22). [`code/ch17/v21/PatternsDemo.java`](code/ch17/v21/PatternsDemo.java) evaluates a small expression tree:
 ```java
 sealed interface Expr permits Num, Add, Mul, Neg {}
 record Num(int value) implements Expr {}
@@ -228,10 +198,10 @@ string of length 3
 something else: Double
 null!
 ```
-If you add a new `Expr` subtype, every `switch` like `eval` stops compiling until you handle it — the compiler finds the places to update. This "data-oriented" style (sealed types + records + pattern switch) is the modern alternative to the Visitor pattern (a classic design pattern for adding operations to a class hierarchy without editing it; [LLD handbook, behavioural patterns](../../../lld/chapters/11-patterns-behavioral-2/README.md)).
+If you add a new `Expr` subtype, every `switch` like `eval` stops compiling until you handle it — the compiler finds the places to update. This "data-oriented" style (sealed types + records + pattern switch) is the modern alternative to the Visitor pattern ([LLD handbook, behavioural patterns](../../../lld/chapters/11-patterns-behavioral-2/README.md)).
 
 ### Virtual threads (JEP 444)
-**Virtual threads** are lightweight threads managed by the JVM rather than the OS: you can have millions, and a **blocking** call (one that waits — sleep, socket read, JDBC database query) unmounts the virtual thread from its **carrier** OS thread (the real operating-system thread it was running on) instead of blocking it. They make the simple **thread-per-request** style (one thread handles one incoming request from start to finish) scale for **I/O-bound** servers (ones that mostly wait on network or disk). Full coverage, including pinning and when they *don't* help: [Chapter 15](../15-concurrency-2-modern/README.md). [`code/ch17/v21/VirtualThreadsDemo.java`](code/ch17/v21/VirtualThreadsDemo.java):
+**Virtual threads** are lightweight JVM-managed threads: you can have millions, and a **blocking** call (sleep, socket read, JDBC query) unmounts the virtual thread from its **carrier** OS thread instead of blocking it. They make the simple **thread-per-request** style scale for **I/O-bound** servers. Full coverage, including pinning and when they *don't* help: [Chapter 15](../15-concurrency-2-modern/README.md). [`code/ch17/v21/VirtualThreadsDemo.java`](code/ch17/v21/VirtualThreadsDemo.java):
 ```java
 try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {   // close() waits for all tasks
     for (int i = 0; i < 10_000; i++) {
@@ -270,8 +240,8 @@ Output:
 
 ### Also final in 21
 - **Generational ZGC** (JEP 439) — opt-in with `-XX:+UseZGC -XX:+ZGenerational` in 21; default mode from 23, the only mode from 24 ([Chapter 16 §16.5](../16-jvm-internals-and-performance/README.md#165-garbage-collection-algorithms)).
-- **Key Encapsulation Mechanism API** (JEP 452) — `javax.crypto.KEM`, the building block for hybrid and **post-quantum** key exchange (agreeing on a shared secret key in a way quantum computers can't break).
-- **Warnings for dynamically loaded agents** (JEP 451) — attaching a Java agent to a running JVM now prints a warning; tools like Mockito's (the popular **mocking** library — mocks are fake objects used in tests, [Chapter 18](../18-testing-build-and-tooling/README.md)) inline mock maker should be loaded with `-javaagent` at start-up.
+- **Key Encapsulation Mechanism API** (JEP 452) — `javax.crypto.KEM`, the building block for hybrid and **post-quantum** key exchange.
+- **Warnings for dynamically loaded agents** (JEP 451) — attaching a Java agent to a running JVM now prints a warning; tools like Mockito's inline mock maker ([Chapter 18](../18-testing-build-and-tooling/README.md)) should be loaded with `-javaagent` at start-up.
 
 ---
 
@@ -302,7 +272,7 @@ a line
 `_` has been a reserved keyword since Java 9, so no valid old code breaks. You can use several `_` in the same scope.
 
 ### Foreign Function & Memory API (JEP 454)
-**What it is:** a pure-Java way to call **native** (C) libraries and to work with memory outside the **heap** (the JVM-managed memory where objects live; memory outside it is called *off-heap*) — the safe, fast replacement for JNI (the Java Native Interface, which needed hand-written C glue code) and for `sun.misc.Unsafe` memory access. **Key types:** `Linker` (makes a Java `MethodHandle` — a callable reference to a function — for a C function), `FunctionDescriptor` (the C signature), `Arena` (owns off-heap memory and frees it when closed), `MemorySegment` (a bounded, checked region of memory), `ValueLayout` (C types like `int`, `long`, pointer).
+**What it is:** a pure-Java way to call **native** (C) libraries and to work with *off-heap* memory — the safe, fast replacement for JNI (the Java Native Interface, which needed hand-written C glue) and for `sun.misc.Unsafe` memory access. **Key types:** `Linker` (makes a Java `MethodHandle` for a C function), `FunctionDescriptor` (the C signature), `Arena` (owns off-heap memory and frees it when closed), `MemorySegment` (a bounded, checked region of memory), `ValueLayout` (C types like `int`, `long`, pointer).
 
 [`code/ch17/v22/ForeignStrlen.java`](code/ch17/v22/ForeignStrlen.java) calls the C library's `strlen`:
 ```java
@@ -328,20 +298,20 @@ WARNING: Restricted methods will be blocked in a future release unless native ac
 strlen = 20
 off-heap ints: [0, 1, 4, 9, 16], 20 bytes
 ```
-Calling native code can crash the JVM, so such methods are **restricted**: grant access explicitly with `--enable-native-access=ALL-UNNAMED` (or a module name). Real-world users: Apache Lucene (the search library behind Elasticsearch; uses memory-mapped index files), database drivers, and **bindings** (ready-made Java wrappers for a C library) generated by the **jextract** tool from C header files (`.h` files that declare a C library's functions).
+Calling native code can crash the JVM, so such methods are **restricted**: grant access explicitly with `--enable-native-access=ALL-UNNAMED` (or a module name). Real-world users: Apache Lucene (the search library behind Elasticsearch; memory-mapped index files), database drivers, and **bindings** (ready-made Java wrappers for a C library) generated by the **jextract** tool from C header files.
 
 ### Launch multi-file source-code programs (JEP 458)
 `java Main.java` now compiles and runs a program spread over several source files in a directory tree — no build step for small tools and learning. See [Chapter 1 §1.10](../01-java-and-the-jvm/README.md#110-launching-source-files-directly).
 
 ### Region pinning for G1 (JEP 423)
-Native code holding a **pointer** (a raw memory address) into a Java array (a JNI "critical region") no longer blocks G1 garbage collection; G1 just avoids moving that one region.
+Native code holding a pointer into a Java array (a JNI "critical region") no longer blocks G1 garbage collection; G1 just avoids moving that one region.
 
 ---
 
 ## 17.8 Java 23
 
 ### Markdown documentation comments (JEP 467)
-Javadoc comments can be written in **Markdown** (the lightweight `**bold**`, `- list` text format) using `///` lines instead of HTML inside `/** … */`. [`code/ch17/v23/MarkdownDoc.java`](code/ch17/v23/MarkdownDoc.java):
+Javadoc comments can be written in **Markdown** using `///` lines instead of HTML inside `/** … */`. [`code/ch17/v23/MarkdownDoc.java`](code/ch17/v23/MarkdownDoc.java):
 ```java
 /// JEP 467 (Java 23): documentation comments written in **Markdown**.
 ///
@@ -368,7 +338,7 @@ public class MarkdownDoc<T> {
 
 ### Also in 23
 - **ZGC generational mode by default** (JEP 474).
-- **`sun.misc.Unsafe` memory-access methods deprecated for removal** (JEP 471; `Unsafe` is an internal JDK class for raw memory access) — the FFM API and `VarHandle` (a typed, safe handle for reading/writing a variable with chosen memory-ordering guarantees) are the replacements.
+- **`sun.misc.Unsafe` memory-access methods deprecated for removal** (JEP 471) — the FFM API and `VarHandle` (a typed handle for reading/writing a variable with chosen memory-ordering guarantees) are the replacements.
 - **String templates withdrawn.** They were previewed in 21 (JEP 430) and 22 (JEP 459); a third preview (JEP 465) was proposed for 23 but **withdrawn**, and the feature was removed from JDK 23. The designers decided the syntax (`STR."Hello \{name}"`) and processor model needed rethinking. There is no replacement yet — use `String.formatted`, `+`, `StringBuilder` or `MessageFormat` ([Chapter 7 §7.4](../07-core-apis/README.md#74-formatting-text-and-numbers)). Don't trust tutorials from 2023–24 that show `STR.` templates: that code doesn't compile on any current JDK.
 
 ---
@@ -376,7 +346,7 @@ public class MarkdownDoc<T> {
 ## 17.9 Java 24
 
 ### Stream gatherers (JEP 485)
-`Stream.gather(Gatherer)` adds **custom intermediate operations** (steps in the middle of a stream pipeline, like `map` or `filter`) — the missing counterpart to custom collectors. Built-ins in `java.util.stream.Gatherers`: `windowFixed`, `windowSliding`, `fold`, `scan`, `mapConcurrent`. Full coverage, including writing your own: [Chapter 12 §12.9](../12-streams/README.md#129-stream-gatherers-java-24). [`code/ch17/v24/GatherersDemo.java`](code/ch17/v24/GatherersDemo.java):
+`Stream.gather(Gatherer)` adds **custom intermediate operations** — the missing counterpart to custom collectors. Built-ins in `java.util.stream.Gatherers`: `windowFixed`, `windowSliding`, `fold`, `scan`, `mapConcurrent`. Full coverage, including writing your own: [Chapter 12 §12.9](../12-streams/README.md#129-stream-gatherers-java-24). [`code/ch17/v24/GatherersDemo.java`](code/ch17/v24/GatherersDemo.java):
 ```java
 Stream.of(1, 2, 3, 4, 5, 6, 7).gather(Gatherers.windowFixed(3)).toList()
 Stream.of(1, 2, 3, 4, 5).gather(Gatherers.windowSliding(2)).toList()
@@ -392,7 +362,7 @@ Output:
 ```
 
 ### Class-File API (JEP 484)
-**What it is:** a standard API (`java.lang.classfile`) for reading, writing and transforming `.class` files. **Why:** frameworks and tools (Spring, Hibernate, Mockito, the JDK itself) generate or rewrite **bytecode** (the compiled instructions inside `.class` files), traditionally with the third-party ASM library, which always lags behind new class-file versions. The JDK's own API is updated in lock-step with each release. [`code/ch17/v24/ClassFileDemo.java`](code/ch17/v24/ClassFileDemo.java) parses its own class file:
+**What it is:** a standard API (`java.lang.classfile`) for reading, writing and transforming `.class` files. **Why:** frameworks and tools (Spring, Hibernate, Mockito, the JDK itself) generate or rewrite bytecode, traditionally with the third-party ASM library, which always lags behind new class-file versions. The JDK's own API is updated in lock-step with each release. [`code/ch17/v24/ClassFileDemo.java`](code/ch17/v24/ClassFileDemo.java) parses its own class file:
 ```java
 ClassModel cm = ClassFile.of().parse(bytes);
 for (MethodModel m : cm.methods()) {
@@ -413,13 +383,13 @@ square(7) = 49
 Major version 69 = Java 25 ([Chapter 1 §1.6](../01-java-and-the-jvm/README.md#16-bytecode-and-class-files)). Note how pattern matching (`instanceof InvokeInstruction inv`) makes walking a model natural. Application developers rarely need this API directly.
 
 ### Virtual threads without pinning (JEP 491)
-Before 24, a virtual thread that blocked **inside a `synchronized` block** stayed *pinned* (stuck) to its carrier OS thread, which could starve the scheduler (leave it with no free carriers) — the standard advice was "replace `synchronized` with `ReentrantLock`". Since 24, virtual threads can release their carrier while holding or waiting for a **monitor** (the lock behind `synchronized`), so that advice is largely obsolete. (Pinning still happens in native frames.) Details: [Chapter 15](../15-concurrency-2-modern/README.md).
+Before 24, a virtual thread that blocked **inside a `synchronized` block** stayed *pinned* to its carrier OS thread, which could starve the scheduler of free carriers — the standard advice was "replace `synchronized` with `ReentrantLock`". Since 24, virtual threads can release their carrier while holding or waiting for a **monitor** (the lock behind `synchronized`), so that advice is largely obsolete. (Pinning still happens in native frames.) Details: [Chapter 15](../15-concurrency-2-modern/README.md).
 
 ### Also final in 24
-- **Ahead-of-time class loading and linking** (JEP 483): record a **training run** (a sample run of the app) into an AOT (*ahead-of-time*) cache, start faster in production ([Chapter 1 §1.7](../01-java-and-the-jvm/README.md#17-how-the-jvm-runs-your-code-class-loading-interpreter-jit)).
+- **Ahead-of-time class loading and linking** (JEP 483): record a **training run** into an AOT cache, start faster in production ([Chapter 1 §1.7](../01-java-and-the-jvm/README.md#17-how-the-jvm-runs-your-code-class-loading-interpreter-jit)).
 - **Security Manager permanently disabled** (JEP 486): `System.setSecurityManager` throws; `-Djava.security.manager` is an error.
-- **Post-quantum cryptography**: ML-KEM key encapsulation (JEP 496) and ML-DSA signatures (JEP 497), standardised by NIST (the US National Institute of Standards and Technology) in FIPS 203/204 (US federal standards).
-- **ZGC non-generational mode removed** (JEP 490), **late barrier expansion for G1** (JEP 475, a JIT-internal simplification — the JIT is the JVM's just-in-time compiler, and *barriers* are small bits of code it adds for the garbage collector), **linking run-time images without JMODs** (JEP 493, lets `jlink` work on JDKs shipped without the `jmods` folder).
+- **Post-quantum cryptography**: ML-KEM key encapsulation (JEP 496) and ML-DSA signatures (JEP 497), standardised by NIST in FIPS 203/204.
+- **ZGC non-generational mode removed** (JEP 490), **late barrier expansion for G1** (JEP 475, a JIT-internal simplification of GC barrier code), **linking run-time images without JMODs** (JEP 493, lets `jlink` work on JDKs shipped without the `jmods` folder).
 - Integrity warnings: **JNI** use prints a warning unless enabled (JEP 472); **`Unsafe` memory access** prints a warning on first use (JEP 498).
 
 ---
@@ -461,7 +431,7 @@ a date    : TUESDAY
 **Trade-off:** ambiguity. Add `import module java.desktop;` next to `java.base` and a plain `List` becomes ambiguous (`java.util.List` or `java.awt.List`?) — fix it with a normal single-type import (`import java.util.List;`), which always wins over module imports. The importing class does not have to be in a named module: this demo lives on the class path.
 
 ### Flexible constructor bodies (JEP 513)
-Statements may now appear **before** `super(…)` (the call to the parent class's constructor) or `this(…)`, as long as they don't use the object being constructed (except to assign its own fields). **The problem it solves:** validating or computing arguments used to need a static helper method or wasted superclass work; and a superclass constructor calling an overridden method saw the subclass's fields still at default values. [`code/ch17/v25/FlexibleConstructors.java`](code/ch17/v25/FlexibleConstructors.java):
+Statements may now appear **before** `super(…)` or `this(…)`, as long as they don't use the object being constructed (except to assign its own fields) — validation, computing arguments, early field assignment. **The problem it solves:** validating or computing arguments used to need a static helper or wasted superclass work; and a superclass constructor calling an overridden method saw the subclass's fields still at default values. [`code/ch17/v25/FlexibleConstructors.java`](code/ch17/v25/FlexibleConstructors.java):
 ```java
 static class Account {
     final String id;
@@ -486,10 +456,10 @@ Output:
   SavingsAccount(SA-1, rate=0.03)
   rejected before any superclass work: bad rate 5.0
 ```
-Before Java 25 the overridden `describe()` would have printed `rate=0.0` (the field wasn't assigned yet). Still, calling overridable methods from constructors is a **design smell** (a sign of a likely design problem) ([Chapter 6](../06-oop-inheritance-interfaces-and-more/README.md)); this feature makes it safe where it can't be avoided. Not allowed in the **prologue** (the code before `super(…)`): reading fields, calling instance methods, using `this` as a value.
+Before Java 25 the overridden `describe()` would have printed `rate=0.0` (the field wasn't assigned yet). Calling overridable methods from constructors is still a design smell ([Chapter 6](../06-oop-inheritance-interfaces-and-more/README.md)); this feature makes it safe where it can't be avoided. Not allowed in the **prologue** (the code before `super(…)`): reading fields, calling instance methods, using `this` as a value.
 
 ### Scoped values (JEP 506)
-A `ScopedValue` passes read-only context (the current user, a request ID, a **transaction** — a group of database operations that succeed or fail together) to code deep in a call chain **without** method parameters — like a `ThreadLocal` (a variable with a separate value per thread), but immutable, automatically unbound when the scope ends (no leaks on thread pools), and cheap to inherit into child threads in **structured concurrency** (a way of running subtasks as one unit; still preview, §17.11). Details and comparison with `ThreadLocal`: [Chapter 15](../15-concurrency-2-modern/README.md). [`code/ch17/v25/ScopedValueDemo.java`](code/ch17/v25/ScopedValueDemo.java):
+A `ScopedValue` passes read-only context (the current user, a request ID, a transaction) to code deep in a call chain **without** method parameters — like a `ThreadLocal`, but immutable, automatically unbound when the scope ends (no leaks on thread pools), and cheap to inherit into child threads in **structured concurrency** (still preview, §17.11). Details and comparison with `ThreadLocal`: [Chapter 15](../15-concurrency-2-modern/README.md). [`code/ch17/v25/ScopedValueDemo.java`](code/ch17/v25/ScopedValueDemo.java):
 ```java
 static final ScopedValue<String> USER = ScopedValue.newInstance();
 
@@ -517,7 +487,7 @@ bound outside? false
 ```
 
 ### Key derivation function API (JEP 510)
-`javax.crypto.KDF` derives **keys** (the secret values encryption algorithms use) from a secret, e.g. with **HKDF** (HMAC-based Key Derivation Function, used by TLS 1.3 — the encryption protocol behind HTTPS — and many protocols). [`code/ch17/v25/HkdfDemo.java`](code/ch17/v25/HkdfDemo.java) checks the JDK against test case 1 of RFC 5869 (an RFC, *Request for Comments*, is an official internet standard document), the HKDF standard:
+`javax.crypto.KDF` derives **keys** from a secret, e.g. with **HKDF** (HMAC-based Key Derivation Function, used by TLS 1.3 and many protocols). [`code/ch17/v25/HkdfDemo.java`](code/ch17/v25/HkdfDemo.java) checks the JDK against test case 1 of RFC 5869, the HKDF standard:
 ```java
 KDF hkdf = KDF.getInstance("HKDF-SHA256");
 byte[] okm = hkdf.deriveData(HKDFParameterSpec.ofExtract()
@@ -529,7 +499,7 @@ OKM      = 3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007
 RFC 5869 = 3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007208d5b887185865
 match    : true
 ```
-Use `deriveKey("AES", spec)` (AES = the standard symmetric encryption algorithm) to get a `SecretKey` instead of raw bytes.
+Use `deriveKey("AES", spec)` to get a `SecretKey` instead of raw bytes.
 
 ### JVM and tooling in 25
 | JEP | Feature | One line |
@@ -538,7 +508,7 @@ Use `deriveKey("AES", spec)` (AES = the standard symmetric encryption algorithm)
 | 521 | Generational Shenandoah | `-XX:+UseShenandoahGC -XX:ShenandoahGCMode=generational`, now a product feature |
 | 514 | AOT command-line ergonomics | One-step AOT cache creation: `-XX:AOTCacheOutput=app.aot` |
 | 515 | AOT method profiling | The AOT cache also stores method profiles, so the JIT warms up faster |
-| 518 | JFR cooperative sampling | Safer, more robust stack sampling in Flight Recorder (JFR, the JVM's built-in low-overhead event recorder) |
+| 518 | JFR cooperative sampling | Safer, more robust stack sampling in Flight Recorder |
 | 520 | JFR method timing and tracing | Time or trace chosen methods via JFR without changing code |
 | 503 | Remove the 32-bit x86 port | Only 64-bit x86 remains |
 
@@ -553,14 +523,14 @@ These are **not** final in Java 25. Don't use them in production code; the book 
 | **Structured concurrency** — treat a group of subtasks as one unit (fail together, cancel together) | Incubator 19 (428), 20 (437); preview 21 (453), 22 (462), 23 (480), 24 (499) | **Fifth preview** (505) | Sixth preview in 26 (525), seventh in 27 (533) |
 | **Primitive types in patterns, `instanceof` and `switch`** — e.g. `case int i when i > 0`, `x instanceof byte b` | Preview 23 (455), 24 (488) | **Third preview** (507) | Fourth preview in 26 (530), fifth in 27 (532) |
 | **Stable values** — lazily initialised constants the JIT can treat as `final` | — | **Preview** (502) | Renamed **Lazy Constants**: second preview in 26 (526), third in 27 (531) |
-| **PEM encodings of cryptographic objects** — read/write keys and certificates (signed documents proving who owns a public key) as PEM text (the `-----BEGIN …-----` Base64 format) | — | **Preview** (470) | Second preview in 26 (524), third in 27 (538) |
-| **Vector API** — portable SIMD computations (*single instruction, multiple data*: one CPU instruction works on several numbers at once) (`jdk.incubator.vector`) | Incubating since 16; 17 (414) … 24 (489) | **Tenth incubator** (508) | 11th incubator in 26 (529), 12th in 27 (537) — waiting for Project Valhalla's value classes (objects without identity that can be stored as compactly as primitives) |
+| **PEM encodings of cryptographic objects** — read/write keys and certificates as PEM text (the `-----BEGIN …-----` Base64 format) | — | **Preview** (470) | Second preview in 26 (524), third in 27 (538) |
+| **Vector API** — portable SIMD computations (`jdk.incubator.vector`) | Incubating since 16; 17 (414) … 24 (489) | **Tenth incubator** (508) | 11th incubator in 26 (529), 12th in 27 (537) — waiting for Project Valhalla's value classes (objects without identity, stored as compactly as primitives) |
 | **JFR CPU-time profiling** (Linux only) | — | **Experimental** (509) | — |
 
 To try a preview on JDK 25: `javac --release 25 --enable-preview Foo.java` and `java --enable-preview Foo`; single-file launch: `java --enable-preview --source 25 Foo.java`.
 
 **What JDK 26 (GA 17 March 2026) and JDK 27 (GA 15 September 2026) finalised** — both non-LTS, noted briefly:
-- **26**: HTTP/3 (the newest HTTP version, running over the UDP-based QUIC protocol) for the HTTP Client API (517), AOT object caching with any GC (516), G1 throughput improvement by reducing synchronization (522), *Prepare to Make Final Mean Final* (500 — warnings when deep reflection mutates `final` fields), Applet API removed (504).
+- **26**: HTTP/3 (over the UDP-based QUIC protocol) for the HTTP Client API (517), AOT object caching with any GC (516), G1 throughput improvement by reducing synchronization (522), *Prepare to Make Final Mean Final* (500 — warnings when deep reflection mutates `final` fields), Applet API removed (504).
 - **27**: G1 the default collector in all environments (523), compact object headers on by default (534), post-quantum hybrid key exchange for TLS 1.3 (527), JFR in-process data redaction (536).
 
 The next LTS is expected to be **Java 29** (September 2027).
@@ -583,8 +553,8 @@ The next LTS is expected to be **Java 29** (September 2027).
 | String templates withdrawn | 465, 23 | Code written against the 21/22 preview must be rewritten |
 
 **A practical upgrade checklist**
-1. Build and run the **test suite** (all the project's automated tests) on the new JDK with `--release` still at the old version, then raise `--release`.
-2. Upgrade build plugins (add-ons for the build tools Maven/Gradle, [Chapter 18](../18-testing-build-and-tooling/README.md)) and bytecode-heavy libraries first (Maven/Gradle plugins, Lombok — generates boilerplate code at compile time — Mockito, Byte Buddy — a bytecode-generation library — Spring, Hibernate): they must understand the new class-file version.
+1. Run the test suite on the new JDK with `--release` still at the old version, then raise `--release`.
+2. Upgrade build plugins ([Chapter 18](../18-testing-build-and-tooling/README.md)) and bytecode-heavy libraries first (Lombok, Mockito, Byte Buddy, Spring, Hibernate): they must understand the new class-file version.
 3. Run `jdeps --jdk-internals your.jar` to find uses of JDK internals and `jdeprscan your.jar` to find deprecated APIs.
 4. Watch the startup warnings (agents, JNI, `Unsafe`) — they become errors in future releases.
 5. Re-check GC and memory settings; defaults changed (generational ZGC, compact headers in 27).
@@ -598,13 +568,6 @@ The next LTS is expected to be **Java 29** (September 2027).
 - *What happened to string templates?* Previewed in 21 and 22, withdrawn in 23; no replacement yet.
 - *Why upgrade from 21 to 25?* LTS support horizon, no `synchronized` pinning with virtual threads, faster start-up with AOT caches, smaller heaps with compact object headers, and the new language conveniences.
 - *Can you use a preview feature in production?* Technically with `--enable-preview`, but it may change or disappear in the next release and class files compiled with previews only run on that exact release — so no.
-
-### Self-check
-1. In which release did virtual threads become final, and which JEP? → Java 21, JEP 444.
-2. Name two features finalised in Java 25. → Any of: compact source files and instance main (512), module import declarations (511), flexible constructor bodies (513), scoped values (506), KDF API (510), compact object headers (519), generational Shenandoah (521).
-3. Did Java 19 or 20 finalise any language features? → No — only previews/incubators (and the RISC-V port in 19).
-4. What does `import module java.base;` import? → All public top-level types of every package exported by `java.base`.
-5. Which statements are allowed before `super(...)` since Java 25? → Ones that don't use `this` — validation, computing arguments, and assigning the class's own fields.
 
 ---
 

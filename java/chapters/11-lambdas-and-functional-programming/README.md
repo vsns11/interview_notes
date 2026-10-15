@@ -1,21 +1,8 @@
 # Chapter 11 — Lambdas and Functional Programming
 
-Until Java 8, if you wanted to hand a piece of *behaviour* to a method — "sort by length", "run this later", "keep only the big orders" — you had to wrap it in an object, usually an anonymous class with five lines of ceremony around one line of logic. **Lambdas** (Java 8) let you write that behaviour directly as a value: `s -> s.length()`. Together with **functional interfaces**, **method references** and **`Optional`**, they brought a **functional style** (programming mostly by passing and combining functions, rather than by changing variables step by step) into Java that the collections API ([Chapter 10](../10-collections/README.md)) and streams ([Chapter 12](../12-streams/README.md)) are built on.
+Before Java 8, handing a piece of *behaviour* to a method — "sort by length", "run this later", "keep only the big orders" — meant wrapping it in an object, usually an anonymous class with five lines of ceremony around one line of logic. **Lambdas** (Java 8) let you write that behaviour directly as a value: `s -> s.length()`. With **functional interfaces**, **method references** and **`Optional`** they brought a **functional style** (programming by passing and combining functions rather than changing variables step by step) that collections ([Chapter 10](../10-collections/README.md)) and streams ([Chapter 12](../12-streams/README.md)) are built on.
 
-This chapter explains how lambdas work, which built-in function types exist and when to use each, how to combine small functions into bigger ones, how to use `Optional` well (and badly), and which functional-programming ideas pay off in everyday Java.
-
-**What you'll learn**
-
-1. Why lambdas exist: passing behaviour as a parameter.
-2. Functional interfaces, lambda syntax and target typing; how lambdas differ from anonymous classes.
-3. The `java.util.function` catalogue, including primitive specialisations.
-4. The four kinds of method reference.
-5. Variable capture and "effectively final"; what `this` means inside a lambda.
-6. Composing functions: `andThen`, `compose`, `Predicate.and/or/not`, function factories.
-7. `Optional`: the right uses, the wrong uses.
-8. Functional style in practice: pure functions, immutability, higher-order functions, currying, laziness, memoisation, strategies, checked exceptions.
-
-All runnable code is in [`code/`](code/) (package `ch11.*`), compiled with `javac --release 25` and run on JDK 26 (the **JDK**, Java Development Kit, is the toolset that compiles and runs Java; `javac` is its compiler, and `--release 25` tells it to target the Java 25 language and library level).
+All runnable code is in [`code/`](code/) (package `ch11.*`), compiled with `javac --release 25` (target the Java 25 language and library level) and run on JDK 26.
 
 > **Exam depth.** Which lambda forms compile, `var` in parameters, method-reference puzzles, the full built-in interface table with method names (`test`, `apply`, `accept`, `get`, `applyAsInt`…) and "effectively final" traps are drilled in [OCP Chapter 8 — Lambdas and functional interfaces](../../../../ocp-java21-study/chapters/08-lambdas-functional/README.md) (see *Gotchas & exam traps*). `Optional` exam questions are in [OCP Chapter 10](../../../../ocp-java21-study/chapters/10-streams/README.md#1-optional--optionalbasicsjava).
 
@@ -24,9 +11,7 @@ All runnable code is in [`code/`](code/) (package `ch11.*`), compiled with `java
 ## 11.1 Why lambdas: passing behaviour
 
 ### The problem it solves
-Many methods need a small piece of logic from the caller: `sort` needs "how to compare", a button needs "what to do when clicked", a thread needs "what to run", a filter needs "what to keep". This is called **behaviour parameterisation** — making behaviour an argument, just like data.
-
-Before Java 8 the only way was an object implementing an interface, typically an **anonymous class** (a class defined and instantiated in one expression, [§6.11](../06-oop-inheritance-interfaces-and-more/README.md#611-local-classes-anonymous-classes-and-lambdas)):
+Many methods need a small piece of logic from the caller: `sort` needs "how to compare", a thread needs "what to run", a filter needs "what to keep". Making behaviour an argument, just like data, is **behaviour parameterisation**. Before Java 8 the only way was an **anonymous class** (defined and instantiated in one expression, [§6.11](../06-oop-inheritance-interfaces-and-more/README.md#611-local-classes-anonymous-classes-and-lambdas)):
 
 ```java
 names.sort(new Comparator<String>() {
@@ -34,30 +19,28 @@ names.sort(new Comparator<String>() {
 });
 ```
 
-Five lines, of which only `Integer.compare(a.length(), b.length())` is the idea. A **lambda expression** is an anonymous function: parameters, an arrow, a body.
+Five lines, one idea. A **lambda expression** is an anonymous function — parameters, an arrow, a body — and the receiving method decides when (and whether) to run it:
 
 ```java
 names.sort((a, b) -> Integer.compare(a.length(), b.length()));
 ```
 
-Analogy: instead of hiring a whole employee (a class) to do one task, you hand over a sticky note with the instructions (the lambda). The receiving method decides when — and whether — to follow them.
-
 ### Why it matters
-- **Less noise**, more intent — *Effective Java* (Joshua Bloch's widely used book of numbered Java best-practice "Items") Item 42: "prefer lambdas to anonymous classes".
-- APIs could become far more flexible: `Map.merge`, `List.removeIf`, `Comparator.comparing`, `CompletableFuture`, the Streams API — all take functions.
-- Deferred and conditional execution (code that runs later, or only if some condition holds): pass a `Supplier` and the work happens only if needed (§11.8).
+- **Less noise, more intent** — *Effective Java* (Joshua Bloch's book of numbered best-practice "Items") Item 42: "prefer lambdas to anonymous classes".
+- Function-taking APIs: `Map.merge`, `List.removeIf`, `Comparator.comparing`, `CompletableFuture`, Streams.
+- Deferred and conditional execution: pass a `Supplier` and the work happens only if needed (§11.8).
 
 ---
 
 ## 11.2 Functional interfaces and lambda syntax
 
 ### What it is
-A **functional interface** is an interface with **exactly one abstract method** (a method declared with no body, which an implementing class or lambda must supply) (a "single abstract method", or **SAM**, type). A lambda is simply a compact way to create an instance of one. `Runnable` (`void run()`), `Comparator<T>` (`int compare(T, T)`) and `Callable<V>` are classic examples.
+A **functional interface** has **exactly one abstract method** (a "single abstract method", or **SAM**, type); a lambda is a compact way to create an instance of one. Classic examples: `Runnable` (`void run()`), `Comparator<T>` (`int compare(T, T)`), `Callable<V>`.
 
 Rules:
 1. Only *abstract* methods count. `default` and `static` methods are fine, and so are abstract re-declarations of `Object`'s public methods (that's why `Comparator` can declare `equals` and still be functional).
-2. The optional **`@FunctionalInterface`** **annotation** (an `@Name` tag attached to code that the compiler or tools can read) asks the compiler to verify the "exactly one" rule — a guard against someone later adding a second abstract method.
-3. A lambda has **no type of its own**. Its type comes from the context it appears in (the compiler works it out, which is called **type inference**) — the **target type** (an assignment, a method parameter, a return, a cast). So the same text `s -> s.isEmpty()` can become a `Predicate<String>` or a `Function<String, Boolean>`. That's also why `var f = x -> x;` doesn't compile: there is no target type.
+2. The optional **`@FunctionalInterface`** annotation makes the compiler verify the "exactly one" rule — a guard against someone later adding a second abstract method.
+3. A lambda has **no type of its own**. The compiler infers it (**type inference**) from the **target type** of its context (assignment, method parameter, return, cast), so `s -> s.isEmpty()` can become a `Predicate<String>` or a `Function<String, Boolean>`. That's why `var f = x -> x;` (or `var f = () -> 42;`) doesn't compile: there is no target type.
 
 ### Syntax
 
@@ -108,13 +91,13 @@ Predicate.test=true Function.apply=false
 +=13 *=42 max=7 
 ```
 
-The last line shows lambdas are *values*: stored in a map, looked up, called — a calculator's operator table in one line.
+The last line shows lambdas are *values*: stored in a map, looked up, called.
 
 ### How it works under the hood
 1. The compiler turns the lambda body into a private method of the enclosing class (named like `lambda$main$0`).
-2. At the lambda's location it emits an **`invokedynamic`** instruction (a **bytecode** instruction — bytecode being the compact, portable instruction format that `javac` produces and the JVM runs — whose target is decided at run time on first use instead of being fixed at compile time). The first time it runs, the JVM's (Java Virtual Machine: the program that loads and executes Java bytecode) `LambdaMetafactory` generates a small class implementing the functional interface that calls that private method.
-3. No separate `.class` file per lambda appears on disk (anonymous classes produce `Outer$1.class`).
-4. A lambda that captures nothing is typically created once and reused; one that captures variables gets a new instance holding those values. (Don't rely on identity either way — it's unspecified.)
+2. At the lambda's location it emits an **`invokedynamic`** bytecode instruction ([§1.6](../01-java-and-the-jvm/README.md#16-bytecode-and-class-files)), whose target is decided at run time on first use. That first time, the JVM's `LambdaMetafactory` generates a small class implementing the functional interface that calls the private method.
+3. No `.class` file per lambda appears on disk (anonymous classes produce `Outer$1.class`).
+4. A non-capturing lambda is typically created once and reused; a capturing one gets a new instance holding the values. (Identity is unspecified either way — don't rely on it.)
 
 ### Lambda vs anonymous class
 
@@ -123,7 +106,7 @@ The last line shows lambdas are *values*: stored in a map, looked up, called —
 | Implements | only functional interfaces | any interface or class (can extend an abstract class) |
 | Number of methods | one | any; can have fields and state |
 | `this` refers to | the **enclosing** instance | the anonymous object itself |
-| Shadowing (a new variable hiding an outer one with the same name) | can't redeclare a local variable of the enclosing scope | can shadow |
+| Shadowing (redeclaring an outer name) | can't redeclare a local variable of the enclosing scope | can shadow |
 | Compiled as | `invokedynamic` + private method | a separate class file |
 
 Use an anonymous class only when you need state, several methods, or to extend a class.
@@ -132,12 +115,7 @@ Use an anonymous class only when you need state, several methods, or to extend a
 - A block body that forgets `return`, or an expression body followed by a semicolon inside: `x -> { x * 2 }` ✗ vs `x -> x * 2` ✓.
 - Mixing typed and untyped parameters: `(String a, b) -> …` ✗.
 - Naming a lambda parameter the same as an existing local variable → "variable is already defined".
-- Long multi-statement lambdas — extract a named method and use a method reference; stack traces (the list of method calls printed when an exception is thrown) and readers both benefit.
-
-### Self-check
-1. What makes an interface "functional"? → Exactly one abstract method (Object's public methods and defaults/statics don't count).
-2. Why can't you write `var f = () -> 42;`? → A lambda needs a target type; `var` provides none.
-3. What does `this` mean inside a lambda? → The enclosing object, same as outside the lambda.
+- Long multi-statement lambdas — extract a named method and use a method reference; stack traces and readers both benefit.
 
 ### TL;DR
 A lambda is an anonymous function that implements a functional interface (one abstract method). Its type comes from context. Syntax: `params -> expression` or `params -> { statements; }`. Prefer it over anonymous classes unless you need state or `this` to mean the object itself.
@@ -146,8 +124,7 @@ A lambda is an anonymous function that implements a functional interface (one ab
 
 ## 11.3 The built-in functional interfaces (`java.util.function`)
 
-### What it is
-You rarely need to write your own functional interface: `java.util.function` has **43** of them covering the common shapes. *Effective Java* Item 44: favour the standard ones — callers already know them and they come with useful **default methods** (interface methods that have a body, so every implementation gets them for free).
+`java.util.function` has **43** interfaces covering the common shapes, so you rarely write your own. *Effective Java* Item 44: favour the standard ones — callers know them and they come with useful **default methods** (interface methods with a body).
 
 ### The core shapes
 
@@ -163,10 +140,10 @@ You rarely need to write your own functional interface: `java.util.function` has
 | `UnaryOperator<T>` | `T → T` | `apply(t)` | `List.replaceAll`, transformations |
 | `BinaryOperator<T>` | `(T, T) → T` | `apply(a, b)` | `reduce`, `merge` functions |
 
-Older JDK types are functional interfaces too: `Runnable` (`() → void`), `Callable<V>` (`() → V`, may throw), `Comparator<T>`.
+Older JDK types are functional interfaces too: `Runnable` (`() → void`), `Callable<V>` (`() → V`, may throw), `Comparator<T>`. `UnaryOperator<T>` extends `Function<T, T>` and `BinaryOperator<T>` extends `BiFunction<T, T, T>`, so they inherit `apply`. Typical targets: `list.removeIf(...)` takes a `Predicate<? super E>`; `map.merge(k, 1, ...)` takes a `BiFunction<? super V, ? super V, ? extends V>` (commonly `Integer::sum`).
 
 ### Primitive specialisations
-Generics (type parameters like `<T>`, [Chapter 9](../09-generics/README.md)) only work with objects, so a `Function<Integer, Integer>` **boxes** every `int` into an `Integer` (wraps the plain number in a heap object; *unboxing* is the reverse) (allocating objects outside the small `Integer` cache — the JDK keeps ready-made `Integer` objects for -128..127 — [Chapter 7](../07-core-apis/README.md)). The primitive versions avoid that. Their names follow a pattern:
+Generics ([Chapter 9](../09-generics/README.md)) only work with objects, so a `Function<Integer, Integer>` **boxes** every `int` into an `Integer` (allocating outside the -128..127 `Integer` cache, [§7.6](../07-core-apis/README.md#76-wrapper-classes-and-autoboxing)). The primitive versions avoid that. Their names follow a pattern:
 
 | Pattern | Meaning | Examples |
 |---|---|---|
@@ -209,18 +186,12 @@ ababab
 20M calls: Function<Integer,Integer> 57 ms vs IntUnaryOperator 8 ms (machine-dependent) results equal=true
 ```
 
-The last line is a rough single-run timing (Apple M4 Pro, JDK 26 — **machine-dependent**; the JIT — the JVM's *just-in-time* compiler, which turns frequently run bytecode into optimised machine code while the program runs — can sometimes remove boxing on its own). The point stands: in hot loops over numbers, pick the primitive interface.
+The last line is a rough single-run timing (Apple M4 Pro, JDK 26 — **machine-dependent**; the JIT compiler can sometimes remove boxing on its own). The point stands: in hot loops over numbers, pick the primitive interface.
 
 ### When to write your own
 - The shape doesn't exist (three parameters, or it throws a checked exception — §11.8).
 - A domain name adds clarity and you'll attach default methods (`Discount.then` in §11.2).
 - Annotate it with `@FunctionalInterface`.
-
-### Self-check
-1. Which interface fits `list.removeIf(...)`? → `Predicate<? super E>`.
-2. Which fits `map.merge(k, 1, ...)`? → `BiFunction<? super V, ? super V, ? extends V>` (commonly written `Integer::sum`).
-3. What's the method of `ToIntFunction`? → `applyAsInt`.
-4. `UnaryOperator<T>` extends which interface? → `Function<T, T>`.
 
 ### TL;DR
 Supplier (get), Consumer (accept), Predicate (test), Function (apply) plus `Bi`/`Unary`/`Binary` variants cover almost everything. Use `Int`/`Long`/`Double` versions for primitives to avoid boxing.
@@ -230,7 +201,7 @@ Supplier (get), Consumer (accept), Predicate (test), Function (apply) plus `Bi`/
 ## 11.4 Method references
 
 ### What it is
-A **method reference** is shorthand for a lambda that does nothing but call one existing method: `String::length` means `s -> s.length()`. Like lambdas they need a target functional interface. *Effective Java* Item 43: prefer them when they are clearer than the lambda — and keep the lambda when it isn't.
+A **method reference** is shorthand for a lambda that only calls one existing method: `String::length` means `s -> s.length()`. It also needs a target functional interface. *Effective Java* Item 43: prefer them when clearer than the lambda — and keep the lambda when not.
 
 ### The four kinds
 
@@ -241,7 +212,7 @@ A **method reference** is shorthand for a lambda that does nothing but call one 
 | Unbound instance (any object of a type) | `Class::instanceMethod` | `(obj, args) -> obj.method(args)` | `String::toUpperCase`, `String::startsWith` |
 | Constructor | `Class::new` | `(args) -> new Class(args)` | `ArrayList::new`, `User::new`, `int[]::new` |
 
-The **unbound** form is the one that confuses people: the *first* parameter of the functional interface becomes the object the method is called on. So `BiFunction<String, String, Boolean> f = String::startsWith` means `(s, p) -> s.startsWith(p)`.
+The **unbound** form confuses people: the *first* parameter of the functional interface becomes the receiver. So `BiFunction<String, String, Boolean> f = String::startsWith` means `(s, p) -> s.startsWith(p)`, and `Comparator<String> c = String::compareToIgnoreCase` means `(a, b) -> a.compareToIgnoreCase(b)`.
 
 ### Code
 
@@ -279,13 +250,8 @@ Amy Kim Zed
 Notes:
 - `parse.apply("42") + 1` printed `43`: the `Integer` result was unboxed and added before string concatenation started.
 - `String::length` fits both `ToIntFunction<String>` and `Function<String, Integer>` — the target type decides.
-- A **bound** reference evaluates its receiver expression **once**, when the reference is created (and throws `NullPointerException` — the error you get when using a reference that points to no object — right then if it's `null`). It holds that *object*, so later mutations of the object are visible (`v1+v2`), but reassigning the variable afterwards would not change the reference.
-- Overloaded methods (several methods sharing one name but taking different parameters) can make a reference ambiguous (e.g. `Integer::toString` fits both the static `toString(int)` and the instance `toString()` for a `Function<Integer, String>`) — use a lambda then.
-
-### Self-check
-1. Rewrite `s -> s.trim()` as a method reference. → `String::trim`.
-2. Rewrite `() -> new HashMap<String, Integer>()`. → `HashMap::new` (target `Supplier<Map<String,Integer>>`).
-3. What does `Comparator<String> c = String::compareToIgnoreCase;` mean? → `(a, b) -> a.compareToIgnoreCase(b)` — unbound, first parameter is the receiver.
+- A **bound** reference evaluates its receiver expression **once**, when the reference is created (throwing `NullPointerException` right then if it's `null`). It holds that *object*, so later mutations are visible (`v1+v2`), but reassigning the variable afterwards would not change the reference.
+- Overloads can make a reference ambiguous (e.g. `Integer::toString` fits both static `toString(int)` and instance `toString()` for a `Function<Integer, String>`) — use a lambda then.
 
 ### TL;DR
 Four kinds: `Class::static`, `obj::method` (bound), `Class::method` (unbound: first argument is the receiver), `Class::new`. Use when it reads better than the lambda.
@@ -295,14 +261,14 @@ Four kinds: `Class::static`, `obj::method` (bound), `Class::method` (unbound: fi
 ## 11.5 Variable capture and "effectively final"
 
 ### What it is
-A lambda can use variables from the surrounding code — this is called **capturing**, and a function that carries captured variables is a **closure**. Java's rule: a captured **local variable or parameter** must be **final or effectively final** — never reassigned after initialisation (whether or not it says `final`).
+A lambda can use variables from the surrounding code — **capturing**; a function carrying captured variables is a **closure**. Java's rule: a captured **local variable or parameter** must be **final or effectively final** — never reassigned after initialisation (whether or not it says `final`).
 
 ### Why the rule exists
-1. Local variables live on the method's **stack frame** (the private scratch area a method call gets for its locals and parameters), which disappears when the method returns, but a lambda can outlive it (stored, passed to another **thread** — an independent path of execution running alongside others in the same program, [Chapter 14](../14-concurrency-1/README.md)). So Java **copies the value** into the lambda object.
-2. If the variable could change later, the copy and the original would silently disagree. Forbidding reassignment makes the copy always correct.
-3. It also prevents a whole class of **data races** (two threads touching the same variable at the same time, at least one writing, with no coordination — giving unpredictable results): a local variable mutated by lambdas running on several threads.
+1. Locals live on the method's **stack frame**, which disappears when the method returns, but a lambda can outlive it (stored, or passed to another thread, [Chapter 14](../14-concurrency-1/README.md)). So Java **copies the value** into the lambda object.
+2. If the variable could change, copy and original would silently disagree; forbidding reassignment keeps the copy correct.
+3. It also rules out **data races** on locals (several threads touching one variable, at least one writing, uncoordinated).
 
-**Fields are different.** Instance fields are reached through the captured `this` reference (and static fields directly), so lambdas may read and modify them freely. That is legal — and exactly why it's easy to create thread-safety bugs (code that breaks only when several threads use it at once) with shared **mutable** (changeable) fields.
+**Fields are different.** Instance fields are reached through the captured `this` (static fields directly), so lambdas may read and modify them freely — which is exactly why shared **mutable** fields are an easy source of thread-safety bugs.
 
 ### Code
 
@@ -336,14 +302,9 @@ field modified from lambda: 2
 ```
 
 ### Common mistakes
-- Capturing the classic `for (int i…)` index — it's reassigned by `i++`. Copy to a local or use `IntStream.range(0, n).forEach(i -> …)`.
-- Working around the rule with one-element arrays (`int[] c = {0}; list.forEach(x -> c[0]++)`) or `AtomicInteger` (a thread-safe integer holder whose updates happen as one indivisible step) just to accumulate. It compiles, but you've re-created shared mutable state; if the code later runs in parallel it breaks. Compute a result instead (`sum`, `count`, `collect`).
-- Assuming a captured *object* is frozen — only the variable is effectively final; the object it points to can still be mutated.
-
-### Self-check
-1. Can a lambda modify a captured local variable? → No; it can't even read one that is reassigned anywhere.
-2. Can it modify an instance field? → Yes (via `this`), which is also why that can be unsafe across threads.
-3. Why does capturing the variable of an enhanced for loop work? → Each iteration declares a fresh variable that is never reassigned.
+- Capturing the classic `for (int i…)` index — it's reassigned by `i++`. Copy to a local or use `IntStream.range(0, n).forEach(i -> …)`. (The enhanced-for variable is fine: each iteration declares a fresh, never-reassigned variable.)
+- Working around the rule with one-element arrays (`int[] c = {0}; list.forEach(x -> c[0]++)`) or an `AtomicInteger` just to accumulate. It compiles, but re-creates shared mutable state that breaks if the code later runs in parallel. Compute a result instead (`sum`, `count`, `collect`).
+- Assuming a captured *object* is frozen — only the variable is effectively final; the object can still be mutated.
 
 ### TL;DR
 Captured locals must be effectively final (values are copied into the lambda). Fields aren't restricted. Don't smuggle mutation through arrays or atomics — return results instead.
@@ -353,11 +314,11 @@ Captured locals must be effectively final (values are copied into the lambda). F
 ## 11.6 Composing functions
 
 ### What it is
-**Composition** builds a new function from existing ones, like joining pipes. The functional interfaces ship default and static methods for this, so you can assemble behaviour from small, tested, named pieces.
+**Composition** builds a new function from existing ones, like joining pipes. The functional interfaces ship default and static methods for it, so behaviour is assembled from small, tested, named pieces.
 
 | Interface | Composition methods |
 |---|---|
-| `Function` | `f.andThen(g)` = g(f(x)); `f.compose(g)` = f(g(x)); `Function.identity()` |
+| `Function` | `f.andThen(g)` = g(f(x)) (f first); `f.compose(g)` = f(g(x)) (g first); `Function.identity()` returns its input unchanged (handy in `toMap(identity(), …)`) |
 | `Predicate` | `and`, `or`, `negate`, `Predicate.not(p)` (11), `Predicate.isEqual(x)` |
 | `Consumer` / `BiConsumer` | `andThen` — run one after the other |
 | `BiFunction` | `andThen(Function)` |
@@ -402,18 +363,13 @@ length, then reverse alpha: [a, cc, bb, aa, ddd]
 ```
 
 Notes:
-- `and`/`or` **short-circuit** (stop as soon as the answer is known) like `&&`/`||`: the second predicate isn't evaluated when the first decides.
+- `and`/`or` **short-circuit** like `&&`/`||`: the second predicate isn't evaluated when the first decides.
 - `startsJ.or(shortWord)` kept `""` and `"  "` because they are short — combine with `nonBlank` when that matters.
 - `Predicate.not(String::isBlank)` exists because you can't write `String::isBlank.negate()` — a method reference has no type until it's assigned.
 - `trim.andThen(lower)` returns a `Function`, not a `UnaryOperator` (the default method is inherited from `Function`).
 
 ### Real-world examples
-Validation rules (`Predicate<Order>` combined per market), request-processing **middleware** (code that sits between an incoming request and the handler, e.g. adding logging or auth; here a chain of `UnaryOperator<Request>`), text-normalisation pipelines in search indexing (preparing text so it can be searched quickly), configurable pricing rules (function factories).
-
-### Self-check
-1. `f.andThen(g)` vs `f.compose(g)`? → `andThen` runs f first; `compose` runs g first.
-2. How to keep strings that are *not* empty using a method reference? → `Predicate.not(String::isEmpty)`.
-3. What does `Function.identity()` return? → A function that returns its input unchanged (handy as a key/value mapper, e.g. `toMap(identity(), …)`).
+Validation rules (`Predicate<Order>` combined per market), request-processing **middleware** (a chain of `UnaryOperator<Request>` adding logging or auth before the handler), text-normalisation pipelines for search indexing, configurable pricing rules (function factories).
 
 ### TL;DR
 Build big behaviour from small functions: `andThen`/`compose` for functions, `and`/`or`/`negate`/`not` for predicates, `andThen` for consumers, and functions that return functions for configurable logic.
@@ -423,10 +379,10 @@ Build big behaviour from small functions: `andThen`/`compose` for functions, `an
 ## 11.7 `Optional`
 
 ### What it is
-**`Optional<T>`** (Java 8) is a container that holds either one non-null value or nothing. It is meant for **method return types** where "no result" is a normal outcome — `findById`, `max`, `findFirst` — so the signature itself tells the caller to handle absence. Analogy: a parcel delivery that may arrive empty; the box forces you to look inside before using the contents, whereas a `null` is a missing box you trip over.
+**`Optional<T>`** (Java 8) is a container holding either one non-null value or nothing. It is meant for **method return types** where "no result" is normal — `findById`, `max`, `findFirst` — so the signature tells the caller to handle absence.
 
 ### Why it matters
-`null` returned from a method says nothing in the signature, and forgetting a check causes a `NullPointerException` far from the cause. `Optional` makes absence explicit and gives fluent operations to handle it without nested `if (x != null)` chains.
+A returned `null` says nothing in the signature, and a forgotten check causes a `NullPointerException` far from the cause. `Optional` makes absence explicit and replaces nested `if (x != null)` chains with fluent operations.
 
 ### The API
 
@@ -435,7 +391,7 @@ Build big behaviour from small functions: `andThen`/`compose` for functions, `an
 | Create | `Optional.of(v)` (NPE if `v` is null), `Optional.ofNullable(v)`, `Optional.empty()` |
 | Test | `isPresent()`, `isEmpty()` (11) |
 | Transform | `map(f)` (wraps the result; a `null` result becomes empty), `flatMap(f)` (when `f` already returns an `Optional`), `filter(p)` |
-| Extract | `orElse(default)`, `orElseGet(supplier)` (a supplier is a no-argument function that produces a value), `orElseThrow()` (10), `orElseThrow(exceptionSupplier)`, `get()` (throws if empty) |
+| Extract | `orElse(default)`, `orElseGet(supplier)`, `orElseThrow()` (10), `orElseThrow(exceptionSupplier)`, `get()` (throws if empty) |
 | Act | `ifPresent(consumer)`, `ifPresentOrElse(consumer, runnable)` (9) |
 | Combine | `or(() -> otherOptional)` (9), `stream()` (9) → 0 or 1 elements |
 | Primitive versions | `OptionalInt`, `OptionalLong`, `OptionalDouble` (`getAsInt()` …) |
@@ -480,9 +436,9 @@ anti-pattern isPresent+get: Ana
 better: Ana
 ```
 
-Read the chain `findById(id).flatMap(Customer::addressOpt).map(Address::city).orElse("no city")` as: find the customer → if found, get their address (which might itself be missing, so `flatMap` to avoid `Optional<Optional<Address>>`) → if present, take the city → otherwise "no city". Three possible "nothing" points, zero `if` statements.
+Read `findById(id).flatMap(Customer::addressOpt).map(Address::city).orElse("no city")` as: find the customer → get the address (itself optional, so `flatMap` avoids `Optional<Optional<Address>>`) → take the city → else "no city". Three "nothing" points, zero `if`s.
 
-The `orElse` line proves that **`orElse`'s argument is always evaluated** — it's an ordinary method argument. Use `orElseGet` when the default is expensive or has **side effects** (anything beyond returning a value — creating objects, DB calls, logging; defined fully in §11.8).
+The `orElse` line proves that **`orElse`'s argument is always evaluated** — it's an ordinary method argument. Use `orElseGet` when the default is expensive or has side effects (§11.8).
 
 ### Right uses and wrong uses
 
@@ -493,11 +449,11 @@ The `orElse` line proves that **`orElse`'s argument is always evaluated** — it
 | Use `orElseThrow()` (10) when absence is a bug — its name says it can throw | Call `get()` without a check (`orElseThrow()` is the same thing with an honest name) |
 | Use `OptionalInt`/`OptionalDouble` for primitives | `Optional<Integer>` in numeric code |
 | Return an **empty collection** for "no items" | `Optional<List<T>>` — an empty list already means "none" |
-| Use nullable fields internally and expose `Optional` from getters if helpful | `Optional` **fields** (not `Serializable` — can't be turned into bytes by Java's built-in serialisation — extra object per field) |
+| Use nullable fields internally and expose `Optional` from getters if helpful | `Optional` **fields** (not `Serializable`; extra object per field) |
 | Overload or use a default for optional inputs | `Optional` **parameters** (callers must wrap; they can still pass `null`) |
 | Use it as a return value | Use it as a map key/value or in collections |
 
-These guidelines follow *Effective Java* Item 55 ("return optionals judiciously") and the intent stated by the JDK designers: `Optional` is primarily for return types. It is also a *value-based* class (one whose instances should be treated purely as values, with no meaningful identity) — don't compare instances with `==` or synchronise on them (use them as a lock, [Chapter 14](../14-concurrency-1/README.md)).
+These follow *Effective Java* Item 55 ("return optionals judiciously") and the JDK designers' intent: `Optional` is primarily for return types. It is also a *value-based* class (instances are pure values with no meaningful identity) — don't compare with `==` or synchronise on them ([Chapter 14](../14-concurrency-1/README.md)).
 
 ### In the interview
 **30-second answer:** "Optional is a return-type container for 'maybe a value'. It makes absence explicit in the signature and lets me chain map, flatMap and filter and end with orElse, orElseGet or orElseThrow instead of null checks. I don't use it for fields, parameters or collections, I never return null from an Optional method, and I use orElseGet when the default is expensive because orElse evaluates its argument eagerly."
@@ -505,11 +461,6 @@ These guidelines follow *Effective Java* Item 55 ("return optionals judiciously"
 - *Follow-up: `map` vs `flatMap`?* → Use `flatMap` when the function itself returns an `Optional`, to avoid nesting.
 - *Follow-up: `Optional.of` vs `ofNullable`?* → `of` throws NPE on null (use when null is a bug); `ofNullable` returns empty.
 - *Follow-up: Is `Optional` serializable?* → No — one reason not to use it for fields.
-
-### Self-check
-1. What does `Optional.ofNullable(null).map(String::length)` return? → `Optional.empty`.
-2. Which is lazy: `orElse` or `orElseGet`? → `orElseGet`.
-3. How do you turn a `Stream<Optional<T>>` into a `Stream<T>` of present values? → `.flatMap(Optional::stream)` (Java 9).
 
 ### TL;DR
 `Optional` = explicit "maybe" for return values. Transform with `map`/`flatMap`/`filter`, end with `orElse`/`orElseGet`/`orElseThrow`/`ifPresentOrElse`. Not for fields, parameters or collections; never `null` itself.
@@ -582,33 +533,28 @@ original [10, 20, 30] untouched; new [9, 18, 27]
 What each idea buys you:
 - **Pure functions** are trivially testable (no setup, no mocks), safe to cache and safe to run in parallel.
 - **Higher-order functions** remove duplicated control flow: the retry loop is written once; callers pass *what* to try and *when* it succeeded.
-- **Laziness via `Supplier`** is how logging frameworks avoid building expensive messages (SLF4J — the Simple Logging Facade for Java, a common logging front end — and its fluent API and `java.util.logging.Logger.fine(Supplier<String>)` both accept suppliers).
+- **Laziness via `Supplier`** is how logging frameworks avoid building expensive messages (SLF4J's fluent API and `java.util.logging.Logger.fine(Supplier<String>)` accept suppliers).
 - **Strategies as lambdas** replace a hierarchy of one-method classes; see the Strategy pattern in [LLD Chapter 10](../../../lld/chapters/10-patterns-behavioral-1/README.md).
 - **Immutability**: transform into a new list instead of editing in place; the original stays valid for anyone else holding it.
 
-**Memoisation note.** The obvious `cache.computeIfAbsent(x, f)` is wrong when `f` is *recursive* (e.g. memoised Fibonacci calls back into the same map): `HashMap.computeIfAbsent` must not be modified by its own mapping function and throws `ConcurrentModificationException` (since Java 9) — `ConcurrentHashMap` (the thread-safe map) can **deadlock** (get stuck forever waiting on itself) or throw `IllegalStateException`. The get-then-put version above is safe for single-threaded use.
+**Memoisation note.** The obvious `cache.computeIfAbsent(x, f)` is wrong when `f` is *recursive* (e.g. memoised Fibonacci calling back into the same map): a `HashMap` must not be modified by its own mapping function and throws `ConcurrentModificationException` (since Java 9); `ConcurrentHashMap` can **deadlock** or throw `IllegalStateException`. The get-then-put version above is safe single-threaded.
 
-**Checked exceptions** (exceptions the compiler forces you to either catch or declare with `throws`, such as `IOException`). `java.util.function` methods don't declare `throws`, so a lambda calling `Files.readString` (which throws `IOException`) won't compile as a `Function`. Options: handle it inside the lambda, wrap it as above (rethrow as unchecked — `UncheckedIOException` is the JDK's own choice for I/O), or define your own throwing interface. Don't silently swallow the exception. See [Chapter 8](../08-exceptions/README.md) for checked vs unchecked.
+**Checked exceptions** ([Chapter 8](../08-exceptions/README.md)): `java.util.function` methods don't declare `throws`, so a lambda calling `Files.readString` (throws `IOException`) won't compile as a `Function<Path, String>`. Options: handle it inside the lambda, wrap and rethrow unchecked as above (`UncheckedIOException` is the JDK's own choice for I/O), or define a throwing interface. Never silently swallow it.
 
 ### When not to use functional style
 - The loop is simpler: a `for` with early `return` or several interacting variables is often clearer than a clever chain.
 - Deeply nested lambdas (a function returning a function returning a function) — name intermediate pieces.
-- Performance-critical inner loops where boxing or **megamorphic** calls (one call site that sees many different implementing classes, which stops the JIT from inlining it) matter — measure ([Chapter 16](../16-jvm-internals-and-performance/README.md)).
-- Stack traces through lambdas include **synthetic** frames (methods the compiler generated, not ones you wrote) like `lambda$main$0`; debugging a long chain is harder than a named method.
+- Performance-critical inner loops where boxing or **megamorphic** calls (one call site seeing many implementing classes, which stops the JIT inlining it) matter — measure ([Chapter 16](../16-jvm-internals-and-performance/README.md)).
+- Stack traces through lambdas include **synthetic** (compiler-generated) frames like `lambda$main$0`; debugging a long chain is harder than a named method.
 
 ### Real-world examples
-Spring's (the most popular Java application framework) `RestClient`/`WebClient` builders and Security configuration **DSLs** (domain-specific languages: mini-APIs designed to read like a small language for one job) take lambdas; `CompletableFuture` chains functions over **async** (asynchronous: finishing later, without blocking the caller) results ([Chapter 15](../15-concurrency-2-modern/README.md)); event listeners and callbacks in UI frameworks; retry/backoff helpers (backoff = waiting a bit longer between each retry; Resilience4j, a fault-tolerance library, decorates `Supplier`s and `Function`s); JUnit's (the standard Java unit-testing library, [Chapter 18](../18-testing-build-and-tooling/README.md)) `assertThrows(Class, Executable)`.
+Spring's `RestClient`/`WebClient` builders and Security configuration **DSLs** (domain-specific languages: mini-APIs that read like a small language) take lambdas; `CompletableFuture` chains functions over async results ([Chapter 15](../15-concurrency-2-modern/README.md)); UI listeners and callbacks; retry/backoff helpers (Resilience4j decorates `Supplier`s and `Function`s); JUnit's `assertThrows(Class, Executable)` ([Chapter 18](../18-testing-build-and-tooling/README.md)).
 
 ### In the interview
 **30-second answer:** "In Java I use functional ideas where they reduce bugs: pure functions and immutable data for anything shared or tested, higher-order functions to remove repeated control flow, Suppliers for laziness, and lambdas as strategies. I stop when a plain loop is clearer, and I'm careful with checked exceptions and mutable captured state."
 
-- *Follow-up: Is Java a functional language?* → No — it's object-oriented with functional features (first-class-ish functions — "first-class" meaning they can be stored, passed and returned like any other value — via functional interfaces, lambdas, streams, records, pattern matching). Functions are objects implementing interfaces, not a separate function type.
-- *Follow-up: What's a pure function and why care?* → Output depends only on input, no side effects; easy to test, cache, and parallelise.
-
-### Self-check
-1. Is `x -> { System.out.println(x); return x; }` pure? → No; printing is a side effect.
-2. What's partial application of `a -> b -> a * b` with `a = 3`? → A function `b -> 3 * b`.
-3. Why can't a lambda that calls `Files.readString` be a `Function<Path, String>` directly? → `IOException` is checked and `Function.apply` doesn't declare it.
+- *Follow-up: Is Java a functional language?* → No — it's object-oriented with functional features (functions as storable, passable values via functional interfaces, lambdas, streams, records, pattern matching). Functions are objects implementing interfaces, not a separate function type.
+- *Follow-up: What's a pure function and why care?* → Output depends only on input, no side effects (so `x -> { System.out.println(x); return x; }` is impure); easy to test, cache, and parallelise.
 
 ### TL;DR
 Pure functions + immutable data + higher-order functions = code that's easier to test and parallelise. Use `Supplier` for laziness, lambdas for strategies, wrap checked exceptions deliberately, and fall back to loops when they're clearer.

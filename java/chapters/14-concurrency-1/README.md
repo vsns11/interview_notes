@@ -1,29 +1,10 @@
 # Chapter 14 — Concurrency I: Threads, Locks and the `java.util.concurrent` Toolkit
 
-A web server handling thousands of requests, an app downloading images while the user scrolls, a **batch job** (a program that processes a large pile of data in one go, usually with no user waiting) using all 16 **cores** (the independent processing units inside one CPU): all of these do several things **at the same time**. Java has supported this since version 1.0 through **threads** (defined in §14.1), and since Java 5 through the high-level **`java.util.concurrent`** package (designed by Doug Lea and the authors of *Java Concurrency in Practice*, "JCIP"). Concurrency is also where Java programs get their nastiest bugs — results that are wrong only sometimes, on some machines, under load.
+A web server handling thousands of requests, an app downloading images while the user scrolls, a **batch job** (processing a large pile of data in one go, no user waiting) using all 16 **cores**: all do several things **at the same time**. Java has supported this since 1.0 through **threads** (§14.1), and since Java 5 through the high-level **`java.util.concurrent`** package (designed by Doug Lea and the authors of *Java Concurrency in Practice*, "JCIP"). Concurrency is also where Java programs get their nastiest bugs — results that are wrong only sometimes, on some machines, under load.
 
-This chapter builds the foundation: creating and controlling threads, *why* shared data goes wrong (race conditions and visibility), the tools that make it right (`synchronized`, `volatile`, locks, atomics), and the everyday toolkit you should actually use at work (thread pools, concurrent collections, synchronizers). [Chapter 15](../15-concurrency-2-modern/README.md) continues with `CompletableFuture`, Fork/Join, **virtual threads**, structured concurrency, scoped values, the Java Memory Model (the rules saying when one thread's writes become visible to another) and **liveness** problems — situations where threads stop making progress: **deadlock** (threads each waiting forever for a lock another holds), **livelock** (threads busily reacting to each other without getting anywhere) and **starvation** (a thread never getting its turn).
+This chapter builds the foundation: creating and controlling threads, *why* shared data goes wrong (race conditions and visibility), the tools that make it right (`synchronized`, `volatile`, locks, atomics), and the everyday toolkit (thread pools, concurrent collections, synchronizers). [Chapter 15](../15-concurrency-2-modern/README.md) continues with `CompletableFuture`, Fork/Join, **virtual threads**, structured concurrency, scoped values, the Java Memory Model (the rules for when one thread's writes become visible to another) and **liveness** problems — threads that stop making progress: **deadlock** (each waiting forever for a lock another holds), **livelock** (busily reacting to each other without progress) and **starvation** (a thread never getting its turn).
 
-**What you'll learn**
-
-| § | Topic | You'll be able to… |
-|---|---|---|
-| 14.1 | Concurrency basics | explain processes, threads, concurrency vs parallelism, and why threads share memory |
-| 14.2 | Creating and starting threads | use `Thread`, `Runnable`, lambdas and `Thread.Builder`; `start` vs `run`; `join`; daemon threads |
-| 14.3 | Thread lifecycle | name every `Thread.State` and what causes each |
-| 14.4 | Interruption | cancel threads cooperatively and handle `InterruptedException` correctly |
-| 14.5 | Race conditions | recognise read-modify-write and check-then-act bugs |
-| 14.6 | `synchronized` and intrinsic locks | protect shared state; know what object is locked |
-| 14.7 | `volatile` and visibility | stop a thread with a flag; know what `volatile` does *not* do |
-| 14.8 | `wait` / `notify` | write a guarded block correctly (and know why you rarely should) |
-| 14.9 | Explicit locks | use `ReentrantLock`, `tryLock`, `Condition`, `ReadWriteLock`, `StampedLock` |
-| 14.10 | Atomic variables | use `AtomicInteger`, CAS, `AtomicReference`, `LongAdder` |
-| 14.11 | Executors and thread pools | submit tasks, use `Future`, size and configure pools, shut them down |
-| 14.12 | Concurrent collections | pick `ConcurrentHashMap`, `CopyOnWriteArrayList`, `BlockingQueue`… and avoid compound-action bugs |
-| 14.13 | Synchronizers | coordinate threads with `CountDownLatch`, `CyclicBarrier`, `Semaphore`, `Phaser` |
-| 14.14 | Designing thread-safe classes | apply JCIP's strategies: immutability, confinement, encapsulated locking |
-
-All runnable code is in [`code/`](code/) (package `ch14.*`), compiled with `javac --release 25` (the Java compiler, targeting Java 25) and run on JDK 26 (the Java Development Kit) on a 14-core laptop. **Concurrency output is not always repeatable.** Lines marked `[nondeterministic]` (not predictable from the code alone) change from run to run (that is the point being demonstrated); lines marked `[machine-dependent]` depend on your hardware. Everything else is forced into a fixed order with `join`, latches or barriers (waiting tools explained in §14.2 and §14.13).
+All runnable code is in [`code/`](code/) (package `ch14.*`), compiled with `javac --release 25` and run on JDK 26 on a 14-core laptop. **Concurrency output is not always repeatable.** Lines marked `[nondeterministic]` change from run to run (that is the point being demonstrated); lines marked `[machine-dependent]` depend on your hardware. Everything else is forced into a fixed order with `join`, latches or barriers (§14.2, §14.13). The programs added in the numbered subsections (§14.1.1 and later, and the extensions of §14.7, §14.13 and §14.14) were compiled with `javac --release 21` and run on JDK 21 on a 4-core Linux machine, so their `[machine-dependent]` numbers come from that machine.
 
 > **Related material — linked, not repeated.**
 > - Exam-level API tables and trick questions (`Future` methods, `Executors` factories, `TimeUnit`, lock methods, parallel streams): [OCP Chapter 13 — Concurrency](../../../../ocp-java21-study/chapters/13-concurrency/README.md).
@@ -35,15 +16,14 @@ All runnable code is in [`code/`](code/) (package `ch14.*`), compiled with `java
 ## 14.1 Concurrency basics
 
 ### What it is
-- A **process** is a running program with its own memory, isolated from other processes by the operating system. Starting `java App` creates one process: the JVM (Java Virtual Machine, the program that runs your compiled Java code).
-- A **thread** is an independent path of execution *inside* a process. Each thread has its own **call stack** (local variables, method frames) and **program counter** (the marker of which instruction runs next), but **all threads in a process share the same heap** (the memory area where all objects live) — the same objects and fields.
+- A **program** is passive: instructions stored in files (`App.class`, a JAR, the `java` launcher binary). Nothing runs until the operating system loads it.
+- A **process** is a running instance of a program, with its own **address space** (the private range of memory addresses it can use), its own open files and sockets, and an OS-assigned **process id** (PID); the OS isolates processes from each other. Starting `java App` twice from the same program gives two processes that share nothing: a `static` field changed in one is unchanged in the other. Each is a JVM (Java Virtual Machine, the program that runs your compiled Java code). Processes communicate only through the OS (pipes, sockets, files).
+- A **thread** is an independent path of execution *inside* a process and the unit the OS **schedules** onto a core. Each thread has its own **call stack** (local variables, method frames) and **program counter** (the marker of which instruction runs next), but **all threads in a process share the same heap** (the memory area where all objects live) — the same objects and fields. A JVM is never single-threaded: even "hello world" runs alongside garbage-collector, JIT-compiler and reference-handler threads. Creating and switching threads is far cheaper than doing the same for processes, because no address space has to be set up or swapped.
 - **Concurrency** means several tasks are *in progress* during the same period (possibly taking turns on one CPU core). **Parallelism** means tasks literally run *at the same instant* on different cores. Concurrency is about structure; parallelism is about hardware. (Detailed comparison with diagrams: [LLD §12.1–12.2](../../../lld/chapters/12-concurrency-concepts/README.md#121-concurrency-vs-parallelism).)
-
-Analogy: a restaurant kitchen. The kitchen (process) has shared fridges and counters (heap). Each cook (thread) has their own recipe card and hands (stack). Cooks working at the same time get a lot done — until two of them grab the last egg at once.
 
 ### Why it matters
 1. **Responsiveness** — a UI (user interface) or server keeps answering while slow work (disk, network) happens elsewhere.
-2. **Throughput** (how much work gets done per second; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) — while one request waits for a database, another can use the CPU.
+2. **Throughput** (work completed per second, §14.1.2) — while one request waits for a database, another can use the CPU.
 3. **Using all cores** — CPU-heavy work (image processing, sorting big data) can be split across cores.
 
 ### The core problem
@@ -63,6 +43,113 @@ Everything in this chapter is a tool against one or more of these.
 | **Lock / monitor** | a mechanism that lets only one thread (or a controlled number) into a critical section |
 | **Blocking** | a thread waiting (for a lock, I/O, a sleep) without doing work |
 | **Context switch** | the OS pausing one thread and running another on the same core |
+
+### 14.1.1 Preemptive vs cooperative multitasking
+A core runs one thread at a time; **multitasking** shares it by saving one thread's registers and program counter and switching to another (a *context switch*). The two designs differ in **who decides when to switch**:
+
+| | Preemptive | Cooperative |
+|---|---|---|
+| Who switches | the **scheduler** (the OS component that picks the next thread), using a hardware timer interrupt | the running task, voluntarily |
+| When | at the end of a **time slice** (a few milliseconds) or when a higher-priority thread becomes ready — at *any* instruction | only at **yield points**: a blocking call, an `await`, an explicit `yield` |
+| A task stuck in a loop | slows everyone a little; others still run | **freezes** every other task sharing that thread/core |
+| Shared-data consequence | a thread can be interrupted between any two instructions → races (§14.5) | no switch between yield points, so code between them runs without interference (on one thread) |
+| Examples | OS threads on Linux, Windows, macOS; Java **platform threads** | Windows 3.x, classic Mac OS; JavaScript's event loop; Python `asyncio`; Kotlin coroutines; Java **virtual threads** with respect to their carrier |
+
+Platform threads are OS threads, so they are preemptively scheduled. **Virtual threads** ([§15.4](../15-concurrency-2-modern/README.md#154-virtual-threads)) leave their **carrier** (the platform thread running them) only when they block in a JDK operation or call `Thread.yield()`: JEP 444 says the scheduler "does not currently implement time sharing for virtual threads". The OS can still preempt the carrier, but that only pauses the virtual thread; no other virtual thread gets the carrier.
+
+[`code/ch14/threads/Multitasking.java`](code/ch14/threads/Multitasking.java) starts threads that spin until a shared deadline 300 ms away and count iterations; a count of 0 means the thread never got a CPU in time. Virtual threads share one carrier (`jdk.virtualThreadScheduler.parallelism=1`, set by the program at startup):
+```java
+Runnable spin = () -> {
+    long count = 0;
+    while (System.nanoTime() < deadline) {                 // pure CPU work, never blocks
+        count++;
+        if (yield && count % 1_000 == 0) Thread.yield();   // a voluntary yield point
+    }
+    loops.set(id, count);
+};
+```
+Output:
+```text
+platform threads that ran before the deadline: 12 of 12
+virtual threads, 1 carrier, no yield:          1 of 3
+virtual threads, 1 carrier, Thread.yield():    3 of 3
+```
+- 12 platform threads on 4 cores all progressed: the OS time-sliced them.
+- The first virtual thread kept the only carrier past the deadline, so the other two never ran: cooperative scheduling.
+- With a `yield()` every 1,000 iterations all three ran. Real virtual threads yield whenever they block on I/O, locks or queues — why they suit I/O-bound work, not long CPU loops.
+
+**In the interview:** "Preemptive means the scheduler can switch threads at any instruction; cooperative means a task runs until it yields. Platform threads are preemptive. Virtual threads switch only when they block or yield, so a CPU-bound virtual thread can hog its carrier."
+
+Sources: JEP 444 (Virtual Threads), `Thread.yield` Javadoc.
+
+### 14.1.2 Sync vs async, I/O-bound vs CPU-bound, throughput vs latency
+Four pairs of words that describe *how a task uses its thread*:
+
+| Pair | Definition | Java example |
+|---|---|---|
+| **Synchronous** | the caller waits for the result before continuing; the result is the return value | `String s = client.send(req, ofString()).body();` |
+| **Asynchronous** | the call returns at once and the result arrives later, through a `Future`, a callback, or a `CompletableFuture` stage | `client.sendAsync(req, ofString()).thenAccept(...)` ([§15.2](../15-concurrency-2-modern/README.md#152-completablefuture)) |
+| **Blocking** | the *thread* is parked until the operation can finish | `queue.take()`, `lock.lock()`, `InputStream.read()` |
+| **Non-blocking** | returns immediately, even if it has to report "not ready" | `queue.poll()` → `null`, `lock.tryLock()` → `false`, NIO channels in non-blocking mode |
+| **I/O-bound** | most of the time is spent waiting for disk, network or a database; the CPU sits idle | a REST call, a JDBC query |
+| **CPU-bound** | the time is spent computing; adding waiting threads doesn't help, adding cores does | hashing, image resizing, sorting a large array |
+| **Latency** | time for **one** operation, start to finish (report percentiles such as p50/p99 — the value 50%/99% of requests stay under) | "p99 checkout latency is 180 ms" |
+| **Throughput** | operations **completed per unit of time** | "the service handles 4,000 requests/s" |
+
+The pairs are independent: a synchronous call can be non-blocking (`poll()` in a loop), and an asynchronous API can block a thread elsewhere (`supplyAsync` runs a blocking call on a pool thread). Virtual threads give synchronous, blocking code the scalability of asynchronous code, because a blocked virtual thread holds no OS thread.
+
+**Little's law** ties the last pair together for any stable system: **in-flight requests = throughput × latency** (L = λ × W). Two worked uses:
+- *Sizing*: 2,000 requests/s at 50 ms each → 2,000 × 0.05 = **100 requests in flight**. If each holds a thread, you need ≥ 100 threads.
+- *Ceiling*: a pool of 20 threads with 200 ms requests can complete at most 20 / 0.2 = **100 requests/s**, however fast the CPU is.
+
+Throughput and latency trade against each other: batching and deep queues raise throughput but lengthen each wait, and near full utilisation waiting explodes. In the simplest queueing model (M/M/1: one server, random arrivals, 10 ms average service, so at most 100 requests/s) the average time in the system is 1 / (100 − arrival rate) s: 20 ms at 50 requests/s, 100 ms at 90/s, 1 s at 99/s. Hence servers run well below 100% busy and bounded queues reject work early (§14.11).
+
+[`code/ch14/threads/IoVsCpu.java`](code/ch14/threads/IoVsCpu.java) compares a task's CPU time (`ThreadMXBean.getCurrentThreadCpuTime()`) with its wall-clock time, then runs 16 copies on 1 thread and on 16 threads:
+```java
+long wall0 = System.nanoTime(), cpu0 = MX.getCurrentThreadCpuTime();
+task.run();                                   // ioTask = sleep(100); cpuTask = 100M arithmetic steps
+// ... CPU busy % = cpu / wall
+long speedup = timeOn(1, tasks, task) / timeOn(tasks, tasks, task);
+```
+Output:
+```text
+I/O-bound task: wall 100 ms, CPU 0 ms -> CPU busy 0%   [machine-dependent]
+CPU-bound task: wall 80 ms, CPU 79 ms -> CPU busy 99%   [machine-dependent]
+cores = 4, tasks = 16, pool = 16 threads   [machine-dependent]
+I/O tasks: speed-up vs one thread = 15x   [machine-dependent]
+CPU tasks: speed-up vs one thread = 4x   [machine-dependent]
+```
+Sixteen threads gave the waiting tasks a 15–16× speed-up (waits overlap for free; thread start-up costs the rest), while the CPU tasks stopped at 4×, the core count — the measured basis of the pool-sizing rule in §14.11.
+
+Sources: `java.net.http.HttpClient`, `BlockingQueue`, `ThreadMXBean` Javadoc; JEP 444.
+
+### 14.1.3 Limits of speed-up: Amdahl's law, Gustafson's law, Moore's law
+**Amdahl's law** (Gene Amdahl, 1967): if a fraction **p** of a program's running time can be parallelised and the rest (1 − p) is serial, the best speed-up on **N** cores is
+
+**S(N) = 1 / ((1 − p) + p / N)**, which can never exceed **1 / (1 − p)** however many cores you add.
+
+| Parallel fraction p | 2 cores | 4 | 8 | 16 | 64 | 1,024 | limit |
+|---|---|---|---|---|---|---|---|
+| 50% | 1.33× | 1.60× | 1.78× | 1.88× | 1.97× | 2.00× | 2× |
+| 90% | 1.82× | 3.08× | 4.71× | 6.40× | 8.77× | 9.91× | 10× |
+| 95% | 1.90× | 3.48× | 5.93× | 9.14× | 15.42× | 19.64× | 20× |
+| 99% | 1.98× | 3.88× | 7.48× | 13.91× | 39.26× | 91.18× | 100× |
+
+Worked example: a 100 s job, 95 s parallelisable, takes 5 + 95/16 ≈ 10.9 s on 16 cores — 9.1×, not 16× — and never under 5 s on any number of cores. In Java the serial parts are code under a contended lock, single-threaded set-up and merge steps, and a counter every thread updates; shrinking them (lock striping, `LongAdder`, per-thread partial results) pays more than adding threads.
+
+**Gustafson's law** (1988) is the optimistic counterpart: more cores usually solve *bigger* problems in the same time, the serial part staying roughly fixed. With s the serial fraction *measured on the N-core run*, the **scaled speed-up** is **S = s + (1 − s) × N** (s = 5%, 16 cores → 15.25×). Amdahl asks "how much faster is this fixed job?", Gustafson "how much more work fits in the same time?".
+
+**Moore's law** (Gordon Moore, 1965, revised 1975) is an *observation*: transistor counts double roughly every two years. For decades **Dennard scaling** (smaller transistors need proportionally less power) also raised clock speeds, so single-threaded code got faster for free. Around 2005 power and heat stopped that; clock rates levelled off at a few GHz and the growing transistor budget became **more cores** (Herb Sutter, "The Free Lunch Is Over", 2005). Programs now get faster on new hardware only by using several cores — within Amdahl's limit.
+
+**In the interview:** "Amdahl: speed-up ≤ 1/(serial fraction), so 5% serial work caps you at 20× on any number of cores; shrink contention and serial steps before adding threads. Gustafson: if the problem grows with the machine, speed-up grows almost linearly. Moore's law still adds transistors, but since Dennard scaling ended they arrive as more cores, which is why concurrency matters."
+
+Sources: G. Amdahl, AFIPS 1967; J. Gustafson, "Reevaluating Amdahl's Law", CACM 1988; G. Moore, *Electronics* 1965; H. Sutter, "The Free Lunch Is Over", 2005.
+
+### Self-check
+1. Two `java App` processes and two threads in one process both change a `static int`. Who sees whose change? → Threads share it (same heap); processes don't (separate address spaces).
+2. Why can one CPU-bound virtual thread starve others on the same carrier? → Virtual threads are scheduled cooperatively: they give up the carrier only when they block or yield.
+3. A service gets 500 requests/s and each takes 80 ms. How many are in flight on average? → Little's law: 500 × 0.08 = 40.
+4. 10% of a job is serial. Best possible speed-up on 1,000 cores? → Below 1/0.1 = 10× (9.91×).
 
 ---
 
@@ -169,7 +256,7 @@ In application code you should almost never call `new Thread(...)` directly: cre
 | `NEW` | created, not yet started | `new Thread(...)` |
 | `RUNNABLE` | running **or ready to run** (waiting for a CPU, or even blocked in OS-level I/O) | after `start()` |
 | `BLOCKED` | waiting to **acquire a monitor lock** (`synchronized`) held by another thread | entering a `synchronized` block that's taken |
-| `WAITING` | waiting indefinitely for another thread's action | `Object.wait()`, `join()`, `LockSupport.park()` (low-level "pause this thread until woken"; used by `Lock`, latches, queues) |
+| `WAITING` | waiting indefinitely for another thread's action | `Object.wait()`, `join()`, `LockSupport.park()` (low-level "pause this thread until woken", §14.9.1) |
 | `TIMED_WAITING` | waiting with a timeout | `sleep(ms)`, `wait(ms)`, `join(ms)`, `tryLock(timeout)` |
 | `TERMINATED` | `run()` has finished (normally or by exception) | end of `run()` |
 
@@ -379,7 +466,7 @@ The last line proves the most common mistake: protection only works if **all** c
 - **Keep critical sections short**; never do slow I/O (input/output: disk, network) or call unknown code (**callbacks** and **listeners** — functions other code registered to be called when something happens) while holding a lock — that's how deadlocks and stalls happen.
 - **Prefer a private final lock object** (`private final Object lock = new Object();`) over `synchronized(this)` in library code, so outside code can't grab your lock and interfere.
 - **Never lock on** `String` literals, boxed integers (`Integer` cache!) or other shared/**interned** objects (objects the JVM reuses so one copy is shared program-wide), and not on a field that can be reassigned.
-- Document which lock guards which fields (JCIP's `@GuardedBy("lock")` convention — an **annotation**, i.e. a `@` label on code for tools and readers).
+- Document which lock guards which fields with JCIP's `@GuardedBy("lock")` **annotation** (a `@` label on code for tools and readers; §14.14).
 - Since Java 24 (JEP 491 — a JEP, *JDK Enhancement Proposal*, is the numbered design document for a Java feature), `synchronized` no longer "pins" (glues to one OS thread) virtual threads — details in [Chapter 15 §15.5](../15-concurrency-2-modern/README.md#155-pinning-and-jep-491).
 
 ### Common mistakes
@@ -402,9 +489,30 @@ Deeper treatment with diagrams: [LLD §12.7](../../../lld/chapters/12-concurrenc
 Modern CPUs keep copies of memory in per-core caches, and both the compiler and the CPU reorder instructions for speed. So without synchronisation, a value written by one thread **may never become visible** to another thread, or become visible out of order. A field declared **`volatile`** fixes visibility:
 - Every read of a volatile field sees the **most recent write** by any thread.
 - Writes made *before* a volatile write become visible to a thread that later *reads* that volatile field (it creates a happens-before edge — [Chapter 15 §15.8](../15-concurrency-2-modern/README.md#158-the-java-memory-model-and-happens-before)).
-- `volatile long`/`double` reads and writes are atomic (plain 64-bit writes are allowed to be split in two by the JLS — the *Java Language Specification*, the official rulebook of the language).
+- `volatile long`/`double` reads and writes are atomic; plain ones are not guaranteed to be (see the table below).
 
 `volatile` does **not** provide mutual exclusion: `volatileCounter++` is still read-modify-write.
+
+**Atomic assignments (JLS 17.7).** A single read or write is *atomic* when another thread can never observe half of it. The JLS (the *Java Language Specification*, the official rulebook of the language) guarantees:
+
+| Access | Atomic? |
+|---|---|
+| read or write of `boolean`, `byte`, `char`, `short`, `int`, `float` | yes |
+| read or write of any **reference** (even on 64-bit JVMs) | yes |
+| plain `long` / `double` | **not guaranteed**: the JVM may perform it as two 32-bit writes, so a reader can see 32 bits of an old value and 32 bits of a new one (**word tearing**) |
+| `volatile long` / `volatile double`, or access under a lock, `AtomicLong`, a `VarHandle` | yes |
+| `x++`, `x += 2`, `if (x == 0) x = 1` | **no**: these are compound operations (§14.5), whatever the type |
+
+Two interview points. **Atomic is not visible**: without a happens-before edge an atomic `int` write can go unseen indefinitely; atomicity only rules out torn values. And the JLS *encourages* JVMs not to split 64-bit values (64-bit HotSpot writes a `long` in one instruction), so tearing is legal but rarely observable — you can't test your way to safety. [`code/ch14/sync/Tearing.java`](code/ch14/sync/Tearing.java) flips a field between `0L` and `-1L` 20 million times while another thread looks for any other value:
+```java
+long v = (i & 1) == 0 ? A : B;  plain = v;               // writer
+long v = plain;  if (v != A && v != B) torn[0]++;          // reader: a mix of the two halves
+```
+```text
+plain long   torn reads: 0   [machine-dependent: 64-bit JVMs write a long in one instruction; a 32-bit JVM may tear]
+volatile long torn reads: 0   (guaranteed 0 by JLS 17.7)
+```
+Rule: share a `long`/`double` across threads only as `volatile`, under a lock, or in an `AtomicLong`. Sources: JLS §17.7 "Non-Atomic Treatment of double and long", JLS §17.4.
 
 [`code/ch14/sync/VolatileFlag.java`](code/ch14/sync/VolatileFlag.java) (key parts):
 ```java
@@ -453,7 +561,7 @@ Sometimes a thread must wait until a *condition* becomes true ("the queue is not
 
 ### How it works — the guarded-block idiom
 1. Acquire the lock (`synchronized`).
-2. **`while`** the condition is false, `wait()`. (A `while`, not `if`: after waking, the condition may already be false again — another thread got there first — or the wakeup may be spurious.)
+2. **`while`** the condition is false, `wait()`. (A `while`, not `if`: after waking, the condition may already be false again, or the wakeup may be spurious — §14.8.2.)
 3. Do the action.
 4. After changing state that others wait on, `notifyAll()`.
 
@@ -480,11 +588,83 @@ wait() without the lock -> IllegalMonitorStateException
 The producer ends with a **poison pill** (`-1`), a special value meaning "no more items" — a common way to stop consumers.
 
 ### When not to use it
-In real code, use `BlockingQueue` (§14.12), `CountDownLatch`/`Semaphore` (§14.13) or `Condition` (§14.9), which are easier to get right. Know `wait`/`notify` for interviews and legacy code. `notify()` (single) is only safe when all waiters wait for the same condition and any one can proceed; otherwise a "lost wakeup" can leave threads stuck — `notifyAll()` is the safe default. Step-by-step coverage: [LLD §12.13](../../../lld/chapters/12-concurrency-concepts/README.md#1213-condition-variables-waitnotify-and-condition) and the blocking queue built two ways in [LLD §13.8](../../../lld/chapters/13-concurrency-problems/README.md#138-thread-safe-bounded-blocking-queue-two-ways).
+In real code, use `BlockingQueue` (§14.12), `CountDownLatch`/`Semaphore` (§14.13) or `Condition` (§14.9), which are easier to get right. Know `wait`/`notify` for interviews and legacy code. `notify()` (single) is only safe when all waiters wait for the same condition and any one can proceed; otherwise it can wake the wrong thread (§14.8.3) — `notifyAll()` is the safe default. Step-by-step coverage: [LLD §12.13](../../../lld/chapters/12-concurrency-concepts/README.md#1213-condition-variables-waitnotify-and-condition) and the blocking queue built two ways in [LLD §13.8](../../../lld/chapters/13-concurrency-problems/README.md#138-thread-safe-bounded-blocking-queue-two-ways).
 
 ### Self-check
 1. Why `while` and not `if` around `wait()`? → Spurious wakeups, and the condition may have changed before the thread re-acquired the lock.
 2. Does `wait()` release the lock? → Yes (only that object's lock); `sleep()` does not release any lock.
+3. Why can a `release()` before `acquire()` work, but a `notify()` before `wait()` not? → A semaphore stores permits; a condition variable has no memory.
+
+### 14.8.1 Mutex vs semaphore vs monitor
+Three classic primitives that are often confused:
+
+| | **Mutex** (mutual-exclusion lock) | **Semaphore** (Dijkstra, 1965) | **Monitor** (Brinch Hansen 1973, Hoare 1974) |
+|---|---|---|---|
+| What it is | a lock: one thread inside at a time | a counter of **permits**: `acquire` takes one (waits at 0), `release` adds one | a mutex **plus** one or more **condition variables** (queues where threads wait for a condition), bundled with the data they protect |
+| Owner | yes: only the holder may unlock | **none**: any thread may `release` | the mutex part has an owner |
+| Memory of signals | — | **yes**: a `release` with no waiter is kept as a permit | **no**: a `notify`/`signal` with no waiter is lost (§14.8.3) |
+| Re-entrant | Java's are (`synchronized`, `ReentrantLock`) | no: a thread asking for a second permit can block itself | yes in Java |
+| Can admit N threads | no (exactly 1) | yes (N permits) | no (1 inside, others wait) |
+| Java | `synchronized` lock, `ReentrantLock` | `java.util.concurrent.Semaphore` | every object (`synchronized` + `wait`/`notify`, one condition); `Lock` + `Condition` (many conditions) |
+| Use for | protecting a critical section | limiting concurrency (10 DB connections), signalling between threads | "wait until a state is true" (buffer not empty / not full) |
+
+A **binary semaphore** looks like a mutex but has no owner: another thread may release it, and an extra `release()` raises it to 2 permits. Each primitive can build the others — a monitor implements a semaphore with a counter and `while (count == 0) wait()` ([§22.2](../22-multithreading-interview-problems/README.md#222-implement-a-counting-semaphore)), semaphores implement mutexes and condition waits — but monitors make the common case, waiting for a state change under a lock, hard to get wrong. [`code/ch14/sync/MonitorPitfalls.java`](code/ch14/sync/MonitorPitfalls.java) part 1:
+```text
+1 mutex locked twice by its owner, holdCount = 2
+1 semaphore: same thread tries a 2nd permit -> false (acquire() here would block forever)
+1 other thread unlock(): IllegalMonitorStateException (not the owner)
+1 other thread release(): ok, permits = 1
+1 extra release() -> permits = 2 (a 'binary' semaphore now admits 2)
+```
+Deeper design discussion: [LLD §12.12](../../../lld/chapters/12-concurrency-concepts/README.md#1212-semaphores). Sources: `Semaphore`, `ReentrantLock`, `Object` Javadoc.
+
+### 14.8.2 Hoare vs Mesa monitors: why Java needs `while`
+When a thread signals a condition, *who runs next*? The two classic answers:
+
+| | **Hoare** semantics (signal-and-wait) | **Mesa** semantics (signal-and-continue) |
+|---|---|---|
+| On `signal` | the lock passes **directly** to one waiter, which runs at once; the signaller is suspended | the signaller **keeps** the lock and carries on; the waiter is only moved to the queue for the lock |
+| When the waiter resumes | immediately, with the condition **guaranteed** true | later, after competing for the lock, so another thread may have made the condition false again |
+| Correct waiting idiom | `if (!condition) wait();` | **`while (!condition) wait();`** |
+| Cost | two extra context switches per signal | cheap; the signal is just a hint |
+| Where | Hoare's 1974 paper, teaching languages | Xerox's Mesa language (Lampson & Redell, 1980), **Java**, POSIX threads (`pthread_cond_wait`), C#, Python |
+
+Java monitors are Mesa-style: `notify`/`notifyAll` and `Condition.signal` only make waiters *eligible* to re-acquire the lock, and `Object.wait`/`Condition.await` may also return with no signal at all (a **spurious wakeup**, allowed by their Javadoc). In exchange, broadcast and timed waits are easy, since a woken thread always re-checks. Part 2: two consumers wait on an empty box, one item arrives, `notifyAll` wakes both:
+```java
+synchronized int takeWithIf() throws InterruptedException {
+    if (items.isEmpty()) wait();          // checked once only
+    return items.removeFirst();           // the other consumer may have emptied it
+}
+synchronized int takeWithWhile() throws InterruptedException {
+    while (items.isEmpty()) wait();       // re-check after every wakeup
+    return items.removeFirst();
+}
+```
+```text
+2 if   : consumers that got an item = 1, crashed with NoSuchElementException = 1
+2 while: after 1 item, one consumer is back in wait() instead of failing
+2 while: consumers that got an item = 2, crashed with NoSuchElementException = 0
+```
+Under Hoare semantics the `if` version would be correct. Under Java's Mesa semantics the second consumer wakes to an empty box. Sources: `Object.wait`, `Condition` Javadoc (spurious wakeups); JLS §17.2.
+
+### 14.8.3 Missed signals
+A **missed signal** (or *lost wakeup*) happens when a notification is sent while nobody is waiting yet: condition variables have **no memory**, so the later waiter sleeps forever. Three common ways it happens:
+1. **Signal before wait**: the worker finishes and calls `notify()` before the main thread reaches `wait()`.
+2. **Check outside the lock**: `if (!done) { /* signal lands here */ synchronized (lock) { lock.wait(); } }`. Java blocks the worst form by requiring the lock for `wait` (otherwise `IllegalMonitorStateException`), but checking the condition *before* taking the lock still opens the gap.
+3. **`notify()` wakes the wrong thread**: producers and consumers share one wait set, and the single wakeup goes to a thread that can't proceed. That thread waits again, and the thread that could proceed is never woken. `notifyAll()` or separate `Condition`s avoid it.
+
+The fix is always the same: **record the event in state guarded by the lock, and wait in a `while` loop on that state.** Alternatively, use a primitive that remembers: `Semaphore` permits, `CountDownLatch`, the `LockSupport` permit (§14.9.1) or a `BlockingQueue`. Demo part 3, where the signal is sent first every time:
+```java
+synchronized (LOCK) { LOCK.wait(500); }                      // naive: nothing remembers the notify()
+synchronized (LOCK) { while (!ready) LOCK.wait(500); }       // signaller did: ready = true; notifyAll()
+sem.release(); ... sem.tryAcquire(500, MILLISECONDS);        // permit stored before anyone waits
+```
+```text
+3 naive wait: still waiting until the 500 ms timeout: true -> the notify() was lost
+3 flag + while: returned at once: true
+3 semaphore: permit was remembered: true
+```
+**In the interview:** "Java monitors are Mesa-style and allow spurious wakeups, so always wait in a `while`. Condition variables don't remember signals, so keep the condition in a guarded field; a semaphore or latch remembers releases."
 
 ---
 
@@ -549,6 +729,40 @@ If you don't need `tryLock`, timeouts, interruptibility, fairness or several con
 **30-second answer:** "`ReentrantLock` offers what `synchronized` doesn't: `tryLock` with timeouts to avoid deadlock, interruptible acquisition, optional fairness and multiple `Condition`s. The price is that I must unlock in `finally`. I default to `synchronized` and switch to `ReentrantLock` when I need those features; `ReadWriteLock` for read-heavy data, `StampedLock` for optimistic reads."
 - *How does `tryLock` help against deadlock?* → A thread that can't get the second lock backs off, releases the first and retries, breaking the circular wait ([Chapter 15 §15.9](../15-concurrency-2-modern/README.md#159-liveness-deadlock-livelock-starvation)).
 
+### 14.9.1 `LockSupport`: the park/unpark primitive
+Every blocking class in `java.util.concurrent` (locks, `Condition`, latches, semaphores, `FutureTask`, blocking queues) finally suspends threads with **`LockSupport`**, most via `AbstractQueuedSynchronizer` (AQS), which keeps the queue of waiters. Each thread has one **permit**, available or not:
+
+| Method | Effect |
+|---|---|
+| `park()` / `park(blocker)` | if the permit is available, consume it and return at once; otherwise block (state `WAITING`) |
+| `parkNanos(ns)` / `parkUntil(deadlineMs)` | the same with a timeout (`TIMED_WAITING`) |
+| `unpark(thread)` | make that thread's permit available; if it is parked, it wakes up |
+| `getBlocker(thread)` | the object passed to `park(blocker)`; thread dumps print it ("parking to wait for …") |
+
+Rules that follow from "one permit, not a counter":
+- **`unpark` before `park` is remembered**, so park/unpark has no missed-signal problem (unlike `notify`, §14.8.3).
+- **Permits don't accumulate**: two `unpark`s followed by two `park`s block on the second `park`.
+- `park` also returns **when the thread is interrupted** (no exception; the flag stays set) and may return **for no reason** (spuriously). So callers always re-check their condition in a loop, and many first check `Thread.interrupted()`.
+- Unlike `wait`, `park` needs no lock. When a virtual thread parks, it unmounts from its carrier, which is how JDK locks and queues free carriers.
+
+[`code/ch14/locks/ParkDemo.java`](code/ch14/locks/ParkDemo.java) (key parts):
+```java
+LockSupport.unpark(Thread.currentThread()); LockSupport.park();            // 1 returns at once
+LockSupport.unpark(t); LockSupport.unpark(t); LockSupport.parkNanos(1);   // 2 one permit only...
+LockSupport.parkNanos(300_000_000L);                                      //   ...this one waits
+Thread sleeper = new Thread(() -> LockSupport.park(blocker));             // 3 unpark from main
+Thread victim  = new Thread(() -> { LockSupport.park(); flag[0] = Thread.currentThread().isInterrupted(); });
+```
+Output:
+```text
+1 unpark then park: returned immediately: true
+2 second park after two unparks waited for the timeout: true
+3 sleeper state = WAITING, blocker recorded: true
+3 after unpark: woke = true
+4 park returned on interrupt, no exception, interrupt flag still set: true
+```
+Use `LockSupport` directly only when building your own synchronizer (or extend AQS); application code should use the higher-level classes. Source: `LockSupport` and `AbstractQueuedSynchronizer` Javadoc.
+
 ---
 
 ## 14.10 Atomic variables
@@ -605,6 +819,60 @@ CAS internals, the ABA problem (a value changes A→B→A, so CAS wrongly thinks
 1. What does `compareAndSet` return if the current value isn't the expected one? → `false`, and the value is unchanged.
 2. When is `LongAdder` better than `AtomicLong`? → Many threads updating, rare reads.
 3. Why must the `updateAndGet` lambda be side-effect free? → It may be retried.
+4. How do you get a concurrent maximum without a lock? → `LongAccumulator(Long::max, Long.MIN_VALUE)` (or `accumulateAndGet(x, Math::max)` on an `AtomicLong`).
+
+### 14.10.1 The rest of the atomics family
+| Class | Adds | Typical use |
+|---|---|---|
+| `AtomicBoolean` | CAS on a flag | **run once**: `if (started.compareAndSet(false, true)) init();`; start/stop state |
+| `AtomicIntegerArray`, `AtomicLongArray`, `AtomicReferenceArray<E>` | every **element** is atomic and volatile (a `volatile int[]` makes only the *array reference* volatile, not its elements) | histograms, per-slot counters, claiming slots with `compareAndSet(i, null, me)`, Bloom-filter bits |
+| `AtomicStampedReference<V>` | a reference and an `int` **stamp** (version) compared and set together | fixing **ABA**: A→B→A changes the stamp, so a stale CAS fails |
+| `AtomicMarkableReference<V>` | a reference and a `boolean` **mark** set together | **logical deletion** in lock-free linked lists: mark a node's `next` as "deleted" so a concurrent insert after it fails its CAS |
+| `AtomicIntegerFieldUpdater`, `AtomicLongFieldUpdater`, `AtomicReferenceFieldUpdater` | atomic operations on a plain **`volatile` field** of existing objects, set up once (reflectively) in a `static final` | millions of small objects (nodes, connections) where an `AtomicInteger` each would waste memory. The field must be `volatile`, non-`static`, exactly `int`/`long` and accessible; atomicity holds only among updater operations |
+| `VarHandle` (Java 9, `java.lang.invoke`) | the modern low-level equivalent of the updaters, for fields **and** array elements, plus weaker memory-order modes (`getAcquire`/`setRelease`/`getOpaque`) | library and JDK internals; prefer it to updaters in new low-level code |
+| `LongAdder`, `DoubleAdder` | sum spread over per-thread cells (§14.10 above) | hot counters, totals. A `DoubleAdder` sum can differ in the last bits between runs because floating-point addition depends on order |
+| `LongAccumulator(op, identity)`, `DoubleAccumulator` | generalise the adders to any **associative, commutative** operation; `accumulate(x)`, `get()`, `reset()` | concurrent **max/min**: `new LongAccumulator(Long::max, Long.MIN_VALUE)` |
+
+Every reference CAS compares with `==` (identity), not `equals`. With boxed values such as `AtomicStampedReference<Integer>`, two equal `Integer`s outside the small-value cache are different objects, and the CAS fails. [`code/ch14/atomic/AtomicFamily.java`](code/ch14/atomic/AtomicFamily.java) (key parts):
+```java
+if (started.compareAndSet(false, true)) initRuns.incrementAndGet();            // 8 racing threads
+histogram.incrementAndGet(i % 4);                                               // AtomicIntegerArray(4)
+stamped.compareAndSet("A", "C", seenStamp, seenStamp + 1);                      // after A->B->A
+link.attemptMark(next, true); link.compareAndSet(next, "node-new", false, false);
+static final AtomicIntegerFieldUpdater<Connection> REFS =
+        AtomicIntegerFieldUpdater.newUpdater(Connection.class, "refCount");     // volatile int refCount
+REFS_VH = MethodHandles.lookup().findVarHandle(Connection.class, "refCount", int.class);
+LongAccumulator maxLatency = new LongAccumulator(Long::max, Long.MIN_VALUE);
+```
+Output:
+```text
+AtomicBoolean       : 8 racing threads, init ran 1 time(s)
+AtomicIntegerArray  : [10000, 10000, 10000, 10000]
+AtomicReferenceArray: 5 threads tried to claim seat 0, winners = 1
+ABA                 : plain CAS A->C true, stamped CAS A->C false (stamp is now 2)
+AtomicMarkableRef   : marked deleted true, later insert after it succeeds? false
+IntegerFieldUpdater : refCount = 40000
+RefFieldUpdater     : NEW->OPEN true, NEW->OPEN again false
+VarHandle CAS       : 40000->0 true, refCount = 0
+updater on non-volatile field -> IllegalArgumentException: Must be volatile type
+LongAccumulator(max): 99999
+DoubleAdder sum     : 1000.0, DoubleAccumulator(min): 0.5
+```
+Sources: `java.util.concurrent.atomic` package summary and class Javadoc; `VarHandle` Javadoc (JEP 193).
+
+### 14.10.2 Progress guarantees: blocking, obstruction-free, lock-free, wait-free
+"Lock-free" is a precise term about **progress**, not about whether a `Lock` object appears in the code:
+
+| Guarantee | Definition | If one thread is paused mid-operation (preempted, page fault, GC) | Java examples |
+|---|---|---|---|
+| **Blocking** | one thread can stop others from progressing indefinitely | every thread needing its lock stops too | `synchronized`, `ReentrantLock`, `BlockingQueue.put`, and also a **spin lock** made from an `AtomicBoolean` (no `Lock` object, still blocking) |
+| **Obstruction-free** | a thread finishes in a finite number of its own steps **if it runs alone** | others still progress, but contending threads can keep undoing each other (livelock) | rare in practice (some transactional-memory designs) |
+| **Lock-free** | at any moment, **some** thread finishes in a finite number of steps (the system as a whole progresses); an individual thread may retry forever | others unaffected | CAS-retry loops: `AtomicInteger.updateAndGet`, `ConcurrentLinkedQueue` (Michael-Scott queue), the Treiber stack in [LLD §12.15](../../../lld/chapters/12-concurrency-concepts/README.md#1215-compare-and-swap-cas--atomics) |
+| **Wait-free** | **every** thread finishes in a bounded number of its own steps, so no thread can starve | others unaffected | `volatile` reads/writes; `AtomicInteger.getAndAdd` where the CPU has an atomic add (on x86-64 the JIT emits a single `LOCK XADD`, JDK-7023898); wait-free queues exist but are complex |
+
+Each row implies the ones above it (wait-free ⇒ lock-free ⇒ obstruction-free); the JDK's **non-blocking** (e.g. `ConcurrentLinkedQueue` Javadoc) means lock-free or better. Lock-free code can't deadlock or stall behind a descheduled lock holder, but it is **not automatically faster** — contended CAS retries burn CPU (hence `LongAdder`) — and multi-variable invariants still need locks.
+
+**In the interview:** "Lock-free means *some* thread always makes progress even if others are paused; wait-free means *every* thread finishes in bounded steps. A CAS retry loop is lock-free but not wait-free, because one unlucky thread can keep losing. A spin lock uses no `Lock` class but is still blocking."
 
 ---
 
@@ -675,7 +943,7 @@ delayed hello
 ```
 - An exception inside a task **doesn't crash anything**: it's stored in the `Future` and rethrown by `get()` as `ExecutionException` with the original as its *cause*. If you never call `get()`, a `submit`ted task's exception is silently lost — a frequent source of "the job just stopped working" mysteries. (`execute()`d tasks, by contrast, let the exception reach the thread's uncaught-exception handler, which prints it.)
 - `invokeAll` returns results in **submission order**, not completion order.
-- `scheduleAtFixedRate` runs at a fixed *rate* (start times 100 ms apart); `scheduleWithFixedDelay` waits a fixed *delay* after each run ends. If a periodic task throws, its future runs are silently cancelled.
+- `scheduleAtFixedRate` runs at a fixed *rate* (start times 100 ms apart); `scheduleWithFixedDelay` waits a fixed *delay* after each run ends. If a periodic task throws, its future runs are silently cancelled (compared with `Timer` in §14.11.2).
 
 ### The `Executors` factory methods
 
@@ -719,7 +987,7 @@ Note the surprise in step 3: the pool grows beyond the core size only when the q
 
 **Rejection policies**: `AbortPolicy` (default, throws `RejectedExecutionException`), **`CallerRunsPolicy`** (the submitting thread runs the task itself — natural **back-pressure** (a signal that pushes back on whoever sends work too fast, slowing them down) that slows the producer; shown in the last line), `DiscardPolicy` (silently drop), `DiscardOldestPolicy` (drop the oldest queued task).
 
-**Sizing** (JCIP): for **CPU-bound** work (limited by processor speed, not by waiting), about **N<sub>cpu</sub> (+1)** threads — more just adds context switches. For tasks that wait, **N<sub>threads</sub> ≈ N<sub>cpu</sub> × (1 + wait time / compute time)**; e.g. 8 cores, tasks that wait 90 ms per 10 ms of CPU → ~80 threads. Then measure. For **I/O-bound** tasks (ones that spend most of their time waiting on disk or network) on Java 21+, virtual threads usually remove the need for this calculation.
+**Sizing** (JCIP): for **CPU-bound** work (§14.1.2), about **N<sub>cpu</sub> (+1)** threads — more just adds context switches. For tasks that wait, **N<sub>threads</sub> ≈ N<sub>cpu</sub> × (1 + wait time / compute time)**; e.g. 8 cores, tasks that wait 90 ms per 10 ms of CPU → ~80 threads. Then measure. For **I/O-bound** tasks on Java 21+, virtual threads usually remove the need for this calculation.
 
 ### Common mistakes
 - Forgetting to shut down a pool → non-daemon worker threads keep the JVM alive forever.
@@ -735,6 +1003,47 @@ Note the surprise in step 3: the pool grows beyond the core size only when the q
 - *`submit` vs `execute`?* → `submit` returns a `Future` and captures exceptions; `execute` returns nothing and exceptions go to the uncaught handler.
 
 Design discussion: [LLD §12.21 Thread pool pattern](../../../lld/chapters/12-concurrency-concepts/README.md#1221-thread-pool-pattern). Exam tables (`TimeUnit`, `ScheduledExecutorService` methods): [OCP Chapter 13](../../../../ocp-java21-study/chapters/13-concurrency/README.md).
+
+### 14.11.1 `CompletionService`: results in completion order
+`invokeAll` and a loop of `future.get()` return results in **submission** order, so a slow first task holds up all the fast ones. **`ExecutorCompletionService`** wraps an executor and queues each `Future` **when it completes**:
+
+| Method | Does |
+|---|---|
+| `submit(callable)` / `submit(runnable, result)` | run on the wrapped executor; returns the `Future` |
+| `take()` | block until the next task completes and return its (done) `Future` |
+| `poll()` / `poll(timeout, unit)` | the same without blocking / with a timeout (`null` if none) |
+
+Call `take()` once per submission; a failed task arrives like any other and its `get()` throws `ExecutionException`. Uses: handling results as they arrive, and "first success wins" — take until one succeeds, then `cancel(true)` the rest (`invokeAny` does this when you don't need the others). [`code/ch14/executors/CompletionAndTimers.java`](code/ch14/executors/CompletionAndTimers.java), tasks that sleep 300, 100 and 200 ms:
+```java
+CompletionService<String> cs = new ExecutorCompletionService<>(pool);
+for (Callable<String> j : jobs) cs.submit(j);
+for (int i = 0; i < jobs.size(); i++) asReady.add(cs.take().get());
+```
+```text
+invokeAll         : [A(300ms), B(100ms), C(200ms)]
+CompletionService : [B(100ms), C(200ms), A(300ms)]
+```
+On Java 8+, `CompletableFuture`s with `thenAccept` give the same "handle each as it finishes" behaviour without a queue ([§15.2](../15-concurrency-2-modern/README.md#152-completablefuture)).
+
+### 14.11.2 `java.util.Timer` vs `ScheduledThreadPoolExecutor`
+`java.util.Timer` + `TimerTask` (Java 1.3) is the legacy scheduler. `ScheduledThreadPoolExecutor` (Java 5, what `Executors.newScheduledThreadPool` returns) replaces it; the `Timer` Javadoc itself calls it "effectively a more versatile replacement":
+
+| | `Timer` | `ScheduledThreadPoolExecutor` |
+|---|---|---|
+| Threads | **one** background thread for all tasks; a slow task delays every other task | a configurable pool of core threads |
+| A task throws | the Timer thread **dies**: all tasks are cancelled and every later `schedule` throws `IllegalStateException` | only that task stops; a periodic task's later runs are suppressed and its `ScheduledFuture.get()` throws `ExecutionException`; other tasks keep running |
+| Clock | OpenJDK's implementation uses `System.currentTimeMillis()` (wall clock), so a clock change can shift schedules | `System.nanoTime()` (a monotonic clock that never jumps) |
+| Task type | must subclass `TimerTask` | any `Runnable` or `Callable`, with a result through `ScheduledFuture` |
+| Shutdown | `cancel()`; non-daemon by default (`new Timer(true)` for daemon) | `shutdown()`/`close()` like any executor |
+
+Output of the second half of the same program (the Timer thread's stack trace also goes to stderr, as an uncaught exception):
+```text
+Timer after a task threw -> IllegalStateException: Timer already cancelled.
+STPE failing periodic task -> ExecutionException caused by IllegalStateException; isDone = true
+STPE other periodic task kept running: true
+STPE terminated after shutdown: true
+```
+Use a scheduled executor, and wrap periodic task bodies in a logging `try/catch`: even there, an exception silently ends that task's schedule. Sources: `ExecutorCompletionService`, `Timer`, `ScheduledThreadPoolExecutor` Javadoc.
 
 ---
 
@@ -847,6 +1156,47 @@ phaser: main + 2 workers passed phase 0, current phase = 1
 - A `Semaphore` has no owner: any thread can `release()`, and releasing without acquiring *increases* the permits — always pair `acquire` with `release` in `finally`.
 - If one thread waiting at a `CyclicBarrier` is interrupted or times out, the barrier becomes **broken** and all others get `BrokenBarrierException`.
 
+**`Exchanger<V>` in depth.** `exchange(x)` blocks until a partner also calls it; each returns the other's object (the timed form throws `TimeoutException`), and everything done before the hand-over is visible to the partner. With more than two threads the pairing is arbitrary, so it fits two roles — classically **double buffering**: a filler and a drainer swap buffers when the filler's is full, so no buffer is ever shared and nothing is copied or locked.
+
+**`Phaser` in depth.** A `Phaser` is a reusable barrier whose number of **parties** (registered participants) can change between phases:
+
+| Method | Meaning |
+|---|---|
+| `new Phaser(n)`, `register()`, `bulkRegister(k)` | add parties (at any time) |
+| `arriveAndAwaitAdvance()` | arrive and wait for the others (like `CyclicBarrier.await`) |
+| `arrive()` | arrive **without** waiting (signal "my part of this phase is done") |
+| `arriveAndDeregister()` | arrive and leave for good; later phases need one party fewer |
+| `awaitAdvance(phase)` | wait for a phase to finish without being a party |
+| `onAdvance(phase, registeredParties)` | override: runs once when a phase completes (like a barrier action); **return `true` to terminate** the phaser. The default terminates when no parties remain |
+| `getPhase()`, `isTerminated()` | the phase number (wraps to 0 after `Integer.MAX_VALUE`; **negative** once terminated) |
+
+A phaser holds at most 65,535 parties (**tiered** phasers — children registered with a parent — go beyond and cut contention). Unlike `CyclicBarrier` it has no "broken" state, and `arriveAndAwaitAdvance` ignores interrupts (`awaitAdvanceInterruptibly` doesn't). In the demo, three workers need 1, 2 and 4 phases and `onAdvance` stops after phase 3. [`code/ch14/synchronizers/ExchangerPhaser.java`](code/ch14/synchronizers/ExchangerPhaser.java) (key parts):
+```java
+if (buf.size() == 3) buf = exchanger.exchange(buf);         // filler: full buffer out, empty one back
+buf = exchanger.exchange(buf); log.add("drained " + buf);   // drainer
+
+Phaser phaser = new Phaser(1) {                             // main is a party
+    @Override protected boolean onAdvance(int phase, int registeredParties) {
+        return phase >= 3 || registeredParties == 0;        // true = terminate
+    }
+};
+phaser.register();                                          // per worker; the worker loops:
+if (r == rounds - 1) phaser.arriveAndDeregister(); else phaser.arriveAndAwaitAdvance();
+while (!phaser.isTerminated()) phaser.arriveAndAwaitAdvance();   // main drives the phases
+```
+Output:
+```text
+Exchanger: [drained [1, 2, 3], drained [4, 5, 6]]
+Exchanger: no partner within 100 ms -> TimeoutException
+  phase 0 done, parties still registered = 3
+  phase 1 done, parties still registered = 2
+  phase 2 done, parties still registered = 2
+  phase 3 done, parties still registered = 1
+Phaser: terminated = true, getPhase() = -2147483644 (negative once terminated)
+Phaser: awaitAdvance on a terminated phaser returns at once: -2147483644
+```
+The registered count fell from 4 (main + 3 workers) as workers deregistered. Sources: `Exchanger`, `Phaser` Javadoc.
+
 Worked examples: [LLD §12.12 Semaphores](../../../lld/chapters/12-concurrency-concepts/README.md#1212-semaphores), [§12.14 Latch and barrier](../../../lld/chapters/12-concurrency-concepts/README.md#1214-countdownlatch-and-cyclicbarrier), and the rate limiter in [LLD §13.11](../../../lld/chapters/13-concurrency-problems/README.md#1311-rate-limiter--token-bucket-thread-safe).
 
 ### Self-check
@@ -875,6 +1225,25 @@ Guidelines:
 5. **Prefer high-level utilities** (executors, concurrent collections, synchronizers) over `wait`/`notify` and raw threads — *Effective Java* Items 80–81.
 6. **Test under load** and use tools: thread dumps, JFR (Java Flight Recorder, the JVM's built-in low-overhead profiler/recorder), and stress-testing harnesses such as OpenJDK's jcstress for low-level code — but remember tests can't prove absence of races; reasoning about happens-before can ([Chapter 15](../15-concurrency-2-modern/README.md#158-the-java-memory-model-and-happens-before)).
 
+**Concurrency annotations (guideline 4 in code).** *Java Concurrency in Practice* introduced four annotations that record thread-safety decisions where readers and tools can see them:
+
+| Annotation | On | Promise |
+|---|---|---|
+| `@ThreadSafe` | class | correct under any concurrent use without extra synchronisation by callers |
+| `@NotThreadSafe` | class | callers must confine it to one thread or lock around it |
+| `@Immutable` | class | state never changes after construction (so it is also thread-safe) |
+| `@GuardedBy("lock")` | field, method | access only while holding the named lock: `"this"`, a field name (`"lock"`), `"Foo.class"`, `"Outer.this"`, `"itself"` (the field's own object) or `"method()"` (the lock returned by a method) |
+
+```java
+@ThreadSafe
+public class Inventory {
+    private final Object lock = new Object();
+    @GuardedBy("lock") private final Map<String, Integer> stock = new HashMap<>();
+    public int available(String sku) { synchronized (lock) { return stock.getOrDefault(sku, 0); } }
+}
+```
+They are **not in the JDK**, and `javac` checks nothing. They come from a library — `net.jcip:jcip-annotations`, the dormant JSR 305 jar (`javax.annotation.concurrent`, never part of the JDK despite the name), or a checker's own versions — and static analysis enforces them: Error Prone (its `@GuardedBy`, `@ThreadSafe`, `@Immutable`, at compile time), the Checker Framework's Lock Checker, SpotBugs. Even unchecked, `@GuardedBy` tells the next maintainer which lock protects which field. Sources: JCIP Appendix A; Error Prone and Checker Framework documentation.
+
 ### Choosing the tool
 
 | Need | Reach for |
@@ -902,18 +1271,19 @@ The LLD book's version of this table with interview framing: [LLD §12.26](../..
 
 | Topic | Remember |
 |---|---|
+| Basics | Program (file) → process (own memory, PID) → thread (shared heap); platform threads preemptive, virtual threads cooperative; Little's law: in-flight = throughput × latency; Amdahl: speed-up ≤ 1/(serial fraction) |
 | Threads | Share the heap, own their stack; `start()` (not `run()`) creates a thread; `join()` waits; daemon threads don't keep the JVM alive; `Thread.Builder` (21) |
 | States | NEW, RUNNABLE, BLOCKED (monitor), WAITING, TIMED_WAITING, TERMINATED |
 | Interruption | Cooperative; blocking calls throw `InterruptedException` and clear the flag; restore it or rethrow |
 | Races | Read-modify-write and check-then-act; results vary run to run; tests can't prove absence |
 | `synchronized` | Mutual exclusion + visibility; `this` / `Class` / chosen object; reentrant; same lock for every access |
-| `volatile` | Visibility (and ordering) only; perfect for flags; `++` still races |
-| `wait`/`notify` | Hold the lock, `while` loop, prefer `notifyAll`; prefer higher-level tools |
-| Locks | `ReentrantLock`: `tryLock`, timeouts, interruptible, fair, `Condition`s — unlock in `finally`; `ReadWriteLock`; `StampedLock` |
-| Atomics | CAS-based, lock-free, single variable; `AtomicReference` + immutable object; `LongAdder` for hot counters |
-| Executors | Prefer to raw threads; `Future` + `ExecutionException`; shut down (or `close()`, 19); bounded queues + rejection policy in servers; size by CPU vs wait |
+| `volatile` | Visibility (and ordering) only; perfect for flags; `++` still races; plain `long`/`double` may tear (JLS 17.7) |
+| `wait`/`notify` | Hold the lock, `while` loop (Mesa semantics + spurious wakeups), prefer `notifyAll`; signals aren't remembered — keep state in a field; mutex = owner, semaphore = counter, monitor = mutex + conditions |
+| Locks | `ReentrantLock`: `tryLock`, timeouts, interruptible, fair, `Condition`s — unlock in `finally`; `ReadWriteLock`; `StampedLock`; all built on `LockSupport` park/unpark (one permit) |
+| Atomics | CAS-based, lock-free, single variable; `AtomicReference` + immutable object; `LongAdder` for hot counters; arrays, stamped/markable refs, field updaters/`VarHandle`, accumulators; lock-free = someone progresses, wait-free = everyone does |
+| Executors | Prefer to raw threads; `Future` + `ExecutionException`; shut down (or `close()`, 19); bounded queues + rejection policy in servers; size by CPU vs wait; `CompletionService` for completion order; scheduled pool, not `Timer` |
 | Collections | `ConcurrentHashMap` atomic methods (`merge`, `computeIfAbsent`); COW lists for read-mostly; `BlockingQueue` for producer-consumer |
-| Synchronizers | Latch (one-shot), barrier (cyclic), semaphore (permits), phaser (dynamic) |
-| Design | Confinement, immutability, encapsulated locking, delegation |
+| Synchronizers | Latch (one-shot), barrier (cyclic), semaphore (permits), phaser (dynamic; `arriveAndDeregister`, `onAdvance` to terminate), exchanger (two-thread swap) |
+| Design | Confinement, immutability, encapsulated locking, delegation; document with `@ThreadSafe`/`@GuardedBy` (library annotations, not JDK) |
 
 **Where next:** composing asynchronous work with `CompletableFuture`, Fork/Join, **virtual threads**, structured concurrency, scoped values, the **Java Memory Model** and deadlock/livelock/starvation in [Chapter 15 — Concurrency II](../15-concurrency-2-modern/README.md). Practise with classic problems in [LLD Chapter 13](../../../lld/chapters/13-concurrency-problems/README.md); exam traps in [OCP Chapter 13](../../../../ocp-java21-study/chapters/13-concurrency/README.md). Python comparison (GIL, `threading`, `asyncio`): [Python Chapter 16](../../../python/chapters/16-concurrency-and-async/README.md).

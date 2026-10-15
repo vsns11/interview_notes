@@ -1,22 +1,8 @@
 # Chapter 12 — Streams
 
-The **Streams API** (`java.util.stream`, Java 8) lets you describe *what* you want to compute from a sequence of values — "the names of customers who spent over 450, upper-cased and sorted" — as a **pipeline** (a chain of steps where each step's output feeds the next) of small operations, instead of writing *how* to loop, test, accumulate and sort by hand. It is built on the lambdas, method references and functional interfaces from [Chapter 11](../11-lambdas-and-functional-programming/README.md) and usually starts from a collection ([Chapter 10](../10-collections/README.md)).
+The **Streams API** (`java.util.stream`, Java 8) lets you describe *what* to compute from a sequence of values — "names of customers who spent over 450, upper-cased and sorted" — as a **pipeline** (a chain of steps, each feeding the next) instead of hand-writing *how* to loop, test, accumulate and sort. It builds on lambdas and functional interfaces ([Chapter 11](../11-lambdas-and-functional-programming/README.md)) and usually starts from a collection ([Chapter 10](../10-collections/README.md)). Covered here: lazy execution, every everyday operation, collectors, primitive streams, parallel streams (and when not to use them), **stream gatherers** (final in Java 24), and common mistakes.
 
-This chapter explains how a stream pipeline actually executes (**lazily** — work is postponed until a result is actually asked for — one element at a time), every everyday operation, the collectors that turn streams into maps and reports, primitive streams, parallel streams and when *not* to use them, the new **stream gatherers** (final in Java 24), and the mistakes that make stream code wrong or slow.
-
-**What you'll learn**
-
-1. What a stream is and isn't; building a pipeline; ways to create streams.
-2. Lazy evaluation, vertical processing, short-circuiting, stateless vs stateful operations.
-3. Intermediate operations: `filter`, `map`, `flatMap`, `mapMulti`, `distinct`, `sorted`, `limit`, `skip`, `takeWhile`, `dropWhile`, `peek`.
-4. Terminal operations and the three forms of `reduce`.
-5. Collectors: `toList`, `toMap`, `joining`, `groupingBy`, `partitioningBy`, downstream collectors, `teeing`, custom collectors.
-6. Primitive streams: `IntStream`, `LongStream`, `DoubleStream`.
-7. Parallel streams — how they work, measured wins and losses, and correctness rules.
-8. Gatherers (Java 24): built-in windows, `scan`, `fold`, `mapConcurrent`, and writing your own.
-9. Common mistakes, streams vs loops, and a realistic reporting pipeline.
-
-All runnable code is in [`code/`](code/) (package `ch12.*`), compiled with `javac --release 25` (the Java compiler, targeting Java 25) and run on JDK 26 (the Java Development Kit: compiler plus runtime).
+All runnable code is in [`code/`](code/) (package `ch12.*`), compiled with `javac --release 25` and run on JDK 26.
 
 > **Exam depth.** Output-prediction puzzles (laziness, `peek`, infinite streams that hang), the exact return types of every terminal operation, `Optional` vs primitive optionals, `Spliterator`, and collector signatures are drilled in [OCP Chapter 10 — Streams](../../../../ocp-java21-study/chapters/10-streams/README.md) (see *Gotchas & exam traps*).
 
@@ -25,7 +11,7 @@ All runnable code is in [`code/`](code/) (package `ch12.*`), compiled with `java
 ## 12.1 What a stream is
 
 ### What it is
-A **stream** is a sequence of elements that supports a chain of operations computed on demand. Think of a factory conveyor belt: items come off a **source** (a collection, an array, a file, a generator), pass through stations that inspect, reshape or discard them (**intermediate operations**), and end at a station that produces a final product (**terminal operation**). Nothing moves until that final station is switched on.
+A **stream** is a sequence of elements supporting a chain of operations computed on demand: elements come from a **source** (collection, array, file, generator), pass through **intermediate operations** that inspect, reshape or discard them, and end at one **terminal operation** that produces the result. Nothing moves until the terminal operation runs.
 
 ```mermaid
 flowchart LR
@@ -43,13 +29,13 @@ A stream is **not** a collection:
 | Purpose | stores elements | computes over elements |
 | Elements | all exist in memory | produced on demand; may be infinite |
 | Traversal | as often as you like | **once** (then it's consumed) |
-| Iteration (stepping through elements) | external (you write the loop) | internal (the library runs the loop) |
+| Iteration | external (you write the loop) | internal (the library runs the loop) |
 | Changes source? | `add`/`remove` modify it | never modifies its source |
 
 ### Why it matters
-- **Readability**: each step names its intent (`filter`, `map`, `groupingBy`), and multi-step data processing reads top to bottom.
-- **Fewer bugs**: no index variables, no forgetting to reset an accumulator.
-- **Optimisation room**: because the library runs the loop, it can fuse steps (merge them into a single pass), stop early, and (optionally) split work across **cores** (the independent processing units inside a CPU, each able to run one thread at a time).
+- **Readability**: each step names its intent (`filter`, `map`, `groupingBy`); multi-step processing reads top to bottom.
+- **Fewer bugs**: no index variables or accumulators to forget to reset.
+- **Optimisation room**: the library runs the loop, so it can fuse steps into a single pass, stop early, and optionally split work across CPU cores.
 
 ### Code: loop vs pipeline
 
@@ -81,7 +67,7 @@ stream: [ANA, ANA, BO, CY]
 | Source | Code | Notes |
 |---|---|---|
 | Any collection | `list.stream()`, `set.parallelStream()` | the usual start |
-| Values | `Stream.of("a", "b")` | varargs (a method that accepts any number of arguments) |
+| Values | `Stream.of("a", "b")` | varargs |
 | Array | `Arrays.stream(arr)`, `Arrays.stream(arr, from, to)` | `int[]` → `IntStream` |
 | Number ranges | `IntStream.range(0, n)` (exclusive), `rangeClosed(1, n)` | |
 | Infinite, by rule | `Stream.iterate(seed, f)`; `Stream.iterate(seed, hasNext, next)` (9) | use `limit` or the 3-arg form |
@@ -91,7 +77,7 @@ stream: [ANA, ANA, BO, CY]
 | Characters / lines | `str.chars()`, `str.lines()` (11) | |
 | Files | `Files.lines(path)`, `bufferedReader.lines()` | lazy; close it — [Chapter 13](../13-io-and-nio/README.md) |
 | Map | `map.entrySet().stream()` | maps aren't streams themselves |
-| Random numbers | `new Random(seed).ints(n, lo, hi)` | seed = starting value; same seed, same numbers |
+| Random numbers | `new Random(seed).ints(n, lo, hi)` | same seed, same numbers |
 | Builder | `Stream.<T>builder().add(x).build()` | |
 
 ```java
@@ -101,28 +87,16 @@ Stream.generate(() -> "ab").limit(3).collect(Collectors.joining("-"));
 Stream<String> s = Stream.of("once"); s.forEach(x -> {}); s.count();   // IllegalStateException
 ```
 
-Output (remaining lines):
+Output (excerpt):
 ```
-Stream.of        [a, b, c]
-Arrays.stream    [3, 1, 2]
-IntStream.range  [0, 1, 2, 3, 4] rangeClosed [1, 2, 3]
 iterate(seed,f)  [1, 2, 4, 8, 16, 32, 64, 128]
 iterate(s,has,f) [1, 3, 9, 27, 81]
 generate         ab-ab-ab
-String.chars     [h, e, y]
-Map.entrySet     [x1, y2]
-ofNullable(null) 0
-concat           [1, 2, 3]
-lines()          3 lines
-builder          [built, stream]
 reuse -> stream has already been operated upon or closed
 source [3, 1, 2] unchanged, result [1, 2, 3]
 ```
 
-### Self-check
-1. What are the three parts of a pipeline? → Source, zero or more intermediate operations, one terminal operation.
-2. Can you run two terminal operations on the same stream? → No — `IllegalStateException` (Java's exception for "this object isn't in a state where that call is allowed"); create a new stream from the source.
-3. Does `list.stream().sorted()` sort `list`? → No; streams never modify their source.
+A stream supports **one** terminal operation; a second throws `IllegalStateException` — create a new stream from the source. And `list.stream().sorted()` does not sort `list`: streams never modify their source.
 
 ### TL;DR
 Stream = a one-shot, lazy pipeline over a source: source → intermediate ops → terminal op → result. It describes a computation; it doesn't store data.
@@ -132,14 +106,14 @@ Stream = a one-shot, lazy pipeline over a source: source → intermediate ops �
 ## 12.2 Laziness: how a pipeline really executes
 
 ### What it is
-**Intermediate operations are lazy**: calling `filter` or `map` only *records* a step and returns a new stream. The work happens when a **terminal operation** pulls elements through. And it happens **element by element through all stages** ("vertical" processing), not stage by stage over the whole list ("horizontal").
+**Intermediate operations are lazy** (work is postponed until a result is asked for): `filter` or `map` only *records* a step and returns a new stream. Work happens when a **terminal operation** pulls elements through — **element by element through all stages** ("vertical" processing), not stage by stage over the whole list ("horizontal"). So `Stream.of(1, 2, 3).map(x -> { System.out.println(x); return x; });` prints nothing.
 
 ### How it works
 1. Each intermediate call adds a *stage* to a linked pipeline description.
 2. The terminal operation asks the source for elements — via a **`Spliterator`** (a "splittable iterator" that can also split its range in two for parallel work).
 3. Each element travels through every stage in order; stages are fused into one pass, so there are no intermediate lists.
 4. **Short-circuiting** operations (`findFirst`, `findAny`, `anyMatch`, `allMatch`, `noneMatch`, `limit`, `takeWhile`) stop pulling as soon as the answer is known — which is what makes infinite streams usable.
-5. **Stateless** operations (`filter`, `map`, `flatMap`, `peek`) handle each element independently. **Stateful** ones need to remember other elements: `distinct` (a set of seen items), `sorted` (**buffers everything** before emitting anything — a *barrier*), `limit`/`skip` (counters).
+5. **Stateless** operations (`filter`, `map`, `flatMap`, `peek`) handle each element independently. **Stateful** ones remember other elements: `distinct` (a set of seen items), `sorted` (**buffers everything** before emitting anything — a *barrier*), `limit`/`skip` (counters), `takeWhile`/`dropWhile`.
 
 ```mermaid
 sequenceDiagram
@@ -211,11 +185,6 @@ What to notice:
 - Putting `sorted()` or `distinct()` *before* `limit` on an infinite stream → it never finishes (the barrier waits forever).
 - Relying on `peek` for real work — the library may skip it entirely (§12.10).
 
-### Self-check
-1. `Stream.of(1, 2, 3).map(x -> { System.out.println(x); return x; });` prints what? → Nothing — no terminal operation.
-2. Which operations short-circuit? → `findFirst`, `findAny`, `anyMatch`, `allMatch`, `noneMatch`, `limit`, `takeWhile`.
-3. Why is `sorted` called a barrier? → It must receive every element before it can emit the first one.
-
 ### TL;DR
 Nothing runs until a terminal operation. Elements flow one at a time through all fused stages; short-circuiting ops stop early; stateful ops (`sorted`, `distinct`) buffer. Filter early, sort late.
 
@@ -230,8 +199,8 @@ Nothing runs until a terminal operation. Elements flow one at a time through all
 | `mapToInt/Long/Double`, `mapToObj`, `boxed` | switch between object and primitive streams | no | §12.6 |
 | `flatMap(Function<T, Stream<R>>)` | each element → 0..n elements, flattened | no | |
 | `mapMulti(BiConsumer<T, Consumer<R>>)` (16) | push 0..n results imperatively | no | avoids creating tiny streams |
-| `distinct()` | drop duplicates (by `equals`/`hashCode`, the methods objects use to compare and bucket themselves) | **yes** | keeps first occurrence |
-| `sorted()` / `sorted(Comparator)` | sort | **yes (barrier)** | stable (equal items keep their original order) for ordered streams |
+| `distinct()` | drop duplicates (by `equals`/`hashCode`) | **yes** | keeps first occurrence |
+| `sorted()` / `sorted(Comparator)` | sort | **yes (barrier)** | stable (equal items keep their order) for ordered streams |
 | `limit(n)` / `skip(n)` | first n / all but first n | yes (counter) | `limit` short-circuits |
 | `takeWhile(p)` / `dropWhile(p)` (9) | take / drop the **prefix** while `p` holds | yes | stop at the first failure |
 | `peek(Consumer)` | look at elements passing by | no | debugging only |
@@ -280,18 +249,13 @@ unordered/parallel/sequential/onClose also exist (see 12.8)
 ```
 
 ### `map` vs `flatMap` — the one to really understand
-- `map` is **one in, one out**. If your function returns a list (or stream, or `Optional`), you get a stream *of lists*: `Stream<List<String>>`.
-- `flatMap` is **one in, many out**: the function returns a *stream* for each element, and `flatMap` splices all of those streams into one: `Stream<String>`. Analogy: `map` puts each book's tag list into a box; `flatMap` empties all the boxes onto one belt.
+- `map` is **one in, one out**. If your function returns a list (or array, stream, `Optional`), you get a stream *of lists*: `Stream<List<String>>`; `Stream.of("a b", "c").map(s -> s.split(" "))` is a `Stream<String[]>`.
+- `flatMap` is **one in, many out**: the function returns a *stream* per element, and `flatMap` splices them into one `Stream<String>` (`flatMap(s -> Arrays.stream(s.split(" ")))`).
 - Uses: all words from all lines, all order lines from all orders, all present values from `Optional`s (`flatMap(Optional::stream)`).
-- **`mapMulti`** (Java 16) does the same job imperatively — you call `sink.accept(x)` for each output. It's handy when each element yields very few results (avoids allocating a stream per element) or when the logic is easier as a loop. Note the explicit **type witness** `<String>mapMulti(...)` (spelling out the generic type yourself because the compiler can't work it out); inference often needs it.
+- **`mapMulti`** (Java 16) does the same imperatively — call `sink.accept(x)` per output. Handy when each element yields very few results (no stream allocated per element) or the logic reads better as a loop. Inference often needs the explicit **type witness** `<String>mapMulti(...)` (spelling out the generic type yourself).
 
 ### `takeWhile`/`dropWhile` vs `filter`
-`takeWhile(n -> n < 8)` stopped at the first 8 and returned `[5, 3]`, even though `3, 1, 2` later are also < 8. It is meant for **sorted or naturally ordered** data ("log lines until the first error", "prices while under budget"). `filter` examines every element.
-
-### Self-check
-1. What type does `Stream.of("a b", "c").map(s -> s.split(" "))` produce? → `Stream<String[]>`; use `flatMap(s -> Arrays.stream(s.split(" ")))` for `Stream<String>`.
-2. `Stream.of(1, 5, 2, 7).dropWhile(x -> x < 3).toList()`? → `[5, 2, 7]`.
-3. Which intermediate ops are stateful? → `distinct`, `sorted`, `limit`, `skip`, `takeWhile`, `dropWhile`.
+`takeWhile(n -> n < 8)` stopped at the first 8 and returned `[5, 3]`, even though later `3, 1, 2` are also < 8; likewise `Stream.of(1, 5, 2, 7).dropWhile(x -> x < 3)` gives `[5, 2, 7]`. They are meant for **sorted or naturally ordered** data ("log lines until the first error"). `filter` examines every element.
 
 ### TL;DR
 `filter` keeps, `map` transforms 1→1, `flatMap`/`mapMulti` 1→many, `distinct`/`sorted` need state, `limit`/`skip`/`takeWhile`/`dropWhile` cut the sequence, `peek` is for debugging.
@@ -302,16 +266,16 @@ unordered/parallel/sequential/onClose also exist (see 12.8)
 
 | Operation | Returns | Short-circuits? | Notes |
 |---|---|---|---|
-| `forEach(c)` / `forEachOrdered(c)` | `void` | no | `forEachOrdered` keeps **encounter order** (the order the source delivers elements in) in parallel |
-| `toList()` (16) | unmodifiable (read-only: `add`/`remove` throw) `List<T>` | no | allows `null` elements |
+| `forEach(c)` / `forEachOrdered(c)` | `void` | no | `forEachOrdered` keeps **encounter order** (the order the source delivers elements) in parallel |
+| `toList()` (16) | unmodifiable `List<T>` (`add`/`remove` throw) | no | allows `null` elements |
 | `collect(collector)` | anything | no | §12.5 |
 | `toArray()` / `toArray(String[]::new)` | `Object[]` / `T[]` | no | |
 | `count()` | `long` | no | may skip the pipeline if size is known |
 | `min(c)` / `max(c)` | `Optional<T>` | no | |
 | `findFirst()` / `findAny()` | `Optional<T>` | **yes** | `findAny` is cheaper in parallel |
-| `anyMatch` / `allMatch` / `noneMatch` | `boolean` | **yes** | on an empty stream: `false` / `true` / `true` |
+| `anyMatch` / `allMatch` / `noneMatch` | `boolean` | **yes** | on an empty stream (any stream type): `false` / `true` / `true` |
 | `reduce(...)` | `T` or `Optional<T>` or `U` | no | three forms below |
-| `iterator()` / `spliterator()` | pull elements manually | — | escape hatch (a way out of the stream API when you need it) |
+| `iterator()` / `spliterator()` | pull elements manually | — | escape hatch out of the stream API |
 
 ### `reduce` — folding a stream into one value
 **Reduction** repeatedly combines elements until one value remains — summing, multiplying, finding the longest.
@@ -323,11 +287,11 @@ unordered/parallel/sequential/onClose also exist (see 12.8)
 | Identity + accumulator + combiner | `U reduce(U identity, BiFunction<U,T,U> acc, BinaryOperator<U> combiner)` | result type differs from element type, e.g. total length of strings; the combiner merges partial results in parallel |
 
 Rules that keep `reduce` correct (they matter the moment you go parallel):
-1. The **identity** must be neutral: `combine(identity, x) == x` (0 for +, 1 for ×, `""` for concatenation).
-2. The function must be **associative** (grouping doesn't change the answer): `(a ⊕ b) ⊕ c == a ⊕ (b ⊕ c)`. Subtraction and averaging are not.
+1. The **identity** must be neutral: `combine(identity, x) == x` (0 for +, 1 for ×, `""` for concatenation). `reduce(5, Integer::sum)` is wrong: in parallel 5 is added once per chunk (§12.8).
+2. The function must be **associative** (grouping doesn't change the answer): `(a ⊕ b) ⊕ c == a ⊕ (b ⊕ c)`. Subtraction and averaging are not — `reduce(0, (a, b) -> a - b)` is unsafe in parallel.
 3. It must be **stateless** and side-effect free.
 
-For summing numbers, prefer `mapToInt(...).sum()`; for building collections use `collect`, not `reduce` (reducing into a new list at every step is O(n²) — in **Big-O** notation, which describes how work grows with input size *n*, that means doubling the input roughly quadruples the time).
+For summing numbers, prefer `mapToInt(...).sum()`; for building collections use `collect`, not `reduce` (reducing into a new list at every step is O(n²)).
 
 ### Code
 
@@ -360,21 +324,16 @@ forEachOrdered (parallel): stream lambda java record var
 iterator first two: java, lambda
 ```
 
-`allMatch` on an empty stream is `true` by **vacuous truth** ("every element matches" can't be false when there are no elements). `max` by length returned `stream`, the first of three 6-letter words. The Javadoc (the official API documentation generated from comments in the JDK source) doesn't promise which of several tied elements you get, so add a tie-breaker (`thenComparing`) when it matters.
+`allMatch` on an empty stream is `true` by **vacuous truth** ("every element matches" can't be false when there are none). `max` by length returned `stream`, the first of three 6-letter words, but the Javadoc doesn't promise which tied element you get — add a tie-breaker (`thenComparing`) when it matters.
 
 ### `toList()` vs `collect(Collectors.toList())`
 
 | | `stream.toList()` (16) | `collect(Collectors.toList())` | `collect(Collectors.toUnmodifiableList())` (10) |
 |---|---|---|---|
 | Mutability | unmodifiable | unspecified (currently `ArrayList`) | unmodifiable |
-| Nulls | allowed | allowed | **NPE** (`NullPointerException`) |
+| Nulls | allowed | allowed | **NPE** |
 
 Use `toList()` by default; `toCollection(ArrayList::new)` when you genuinely need to modify the result.
-
-### Self-check
-1. What does `reduce` without an identity return? → `Optional<T>`.
-2. `IntStream.empty().anyMatch(x -> true)`? → `false`.
-3. Why is `reduce(5, Integer::sum)` wrong for a sum? → 5 isn't an identity for addition; in parallel it's added once per chunk (§12.8).
 
 ### TL;DR
 Terminal ops run the pipeline: `toList`, `collect`, `count`, `min`/`max`, `find*`, `*Match`, `reduce`, `forEach`. `reduce` needs a true identity and an associative, stateless function. `toList()` is unmodifiable.
@@ -384,7 +343,7 @@ Terminal ops run the pipeline: `toList`, `collect`, `count`, `min`/`max`, `find*
 ## 12.5 Collectors
 
 ### What it is
-A **`Collector`** is a recipe for **mutable reduction**: accumulate stream elements into a container (list, map, string builder, statistics) and optionally finish it. `Collectors` (with an *s*) provides ready-made ones; you pass them to `collect`. Add `import static java.util.stream.Collectors.*;` to keep pipelines readable.
+A **`Collector`** is a recipe for **mutable reduction**: accumulate elements into a container (list, map, string builder, statistics) and optionally finish it. `Collectors` (with an *s*) provides ready-made ones for `collect`; `import static java.util.stream.Collectors.*;` keeps pipelines readable.
 
 ### The toolbox
 
@@ -395,8 +354,8 @@ A **`Collector`** is a recipe for **mutable reduction**: accumulate stream eleme
 | `toMap(keyFn, valueFn)` | `Map` | **duplicate key → `IllegalStateException`**; `null` value → NPE |
 | `toMap(keyFn, valueFn, mergeFn)` | `Map` | merge function resolves duplicates |
 | `toMap(keyFn, valueFn, mergeFn, TreeMap::new)` | chosen map type | |
-| `joining()`, `joining(", ")`, `joining(", ", "[", "]")` | `String` | elements must be `CharSequence` (the interface behind `String`, `StringBuilder` and friends) |
-| `groupingBy(classifier)` | `Map<K, List<T>>` | the SQL `GROUP BY` (database clause that buckets rows by a column) of streams |
+| `joining()`, `joining(", ")`, `joining(", ", "[", "]")` | `String` | elements must be `CharSequence` |
+| `groupingBy(classifier)` | `Map<K, List<T>>` | the SQL `GROUP BY` of streams |
 | `groupingBy(classifier, downstream)` / `(classifier, mapFactory, downstream)` | `Map<K, D>` | downstream collector per group |
 | `partitioningBy(predicate[, downstream])` | `Map<Boolean, …>` | always both keys `false` and `true` |
 | `counting()`, `summingInt/Long/Double`, `averagingX`, `minBy`, `maxBy` | numbers / `Optional` | usually as downstream |
@@ -465,10 +424,10 @@ Collector.of     Ana|Bo|Cy|Dee|Eli
 ```
 
 How to read the grouping results:
-- `groupingBy` = SQL `GROUP BY dept`; the **downstream** collector is the aggregate (`COUNT(*)`, `AVG(salary)`, `MAX(...)`). Compare with the SQL book's grouping chapter if you know SQL.
-- `groupingBy` with no map factory (a function that creates the map) returns a `HashMap` (no order); pass `TreeMap::new` (a map that keeps keys sorted) for sorted keys — used here so the output is predictable.
+- `groupingBy` = SQL `GROUP BY dept`; the **downstream** collector is the aggregate (`COUNT(*)`, `AVG(salary)`, `MAX(...)`).
+- `groupingBy` with no map factory returns a `HashMap` (no order); pass `TreeMap::new` for sorted keys — e.g. "names per department, sorted by department" is `groupingBy(Employee::dept, TreeMap::new, mapping(Employee::name, toList()))`.
 - `filtering` inside the group kept the `OPS` and `SALES` keys with empty lists. A `filter` *before* `groupingBy` would have removed those groups entirely — choose based on whether you want empty groups reported.
-- `partitioningBy` always contains both `false` and `true` keys, even for an empty stream; `groupingBy` only creates keys that occur.
+- `partitioningBy` always contains both `false` and `true` keys, even for an empty stream (`{false=[], true=[]}`); `groupingBy` only creates keys that occur.
 - The `maxBy` downstream yields `Optional<Employee>` per group; `collectingAndThen` unwraps it.
 
 ### How a collector works (for writing your own)
@@ -486,11 +445,6 @@ A `Collector<T, A, R>` bundles four functions — the same shape as the `Collect
 - *Follow-up: How do you count word frequencies with streams?* → `words.stream().collect(groupingBy(Function.identity(), counting()))`.
 - *Follow-up: What happens on duplicate keys in `toMap`?* → `IllegalStateException` unless you pass a merge function.
 
-### Self-check
-1. Collector for "names per department, sorted by department"? → `groupingBy(Employee::dept, TreeMap::new, mapping(Employee::name, toList()))`.
-2. `partitioningBy` on an empty stream returns? → `{false=[], true=[]}`.
-3. What's `teeing` for? → Computing two aggregates in one pass and merging them (e.g. min and max, or count and sum).
-
 ### TL;DR
 `collect` + `Collectors`: `toList`/`toSet`/`toCollection`, `toMap` (+ merge fn!), `joining`, `groupingBy` + downstream (`counting`, `summingX`, `averagingX`, `mapping`, `filtering`, `flatMapping`, `maxBy`), `partitioningBy`, `summarizingX`, `teeing`, `collectingAndThen`. Custom: `Collector.of(supplier, accumulator, combiner, finisher)`.
 
@@ -499,7 +453,7 @@ A `Collector<T, A, R>` bundles four functions — the same shape as the `Collect
 ## 12.6 Primitive streams
 
 ### What it is
-`IntStream`, `LongStream` and `DoubleStream` hold **primitive** values (plain `int`/`long`/`double`, not objects) directly, avoiding the **boxing** (wrapping each number in an `Integer`/`Long` object on the heap) a `Stream<Integer>` performs on every element. They add numeric operations: `sum()`, `average()`, `summaryStatistics()`, `range`/`rangeClosed` (int and long only), and they return **`OptionalInt`/`OptionalLong`/`OptionalDouble`** for possibly-empty results.
+`IntStream`, `LongStream` and `DoubleStream` hold primitive values directly, avoiding the **boxing** a `Stream<Integer>` performs on every element ([§7.6](../07-core-apis/README.md#76-wrapper-classes-and-autoboxing)). They add numeric operations — `sum()`, `average()`, `summaryStatistics()`, `range`/`rangeClosed` (int and long only) — and return **`OptionalInt`/`OptionalLong`/`OptionalDouble`** for possibly-empty results.
 
 | From → To | Method |
 |---|---|
@@ -546,17 +500,12 @@ dice: [5, 3, 4, 5, 5]
 sum 0..10M: LongStream 6 ms vs Stream<Long> 76 ms (same result: true)
 ```
 
-The last line is a single rough timing (Apple M4 Pro, JDK 26 — **machine-dependent**): the boxed version allocates up to ten million `Long` objects and is roughly an order of magnitude slower here. For numeric work, stay primitive until you need objects.
+The last line is a single rough timing (Apple M4 Pro, JDK 26 — **machine-dependent**): the boxed version allocates up to ten million `Long` objects and is roughly an order of magnitude slower here. For numeric work, stay primitive until you need objects — `mapToInt(...).sum()` beats `map(...).reduce(0, Integer::sum)` on both speed and readability.
 
-`sum()` wraps silently on **overflow** (a result too big for the type wraps around to a wrong, often negative, number) like `+` does ([§2 integer overflow](../02-basics-types-and-operators/README.md)); use `LongStream` or `mapToObj(BigInteger::valueOf)` for large totals.
-
-### Self-check
-1. Return type of `IntStream.average()`? → `OptionalDouble`.
-2. How do you turn `IntStream` into `List<Integer>`? → `.boxed().toList()`.
-3. Why prefer `mapToInt(...).sum()` over `map(...).reduce(0, Integer::sum)`? → No boxing, and it reads better.
+`sum()` wraps silently on **overflow** like `+` does ([§2.10](../02-basics-types-and-operators/README.md#210-integer-overflow)); use `LongStream` or `mapToObj(BigInteger::valueOf)` for large totals.
 
 ### TL;DR
-Use `IntStream`/`LongStream`/`DoubleStream` for numbers: `sum`, `average` (→ `OptionalDouble`), `summaryStatistics`, `range`. Convert with `mapToInt`/`boxed`/`mapToObj`. Avoid boxing in **hot paths** (code that runs extremely often, so small costs add up).
+Use `IntStream`/`LongStream`/`DoubleStream` for numbers: `sum`, `average` (→ `OptionalDouble`), `summaryStatistics`, `range`. Convert with `mapToInt`/`boxed`/`mapToObj`. Avoid boxing in **hot paths** (code that runs extremely often).
 
 ---
 
@@ -573,13 +522,13 @@ Streams and `Optional` ([§11.7](../11-lambdas-and-functional-programming/README
 ## 12.8 Parallel streams
 
 ### What it is
-Calling `.parallel()` on a stream (or `collection.parallelStream()`) lets the library split the source into chunks, process chunks on several **threads** (independent flows of execution that can run at the same time on different cores), and merge the partial results. You change one word; correctness and performance are your responsibility.
+`.parallel()` on a stream (or `collection.parallelStream()`) lets the library split the source into chunks, process them on several threads, and merge the partial results. You change one word; correctness and performance are your responsibility.
 
 ### How it works
 1. The source's **`Spliterator`** splits its range recursively (like halving an array) into chunks.
-2. Chunks run as tasks on the **common `ForkJoinPool`** (a built-in **thread pool** — a fixed set of reusable worker threads — designed for splitting work and joining results; shared by the whole JVM, the Java Virtual Machine that runs your program; by default its parallelism is the number of cores minus one, and the calling thread also helps).
+2. Chunks run as tasks on the **common `ForkJoinPool`** (a JVM-wide **thread pool** — a set of reusable worker threads — designed for split-and-join work; default parallelism = cores minus one, and the calling thread also helps; [§15.2](../15-concurrency-2-modern/README.md)).
 3. Partial results are merged with the reduction's **combiner** (or the collector's combiner).
-4. For ordered streams, operations like `findFirst`, `limit`, `forEachOrdered` and `sorted` must respect **encounter order**, which costs coordination; `unordered()`, `findAny` and `forEach` relax it.
+4. For ordered streams, `findFirst`, `limit`, `forEachOrdered` and `sorted` must respect **encounter order**, which costs coordination; `unordered()`, `findAny` (cheaper — any element will do) and `forEach` relax it.
 
 ### When it helps — measured
 `ParallelDemo` runs each case twice and times the second run. **Timings are machine-dependent** (this run: 14-core Apple M4 Pro, JDK 26); some lines, such as the `forEach` order and the wrong `reduce` result, vary between runs by design.
@@ -609,30 +558,25 @@ forEach (parallel, order not guaranteed):   4 3 5 7 2 1 6 0
 forEachOrdered (parallel, encounter order): 0 1 2 3 4 5 6 7 
 ```
 
-- **Prime counting** (CPU-heavy — limited by processor speed rather than by waiting on disk or network — independent elements, perfectly splittable range): ~7× faster on 14 cores.
-- **1,000 tiny operations**: splitting and thread hand-offs cost more than the work — parallel is slower. A common rule of thumb (Brian Goetz's "NQ model"): parallelism pays when *N* (elements) × *Q* (work per element) is large; for trivial per-element work you need well over ten thousand elements.
+- **Prime counting** (CPU-bound, independent elements, perfectly splittable range): ~7× faster on 14 cores.
+- **1,000 tiny operations**: splitting and thread hand-offs cost more than the work — parallel is slower. Brian Goetz's "NQ model": parallelism pays when *N* (elements) × *Q* (work per element) is large; for trivial per-element work you need well over ten thousand elements.
 - **`Stream.iterate` + `limit`**: the source can only produce elements one after another and `limit` must respect order, so parallel is *slower*. Sources split well when they know their size and can be cut anywhere: arrays, `ArrayList`, `IntStream.range`. They split badly: `LinkedList`, `Stream.iterate`, `BufferedReader.lines()`, most `Iterator`-based sources.
 - **Wrong identity**: `reduce(5, Integer::sum)` added 5 once per chunk (in this run the extra 500 means the 100 numbers were split into 100 chunks). Sequentially it would be 5055. Both are wrong — 5 was never an identity.
 
 ### Correctness rules
-1. **No shared mutable state** (data that several threads can change) in lambdas. Adding to an `ArrayList` from `forEach` in parallel loses elements or throws `ArrayIndexOutOfBoundsException`; let `toList()`/`collect` do the merging.
+1. **No shared mutable state** in lambdas. Adding to an `ArrayList` from `forEach` in parallel loses elements or throws `ArrayIndexOutOfBoundsException` (it isn't thread-safe); let `toList()`/`collect` do the merging.
 2. **Reduction functions must be associative, stateless, with a true identity** (§12.4).
-3. **Don't block** (make a thread sit idle waiting — on I/O, i.e. disk/network input-output, on **locks** that guard shared data, or on `Thread.sleep`) inside parallel streams — you tie up the JVM-wide common pool, starving every other parallel stream and `CompletableFuture` using it. For concurrent I/O use **virtual threads** (very cheap threads managed by the JVM rather than the operating system, [Chapter 15](../15-concurrency-2-modern/README.md)) or the `mapConcurrent` gatherer (§12.9).
+3. **Don't block** (on I/O, locks or `Thread.sleep`) inside parallel streams — you tie up the JVM-wide common pool, starving every other parallel stream and `CompletableFuture` using it. For concurrent I/O use **virtual threads** ([Chapter 15](../15-concurrency-2-modern/README.md)) or the `mapConcurrent` gatherer (§12.9).
 4. **Order costs**: if you don't need order, `unordered()`, `findAny()` and `forEach` are cheaper; if you do, `forEachOrdered`.
 
 ### When not to use it
-Most of the time. *Effective Java* Item 48: "use caution when making streams parallel" — measure first with a proper **benchmark** (a controlled performance measurement; JMH, the Java Microbenchmark Harness, is the standard tool, [Chapter 16](../16-jvm-internals-and-performance/README.md)). Avoid it in web servers (requests already run in parallel), for small inputs, poorly splittable sources, **I/O-bound** work (time spent mostly waiting on disk or network), or pipelines with `limit`/`sorted`/`findFirst` on ordered data.
+Most of the time. *Effective Java* Item 48: "use caution when making streams parallel" — measure first with a proper **benchmark** (JMH, [Chapter 16](../16-jvm-internals-and-performance/README.md)). Avoid it in web servers (requests already run in parallel), for small inputs, poorly splittable sources, **I/O-bound** work (mostly waiting on disk or network), or pipelines with `limit`/`sorted`/`findFirst` on ordered data.
 
 ### In the interview
 **30-second answer:** "Parallel streams split the source with a Spliterator and run chunks on the common ForkJoinPool, combining partial results. They help only for large, CPU-bound, independent work on splittable sources like arrays or ranges. They hurt for small inputs, LinkedList or iterate sources, ordered operations like limit, and anything blocking — which also starves the shared pool. Lambdas must be stateless and reductions associative with a real identity. I measure before switching."
 
 - *Follow-up: Which thread pool do parallel streams use?* → The common `ForkJoinPool` (plus the caller thread).
 - *Follow-up: Why might `parallel().forEach(list::add)` fail?* → `ArrayList` isn't thread-safe; concurrent adds lose data or throw. Use `collect`/`toList`.
-
-### Self-check
-1. Name two sources that split well and two that don't. → Well: arrays, `ArrayList`, `IntStream.range`. Badly: `LinkedList`, `Stream.iterate`, `Files.lines`.
-2. Why is `findAny` preferred over `findFirst` in parallel? → It doesn't have to respect encounter order.
-3. Is `reduce(0, (a, b) -> a - b)` safe in parallel? → No — subtraction isn't associative.
 
 ### TL;DR
 Parallel = split + common ForkJoinPool + combine. Worth it only for big, CPU-heavy, splittable, stateless work — measure. Never share mutable state, never block, and respect reduction rules.
@@ -642,10 +586,10 @@ Parallel = split + common ForkJoinPool + combine. Worth it only for big, CPU-hea
 ## 12.9 Stream gatherers (Java 24)
 
 ### The problem it solves
-The built-in intermediate operations are a fixed set. Operations that need **state across elements** — "sliding windows of 3", "running totals", "distinct by a key", "emit groups of consecutive equal items" — were awkward: you either broke out of the stream into a loop or wrote a custom `Spliterator`. Collectors could keep state but only at the *end* of a pipeline.
+The built-in intermediate operations are a fixed set. Operations needing **state across elements** — sliding windows, running totals, distinct by a key, groups of consecutive equal items — meant breaking out into a loop or writing a custom `Spliterator`. Collectors keep state, but only at the *end* of a pipeline.
 
 ### What it is
-**JEP 485** (a JEP, *JDK Enhancement Proposal*, is the numbered design document for a Java feature; this one was **previewed** — shipped switched-off-by-default for feedback — in Java 22 and 23, **final in Java 24**, so available in Java 25 **LTS**, a *long-term support* release that gets years of updates) adds `Stream.gather(Gatherer)`: a way to plug **custom intermediate operations** into a pipeline. A **`Gatherer<T, A, R>`** consumes elements of type `T`, keeps private state `A`, and pushes zero or more `R` elements **downstream** (on to the next stage of the pipeline). It can be one-to-one, one-to-many, many-to-one or many-to-many, and it can stop the stream early. Think of it as "a collector, but in the middle of the pipeline".
+**JEP 485** (previewed in Java 22 and 23, **final in Java 24**, so available in Java 25 **LTS**; JEPs and LTS: [§1.12](../01-java-and-the-jvm/README.md#112-java-releases-lts-and-jeps)) adds `Stream.gather(Gatherer)`: **custom intermediate operations**. A **`Gatherer<T, A, R>`** consumes `T` elements, keeps private state `A`, and pushes zero or more `R` elements **downstream** (to the next stage). It can be one-to-one, one-to-many, many-to-one or many-to-many, and can stop the stream early — "a collector, but in the middle of the pipeline".
 
 A gatherer has up to four functions (the same idea as a collector's):
 
@@ -663,7 +607,7 @@ Factory methods: `Gatherer.ofSequential(...)` (no combiner, sequential only) and
 | Gatherer | Does | Example result |
 |---|---|---|
 | `windowFixed(n)` | non-overlapping lists of n (last may be shorter) | batches of 3 |
-| `windowSliding(n)` | overlapping windows, each shifted by one | moving averages (average of the last n values, recomputed at each step) |
+| `windowSliding(n)` | overlapping windows, each shifted by one | moving averages |
 | `scan(initial, f)` | running accumulation, emits every intermediate value | running totals |
 | `fold(initial, f)` | like reduce, but as an intermediate op emitting one final value | single aggregate |
 | `mapConcurrent(maxConcurrency, f)` | applies `f` using **virtual threads**, at most n at once, preserving encounter order | parallel I/O calls |
@@ -727,15 +671,10 @@ Notes:
 - `downstream.push(x)` returns `false` when downstream no longer wants elements (e.g. a later `limit` is satisfied); returning that value propagates the short-circuit.
 - `takeWithinBudget` stopped at 30 even though a later small element might fit — that's the difference from `filter`, the same as `takeWhile`.
 - `runs()` needs the finisher: without it the final `[a]` group would be lost.
-- `mapConcurrent` is the **idiomatic** (natural, conventional) way to call a slow service for each element with bounded **concurrency** (a cap on how many calls are in flight at once) — a job parallel streams do badly (§12.8).
+- `mapConcurrent` is the idiomatic way to call a slow service per element with bounded **concurrency** (a cap on calls in flight) — a job parallel streams do badly (§12.8).
 
 ### When not to use it
 If a built-in operation or a collector already does the job (`distinct`, `groupingBy`), use that. Gatherers are for stateful *mid-pipeline* logic. Keep state private to the gatherer — the initializer creates a fresh state object for each evaluation of the stream.
-
-### Self-check
-1. Which gatherer computes a running total? → `Gatherers.scan`.
-2. How does an integrator stop the stream? → It returns `false`.
-3. What's the finisher for? → Emitting results that depend on having seen all elements, like the final partial window or run.
 
 ### TL;DR
 `stream.gather(g)` (Java 24) = custom intermediate operations with private state. Built-ins: `windowFixed`, `windowSliding`, `scan`, `fold`, `mapConcurrent`. Write your own with `Gatherer.ofSequential(initializer, integrator[, finisher])`; return `false` to short-circuit.
@@ -773,7 +712,7 @@ Output:
 |---|---|---|
 | 1 | `Stream.of(intArray)` | `Arrays.stream(intArray)` or `IntStream.of(...)` |
 | 2 | Side effects in `forEach`/`map` to build results (*Effective Java* Item 46: use side-effect-free functions) | `toList()`, `collect(...)` |
-| 3 | Modifying the source during the pipeline (→ `ConcurrentModificationException`, thrown when a collection changes while being iterated) | Collect first, then modify; or `removeIf` |
+| 3 | Modifying the source during the pipeline (→ `ConcurrentModificationException`) | Collect first, then modify; or `removeIf` |
 | 4 | `toMap` on non-unique keys | pass a merge function or use `groupingBy` |
 | 5 | `toMap` with `null` values | filter nulls or collect manually |
 | 6 | Mutating `toList()` results | `toCollection(ArrayList::new)` |
@@ -784,7 +723,7 @@ Output:
 | 11 | Checked exceptions in lambdas | wrap ([§11.8](../11-lambdas-and-functional-programming/README.md#118-functional-style-in-everyday-java)) or use a loop |
 | 12 | Streams everywhere | a loop with `break`, several accumulators or complex control flow is often clearer (*Effective Java* Item 45: use streams judiciously) |
 | 13 | Returning `Stream` from APIs that callers will iterate twice | return a `Collection` (EJ Item 47) — a stream can be traversed only once |
-| 14 | Not closing I/O-backed streams | `try (Stream<String> lines = Files.lines(p)) { … }` — `BaseStream` is `AutoCloseable` (usable in try-with-resources, which closes it automatically) |
+| 14 | Not closing I/O-backed streams | `try (Stream<String> lines = Files.lines(p)) { … }` — `BaseStream` is `AutoCloseable` |
 | 15 | Reusing a stream variable | create a new stream each time, or keep a `Supplier<Stream<T>>` |
 
 ---
@@ -801,7 +740,7 @@ Output:
 | You may later want `parallel()` for heavy CPU work | You're in a very hot loop over primitives and need every nanosecond (measure) |
 | Data is already in a collection | You need the index and neighbours constantly (or use a gatherer) |
 
-Performance: for typical business code, a sequential stream costs about the same as a loop — the JIT (the JVM's just-in-time compiler, which turns hot bytecode into fast machine code at run time) optimises both. Overhead shows up with tiny collections in hot paths or boxing; readability usually matters more.
+Performance: for typical business code a sequential stream costs about the same as a loop — the JIT optimises both. Overhead shows with tiny collections in hot paths or boxing; readability usually matters more.
 
 ### A realistic pipeline: a sales report
 
@@ -835,9 +774,9 @@ top-2 products by revenue [monitor=2225.00, keyboard=707.90]
 orders >= 500: 2, smaller: 4
 ```
 
-The input is **CSV** (comma-separated values: one record per line, fields split by commas). The pipeline reads like the requirements: parse, drop bad lines, total by region, total by month, top-2 products, count big orders. Two malformed lines (`bad line` and a non-numeric unit count) were skipped by `parse` returning `Optional.empty()` and `flatMap(Optional::stream)`. In production you'd also log or count rejects.
+The **CSV** input is parsed, bad lines dropped, then totals by region and month, top-2 products and big-order counts — the pipeline reads like the requirements. Two malformed lines (`bad line` and a non-numeric unit count) were skipped by `parse` returning `Optional.empty()` plus `flatMap(Optional::stream)`; in production you'd also log or count rejects.
 
-Real-world uses: report generation and **ETL**-style transforms (Extract, Transform, Load: pulling data from one place, reshaping it, and storing it elsewhere) in back-end services, request validation (`allMatch`), building lookup maps from query results (`toMap`), batch processing of log lines (`Files.lines` + `filter` + `groupingBy`), and — with Spring Data or JPA (the Java Persistence API, the standard way of mapping Java objects to database tables) — processing result streams inside a **transaction** (a group of database operations that succeed or fail as one unit).
+Real-world uses: report generation and **ETL** (Extract, Transform, Load) transforms in back-end services, request validation (`allMatch`), building lookup maps from query results (`toMap`), batch processing of log lines (`Files.lines` + `filter` + `groupingBy`), and processing Spring Data / JPA result streams inside a transaction.
 
 ### In the interview
 **30-second answer:** "A stream is a lazy, single-use pipeline: source, intermediate operations, terminal operation. Nothing runs until the terminal op, elements flow one at a time, and short-circuiting ops can stop early, so infinite streams work with limit. I use filter/map/flatMap, then collect with toList, toMap with a merge function, or groupingBy with a downstream collector. I keep lambdas side-effect free, use primitive streams for numbers, and only go parallel for large CPU-bound work after measuring. Since Java 24, gatherers let me write custom stateful intermediate ops like sliding windows."

@@ -1,26 +1,8 @@
 # Chapter 16 — JVM Internals and Performance
 
-[Chapter 1](../01-java-and-the-jvm/README.md) gave the one-page picture: `javac` makes **bytecode** (the compact, CPU-independent instruction format stored in `.class` files); the JVM loads it lazily (only when first needed), **interprets** it (executes it instruction by instruction), **JIT-compiles** hot code (turns frequently run methods into native machine code *just in time*, while the program runs) and collects garbage (frees memory of objects nothing uses any more). This chapter opens the hood — with measurements: class loading, object sizes, five garbage collectors on one workload, the JIT deleting allocations, lying benchmarks, the JDK's diagnostic tools, a leak hunt (a **memory leak** is memory that is never released though no longer needed), a two-module JPMS (Java Platform Module System, §16.12) application, and (§16.13) the operating-system mechanics underneath every process.
+[Chapter 1](../01-java-and-the-jvm/README.md) gave the one-page picture: `javac` makes bytecode; the JVM loads it lazily, interprets it, JIT-compiles hot code and collects garbage. This chapter opens the hood — with measurements: class loading, object sizes, five garbage collectors on one workload, the JIT deleting allocations, lying benchmarks, the JDK's diagnostic tools, a leak hunt (a **memory leak** is memory never released though no longer needed), a two-module JPMS application (§16.12), and the operating-system mechanics underneath every process (§16.13).
 
-Everything here is about **HotSpot**, the JVM inside OpenJDK (the open-source reference implementation of Java) and almost every vendor build (a company's packaged, supported distribution of it: Oracle, Temurin, Corretto, Zulu, Microsoft). Other JVMs (OpenJ9, GraalVM native images — programs compiled ahead of time into a standalone executable) differ in details.
-
-**What you'll learn**
-
-| # | Topic | You will be able to… |
-|---|---|---|
-| 16.1 | JVM architecture | name the subsystems |
-| 16.2 | Class loading | explain loading, linking, initialization, delegation, CDS (Class Data Sharing) |
-| 16.3 | Runtime memory areas | map each area to its `OutOfMemoryError` (the error thrown when the JVM can't get more memory) |
-| 16.4 | Object layout | estimate object sizes; headers, compressed oops (shrunken object references), compact headers |
-| 16.5 | GC (garbage collection) algorithms | pick between Serial, Parallel, G1, ZGC, Shenandoah, Epsilon |
-| 16.6 | Collectors compared | read `-Xlog:gc` and compare pauses on one workload |
-| 16.7 | GC tuning basics | size the heap, set a goal, read `-XX:+PrintFlagsFinal` |
-| 16.8 | JIT and escape analysis | explain C2's (the JVM's optimising compiler) optimisations and prove an allocation vanished |
-| 16.9 | Benchmarking and JMH (Java Microbenchmark Harness) | avoid warm-up and dead-code traps |
-| 16.10 | Profiling and diagnostics | use `jcmd`, `jstat`, JFR (Java Flight Recorder) and friends |
-| 16.11 | Memory leaks | find a leak from growth, histograms and JFR |
-| 16.12 | Modules (JPMS) basics | write `module-info.java`; use `jdeps` and `jlink` |
-| 16.13 | OS fundamentals for engineers | explain processes vs threads, scheduling, virtual memory and page faults, syscalls, file descriptors, blocking vs epoll I/O and the page cache |
+Everything here is about **HotSpot**, the JVM inside OpenJDK and almost every vendor build (Oracle, Temurin, Corretto, Zulu, Microsoft). Other JVMs (OpenJ9, GraalVM native images — programs compiled ahead of time into a standalone executable) differ in details.
 
 **How the code was run.** Programs are in [`code/`](code/) (package `ch16.*`), compiled with `javac --release 25`, run on **OpenJDK 26** (`26+35`), Apple M4 Pro (14 cores, 48 GiB — **GiB/MiB/KiB** are binary units: 1 GiB = 1024 MiB = 1024 × 1024 KiB — macOS). The JPMS example has its own [`jpms/run.sh`](jpms/run.sh). **All timings, byte counts, heap sizes and pauses are machine-dependent** — compare the *shape* of the results. Shenandoah isn't in the Oracle-built OpenJDK 26, so its numbers come from **Amazon Corretto 21.0.10**.
 
@@ -31,7 +13,7 @@ Everything here is about **HotSpot**, the JVM inside OpenJDK (the open-source re
 ## 16.1 The JVM's architecture
 
 ### What it is
-A **Java Virtual Machine** runs bytecode — a small operating system for Java programs: it loads code, gives each **thread** (an independent path of execution) a **stack** (per-call scratch memory for local variables), owns and cleans a **heap** (the shared memory area where objects live) of objects, and compiles bytecode to machine code on the fly. The *JVM Specification* says **what** a JVM must do; HotSpot decides **how** (which collectors, which compilers).
+A **Java Virtual Machine** is a small operating system for Java programs: it loads code, gives each thread a **stack** (per-call scratch memory for locals), owns and cleans the shared **heap** of objects, and compiles bytecode to machine code on the fly. The *JVM Specification* says **what** a JVM must do; HotSpot decides **how** (which collectors, which compilers).
 
 ```mermaid
 flowchart TB
@@ -61,30 +43,30 @@ flowchart TB
 | Interpreter + JIT compilers | Execute bytecode; compile hot code to machine code | 16.8, [Chapter 1 §1.7](../01-java-and-the-jvm/README.md#17-how-the-jvm-runs-your-code-class-loading-interpreter-jit) |
 | Garbage collector | Reclaim unreachable objects, compact memory | 16.5–16.7 |
 | Native interface | Call C code: JNI (Java Native Interface, old) or the Foreign Function & Memory API (Java 22, [Chapter 17](../17-modern-java-17-to-25/README.md)) | — |
-| Serviceability | Tools and events that observe a live JVM: JFR, `jcmd`, JMX (Java Management Extensions, the standard API for monitoring a running JVM) | 16.10 |
+| Serviceability | Tools and events that observe a live JVM: JFR, `jcmd`, JMX (Java Management Extensions, the standard monitoring API) | 16.10 |
 
 ---
 
 ## 16.2 Class loading in depth
 
 ### What it is
-**Class loading** is how a class goes from bytes on disk to something the JVM can execute. It happens **lazily**: a class is loaded the first time the program needs it, not when the program starts. Analogy: a library that fetches a book from the warehouse only when a reader first asks for it, checks it isn't damaged (verification), shelves it, and the first reader cuts the ribbon (initialization).
+**Class loading** is how a class goes from bytes on disk to something the JVM can execute. It happens **lazily**: a class is loaded the first time the program needs it, not at start-up.
 
 ### How it works
-1. **Loading** — a *class loader* finds the bytes (`.class` file, JAR entry — a **JAR** is a zip file of compiled classes — or the JDK's `jrt:` image) and creates a `Class` object plus **metadata** (the JVM's internal description of the class: methods, fields, bytecode) in **metaspace** (§16.3).
-2. **Linking** — **verification** (the bytecode is **type-safe** — never treats a value as a type it isn't — so hostile class files can't crash the JVM); **preparation** (static fields get default values); **resolution** (symbolic references like "`println` in `java/io/PrintStream`" become direct pointers, lazily on first use).
+1. **Loading** — a *class loader* finds the bytes (`.class` file, JAR entry, or the JDK's `jrt:` image) and creates a `Class` object plus **metadata** (the JVM's internal description: methods, fields, bytecode) in **metaspace** (§16.3).
+2. **Linking** — **verification** (the bytecode is **type-safe**, so hostile class files can't crash the JVM); **preparation** (static fields get default values); **resolution** (symbolic references like "`println` in `java/io/PrintStream`" become direct pointers, lazily on first use).
 3. **Initialization** — static initialisers and `static { }` blocks run top to bottom, exactly once, under a lock.
 
-**What triggers initialization?** Creating an instance (`new`), calling a static method, reading or writing a static field that is **not** a compile-time constant, initialising a subclass (the superclass goes first), **reflection** (code inspecting or using classes by name at run time) like `Class.forName("X")`, or being the main class. Merely *loading* a class (for example because it is named in a signature) does not initialise it.
+**What triggers initialization?** Creating an instance (`new`), calling a static method, reading or writing a static field that is **not** a compile-time constant (so reading `static final int MAX = 10` doesn't), initialising a subclass (the superclass goes first), **reflection** like `Class.forName("X")`, or being the main class. Merely *loading* a class (e.g. because it is named in a signature) does not initialise it.
 
 ### The loader hierarchy and parent delegation
 
 | Loader | Loads | `getClassLoader()` returns |
 |---|---|---|
-| **Bootstrap** (inside the JVM, written in C++) | `java.base` and other core modules | `null` |
+| **Bootstrap** (inside the JVM, written in C++) | `java.base` and other core modules | `null` (e.g. `String.class.getClassLoader()`) |
 | **Platform** | Other Java SE / JDK modules such as `java.sql` | the platform loader |
-| **Application** (also called *system*) | Your class path (the list of folders/JARs searched for classes) and module path (the same for modules, §16.12) | the app loader |
-| Custom (`new URLClassLoader(…)`, frameworks) | Plugins, web apps in **app servers** (servers like Tomcat that host several deployed web applications), hot-reload tools (reload changed code without a restart) | your loader |
+| **Application** (also called *system*) | Your class path (folders/JARs searched for classes) and module path (§16.12) | the app loader |
+| Custom (`new URLClassLoader(…)`, frameworks) | Plugins, web apps in **app servers** (Tomcat-style servers hosting several deployed apps), hot-reload tools | your loader |
 
 A loader first **delegates to its parent**; only if the parent can't find the class does it look itself. So nobody can sneak in a fake `java.lang.String`: the bootstrap loader always wins. A class's identity is **its name plus its defining loader** — the same `.class` file loaded by two loaders gives two different, incompatible classes (the source of the infamous "`ClassCastException`: `Foo` cannot be cast to `Foo`" in app servers).
 
@@ -146,23 +128,18 @@ What to notice:
 [0.023s][info][class,load] java.sql.Date source: jrt:/java.sql
 ```
 
-The run loaded **786 classes**: 770 from the *shared objects file*, 9 from `jrt:/` (the JDK's module image), the rest from `out/`. `Child` is **loaded** at step 4 but **not initialised** until step 5 — separate steps. The **shared objects file** is **Class Data Sharing (CDS)**: a pre-parsed, pre-verified archive of core classes mapped straight into memory, which is why Hello World starts in tens of milliseconds. The JDK ships a default archive (JEP 341, Java 12 — a JEP, *JDK Enhancement Proposal*, is the numbered design document behind a Java feature); you can archive your own classes (AppCDS, JEP 310, Java 10) and, since Java 24–25, a full **AOT cache** (*ahead-of-time*: work done before the program runs and saved for reuse) that also records linked classes and method profiles (JEPs 483, 514, 515 — see [Chapter 1 §1.7](../01-java-and-the-jvm/README.md#17-how-the-jvm-runs-your-code-class-loading-interpreter-jit)).
+The run loaded **786 classes**: 770 from the *shared objects file*, 9 from `jrt:/` (the JDK's module image), the rest from `out/`. `Child` is **loaded** at step 4 but **not initialised** until step 5 — separate steps. The **shared objects file** is **Class Data Sharing (CDS)**: a pre-parsed, pre-verified archive of core classes mapped straight into memory, which is why Hello World starts in tens of milliseconds. The JDK ships a default archive (JEP 341, Java 12); you can archive your own classes (AppCDS, JEP 310, Java 10) and, since Java 24–25, a full **AOT cache** (*ahead-of-time*: work done before the program runs and saved) that also records linked classes and method profiles (JEPs 483, 514, 515 — see [Chapter 1 §1.7](../01-java-and-the-jvm/README.md#17-how-the-jvm-runs-your-code-class-loading-interpreter-jit)).
 
 ### Common mistakes
 - Expecting a `static {}` block to run at program start. It runs at first *active use*.
 - Heavy work in static initialisers. An exception there becomes `ExceptionInInitializerError`, and every later use of the class throws `NoClassDefFoundError` — the class is permanently broken for that loader.
 - Confusing `ClassNotFoundException` (checked; thrown by `Class.forName`/`loadClass` when a name can't be found) with `NoClassDefFoundError` (an error; the class was present at compile time but is missing or failed to initialise at run time).
-- Holding references to a custom loader's classes from shared code: that loader and all its classes can never be unloaded — the *classloader leak* (16.11) behind `OutOfMemoryError: Metaspace` after **redeploys** (replacing a running application with a new version without restarting the server).
+- Holding references to a custom loader's classes from shared code: that loader and all its classes can never be unloaded — the *classloader leak* (16.11) behind `OutOfMemoryError: Metaspace` after **redeploys** (replacing a running app without restarting the server).
 
 ### In the interview
 **Q: Walk me through what happens when the JVM first uses a class.** It is loaded by a class loader using parent delegation (bootstrap → platform → application), linked (verified, statics prepared with defaults, references resolved lazily), then initialised: static initialisers run once, in textual order, under a lock.
 - *Why parent delegation?* Core classes can't be spoofed, and each class is loaded once per hierarchy.
 - *What is CDS?* A memory-mapped archive of pre-processed classes: faster start-up, metadata shared between JVMs.
-
-### Self-check
-1. Does reading a `static final int MAX = 10` initialise its class? → No, it is a compile-time constant inlined by `javac`.
-2. What does `String.class.getClassLoader()` return? → `null` (the bootstrap loader).
-3. Name the three linking steps. → Verification, preparation, resolution.
 
 ### TL;DR
 Load (find bytes) → link (verify, prepare, resolve) → initialise (static code, once). Lazy. Loaders delegate to parents first. CDS/AOT caches pre-do this work for faster start-up.
@@ -177,18 +154,18 @@ The JVM splits its memory into areas with different owners and lifetimes. Knowin
 | Area | Per thread or shared | Holds | Size flag | When it runs out |
 |---|---|---|---|---|
 | **Heap** | Shared | All objects and arrays | `-Xms` (initial), `-Xmx` (max), `-XX:MaxRAMPercentage` | `OutOfMemoryError: Java heap space` (also `GC overhead limit exceeded` when GC time dominates) |
-| **Java stack** | Per thread | One **frame** per active method call: local variables, operand stack (the scratch stack bytecode instructions push and pop values on), return address | `-Xss` / `Thread` constructor `stackSize` | `StackOverflowError` |
+| **Java stack** | Per thread | One **frame** per active method call: local variables (e.g. a method's local `int`s), operand stack (the scratch stack bytecode pushes and pops values on), return address | `-Xss` / `Thread` constructor `stackSize` | `StackOverflowError` |
 | **PC register** (program counter) | Per thread | Address of the current bytecode instruction | — | — |
 | **Native method stack** | Per thread | Frames of native (C) code | OS | crash or `StackOverflowError` |
-| **Metaspace** | Shared, native memory (memory the JVM gets straight from the OS, outside the Java heap) | Class metadata: methods, bytecode, constant pools (each class's table of literals and symbolic references), field layouts | `-XX:MaxMetaspaceSize` (unlimited by default) | `OutOfMemoryError: Metaspace` |
+| **Metaspace** | Shared, native memory (straight from the OS, outside the Java heap) | Class metadata: methods, bytecode, constant pools (each class's table of literals and symbolic references), field layouts | `-XX:MaxMetaspaceSize` (unlimited by default) | `OutOfMemoryError: Metaspace` |
 | **Compressed class space** | Part of metaspace | Class structures addressed by compressed class pointers | `-XX:CompressedClassSpaceSize` (1 GiB default) | `OutOfMemoryError: Compressed class space` |
 | **Code cache** | Shared | JIT-compiled machine code | `-XX:ReservedCodeCacheSize` | Warning "CodeCache is full. Compiler has been disabled" — the app keeps running, slowly |
-| **Direct / native memory** | Shared | `ByteBuffer.allocateDirect`, FFM (Foreign Function & Memory API) `Arena` memory, thread stacks, GC data structures | `-XX:MaxDirectMemorySize` | `OutOfMemoryError: Direct buffer memory` / `unable to create native thread` |
+| **Direct / native memory** | Shared | `ByteBuffer.allocateDirect`, FFM `Arena` memory, thread stacks, GC data structures | `-XX:MaxDirectMemorySize` | `OutOfMemoryError: Direct buffer memory` / `unable to create native thread` |
 
 Since **Java 8** (JEP 122) class metadata lives in **metaspace** (native memory) instead of the old fixed-size *PermGen*, so the classic `PermGen space` error is gone — but an unbounded metaspace can still grow with a classloader leak.
 
 ### Seeing it: [`code/ch16/memory/MemoryAreas.java`](code/ch16/memory/MemoryAreas.java)
-The `java.lang.management` API reports the pools the running JVM actually has; a **recursion** (a method calling itself) in threads of different stack sizes measures stack depth.
+The `java.lang.management` API reports the pools the running JVM actually has; recursion in threads of different stack sizes measures stack depth.
 
 ```java
 for (MemoryPoolMXBean p : ManagementFactory.getMemoryPoolMXBeans()) {
@@ -223,7 +200,7 @@ Stack   256 KiB -> StackOverflowError after ~1,473 frames
 Stack  1024 KiB -> StackOverflowError after ~23,200 frames
 Stack  8192 KiB -> StackOverflowError after ~206,700 frames
 ```
-- The **code cache** has three segments: JVM stubs (small helper routines), C1 code still **profiling** (recording how the code is actually used) ("profiled nmethods" — *nmethod* is HotSpot's name for a compiled method), and final C2 code ("non-profiled").
+- The **code cache** has three segments: JVM stubs (small helper routines), C1 code still **profiling** usage ("profiled nmethods" — *nmethod* is HotSpot's name for a compiled method), and final C2 code ("non-profiled").
 - Depth isn't proportional to stack size: at 256 KiB the method overflowed while still **interpreted** (big frames); with bigger stacks it got **JIT-compiled** (small frames). Never rely on an exact depth.
 - Under `-XX:+UseZGC` the pools become `ZGC Young/Old Generation`.
 
@@ -238,16 +215,11 @@ Total: reserved=1722MB, committed=278MB
 -                        GC (reserved=60MB, committed=59MB)
 ...
 ```
-*Reserved* = **address space** (a range of memory addresses) set aside; *committed* = backed by RAM. The **GC's own bookkeeping** (59 MB: remembered sets — records of which old objects point to young ones — and mark bitmaps) and other areas push committed memory (278 MB) past the heap — why a 512 MB **container** (an isolated, resource-limited process environment, e.g. Docker) must not get `-Xmx512m`.
+*Reserved* = address space set aside; *committed* = backed by RAM. The **GC's own bookkeeping** (59 MB: remembered sets and mark bitmaps, §16.5) and other areas push committed memory (278 MB) past the heap — why a 512 MB **container** (an isolated, resource-limited process environment, e.g. Docker) must not get `-Xmx512m`.
 
 ### Common mistakes
-- Sizing a container by `-Xmx` alone. Budget heap + metaspace + code cache + thread stacks (roughly 1 MB each by default, 2 MB on macOS/AArch64 — AArch64 being 64-bit ARM, as in Apple Silicon) + direct buffers + GC overhead. A common start is `-XX:MaxRAMPercentage=75` and measure.
+- Sizing a container by `-Xmx` alone. Budget heap + metaspace + code cache + thread stacks (roughly 1 MB each by default, 2 MB on macOS/AArch64 — 64-bit ARM) + direct buffers + GC overhead. A common start is `-XX:MaxRAMPercentage=75` and measure. If the heap is at 40% but the container OOM-killed the process (§16.13), look at native memory: NMT summary, thread count, direct buffers, metaspace.
 - "Fixing" `StackOverflowError` with a giant `-Xss`. Usually the recursion has no base case, or should be a loop ([Chapter 4 §4.5](../04-methods-and-arrays/README.md#45-recursion)).
-
-### Self-check
-1. Which area holds a method's local `int` variables? → That thread's Java stack frame.
-2. What replaced PermGen, and in which release? → Metaspace, Java 8.
-3. The heap is at 40% but the process was OOM-killed (terminated by the OS for exceeding its memory limit, §16.13) by the container. Where do you look? → Native memory: NMT summary, thread count, direct buffers, metaspace.
 
 ### TL;DR
 Heap = objects (`-Xmx`); stack = frames per thread (`-Xss`); metaspace = class metadata; code cache = JIT output; plus native memory. Each has its own error message — read it.
@@ -263,7 +235,7 @@ On 64-bit HotSpot with default settings:
 
 | Part | Size | Contains |
 |---|---|---|
-| **Mark word** | 8 bytes | Identity hash code (the default `hashCode()` value), lock state, GC age bits (how many collections the object survived) |
+| **Mark word** | 8 bytes | Identity hash code (default `hashCode()`), lock state, GC age bits (collections survived) |
 | **Class pointer** | 4 bytes (*compressed class pointers*) | Which class this object is |
 | Array length (arrays only) | 4 bytes | `length` |
 | Fields | `long`/`double` 8, `int`/`float` 4, `short`/`char` 2, `byte`/`boolean` 1, **reference 4** (*compressed oops*) | Your data, reordered by the JVM to reduce gaps |
@@ -303,15 +275,10 @@ Output of `java -cp out ch16.layout.ObjectSizes`, then with `-XX:+UseCompactObje
 What this means in practice:
 - A `List<Integer>` of a million values costs ~4 MB of references **plus** ~16 MB of `Integer`s (outside the -128..127 cache — [§7.6](../07-core-apis/README.md#76-wrapper-classes-and-autoboxing)); an `int[]` costs 4 MB — 5× less.
 - A two-`int` record is 24 bytes for 8 bytes of data: headers dominate small objects. Compact headers cut them by a third (JEP 519 reports 22% less heap and 8% less CPU on SPECjbb2015, an industry-standard Java server benchmark).
-- 6 ASCII characters cost 48 bytes as a `String` (Latin-1 — a one-byte-per-character encoding covering Western European text — strings use 1 byte per char — Java 9 *compact strings*).
+- 6 ASCII characters cost 48 bytes as a `String` (Latin-1 strings use 1 byte per char — Java 9 *compact strings*).
 
 ### When not to care
 Most business code allocates moderately and the GC handles it. Worry about layout when profiling (16.10) shows a type with millions of instances dominating the heap — then consider primitive arrays, fewer wrapper objects, or compact headers.
-
-### Self-check
-1. Why does `new Object()` take 16 bytes when the header is 12? → Alignment to 8 bytes.
-2. What does "compressed oops" save, and when is it disabled? → 4 bytes per reference; disabled for heaps of about 32 GB and above.
-3. How do you turn on compact object headers in Java 25? → `-XX:+UseCompactObjectHeaders` (default from JDK 27).
 
 ### TL;DR
 Header 12 bytes (8 with compact headers), references 4 bytes (compressed oops, heap < ~32 GB), everything padded to 8. Small objects are mostly header; primitive arrays are dense.
@@ -320,20 +287,20 @@ Header 12 bytes (8 with compact headers), references 4 bytes (compressed oops, h
 
 ## 16.5 Garbage-collection algorithms
 
-[Chapter 1 §1.8](../01-java-and-the-jvm/README.md#18-memory-and-garbage-collection--an-overview) explained **reachability** (an object is alive if a chain of references leads to it), **GC roots** (the starting points of those chains: local variables, static fields, active threads) and the **generational** idea (young and old objects are kept apart and collected differently). Here are the mechanics behind each HotSpot collector.
+[Chapter 1 §1.8](../01-java-and-the-jvm/README.md#18-memory-and-garbage-collection--an-overview) explained **reachability** (alive = reachable by a chain of references), **GC roots** (where chains start: local variables, static fields, active threads) and the **generational** idea (young and old objects kept apart and collected differently). Here are the mechanics behind each HotSpot collector.
 
 ### The building blocks
 
 | Technique | How it works | Cost | Used by |
 |---|---|---|---|
 | **Mark** | Trace from GC roots, marking every reachable object | Proportional to **live** objects | All |
-| **Sweep** | Walk memory, add unmarked space to free lists (lists of reusable gaps) | Proportional to heap size; leaves **fragmentation** (free memory split into many small gaps) | Old gen of Serial (with compaction) |
+| **Sweep** | Walk memory, add unmarked space to free lists | Proportional to heap size; leaves **fragmentation** (free memory split into many small gaps) | Old gen of Serial (with compaction) |
 | **Compact** | Slide live objects together, fix up references | Proportional to live data; no fragmentation | Serial/Parallel old gen, G1 full GC |
 | **Copy (evacuate)** | Copy live objects into an empty area; the old area is freed wholesale | Proportional to live data; needs spare space | Young generations everywhere; G1, ZGC, Shenandoah for all regions |
 | **Generations** | Collect the young area often (most objects are already dead), the old area rarely | Needs to track old→young references (**card table / remembered sets** — side tables noting which old areas point into young ones) | Serial, Parallel, G1, generational ZGC and Shenandoah |
 | **Concurrent phases** | GC threads work *while* application threads run | Needs **barriers** — small code the JIT inserts around reference reads/writes — and extra CPU | G1 marking, ZGC, Shenandoah |
 
-Terms: a **stop-the-world (STW) pause** halts all application threads at a **safepoint** (where every thread's state is known). **Throughput** = share of time running your code, **latency** = pause lengths, **footprint** = memory needed ([System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md) explains throughput and latency more generally); a collector optimises two, rarely all three.
+Terms: a **stop-the-world (STW) pause** halts all application threads at a **safepoint** (where every thread's state is known). **Throughput** = share of time running your code, **latency** = pause lengths, **footprint** = memory needed; a collector optimises two, rarely all three.
 
 ### The collectors
 
@@ -349,7 +316,7 @@ flowchart LR
 
 | Collector | Since | How it works | Pauses | Choose it for |
 |---|---|---|---|---|
-| **Serial** `-XX:+UseSerialGC` | The original | One GC thread; copying young gen, mark-sweep-compact old gen; all STW | Grow with heap size | Small heaps, 1 CPU, CLI tools (command-line programs), small containers |
+| **Serial** `-XX:+UseSerialGC` | The original | One GC thread; copying young gen, mark-sweep-compact old gen; all STW | Grow with heap size | Small heaps, 1 CPU, CLI tools, small containers |
 | **Parallel** `-XX:+UseParallelGC` | Default before Java 9 | Serial's design with many GC threads | Shorter, still grow with live data | Batch jobs: max throughput, pauses irrelevant |
 | **G1** (Garbage-First) `-XX:+UseG1GC` | Default since Java 9 (JEP 248) | Equal **regions** (1–32 MB, sized from the heap). Young regions evacuated in parallel STW pauses; old regions **marked concurrently**, then **mixed** collections evacuate the old regions with the most garbage first (hence the name). Objects ≥ half a region are **humongous** (own regions). *Evacuate* = copy live objects out so the region can be freed. Full GC only as a fallback | Aims at `-XX:MaxGCPauseMillis` (default 200 ms); typically a few to tens of ms | General purpose — the default for most services |
 | **ZGC** `-XX:+UseZGC` | Experimental 11, production 15, generational 21 (JEP 439), generational-only since 24 (JEP 490) | Nearly everything concurrent, including **relocation** (moving objects). **Coloured pointers** keep GC state in spare bits of each reference; **load barriers** fix references as the app reads them | Well under 1 ms, independent of heap size (up to 16 TB) | Latency-sensitive services, large heaps |
@@ -371,12 +338,7 @@ The removed **CMS** collector (removed in Java 14, JEP 363) is still mentioned i
 **Q: Compare G1 and ZGC.** Both are region-based and generational. G1 copies live objects in stop-the-world pauses aimed at a goal (200 ms default, usually far less) with lower CPU and memory overhead. ZGC also moves objects concurrently (coloured pointers, load barriers), so pauses stay under a millisecond whatever the heap size, at some cost in throughput and **headroom** (spare free memory).
 - *Why generational?* Most objects die young, so collecting only the young area is cheap and productive.
 - *Why do concurrent collectors need barriers?* The app changes references while the GC traces or moves objects; barriers record or repair those changes.
-
-### Self-check
-1. Which collector would you use for a nightly batch job on 32 cores? → Parallel (throughput).
-2. What does "Garbage-First" refer to? → Collecting the old regions with the most garbage first in mixed collections.
-3. Since which release is ZGC generational-only? → Java 24 (JEP 490); generational mode arrived in 21 and became the default in 23.
-4. Name one collector not in Oracle's JDK builds. → Shenandoah.
+- *Which collector for a nightly batch job on 32 cores?* Parallel (throughput). ZGC's generational mode arrived in 21, became its default in 23, and is the only mode since 24.
 
 ### TL;DR
 Serial (tiny), Parallel (throughput), **G1 (default, balanced)**, ZGC and Shenandoah (concurrent compaction, sub-ms pauses), Epsilon (no GC). All modern ones are generational and region-based.
@@ -386,7 +348,7 @@ Serial (tiny), Parallel (throughput), **G1 (default, balanced)**, ZGC and Shenan
 ## 16.6 Collectors compared on a real workload
 
 ### The workload: [`code/ch16/gc/AllocWorkload.java`](code/ch16/gc/AllocWorkload.java)
-A server-like pattern: a "**cache**" (data kept in memory for reuse) of 100 000 byte arrays (~100 MB) with random replacement, so objects live a while, get promoted, then die in the old generation — the hard case for generational GC. A **heartbeat** thread sleeps 1 ms in a loop and records its worst extra delay: the latency users would feel.
+A server-like pattern: a cache of 100 000 byte arrays (~100 MB) with random replacement, so objects live a while, get promoted, then die in the old generation — the hard case for generational GC. A **heartbeat** thread sleeps 1 ms in a loop and records its worst extra delay: the latency users would feel.
 
 ```java
 Thread heartbeat = Thread.ofPlatform().daemon().start(() -> {
@@ -469,7 +431,7 @@ Three runs each with `-Xmx1g`, pauses parsed from `-Xlog:gc*` (Shenandoah on Cor
 How to read it:
 - **Serial** works on one thread while the app waits: slowest, with 130 ms freezes. **Parallel** spreads the pauses over 11 GC threads: short pauses, most CPU. **G1** matches Parallel here, with tunable pause goals.
 - **ZGC/Shenandoah** pauses are tiny; the heartbeat's leftover sub-millisecond "stall" is OS scheduling noise. On this many-core machine they also finished fastest; in a CPU-starved container their concurrent GC threads compete with yours and the picture can flip — measure on production-like hardware.
-- JFR agrees (16.10): `jfr view gc-pauses` reported **P99 8.40 ms** (99% of pauses were this short or shorter — the 99th **percentile**) for G1 and **P99 0.012 ms** for ZGC on a 20-million-allocation run.
+- JFR agrees (16.10): `jfr view gc-pauses` reported **P99 8.40 ms** (the 99th **percentile**: 99% of pauses were this short or shorter) for G1 and **P99 0.012 ms** for ZGC on a 20-million-allocation run.
 
 ### When the heap is too small
 The same G1 run with `-Xmx512m` (real log excerpt):
@@ -478,7 +440,7 @@ The same G1 run with `-Xmx512m` (real log excerpt):
 [0.208s][info][gc] GC(43) Pause Young (Normal) (G1 Evacuation Pause) (Evacuation Failure: Allocation) 512M->512M(512M) 1.192ms
 [0.215s][info][gc] GC(44) Pause Full (G1 Compaction Pause) 512M->104M(367M) 6.408ms
 ```
-At ~6.5 GB/s of allocation and ~400 MB of headroom, G1's marking couldn't keep up, evacuation failed (no free region for survivors) and G1 fell back to **six Full GCs** in under a second. The heap after the full GC (104M) is the real **live set** (the memory taken by objects that are still reachable). The fix is headroom, not a magic flag: at `-Xmx1g` there were no full GCs. ZGC at 512 MB still had no allocation stalls (longest pause 0.019 ms).
+At ~6.5 GB/s of allocation and ~400 MB of headroom, G1's marking couldn't keep up, evacuation failed (no free region for survivors) and G1 fell back to **six Full GCs** in under a second. The heap after the full GC (104M) is the real **live set** (memory taken by still-reachable objects). The fix is headroom, not a magic flag: at `-Xmx1g` there were no full GCs. ZGC at 512 MB still had no allocation stalls (longest pause 0.019 ms).
 
 ### TL;DR
 Read `before->after(size) pause` in G1 logs; for ZGC, pauses are in `gc+phases`. Serial pauses scale with the heap; G1 gives single-digit milliseconds here; ZGC/Shenandoah give microseconds. `Pause Full` or `Evacuation Failure` in G1 = not enough headroom.
@@ -488,12 +450,12 @@ Read `before->after(size) pause` in G1 logs; for ZGC, pauses are in `gc+phases`.
 ## 16.7 GC tuning basics
 
 ### The problem it solves
-Default settings are good for most programs. Tuning is for when you have a **measured** problem: pauses over an SLA (service-level agreement), throughput too low, or memory too high.
+Default settings are good for most programs. Tuning is for a **measured** problem: pauses over an SLA (service-level agreement), throughput too low, or memory too high.
 
 ### How to tune (in this order)
 1. **Define the goal** — "p99 latency < 50 ms", "batch done in 20 min", "fits a 2 GB container".
 2. **Log GC permanently** (cheap): `-Xlog:gc*:file=gc.log:time,uptime,level,tags:filecount=5,filesize=20m`.
-3. **Size the heap**: `-Xmx`, or `-XX:MaxRAMPercentage` in containers (**cgroup** limits — the Linux kernel feature containers use to cap CPU and memory — are detected on Linux). Rule of thumb: 3–4× the **live set** (heap after a full or mixed GC). `-Xms` = `-Xmx` avoids resizing in long-running services.
+3. **Size the heap**: `-Xmx`, or `-XX:MaxRAMPercentage` in containers (**cgroup** limits — the Linux kernel feature containers use to cap CPU and memory — are detected). Rule of thumb: 3–4× the **live set** (heap after a full or mixed GC). `-Xms` = `-Xmx` avoids resizing in long-running services.
 4. **Pick the collector** (16.5), then **set a goal, not mechanisms**: G1 `-XX:MaxGCPauseMillis=100`; ZGC mostly needs only `-Xmx`.
 5. **Change one thing at a time** and re-measure under realistic load.
 6. **Reduce allocation** in code — often the biggest win (JFR allocation views, 16.10, show where).
@@ -509,8 +471,8 @@ Default settings are good for most programs. Tuning is for when you have a **mea
 | `-Xss<size>` | Thread stack size |
 | `-XX:MaxMetaspaceSize=<size>` | Cap metaspace (turns a classloader leak into a clear error) |
 | `-Xlog:gc*` | Unified GC logging (Java 9+; replaces `-XX:+PrintGCDetails`) |
-| `-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=<dir>` | Write a **heap dump** (a file containing every object in the heap, for offline analysis) when the heap is exhausted |
-| `-XX:+AlwaysPreTouch` | Touch all heap pages at start-up (slower start, no page-fault hiccups later — page faults are explained in §16.13) |
+| `-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=<dir>` | Write a **heap dump** (a file of every object in the heap, for offline analysis) when the heap is exhausted |
+| `-XX:+AlwaysPreTouch` | Touch all heap pages at start-up (slower start, no page-fault hiccups later, §16.13) |
 | `-XX:+UseCompactObjectHeaders` | Java 25+: 8-byte headers (16.4) |
 
 ### What the JVM chose for you: `-XX:+PrintFlagsFinal`
@@ -538,10 +500,6 @@ Default settings are good for most programs. Tuning is for when you have a **mea
 - Calling `System.gc()` in application code (it triggers a full collection; disable with `-XX:+DisableExplicitGC` if a library does it).
 - Measuring GC on a laptop and deploying to a 2-CPU container.
 
-### Self-check
-1. First two things to do before tuning? → Define a measurable goal and enable GC logging.
-2. What does `{ergonomic}` mean in `PrintFlagsFinal`? → The JVM computed that value from the hardware.
-
 ### TL;DR
 Measure → size heap from the live set → pick collector → set a goal → one change at a time.
 
@@ -555,10 +513,10 @@ Measure → size heap from the live set → pick collector → set a goal → on
 
 | Optimisation | What it does | Why it matters |
 |---|---|---|
-| **Inlining** | Copies a **callee**'s (the called method's) body into the caller (hot methods up to `FreqInlineSize` = 325 bytecode bytes, others up to `MaxInlineSize` = 35) | Removes call overhead and lets other optimisations see across methods; small methods and getters are free |
-| **Devirtualisation** | If profiling shows a **virtual call** (a call whose target depends on the object's runtime class) only ever sees one or two **receiver** classes (the class of the object the method is called on), call them directly (with a guard — a quick check that the assumption still holds) | Interfaces and **polymorphism** (one call working on many types) cost almost nothing in hot code |
+| **Inlining** | Copies a **callee**'s body into the caller (hot methods up to `FreqInlineSize` = 325 bytecode bytes, others up to `MaxInlineSize` = 35) | Removes call overhead and lets other optimisations see across methods; small methods and getters are free |
+| **Devirtualisation** | If profiling shows a **virtual call** (target depends on the runtime class) only ever sees one or two **receiver** classes, call them directly (behind a cheap guard checking the assumption) | Interfaces and polymorphism cost almost nothing in hot code |
 | **Escape analysis** | Proves an object never leaves the method/thread | **Scalar replacement** (fields become locals — no allocation) and **lock elision** |
-| **Loop optimisations** | Unrolling (repeating the loop body to do fewer jumps), range-check elimination, vectorisation (SIMD — *single instruction, multiple data*: one CPU instruction processes several values) | Array loops approach C speed |
+| **Loop optimisations** | Unrolling (repeating the body to do fewer jumps), range-check elimination, vectorisation (SIMD — *single instruction, multiple data*) | Array loops approach C speed |
 | **Dead-code elimination** | Removes computations whose results are unused | Great for apps, a trap for benchmarks (16.9) |
 | **Speculation + deoptimisation** | Optimise for what was observed; fall back to the interpreter if it changes (*deoptimise*) | Aggressive yet correct |
 
@@ -593,13 +551,13 @@ DoEscapeAnalysis = false
 local      result=100000020000000  heap allocated for 10M iterations: 720,000,000 bytes
 escaping   result=100000020000000  heap allocated for 10M iterations: 720,000,000 bytes
 ```
-- With escape analysis, 30 million `Point`s in `sumLocal` cost **zero** bytes: after inlining, C2 kept `x` and `y` in **registers** (tiny storage slots inside the CPU). In `sumEscaping` only the published `Point` is allocated (10M × 24 B = 240 MB).
+- With escape analysis, 30 million `Point`s in `sumLocal` cost **zero** bytes: after inlining, C2 kept `x` and `y` in CPU **registers**. In `sumEscaping` only the published `Point` escaped (10M × 24 B = 240 MB); the two temporaries were scalar-replaced.
 - Switched off, all 3 × 10M × 24 B = 720 MB are allocated.
 
 Lesson: short-lived small objects in hot code (records, iterators, `Optional`, lambdas) are often free — write clear code first, profile before "optimising" allocations away by hand.
 
 ### Interpreter vs C1 vs C2 on real work
-The first part of [`code/ch16/bench/NaiveBenchmark.java`](code/ch16/bench/NaiveBenchmark.java) computes Collatz sequence lengths (repeatedly halve even numbers and map odd *n* to 3*n*+1 until reaching 1 — a cheap CPU workout) for 20 000 numbers per round. Round times (ms; machine-dependent):
+The first part of [`code/ch16/bench/NaiveBenchmark.java`](code/ch16/bench/NaiveBenchmark.java) computes Collatz sequence lengths (halve even numbers, map odd *n* to 3*n*+1, until 1 — a cheap CPU workout) for 20 000 numbers per round. Round times (ms; machine-dependent):
 
 | Mode | Round 1 | Rounds 6–8 |
 |---|---:|---:|
@@ -610,17 +568,12 @@ The first part of [`code/ch16/bench/NaiveBenchmark.java`](code/ch16/bench/NaiveB
 The interpreter is ~10× slower than C2 here; C1 alone is about 2× slower. `TieredStopAtLevel=1` is sometimes used for short-lived tools where start-up matters more than peak speed.
 
 ### Code cache
-Compiled code lives in the code cache (16.3). If it fills, the JIT stops compiling and new hot code stays interpreted. `jcmd <pid> Compiler.codecache` shows its use; increase `-XX:ReservedCodeCacheSize` if logs say *CodeCache is full*.
+Compiled code lives in the code cache (16.3). If it fills, the JIT stops compiling and new hot code stays interpreted — the app runs on, slower. `jcmd <pid> Compiler.codecache` shows its use; increase `-XX:ReservedCodeCacheSize` if logs say *CodeCache is full*.
 
 ### In the interview
 **Q: What is escape analysis?** C2 proves an object is never seen outside the method or thread that made it, then replaces it with its fields in registers (no allocation, no GC) and drops locks on it. It depends on inlining, so it works best on small, hot code.
 - *Does Java allocate on the stack?* Not literally; scalar replacement has the same effect for non-escaping objects.
 - *What is deoptimisation?* Discarding compiled code whose speculation failed (e.g. a new subclass appeared) and continuing in the interpreter.
-
-### Self-check
-1. Why was the escaping case 240 MB and not 720 MB? → Only the published `Point` escaped; the two temporaries were scalar-replaced.
-2. Which flag keeps only the C1 compiler? → `-XX:TieredStopAtLevel=1`.
-3. What happens when the code cache is full? → Compilation stops; the app runs on with slower code.
 
 ### TL;DR
 C2 inlines, devirtualises, removes non-escaping allocations and dead code, and speculates with a safety net. Prove optimisations with measurement (allocated bytes, JFR), not guesses.
@@ -656,10 +609,10 @@ Output (machine-dependent):
 1. **Warm-up**: round 1 is ~70% slower than round 8 — measure the first run and you compare the interpreter, not your algorithm.
 2. **Dead-code elimination**: 50 million square roots "in 0.00 ms" is impossible — the JIT removed the loop because nobody used `Math.sqrt`'s result.
 
-Other traps: **constant folding** (inputs known at compile time get precomputed), **loop hoisting** (moving work that doesn't change out of the loop), **GC noise** (allocation from an earlier test collected during a later one), **profile pollution** (benchmarking two implementations in one JVM makes a call site polymorphic), **CPU frequency scaling** (the CPU speeding up or slowing down for heat and power), and **`System.currentTimeMillis()`** (low resolution — use `System.nanoTime()` for intervals).
+Other traps: **constant folding** (inputs known at compile time get precomputed), **loop hoisting** (moving invariant work out of the loop), **GC noise** (allocation from an earlier test collected during a later one), **profile pollution** (benchmarking two implementations in one JVM makes a call site polymorphic), **CPU frequency scaling**, and **`System.currentTimeMillis()`** (low resolution — use `System.nanoTime()` for intervals).
 
 ### What JMH is
-**JMH** (Java Microbenchmark Harness, an OpenJDK project) handles these traps: separate warm-up and measurement iterations, fresh **forked** JVMs (new JVM processes started per benchmark), a `Blackhole` that "consumes" results so they can't be eliminated, state fields that prevent constant folding, and error bars.
+**JMH** (Java Microbenchmark Harness, an OpenJDK project) handles these traps: separate warm-up and measurement iterations, fresh **forked** JVMs per benchmark (isolating profiles and JIT decisions), a `Blackhole` that "consumes" results so the JIT can't eliminate them, state fields that prevent constant folding, and error bars.
 
 ```java
 // (JMH — not run in this book: needs the jmh-core library and its annotation processor)
@@ -673,15 +626,10 @@ public class SqrtBench {
     @Benchmark public void sqrtBlackhole(Blackhole bh) { bh.consume(Math.sqrt(x)); }
 }
 ```
-To run: generate a project from the **Maven archetype** (a project template for Maven, the build tool covered in [Chapter 18](../18-testing-build-and-tooling/README.md)) `org.openjdk.jmh:jmh-java-benchmark-archetype`, `mvn package`, `java -jar target/benchmarks.jar`. Results read `Score ± Error`; overlapping error ranges mean no demonstrated difference.
+To run: generate a project from the Maven archetype ([Chapter 18](../18-testing-build-and-tooling/README.md)) `org.openjdk.jmh:jmh-java-benchmark-archetype`, `mvn package`, `java -jar target/benchmarks.jar`. Results read `Score ± Error`; overlapping error ranges mean no demonstrated difference.
 
 ### When not to use microbenchmarks
-Microbenchmarks answer tiny questions. For "why is my service slow?", **profile the real application** under load (16.10) — the **bottleneck** (the slowest part, which limits everything else) is usually I/O, locks or an algorithm.
-
-### Self-check
-1. Two reasons naive timing loops mislead? → Warm-up (interpreted vs compiled phases) and dead-code elimination; also GC noise.
-2. What does `Blackhole.consume` prevent? → The JIT deleting the computation as unused.
-3. Why does JMH fork a new JVM? → To isolate profiles and JIT decisions between benchmarks.
+Microbenchmarks answer tiny questions. For "why is my service slow?", **profile the real application** under load (16.10) — the **bottleneck** is usually I/O, locks or an algorithm.
 
 ### TL;DR
 Never trust a single `nanoTime` loop. Use JMH for micro questions and a profiler for real ones.
@@ -694,15 +642,15 @@ Never trust a single `nanoTime` loop. Use JMH for micro questions and a profiler
 
 | Tool | What it does | Typical use |
 |---|---|---|
-| `jps -l` | Lists running JVMs with PIDs (process ids: the OS's number for each running program) and main classes | Find the process |
+| `jps -l` | Lists running JVMs with PIDs and main classes | Find the process |
 | **`jcmd <pid> <command>`** | Swiss-army knife: sends diagnostic commands to a live JVM | Flags, heap info, class histogram, thread dump, JFR start/stop, heap dump, NMT |
 | `jstat -gcutil <pid> <ms>` | Samples GC statistics periodically | Watch heap occupancy and GC counts live |
 | `jstack <pid>` | Thread dump (same as `jcmd <pid> Thread.print`) | Deadlocks, stuck threads |
 | `jmap`, `jinfo` | Older heap/flag tools, mostly superseded by `jcmd` | Legacy scripts |
 | `jfr` | Reads Flight Recorder files | Offline analysis |
-| `jconsole` / `jhsdb` | Basic JMX GUI (graphical user interface) / inspect a hung process or **core dump** (a snapshot of a crashed process's memory) | Quick look / last resort |
+| `jconsole` / `jhsdb` | Basic JMX GUI / inspect a hung process or **core dump** (snapshot of a crashed process's memory) | Quick look / last resort |
 
-Free external tools: **JDK Mission Control (JMC)**, the JFR GUI (separate download); **VisualVM** (visualvm.github.io) — live monitoring, sampling profiler, heap-dump browser; **async-profiler** — low-overhead CPU/allocation **flame graphs** (charts where each bar is a method and its width shows how much time or memory it accounts for) (Linux/macOS).
+Free external tools: **JDK Mission Control (JMC)**, the JFR GUI (separate download); **VisualVM** (visualvm.github.io) — live monitoring, sampling profiler, heap-dump browser; **async-profiler** — low-overhead CPU/allocation **flame graphs** (each bar is a method; its width shows its share of time or memory) (Linux/macOS).
 
 ### `jcmd` on a live process
 The leak demo of 16.11 can be kept alive with `java -Xmx256m -cp out ch16.leak.ListenerLeak leak 12`. Real session (PID machine-specific):
@@ -740,7 +688,7 @@ While `AllocWorkload` ran with 60 million allocations: `jstat -gcutil <pid> 500 
 Columns are percentages of capacity for **S**urvivor 0/1, **E**den, **O**ld, **M**etaspace, **C**ompressed **C**lass **S**pace, then counts and total seconds for **Y**oung GC, **F**ull GC, **C**oncurrent GC. Here: ~25 young GCs per second, no full GCs, old gen oscillating 30–44% as mixed collections clean it — healthy. A steadily rising `O` that never drops after GCs is the signature of a leak.
 
 ### Java Flight Recorder (JFR)
-**What it is**: an event recorder built into the JVM (open-sourced in JDK 11, JEP 328) — think of an aircraft's black box. It records GC, JIT, locks, I/O, allocation samples and CPU samples with typically ~1% overhead (default settings), so it is safe to leave on in production.
+**What it is**: an event recorder built into the JVM (open-sourced in JDK 11, JEP 328) — the aircraft "black box". It records GC, JIT, locks, I/O, allocation samples and CPU samples with typically ~1% overhead (default settings), so it is safe to leave on in production.
 
 **How to use it**
 1. Start at launch: `java -XX:StartFlightRecording=filename=rec.jfr,settings=profile …` (or attach later: `jcmd <pid> JFR.start duration=60s filename=rec.jfr`).
@@ -798,17 +746,12 @@ byte[]                                                                  100.00%
 | Latency spikes | GC log pauses; JFR `gc-pauses`, `safepoints` | Lock contention views, thread dumps |
 | App hangs | `jcmd <pid> Thread.print` two or three times | Look for `BLOCKED` threads and "Found one Java-level deadlock" |
 | Memory keeps growing | `jstat -gcutil` (old gen after GC); `GC.class_histogram` twice | JFR `OldObjectSample` with `path-to-gc-roots=true`; heap dump in VisualVM/Eclipse MAT (Memory Analyzer Tool) |
-| Process RSS (resident set size: RAM the process really uses, §16.13) > heap | NMT `VM.native_memory` | Thread count, direct buffers, metaspace |
+| Process RSS (RAM really used, §16.13) > heap | NMT `VM.native_memory` | Thread count, direct buffers, metaspace |
 | Slow start-up | `-Xlog:class+load`, `-Xlog:startuptime` | CDS / AOT cache |
 
 ### In the interview
-**Q: Latency spikes every few minutes. How do you investigate?** Correlate spikes with the GC log (long pauses, full GCs, evacuation failures), then record JFR across a spike and check GC pauses, safepoints, lock **contention** (threads queuing for the same lock) and allocation hot spots. If GC is the cause, fix allocation rate or headroom before touching flags.
+**Q: Latency spikes every few minutes. How do you investigate?** Correlate spikes with the GC log (long pauses, full GCs, evacuation failures), then record JFR across a spike and check GC pauses, safepoints, lock **contention** (threads queuing for one lock) and allocation hot spots. If GC is the cause, fix allocation rate or headroom before touching flags.
 - *Thread dump vs heap dump?* Thread dump: every thread's stack and locks — small and fast. Heap dump: every object — large, pauses the JVM, may contain secrets.
-
-### Self-check
-1. Which `jcmd` command shows instances and bytes per class without a heap dump? → `GC.class_histogram`.
-2. What does a rising `O` column in `jstat -gcutil` that never falls indicate? → Old-generation growth — a possible leak.
-3. How do you start JFR on an already-running JVM? → `jcmd <pid> JFR.start …`.
 
 ### TL;DR
 `jps` → `jcmd` (everything) → `jstat` (live GC counters) → JFR for low-overhead recordings (`jfr summary/print/view`, JMC). Heap dumps are the heavy tool of last resort.
@@ -818,7 +761,7 @@ byte[]                                                                  100.00%
 ## 16.11 Memory leaks
 
 ### What it is
-A **memory leak** in Java is memory that stays **reachable** although the program will never use it again. The GC can't free it — something still points to it. Analogy: a coat-check where the attendant never hands coats back because the tickets are kept in a drawer; the room fills up even though the guests left long ago.
+A **memory leak** in Java is memory that stays **reachable** although the program will never use it again. The GC can't free it — something still points to it.
 
 ### Why it matters
 Leaks grow slowly: fine for days, then ever more frequent GCs, rising latency, and finally `OutOfMemoryError: Java heap space` — often at peak traffic.
@@ -827,11 +770,11 @@ Leaks grow slowly: fine for days, then ever more frequent GCs, rising latency, a
 
 | Shape | Example | Fix |
 |---|---|---|
-| Unbounded static collection | `static Map<String, Result> cache` that only grows | Bounded cache with **eviction** (automatically removing old or least-used entries; Caffeine is a popular caching library, or `LinkedHashMap.removeEldestEntry` — [Chapter 10](../10-collections/README.md)) |
-| Listeners never removed | Per-request subscription to an app-wide **event bus** (a central object that forwards published events to every subscribed listener) | Unsubscribe (try-with-resources handle) |
+| Unbounded static collection | `static Map<String, Result> cache` that only grows | Bounded cache with **eviction** (removing old or least-used entries: Caffeine, or `LinkedHashMap.removeEldestEntry` — [Chapter 10](../10-collections/README.md)) |
+| Listeners never removed | Per-request subscription to an app-wide **event bus** (forwards published events to every subscriber) | Unsubscribe (try-with-resources handle) |
 | `ThreadLocal` on pooled threads | Setting per-request data on a thread pool thread and never calling `remove()` | `try { … } finally { tl.remove(); }`; scoped values (Java 25) |
 | Wrong `equals`/`hashCode` for map keys | Mutable key changed after insertion; entry can never be found or removed | Immutable keys, e.g. records ([Chapter 6 §6.13](../06-oop-inheritance-interfaces-and-more/README.md#613-object-methods-equals-hashcode-and-tostring)) |
-| Classloader leaks | A shared class keeps a reference into a redeployed web app | Clean up drivers (e.g. database drivers), threads, thread-locals on undeploy |
+| Classloader leaks | A shared class keeps a reference into a redeployed web app | Clean up drivers, threads, thread-locals on undeploy |
 | Unclosed resources | Streams, connections holding native buffers | try-with-resources ([Chapter 8](../08-exceptions/README.md)) |
 | Inner-class capture | A stored inner-class instance or lambda keeps its outer object alive | Static nested classes; capture less |
 
@@ -864,7 +807,7 @@ static long usedAfterGcKiB() {
     return ManagementFactory.getMemoryMXBean().getHeapMemoryUsage().getUsed() / 1024;
 }
 ```
-The method reference `s::onEvent` captures `s`, so the static list → lambda → session → 10 KiB buffer chain keeps every request's memory alive.
+The bound method reference `s::onEvent` captures its receiver `s`, so the static list → lambda → session → 10 KiB buffer chain keeps every request's memory alive.
 
 Output (KiB figures vary slightly between runs — machine-dependent):
 ```text
@@ -921,15 +864,11 @@ Read the `object` chain bottom-up and you have the whole story: the `LISTENERS` 
 
 ### Common mistakes
 - Treating a large heap as a leak. A cache that is big but bounded is fine; a leak is **growth without bound** in heap-after-GC.
-- "Fixing" with `WeakReference` everywhere (a weak reference doesn't keep its object alive; the GC may clear it). Weak references are right for canonicalising maps (maps that ensure one shared instance per value) and listener registries you don't own; for caches you usually want size- or time-based eviction.
+- "Fixing" with `WeakReference` everywhere (a weak reference doesn't keep its object alive; the GC may clear it). Weak references suit canonicalising maps (one shared instance per value) and listener registries you don't own; caches usually want size- or time-based eviction.
 
 ### In the interview
 **Q: Can Java leak memory if it has a GC?** Yes: the GC frees only *unreachable* objects, so anything still referenced but no longer needed — static maps, listeners never removed, thread-locals on pooled threads — leaks. Confirm with heap-after-GC growth, find the type with class histograms or JFR old-object samples, and follow the path to the GC root.
-- *Leak vs high usage?* A leak keeps growing after GC; high usage plateaus.
-
-### Self-check
-1. Why does `s::onEvent` keep the session alive? → A bound method reference captures its receiver `s`.
-2. Which number proves a leak: heap before GC or after GC? → After GC.
+- *Leak vs high usage?* A leak keeps growing in heap-after-GC; high usage plateaus.
 
 ### TL;DR
 Leak = still reachable, never used. Measure heap after GC → class histogram → JFR `OldObjectSample` path to root → fix the reference (unsubscribe, bound the cache, `remove()` the thread-local).
@@ -939,10 +878,10 @@ Leak = still reachable, never used. Measure heap after GC → class histogram �
 ## 16.12 Modules (JPMS) basics
 
 ### What it is
-The **Java Platform Module System** (JPMS, Java 9, JEP 261) adds a level above packages: a **module** is a named group of packages whose `module-info.java` declares **what it needs** (`requires`) and **what it offers** (`exports`). The JDK itself is about 70 modules (`java.base`, `java.sql`, …). Analogy: a building with a front door for visitors (exported packages) and staff-only rooms (everything else).
+The **Java Platform Module System** (JPMS, Java 9, JEP 261) adds a level above packages: a **module** is a named group of packages whose `module-info.java` declares **what it needs** (`requires`) and **what it offers** (`exports`). The JDK itself is about 70 modules (`java.base`, `java.sql`, …).
 
 ### The problem it solves
-The flat **class path** made every `public` class usable by everyone (hence widespread use of internals like `sun.misc.Unsafe`, a JDK-private class for raw memory access), found missing or duplicate JARs only at run time ("JAR hell"), and couldn't produce a smaller JDK. Modules give **reliable configuration**, **strong encapsulation** (non-exported packages are inaccessible, even to reflection) and a **modular JDK** that `jlink` can trim.
+The flat **class path** made every `public` class usable by everyone (hence widespread use of internals like `sun.misc.Unsafe`), found missing or duplicate JARs only at run time ("JAR hell"), and couldn't produce a smaller JDK. Modules give **reliable configuration**, **strong encapsulation** (non-exported packages are inaccessible, even to reflection) and a **modular JDK** that `jlink` can trim.
 
 ### The directives
 
@@ -953,9 +892,9 @@ The flat **class path** made every `public` class usable by everyone (hence wide
 | `requires static M;` | Needed at compile time only; optional at run time |
 | `exports p;` | Public types in package `p` are accessible to other modules |
 | `exports p to M1, M2;` | Qualified export — only to the named modules |
-| `opens p;` / `opens p to M;` | Allow deep reflection (private members) on `p` at run time — what frameworks like Jackson (JSON) or Hibernate (database mapping) need |
+| `opens p;` / `opens p to M;` | Allow deep reflection (private members) on `p` at run time — what Jackson or Hibernate need |
 | `open module m { … }` | Opens every package of the module for reflection |
-| `uses S;` / `provides S with Impl;` | Service consumer / provider for `ServiceLoader` (the JDK's built-in plug-in lookup mechanism) |
+| `uses S;` / `provides S with Impl;` | Service consumer / provider for `ServiceLoader` (the JDK's plug-in lookup) |
 
 `java.base` is required implicitly by every module.
 
@@ -1032,7 +971,7 @@ import com.example.greet.internal.Formatter;
                         ^
   (package com.example.greet.internal is declared in module com.example.greet, which does not export it)
 ```
-`--module-source-path` compiles several modules at once (one sub-folder per module); `-m module/mainclass` launches. `jdeps` shows dependencies (also useful on plain JARs to find use of JDK internals). `jlink` built a **44 MB** self-contained runtime with just four modules, compared with the full 377 MB JDK on this machine — ideal for **container images** (the packaged file system a container starts from).
+`--module-source-path` compiles several modules at once (one sub-folder per module); `-m module/mainclass` launches. `jdeps` shows dependencies (also useful on plain JARs to find use of JDK internals). `jlink` built a **44 MB** self-contained runtime with just four modules, compared with the full 377 MB JDK on this machine — ideal for container images.
 
 ### Class path vs module path
 
@@ -1040,7 +979,7 @@ import com.example.greet.internal.Formatter;
 |---|---|---|---|
 | Class path | Part of the **unnamed module** | Every module | Everything (but named modules can't `require` it) |
 | Module path, has `module-info.class` | **Named (explicit) module** | Only what it `requires` | Only what it `exports` |
-| Module path, no `module-info` | **Automatic module** (name from `Automatic-Module-Name` in the **manifest** — the `META-INF/MANIFEST.MF` metadata file inside a JAR — else the file name) | Every module | Everything |
+| Module path, no `module-info` | **Automatic module** (name from `Automatic-Module-Name` in the JAR's `META-INF/MANIFEST.MF` **manifest**, else the file name) | Every module | Everything |
 
 This is why modules were adoptable gradually: most applications still run on the class path, while the **JDK's** internals are strongly encapsulated for everyone since Java 16–17 (JEPs 396 and 403). Code that reflects into JDK internals needs `--add-opens java.base/java.lang=ALL-UNNAMED` (a temporary workaround, not a fix).
 
@@ -1057,11 +996,6 @@ Most applications stay on the class path — frameworks work fine there, and mod
 **Q: What does JPMS give you over the class path?** Reliable configuration (dependencies checked at start-up), strong encapsulation (only exported packages are accessible; deep reflection needs `opens`), and a modular JDK that `jlink` can shrink.
 - *`exports` vs `opens`?* Compile- and run-time access to public types vs run-time reflective access to all members, private included.
 
-### Self-check
-1. Where does a class on the class path live? → The unnamed module.
-2. A `public` class in a non-exported package: can another module call it? → No — neither directly nor through reflection.
-3. Which tool builds a trimmed runtime image? → `jlink`.
-
 ### TL;DR
 `module-info.java`: `requires` what you need, `exports` your API, `opens` for reflection. Class path = unnamed module. `jdeps` to analyse, `jlink` to ship a small runtime. Exam-level detail: [OCP Chapter 12](../../../../ocp-java21-study/chapters/12-modules/README.md).
 
@@ -1070,24 +1004,22 @@ Most applications stay on the class path — frameworks work fine there, and mod
 ## 16.13 Operating-system fundamentals for engineers
 
 ### What it is
-The JVM is a program like any other: the **operating system (OS)** gives it CPU time, memory and access to files and the network. Many "JVM" problems — a service stuck at 100% CPU, `Too many open files`, a container killed with no Java stack trace, a first request that is slow because the disk was cold — are really OS behaviour. This section covers the OS ideas every **backend** engineer (one who builds the server side of applications) is expected to know, each tied to what you see from Java. The Python handbook points here too ([Python ch.17](../../../python/chapters/17-performance-memory-internals/README.md)); the ideas are language-neutral.
-
-Analogy: the OS **kernel** is a building's management. Tenants (**processes** — running programs) each get a private flat (address space); the lift schedule (**scheduler**) decides who moves when; tenants can't touch the wiring themselves and must file requests at the front desk (**system calls**); each tenant's key ring has numbered keys to doors they may open (**file descriptors**).
+The JVM is a program like any other: the **operating system (OS)** **kernel** gives it CPU time, memory and access to files and the network. Many "JVM" problems — 100% CPU, `Too many open files`, a container killed with no Java stack trace, a slow first request on a cold disk — are really OS behaviour. This section covers the OS ideas every backend engineer is expected to know, each tied to what you see from Java (process vs thread basics are introduced in [§14.1](../14-concurrency-1/README.md#141-concurrency-basics)). The Python handbook points here too ([Python ch.17](../../../python/chapters/17-performance-memory-internals/README.md)); the ideas are language-neutral.
 
 ### Processes vs threads
 
 | | **Process** | **Thread** |
 |---|---|---|
-| What | a running program with its **own virtual address space** (its private view of memory, explained below), file-descriptor table and resources | a path of execution **inside** a process: its own stack, registers and program counter |
+| What | a running program with its **own virtual address space** (below), file-descriptor table and resources | a path of execution **inside** a process: its own stack, registers and program counter |
 | Shares memory with | nobody (only through explicit IPC) | every other thread in the same process — hence data races ([14.5](../14-concurrency-1/README.md#145-race-conditions)) |
-| Create / switch cost | higher: new address space; switching may **flush** (empty) address-translation caches | lower, but a platform thread still has a kernel structure and ~1 MiB of reserved stack by default |
+| Create / switch cost | higher: new address space; switching may flush address-translation caches | lower, but a platform thread still has a kernel structure and ~1 MiB of reserved stack by default |
 | Crash isolation | one process crashing leaves others alive | one thread corrupting memory can take down the whole process |
 | Java | `ProcessBuilder`, `ProcessHandle` (each JVM is one process) | each **platform thread** is one OS thread (1:1). **Virtual threads** ([15.4](../15-concurrency-2-modern/README.md#154-virtual-threads)) are scheduled by the JVM onto a few OS carrier threads (M:N) |
 
-On Linux, `fork()` creates a child process as a copy of the parent (using **copy-on-write**: pages are shared until one side writes), and `exec()` replaces its program — that is what `ProcessBuilder.start()` does. Processes talk through **IPC** (inter-process communication): pipes (what `Process.getInputStream()` reads), sockets (including Unix domain sockets, supported by `SocketChannel` since Java 16), shared memory (a memory-mapped file), **signals** (small numbered notifications the OS delivers to a process; `kill -TERM` triggers the JVM's **shutdown hooks** — code registered to run when the JVM exits) and message queues.
+On Linux, `fork()` creates a child process as a copy of the parent (using **copy-on-write**: pages are shared until one side writes), and `exec()` replaces its program — that is what `ProcessBuilder.start()` does. Processes talk through **IPC** (inter-process communication): pipes (what `Process.getInputStream()` reads), sockets (including Unix domain sockets, supported by `SocketChannel` since Java 16), shared memory (a memory-mapped file), **signals** (small numbered OS notifications; `kill -TERM` triggers the JVM's **shutdown hooks**, code registered to run at exit) and message queues.
 
 ### CPU scheduling
-A CPU core runs one thread at a time. The kernel's **scheduler** gives each runnable thread a short **time slice**, then **preempts** it (a timer **interrupt** — a hardware signal that makes the CPU stop and run kernel code — forces a switch) and saves its registers — a **context switch**, costing on the order of a few microseconds plus cache warm-up. Linux's scheduler (CFS, the Completely Fair Scheduler, replaced by EEVDF in kernel 6.6) aims at fairness weighted by priority (`nice`, the Unix per-process priority setting). Threads waiting for I/O or a lock are **blocked** and use no CPU; **load average** counts threads running or waiting to run (on Linux it also counts uninterruptible disk waits).
+A CPU core runs one thread at a time. The kernel's **scheduler** gives each runnable thread a short **time slice**, then **preempts** it (a timer **interrupt** forces the CPU into kernel code) and saves its registers — a **context switch**, costing a few microseconds plus cache warm-up. Linux's scheduler (CFS, the Completely Fair Scheduler, replaced by EEVDF in kernel 6.6) aims at fairness weighted by priority (`nice`). Threads waiting for I/O or a lock are **blocked** and use no CPU; **load average** counts threads running or waiting to run (on Linux also uninterruptible disk waits).
 
 Consequences for Java: a pool of 500 CPU-bound platform threads on 8 cores gets no faster than ~8 threads, just more switching; blocked threads are cheap in CPU but not in memory; and container CPU **limits** (cgroup quotas) can pause (**throttle**) a whole JVM for the rest of a 100 ms period once its quota is spent — the JVM reads the limit to size GC and fork-join threads (`-XX:ActiveProcessorCount` overrides it).
 
@@ -1109,7 +1041,7 @@ flowchart LR
 
 - Memory is **allocated lazily**: reserving address space (`-Xmx`, `mmap`) costs nothing until a page is touched; the first touch triggers a **page fault** and the kernel supplies a frame. That is why a process's **virtual size (VSZ)** is far larger than its **resident set size (RSS)**, the RAM actually used. `-XX:+AlwaysPreTouch` touches the whole heap at start-up to avoid faults later.
 - When RAM runs short the kernel drops clean file pages, writes **dirty** ones (modified since they were read) back, and **swaps** **anonymous pages** (memory not backed by any file, such as the heap) out to a disk area called *swap*; a **major fault** then costs milliseconds instead of nanoseconds. A swapping JVM has terrible GC pauses, so servers usually run with little or no swap.
-- Out of memory entirely, Linux's **OOM killer** (*out of memory*) picks a victim and sends `SIGKILL` (the signal that ends a process immediately and can't be caught) — the JVM dies with no `OutOfMemoryError` and no stack trace. In containers the cgroup memory limit applies to the *whole* process (heap + metaspace + thread stacks + direct buffers, [16.3](#163-runtime-memory-areas)), so size `-Xmx` (or `-XX:MaxRAMPercentage`) well below it.
+- Out of memory entirely, Linux's **OOM killer** picks a victim and sends `SIGKILL` (uncatchable, immediate) — the JVM dies with no `OutOfMemoryError` and no stack trace. In containers the cgroup memory limit applies to the *whole* process (heap + metaspace + thread stacks + direct buffers, [16.3](#163-runtime-memory-areas)), so size `-Xmx` (or `-XX:MaxRAMPercentage`) well below it.
 - **Segmentation** (variable-size segments) is the older scheme; modern x86-64 and ARM OSes use flat paging, and "segmentation fault" today just means touching an unmapped or protected page.
 
 **Memory hierarchy — rough latencies** (orders of magnitude; vary by hardware):
@@ -1119,15 +1051,15 @@ flowchart LR
 | CPU register / L1 cache | ~1 ns | tens of KiB per core |
 | L2 / L3 cache | ~4–40 ns | MiB |
 | Main memory (DRAM) | ~100 ns | GiB |
-| NVMe SSD (fast flash storage) read | ~20–100 µs | TiB |
+| NVMe SSD read | ~20–100 µs | TiB |
 | Spinning disk seek | ~5–10 ms | TiB |
 | Network round trip, same data centre / across a continent | ~0.5 ms / ~50–150 ms | — |
 
 ### System calls
-Your code runs in **user mode** and cannot touch hardware. To open a file, send bytes, create a thread or allocate pages it makes a **system call** (`open`, `read`, `write`, `mmap` — map a file or memory into the address space — `clone` — create a thread/process — `futex` — the kernel's wait/wake primitive behind locks — `epoll_wait` …): the CPU switches to **kernel mode**, the kernel does the work and checks permissions, and control returns. A syscall costs roughly 100 ns to a few µs — cheap once, expensive per byte. That is why buffering matters ([13.6](../13-io-and-nio/README.md#136-buffering)): 1,000 one-byte `write` calls are 1,000 syscalls; one buffered 1,000-byte write is one. On Linux, `strace -f -c java …` (a tool that traces system calls) counts a program's syscalls (not run here: macOS needs `dtruss` with System Integrity Protection relaxed).
+Your code runs in **user mode** and cannot touch hardware. To open a file, send bytes, create a thread or allocate pages it makes a **system call** (`open`, `read`, `write`, `mmap` — map a file or memory into the address space — `clone` — create a thread/process — `futex` — the kernel wait/wake primitive behind locks — `epoll_wait` …): the CPU traps into **kernel mode**, the kernel checks permissions and does the work, and control returns. A syscall costs roughly 100 ns to a few µs — cheap once, expensive per byte. That is why buffering matters ([13.6](../13-io-and-nio/README.md#136-buffering)): 1,000 one-byte `write` calls are 1,000 syscalls; one buffered 1,000-byte write is one. On Linux, `strace -f -c java …` counts a program's syscalls (not run here: macOS needs `dtruss` with System Integrity Protection relaxed).
 
 ### File descriptors
-A **file descriptor (fd)** is a small integer index into a process's table of open kernel objects — files, pipes, sockets, the epoll instance itself ("everything is a file"). 0, 1 and 2 are stdin, stdout and stderr (standard input, output and error — [§13.8](../13-io-and-nio/README.md#138-console-and-standard-streams)). Every `FileInputStream`, `FileChannel`, socket and database connection holds one until closed. The table has a per-process limit (`ulimit -n`, often 1,024 by default for shells; servers raise it to tens of thousands); leaked streams or a connection storm (a sudden flood of new connections) end in `IOException: Too many open files`. Use try-with-resources ([Chapter 8](../08-exceptions/README.md)) and watch the count (`ls /proc/<pid>/fd | wc -l` on Linux, or the JMX `OpenFileDescriptorCount`). File **permissions** (`rwx` for owner, group, others) are checked when the fd is opened, not on each read.
+A **file descriptor (fd)** is a small integer index into a process's table of open kernel objects — files, pipes, sockets, the epoll instance itself ("everything is a file"). 0, 1 and 2 are stdin, stdout and stderr ([§13.8](../13-io-and-nio/README.md#138-console-and-standard-streams)). Every `FileInputStream`, `FileChannel`, socket and database connection holds one until closed. The table has a per-process limit (`ulimit -n`, often 1,024 by default for shells; servers raise it to tens of thousands); leaked streams or a connection storm end in `IOException: Too many open files` (`EMFILE`). Use try-with-resources ([Chapter 8](../08-exceptions/README.md)) and watch the count (`ls /proc/<pid>/fd | wc -l` on Linux, or the JMX `OpenFileDescriptorCount`). File **permissions** (`rwx` for owner, group, others) are checked when the fd is opened, not on each read.
 
 ### I/O models: blocking, non-blocking, multiplexing, async
 
@@ -1135,12 +1067,12 @@ A **file descriptor (fd)** is a small integer index into a process's table of op
 |---|---|---|---|
 | **Blocking** | `read()` sleeps in the kernel until data arrives | `java.io` streams, `Socket` | one thread per connection — fine for hundreds, costly for 100k **platform** threads |
 | **Non-blocking** | `read()` returns 0 immediately if nothing is there; the app must retry | `configureBlocking(false)` | useless alone (busy-waiting) |
-| **Multiplexing** | one call waits for **readiness** on many fds: `select`/`poll` (O(n) per call — cost grows with the number of fds), **`epoll`** (Linux) / **`kqueue`** (BSD, macOS) (O(ready)) | NIO `Selector` — the basis of Netty, Tomcat NIO connector, Redis's (an in-memory key-value database) **event loop** — one thread looping over "what's ready next?" (SQL book §16.11) | one thread, tens of thousands of connections |
-| **Asynchronous (completion)** | submit the operation; the kernel tells you when it is *done* | `AsynchronousFileChannel`; Linux `io_uring` (the kernel's modern batched async I/O interface) via libraries | high-throughput storage and networking |
+| **Multiplexing** | one call waits for **readiness** on many fds: `select`/`poll` (O(n) per call), **`epoll`** (Linux) / **`kqueue`** (BSD, macOS) (O(ready)) | NIO `Selector` — the basis of Netty, Tomcat's NIO connector, Redis's **event loop** (one thread looping over "what's ready next?", SQL book §16.11) | one thread, tens of thousands of connections |
+| **Asynchronous (completion)** | submit the operation; the kernel tells you when it is *done* | `AsynchronousFileChannel`; Linux `io_uring` (batched async I/O) via libraries | high-throughput storage and networking |
 | **Virtual threads** | write blocking code; the JVM parks the virtual thread and uses the OS readiness APIs underneath | `Thread.ofVirtual()`, `Executors.newVirtualThreadPerTaskExecutor()` | blocking style at event-loop scale |
 
 ### Page cache and zero-copy
-The kernel keeps recently read and written file data in otherwise unused RAM, the **page cache**. A `read()` of cached data is a memory copy; a miss goes to disk. A `write()` normally only dirties cached pages and returns — the kernel flushes them later — so data survives a crash only after **`fsync`** (`FileChannel.force(true)`), which is what databases do at **commit** (when a transaction is made permanent) (SQL book's write-ahead log). This is also why "free" memory on a busy Linux server looks near zero (it is being used as cache and is released on demand) and why the second run of a file-heavy job is much faster. **Zero-copy** (`sendfile`, used by `FileChannel.transferTo`) sends file pages from the page cache straight to a socket without copying them through the JVM — one reason Kafka (a widely used distributed message log) is fast.
+The kernel keeps recently read and written file data in otherwise unused RAM, the **page cache**. A `read()` of cached data is a memory copy; a miss goes to disk. A `write()` normally only dirties cached pages and returns — the kernel flushes them later — so data survives a power cut only after **`fsync`** (`FileChannel.force(true)`), which databases do at commit (SQL book's write-ahead log). This is also why "free" memory on a busy Linux server looks near zero (it's cache, released on demand) and why the second run of a file-heavy job is much faster. **Zero-copy** (`sendfile`, used by `FileChannel.transferTo`) sends file pages from the page cache straight to a socket without copying through the JVM — one reason Kafka is fast.
 
 ### Seeing it: [`code/ch16/os/OsBasics.java`](code/ch16/os/OsBasics.java)
 
@@ -1156,7 +1088,7 @@ nio      one selector thread echoed to 200 of 200 clients
 
 Reading it: a thread sees the variable another thread wrote; a child process (created by fork + exec) has its own pid, reports ours as its parent, and could not see our memory. Opening 100 channels added ~100 descriptors (the small leftovers are descriptors the JDK opened for its own use meanwhile, such as the pipes to the `getconf` child). Mapping 1 GiB was instant because pages are only backed when touched. On macOS the NIO selector is kqueue-based (it would print `EPollSelectorProvider` on Linux), and a single thread served 200 connections. Pids and counts change on every run.
 
-**How the demo's program itself ran** — compiled vs interpreted vs JIT: C and Go are compiled ahead of time to machine code; CPython (the standard Python interpreter) interprets bytecode; the JVM starts interpreting bytecode and **JIT-compiles** hot methods to machine code ([16.8](#168-jit-compilation-inlining-and-escape-analysis)). **Endianness** (byte order of multi-byte numbers) also comes from the CPU: x86 and ARM are little-endian, network protocols are big-endian, and Java's `ByteBuffer` defaults to big-endian (`ByteOrder.nativeOrder()` tells you the CPU's).
+**How the demo's program itself ran** — C and Go are compiled ahead of time to machine code; CPython interprets bytecode; the JVM interprets bytecode and **JIT-compiles** hot methods ([16.8](#168-jit-compilation-inlining-and-escape-analysis)). **Endianness** (byte order of multi-byte numbers) also comes from the CPU: x86 and ARM are little-endian, network protocols are big-endian, and Java's `ByteBuffer` defaults to big-endian (`ByteOrder.nativeOrder()` tells you the CPU's).
 
 ### Common mistakes
 - **Thread-per-request with thousands of platform threads** → memory for stacks and scheduler overhead; use a bounded pool, virtual threads, or an event loop.
@@ -1173,13 +1105,6 @@ Reading it: a thread sees the variable another thread wrote; a child process (cr
 - *epoll vs select?* → `select` re-scans every fd on each call (O(n), limited set size); `epoll` registers fds once and returns only the ready ones (O(ready)).
 - *Why did my container JVM vanish without an `OutOfMemoryError`?* → The kernel's OOM killer sent `SIGKILL` because total process memory exceeded the cgroup limit.
 - *What happens on a system call?* → Switch from user to kernel mode via a trap, the kernel validates and performs the operation, then returns — cheap but not free, so batch I/O.
-
-### Self-check
-1. Two threads vs two processes: which share the heap? → Threads in the same process.
-2. Why is VSZ much larger than RSS for a JVM? → Reserved address space (heap max, thread stacks, mappings) isn't backed by RAM until touched.
-3. What error do you get when a process runs out of file descriptors? → `Too many open files` (`EMFILE`).
-4. Which I/O model does NIO's `Selector` use? → Readiness multiplexing: epoll on Linux, kqueue on macOS.
-5. When is written data safe from a power cut? → After `fsync` (`FileChannel.force`), not after `write`.
 
 ### TL;DR
 Processes own address spaces and fd tables; threads share them. The scheduler time-slices runnable threads (context switches aren't free; cgroup CPU limits throttle). Virtual memory = pages + page tables + TLB, allocated lazily on page faults; out of RAM → swap or OOM killer. Syscalls cross into the kernel (batch them); fds are per-process handles with a limit. I/O: blocking, non-blocking, multiplexed (epoll/kqueue — NIO, Netty, Redis), async (io_uring), or virtual threads. The page cache makes repeat reads fast, writes lazy (`fsync` for durability) and enables zero-copy.

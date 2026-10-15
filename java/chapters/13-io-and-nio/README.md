@@ -1,28 +1,8 @@
 # Chapter 13 — I/O and NIO
 
-Almost every real program reads or writes something outside itself: configuration files, CSV exports (CSV = comma-separated values, a plain-text table with one row per line), logs, uploaded images, the keyboard, the terminal. **I/O** (input/output) is how a program moves data across that boundary. Java has two generations of file APIs that you will meet side by side in real code: the original **`java.io`** package (Java 1.0, built around *streams* of bytes and characters) and **NIO.2** (`java.nio.file`, Java 7, built around `Path` and the `Files` utility class). This chapter teaches both, shows which one to reach for, and covers the topics that trip people up in production: buffering, character encodings (the rules for turning text into bytes), serialization (turning objects into bytes so they can be saved or sent), and configuration files.
+Almost every program reads or writes something outside itself: config files, CSV exports, logs, uploads, the keyboard, the terminal. **I/O** (input/output) moves data across that boundary. Java has two generations of file APIs, met side by side in real code: the original **`java.io`** package (Java 1.0, *streams* of bytes and characters) and **NIO.2** (`java.nio.file`, Java 7, `Path` + the `Files` utility class). This chapter covers both, which to reach for, and the production trip-ups: buffering, character encodings, serialization and configuration files. It leans on try-with-resources and `IOException` ([Chapter 8](../08-exceptions/README.md)) and lazy streams ([Chapter 12](../12-streams/README.md) — `Files.lines` and `Files.walk` return `Stream`s).
 
-You already know the tools this chapter leans on: try-with-resources (the `try (Resource r = …) { }` form that closes `r` automatically, even after an exception) and `IOException` from [Chapter 8](../08-exceptions/README.md), and lazy streams from [Chapter 12](../12-streams/README.md) (`Files.lines` and `Files.walk` return `Stream`s).
-
-**What you'll learn**
-
-| § | Topic | You'll be able to… |
-|---|---|---|
-| 13.1 | The big picture | tell `java.io` and NIO.2 apart and pick the right API |
-| 13.2 | `Path` | build, combine, normalise and compare file paths without touching the disk |
-| 13.3 | `Files`: managing files and directories | create, copy, move, delete, inspect, list and walk directory trees safely |
-| 13.4 | Reading and writing whole files | use the `Files` one-liners and stream large files line by line |
-| 13.5 | Byte streams and character streams | understand `InputStream`/`OutputStream`/`Reader`/`Writer` and the decorator chain |
-| 13.6 | Buffering | know why unbuffered I/O is slow and why forgetting `flush` loses data |
-| 13.7 | Charsets and encodings | avoid mojibake (garbled text, defined in §13.7), and know what changed with UTF-8 by default (Java 18) |
-| 13.8 | Console and standard streams | read user input with `Scanner`, `BufferedReader`, `Console` and `IO` |
-| 13.9 | Binary data, channels and buffers | read/write primitives, use `FileChannel` and `ByteBuffer`, know what `WatchService` is for |
-| 13.10 | Serialization (and why to avoid it) | explain how it works, `transient`, `serialVersionUID`, filters, and its security risk |
-| 13.11 | Properties files | load, read and store `key=value` configuration |
-| 13.12 | Working with JSON | know that JSON needs a library, and what the code looks like |
-| 13.13 | Best practices and common mistakes | a checklist for correct, portable I/O |
-
-All runnable code is in [`code/`](code/) (package `ch13.*`), compiled with `javac --release 25` (the Java compiler, targeting Java 25) and run on JDK 26 (the Java Development Kit). Every program works inside a directory made by `Files.createTempDirectory` and deletes it at the end, so nothing is left on your disk. Outputs are pasted from real runs.
+All runnable code is in [`code/`](code/) (package `ch13.*`), compiled with `javac --release 25` and run on JDK 26. Every program works inside a `Files.createTempDirectory` directory and deletes it at the end. Outputs are pasted from real runs.
 
 > **Exam depth.** `File` vs `Path` method-name differences, `resolve`/`relativize` puzzles, `Files` exception rules, stream class tables and `Console` details: [OCP Chapter 14 — I/O](../../../../ocp-java21-study/chapters/14-io/README.md). This chapter stays at "use it correctly at work" depth and links there for traps.
 
@@ -31,14 +11,12 @@ All runnable code is in [`code/`](code/) (package `ch13.*`), compiled with `java
 ## 13.1 The big picture: `java.io` vs NIO.2
 
 ### What it is
-- **`java.io`** (Java 1.0) models I/O as **streams**: a one-way flow of data you read from (an *input stream*) or write to (an *output stream*), one piece after another, like water through a pipe. Files are represented by the old `java.io.File` class. (These I/O streams are unrelated to the `java.util.stream.Stream` of Chapter 12 — same word, different idea.)
-- **NIO** ("New I/O", Java 1.4, `java.nio`) added **buffers** (`ByteBuffer`) and **channels** (`FileChannel`, `SocketChannel`) — lower-level, block-oriented (moving data in chunks rather than one byte at a time), and capable of **non-blocking** network I/O (a read or write returns immediately even if no data is ready, instead of making the thread wait).
-- **NIO.2** (Java 7, `java.nio.file`) replaced `File` with the **`Path`** interface and the **`Files`** class full of static helpers, plus file attributes, **symbolic links** (symlinks: small files that just point to another file or directory, like a shortcut), directory walking and file-change watching.
-
-Analogy: `java.io` is the plumbing — pipes you connect together. NIO.2 is the building manager's office — it knows where every room (file) is, can create, move or inspect rooms, and hands you a pipe when you need one.
+- **`java.io`** (Java 1.0) models I/O as **streams**: a one-way flow of data you read from (*input stream*) or write to (*output stream*), piece after piece. Files are the old `java.io.File` class. (Unrelated to Chapter 12's `java.util.stream.Stream` — same word, different idea.)
+- **NIO** ("New I/O", Java 1.4, `java.nio`) added **buffers** (`ByteBuffer`) and **channels** (`FileChannel`, `SocketChannel`) — lower-level, block-oriented (data in chunks), and capable of **non-blocking** network I/O (a read/write returns immediately even if no data is ready, instead of making the thread wait).
+- **NIO.2** (Java 7, `java.nio.file`) replaced `File` with the **`Path`** interface and the **`Files`** class of static helpers, plus file attributes, **symbolic links** (symlinks: small files pointing to another file or directory), directory walking and change watching.
 
 ### Why it matters
-Both APIs are current and interoperate. Modern code uses `Path` + `Files` for everything about *files*, and still uses `java.io` stream classes whenever data flows from something that isn't a file (network **sockets** — the OS endpoint for one network connection — HTTP bodies, the data part of a web request or response, zip entries, in-memory arrays) — `Files.newInputStream(path)` even *returns* a `java.io.InputStream`.
+Both APIs are current and interoperate. Modern code uses `Path` + `Files` for everything about *files*, and `java.io` streams whenever data flows from something that isn't a file (network **sockets**, HTTP bodies, zip entries, in-memory arrays) — `Files.newInputStream(path)` even *returns* a `java.io.InputStream`.
 
 | Need | Use | Since |
 |---|---|---|
@@ -48,13 +26,13 @@ Both APIs are current and interoperate. Modern code uses `Path` + `Files` for ev
 | Read a huge text file line by line | `Files.lines` (lazy `Stream`) or `Files.newBufferedReader` | 8 / 7 |
 | Process bytes from any source (socket, zip, HTTP) | `InputStream` / `OutputStream` | 1.0 |
 | Process text from any source | `Reader` / `Writer` (+ a charset) | 1.1 |
-| Random access (jumping to any position), big files, memory mapping | `FileChannel` + `ByteBuffer` | 1.4 |
-| Legacy (older, still-in-use) APIs that want a `File` | `path.toFile()` / `file.toPath()` | 7 |
+| Random access (jump to any position), big files, memory mapping | `FileChannel` + `ByteBuffer` | 1.4 |
+| Legacy APIs that want a `File` | `path.toFile()` / `file.toPath()` | 7 |
 
 ### Why `File` was replaced
 The old `File` class has real flaws that NIO.2 fixes:
 1. **Silent failures.** `file.delete()`, `mkdir()` and `renameTo()` return `false` without saying *why* (missing? permission? not empty?). `Files.delete` throws a specific exception (`NoSuchFileException`, `DirectoryNotEmptyException`, `AccessDeniedException`).
-2. **No symbolic-link support, poor metadata** (data *about* a file — size, dates, owner — rather than its contents). NIO.2 reads attributes (size, times, POSIX permissions — the Unix read/write/execute flags for owner, group and others — owner) in one call.
+2. **No symbolic-link support, poor metadata** (size, dates, owner). NIO.2 reads attributes (size, times, POSIX permissions — Unix read/write/execute flags for owner, group and others — owner) in one call.
 3. **No efficient directory walking.** `File.listFiles()` loads everything into an array; `Files.walk`/`Files.list` stream lazily.
 
 ### TL;DR
@@ -65,11 +43,11 @@ Use `Path` + `Files` for files and directories; use `InputStream`/`Reader` famil
 ## 13.2 `Path`: naming files and directories
 
 ### What it is
-A **`Path`** is an **immutable** (can't be changed after creation) object that represents a location in a file system as a sequence of **name elements** (`reports`, `2025`, `q3`, `sales.csv`) plus an optional **root** (`/` on Unix — the family of operating systems that includes Linux and macOS — `C:\` on Windows). Crucially, a `Path` is *just a name*: creating one does not check that the file exists or touch the disk at all. Think of it as a street address written on paper — you can write down an address for a house that hasn't been built.
+A **`Path`** is an **immutable** object representing a file-system location as a sequence of **name elements** (`reports`, `2025`, `q3`, `sales.csv`) plus an optional **root** (`/` on Unix/macOS, `C:\` on Windows). A `Path` is *just a name*: creating one never checks that the file exists or touches the disk — `Path.of("missing.txt")` doesn't throw.
 
 Key terms:
-- **Absolute path** — starts at a root (`/srv/app/logs`). **Relative path** — interpreted from the **current working directory** (the folder the program was started from) of the JVM **process** (a running program with its own memory, managed by the OS) (`reports/q3.csv`).
-- **Separator** — `/` on Unix/macOS, `\` on Windows. `Path.of("a", "b")` inserts the right one, so don't concatenate strings with `"/"` yourself.
+- **Absolute path** — starts at a root (`/srv/app/logs`). **Relative path** — interpreted from the JVM process's **current working directory** (the folder the program was started from) (`reports/q3.csv`).
+- **Separator** — `/` on Unix/macOS, `\` on Windows. `Path.of("a", "b")` inserts the right one; don't concatenate with `"/"` yourself.
 - `.` means "this directory", `..` means "the parent directory".
 
 ### How it works
@@ -117,26 +95,20 @@ Paths.get     = true
 What to notice:
 - `getRoot()` is `null` for a relative path, and `getName(0)` is the first element *after* the root.
 - `subpath(1, 3)` is **half-open** (includes the start index, excludes the end) like `String.substring`: elements 1 and 2.
-- `resolve` with an absolute argument returns the argument — a classic source of bugs when a user-supplied "file name" starts with `/`.
-- `relativize` requires both paths to be of the same kind (both absolute or both relative), otherwise it throws `IllegalArgumentException`.
-- `startsWith("/srv/ap")` is `false`: comparison is by name elements, not by characters.
+- `resolve` with an absolute argument returns the argument (`Path.of("/a/b").resolve("/c")` → `/c`) — a classic bug when a user-supplied "file name" starts with `/`.
+- `relativize` requires both paths to be the same kind (both absolute or both relative), otherwise `IllegalArgumentException`; `Path.of("/a/b").relativize(Path.of("/a/c/d"))` → `../c/d`.
+- `startsWith("/srv/ap")` is `false`: comparison is by name elements, not characters.
 
 ### Common mistakes
 - Building paths by string concatenation (`dir + "/" + name`) — breaks on Windows and doubles separators. Use `resolve`.
 - Assuming `normalize()` checks the disk. It is purely textual; `a/link/..` normalises to `a` even if `link` is a symlink pointing elsewhere. Use `toRealPath()` when it matters.
-- **Path traversal**: `uploads.resolve(userInput)` where `userInput` is `../../etc/passwd`. Guard with `Path target = uploads.resolve(name).normalize(); if (!target.startsWith(uploads)) throw ...` — this is exactly the check web servers do. (Path traversal is an attack where `..` segments in input escape the folder you meant to allow.)
-
-### Self-check
-1. Does `Path.of("missing.txt")` throw if the file doesn't exist? → No; a `Path` is only a name.
-2. `Path.of("/a/b").resolve("/c")`? → `/c`.
-3. `Path.of("/a/b").relativize(Path.of("/a/c/d"))`? → `../c/d`.
-
+- **Path traversal** (an attack where `..` segments in input escape the allowed folder): `uploads.resolve(userInput)` with `userInput = ../../etc/passwd`. Guard with `Path target = uploads.resolve(name).normalize(); if (!target.startsWith(uploads)) throw ...` — exactly the check web servers do.
 ---
 
 ## 13.3 `Files`: managing files and directories
 
 ### What it is
-**`java.nio.file.Files`** is a class of static methods that *do* touch the disk: test, create, copy, move, delete, read attributes, list and walk. Every method that can fail throws a specific subclass of `IOException` (a *checked* exception, so the compiler makes you handle it — [Chapter 8 §8.3](../08-exceptions/README.md)).
+**`java.nio.file.Files`** is a class of static methods that *do* touch the disk: test, create, copy, move, delete, read attributes, list and walk. Every method that can fail throws a specific subclass of the checked `IOException` ([§8.3](../08-exceptions/README.md#83-handle-or-declare-checked-exceptions-and-throws)).
 
 ### How it works — the core operations
 
@@ -145,9 +117,9 @@ What to notice:
 | Does it exist? | `exists`, `notExists`, `isRegularFile`, `isDirectory`, `isReadable`, `isSymbolicLink` | never throws; returns `false` if unsure |
 | Make a directory | `createDirectory(p)` / `createDirectories(p)` | `FileAlreadyExistsException` / parents made too, no error if present |
 | Make an empty file | `createFile(p)` | `FileAlreadyExistsException` |
-| Temporary file/dir | `createTempFile(prefix, suffix)`, `createTempDirectory(prefix)` | in `java.io.tmpdir` (the system's temp folder) |
+| Temporary file/dir | `createTempFile(prefix, suffix)`, `createTempDirectory(prefix)` | in `java.io.tmpdir` |
 | Copy | `copy(src, dst, options...)` | `FileAlreadyExistsException` unless `REPLACE_EXISTING` |
-| Move / rename | `move(src, dst, options...)` | same; add `ATOMIC_MOVE` for all-or-nothing (**atomic**: other programs see either the old state or the new one, never a half-done step) within one file system |
+| Move / rename | `move(src, dst, options...)` | same; add `ATOMIC_MOVE` for all-or-nothing (**atomic**: others see the old state or the new one, never half-done) within one file system |
 | Delete | `delete(p)` / `deleteIfExists(p)` | `NoSuchFileException`, `DirectoryNotEmptyException` / returns `boolean` |
 | Size, times, type | `size`, `getLastModifiedTime`, `readAttributes(p, BasicFileAttributes.class)` | `NoSuchFileException` |
 | Same content? | `mismatch(a, b)` (Java 12) → `-1` if identical, else first differing byte index | |
@@ -158,7 +130,7 @@ What to notice:
 
 Details worth knowing:
 - `copy` of a directory copies only the directory itself (empty), not its contents. Recursive copy = `walk` + `copy` each entry.
-- `walk` visits **depth-first** (goes all the way down one branch of the folder tree before moving to the next), starts with the directory itself, and by default does **not** follow symbolic links (pass `FileVisitOption.FOLLOW_LINKS` to change that).
+- `walk` visits **depth-first** (down one branch fully before the next), starts with the directory itself, and by default does **not** follow symbolic links (pass `FileVisitOption.FOLLOW_LINKS`).
 - `readAttributes(..., BasicFileAttributes.class)` fetches size, times and type in **one** file-system call — much cheaper than calling `size`, `isDirectory` and `getLastModifiedTime` separately in a loop over thousands of files.
 
 [`code/ch13/files/FileOps.java`](code/ch13/files/FileOps.java) (key parts):
@@ -224,11 +196,11 @@ read missing file    -> NoSuchFileException
 temp dir removed?    true
 ```
 - The empty string `''` in the walk output is the root itself (`root.relativize(root)`), proving that `walk` includes its starting point.
-- We **sort** listing output because the order returned by the operating system is not specified; never rely on it.
+- We **sort** listing output because the OS order is unspecified; never rely on it (in tests either).
 - `deleteRecursively` sorts paths in reverse so `docs/2025/a.txt` comes before `docs/2025`, which comes before `docs` — a directory can only be deleted once it's empty. (`walkFileTree` with a `postVisitDirectory` callback is the other standard way.)
 
 ### Watching a directory for changes
-`WatchService` (Java 7) lets a program be notified when files in a directory are created, modified or deleted — how IDEs (Integrated Development Environments such as IntelliJ IDEA or VS Code) and dev servers notice edits:
+`WatchService` (Java 7) notifies a program when files in a directory are created, modified or deleted — how IDEs and dev servers notice edits:
 ```java
 // (not run: event delivery timing is OS-dependent; macOS uses polling with a delay of seconds)
 try (WatchService ws = FileSystems.getDefault().newWatchService()) {
@@ -238,16 +210,16 @@ try (WatchService ws = FileSystems.getDefault().newWatchService()) {
     key.reset();                                      // re-arm, or no more events arrive
 }
 ```
-It watches a single directory (not subdirectories), and events can be coalesced (merged into one) or overflow (`OVERFLOW` kind), so treat events as hints and re-scan when in doubt.
+It watches a single directory (not subdirectories), and events can be coalesced (merged) or overflow (`OVERFLOW` kind), so treat events as hints and re-scan when in doubt.
 
 ### Common mistakes
-- **Not closing** `Files.list`/`walk`/`find`/`lines`. They hold an open directory or **file handle** (an OS-issued token for an open file; each process may hold only a limited number); in a long-running server, leaking them eventually hits "Too many open files". Always use try-with-resources.
-- **Check-then-act**: `if (!Files.exists(p)) Files.createFile(p);` — another process can create it in between (a **race condition**: the result depends on the timing of two independent actors). Call `createFile` and catch `FileAlreadyExistsException` instead (or use `CREATE_NEW`, §13.4).
+- **Not closing** `Files.list`/`walk`/`find`/`lines`. They hold an open directory or **file handle** (an OS token for an open file; each process gets a limited number); a long-running server leaking them eventually hits "Too many open files". Always use try-with-resources.
+- **Check-then-act**: `if (!Files.exists(p)) Files.createFile(p);` — another process can create it in between (a **race condition**). Call `createFile` and catch `FileAlreadyExistsException` instead (or use `CREATE_NEW`, §13.4).
 - Using `Files.exists` as proof: it returns `false` both for "doesn't exist" and "can't tell" (no permission). `Files.notExists` is not simply its negation — both can be `false`.
 - Hard-coding `/tmp` — use `Files.createTempDirectory` (portable, unique name).
 
 ### Real-world examples
-Log rotation (periodically renaming the current log file and starting a fresh one; `move` with `ATOMIC_MOVE` so readers never see half-written files), build tools walking source trees (`walk` + `find`), and "write to a temp file, then atomically move over the real file" — the standard trick for crash-safe config and **cache** (a saved copy of data kept for fast reuse) updates.
+Log rotation (rename the current log and start a fresh one; `move` with `ATOMIC_MOVE` so readers never see half-written files), build tools walking source trees (`walk` + `find`), and "write to a temp file, then atomically move over the real file" — the standard trick for crash-safe config and cache updates.
 
 ### In the interview
 **30-second answer:** "I use `Path.of` and the `Files` class: `createDirectories`, `copy`/`move` with explicit `StandardCopyOption`s, `delete` which throws a descriptive exception, and `walk`/`list`/`find` inside try-with-resources because they hold OS handles. For crash-safe updates I write to a temp file in the same directory and `move` it with `ATOMIC_MOVE`."
@@ -255,17 +227,12 @@ Log rotation (periodically renaming the current log file and starting a fresh on
 - *How do you delete a directory tree?* → `walk`, sort in reverse order, delete each; or `walkFileTree` deleting in `postVisitDirectory`.
 - *Is `walk` depth-first or breadth-first?* → Depth-first; it includes the start directory.
 
-### Self-check
-1. What does `Files.copy(dir, target)` do for a non-empty directory? → Creates an empty directory; contents are not copied.
-2. What does `Files.mismatch` return for identical files? → `-1`.
-3. Why sort the results of `Files.list` in a test? → The OS order is unspecified.
-
 ---
 
 ## 13.4 Reading and writing whole files
 
 ### What it is
-For everyday text files, `Files` has one-line methods. They default to **UTF-8** (the dominant text encoding, explained in §13.7; this was true for `Files` methods even before Java 18) and open/close the file for you.
+For everyday text files, `Files` has one-line methods. They default to **UTF-8** (§13.7; true for `Files` methods even before Java 18) and open/close the file for you.
 
 | Method | Reads/writes | Memory | Since |
 |---|---|---|---|
@@ -276,7 +243,7 @@ For everyday text files, `Files` has one-line methods. They default to **UTF-8**
 | `newBufferedReader(p)` / `newBufferedWriter(p, opts...)` | `BufferedReader`/`BufferedWriter` | small buffer | 7 |
 | `newInputStream(p)` / `newOutputStream(p, opts...)` | raw bytes | small buffer | 7 |
 
-**Open options** (`StandardOpenOption`) control what "write" means. The default for the write methods is `CREATE`, `TRUNCATE_EXISTING`, `WRITE` — create if missing, **otherwise wipe it first** (*truncate* = cut the file to zero length). Others: `APPEND` (add at the end), `CREATE_NEW` (fail if it exists — an atomic "create only if absent"), `READ`, `SYNC`/`DSYNC` (force every write to the storage device — `DSYNC` syncs only the contents, `SYNC` also the metadata), `DELETE_ON_CLOSE`.
+**Open options** (`StandardOpenOption`) control what "write" means. The default for the write methods is `CREATE`, `TRUNCATE_EXISTING`, `WRITE` — create if missing, **otherwise wipe it first** (*truncate* to zero length). Others: `APPEND`, `CREATE_NEW` (fail if it exists — an atomic "create only if absent"), `READ`, `SYNC`/`DSYNC` (force every write to the storage device — `DSYNC` syncs only the contents, `SYNC` also the metadata), `DELETE_ON_CLOSE`.
 
 [`code/ch13/files/ReadWrite.java`](code/ch13/files/ReadWrite.java) (key parts):
 ```java
@@ -321,21 +288,16 @@ total score = 169
 
 | Style | Pros | Cons |
 |---|---|---|
-| `readString`/`readAllLines` | shortest code | loads the whole file; a 4 GB log → `OutOfMemoryError` (the JVM ran out of heap memory) |
+| `readString`/`readAllLines` | shortest code | loads the whole file; a 4 GB log → `OutOfMemoryError` |
 | `lines()` | constant memory, stream operations | must remember try-with-resources; `UncheckedIOException` if a read fails mid-stream |
 | `BufferedReader` loop | constant memory, full control, easy early exit | more code |
 
-Rule of thumb: whole-file methods for files you know are small (configs, test **fixtures** — fixed sample data used by tests — < a few MB); streaming for anything user-supplied or unbounded.
+Rule of thumb: whole-file methods for files known to be small (configs, test fixtures, < a few MB); streaming for anything user-supplied or unbounded.
 
 ### Common mistakes
 - Forgetting that the default write **truncates** — appending needs `APPEND`.
-- Writing a CSV "by hand" with `split(",")` for real data: quoted fields containing commas break it. Use a CSV **library** (reusable code someone else wrote that you add as a dependency — e.g. Apache Commons CSV, OpenCSV) for anything external.
+- Writing a CSV "by hand" with `split(",")` for real data: quoted fields containing commas break it. Use a CSV library (Apache Commons CSV, OpenCSV) for anything external.
 - Writing important files in place. If the program crashes mid-write the file is corrupt. Write a temp file in the same directory, then `Files.move(tmp, target, ATOMIC_MOVE, REPLACE_EXISTING)`.
-
-### Self-check
-1. Which option makes `writeString` fail if the file exists? → `CREATE_NEW`.
-2. Why wrap `Files.lines` in try-with-resources? → It keeps the file open until the stream is closed.
-3. What does `readLine()` return at end of file? → `null`.
 
 ### TL;DR
 `readString`/`writeString` for small text, `lines`/`newBufferedReader` for big text, and remember: writes truncate unless you say `APPEND`.
@@ -345,11 +307,11 @@ Rule of thumb: whole-file methods for files you know are small (configs, test **
 ## 13.5 Byte streams and character streams
 
 ### What it is
-In `java.io` all I/O is built from four **abstract classes** (classes that can't be instantiated directly and exist to be extended):
+In `java.io` all I/O is built from four abstract classes:
 
 | | Input (read) | Output (write) | Unit |
 |---|---|---|---|
-| **Byte streams** | `InputStream` | `OutputStream` | `byte` (8-bit raw data: images, zip, protobuf — Google's compact binary data format — anything) |
+| **Byte streams** | `InputStream` | `OutputStream` | `byte` (8-bit raw data: images, zip, protobuf, anything) |
 | **Character streams** | `Reader` | `Writer` | `char` (16-bit UTF-16 text unit; see §13.7) |
 
 Byte streams move raw bytes. Character streams move text, and at the point where text meets bytes (a file, a socket) something must **encode** chars to bytes or **decode** bytes to chars using a **charset** (§13.7). The **bridge** classes are `InputStreamReader` (bytes → chars) and `OutputStreamWriter` (chars → bytes).
@@ -359,7 +321,7 @@ Concrete classes come in two kinds:
 1. **Source/sink streams** that actually connect to something: `FileInputStream`, `ByteArrayInputStream`, a socket's stream, `FileReader`, `StringReader`, `StringWriter`.
 2. **Filter (wrapper) streams** that take another stream in their constructor and add a feature: buffering (`BufferedInputStream`, `BufferedReader`), primitives (`DataInputStream`), objects (`ObjectInputStream`), compression (`GZIPInputStream`), formatting (`PrintStream`, `PrintWriter`).
 
-You stack wrappers like nested boxes. Each `read`/`write` passes through the layers, and **closing the outermost wrapper closes the whole chain**. This is the **Decorator** pattern (wrapping an object in another object of the same type that adds behaviour, [LLD Chapter 9](../../../lld/chapters/09-patterns-structural/README.md)).
+You stack wrappers like nested boxes. Each `read`/`write` passes through the layers, and **closing the outermost wrapper closes the whole chain** (e.g. a `BufferedReader` over an `InputStreamReader`). This is the **Decorator** pattern (wrap an object in another of the same type that adds behaviour, [LLD Chapter 9](../../../lld/chapters/09-patterns-structural/README.md)).
 
 ```mermaid
 classDiagram
@@ -385,7 +347,7 @@ classDiagram
 The read contracts, which every subclass follows:
 - `int read()` returns the next byte (0–255) or char (0–65535) **as an `int`**, or **`-1` at end of stream**. It returns `int` rather than `byte` precisely so `-1` can't be confused with a real value.
 - `int read(byte[] buf)` fills *up to* `buf.length` bytes and returns **how many it actually read** (possibly fewer!) or `-1`. Always write `buf, 0, n`, never the whole array.
-- Reads **block**: the **thread** (the flow of execution running your code) waits until data arrives, the stream ends, or an error occurs.
+- Reads **block**: the thread waits until data arrives, the stream ends, or an error occurs.
 
 [`code/ch13/streams/ByteAndCharStreams.java`](code/ch13/streams/ByteAndCharStreams.java) (key parts):
 ```java
@@ -448,17 +410,12 @@ StringReader -> StringWriter: abc
 - *Why does `read()` return `int`?* → To fit all 256 byte values plus `-1` as the end marker.
 - *Byte or character stream for a PNG?* → Byte stream; it isn't text.
 
-### Self-check
-1. Which class turns bytes into chars? → `InputStreamReader` (with a charset).
-2. What does closing a `BufferedReader` wrapping an `InputStreamReader` do? → Closes the whole chain.
-3. What's wrong with `out.write(buf)` in a copy loop? → Writes stale bytes on the last partial read; use `write(buf, 0, n)`.
-
 ---
 
 ## 13.6 Buffering
 
 ### What it is
-A **buffer** is a block of memory (8 KiB — 8 × 1024 bytes — by default for the `Buffered*` classes) that collects many small reads or writes into one large operation. Without it, each `write('x')` on a `FileOutputStream` becomes a **system call** — a request to the operating-system **kernel** (the core of the OS that controls hardware such as disks), which costs far more than copying a byte in memory. Analogy: carrying groceries from the car one item per trip versus filling a bag.
+A **buffer** is a block of memory (8 KiB by default for the `Buffered*` classes) that collects many small reads or writes into one large operation. Without it, each `write('x')` on a `FileOutputStream` becomes a **system call** — a request to the OS **kernel**, which costs far more than copying a byte in memory.
 
 ### How it works
 1. `BufferedOutputStream.write(b)` puts the byte in its internal array.
@@ -494,12 +451,12 @@ Same 200,000 bytes, roughly 100× faster with a buffer on this machine. And unti
 ### When not to use it
 - When you already read/write big arrays (`read(byte[8192])`, `Files.readAllBytes`, `transferTo`) — a buffer adds only a copy.
 - The `Files` convenience methods and `Files.newBufferedReader/Writer` already buffer.
-- Interactive **protocols** (agreed message formats between two programs, e.g. over a network) where each message must go out immediately — you can still buffer, but call `flush()` after each message.
+- Interactive **protocols** where each message must go out immediately — you can still buffer, but call `flush()` after each message.
 
 ### Common mistakes
 - Forgetting `flush()` on a socket writer → the other side waits forever for a message sitting in your buffer.
 - Wrapping twice (`new BufferedReader(Files.newBufferedReader(p))`) — harmless but pointless.
-- Note: `flush()` hands data to the OS, not necessarily to the physical disk. For **durability** (data surviving a crash or power cut) after power loss use `FileChannel.force(true)` or the `SYNC`/`DSYNC` open options (databases do this).
+- `flush()` hands data to the OS, not necessarily to the physical disk. For **durability** (surviving a crash or power cut) use `FileChannel.force(true)` or the `SYNC`/`DSYNC` open options (databases do this).
 
 ### TL;DR
 Always buffer small reads/writes; `close()` flushes; `flush()` ≠ on disk.
@@ -510,7 +467,7 @@ Always buffer small reads/writes; `close()` flushes; `flush()` ≠ on disk.
 
 ### What it is
 Files and networks carry **bytes**; Java `String`s hold **characters** (as UTF-16 `char` units). A **charset** (character encoding) is the rulebook that maps between them.
-- **UTF-8** — variable length: 1 byte for ASCII (the basic 128 English letters, digits and symbols), 2 for most European accents, 3 for most other symbols (`€`, CJK — Chinese, Japanese, Korean characters), 4 for emoji. The web's and Java's default.
+- **UTF-8** — variable length: 1 byte for ASCII (the basic 128 English letters, digits and symbols), 2 for most European accents, 3 for most other symbols (`€`, CJK), 4 for emoji. The web's and Java's default.
 - **UTF-16** — 2 or 4 bytes per character; what `String` uses internally (conceptually).
 - **ISO-8859-1** (Latin-1) — exactly 1 byte per character, only 256 characters.
 - **US-ASCII** — 7-bit, 128 characters.
@@ -518,8 +475,7 @@ Files and networks carry **bytes**; Java `String`s hold **characters** (as UTF-1
 **Mojibake** is the garbled text you get when bytes are decoded with a different charset from the one used to encode them (`cafÃ©`).
 
 ### Why it matters: JEP 400 (Java 18)
-A **JEP** (*JDK Enhancement Proposal*) is the numbered design document behind each new Java feature.
-Before Java 18, APIs without an explicit charset (`FileReader`, `new String(bytes)`, `String.getBytes()`, `Scanner(File)`) used the **platform default**, which depended on the OS and **locale** (the user's language/region settings) (UTF-8 on most Linux/macOS, Windows-1252 on many Windows machines). The same program could read a file correctly on a developer's Mac and wrongly on a Windows server. Since **Java 18 (JEP 400) the default charset is UTF-8 everywhere**. (The console's own encoding is separate and still follows the terminal: see `System.getProperty("stdout.encoding")`.) Being explicit — `StandardCharsets.UTF_8` — is still best practice, because it documents intent and keeps code correct if someone runs it with `-Dfile.encoding=COMPAT` (`-Dname=value` on the `java` command line sets a *system property*, §13.11).
+Before Java 18, APIs without an explicit charset (`FileReader`, `new String(bytes)`, `String.getBytes()`, `Scanner(File)`) used the **platform default**, which depended on the OS and **locale** (language/region settings): UTF-8 on most Linux/macOS, Windows-1252 on many Windows machines. The same program could read a file correctly on a Mac and wrongly on a Windows server. Since **Java 18 (JEP 400; JEPs: [§1.12](../01-java-and-the-jvm/README.md#112-java-releases-lts-and-jeps)) the default charset is UTF-8 everywhere**. (The console's own encoding still follows the terminal: see `System.getProperty("stdout.encoding")`.) Being explicit — `StandardCharsets.UTF_8` — is still best practice: it documents intent and stays correct if someone runs with `-Dfile.encoding=COMPAT` (a *system property*, §13.11).
 
 [`code/ch13/charsets/CharsetDemo.java`](code/ch13/charsets/CharsetDemo.java) (key parts):
 ```java
@@ -549,9 +505,9 @@ length()=4 codePoints=3 utf8 bytes=6
 ```
 What to notice:
 - The same 6-character string is 9, 12 or 6 bytes depending on the charset.
-- `3f` is `?`: `String.getBytes` **silently replaces** characters the charset can't represent (`€` in Latin-1; `é` and `€` in ASCII). Data is lost without an error. (To get an error instead, use a `CharsetEncoder` with `CodingErrorAction.REPORT`.)
+- `3f` is `?`: `String.getBytes` **silently replaces** characters the charset can't represent (`€` in ISO-8859-1; `é` and `€` in ASCII). Data is lost without an error. (To get an error, use a `CharsetEncoder` with `CodingErrorAction.REPORT`.)
 - `Files.readString`/`readAllLines` are **strict**: invalid UTF-8 throws `MalformedInputException` rather than guessing — better than silent corruption. `BufferedReader` built with `InputStreamReader` is lenient and substitutes `�` (U+FFFD).
-- `"hi👋".length()` is 4: the emoji is one **code point** but two `char`s (a *surrogate pair*). Use `codePoints()` to count what humans see as characters (more in [Chapter 7](../07-core-apis/README.md)).
+- `"hi👋".length()` is 4: the emoji is one **code point** outside the Basic Multilingual Plane, stored as two `char`s (a *surrogate pair*). Use `codePoints()` to count what humans see as characters ([Chapter 7](../07-core-apis/README.md)).
 
 ### Common mistakes
 - Decoding a byte array that was cut in the middle of a multi-byte character (e.g. splitting network data at a fixed size) — decode after reassembling, or use a `Reader` which handles the boundary.
@@ -563,26 +519,21 @@ What to notice:
 - *How many bytes is `é` in UTF-8?* → 2.
 - *Why can `String.length()` differ from the number of visible characters?* → It counts UTF-16 `char`s; characters outside the Basic Multilingual Plane (emoji) take two.
 
-### Self-check
-1. What was JEP 400? → UTF-8 as the default charset, Java 18.
-2. What does ISO-8859-1 do with `€`? → Can't represent it; `getBytes` writes `?`.
-3. Which is strict on bad input: `Files.readString` or `InputStreamReader`? → `Files.readString`.
-
 ---
 
 ## 13.8 Console and standard streams
 
 ### What it is
-Every process starts with three **standard streams** connected by the OS: **standard input** (`System.in`, an `InputStream` — usually the keyboard), **standard output** (`System.out`, a `PrintStream`) and **standard error** (`System.err`, a `PrintStream` for diagnostics). **Shells** (the command-line programs, like bash or zsh, that you type commands into) can **redirect** them (point them at files instead of the screen/keyboard) independently: `java App < input.txt > out.txt 2> errors.txt`.
+Every process starts with three **standard streams** connected by the OS: **standard input** (`System.in`, an `InputStream` — usually the keyboard), **standard output** (`System.out`, a `PrintStream`) and **standard error** (`System.err`, a `PrintStream` for diagnostics and error messages). Shells can **redirect** each independently to files: `java App < input.txt > out.txt 2> errors.txt`.
 
 Ways to read input:
 
 | Tool | Best for | Notes |
 |---|---|---|
-| `Scanner(System.in)` | small interactive programs, exercises | parses tokens (`nextInt`, `nextDouble`, `nextLine`); slow for big input |
-| `BufferedReader(new InputStreamReader(System.in))` | large inputs (competitive programming, piped data — output of one command fed straight into another) | line-based; parse with `split`/`Integer.parseInt` |
+| `Scanner(System.in)` | small interactive programs, exercises | parses tokens (`nextInt`, `nextDouble`, `nextLine`); regex-based, slow for big input |
+| `BufferedReader(new InputStreamReader(System.in))` | large inputs (competitive programming, piped data; e.g. 10⁶ numbers) | line-based; parse with `split`/`Integer.parseInt` |
 | `System.console()` | real terminals; passwords | `readPassword()` doesn't echo and returns `char[]` (can be wiped) |
-| `IO.readln(prompt)` / `IO.println(x)` | beginner programs | `java.lang.IO`, **Java 25** (JEP 512), usable without imports |
+| `IO.readln(prompt)` / `IO.println(x)` | beginner programs | `java.lang.IO`, **Java 25** (JEP 512), auto-imported — no `import` needed |
 
 [`code/ch13/console/ConsoleInput.java`](code/ch13/console/ConsoleInput.java) simulates typed input with an in-memory stream so the output is repeatable:
 ```java
@@ -616,24 +567,19 @@ System.console() available? false
 IO.println works without System.out
 ```
 - **The `nextInt`/`nextLine` trap**: `nextInt()` consumes `42` but leaves the newline; the following `nextLine()` returns the empty remainder of that line. Fix: call an extra `nextLine()` after `nextInt()`, or read whole lines and parse them.
-- `System.console()` returns `null` when input or output is redirected (IDEs, pipes, CI — *continuous integration*, servers that automatically build and test every code change) — always null-check it. Java 22–24 used a JLine-based (JLine is a library for rich terminal input) console by default that could return a `Console` even then; Java 25 reverted to the old behaviour. `isTerminal()` (22) tells you whether a returned console is really interactive.
+- `System.console()` returns `null` when input or output is redirected (IDEs, pipes, CI servers) — always null-check it. Java 22–24 used a JLine-based console by default that could return a `Console` even then; Java 25 reverted to the old behaviour. `isTerminal()` (22) tells you whether a returned console is really interactive.
 
 ### Common mistakes
 - Closing a `Scanner` wrapping `System.in` in a helper method — that closes `System.in` for the rest of the program.
-- Using `System.out.println` for logging in applications — use a logging framework (a library that writes timestamped, levelled, configurable log messages) ([Chapter 18](../18-testing-build-and-tooling/README.md)).
+- Using `System.out.println` for logging in applications — use a logging framework ([Chapter 18](../18-testing-build-and-tooling/README.md)).
 - Reading passwords with `Scanner` into a `String` — use `Console.readPassword()`.
-
-### Self-check
-1. Which stream should error messages go to? → `System.err`.
-2. Why is `BufferedReader` preferred for 10⁶ numbers? → `Scanner` uses **regex** (regular expression: a pattern language for matching text) parsing and is much slower.
-3. What does `IO.println` need to be imported? → Nothing; `java.lang.IO` is imported automatically (Java 25).
 
 ---
 
 ## 13.9 Binary data, channels and buffers
 
 ### Primitive values: `DataOutputStream` / `DataInputStream`
-To store numbers compactly (not as text), `DataOutputStream` writes Java **primitives** (`int`, `double`, `boolean` …) in a fixed **big-endian** (most significant byte first) binary format; `DataInputStream` reads them back. **You must read in exactly the same order and types you wrote** — the file has no labels.
+To store numbers compactly (not as text), `DataOutputStream` writes Java primitives (`int`, `double`, `boolean` …) in a fixed **big-endian** (most significant byte first) binary format; `DataInputStream` reads them back. **You must read in exactly the same order and types you wrote** — the file has no labels, so the reader can't ask what type comes next.
 
 [`code/ch13/binary/DataAndChannels.java`](code/ch13/binary/DataAndChannels.java) (key parts):
 ```java
@@ -644,6 +590,7 @@ try (DataInputStream in = new DataInputStream(new BufferedInputStream(Files.newI
     in.readInt(); in.readDouble(); in.readBoolean(); in.readUTF();
 }
 ```
+
 ### Channels and `ByteBuffer`
 NIO models I/O differently from streams:
 - A **channel** (`FileChannel`, `SocketChannel`) is a connection that can read *into* and write *from* a buffer, often in both directions, and supports **positioned** (random-access) reads.
@@ -684,28 +631,24 @@ bytes 13..15 = buf
 | `FileChannel.map(...)` → `MappedByteBuffer` | **memory-mapped files**: the OS maps the file into memory; fast random access to huge files (databases, search indexes) |
 | `FileChannel.transferTo/transferFrom` | **zero-copy** (the OS moves the data without copying it through your program's memory) file-to-socket transfer (web servers sending static files) |
 | `FileChannel.lock()` | OS-level file locks between processes |
-| `Selector` + non-blocking `SocketChannel` | one thread watching thousands of connections — the basis of Netty (a popular high-performance networking library); far less needed now that **virtual threads** (lightweight JVM-managed threads) make blocking I/O cheap ([Chapter 15](../15-concurrency-2-modern/README.md)) |
-| `AsynchronousFileChannel` | **callback** (a function you hand over to be called when the work finishes) / `Future`-based (a handle to a result that will be ready later) file I/O |
-| `ByteBuffer.allocateDirect` | memory outside the **heap** (the JVM-managed memory area where objects live and the garbage collector cleans up) for **native** I/O (I/O done directly by OS / C code) (the newer Foreign Function & Memory API, final in Java 22, is the modern route to off-heap memory) |
+| `Selector` + non-blocking `SocketChannel` | one thread watching thousands of connections — the basis of Netty; far less needed now that virtual threads make blocking I/O cheap ([Chapter 15](../15-concurrency-2-modern/README.md)) |
+| `AsynchronousFileChannel` | callback / `Future`-based file I/O |
+| `ByteBuffer.allocateDirect` | memory outside the heap for native (OS/C-level) I/O (the Foreign Function & Memory API, final in Java 22, is the modern route to off-heap memory) |
 | `RandomAccessFile` (java.io) | the older way to seek and read/write at positions |
-
-### Self-check
-1. What does `flip()` do? → Sets limit to the current position and position to 0, so you can read what you just wrote into the buffer.
-2. Can a `DataInputStream` tell you what type is next? → No; the reader must know the layout.
 
 ---
 
 ## 13.10 Serialization (and why to avoid it)
 
 ### What it is
-**Java serialization** converts an **object graph** (an object and everything it references) into a byte stream with `ObjectOutputStream.writeObject`, and rebuilds it with `ObjectInputStream.readObject`. A class opts in by implementing the **marker interface** `java.io.Serializable` (an interface with no methods that only "tags" a class).
+**Java serialization** converts an **object graph** (an object and everything it references) into a byte stream with `ObjectOutputStream.writeObject`, and rebuilds it (*deserialization*) with `ObjectInputStream.readObject`. A class opts in by implementing the **marker interface** `java.io.Serializable` (no methods; it only tags the class).
 
 Rules:
 1. Every non-`transient`, non-`static` field is written; referenced objects must also be `Serializable`, or `NotSerializableException` is thrown.
 2. **`transient`** fields are skipped and come back as default values (`null`, `0`, `false`).
 3. On deserialization of a normal class, **its constructor does not run**. Java allocates the object and fills fields directly; only the no-arg constructor of the first *non-serializable* superclass runs. Validation in constructors is therefore bypassed.
 4. **Records** are the exception: they are rebuilt **through the canonical constructor** (the record's main constructor taking every component in order), so validation runs (Java 16).
-5. **`serialVersionUID`** is a version stamp. If you don't declare one, the JVM computes it from the class structure; almost any change (adding a method) changes it, and old data then fails with `InvalidClassException`. Declare it explicitly (`@Serial private static final long serialVersionUID = 1L;` — `@Serial` is Java 14) if you serialize at all. (*Deserialization* is the reverse step: bytes back into objects.)
+5. **`serialVersionUID`** is a version stamp. If you don't declare one, the JVM computes it from the class structure; almost any change (adding a method) changes it, and old data then fails with `InvalidClassException`. Declare it explicitly (`@Serial private static final long serialVersionUID = 1L;` — `@Serial` is Java 14) if you serialize at all.
 
 [`code/ch13/serial/SerializationDemo.java`](code/ch13/serial/SerializationDemo.java) (key parts):
 ```java
@@ -746,29 +689,23 @@ filtered, ArrayList -> InvalidClassException: filter status: REJECTED
 
 ### Why to avoid it
 *Effective Java* (Item 85) is blunt: there is no reason to use Java serialization in new systems.
-1. **Security.** `readObject` can **instantiate** (create an object of) any serializable class on the **classpath** (the list of folders and JAR files the JVM loads classes from) and run its deserialization methods. Attackers chain such "gadget" classes (existing harmless-looking classes whose side effects can be combined into an attack) to execute code — many real **remote-code-execution** (RCE: an attacker running their own code on your server) vulnerabilities in application servers and libraries came from deserializing untrusted bytes. Filters (`ObjectInputFilter`, Java 9, JEP 290; JVM-wide filter factories, Java 17, JEP 415; or the `jdk.serialFilter` system property) reduce the risk but must be configured correctly.
+1. **Security.** `readObject` can instantiate any serializable class on the **classpath** and run its deserialization methods. Attackers chain such "gadget" classes (harmless-looking classes whose side effects combine into an attack) to execute code — many real **remote-code-execution** (RCE) vulnerabilities in application servers and libraries came from deserializing untrusted bytes. Filters (`ObjectInputFilter`, Java 9, JEP 290; JVM-wide filter factories, Java 17, JEP 415; or the `jdk.serialFilter` system property) reduce the risk but must be configured correctly.
 2. **Hidden constructor.** Deserialization bypasses constructors and invariants (except for records).
 3. **Fragile versioning** and a format only Java can read.
-4. **Freezes your implementation**: private fields become part of the public **wire format** (the exact byte layout sent over a network or stored on disk).
+4. **Freezes your implementation**: private fields become part of the public **wire format** (the byte layout sent or stored).
 
-**Use instead:** JSON (§13.12) for human-readable data and APIs, Protocol Buffers/Avro (compact binary formats with a schema, readable from many languages) for compact cross-language data, a database for **persistence** (keeping data after the program stops). If you're stuck with serialization (legacy RMI — Remote Method Invocation, Java's old way to call methods on another machine — some caches), serialize records, set an allow-list filter, and never deserialize data from untrusted sources.
+**Use instead:** JSON (§13.12) for human-readable data and APIs, Protocol Buffers/Avro (compact schema-based binary formats readable from many languages) for cross-language data, a database for persistence. If stuck with serialization (legacy RMI — Remote Method Invocation — some caches), serialize records, set an allow-list filter, and never deserialize untrusted data.
 
 ### In the interview
 **30-second answer:** "Serialization turns an object graph into bytes via `Serializable`; `transient` fields are skipped, `serialVersionUID` guards compatibility, and normal classes are rebuilt without calling their constructor. I avoid it for new code because deserializing untrusted data can lead to remote code execution and it's brittle; I use JSON or protobuf. If I must, I use records and an `ObjectInputFilter` allow-list."
 - *What happens to a `static` field?* → Not serialized; it belongs to the class.
 - *Superclass not `Serializable`?* → Its no-arg constructor runs on deserialization and its fields are not restored (and it must have an accessible no-arg constructor).
-
-### Self-check
-1. Does a normal `Serializable` class's constructor run on `readObject`? → No.
-2. And a record's? → Yes, the canonical constructor.
-3. What exception when a referenced object isn't serializable? → `NotSerializableException`.
-
 ---
 
 ## 13.11 Properties files
 
 ### What it is
-A **properties file** is plain text of `key=value` lines — the traditional Java configuration format (Spring Boot's — Spring Boot being the most popular Java framework for building services — `application.properties`, `log4j2.properties`, `gradle.properties`). `java.util.Properties` loads and stores them.
+A **properties file** is plain text of `key=value` lines — the traditional Java configuration format (Spring Boot's `application.properties`, `log4j2.properties`, `gradle.properties`). `java.util.Properties` loads and stores them.
 
 Format rules: `#` or `!` start a comment; the separator can be `=`, `:` or whitespace, with spaces around it ignored; a trailing `\` continues the value on the next line (leading whitespace of the next line is dropped); values are **always strings**.
 
@@ -806,8 +743,8 @@ system property java.version starts with 2? true
 
 ### Common mistakes
 - `load(InputStream)` decodes as **ISO-8859-1**, so `Zürich` saved as UTF-8 becomes `ZÃ¼rich`. Use `load(Reader)` with UTF-8. (Resource bundles, `PropertyResourceBundle`, read UTF-8 since Java 9.)
-- `Properties` extends `Hashtable<Object,Object>` (an old, synchronised map class; a historical design mistake); use only `getProperty`/`setProperty`/`stringPropertyNames`, never `put`/`get` with non-strings.
-- **Committing** (saving into version control such as Git) secrets (passwords, **API keys** — secret tokens that identify your program to a service) in properties files — use **environment variables** (named values the OS passes to each process) or a **secret manager** (a service that stores and hands out credentials securely).
+- `Properties` extends `Hashtable<Object,Object>` (an old synchronised map; a historical design mistake); use only `getProperty`/`setProperty`/`stringPropertyNames`, never `put`/`get` with non-strings.
+- Committing secrets (passwords, API keys) to version control in properties files — use **environment variables** or a **secret manager** (a service that stores and hands out credentials).
 - **System properties** (`System.getProperty("user.home")`, set with `-Dkey=value`) are a separate, JVM-wide `Properties` object; **environment variables** come from `System.getenv("HOME")`.
 
 For locale-specific messages with `ResourceBundle`, see [OCP Chapter 11](../../../../ocp-java21-study/chapters/11-exceptions-localization/README.md).
@@ -817,10 +754,9 @@ For locale-specific messages with `ResourceBundle`, see [OCP Chapter 11](../../.
 ## 13.12 Working with JSON
 
 ### What it is
-**JSON** (JavaScript Object Notation: nested `{"key": value}` objects and `[ … ]` lists in plain text) is the text format of web APIs and most modern config/data files. As of Java 25/26 the JDK has **no public JSON API** — you use a library. The two common ones are **Jackson** (the default in Spring Boot) and **Gson**; JSON-B/Yasson is the Jakarta EE (the enterprise Java specifications, formerly Java EE) standard. Jackson 3 (October 2025, default in Spring Boot 4) moved to `tools.jackson.*` packages and prefers building an immutable `JsonMapper` via `JsonMapper.builder()`; the calls below are otherwise the same.
+**JSON** (JavaScript Object Notation: nested `{"key": value}` objects and `[ … ]` lists in plain text) is the format of web APIs and most modern config/data files. As of Java 25/26 the JDK has **no public JSON API** — you use a library: **Jackson** (Spring Boot's default) or **Gson**; JSON-B/Yasson is the Jakarta EE standard. Jackson 3 (October 2025, default in Spring Boot 4) moved to `tools.jackson.*` packages and prefers building an immutable `JsonMapper` via `JsonMapper.builder()`; the calls below are otherwise the same.
 
 ### How it works (Jackson 2.x — not run: needs the `jackson-databind` dependency)
-A **dependency** is an external library your project declares and the build tool downloads for you.
 ```java
 // (Jackson - not run)
 record Order(String id, List<String> items, double total) {}
@@ -834,12 +770,12 @@ tree.get("items").get(0).asText();                          // "pen"
 List<Order> orders = mapper.readValue(arrayJson, new TypeReference<List<Order>>() {});  // generics survive erasure
 ```
 - **Data binding** (JSON ↔ your classes; records fit perfectly) for known shapes; the **tree model** (`JsonNode`) for dynamic or partial data; **streaming** (`JsonParser`) for gigantic files.
-- `TypeReference` works around **type erasure** (generic type arguments like `<Order>` are removed after compilation, so they're unknown at run time; [Chapter 9](../09-generics/README.md)).
+- `TypeReference` works around **type erasure** (generic type arguments are unknown at run time; [Chapter 9](../09-generics/README.md)).
 - Money: use `BigDecimal`, not `double` ([Chapter 7](../07-core-apis/README.md)).
 - Adding the dependency with Maven/Gradle: [Chapter 18](../18-testing-build-and-tooling/README.md).
 
 ### Common mistakes
-Hand-building JSON with string concatenation (quotes and escapes break it; it's an **injection** risk — attacker-controlled text changing the structure of what you build), creating a new `ObjectMapper` per request (it's expensive — share one), and silently ignoring unknown fields vs failing on them without deciding which you want (`FAIL_ON_UNKNOWN_PROPERTIES`).
+Hand-building JSON with string concatenation (quotes and escapes break it; an **injection** risk — attacker text changing the structure), creating a new `ObjectMapper` per request (expensive — share one), and not deciding whether unknown fields should be ignored or fail (`FAIL_ON_UNKNOWN_PROPERTIES`).
 
 ---
 
@@ -855,8 +791,8 @@ Hand-building JSON with string concatenation (quotes and escapes break it; it's 
 8. **Validate user-supplied paths**: `normalize()` then `startsWith(baseDir)`.
 9. **Don't swallow `IOException`**: it carries the reason (disk full, permission denied). Wrap in `UncheckedIOException` inside lambdas ([Chapter 8 §8.8](../08-exceptions/README.md)).
 10. **No Java serialization of untrusted data**; prefer JSON/protobuf; if unavoidable, records + filters.
-11. **Tests**: use `@TempDir` (JUnit Jupiter, the current version of Java's standard test framework) or `Files.createTempDirectory`, and in-memory streams (`ByteArrayInputStream`, `StringReader`) to test parsing without files.
-12. **Blocking I/O is fine on virtual threads** — thousands of **concurrent** (in progress at the same time) file/socket operations no longer need **async** APIs (ones that return immediately and deliver the result later) ([Chapter 15 §15.4](../15-concurrency-2-modern/README.md#154-virtual-threads)).
+11. **Tests**: use JUnit's `@TempDir` or `Files.createTempDirectory`, and in-memory streams (`ByteArrayInputStream`, `StringReader`) to test parsing without files.
+12. **Blocking I/O is fine on virtual threads** — thousands of concurrent file/socket operations no longer need async APIs ([Chapter 15 §15.4](../15-concurrency-2-modern/README.md#154-virtual-threads)).
 
 ### In the interview (chapter-level)
 - *How would you count lines in a 50 GB log file?* → `Files.lines(p)` in try-with-resources (or a `BufferedReader` loop) — constant memory; never `readAllLines`.
