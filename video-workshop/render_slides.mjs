@@ -24,9 +24,9 @@ const fmt = s => esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`(.+?)`/
 const css = `
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{width:1920px;height:1080px;background:#FBF0D9;color:#2E261C;font-family:'DejaVu Sans',Arial,sans-serif;overflow:hidden}
-.frame{position:absolute;inset:0;padding:90px 120px 120px}
+.frame{position:absolute;inset:0;padding:80px 120px 110px;display:flex;flex-direction:column}
 .kicker{font-size:30px;letter-spacing:2px;text-transform:uppercase;color:#8A6D3B;margin-bottom:14px;font-weight:600}
-h1{font-size:68px;line-height:1.12;color:#2B3F8C;margin-bottom:40px}
+h1{font-size:64px;line-height:1.12;color:#2B3F8C;margin-bottom:34px}
 ul{list-style:none}
 li{font-size:44px;line-height:1.3;margin:0 0 26px 0;padding-left:56px;position:relative}
 li::before{content:'';position:absolute;left:8px;top:20px;width:20px;height:20px;border-radius:50%;background:#3A5BC7}
@@ -42,9 +42,9 @@ table{border-collapse:collapse;font-size:38px;width:100%}
 th{background:#3A5BC7;color:#fff;text-align:left;padding:16px 22px}
 td{padding:14px 22px;border-bottom:2px solid #E2CFA6}
 tr.hidden td{visibility:hidden}
-.diagram{display:flex;justify-content:center;align-items:center;height:700px}
-.diagram svg{max-width:1680px!important;max-height:700px;width:auto;height:auto}
-.caption{font-size:36px;color:#5A4A33;text-align:center;margin-top:20px}
+.diagram{display:flex;justify-content:center;align-items:center;flex:1;min-height:0}
+.diagram svg{max-width:1680px;width:auto;height:auto}
+.caption{font-size:34px;color:#5A4A33;text-align:center;margin-top:14px}
 .big{font-size:120px;font-weight:700;color:#2B3F8C;text-align:center;margin-top:120px;line-height:1.15}
 .title-wrap{display:flex;flex-direction:column;justify-content:center;height:100%}
 .title-wrap .series{font-size:40px;color:#8A6D3B;letter-spacing:3px;text-transform:uppercase}
@@ -103,6 +103,10 @@ for (const [si, sc] of script.scenes.entries()) {
   for (const [ki, st] of (sc.steps || []).entries()) {
     const reveal = ['bullets', 'recap', 'table', 'twocol'].includes(sc.layout || 'bullets')
       ? Math.min(st.reveal ?? nItems, nItems) : null;
+    if (sc.mermaid && /^\s*(flowchart|graph)\s+LR/.test(sc.mermaid) && !/subgraph/.test(sc.mermaid)) {
+      const ids = new Set([...sc.mermaid.matchAll(/([A-Za-z0-9_]+)\s*[\[\(\{]/g)].map(m => m[1]));
+      if (ids.size >= 4) sc.mermaid = sc.mermaid.replace(/^(\s*(?:flowchart|graph)\s+)LR/, '$1TB');
+    }
     const html = `<!doctype html><html><head><meta charset="utf-8"><style>${css}</style></head><body>
 <div class="frame">${body(sc, reveal)}</div>
 <div class="footer"><span>${fmt(script.series)} · Ep ${script.episode}: ${fmt(script.title)}</span><span>${si + 1} / ${total}</span></div>
@@ -110,7 +114,10 @@ for (const [si, sc] of script.scenes.entries()) {
 <script>${mermaidJs}</script>
 <script>
 mermaid.initialize({startOnLoad:false,theme:'base',themeVariables:{fontSize:'28px',background:'#FBF0D9',primaryColor:'#EAD8B2',primaryTextColor:'#2E261C',primaryBorderColor:'#3A5BC7',lineColor:'#5A6FA8',secondaryColor:'#EAD8B2',tertiaryColor:'#F6EAD0',actorBkg:'#EAD8B2',signalColor:'#3B3024'},securityLevel:'loose',fontFamily:'DejaVu Sans',flowchart:{useMaxWidth:false},sequence:{useMaxWidth:false}});
-window.done=(async()=>{for(const [i,el] of [...document.querySelectorAll('pre.mermaid')].entries()){try{const {svg}=await mermaid.render('m'+i,el.textContent);el.outerHTML=svg}catch(e){el.outerHTML='<div class="caption">diagram error</div>';window.merr=String(e)}}})();
+window.done=(async()=>{for(const [i,el] of [...document.querySelectorAll('pre.mermaid')].entries()){let src=el.textContent;try{let {svg}=await mermaid.render('m'+i,src);
+const m=svg.match(/viewBox="[-\d.]+ [-\d.]+ ([\d.]+) ([\d.]+)"/);const vb=m?{width:+m[1],height:+m[2]}:null;
+if(vb&&vb.width/vb.height>3.2&&/^\s*(flowchart|graph)\s+LR/.test(src)){src=src.replace(/^(\s*(?:flowchart|graph)\s+)LR/,'$1TB');svg=(await mermaid.render('mt'+i,src)).svg}
+el.outerHTML=svg}catch(e){el.outerHTML='<div class="caption">diagram error</div>';window.merr=String(e)}}})();
 </script></body></html>`;
     await page.setContent(html, { waitUntil: 'load' });
     await page.evaluate(() => window.done);
@@ -120,7 +127,7 @@ window.done=(async()=>{for(const [i,el] of [...document.querySelectorAll('pre.me
     await page.evaluate(() => {
       for (const s of document.querySelectorAll('.diagram svg')) {
         const vb = s.viewBox.baseVal; if (!vb || !vb.width) continue;
-        const k = Math.min(1680 / vb.width, 700 / vb.height, 1.6);
+        const box = s.parentElement.getBoundingClientRect(); const k = Math.min((box.width - 20) / vb.width, (box.height - 10) / vb.height, 2.2);
         s.setAttribute('width', vb.width * k); s.setAttribute('height', vb.height * k);
         s.style.maxWidth = 'none';
       }
