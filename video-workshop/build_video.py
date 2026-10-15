@@ -11,8 +11,8 @@ Needs: node, Chromium (CHROME_PATH), ffmpeg/ffprobe, Piper (offline neural TTS).
 import argparse, hashlib, json, os, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-GAP = 0.45          # seconds of silence after each step
-SCENE_GAP = 0.35    # extra silence when the slide changes
+GAP = 0.35          # seconds of silence after each step
+SCENE_GAP = 0.3     # extra silence when the slide changes
 
 
 def run(cmd, **kw):
@@ -44,6 +44,7 @@ def main():
     ap.add_argument('--piper', default=os.environ.get('PIPER', 'piper'))
     ap.add_argument('--voice', default=os.environ.get('PIPER_VOICE'))
     ap.add_argument('--skip-render', action='store_true')
+    ap.add_argument('--length-scale', default='0.9', help='Piper speaking pace; <1 is faster (default 0.9)')
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
     if not a.skip_render:
@@ -56,9 +57,9 @@ def main():
     for i, f in enumerate(frames):
         text = f['say'].strip()
         key = hashlib.sha1(text.encode()).hexdigest()[:16]
-        raw = os.path.join(adir, f'{key}.wav')
+        raw = os.path.join(adir, f'{key}-{a.length_scale}.wav')
         if not os.path.exists(raw):
-            run([a.piper, '-m', a.voice, '-f', raw, '--sentence_silence', '0.25'],
+            run([a.piper, '-m', a.voice, '-f', raw, '--sentence_silence', '0.2', '--length_scale', a.length_scale],
                 input=text.encode(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         last_of_scene = i + 1 == len(frames) or frames[i + 1]['scene'] != f['scene']
         pad = GAP + (SCENE_GAP if last_of_scene else 0)
