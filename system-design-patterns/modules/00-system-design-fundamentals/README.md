@@ -2,56 +2,54 @@
 
 ## Module Introduction
 
-**What this module is.** Every other module in these notes assumes you already know the basic vocabulary of system design: what *latency* means, what a *load balancer* does, why a *cache* helps, what *sharding* or *eventual consistency* are. This module teaches all of it from zero. If you have only ever written programs that run on one computer, start here.
+**What this module is.** Every other module assumes the basic vocabulary of system design: what *latency* means, what a *load balancer* does, why a *cache* helps, what *sharding* or *eventual consistency* are. This module teaches all of it from zero. If you have only written programs that run on one computer, start here.
 
 **How it is organised.** Six parts, each building on the one before:
 
 | Part | What you learn |
 |---|---|
-| 1 — Foundations and performance | Clients and servers, latency, throughput, percentiles, estimation, availability and the nines, SLAs, scaling up vs out, stateless services, bottlenecks, how a design interview runs |
-| 2 — Networking and communication | IP, ports, DNS, TCP/UDP/QUIC, HTTP versions, TLS, REST/gRPC/GraphQL, WebSockets and friends, proxies, API gateways, load balancers (every type and algorithm), CDNs |
+| 1 — Foundations and performance | Clients and servers, latency, throughput, percentiles, estimation, availability and the nines, SLAs, scaling up vs out, stateless services, bottlenecks, how a design interview runs, non-functional requirements and their design levers |
+| 2 — Networking and communication | IP, ports, DNS, TCP/UDP/QUIC, HTTP versions, TLS, REST/gRPC/GraphQL and RPC internals, WebSockets and friends, proxies, API gateways, load balancers (every type and algorithm), CDNs |
 | 3 — Data storage | Relational databases, ACID, isolation levels, NoSQL families, indexes, replication, partitioning and sharding, consistent hashing, block/file/object storage, OLTP vs OLAP, durability |
 | 4 — Caching, async and consistency | Cache strategies and eviction, queues and streams, delivery guarantees, idempotency, consistency models, CAP/PACELC, quorums, consensus, clocks, 2PC and sagas, Bloom filters, ID generation |
 | 5 — Architecture, operations and security | Monolith vs microservices vs serverless, resilience patterns, rate limiting, autoscaling, containers and Kubernetes, CI/CD and deployments, observability, disaster recovery, auth, encryption, web security |
 | 6 — Putting it together | A request's journey end to end, a worked design, a decision cheat sheet, 60 interview questions and a master A–Z glossary |
 
-**How to read it.** Each concept follows the same rhythm as the rest of the book: *What it is → Why it matters → How it works → Types → Trade-offs → Common mistakes → Real-world examples → In the interview → TL;DR*. Read Parts 1–5 in order the first time; afterwards use the Part 6 glossary and cheat sheet as a reference. Every part ends with its own glossary table.
+**How to read it.** Each concept follows the same rhythm: *What it is → Why it matters → How it works → Types → Trade-offs → Common mistakes → Real-world examples → In the interview → TL;DR*. Read Parts 1–5 in order the first time; afterwards use the Part 6 cheat sheet and the master A–Z glossary (which holds every part's terms) as a reference.
 
 > These notes are written in my own words from official documentation, papers and engineering blogs; specific numbers were checked against their sources.
 
 ## Part 1 — Foundations and performance
 
-This part is the ground floor. It explains what "system design" means, names the basic pieces every web application is built from, and gives you the vocabulary for talking about speed (latency, throughput, percentiles), size (estimation, units), staying up (availability, reliability, durability) and growing (scalability). It ends with a step-by-step method for a system design interview. Nothing here assumes more than this: a website runs on a computer called a **server**, and you reach it from your phone or laptop over the internet.
+The ground floor: what "system design" means, the basic pieces every web application is built from, and the vocabulary for speed (latency, throughput, percentiles), size (estimation, units), staying up (availability, reliability, durability) and growing (scalability). It ends with a step-by-step method for a system design interview. It assumes only that a website runs on a computer called a **server**, which you reach over the internet.
 
 ---
 
 ## What system design is
 
 ### What it is
-**System design** is the work of deciding which parts a piece of software needs, what each part does, how the parts talk to each other, and where data lives, so that the whole thing meets its goals. Those goals usually include serving a certain number of users, responding within a certain time, staying available when machines break, and costing an acceptable amount.
+**System design** is deciding which parts a piece of software needs, what each part does, how the parts talk to each other, and where data lives, so that the whole meets its goals: serving a certain number of users, responding within a certain time, staying available when machines break, and costing an acceptable amount.
 
-Writing code answers "how does this function work?". System design answers "how do these twenty programs, running on two hundred machines in three countries, work together without losing anyone's data?".
-
-**Analogy:** an architect designing a building does not lay bricks. They decide how many floors, where the lifts and fire exits go, how water and electricity flow, and how many people the building can hold. System design is the architect's job for software. The builders (programmers) then fill in each room.
+Writing code answers "how does this function work?". System design answers "how do these twenty programs, on two hundred machines in three countries, work together without losing anyone's data?" Like an architect who decides floors, lifts and fire exits but lays no bricks, the designer shapes the system and programmers fill in each room.
 
 ### Why it matters
-A program that works perfectly for 10 users can collapse at 10 million. The code may be fine; the shape of the system is wrong. Typical shape problems are: one database that every request has to queue for, one machine whose failure takes the whole site down, or data stored so far from users that every page takes seconds. These are fixed by design decisions, not by better loops.
-
-System design also matters for cost. Two designs that both work can differ by ten times in their monthly cloud bill.
+A program that works for 10 users can collapse at 10 million because the *shape* of the system is wrong: one database every request queues for, one machine whose failure takes the site down, data so far from users that every page takes seconds. These are fixed by design decisions, not better loops. Design also drives cost: two working designs can differ tenfold in their cloud bill.
 
 ### How it works
 Most system design follows the same loop:
 
 1. **Understand the goal.** What must the system do (features), and how well (speed, size, uptime)?
-2. **Estimate the load.** How many users, requests per second, gigabytes per day?
+2. **Estimate the load.** Users, requests per second, gigabytes per day.
 3. **Sketch the parts.** Clients, servers, databases, caches, queues and how requests flow between them.
 4. **Find the weak spots.** Which part runs out of capacity first? Which part, if it dies, takes everything with it?
 5. **Fix and justify.** Add or change parts, and state what each change costs.
 
-You repeat this loop as the system grows. A design is never "finished"; it is right for a given load and set of goals.
+You repeat the loop as the system grows; a design is right for a given load and set of goals, never "finished".
+
+**Abstraction is the main tool.** An **abstraction** hides how a part works behind a simple contract, so you can reason about the whole system without holding every detail in your head. Distributed systems lean on a few standard ones: a remote call that looks like a local function (*RPC internals*, Part 2), a database that looks like one reliable table although it is many replicated machines (Part 3), a **consistency model** that states what readers may see (Part 4), and a **failure model** that states how parts may break (*Faults, failures and fault tolerance*, this part). Abstractions **leak**: the network is slow and fails partially, replicas lag, clocks drift. Good design uses the contract and names the leaks it must handle.
 
 ### Trade-offs
-Almost every design choice gives something up. Faster reads may mean slower writes. More copies of data mean better safety but more cost and more chance that copies disagree. Simpler systems are easier to run but may not scale. A good designer names the trade-off out loud instead of pretending a choice is free.
+Almost every choice gives something up: faster reads may mean slower writes; more copies of data mean better safety but more cost and more chance copies disagree; simpler systems are easier to run but may not scale. Name the trade-off out loud instead of pretending a choice is free.
 
 ### Common mistakes
 - Designing for Google-scale traffic when the product has 1,000 users. Extra parts add cost and failure points.
@@ -59,32 +57,30 @@ Almost every design choice gives something up. Faster reads may mean slower writ
 - Ignoring failure. Every machine, disk and network link eventually breaks.
 
 ### In the interview
-**Q:** What is the interviewer actually testing in a system design round?
+**Q:** What is the interviewer testing in a system design round?
 
-**A:** Your ability to turn a vague product idea into a reasoned architecture: asking the right questions, estimating scale, choosing components, and explaining trade-offs. There is rarely one correct answer; the reasoning is graded.
+**A:** Turning a vague product idea into a reasoned architecture: asking the right questions, estimating scale, choosing components, explaining trade-offs. There is rarely one correct answer; the reasoning is graded.
 
 **Q:** How is system design different from coding?
 
-**A:** Coding is about correctness inside one program. System design is about how many programs and machines cooperate, how they behave under load and failure, and what that costs.
+**A:** Coding is correctness inside one program. System design is how many programs and machines cooperate, how they behave under load and failure, and what that costs.
 
 ### TL;DR
-System design is choosing the parts of a software system and how they fit together so it is fast enough, big enough, reliable enough and cheap enough. Every choice is a trade-off you should be able to explain.
+System design is choosing the parts of a software system and how they fit together so it is fast, big, reliable and cheap enough. Every choice is a trade-off you should be able to explain.
 
 ---
 
 ## Clients, servers and the request/response cycle
 
 ### What it is
-A **client** is any program that asks for something. Your web browser, a phone app, or even another server can be a client. A **server** is a program (and, loosely, the machine it runs on) that waits for requests and answers them.
+A **client** is any program that asks for something: a browser, a phone app, or another server. A **server** is a program (and, loosely, the machine it runs on) that waits for requests and answers them.
 
-The conversation between them follows the **request/response** pattern: the client sends a **request** ("give me the home page", "save this photo"), the server does some work, and sends back a **response** (the page, or "saved, here is its ID"). On the web, these messages usually use **HTTP** (HyperText Transfer Protocol), a standard text format for requests and responses. Part 2 covers HTTP in detail.
-
-**Analogy:** a restaurant. You (the client) tell the waiter your order (the request). The kitchen (the server) cooks it and the waiter brings the plate (the response). You don't need to know how the kitchen works; you only need to know how to order.
+They follow the **request/response** pattern: the client sends a **request** ("give me the home page", "save this photo"), the server does some work and sends back a **response** (the page, or "saved, here is its ID"). On the web these messages usually use **HTTP** (HyperText Transfer Protocol), a standard format for requests and responses (Part 2). Like a diner ordering from a waiter, the client only needs to know how to order, not how the kitchen works.
 
 ### How it works
-Here is what happens when you open `https://example.com/profile` in a browser, at the simplest level:
+Opening `https://example.com/profile` in a browser, at the simplest level:
 
-1. The browser finds the server's address on the internet (using **DNS**, the internet's phone book, covered in Part 2).
+1. The browser finds the server's address (using **DNS**, the internet's phone book, Part 2).
 2. It opens a network connection to that server.
 3. It sends an HTTP request such as:
 
@@ -117,18 +113,18 @@ sequenceDiagram
 ```
 
 ### Types
-- **Thin client vs thick client.** A thin client (a basic web page) does little work itself and relies on the server. A thick client (a mobile game, a desktop app) does a lot locally and talks to the server only for shared data.
-- **Server-to-server.** Inside a large system, servers are constantly clients of other servers. The "profile service" may call the "photo service". The same request/response idea applies.
-- **Push instead of pull.** Normally the client asks (pulls). Some features need the server to send data unasked (a chat message arriving). Techniques for this (WebSockets, Server-Sent Events) are in Part 2.
+- **Thin vs thick client.** A thin client (a basic web page) relies on the server; a thick client (a mobile game, a desktop app) does a lot locally and talks to the server only for shared data.
+- **Server-to-server.** Inside a large system servers are constantly clients of other servers (the "profile service" calls the "photo service"). The same request/response idea applies.
+- **Push instead of pull.** Normally the client asks (pulls). Some features need the server to send data unasked (a chat message arriving); techniques for this (WebSockets, Server-Sent Events) are in Part 2.
 
 ### Common mistakes
-- Thinking "server" always means one physical box. A server is a role. One machine can run many server programs, and one logical "server" (say, `api.example.com`) is often hundreds of machines behind a load balancer.
+- Thinking "server" means one physical box. A server is a role: one machine can run many server programs, and one logical server (`api.example.com`) is often hundreds of machines behind a load balancer.
 - Forgetting that the network between client and server is slow and unreliable compared with work inside one machine.
 
 ### In the interview
 **Q:** Can a server also be a client?
 
-**A:** Yes. Any program that sends a request is acting as a client for that request. In a microservice system almost every service is both.
+**A:** Yes. Any program sending a request is a client for that request; in a microservice system almost every service is both.
 
 ### TL;DR
 A client asks, a server answers. Almost everything on the web is a chain of request/response conversations, often with servers acting as clients of other servers.
@@ -138,38 +134,21 @@ A client asks, a server answers. Almost everything on the web is a chain of requ
 ## The building blocks of a web application
 
 ### What it is
-Nearly every web application, from a blog to a bank, is built from the same handful of parts. Learn these and most architecture diagrams become readable.
+Nearly every web application, from a blog to a bank, is built from the same handful of parts:
 
-| Part | What it does | Everyday comparison |
+| Part | What it does | Examples (covered in) |
 |---|---|---|
-| Client (browser/app) | Shows the interface, sends requests | The customer |
-| Load balancer | Spreads requests across many servers | The host seating diners at free tables |
-| App server | Runs the business logic | The kitchen |
-| Database | Stores data permanently and lets you query it | The pantry and recipe book |
-| Cache | Keeps a fast copy of popular data | Ingredients kept on the counter |
-| Message queue | Holds jobs to be done later | The order ticket rail |
-| Object storage | Stores large files (images, videos) | The warehouse |
-| CDN | Copies static files close to users | Branch shops in every town |
+| Client (browser/app) | Renders the interface and calls the backend over HTTP | Browser, mobile app |
+| Load balancer | Sits in front of the app servers and forwards each request to one of them, so none is overloaded and dead ones are skipped | NGINX, AWS ALB (Part 2) |
+| **App server (application server)** | Receives requests, applies business rules ("only friends may see this post"), reads and writes data, returns a response; run several identical copies so one crash doesn't stop the site | Java, Python, Go, Node.js programs |
+| Database | Stores data durably (survives power loss) and lets you search it; usually the hardest part to scale because it holds **state** (data that must be remembered) | PostgreSQL, MySQL, MongoDB, DynamoDB (Part 3) |
+| Cache | Small, fast store (usually RAM) holding copies of frequently read data so the app skips the slower database: a RAM read takes well under a millisecond, a database query several ms or more | Redis, Memcached (Part 4) |
+| Message queue | Buffer where one part drops a job ("send a welcome email to user 42") and another picks it up later, so the web request returns at once while slow work runs in the background | RabbitMQ, Amazon SQS, Apache Kafka (Part 4) |
+| **Workers** | Background programs that take jobs from the queue and do them | — |
+| Object storage | Stores big files ("objects") cheaply by key, e.g. `photos/42/avatar.jpg`; databases are bad at large files | Amazon S3 (Part 3) |
+| CDN (Content Delivery Network) | Servers around the world keeping copies of static files (images, JavaScript, video) near users, so Sydney doesn't fetch every image from Virginia | Cloudflare, CloudFront (Part 2) |
 
 ### How it works
-**Client.** The browser or mobile app. It renders the user interface and calls the backend over HTTP.
-
-**App server (application server).** A program written in a language such as Java, Python, Go or JavaScript (Node.js) that receives requests, applies rules ("only friends may see this post"), reads and writes data, and returns a response. You usually run several identical copies so that one crash doesn't stop the site.
-
-**Load balancer.** A component that sits in front of the app servers and forwards each incoming request to one of them, so no single server is overloaded and dead servers are skipped. (Covered in depth in Part 2.)
-
-**Database.** Software that stores data durably (it survives power loss) and lets you search it. Examples: PostgreSQL, MySQL, MongoDB, DynamoDB. It is usually the hardest part to scale because it holds **state** (data that must be remembered). (Part 3.)
-
-**Cache.** A small, fast store (usually in memory, RAM) holding copies of data that is read often, so the app doesn't have to ask the slower database every time. Redis and Memcached are common. Reading from RAM takes well under a millisecond; a database query may take several milliseconds or more. (Part 4.)
-
-**Message queue.** A buffer where one part of the system drops a job ("send a welcome email to user 42") and another part picks it up later. This lets the web request return immediately while slow work happens in the background. Examples: RabbitMQ, Amazon SQS, Apache Kafka. (Part 4.)
-
-**Workers.** Background programs that take jobs from the queue and do them.
-
-**Object storage.** A service for storing big files ("objects") cheaply, addressed by a key such as `photos/42/avatar.jpg`. Amazon S3 is the best-known example. Databases are bad at storing large files; object storage is built for it. (Part 3.)
-
-**CDN (Content Delivery Network).** A network of servers spread around the world that keep copies of static files (images, JavaScript, video) close to users, so a user in Sydney doesn't fetch every image from Virginia. (Part 2.)
-
 ```mermaid
 flowchart TD
     U["Users (browser / app)"] --> CDN["CDN (static files)"]
@@ -186,50 +165,50 @@ flowchart TD
 ```
 
 ### Why it matters
-In an interview you will draw some version of this diagram within the first fifteen minutes. Knowing what each box is for lets you justify adding it ("we add a cache because reads outnumber writes 100 to 1") rather than adding boxes because "big systems have them".
+In an interview you draw some version of this diagram within fifteen minutes. Knowing what each box is for lets you justify it ("we add a cache because reads outnumber writes 100 to 1") instead of adding boxes because "big systems have them".
 
 ### Common mistakes
-- Adding every component by default. A small internal tool may need only one app server and one database.
-- Storing images inside the database. Put files in object storage and keep only their key (address) in the database.
+- Adding every component by default. A small internal tool may need one app server and one database.
+- Storing images inside the database. Put files in object storage and keep only their key in the database.
 - Doing slow work (emails, video encoding) inside the web request. Put it on a queue.
 
 ### Real-world examples
 - Instagram's early stack (2011–2012) was Django app servers, PostgreSQL, Redis and Memcached, with photos in Amazon S3 — almost exactly the diagram above.
-- Most cloud tutorials (AWS, Google Cloud, Azure) describe a "three-tier" app: presentation (client), logic (app servers), data (database), with caches and queues added as it grows.
+- Cloud tutorials (AWS, Google Cloud, Azure) describe a "three-tier" app: presentation (client), logic (app servers), data (database), with caches and queues added as it grows.
 
 ### In the interview
 **Q:** Why not keep everything on one server?
 
-**A:** One server is a single point of failure (if it dies the site is down) and has a hard capacity limit. Splitting into stateless app servers behind a load balancer, plus a separate database, lets you add servers and survive crashes.
+**A:** One server is a single point of failure and has a hard capacity limit. Stateless app servers behind a load balancer, plus a separate database, let you add servers and survive crashes.
 
 **Q:** When do you add a queue?
 
-**A:** When some work is slow, can be done later, or comes in bursts. The queue lets the user get a fast response and smooths spikes for the workers behind it.
+**A:** When work is slow, can be done later, or arrives in bursts. The user gets a fast response and the queue smooths spikes for the workers.
 
 ### TL;DR
-Client, load balancer, app servers, database, cache, queue with workers, object storage and CDN are the standard building blocks. Each solves one problem; add each one only when you can name that problem.
+Client, load balancer, app servers, database, cache, queue with workers, object storage and CDN are the standard building blocks. Each solves one problem; add it only when you can name that problem.
 
 ---
 
 ## Latency, throughput and bandwidth
 
 ### What it is
-These three words describe speed, but different kinds of speed.
+Three different kinds of speed:
 
-- **Latency** is how long one thing takes: the delay between asking and getting the answer. Measured in time: milliseconds (ms, thousandths of a second) or microseconds (µs, millionths; written "us" in plain text).
-- **Throughput** is how many things get done per unit of time: requests per second, messages per second, megabytes per second.
-- **Bandwidth** is the maximum amount of data a network link (or disk, or memory bus) can carry per second. It is a capacity, like the width of a pipe. Measured in bits per second (Mbps, Gbps).
+- **Latency** is how long one thing takes: the delay between asking and getting the answer, in milliseconds (ms, thousandths of a second) or microseconds (µs, millionths; written "us" in plain text).
+- **Throughput** is how many things get done per unit of time: requests, messages or megabytes per second.
+- **Bandwidth** is the maximum data a network link (or disk, or memory bus) can carry per second — a capacity, like the width of a pipe, in bits per second (Mbps, Gbps).
 
-**Analogy:** a motorway. Latency is how long one car takes to drive from London to Birmingham (about 2 hours). Bandwidth is how many lanes the motorway has. Throughput is how many cars actually arrive per hour, which can be lower than the lanes allow if there is a crash or a toll booth.
+On a motorway, latency is how long one car takes from London to Birmingham, bandwidth is the number of lanes, and throughput is how many cars actually arrive per hour (lower than the lanes allow if there is a crash or toll booth).
 
 ### Response time vs latency
-People often use these as synonyms, but strictly:
+Often used as synonyms, but strictly:
 
-- **Response time** is what the client experiences: the full time from sending a request to receiving the complete answer. It includes network travel both ways, time waiting in queues, and the actual processing.
+- **Response time** is what the client experiences: the full time from sending a request to receiving the complete answer, including network travel both ways, queueing and processing.
 - **Latency**, used strictly, covers only delay: the stretch before a server starts on the request (sitting in a queue, travelling a network hop), not the work itself.
 - **Service time** is the time the server spends actually working on it.
 
-So: response time = network delay + queueing delay + service time. In interviews "latency" almost always means response time; just be clear which one you mean when it matters.
+So: response time = network delay + queueing delay + service time. In interviews "latency" almost always means response time; be clear which you mean when it matters.
 
 ```mermaid
 sequenceDiagram
@@ -243,21 +222,21 @@ sequenceDiagram
 ```
 
 ### Why it matters
-- Users feel latency. Interfaces under about 100 ms feel instant; delays over a second break concentration. Google and Amazon have both reported that small added delays measurably reduce searches and sales.
-- Throughput decides how many machines you need. If one server handles 1,000 requests per second and you expect 50,000, you need at least 50 (and more for headroom).
-- Bandwidth decides whether large transfers (video, backups) are even possible in time.
+- Users feel latency. Under about 100 ms feels instant; over a second breaks concentration. Google and Amazon have both reported that small added delays measurably reduce searches and sales.
+- Throughput decides how many machines you need: at 1,000 requests per second per server and 50,000 expected, you need at least 50 (more for headroom).
+- Bandwidth decides whether large transfers (video, backups) are possible in time.
 
 ### How it works
 **Where latency comes from.** A request picks up delay at every step:
 
-1. **Propagation delay:** signals in fibre travel at roughly two thirds the speed of light, about 200 km per millisecond. London to New York is about 5,600 km, so one way takes at least 28 ms, and a real **round trip** (there and back, RTT) is typically about 70 ms because cables don't run in straight lines and routers add delay.
-2. **Transmission delay:** time to push the bits onto the wire. Sending 1 MB (8 megabits) over a 100 Mbps link takes 80 ms; over 1 Gbps, 8 ms. This is where bandwidth matters.
+1. **Propagation delay:** signals in fibre travel at about two thirds the speed of light, ~200 km per millisecond. London–New York is ~5,600 km, so one way takes at least 28 ms; a real **round trip** (RTT) is typically ~70 ms because cables don't run straight and routers add delay.
+2. **Transmission delay:** time to push the bits onto the wire. 1 MB (8 megabits) takes 80 ms at 100 Mbps, 8 ms at 1 Gbps. This is where bandwidth matters.
 3. **Queueing delay:** waiting behind other requests at routers, load balancers, thread pools, database locks.
 4. **Processing delay:** the actual work: parsing, running code, reading disk.
 
-**Latency and bandwidth are independent.** A satellite link may have huge bandwidth and terrible latency (about 600 ms round trip for geostationary satellites). A small request is limited by latency; a large file download is limited by bandwidth. Adding bandwidth does not make a small API call faster.
+**Latency and bandwidth are independent.** A geostationary satellite link may have huge bandwidth and ~600 ms round trips. A small request is limited by latency, a large download by bandwidth; more bandwidth does not make a small API call faster.
 
-**Throughput and latency are linked through load.** At low load, throughput rises as you send more requests and latency stays flat. As a server approaches full use, requests start waiting for each other and latency shoots up, while throughput levels off. Running a server with its CPU (central processing unit, the processor) 95% busy usually means terrible latency.
+**Throughput and latency are linked through load.** At low load throughput rises with offered load and latency stays flat. Near full use, requests wait for each other: latency shoots up while throughput levels off. A server with its CPU (central processing unit) 95% busy usually has terrible latency.
 
 ```mermaid
 flowchart LR
@@ -266,40 +245,56 @@ flowchart LR
     C --> D["Overload: throughput may even drop (timeouts, retries)"]
 ```
 
+### Low-latency checklist
+Every latency fix attacks one of the four delays above. Start with a **latency budget**: split the target (say p99 < 200 ms for an API call) across the hops, for example 60 ms of network, 20 ms at the gateway, 80 ms in the service and its database, and 40 ms of slack. Any hop that overspends its share is where you work first. Then go down the list, roughly in order of payoff:
+
+| # | Lever | What to do | Which delay it cuts | Explained in |
+|---|---|---|---|---|
+| 1 | Remove round trips | Batch many small calls into one; run independent calls in parallel, not one after another; avoid N+1 query loops | Propagation × number of trips | *Connection pooling, ORMs and N+1 queries* (Part 3) |
+| 2 | Reuse connections | Connection pools and keep-alive; HTTP/2 or HTTP/3 multiplexing; TLS 1.3 and session resumption, so a request does not pay 2–3 handshake RTTs | Propagation | *TCP, UDP and QUIC*, *HTTPS and TLS* (Part 2) |
+| 3 | Move bytes closer | CDN for static and cacheable content; edge termination of TLS; regional deployments or read replicas near users | Propagation | *CDNs and anycast* (Part 2), *Replication* (Part 3) |
+| 4 | Serve from memory | In-process or distributed cache for hot reads; precompute results (feeds, counts, materialised views) at write time | Processing | *Caching basics* (Part 4) |
+| 5 | Do less while the user waits | Move anything the user doesn't need in the response (emails, analytics, thumbnails) onto a queue | Processing | *Message queues* (Part 4) |
+| 6 | Shrink payloads | Compress (gzip, Brotli); compact binary formats (Protobuf); paginate; return only the fields the screen needs | Transmission | *API styles* (Part 2) |
+| 7 | Make each query cheap | Index the access path; denormalise the hot read; keep data in a store whose layout matches the query | Processing | *Indexes*, *Normalization and denormalization* (Part 3) |
+| 8 | Keep headroom | Run at 50–70% peak utilisation; autoscale before saturation; shed load rather than queue forever | Queueing | *Autoscaling*, *Load shedding* (Part 5) |
+| 9 | Cut the tail | Deadlines on every call; hedged requests to a second replica; limit fan-out width; avoid long garbage-collection pauses and shared locks | Queueing and processing at p99 | *Percentiles, tail latency* (this part) |
+| 10 | Measure the right thing | Track p50/p95/p99 per hop with histograms and distributed tracing; load-test with open-loop tools that don't hide slow responses | All of them (you can't fix what you can't see) | *Observability* (Part 5) |
+
+Two rules keep the list honest. **Fix the biggest term first:** a trans-Atlantic round trip (70 ms) dwarfs a 2 ms JSON parse, so moving the data closer beats micro-optimising code. **Every lever has a price:** caches can serve stale data, replicas cost money and add consistency questions, hedging adds load, and async work means the user doesn't see the result right away. Say which price you're paying.
+
 ### Trade-offs
-- **Batching** improves throughput but hurts latency: waiting to collect 100 writes and sending them together is efficient, but the first write waits for the other 99.
-- **Spare capacity** keeps latency low but costs money. Many teams target 50–70% peak utilisation so that bursts don't create queues.
+- **Batching** improves throughput but hurts latency: collecting 100 writes to send together is efficient, but the first write waits for the other 99.
+- **Spare capacity** keeps latency low but costs money; many teams target 50–70% peak utilisation so bursts don't create queues.
 
 ### Common mistakes
-- Mixing bits and bytes. Network speeds are in bits (Mbps); file sizes are in bytes (MB). 1 byte = 8 bits, so a 100 Mbps link moves at most 12.5 MB per second.
-- Assuming more bandwidth fixes slowness. If the problem is round trips (a page making 40 sequential API calls), only fewer round trips or shorter distances help.
+- Mixing bits and bytes. Network speeds are in bits (Mbps), file sizes in bytes (MB); 1 byte = 8 bits, so 100 Mbps moves at most 12.5 MB per second.
+- Assuming more bandwidth fixes slowness. If the problem is round trips (a page making 40 sequential API calls), only fewer trips or shorter distances help.
 - Measuring throughput without latency (or the reverse). "10,000 requests per second" means nothing if each takes 5 seconds.
 
 ### Real-world examples
 - Video streaming (Netflix, YouTube) is bandwidth-bound: a 4K stream needs roughly 15–25 Mbps.
-- High-frequency trading firms pay for microwave links between Chicago and New York because they shave a few milliseconds of propagation delay compared with fibre.
+- High-frequency trading firms pay for microwave links between Chicago and New York to shave a few milliseconds of propagation delay compared with fibre.
 - Online games are latency-bound: players feel the difference between 20 ms and 120 ms "ping" (round-trip time).
 
 ### In the interview
 **Q:** What is the difference between latency and throughput?
 
-**A:** Latency is how long one request takes; throughput is how many requests complete per second. You can have high throughput with high latency (a cargo ship) or low latency with low throughput (a motorbike courier).
+**A:** Latency is how long one request takes; throughput is how many complete per second. You can have high throughput with high latency (a cargo ship) or low latency with low throughput (a motorbike courier).
 
 **Q:** A user in Australia complains the site is slow; servers are in Virginia. What helps?
 
-**A:** The round trip is roughly 200 ms, so cut round trips: serve static files from a CDN near them, reduce the number of sequential calls, reuse connections, and consider a regional deployment closer to them. More bandwidth won't help much.
+**A:** The round trip is ~200 ms, so cut round trips: CDN for static files near them, fewer sequential calls, reused connections, perhaps a regional deployment. More bandwidth won't help much.
 
 ### TL;DR
-Latency is time per request, throughput is requests per time, bandwidth is the pipe's maximum capacity. They are related through load: push a system near its limit and latency rises sharply.
+Latency is time per request, throughput is requests per time, bandwidth is the pipe's maximum capacity. Push a system near its limit and latency rises sharply.
 
 ---
 
 ## Percentiles, tail latency and why averages lie
 
 ### What it is
-A **percentile** tells you the value below which a given percentage of measurements fall. If the **p95** (95th percentile) latency is 300 ms, then 95% of requests finished in 300 ms or less, and 5% took longer.
-
-The common ones:
+A **percentile** is the value below which a given percentage of measurements fall. If **p95** (95th percentile) latency is 300 ms, 95% of requests finished in 300 ms or less and 5% took longer.
 
 | Name | Meaning | 1 in N requests slower |
 |---|---|---|
@@ -309,26 +304,24 @@ The common ones:
 | p99 | 99% are faster | 1 in 100 |
 | p999 (p99.9) | 99.9% are faster | 1 in 1,000 |
 
-**Tail latency** means the slow end of the distribution: p99, p999 and the maximum. These are "the tail" because on a graph of latencies the slow requests form a long thin tail to the right.
-
-**Analogy:** a bus route. "The average trip takes 20 minutes" sounds fine. But if one trip in ten takes 90 minutes because of a broken-down bus, someone who rides twice a day gets stuck several times a month. The p95 (90 minutes) describes their real worry far better than the average.
+**Tail latency** is the slow end of the distribution: p99, p999 and the maximum — on a latency graph the slow requests form a long thin tail to the right. (If one bus trip in ten takes 90 minutes, a twice-a-day rider is stuck several times a month; "the average trip is 20 minutes" hides that.)
 
 ### Why averages lie
-The **mean** (average) mixes fast and slow requests into one number that may match no real request. Take ten requests:
+The **mean** (average) mixes fast and slow requests into one number that may match no real request. Ten requests:
 
 ```
 10, 10, 10, 10, 10, 10, 10, 10, 10, 1000   (milliseconds)
 ```
 
-- Mean = 1090 / 10 = 109 ms. No request actually took 109 ms.
+- Mean = 1090 / 10 = 109 ms. No request took 109 ms.
 - Median (p50) = 10 ms. The typical user is happy.
 - p95 and p99 = 1000 ms (they land on the slowest request). One user in ten waits a full second.
 
-The mean hides the 1-second outlier inside a number that looks moderate. In real systems latency is almost never a neat bell curve; it is skewed, with a long tail caused by garbage collection pauses, cache misses, slow disks, retries and queueing. Percentiles show the shape; averages flatten it.
+Real latency is almost never a bell curve; it is skewed, with a long tail from garbage collection pauses, cache misses, slow disks, retries and queueing. Percentiles show the shape; averages flatten it.
 
 ### Why the tail matters more than you think
-1. **Heavy users hit the tail most.** A user who loads 100 pages a day hits your p99 about once a day. Often these are your most valuable customers (they have the most data, the biggest carts).
-2. **Fan-out amplifies the tail.** If one user request calls 100 backend servers in parallel and waits for all of them, the request is as slow as the slowest server. Suppose each server is slow (1 second) just 1% of the time. The chance that *at least one* of 100 is slow is 1 − 0.99^100 ≈ 63%. So a 1-in-100 problem per server becomes a nearly 2-in-3 problem for the user. This effect is described in Google's well-known paper "The Tail at Scale" (Dean and Barroso, 2013).
+1. **Heavy users hit the tail most.** A user loading 100 pages a day hits your p99 about once a day — often your most valuable customers (most data, biggest carts).
+2. **Fan-out amplifies the tail.** If one user request calls 100 backend servers in parallel and waits for all, it is as slow as the slowest. If each server is slow (1 second) just 1% of the time, the chance that *at least one* of 100 is slow is 1 − 0.99^100 ≈ 63%: a 1-in-100 problem per server becomes a nearly 2-in-3 problem for the user (Google's "The Tail at Scale", Dean and Barroso, 2013).
 
 ```mermaid
 flowchart LR
@@ -341,79 +334,75 @@ flowchart LR
 ```
 
 ### How it works
-**Measuring percentiles.** Record each request's latency, sort them, and pick the value at the required position (the 990th of 1,000 sorted values is roughly p99). Real monitoring systems can't store every value, so they use compact summaries called **histograms** (counts per latency bucket, e.g. 0–10 ms, 10–25 ms ...) or sketches such as HDRHistogram or t-digest, which estimate percentiles with small error.
+**Measuring percentiles.** Record each latency, sort, and pick the value at the required position (the 990th of 1,000 sorted values ≈ p99). Monitoring systems can't store every value, so they use **histograms** (counts per latency bucket, e.g. 0–10 ms, 10–25 ms…) or sketches such as HDRHistogram or t-digest, which estimate percentiles with small error.
 
-**Do not average percentiles.** The p99 of server A plus the p99 of server B divided by two is not the p99 of the combined traffic. Merge the histograms and compute the percentile from the merged data.
+**Do not average percentiles.** The mean of server A's p99 and server B's p99 is not the p99 of the combined traffic. Merge the histograms and compute from the merged data.
 
-**Reducing tail latency.** Common techniques:
-- **Hedged requests:** if a reply hasn't come back within (say) the p95 time, send the same request to a second replica and use whichever answers first.
+**Reducing tail latency:**
+- **Hedged requests:** if no reply within (say) the p95 time, send the same request to a second replica and use whichever answers first.
 - **Timeouts and fewer fan-out calls.**
 - Removing sources of pauses: tune garbage collection, avoid shared locks, keep spare capacity so queues stay short.
 
 ### Common mistakes
 - Reporting only the average in dashboards or SLOs.
 - Measuring latency only on the server. The client also sees network time, DNS lookups and connection setup.
-- **Coordinated omission:** a load-test tool that waits for each slow response before sending the next request quietly sends fewer requests during slow periods, so it under-reports the tail.
+- **Coordinated omission:** a load-test tool that waits for each slow response before sending the next sends fewer requests during slow periods, so it under-reports the tail.
 
 ### Real-world examples
-- Amazon has long described setting internal service targets at p99.9 rather than averages, so that even its heaviest customers get good performance.
-- Monitoring tools such as Prometheus, Datadog and Grafana show latency as p50/p95/p99 lines by default.
+- Amazon has long described setting internal service targets at p99.9 rather than averages, so even its heaviest customers get good performance.
+- Prometheus, Datadog and Grafana show latency as p50/p95/p99 lines by default.
 
 ### In the interview
 **Q:** Why use p99 instead of the average for an SLO?
 
-**A:** The average hides slow outliers and doesn't describe any real user. p99 says "99% of requests are at least this fast", which captures the experience of the unlucky but common slow cases.
+**A:** The average hides slow outliers and describes no real user. p99 says "99% of requests are at least this fast", capturing the unlucky but common slow cases.
 
-**Q:** Your service's p99 is fine but users still complain. Why might that be?
+**Q:** Your service's p99 is fine but users still complain. Why?
 
-**A:** Each page may call many services or make many requests, so the chance of hitting at least one slow call per page is much higher than 1%. Look at end-to-end page latency and fan-out, not each service in isolation.
+**A:** Each page may call many services or make many requests, so the chance of at least one slow call per page is much higher than 1%. Look at end-to-end page latency and fan-out, not each service in isolation.
 
 ### TL;DR
-Use percentiles (p50, p95, p99, p999), not averages, to describe latency. The slow tail matters because heavy users and fan-out make rare slowness common.
+Describe latency with percentiles (p50, p95, p99, p999), not averages. Heavy users and fan-out make rare slowness common.
 
 ---
 
 ## Little's law
 
 ### What it is
-**Little's law** is a simple rule that holds for any stable system where items arrive, wait or get served, and leave:
+**Little's law** holds for any stable system where items arrive, wait or get served, and leave:
 
 > **L = λ × W**
 
-- **L** = the average number of items inside the system at once (requests in flight, people in a shop).
-- **λ** (lambda) = the average arrival rate (requests per second). In a stable system this equals the throughput.
-- **W** = the average time each item spends inside (latency).
+- **L** = average number of items inside the system at once (requests in flight, people in a shop).
+- **λ** (lambda) = average arrival rate (requests per second); in a stable system this equals throughput.
+- **W** = average time each item spends inside (latency).
 
-**Analogy:** a coffee shop. If 2 customers arrive per minute and each stays 10 minutes, then on average 2 × 10 = 20 customers are in the shop. You don't need to know anything about how the barista works.
+If 2 customers arrive per minute and each stays 10 minutes, on average 20 are in the shop — whatever the barista does.
 
 ### Why it matters
-It lets you work out any one of the three numbers from the other two, which is extremely handy for sizing:
+It gives any one of the three numbers from the other two, which is handy for sizing:
 
-- **How many concurrent connections or threads do I need?** If a service gets 1,000 requests per second and each takes 200 ms (0.2 s), then on average 1,000 × 0.2 = **200 requests are in flight**. You need at least 200 worker threads or connections (plus headroom), or requests will queue.
-- **What throughput can I get?** A database connection pool of 20 connections, with queries taking 5 ms each, can serve at most 20 / 0.005 = **4,000 queries per second**.
-- **Why did latency double?** If concurrency limits stay fixed and latency doubles (a slow dependency), maximum throughput halves.
+- **Concurrent connections or threads needed:** 1,000 requests/s × 0.2 s each = **200 requests in flight**, so at least 200 worker threads or connections (plus headroom), or requests queue.
+- **Maximum throughput:** a pool of 20 database connections with 5 ms queries serves at most 20 / 0.005 = **4,000 queries per second**.
+- **Why latency hurts throughput:** with fixed concurrency limits, if latency doubles (a slow dependency), maximum throughput halves.
 
 ### How it works
 1. Pick the boundary of your "system": one server, one thread pool, one queue, the whole service.
-2. Measure or assume two of the three numbers over a long enough period for the system to be stable (arrivals roughly equal departures).
-3. Compute the third.
-
-Rearranged forms:
-- W = L / λ (latency from in-flight count and rate)
-- λ = L / W (throughput from concurrency limit and latency)
+2. Measure or assume two of the numbers over a period long enough for the system to be stable (arrivals ≈ departures).
+3. Compute the third: W = L / λ (latency from in-flight count and rate); λ = L / W (throughput from concurrency limit and latency).
 
 ### Common mistakes
-- Applying it to an unstable system where the queue keeps growing (arrival rate above capacity). Then there is no steady state and L grows without limit.
+- Applying it to an unstable system where the queue keeps growing (arrival rate above capacity): there is no steady state and L grows without limit.
 - Forgetting units. Convert milliseconds to seconds before multiplying by "per second".
 
 ### In the interview
-**Q:** A service handles 5,000 requests per second with an average latency of 40 ms. How many requests are being processed at any moment?
+**Q:** A service handles 5,000 requests/s with 40 ms average latency. How many requests are in progress at any moment?
 
-**A:** L = 5,000 × 0.04 = 200 requests in flight on average. If the service has 50 instances, that's about 4 per instance.
+**A:** L = 5,000 × 0.04 = 200 in flight on average; with 50 instances, about 4 per instance.
 
-**Q:** Your thread pool has 100 threads and each request holds a thread for 250 ms. What is the max throughput?
+**Q:** A thread pool has 100 threads and each request holds a thread for 250 ms. Max throughput?
 
-**A:** λ = 100 / 0.25 = 400 requests per second. Beyond that, requests queue and latency rises.
+**A:** λ = 100 / 0.25 = 400 requests/s. Beyond that requests queue and latency rises.
 
 ### TL;DR
 Items in the system = arrival rate × time in system. Use it to size thread pools, connection pools and fleets, and to explain why slower dependencies cut throughput.
@@ -423,9 +412,9 @@ Items in the system = arrival rate × time in system. Use it to size thread pool
 ## Latency numbers every engineer should know
 
 ### What it is
-A list of rough costs for common operations, first popularised by Google's Jeff Dean and Peter Norvig. The exact numbers change with hardware (the table below uses rounded figures for current machines; the original list, for example, gave 150 us for an SSD random read); what matters is the **order of magnitude** (whether something takes nanoseconds, microseconds or milliseconds) and the ratios between them.
+Rough costs of common operations, popularised by Google's Jeff Dean and Peter Norvig. Exact numbers change with hardware (the table uses rounded figures for current machines; the original list gave, for example, 150 us for an SSD random read); what matters is the **order of magnitude** (nanoseconds, microseconds or milliseconds) and the ratios.
 
-Units: 1 ns (nanosecond) = one billionth of a second. 1 µs (microsecond) = 1,000 ns. 1 ms (millisecond) = 1,000 µs.
+Units: 1 ns (nanosecond) = one billionth of a second; 1 µs (microsecond) = 1,000 ns; 1 ms (millisecond) = 1,000 µs.
 
 | Operation | Approximate time | Scaled: if 1 ns were 1 second |
 |---|---|---|
@@ -443,14 +432,13 @@ Units: 1 ns (nanosecond) = one billionth of a second. 1 µs (microsecond) = 1,00
 | Round trip London to New York | 70 ms | about 2 years |
 | Round trip California to Europe | 150 ms | about 5 years |
 
-(A **CPU cache** is a tiny, very fast memory built into the processor. **RAM** is the computer's main working memory, lost on power-off. An **SSD** is a solid-state drive with no moving parts; an **HDD** is a spinning magnetic disk with a moving arm, which is why "seeking" to a new position is slow.)
+(A **CPU cache** is tiny, very fast memory inside the processor. **RAM** is the main working memory, lost on power-off. An **SSD** is a solid-state drive with no moving parts; an **HDD** is a spinning magnetic disk with a moving arm, which is why "seeking" to a new position is slow.)
 
 ### Why it matters
-These numbers drive design decisions:
-- **Memory is about 100 to 1,000 times faster than SSD for random reads**, and SSD is about 100 times faster than spinning disk. That's why caches live in RAM.
-- **A network round trip inside a data centre (0.5 ms) costs as much as thousands of memory reads.** A loop that makes 1,000 small database calls spends at least half a second just on round trips. Batch them.
-- **Crossing an ocean costs 70–150 ms per round trip**, and the speed of light is not getting faster. Only moving data closer to users (CDNs, regional servers) fixes it.
-- **Sequential reads are far faster than random reads**, especially on HDD. Many storage engines (append-only logs, and the log-structured merge trees, or LSM-trees, of Part 3) are designed to write sequentially for this reason.
+- **RAM is about 100–1,000× faster than SSD for random reads**, and SSD about 100× faster than spinning disk. That's why caches live in RAM.
+- **A data-centre round trip (0.5 ms) costs as much as thousands of memory reads.** A loop making 1,000 small database calls spends at least half a second on round trips. Batch them.
+- **Crossing an ocean costs 70–150 ms per round trip**, and light is not getting faster. Only moving data closer to users (CDNs, regional servers) fixes it.
+- **Sequential reads are far faster than random reads**, especially on HDD, so many storage engines (append-only logs, the log-structured merge trees or LSM-trees of Part 3) write sequentially.
 
 ```mermaid
 flowchart LR
@@ -463,26 +451,26 @@ flowchart LR
 
 ### Common mistakes
 - Memorising exact numbers. Interviewers want orders of magnitude: "RAM is nanoseconds, SSD microseconds, network and disk milliseconds".
-- Treating a remote cache (Redis over the network) as "as fast as memory". The RAM read is 100 ns, but the network round trip to reach it is ~0.5 ms. It is still far faster than a typical database query, but not free.
+- Treating a remote cache (Redis over the network) as "as fast as memory". The RAM read is 100 ns but the round trip is ~0.5 ms — still far faster than a typical database query, but not free.
 
 ### In the interview
 **Q:** Why is a cache faster than a database?
 
-**A:** A cache serves data from RAM (nanoseconds per read plus one network hop), while a database may read from disk, parse a query, take locks and do more work. Typical cache hits take well under 1 ms; database queries often take several ms or more.
+**A:** A cache serves from RAM (nanoseconds plus one network hop); a database may read disk, parse a query, take locks and do more work. Cache hits take well under 1 ms; database queries often several ms or more.
 
-**Q:** Why does a service that calls another service 50 times per request feel slow even though each call is "fast"?
+**Q:** Why does a service that calls another 50 times per request feel slow though each call is "fast"?
 
-**A:** Each call costs at least a network round trip (~0.5 ms in the same data centre, more across zones), and sequential calls add up: 50 × 1 ms = 50 ms before any real work. Batch or parallelise the calls.
+**A:** Each call costs at least a round trip (~0.5 ms in one data centre, more across zones), and sequential calls add up: 50 × 1 ms = 50 ms before real work. Batch or parallelise.
 
 ### TL;DR
-Memory is nanoseconds, SSD is tens of microseconds, data-centre network is half a millisecond, spinning disks and cross-continent trips are tens to hundreds of milliseconds. Design so the hot path stays at the fast end.
+Memory is nanoseconds, SSD tens of microseconds, data-centre network half a millisecond, spinning disks and cross-continent trips tens to hundreds of milliseconds. Keep the hot path at the fast end.
 
 ---
 
 ## Units, powers of two and data sizes
 
 ### What it is
-Estimation needs a shared vocabulary for size. Data is measured in **bits** (a single 0 or 1) and **bytes** (8 bits, enough for one English letter).
+Data is measured in **bits** (a single 0 or 1) and **bytes** (8 bits, enough for one English letter).
 
 | Unit | Bytes (decimal, used in estimates) | Power of two (exact) | Roughly holds |
 |---|---|---|---|
@@ -492,18 +480,15 @@ Estimation needs a shared vocabulary for size. Data is measured in **bits** (a s
 | TB (terabyte) | 10^12 | 2^40 ≈ 1.1 trillion | A typical laptop drive |
 | PB (petabyte) | 10^15 | 2^50 | A large company's data warehouse |
 
-Above PB come EB (exabyte, 10^18) and ZB (zettabyte, 10^21). Strictly, the power-of-two units have their own names (KiB, MiB, GiB), but in estimates everybody rounds 2^10 to 1,000. The 2–10% error doesn't matter.
+Above PB come EB (exabyte, 10^18) and ZB (zettabyte, 10^21). Strictly the power-of-two units have their own names (KiB, MiB, GiB), but estimates round 2^10 to 1,000; the 2–10% error doesn't matter.
 
 ### How it works
 **Powers of two to remember:**
-- 2^10 ≈ 1 thousand (10^3)
-- 2^20 ≈ 1 million (10^6)
-- 2^30 ≈ 1 billion (10^9)
-- 2^40 ≈ 1 trillion (10^12)
-- 2^32 ≈ 4.3 billion (the number of IPv4 addresses, and the limit of an unsigned 32-bit integer; a 32-bit ID column runs out at about 2 billion signed or 4 billion unsigned)
+- 2^10 ≈ 1 thousand (10^3); 2^20 ≈ 1 million (10^6); 2^30 ≈ 1 billion (10^9); 2^40 ≈ 1 trillion (10^12)
+- 2^32 ≈ 4.3 billion (the number of IPv4 addresses and the limit of an unsigned 32-bit integer; a 32-bit ID column runs out at about 2 billion signed or 4 billion unsigned)
 - 2^64 ≈ 1.8 × 10^19 (plenty for any ID)
 
-**Typical sizes of things:**
+**Typical sizes:**
 
 | Item | Rough size |
 |---|---|
@@ -515,12 +500,9 @@ Above PB come EB (exabyte, 10^18) and ZB (zettabyte, 10^21). Strictly, the power
 | A compressed photo | 200 KB - 2 MB |
 | One minute of HD video | roughly 25-60 MB |
 
-**Time conversions:**
-- 1 day = 86,400 seconds ≈ **10^5 seconds** (round it; makes maths easy).
-- 1 month ≈ 2.5 million seconds (2.6 × 10^6).
-- 1 year ≈ 31.5 million seconds (≈ 3 × 10^7).
+**Time conversions:** 1 day = 86,400 s ≈ **10^5 seconds** (round it); 1 month ≈ 2.6 × 10^6 s; 1 year ≈ 3 × 10^7 s (31.5 million).
 
-**Shortcut:** 1 million requests per day ≈ 12 requests per second (10^6 / 86,400 ≈ 11.6). So "X million per day" ≈ "12 × X per second".
+**Shortcut:** 1 million requests per day ≈ 12 per second (10^6 / 86,400 ≈ 11.6), so "X million per day" ≈ "12 × X per second".
 
 ### Common mistakes
 - Mixing bits and bytes: a "1 Gbps" network card moves 125 MB per second at best.
@@ -534,38 +516,28 @@ KB, MB, GB, TB, PB each step up by about 1,000 (2^10). A day is about 10^5 secon
 ## Back-of-the-envelope estimation
 
 ### What it is
-A **back-of-the-envelope estimate** is a quick, rough calculation (small enough to scribble on an envelope) that tells you the size of a problem: how many requests per second, how much storage, how much bandwidth, how many servers. The goal is the right **order of magnitude** (is it 10, 1,000 or 1,000,000?), not precision.
-
-**Analogy:** before a road trip you estimate "about 400 km, about 5 hours, need to refuel once". You don't compute it to the minute, but it tells you whether to leave at 6 am or noon.
+A **back-of-the-envelope estimate** is a quick, rough calculation that sizes a problem — requests per second, storage, bandwidth, servers. The goal is the right **order of magnitude** (10, 1,000 or 1,000,000?), not precision.
 
 ### Why it matters
-The estimate decides the architecture. 100 requests per second fits on one server with one database. 100,000 per second needs many servers, caching, and probably sharded data (split across many databases). 10 GB of data fits in memory on one machine; 10 PB needs a distributed storage system. Without numbers you can't tell which design is needed.
+The estimate decides the architecture. 100 requests per second fits on one server with one database; 100,000 needs many servers, caching, and probably sharded data (split across many databases). 10 GB fits in memory on one machine; 10 PB needs distributed storage.
 
 ### How it works
 The key terms:
 
-- **DAU (Daily Active Users):** distinct users who use the product on a given day. **MAU** is the same per month. DAU is usually 20–50% of MAU for social apps.
-- **QPS (Queries Per Second)** or **RPS (Requests Per Second):** how many requests reach the system each second.
-- **Average QPS** = total requests per day / 86,400.
-- **Peak factor:** traffic is not flat. Evenings, weekends, or events (a sale, a football final) create peaks. Peak QPS is commonly estimated as **2–3 times** the average, sometimes 5–10× for spiky products.
-- **Read/write ratio:** how many reads per write. Social feeds might be 100:1; logging systems are almost all writes.
-- **Storage per day** = new items per day × size of each item.
-- **Bandwidth** = QPS × size of each response (or request).
+- **DAU (Daily Active Users):** distinct users on a given day; **MAU** the same per month. DAU is usually 20–50% of MAU for social apps.
+- **QPS (Queries Per Second)** or **RPS (Requests Per Second):** requests reaching the system each second. **Average QPS** = requests per day / 86,400.
+- **Peak factor:** traffic is not flat (evenings, weekends, a sale, a football final). Peak QPS is commonly **2–3×** average, sometimes 5–10× for spiky products.
+- **Read/write ratio:** reads per write. Social feeds might be 100:1; logging is almost all writes.
+- **Storage per day** = new items per day × item size. **Bandwidth** = QPS × response (or request) size.
 
-**Step by step, worked example — a photo-sharing app:**
+**Worked example — a photo-sharing app.** Assumptions (state them out loud): 10 million DAU; each user views 50 photos and uploads 0.2 per day; average photo 500 KB, metadata 1 KB; keep data 5 years.
 
-Assumptions (state them out loud):
-- 10 million DAU.
-- Each user views 50 photos and uploads 0.2 photos per day (one in five users posts once).
-- Average photo after compression: 500 KB. Metadata per photo: 1 KB.
-- Keep data for 5 years.
-
-1. **Read QPS:** 10M × 50 = 500M views per day. 500M / 10^5 ≈ **5,000 QPS** average. Peak (×3) ≈ **15,000 QPS**.
-2. **Write QPS:** 10M × 0.2 = 2M uploads per day ≈ **20 uploads per second** average, ~60 at peak. Read:write ≈ 250:1, so this is a read-heavy system: caching and a CDN will matter a lot.
-3. **Storage per day:** 2M × 500 KB = 1,000,000 MB = **1 TB per day** of photos, plus 2M × 1 KB = 2 GB per day of metadata.
-4. **Storage for 5 years:** 1 TB × 365 × 5 ≈ **1.8 PB** of photos (more with replicas: typically × 3). Metadata ≈ 3.6 TB. So photos go in object storage; metadata fits in a (sharded) database.
-5. **Outgoing bandwidth:** 5,000 views/s × 500 KB = 2,500 MB/s = **2.5 GB/s ≈ 20 Gbps** average. That's a strong argument for a CDN.
-6. **Servers:** if one app server handles ~1,000 simple requests per second, peak 15,000 QPS needs ~15 servers, so plan ~20–30 for headroom and failures.
+1. **Read QPS:** 10M × 50 = 500M views/day; 500M / 10^5 ≈ **5,000 QPS** average, ≈ **15,000** at peak (×3).
+2. **Write QPS:** 10M × 0.2 = 2M uploads/day ≈ **20/s** average, ~60 at peak. Read:write ≈ 250:1 — read-heavy, so caching and a CDN matter a lot.
+3. **Storage per day:** 2M × 500 KB = **1 TB/day** of photos, plus 2M × 1 KB = 2 GB/day of metadata.
+4. **5 years:** 1 TB × 365 × 5 ≈ **1.8 PB** of photos (typically × 3 with replicas); metadata ≈ 3.6 TB. Photos go in object storage; metadata fits in a (sharded) database.
+5. **Outgoing bandwidth:** 5,000 views/s × 500 KB = 2.5 GB/s ≈ **20 Gbps** average — a strong argument for a CDN.
+6. **Servers:** 15,000 peak QPS at ~1,000 simple requests/s per server is ~15 servers before headroom and redundancy; the worked example below does this step properly.
 
 ```mermaid
 flowchart TD
@@ -577,7 +549,7 @@ flowchart TD
     C --> G["Bandwidth = QPS x response size"]
 ```
 
-**Rules of thumb for capacity (very rough, for simple workloads on modern hardware):**
+**Rules of thumb for capacity (very rough, simple workloads on modern hardware):**
 
 | Component | Rough capacity per machine |
 |---|---|
@@ -586,42 +558,61 @@ flowchart TD
 | Redis/Memcached cache | 100,000+ operations/s |
 | Kafka broker | hundreds of MB/s |
 
+### Worked example: how many servers do we need?
+"Divide peak QPS by a rule-of-thumb capacity" is a start, but interviewers like to see the four corrections that turn it into a real number: **measured cost per request, a utilisation ceiling, a concurrency check, and failure headroom**.
+
+**Assumptions** (say them out loud): an API tier with **30,000 requests/s at peak**. Load testing shows each request uses **4 ms of CPU time** (time the processor actually spends on it) and takes **50 ms end to end** (mostly waiting on the cache and database). Machines have **16 cores**. Responses average **20 KB**. We run in **3 availability zones** and must survive losing one.
+
+| Step | Calculation | Result |
+|---|---|---|
+| 1. Capacity of one core | 1,000 ms ÷ 4 ms CPU per request | 250 requests/s per core |
+| 2. Capacity of one server at 100% | 250 × 16 cores | 4,000 requests/s |
+| 3. Apply a utilisation ceiling | Keep CPU ≤ 60% so queues stay short (see *Latency, throughput and bandwidth*): 4,000 × 0.6 | **2,400 requests/s per server** |
+| 4. Servers for peak | 30,000 ÷ 2,400 = 12.5, round up | **13 servers** |
+| 5. Concurrency check (*Little's law*) | In flight = arrival rate × time in system = 30,000 × 0.05 s = 1,500 requests; ÷ 13 servers | ~115 in flight per server: fine for an async server; with one thread per request, that means ~115 threads and a database pool sized to match |
+| 6. Survive a zone loss | 13 servers must remain after one of 3 zones dies, so each of the 2 survivors needs ⌈13 ÷ 2⌉ = 7 | 7 per zone × 3 zones = **21 servers** |
+| 7. Deployment surge | Rolling deploys take ~10% out of service at a time: 21 × 1.1 | **~23 servers** |
+| 8. Network check | 30,000 × 20 KB = 600 MB/s ≈ 4.8 Gbps in total; ÷ 21 servers | ~0.23 Gbps each: far below a 10 Gbps network card, so CPU, not network, is the limit |
+
+**Reading the answer.** The naive "30,000 ÷ 4,000 = 8 servers" was off by about 3×; the utilisation ceiling and the zone-loss rule, both deliberate and defensible, explain nearly all of it. CPU per request decided the number: halving it halves the fleet, which is why profiling is a cost lever.
+
+**Repeat per tier.** Do the same for each layer with its own bottleneck resource: the cache tier is usually limited by **memory** (working set ÷ usable RAM per node, times replicas), the database by **IOPS or write throughput** per primary (which is what forces sharding), and a streaming tier by **network and disk bandwidth** per broker. The tier whose count grows fastest as traffic grows is the one to design around.
+
+**In one sentence for the interview:** "At 4 ms of CPU per request a 16-core box does 4,000 requests/s, I keep it at 60%, so 2,400; 30,000 at peak needs 13, and to survive a zone loss across three zones I deploy 7 per zone, 21 total, plus a little for rolling deploys."
+
 ### Trade-offs
 More precise estimates take longer and rarely change the design. Spend 3–5 minutes in an interview, write numbers down, and move on.
 
 ### Common mistakes
 - Forgetting the peak. Systems fall over at peak, not at average.
-- Forgetting replication: storing 3 copies triples storage.
-- Forgetting metadata, indexes and logs, which can add 20–50%.
+- Forgetting replication (3 copies triple storage) and metadata, indexes and logs (often +20–50%).
 - False precision ("11,574.07 QPS"). Say "about 12,000".
 - Doing maths silently. Say each assumption so the interviewer can correct it.
 
 ### Real-world examples
-- WhatsApp said in late 2020 that it delivers about 100 billion messages per day. 10^11 / 10^5 ≈ 1 million messages per second on average, a useful anchor for "very large" chat scale.
-- YouTube said in 2019 that more than 500 hours of video are uploaded every minute. That is about 720,000 hours a day, which makes its storage needs enormous.
+- WhatsApp said in late 2020 it delivers about 100 billion messages per day: 10^11 / 10^5 ≈ 1 million messages per second on average, an anchor for "very large" chat scale.
+- YouTube said in 2019 that more than 500 hours of video are uploaded every minute — about 720,000 hours a day.
 
 ### In the interview
-**Q:** A service has 100 million DAU, each making 20 requests per day. What QPS should you plan for?
+**Q:** 100 million DAU, each making 20 requests per day. What QPS should you plan for?
 
-**A:** 100M × 20 = 2 billion requests per day. 2 × 10^9 / 10^5 = 20,000 QPS average. With a peak factor of 3, plan for about 60,000 QPS.
+**A:** 2 billion requests/day ÷ 10^5 = 20,000 QPS average; with a peak factor of 3, plan for about 60,000.
 
-**Q:** Why bother estimating if numbers are guesses?
+**Q:** Why bother estimating if the numbers are guesses?
 
-**A:** The order of magnitude decides the architecture: whether one database is enough, whether data fits in memory, whether you need a CDN. Even rough numbers rule designs in or out.
+**A:** The order of magnitude decides the architecture: whether one database is enough, whether data fits in memory, whether you need a CDN. Rough numbers still rule designs in or out.
 
 ### TL;DR
-Start from DAU and per-user actions, convert per day to per second by dividing by about 10^5, multiply by 2–3 for peak, and compute storage and bandwidth from item sizes. Round aggressively and state every assumption.
+From DAU and per-user actions, divide per-day counts by about 10^5 for per second, multiply by 2–3 for peak, and compute storage and bandwidth from item sizes. Round aggressively and state every assumption.
 
 ---
 
 ## Availability and the nines
 
 ### What it is
-**Availability** is the fraction of time a system is up and doing its job (answering requests correctly). It is usually written as a percentage with many 9s, so people talk about "three nines" (99.9%) or "four nines" (99.99%).
+**Availability** is the fraction of time a system is up and doing its job (answering requests correctly), usually written with many 9s: "three nines" (99.9%), "four nines" (99.99%).
 
-Availability = uptime / (uptime + downtime), or, measured by requests, successful requests / total valid requests.
-
-**Analogy:** a shop that is supposed to be open 24 hours. If it is closed by surprise for 9 hours across a whole year, it was available about 99.9% of the time.
+Availability = uptime / (uptime + downtime), or, measured by requests, successful requests / total valid requests. A 24-hour shop closed by surprise for 9 hours in a year was available about 99.9% of the time.
 
 ### The nines table
 (Year = 365 days, month = 30 days.)
@@ -634,24 +625,16 @@ Availability = uptime / (uptime + downtime), or, measured by requests, successfu
 | 99.99% | four nines | 52.6 minutes | 4.32 minutes | 8.6 seconds |
 | 99.999% | five nines | 5.26 minutes | 26 seconds | 0.86 seconds |
 
-Each extra nine cuts allowed downtime by 10×, and usually costs much more than 10× the engineering effort.
+Each extra nine cuts allowed downtime by 10× and usually costs much more than 10× the engineering effort.
 
 ### Why it matters
-- Downtime costs money and trust. An online shop down for an hour on Black Friday loses that hour's sales permanently.
-- The target decides the design. 99% can survive manual recovery ("someone restarts the server in the morning"). 99.99% leaves 4 minutes a month, which is less than the time it takes a human to wake up and log in, so recovery must be **automatic**.
+- Downtime costs money and trust: a shop down for an hour on Black Friday loses that hour's sales permanently.
+- The target decides the design. 99% survives manual recovery ("someone restarts the server in the morning"). 99.99% leaves 4 minutes a month — less than a human needs to wake up and log in — so recovery must be **automatic**.
 
 ### How it works
-**Availability of parts in series (all must work).** If a request passes through a load balancer (99.99%), an app server (99.9%) and a database (99.9%), all three must be up:
+**Parts in series (all must work).** A request through a load balancer (99.99%), an app server (99.9%) and a database (99.9%): 0.9999 × 0.999 × 0.999 ≈ **99.79%**. The chain is weaker than its weakest link; every dependency added in series lowers availability.
 
-Availability = 0.9999 × 0.999 × 0.999 ≈ 0.9979 → **99.79%**.
-
-The chain is weaker than its weakest link. Every dependency you add in series lowers availability.
-
-**Availability of parts in parallel (any one is enough).** Two independent servers, each 99%: the system is down only when both are down at the same time.
-
-Availability = 1 − (0.01 × 0.01) = 1 − 0.0001 = **99.99%**.
-
-Redundancy turns two "two nines" machines into a "four nines" pair, assuming failures are independent (they often aren't fully, e.g. both in the same rack lose power together).
+**Parts in parallel (any one is enough).** Two independent servers, each 99%, are down only when both are: 1 − (0.01 × 0.01) = **99.99%**. Redundancy turns two "two nines" machines into a "four nines" pair — if failures are independent (often not fully: both in one rack lose power together).
 
 ```mermaid
 flowchart LR
@@ -665,52 +648,46 @@ flowchart LR
 ```
 
 ### Trade-offs
-Higher availability needs redundancy (more machines, more data centres), automation, testing and on-call staff. Going from 99.9% to 99.99% might mean running in multiple data centres with automatic failover, which roughly doubles infrastructure and adds complexity. Many internal tools are fine at 99.5%.
+Higher availability needs redundancy (more machines, more data centres), automation, testing and on-call staff. 99.9% → 99.99% might mean multiple data centres with automatic failover, roughly doubling infrastructure and adding complexity. Many internal tools are fine at 99.5%.
 
 ### Common mistakes
-- Promising five nines without the budget. Even the big cloud providers' SLAs for single services are usually 99.9%–99.99%.
-- Forgetting dependencies. Your service can't be more available than the things it needs in series (unless you design fallbacks).
+- Promising five nines without the budget. Even big cloud providers' SLAs for single services are usually 99.9%–99.99%.
+- Forgetting dependencies. You can't be more available than what you need in series (unless you design fallbacks).
 - Counting planned maintenance as "not downtime". Users don't care why it's down.
 
 ### Real-world examples
-- Amazon S3 Standard is designed for 99.99% availability, and its SLA promises 99.9% per month (with service credits below that).
+- Amazon S3 Standard is designed for 99.99% availability; its SLA promises 99.9% per month (service credits below that).
 - Telephone networks were historically engineered for five nines.
 
 ### In the interview
 **Q:** How much downtime per month does 99.9% allow?
 
-**A:** About 43 minutes. 99.99% allows about 4.3 minutes.
+**A:** About 43 minutes; 99.99% about 4.3 minutes.
 
 **Q:** How do you get higher availability than any single machine provides?
 
-**A:** Run redundant copies in parallel with automatic failover, and remove single points of failure, ideally spreading copies across separate failure domains (racks, zones, regions).
+**A:** Redundant copies in parallel with automatic failover, no single points of failure, copies spread across separate failure domains (racks, zones, regions).
 
 ### TL;DR
-Availability is the share of time a system works. Each extra nine is ten times less downtime: 99.9% is about 43 minutes a month, 99.99% about 4. Series dependencies multiply down; parallel redundancy multiplies up.
+Availability is the share of time a system works. Each extra nine is ten times less downtime: 99.9% ≈ 43 minutes a month, 99.99% ≈ 4. Series dependencies multiply down; parallel redundancy multiplies up.
 
 ---
 
 ## SLA, SLO, SLI and error budgets
 
 ### What it is
-Three related terms, from most technical to most legal:
+From most technical to most legal:
 
-- **SLI (Service Level Indicator):** a *measurement* of how the service is doing. Example: "percentage of HTTP requests that returned successfully in under 300 ms over the last 30 days."
-- **SLO (Service Level Objective):** an internal *target* for an SLI. Example: "99.9% of requests succeed in under 300 ms, measured over 30 days."
-- **SLA (Service Level Agreement):** a *contract* with customers saying what happens if a target is missed, usually refunds or service credits. Example: "If monthly availability falls below 99.9%, customers get 10% of their bill back."
+- **SLI (Service Level Indicator):** a *measurement* of how the service is doing, e.g. "percentage of HTTP requests that succeeded in under 300 ms over the last 30 days."
+- **SLO (Service Level Objective):** an internal *target* for an SLI, e.g. "99.9% of requests succeed in under 300 ms, measured over 30 days."
+- **SLA (Service Level Agreement):** a *contract* with customers saying what happens if a target is missed, usually refunds or service credits, e.g. "below 99.9% monthly availability, customers get 10% of their bill back."
 
-**Analogy:** a pizza shop. The SLI is "how long deliveries actually take". The SLO is the manager's target: "95% delivered within 30 minutes". The SLA is the printed promise: "over 45 minutes and it's free".
-
-The SLA is normally looser than the SLO, so the team gets warning (missing the SLO) before the company has to pay (missing the SLA).
+(Pizza shop: the SLI is how long deliveries actually take, the SLO the manager's "95% within 30 minutes", the SLA the printed "over 45 minutes and it's free".) The SLA is normally looser than the SLO, so the team gets warning (missing the SLO) before the company has to pay (missing the SLA).
 
 ### Error budgets
-An **error budget** is the amount of unreliability the SLO allows. If the SLO is 99.9% success, the error budget is 0.1%: in a month with 100 million requests, up to 100,000 may fail (or about 43 minutes of full outage).
+An **error budget** is the unreliability the SLO allows: with a 99.9% SLO it is 0.1% — in a month with 100 million requests up to 100,000 may fail (or about 43 minutes of full outage).
 
-The budget turns reliability into a shared decision:
-- While budget remains, the team can ship features fast and take risks.
-- When the budget is spent, the team slows releases and works on reliability until it recovers.
-
-This idea comes from Google's **Site Reliability Engineering (SRE)** practice. SRE is the discipline of running production systems using software engineering methods.
+The budget turns reliability into a shared decision: while budget remains, the team ships fast and takes risks; when it is spent, releases slow and reliability work takes priority until it recovers. The idea comes from Google's **Site Reliability Engineering (SRE)**, the discipline of running production systems with software engineering methods.
 
 ```mermaid
 flowchart TD
@@ -722,24 +699,24 @@ flowchart TD
 ```
 
 ### How it works
-1. Choose SLIs that reflect what users feel: availability (success rate), latency (p99 under X ms), freshness (data no older than Y), durability.
-2. Set an SLO slightly below what users actually need, not "100%". 100% is impossible and leaves no room to change anything.
+1. Choose SLIs users feel: availability (success rate), latency (p99 under X ms), freshness (data no older than Y), durability.
+2. Set the SLO slightly below what users actually need, never "100%" (impossible, and leaves no room to change anything).
 3. Measure over a window (often 28 or 30 days, rolling).
-4. Alert when the budget is being burned too fast (Part 5 covers burn-rate alerts).
+4. Alert when the budget burns too fast (burn-rate alerts, Part 5).
 
 ### Common mistakes
-- Setting the SLO to 100%. Any deployment risk then "violates" it.
+- Setting the SLO to 100%: any deployment risk then "violates" it.
 - Choosing SLIs users don't feel (CPU usage) instead of ones they do (failed checkouts).
 - Making the SLA as tight as the SLO, leaving no warning margin.
 
 ### In the interview
 **Q:** What's the difference between an SLO and an SLA?
 
-**A:** An SLO is an internal target for a measured indicator; an SLA is an external contract with penalties. SLAs are usually set looser than SLOs.
+**A:** An SLO is an internal target for a measured indicator; an SLA is an external contract with penalties, usually looser.
 
 **Q:** What is an error budget used for?
 
-**A:** It quantifies how much failure is acceptable (1 − SLO). Teams spend it on releases and experiments; when it's used up, they prioritise reliability work.
+**A:** It quantifies acceptable failure (1 − SLO). Teams spend it on releases and experiments; when it's gone, they prioritise reliability.
 
 ### TL;DR
 SLI is the measurement, SLO the target, SLA the contract with penalties. The error budget (1 − SLO) is how much failure you can "spend" before you must slow down and fix reliability.
@@ -749,27 +726,16 @@ SLI is the measurement, SLO the target, SLA the contract with penalties. The err
 ## MTBF, MTTR and measuring failure
 
 ### What it is
-Two averages that describe how often things break and how fast they're fixed:
-
 - **MTBF (Mean Time Between Failures):** average time a system runs before it fails. Higher is better.
 - **MTTR (Mean Time To Repair / Recover):** average time from a failure until service is restored. Lower is better.
-
-Related: **MTTD (Mean Time To Detect)**, how long before anyone notices, and **MTTF (Mean Time To Failure)**, used for parts that are replaced rather than repaired (like disks).
-
-**Analogy:** a car. MTBF is how many months it typically goes between breakdowns. MTTR is how long it sits at the garage each time.
+- **MTTD (Mean Time To Detect):** how long before anyone notices. **MTTF (Mean Time To Failure):** used for parts that are replaced rather than repaired (like disks).
 
 ### How it works
-Availability can be estimated as:
-
 > Availability = MTBF / (MTBF + MTTR)
 
-Example: a server fails on average every 1,000 hours (MTBF) and takes 1 hour to recover (MTTR). Availability = 1,000 / 1,001 ≈ 99.9%.
+A server failing every 1,000 hours on average and taking 1 hour to recover: 1,000 / 1,001 ≈ 99.9%.
 
-There are two levers:
-1. **Increase MTBF:** better hardware, testing, careful deployments.
-2. **Decrease MTTR:** fast detection (monitoring and alerts), automatic failover, quick rollback, runbooks.
-
-In large distributed systems, failures are constant, so cutting MTTR is usually the cheaper lever. If recovery is automatic and takes 10 seconds instead of 1 hour, the same failure rate gives about 99.9997% availability.
+Two levers: **increase MTBF** (better hardware, testing, careful deployments) or **decrease MTTR** (fast detection by monitoring and alerts, automatic failover, quick rollback, runbooks). In large distributed systems failures are constant, so cutting MTTR is usually cheaper: automatic 10-second recovery instead of 1 hour gives the same failure rate about 99.9997% availability.
 
 ### Common mistakes
 - Only trying to prevent failures. You can't prevent them all; plan to recover fast.
@@ -778,23 +744,21 @@ In large distributed systems, failures are constant, so cutting MTTR is usually 
 ### In the interview
 **Q:** Which is easier to improve at scale, MTBF or MTTR?
 
-**A:** Usually MTTR. With thousands of machines something always fails, so automatic detection and failover (seconds) give more availability than trying to make each machine fail less often.
+**A:** Usually MTTR. With thousands of machines something always fails, so automatic detection and failover (seconds) buy more availability than making each machine fail less often.
 
 ### TL;DR
-MTBF is how long between failures, MTTR how long to recover. Availability ≈ MTBF / (MTBF + MTTR); in practice, shrink MTTR with monitoring and automation.
+MTBF is time between failures, MTTR time to recover. Availability ≈ MTBF / (MTBF + MTTR); in practice, shrink MTTR with monitoring and automation.
 
 ---
 
 ## Reliability, availability and durability
 
 ### What it is
-Three words often mixed up:
+- **Reliability:** the system keeps doing the *right thing* over time, even when things go wrong — correct results, no corrupted data.
+- **Availability:** the system is *up and responding* when you ask. It can be available but unreliable (answers quickly, with wrong data).
+- **Durability:** saved data *stays saved*, even if machines crash or disks die. A system can be unavailable but durable (down for an hour, no data lost).
 
-- **Reliability:** the system keeps doing the *right thing* over time, even when things go wrong. It returns correct results and doesn't corrupt data. A reliable system is one you can trust.
-- **Availability:** the system is *up and responding* when you ask. A system can be available but unreliable (it answers quickly, with wrong data).
-- **Durability:** once data is saved, it *stays saved* and isn't lost, even if machines crash or disks die. A system can be unavailable but durable (down for an hour, but no data lost when it returns).
-
-**Analogy:** a bank. Availability: the cash machine works when you walk up. Reliability: it gives you the right amount and debits the right account. Durability: your balance is still there tomorrow even if the bank's building floods.
+(At a bank: the cash machine works when you walk up; it gives the right amount and debits the right account; your balance survives a flood.)
 
 | Property | Question it answers | Typical measure |
 |---|---|---|
@@ -803,40 +767,36 @@ Three words often mixed up:
 | Durability | Will my saved data still exist later? | Probability of losing an object per year |
 
 ### How it works
-- Availability is improved by redundancy and failover (more on this below).
-- Durability is improved by keeping multiple copies of data on separate disks, machines and locations, writing to disk before confirming (Part 3 covers write-ahead logs), and backups.
+- Availability: redundancy and failover (below).
+- Durability: multiple copies on separate disks, machines and locations; writing to disk before confirming (write-ahead logs, Part 3); backups.
 - Reliability is the umbrella: testing, validation, handling faults gracefully, and both of the above.
 
 ### Real-world examples
-- Amazon S3 Standard is designed for 99.999999999% ("eleven nines") yearly durability per object: keep ten million objects there and, on average, a single one goes missing roughly once in ten thousand years. It is designed for only 99.99% availability (and its SLA pays credits below 99.9%). Durability and availability are separate promises.
+- Amazon S3 Standard is designed for 99.999999999% ("eleven nines") yearly durability per object — store ten million objects and on average one goes missing roughly once in ten thousand years — but only 99.99% availability (SLA credits below 99.9%). Durability and availability are separate promises.
 
 ### Common mistakes
 - Saying "highly available" when you mean "doesn't lose data". Say durable.
-- Assuming replication equals backup. If a bug deletes data, replication faithfully deletes every copy. Backups protect against that.
+- Assuming replication equals backup. A bug that deletes data is faithfully replicated to every copy; backups protect against that.
 
 ### In the interview
 **Q:** Can a system be durable but not available?
 
-**A:** Yes. If a database cluster is down for maintenance, no one can read the data (unavailable), but all of it is safely on disk (durable).
+**A:** Yes. A database cluster down for maintenance can't be read (unavailable), but all data is safely on disk (durable).
 
 ### TL;DR
-Availability = can I use it now; reliability = does it work correctly over time; durability = will saved data survive. They are improved by different techniques and promised separately.
+Availability = can I use it now; reliability = does it work correctly over time; durability = will saved data survive. Different techniques improve each, and they are promised separately.
 
 ---
 
 ## Faults, failures and fault tolerance
 
 ### What it is
-- A **fault** is something going wrong with one part: a disk dies, a process crashes, a network cable is cut, a bug returns a wrong value.
-- A **failure** is when the *whole system* stops providing its service to users.
+- A **fault** is one part going wrong: a disk dies, a process crashes, a cable is cut, a bug returns a wrong value.
+- A **failure** is the *whole system* no longer providing its service to users.
 
-Faults are inevitable; failures are what we try to prevent. **Fault tolerance** (or resilience) is the ability of a system to keep working, perhaps in a reduced way, when some of its parts have faults.
-
-**Analogy:** a plane with two engines. One engine stopping is a fault. The plane crashing would be a failure. Being able to fly and land on one engine is fault tolerance.
+Faults are inevitable; failures are what we prevent. **Fault tolerance** (resilience) is continuing to work, perhaps in a reduced way, when some parts have faults — like a twin-engine plane landing on one engine.
 
 ### Types
-Common kinds of faults:
-
 | Fault type | Example | Typical defence |
 |---|---|---|
 | Hardware | Disk dies, power supply fails | Redundant machines, replicated data |
@@ -845,60 +805,68 @@ Common kinds of faults:
 | Human | Wrong config pushed, table deleted | Reviews, automation, backups, rollback |
 | Dependency | Third-party API is slow or down | Timeouts, fallbacks, circuit breakers |
 
-Faults also differ by behaviour:
-- **Crash (fail-stop):** the part stops completely. Easiest to detect.
-- **Omission:** some messages are lost.
-- **Timing / slow:** the part works but too slowly. Hard to tell from a crash; often worse, because callers keep waiting.
-- **Byzantine:** the part sends wrong or even malicious answers. Most business systems assume this doesn't happen inside their own network; blockchains are designed for it.
+**Failure models.** Faults also differ by *how the broken part behaves*. Distributed-systems research names a spectrum of **failure models** (formal assumptions about what a faulty part may do); roughly, each row below permits more misbehaviour than the one above, so it is harder to tolerate:
+
+| Model | What the faulty part does | Can the others tell? | Typical defence and cost | Example |
+|---|---|---|---|---|
+| **Fail-stop** | Halts, and every other part reliably learns that it halted | Yes, by definition | Simplest: with guaranteed detection, f+1 copies can tolerate f failures | An idealisation; approximated by fencing or "shoot the other node" power switches |
+| **Crash (crash-stop)** | Halts and sends nothing more, but nobody is told | No: on a network, a crashed node looks exactly like a slow one | Timeouts plus majority quorums: consensus needs 2f+1 nodes to tolerate f crashes | Process killed, kernel panic |
+| **Crash-recovery** | Crashes, later restarts with only what it saved to disk | Not reliably | Write state durably before acknowledging (write-ahead log), rejoin and catch up | Server reboot, container restart |
+| **Omission** | Keeps running but drops some messages it should send or receive | Only through missing acknowledgements | Acknowledgements, retries, idempotent handlers | Full network buffer, lossy link |
+| **Timing (performance)** | Gives correct answers but outside the expected time bound, or its clock drifts | Indistinguishable from omission until the answer arrives | Timeouts, deadlines, leases with clock-error margins, hedged requests | Long garbage-collection pause, overloaded disk |
+| **Byzantine (arbitrary)** | Anything at all: wrong, contradictory or deliberately malicious answers | No | 3f+1 replicas to agree despite f liars; signatures and checksums | Memory corruption, a compromised node, a buggy replica |
+
+Most systems inside one company's data centres assume **crash-recovery plus omission plus timing faults**, and add checksums to catch the one Byzantine-like fault that really happens: corrupted data. Blockchains and some aerospace systems design for full Byzantine faults. The model you assume decides how many replicas you need and which algorithms are correct, so state it out loud.
 
 ### How it works
-Fault tolerance generally follows a pattern: **detect** the fault (health checks, timeouts, heartbeats), **isolate** it so it doesn't spread (timeouts, bulkheads), and **recover** (route around it, restart, fail over to a copy). Parts 4 and 5 cover the specific tools: retries, circuit breakers, replication, consensus.
+**Detect** the fault (health checks, timeouts, heartbeats), **isolate** it so it doesn't spread (timeouts, bulkheads), **recover** (route around it, restart, fail over to a copy). Parts 4 and 5 cover the tools: retries, circuit breakers, replication, consensus.
 
 ### Common mistakes
-- Treating "slow" as fine. A dependency that takes 30 seconds to fail can tie up all your threads; a fast error is often better.
-- Assuming faults are independent. A bad deployment or a shared power supply can break many "redundant" copies at once (**correlated failure**).
+- Treating "slow" as fine. A dependency taking 30 seconds to fail can tie up all your threads; a fast error is often better.
+- Assuming faults are independent. A bad deployment or shared power supply can break many "redundant" copies at once (**correlated failure**).
 
 ### Real-world examples
-- Netflix's Chaos Monkey randomly shuts down production servers so that engineers must build services that tolerate instance faults.
-- Large cloud outages are often caused by a configuration change pushed everywhere at once, a reminder that human and software faults matter as much as hardware.
+- Netflix's Chaos Monkey randomly shuts down production servers so engineers must build services that tolerate instance faults.
+- Large cloud outages are often a configuration change pushed everywhere at once: human and software faults matter as much as hardware.
 
 ### In the interview
 **Q:** What is the difference between a fault and a failure?
 
-**A:** A fault is a component misbehaving; a failure is the system as a whole not serving users. Fault tolerance stops faults from becoming failures.
+**A:** A fault is a component misbehaving; a failure is the system as a whole not serving users. Fault tolerance stops faults becoming failures.
+
+**Q:** Why does Raft need 3 nodes to survive 1 failure, while a Byzantine-tolerant protocol needs 4?
+
+**A:** Raft assumes crash faults: a live majority (2 of 3) always overlaps any other majority, so 2f+1 suffices. With Byzantine faults a node can lie, so honest nodes must outnumber liars inside every quorum, which takes 3f+1 nodes (Lamport, Shostak and Pease, 1982).
 
 ### TL;DR
-Faults happen to parts; failures happen to the system. Design to detect, isolate and recover from faults so they don't become user-visible failures.
+Faults happen to parts; failures happen to the system. Name your failure model (crash, omission, timing, Byzantine), because it sets how many replicas you need; then detect, isolate and recover so faults don't become user-visible failures.
+
+*Sources:* R. Schlichting and F. Schneider, "Fail-stop processors", *ACM TOCS* 1(3), 1983; V. Hadzilacos and S. Toueg, "A modular approach to fault-tolerant broadcasts and related problems", Cornell TR 94-1425, 1994; L. Lamport, R. Shostak, M. Pease, "The Byzantine Generals Problem", *ACM TOPLAS* 4(3), 1982; D. Ongaro and J. Ousterhout, "In Search of an Understandable Consensus Algorithm (Raft)", USENIX ATC 2014.
 
 ---
 
 ## Redundancy, single points of failure and failover
 
 ### What it is
-- **Redundancy** means having more than one of something, so a spare can take over if one breaks: extra servers, extra copies of data, extra network links, extra power supplies.
-- A **single point of failure (SPOF)** is any part whose failure alone brings down the whole system. One database, one load balancer, one DNS provider, one data centre, even one engineer who knows the password.
-- **Failover** is the process of switching work from a failed component to a standby one.
-
-**Analogy:** a hospital has backup generators. Mains power is a SPOF without them; with them, a blackout triggers failover to the generators within seconds.
+- **Redundancy:** more than one of something (servers, data copies, network links, power supplies), so a spare can take over.
+- A **single point of failure (SPOF)** is any part whose failure alone brings down the whole system: one database, one load balancer, one DNS provider, one data centre, even one engineer who knows the password.
+- **Failover** is switching work from a failed component to a standby (as a hospital switches to its backup generators within seconds of a blackout).
 
 ### How it works
-**Finding SPOFs:** walk through the diagram and ask of every box and arrow, "if this disappears, what happens?". If the answer is "everything stops", it's a SPOF.
+**Finding SPOFs:** ask of every box and arrow, "if this disappears, what happens?" If "everything stops", it's a SPOF.
 
 **Removing them:**
-1. Run at least two of every critical component, in separate **failure domains**: different racks, different **availability zones** (separate data centres in the same region, with their own power and networking), or different regions.
-2. Put something in front that can route around dead copies (a load balancer, DNS, a client library).
-3. Add **health checks**: periodic tests ("are you alive?") so dead copies are detected.
+1. Run at least two of every critical component in separate **failure domains**: different racks, **availability zones** (separate data centres in one region, with their own power and networking), or regions.
+2. Put something in front that routes around dead copies (a load balancer, DNS, a client library).
+3. Add **health checks** — periodic "are you alive?" tests — so dead copies are detected.
 4. Automate failover so it happens in seconds, not when a human notices.
 
 ### Types
-**Active-passive (primary-standby):** one copy handles all traffic; a standby waits, kept up to date, and takes over when the primary fails. Simple, but the standby is idle capacity, and failover takes some time (seconds to minutes).
+**Active-passive (primary-standby):** one copy handles all traffic; an up-to-date standby takes over when the primary fails. Simple, but the standby is idle capacity and failover takes seconds to minutes.
 
-**Active-active:** all copies handle traffic at the same time. If one fails, the others absorb its share. Better use of hardware and faster recovery, but harder for stateful parts like databases (two copies accepting writes can conflict).
+**Active-active:** all copies serve traffic at once; if one fails the others absorb its share. Better hardware use and faster recovery, but harder for stateful parts like databases (two copies accepting writes can conflict).
 
-**Cold, warm and hot standby:**
-- **Cold:** the spare exists but must be started and loaded with data (minutes to hours).
-- **Warm:** running and partially up to date (minutes).
-- **Hot:** running and fully in sync, ready immediately (seconds).
+**Cold, warm and hot standby:** **cold** — exists but must be started and loaded with data (minutes to hours); **warm** — running and partially up to date (minutes); **hot** — running, fully in sync, ready immediately (seconds).
 
 ```mermaid
 flowchart TD
@@ -913,21 +881,21 @@ flowchart TD
     end
 ```
 
-**N+1 and N+2:** if you need N servers to handle peak load, run N+1 (survive one failure) or N+2 (survive one failure during maintenance of another).
+**N+1 and N+2:** if N servers handle peak load, run N+1 (survive one failure) or N+2 (survive one failure during maintenance of another).
 
 ### Trade-offs
 - Redundancy costs money: standby machines, extra copies of data.
-- Failover is risky. If the system wrongly decides the primary is dead while it's actually alive (perhaps just slow or cut off), you can end up with two primaries both accepting writes, called **split brain**. Part 3 and Part 4 cover how databases prevent this (quorums, fencing).
-- Failover itself must be tested regularly; untested failover often fails when needed.
+- Failover is risky. If the system wrongly decides a slow or cut-off primary is dead, two primaries may both accept writes: **split brain**. Parts 3 and 4 cover prevention (quorums, fencing).
+- Failover must be tested regularly; untested failover often fails when needed.
 
 ### Common mistakes
 - Making app servers redundant but leaving one database or one load balancer.
 - Putting all "redundant" copies in the same rack or zone.
-- Forgetting that the standby needs enough capacity to take the full load.
+- Forgetting the standby needs capacity for the full load.
 
 ### Real-world examples
-- AWS recommends spreading instances across at least two availability zones; managed databases such as Amazon RDS Multi-AZ keep a synchronous standby in another zone and fail over automatically, typically within a minute or two.
-- Load balancers themselves are deployed in pairs (or as a managed, internally redundant service) to avoid being the SPOF.
+- AWS recommends spreading instances across at least two availability zones; Amazon RDS Multi-AZ keeps a synchronous standby in another zone and fails over automatically, typically within a minute or two.
+- Load balancers are deployed in pairs (or as a managed, internally redundant service) so they are not the SPOF.
 
 ### In the interview
 **Q:** How do you find single points of failure in a design?
@@ -936,34 +904,32 @@ flowchart TD
 
 **Q:** Active-passive or active-active?
 
-**A:** Active-passive is simpler and common for databases with one writer. Active-active uses capacity better and recovers faster, and is natural for stateless services, but needs conflict handling for stateful data.
+**A:** Active-passive is simpler and common for single-writer databases. Active-active uses capacity better, recovers faster and suits stateless services, but needs conflict handling for stateful data.
 
 ### TL;DR
-Redundancy means spares; a SPOF is any part with no spare; failover moves work to the spare. Remove SPOFs by duplicating critical parts across failure domains and automating failover, while guarding against split brain.
+Redundancy means spares; a SPOF is any part with no spare; failover moves work to the spare. Duplicate critical parts across failure domains and automate failover, while guarding against split brain.
 
 ---
 
 ## Scalability
 
 ### What it is
-**Scalability** is a system's ability to handle more load (more users, more requests, more data) by adding resources, without a redesign and without performance collapsing. A scalable system's cost and effort grow roughly in proportion to its load; an unscalable one hits a wall.
+**Scalability** is handling more load (users, requests, data) by adding resources, without a redesign and without performance collapsing: cost and effort grow roughly in proportion to load instead of hitting a wall.
 
-**Load** needs to be described with specific numbers, called **load parameters**: requests per second, number of concurrent users, read/write ratio, size of the data, number of followers per user, and so on. "Scalable" only makes sense relative to one of them: "we can scale to 10× the requests per second by adding servers".
-
-**Analogy:** a restaurant that can serve more diners by adding tables and hiring more cooks is scalable. One whose single tiny kitchen can never cook faster than 50 meals an hour, no matter how many tables you add, is not.
+Load is described by **load parameters**: requests per second, concurrent users, read/write ratio, data size, followers per user, and so on. "Scalable" only makes sense relative to one of them: "we can scale to 10× the requests per second by adding servers". (A restaurant that serves more diners by adding tables and cooks scales; one whose tiny kitchen tops out at 50 meals an hour does not.)
 
 ### Why it matters
-Successful products grow, sometimes overnight. A system that needs a rewrite at each 10× step slows the business down at exactly the wrong moment.
+Successful products grow, sometimes overnight. A system needing a rewrite at each 10× step slows the business at exactly the wrong moment.
 
 ### How it works
-There are a few dimensions you can scale along:
+Dimensions to scale along:
 
 - **Load scalability:** more requests per second.
 - **Data scalability:** more stored data.
-- **Geographic scalability:** users spread around the world, needing low latency everywhere.
-- **Organisational scalability:** more engineers working on the system without stepping on each other (one reason teams split into microservices, Part 5).
+- **Geographic scalability:** users worldwide needing low latency everywhere.
+- **Organisational scalability:** more engineers working without stepping on each other (one reason teams split into microservices, Part 5).
 
-The core techniques, all explained in later parts:
+Core techniques, explained later:
 1. Scale out stateless app servers behind a load balancer (next section).
 2. Cache hot data (Part 4).
 3. Copy data to read replicas for read-heavy loads (Part 3).
@@ -973,13 +939,13 @@ The core techniques, all explained in later parts:
 
 ### Common mistakes
 - Calling a system "scalable" without saying which load parameter and by how much.
-- Scaling the wrong part. Adding app servers does nothing if the database is the bottleneck.
-- Building for 1,000× growth on day one. Design so the next 10× is easy, and re-evaluate.
+- Scaling the wrong part: more app servers do nothing if the database is the bottleneck.
+- Building for 1,000× growth on day one. Make the next 10× easy, then re-evaluate.
 
 ### In the interview
 **Q:** What does it mean for a system to be scalable?
 
-**A:** That it can handle growing load, described with concrete numbers, by adding resources roughly in proportion, while keeping performance within targets.
+**A:** It handles growing load, stated in concrete numbers, by adding resources roughly in proportion, while staying within performance targets.
 
 ### TL;DR
 Scalability is handling more load by adding resources without a redesign. Always say what load (QPS, data size, users) and by how much.
@@ -989,17 +955,13 @@ Scalability is handling more load by adding resources without a redesign. Always
 ## Vertical and horizontal scaling
 
 ### What it is
-- **Vertical scaling (scale up):** make one machine bigger: more CPU cores, more RAM, faster disks.
-- **Horizontal scaling (scale out):** add more machines and spread the work across them.
-
-**Analogy:** to carry more passengers you can buy a bigger bus (vertical) or run more buses (horizontal).
+- **Vertical scaling (scale up):** make one machine bigger: more CPU cores, RAM, faster disks (a bigger bus).
+- **Horizontal scaling (scale out):** add more machines and spread the work across them (more buses).
 
 ### How it works
-**Vertical scaling** is usually just a configuration change on a cloud provider: stop the machine, pick a larger size, start it. No code changes. Modern cloud machines go very large: AWS offers instances with hundreds of CPU cores and multiple terabytes of RAM.
+**Vertical scaling** is usually a configuration change in the cloud: stop the machine, pick a larger size, start it; no code changes. Cloud machines go very large: AWS offers instances with hundreds of cores and multiple terabytes of RAM.
 
-**Horizontal scaling** requires the work to be divisible:
-- Stateless app servers: easy. Put a load balancer in front and add copies.
-- Databases: harder. Reads can go to replicas; spreading writes needs sharding (each machine holds part of the data).
+**Horizontal scaling** needs divisible work: stateless app servers are easy (add copies behind a load balancer); databases are harder — reads can go to replicas, but spreading writes needs sharding (each machine holds part of the data).
 
 ```mermaid
 flowchart LR
@@ -1026,21 +988,21 @@ flowchart LR
 | Consistency | Easy (one copy of data) | Harder (data spread across machines) |
 
 ### Common mistakes
-- Dismissing vertical scaling. A single large database server handles a lot; scaling up first is often the right, cheap answer.
-- Scaling out a stateful service without dealing with its state (see next sections).
+- Dismissing vertical scaling. One large database server handles a lot; scaling up first is often the right, cheap answer.
+- Scaling out a stateful service without dealing with its state (next sections).
 
 ### Real-world examples
-- Stack Overflow famously served a very large site from a small number of powerful servers (in 2016: 11 web servers and 4 SQL Server machines, plus a few Redis, search and tag-engine boxes), a well-known example of vertical scaling done well.
+- Stack Overflow famously served a very large site from a few powerful servers (in 2016: 11 web servers and 4 SQL Server machines, plus a few Redis, search and tag-engine boxes) — vertical scaling done well.
 - Google, Meta and Amazon are each estimated to run millions of commodity servers: horizontal scaling at the extreme.
 
 ### In the interview
 **Q:** When would you choose vertical scaling?
 
-**A:** Early on, or for components that are hard to distribute (like a relational database's primary). It's simple and buys time. Switch to horizontal when you approach the largest machine size, need fault tolerance, or costs climb steeply.
+**A:** Early on, or for components hard to distribute (a relational database's primary). It's simple and buys time. Go horizontal when nearing the largest machine, needing fault tolerance, or when costs climb steeply.
 
 **Q:** What makes horizontal scaling hard?
 
-**A:** State. Stateless servers scale out trivially; anything that stores data must be replicated or partitioned, which brings consistency and coordination problems.
+**A:** State. Stateless servers scale out trivially; anything storing data must be replicated or partitioned, bringing consistency and coordination problems.
 
 ### TL;DR
 Scale up = bigger machine (simple, limited, still a SPOF). Scale out = more machines (unlimited and fault tolerant, but needs stateless design or data partitioning). Most real systems do both.
@@ -1050,27 +1012,20 @@ Scale up = bigger machine (simple, limited, still a SPOF). Scale out = more mach
 ## Elasticity
 
 ### What it is
-**Elasticity** is the ability to add and remove resources *automatically and quickly* as load changes, so you pay for roughly what you use. Scalability says "we *can* grow"; elasticity says "we grow and shrink by ourselves, in minutes".
-
-**Analogy:** a supermarket that opens more checkouts when queues get long and closes them when the shop is quiet.
+**Elasticity** is adding and removing resources *automatically and quickly* as load changes, so you pay for roughly what you use. Scalability says "we *can* grow"; elasticity says "we grow and shrink by ourselves, in minutes" — like a supermarket opening checkouts when queues lengthen.
 
 ### How it works
-1. Watch a metric: CPU use, requests per second, queue length.
-2. When it crosses a threshold (say CPU above 70% for 5 minutes), launch more servers.
-3. When it drops (CPU below 30%), remove some.
-4. The load balancer automatically starts and stops sending them traffic.
-
-This is called **autoscaling** (Part 5 covers kinds: reactive, scheduled, predictive). Cloud platforms (AWS Auto Scaling groups, Kubernetes Horizontal Pod Autoscaler) and **serverless** platforms (AWS Lambda, which runs your code per request and scales to zero) provide it.
+Watch a metric (CPU, requests per second, queue length); past a threshold (CPU above 70% for 5 minutes) launch servers, below another (30%) remove some, while the load balancer starts and stops sending them traffic. This is **autoscaling** (*Autoscaling*, Part 5: reactive, scheduled, predictive), provided by cloud platforms (AWS Auto Scaling groups, Kubernetes Horizontal Pod Autoscaler) and **serverless** platforms (AWS Lambda, which runs your code per request and scales to zero).
 
 ### Trade-offs
-- New servers take time to start (seconds for containers, minutes for virtual machines). A sudden spike can arrive faster than capacity.
+- New servers take time to start (seconds for containers, minutes for virtual machines); a sudden spike can outrun capacity.
 - Only stateless parts are easily elastic; databases scale much more slowly.
 - Scaling down too eagerly causes "flapping" (adding and removing repeatedly).
 
 ### In the interview
 **Q:** What's the difference between scalability and elasticity?
 
-**A:** Scalability is the capability to handle more load by adding resources. Elasticity is doing that automatically, in both directions, to match demand as it changes.
+**A:** Scalability is the capability to handle more load by adding resources; elasticity is doing it automatically, in both directions, as demand changes.
 
 ### TL;DR
 Elasticity is automatic, fast scaling up and down with demand, mostly for stateless parts, so you pay only for what you need.
@@ -1080,20 +1035,18 @@ Elasticity is automatic, fast scaling up and down with demand, mostly for statel
 ## Stateless and stateful services
 
 ### What it is
-**State** is data a program remembers between requests: who is logged in, what's in a shopping cart, the contents of a database.
+**State** is data a program remembers between requests: who is logged in, a shopping cart, the contents of a database.
 
-- A **stateless service** keeps no client-specific data in its own memory between requests. Every request carries (or points to) everything needed to handle it, and any copy of the service can handle any request.
-- A **stateful service** remembers data between requests locally, so a particular client or a particular piece of data is tied to a particular server.
-
-**Analogy:** a stateless service is a call centre where every agent can pull up your file from the shared system, so any agent can help you. A stateful service is your family doctor who keeps your history in their head: great until they're on holiday.
+- A **stateless service** keeps no client-specific data in its own memory between requests. Every request carries (or points to) everything needed, so any copy can handle any request — like a call centre where any agent can pull up your file.
+- A **stateful service** remembers data locally between requests, so a client or piece of data is tied to a particular server — like a family doctor who keeps your history in their head: great until they're on holiday.
 
 ### Why it matters
-Stateless services are easy to scale out, load balance, restart and replace: kill any copy and nothing is lost. That's why the standard advice is "**make app servers stateless and push state into dedicated stores**" (databases, caches, object storage) that are designed for replication.
+Stateless services are easy to scale out, load balance, restart and replace: kill any copy and nothing is lost. Hence the standard advice: "**make app servers stateless and push state into dedicated stores**" (databases, caches, object storage) designed for replication.
 
 ### How it works
-How to make a web app stateless:
-1. Store login sessions in a shared store (Redis) or in a signed token the client sends with each request (like a JWT, JSON Web Token, covered in Part 5), not in server memory.
-2. Store uploaded files in object storage, not on the server's local disk.
+To make a web app stateless:
+1. Store login sessions in a shared store (Redis) or a signed token the client sends with each request (a JWT, JSON Web Token, Part 5), not in server memory.
+2. Store uploaded files in object storage, not the server's local disk.
 3. Keep shopping carts and similar data in a database or cache.
 
 Then the load balancer can send each request to any server.
@@ -1112,21 +1065,21 @@ flowchart LR
     end
 ```
 
-If a service stays stateful (for example a game server holding a live match, or a chat server holding open connections), the load balancer must send each client to the same server, called **sticky sessions** (Part 2), and you must plan for what happens when that server dies.
+If a service stays stateful (a game server holding a live match, a chat server holding open connections), the load balancer must send each client to the same server — **sticky sessions** (Part 2) — and you must plan for that server dying.
 
 ### Trade-offs
-- Stateless servers need an extra network hop to fetch state, adding latency (usually under a millisecond to a cache).
+- Stateless servers need an extra network hop to fetch state (usually under a millisecond to a cache).
 - Stateful designs can be faster (data already in memory) and are sometimes necessary (databases, real-time games, WebSocket servers), but are harder to scale and recover.
 
 ### Common mistakes
 - Keeping sessions in local memory, then adding a second server and finding users randomly logged out.
-- Writing uploaded files to the local disk of one server.
-- Calling a system stateless when it just moved state somewhere else; the state store now needs scaling and redundancy too.
+- Writing uploaded files to one server's local disk.
+- Calling a system stateless when state just moved elsewhere; the state store now needs scaling and redundancy too.
 
 ### In the interview
 **Q:** Why should application servers be stateless?
 
-**A:** So any instance can handle any request: you can add or remove instances freely, load balance evenly, and lose an instance without losing user data. State lives in stores built for durability and replication.
+**A:** So any instance can handle any request: add or remove instances freely, balance evenly, and lose one without losing user data. State lives in stores built for durability and replication.
 
 ### TL;DR
 Stateless services remember nothing between requests and scale easily; stateful ones hold data and are harder to scale and recover. Keep app servers stateless and put state in databases and caches.
@@ -1136,17 +1089,13 @@ Stateless services remember nothing between requests and scale easily; stateful 
 ## Performance vs scalability
 
 ### What it is
-- **Performance** is how fast the system is for *one* request or user at the current load: low latency, efficient use of resources.
+- **Performance** is how fast the system is for *one* request or user at the current load: low latency, efficient resource use.
 - **Scalability** is how well performance holds up as load *grows*.
 
-A quick diagnostic:
-- Send one request to an otherwise idle system. If even that is slow, the trouble is **performance**.
-- If that lone request is quick but things drag once traffic piles up, the trouble is **scalability**.
-
-**Analogy:** a sports car is high-performance (fast for one person) but doesn't scale (two seats). A train is slower to get going but carries a thousand people.
+Diagnostic: send one request to an otherwise idle system. If even that is slow, it's **performance**; if it's quick but things drag as traffic piles up, it's **scalability**. (A sports car is fast for one person but seats two; a train is slower off the mark but carries a thousand.)
 
 ### Trade-offs
-Some changes help one and hurt the other. Adding a network hop to reach a shared cache slightly hurts single-request performance but lets you scale out. Keeping everything in one process's memory is fast but caps you at one machine.
+Some changes help one and hurt the other: a network hop to a shared cache slightly hurts single-request performance but lets you scale out; keeping everything in one process's memory is fast but caps you at one machine.
 
 ### In the interview
 **Q:** The site is slow even at 3 am with almost no traffic. Performance or scalability?
@@ -1154,29 +1103,27 @@ Some changes help one and hurt the other. Adding a network hop to reach a shared
 **A:** Performance: something is slow per request (an unindexed query, a slow external call, a big page). Adding servers won't help; profile the request.
 
 ### TL;DR
-Performance = fast for one; scalability = stays fast for many. Diagnose which one you have before fixing.
+Performance = fast for one; scalability = stays fast for many. Diagnose which before fixing.
 
 ---
 
 ## Concurrency vs parallelism
 
 ### What it is
-- **Concurrency** means several tasks are in progress during the same period, with the program switching between them whenever one has to wait. It describes how the work is organised.
-- **Parallelism** means several tasks are literally running at the same instant, on multiple CPU cores or machines. It describes how the work is executed.
+- **Concurrency:** several tasks in progress during the same period, the program switching between them whenever one waits. It describes how work is *organised*.
+- **Parallelism:** several tasks running at the same instant on multiple CPU cores or machines. It describes how work is *executed*.
 
-Go co-creator Rob Pike summed this up as concurrency being about *dealing with* lots of things at once and parallelism about *doing* lots of things at once.
-
-**Analogy:** one barista taking an order, starting the milk, taking another order while the milk steams, then finishing the first drink, is concurrent. Three baristas each making a drink at the same moment is parallel. You can have concurrency on a single CPU core (by switching) but parallelism needs multiple cores.
+Rob Pike (Go co-creator): concurrency is *dealing with* lots of things at once, parallelism is *doing* lots of things at once. One barista interleaving orders while the milk steams is concurrent; three baristas each making a drink at once is parallel. Concurrency works on a single core (by switching); parallelism needs multiple cores.
 
 ### Why it matters
-Most web servers spend their time **waiting** (on the network, the database, the disk), not computing. Concurrency lets one server keep thousands of requests in progress while each waits. Parallelism speeds up **CPU-heavy** work (image processing, encryption, analytics) by splitting it across cores.
+Most web servers spend their time **waiting** (network, database, disk), not computing. Concurrency lets one server keep thousands of requests in progress while each waits. Parallelism speeds up **CPU-heavy** work (image processing, encryption, analytics) by splitting it across cores.
 
 ### How it works
 Ways to achieve concurrency:
-- **Processes:** separate running programs, each with its own memory. Heavy but isolated.
-- **Threads:** multiple flows of execution inside one process, sharing memory. Lighter, but shared memory needs locks to avoid errors.
-- **Event loop / async I/O:** one thread handles many requests by never blocking: it starts an I/O operation, handles something else, and comes back when the result is ready. Node.js, NGINX and Python's asyncio work this way.
-- **Lightweight threads / coroutines:** cheap tasks scheduled by the language runtime (Go's goroutines, Java's virtual threads), letting you write simple blocking-style code that runs with event-loop efficiency.
+- **Processes:** separate programs with their own memory. Heavy but isolated.
+- **Threads:** multiple flows of execution inside one process sharing memory. Lighter, but shared memory needs locks.
+- **Event loop / async I/O:** one thread handles many requests by never blocking: start an I/O operation, handle something else, return when the result is ready (Node.js, NGINX, Python's asyncio).
+- **Lightweight threads / coroutines:** cheap tasks scheduled by the language runtime (Go's goroutines, Java's virtual threads): simple blocking-style code with event-loop efficiency.
 
 ```mermaid
 sequenceDiagram
@@ -1191,18 +1138,18 @@ sequenceDiagram
     Note over T: "Finishes request B"
 ```
 
-**Concurrency hazards:** when tasks share data you can get a **race condition** (the result depends on timing, like two requests both reading a balance of 100 and both writing 90 after a withdrawal of 10, losing one withdrawal), **deadlock** (two tasks each wait for a lock the other holds, forever) and contention (tasks queue for the same lock). Locks, atomic operations and database transactions (Part 3) address them.
+**Concurrency hazards** when tasks share data: a **race condition** (the result depends on timing — two requests both read a balance of 100 and both write 90 after a withdrawal of 10, losing one withdrawal), **deadlock** (two tasks each wait forever for a lock the other holds) and contention (tasks queue for the same lock). Locks, atomic operations and database transactions (Part 3) address them.
 
-**Amdahl's law** (a related rule) says the speed-up from parallelism is limited by the part of the work that must run one step at a time. If 10% of a job is serial, even infinite cores give at most a 10× speed-up.
+**Amdahl's law:** the speed-up from parallelism is limited by the part that must run serially. If 10% of a job is serial, even infinite cores give at most 10×.
 
 ### Common mistakes
-- Adding threads to a CPU-bound task beyond the number of cores. It just adds switching overhead.
+- Adding threads to a CPU-bound task beyond the number of cores: just switching overhead.
 - Assuming parallel code is automatically faster; coordination and locking can make it slower.
 
 ### In the interview
 **Q:** Is a single-threaded Node.js server concurrent?
 
-**A:** Yes, it handles many requests concurrently using an event loop and non-blocking I/O. It isn't parallel for JavaScript code on one core; you run several processes to use multiple cores.
+**A:** Yes: an event loop and non-blocking I/O handle many requests concurrently. It isn't parallel for JavaScript on one core; run several processes to use multiple cores.
 
 ### TL;DR
 Concurrency is juggling many tasks (great for waiting on I/O); parallelism is doing several at the same instant on multiple cores (great for CPU-heavy work). Shared data under concurrency needs care to avoid races and deadlocks.
@@ -1212,7 +1159,7 @@ Concurrency is juggling many tasks (great for waiting on I/O); parallelism is do
 ## Bottlenecks: CPU, memory, disk and network
 
 ### What it is
-A **bottleneck** is the part of a system that limits its overall capacity, like the narrow neck of a bottle that limits how fast you can pour. Improving anything else won't help until the bottleneck is fixed. Every machine has four basic resources that can become one.
+A **bottleneck** is the part that limits overall capacity, like a bottle's narrow neck; improving anything else won't help until it is fixed. Every machine has four basic resources that can become one:
 
 | Resource | What it limits | Signs it's the bottleneck | Usual fixes |
 |---|---|---|---|
@@ -1223,20 +1170,16 @@ A **bottleneck** is the part of a system that limits its overall capacity, like 
 
 ### How it works
 **Finding the bottleneck:**
-1. Measure each resource under load (monitoring dashboards, `top`, `iostat`, cloud metrics).
-2. Look for the one at or near its limit, or for queues building up in front of something (thread pools full, database connections exhausted, lock waits).
-3. Fix it, then measure again. The bottleneck moves: fix the database and the network may be next.
+1. Measure each resource under load (dashboards, `top`, `iostat`, cloud metrics).
+2. Look for the one at or near its limit, or queues building in front of something (full thread pools, exhausted database connections, lock waits).
+3. Fix it and measure again. The bottleneck moves: fix the database and the network may be next.
 
-Non-hardware bottlenecks are just as common: a single lock everybody waits for, a database connection pool that's too small, one "hot" row that every request updates, or an external API with a rate limit.
+Non-hardware bottlenecks are just as common: a single lock everybody waits for, a too-small connection pool, one "hot" row every request updates, an external API's rate limit.
 
-**Bound terms:** a task is **CPU-bound** when it's limited by computation, and **I/O-bound** when limited by waiting for disk or network. Most web services are I/O-bound.
+A task is **CPU-bound** when limited by computation and **I/O-bound** when limited by waiting for disk or network. Most web services are I/O-bound.
 
 ### IOPS and disk performance
-**IOPS (Input/Output Operations Per Second)** is how many separate read or write operations a storage device can perform per second. It matters most for **random** access (many small reads at different locations), such as database lookups.
-
-Disks have two separate limits:
-- **IOPS:** number of operations per second (matters for small random reads/writes).
-- **Throughput:** megabytes per second (matters for large sequential reads/writes, like streaming a video file or a backup).
+**IOPS (Input/Output Operations Per Second)** is how many separate read or write operations a storage device performs per second; it matters most for **random** access (many small reads at different locations), such as database lookups. Disks have two separate limits: **IOPS** (small random reads/writes) and **throughput** in MB/s (large sequential transfers such as streaming a video or a backup). A disk can hit one limit without the other.
 
 | Device | Rough random IOPS | Rough sequential throughput |
 |---|---|---|
@@ -1245,23 +1188,21 @@ Disks have two separate limits:
 | NVMe SSD | hundreds of thousands to about 1 million | several GB/s |
 | Cloud block disk (e.g. AWS gp3 baseline) | 3,000 (can buy more) | 125 MB/s (can buy more) |
 
-An HDD's IOPS is low because each random read must physically move the arm and wait for the platter to spin (roughly 5–10 ms). That's why databases moved to SSDs, and why systems that must use HDDs favour sequential writes.
-
-**Example:** a database needs 20,000 random reads per second that miss the cache. One HDD (~150 IOPS) would need over 100 disks; one NVMe SSD handles it comfortably.
+An HDD's IOPS is low because each random read must physically move the arm and wait for the platter (roughly 5–10 ms); hence databases moved to SSDs, and HDD systems favour sequential writes. Example: 20,000 random cache-missing reads per second would need over 100 HDDs (~150 IOPS each); one NVMe SSD handles it comfortably.
 
 ### Common mistakes
 - Guessing the bottleneck instead of measuring.
-- Looking only at averages. A resource at 50% average can be at 100% for the busy minute that matters.
+- Looking only at averages: a resource at 50% average can be at 100% for the busy minute that matters.
 - Forgetting cloud disks have provisioned IOPS limits: a database can be throttled by its disk while CPU looks idle.
 
 ### In the interview
 **Q:** Latency rises under load but CPU is only at 30%. Where would you look?
 
-**A:** Something else is the bottleneck: disk IOPS, network, a full database connection pool, a lock, or a slow dependency. Look for where requests are queueing.
+**A:** Another bottleneck: disk IOPS, network, a full connection pool, a lock, or a slow dependency. Look for where requests queue.
 
 **Q:** What's the difference between IOPS and disk throughput?
 
-**A:** IOPS counts operations per second (key for many small random reads, like database lookups); throughput counts bytes per second (key for large sequential transfers). A disk can hit one limit without hitting the other.
+**A:** IOPS counts operations per second (key for small random reads like database lookups); throughput counts bytes per second (key for large sequential transfers).
 
 ### TL;DR
 The bottleneck is whichever resource (CPU, memory, disk, network, or a lock or pool) runs out first. Measure to find it; disks are limited separately by IOPS and by MB/s.
@@ -1271,7 +1212,7 @@ The bottleneck is whichever resource (CPU, memory, disk, network, or a lock or p
 ## How to approach a system design interview
 
 ### What it is
-A system design interview is usually a 45–60 minute conversation where you're asked to design something like "a URL shortener", "a chat app" or "a news feed". It is open-ended on purpose. A clear, repeatable structure helps you cover everything and shows the interviewer how you think.
+A 45–60 minute, deliberately open-ended conversation: "design a URL shortener / a chat app / a news feed". A repeatable structure helps you cover everything and shows how you think.
 
 ### How it works
 A widely used sequence, with rough timings for a 45-minute interview:
@@ -1286,36 +1227,60 @@ flowchart TD
     DD --> T["7. Trade-offs and wrap-up (3-5 min)"]
 ```
 
-**1. Clarify requirements.** Never start drawing straight away. Ask questions and write down two lists:
+**1. Clarify requirements.** Never start drawing straight away. Ask questions and write two lists:
 - **Functional requirements:** *what* the system does, the features. Example for a URL shortener: "create a short link from a long URL", "redirect a short link to the original", "optional custom aliases", "links expire after a year".
-- **Non-functional requirements:** *how well* it does it, the qualities. Scale (100M new links per month), latency (redirect in under 50 ms at p99), availability (99.99% for redirects), durability (never lose a link), consistency (is a newly created link visible everywhere immediately?), security, cost.
-- Also agree on what's **out of scope** (analytics dashboards, user accounts), so you don't waste time.
+- **Non-functional requirements:** *how well* it does it, the qualities. Scale (100M new links per month), latency (redirect in under 50 ms at p99), availability (99.99% for redirects), durability (never lose a link), consistency (is a newly created link visible everywhere immediately?), security, maintainability, cost. The table after step 7 lists each one with the design levers that meet it.
+- Also agree what's **out of scope** (analytics dashboards, user accounts).
 
-**2. Estimate scale.** Use the back-of-the-envelope method: QPS (average and peak), read/write ratio, storage over time, bandwidth. Keep it quick and say how the numbers affect the design ("100:1 reads, so caching matters").
+**2. Estimate scale.** Back-of-the-envelope: QPS (average and peak), read/write ratio, storage over time, bandwidth. Keep it quick and say how the numbers affect the design ("100:1 reads, so caching matters").
 
-**3. Define the API.** List the main endpoints the client calls, with inputs and outputs. For example:
+**3. Define the API.** The main endpoints with inputs and outputs; this pins down exactly what the system must do:
 
 ```
 POST /links        body: {long_url, custom_alias?}  -> {short_code}
 GET  /{short_code}                                  -> 301 redirect to long_url
 ```
 
-This pins down exactly what the system must do.
+**4. Sketch the data model.** Entities, key fields and access patterns, e.g. a `links` table: `short_code` (primary key), `long_url`, `created_at`, `expires_at`. Mention which kind of database fits the access pattern (Part 3).
 
-**4. Sketch the data model.** What entities are stored, their key fields, and how they're accessed. For example a `links` table: `short_code` (primary key), `long_url`, `created_at`, `expires_at`. Mention which kind of database fits the access pattern (Part 3).
+**5. Draw the high-level design.** Boxes and arrows (clients, load balancer, app servers, cache, database, queue…). Walk one write and one read end to end. Keep it simple; it must meet the functional requirements.
 
-**5. Draw the high-level design.** The boxes and arrows: clients, load balancer, app servers, cache, database, queue, etc. Walk through one write and one read end to end. Keep it simple at first; it should meet the functional requirements.
+**6. Deep dives.** Go deeper on the hardest parts, often steered by the interviewer: how to generate unique short codes without collisions, how to shard the database, how to cache hot links, what happens when a data centre fails, how to handle a celebrity's viral link. Use your estimates to justify choices.
 
-**6. Deep dives.** Pick the hardest or most interesting parts, often guided by the interviewer, and go deeper: how to generate unique short codes without collisions, how to shard the database, how to cache hot links, what happens when a data centre fails, how to handle a celebrity's viral link. Use your estimates to justify choices.
+**7. Discuss trade-offs and wrap up.** Name weaknesses and next steps: bottlenecks, single points of failure, monitoring, what changes at 10× scale.
 
-**7. Discuss trade-offs and wrap up.** Name the weaknesses of your design and what you'd do next: bottlenecks, single points of failure, monitoring, what changes at 10× scale.
+### Non-functional requirements and the levers that meet them
+A non-functional requirement only helps if it is **measurable** ("p99 < 200 ms", not "fast") and if you can name the **design lever** that delivers it. Use this table twice: in step 1 to make sure you asked about each row, and in step 7 to check that every number you agreed has a mechanism behind it.
+
+| Requirement | Make it measurable as | Main design levers | What the lever costs | Explained in |
+|---|---|---|---|---|
+| **Availability** | % of successful requests per month (SLO); allowed downtime | Redundancy in several zones, health checks and failover, no single point of failure, graceful degradation | More machines; consistency questions between copies | *Availability and the nines*, *Redundancy* (Part 1) |
+| **Latency** | p50/p95/p99 per endpoint | Caching, CDNs, fewer round trips, async work, headroom | Staleness, money, complexity (see *Low-latency checklist*) | *Latency, throughput and bandwidth* (Part 1) |
+| **Scalability / throughput** | Peak QPS, data size and growth per year | Stateless services behind load balancers, sharding, queues to absorb bursts | Cross-shard queries and transactions get hard | *Scalability*, *Partitioning and sharding* (Parts 1, 3) |
+| **Consistency** | "After a write, who must see it, and how soon?" | Single leader with synchronous replicas, quorums, consensus; or eventual consistency with conflict handling | Higher write latency and lower availability during partitions (CAP/PACELC) | *Consistency models*, *CAP theorem* (Part 4) |
+| **Durability** | "Never lose an acknowledged write"; RPO (how much data may be lost) | Write-ahead log, replication before acknowledging, backups, cross-region copies | Write latency, storage cost | *Durability* (Part 3), *Disaster recovery* (Part 5) |
+| **Reliability / fault tolerance** | Error rate, MTTR | Timeouts, retries with backoff, idempotency, circuit breakers, bulkheads | Extra load from retries; code complexity | Part 5 resilience sections |
+| **Security and privacy** | Who may do what; which data is sensitive; compliance rules | Authentication and authorisation at the edge, encryption in transit and at rest, least privilege, audit logs | Latency of checks, operational overhead | Part 5 security sections |
+| **Maintainability** | Time to diagnose an incident; time to ship a typical change; deploys per day | See the three parts below | Up-front engineering time | This section |
+| **Cost** | Cost per request, per user or per GB stored | Right-size machines, autoscale, tier storage (hot/cold), cache to avoid expensive reads | Less headroom; slower cold data | *Cost awareness* (Part 5) |
+
+**Maintainability** is the requirement candidates forget, yet most of a system's lifetime cost is spent operating and changing it after launch. Break it into three parts:
+
+| Part | Meaning | What it looks like in a design |
+|---|---|---|
+| **Operability** | How easy it is for the people running the system to keep it healthy | Metrics, logs and traces on every component; dashboards and alerts tied to SLOs; runbooks; safe, automated deploys and rollbacks; sensible defaults; no manual steps that only one person knows |
+| **Simplicity** | How easy it is for a new engineer to understand the system | Few component types; clear boundaries with one owner each; well-named APIs that hide internals; avoiding accidental complexity (complexity that comes from the implementation, not from the problem itself) |
+| **Evolvability** | How easy it is to change the system as requirements change | Versioned APIs and backward-compatible schemas; loose coupling through queues or well-defined interfaces; feature flags; data migrations that can run online; tests that make refactoring safe |
+
+In an interview, maintainability is usually one or two sentences at the wrap-up: "each service has one owning team and its own SLO dashboard, schemas are versioned so producers and consumers deploy independently, and every deployment is a canary with automatic rollback". That sentence shows you have run systems, not just drawn them.
+
+*Sources:* ISO/IEC 25010:2023 product quality model (maintainability and its sub-characteristics); M. Kleppmann, *Designing Data-Intensive Applications*, ch. 1 (O'Reilly, 2017), for the operability/simplicity/evolvability split; B. Beyer et al., *Site Reliability Engineering* (Google, 2016), chapters on SLOs and monitoring.
 
 ### Trade-offs
 Breadth vs depth: covering every box shallowly looks junior; going deep on one box and never finishing the design is worse. Aim for a complete simple design first, then depth.
 
 ### Common mistakes
-- Jumping into a detailed design before clarifying requirements.
-- Staying silent while thinking. Think out loud.
+- Jumping into detailed design before clarifying requirements, or staying silent — think out loud.
 - Naming technologies without reasons ("use Cassandra"). Always say why ("write-heavy, simple key lookups, needs multi-region").
 - Ignoring the non-functional requirements, which usually decide the design.
 - Over-engineering: microservices, Kafka and five databases for a system with 100 QPS.
@@ -1324,15 +1289,15 @@ Breadth vs depth: covering every box shallowly looks junior; going deep on one b
 ### In the interview
 **Q:** What is the difference between functional and non-functional requirements?
 
-**A:** Functional requirements are features: what the system does (post a photo, follow a user). Non-functional requirements are qualities: how well it does them (latency, availability, scale, consistency, durability, cost). Non-functional requirements usually drive architecture choices.
+**A:** Functional = features, what it does (post a photo, follow a user). Non-functional = qualities, how well (latency, availability, scale, consistency, durability, cost); these usually drive the architecture.
 
 **Q:** The interviewer says "design Twitter". What do you do first?
 
-**A:** Ask clarifying questions to narrow scope: which features (post, follow, home timeline, search?), how many users, read/write mix, latency and consistency expectations. Write the agreed requirements down before estimating or drawing.
+**A:** Narrow scope with clarifying questions: which features (post, follow, home timeline, search?), how many users, read/write mix, latency and consistency expectations. Write the agreed requirements down before estimating or drawing.
 
 **Q:** How do you choose what to deep-dive into?
 
-**A:** The parts that are hardest given the requirements and estimates (usually the biggest scale or consistency challenge), or whatever the interviewer steers toward. Ask if unsure.
+**A:** The hardest parts given the requirements and estimates (usually the biggest scale or consistency challenge), or wherever the interviewer steers. Ask if unsure.
 
 ### TL;DR
 Requirements (functional and non-functional), estimates, API, data model, high-level design, deep dives, trade-offs. Think out loud, justify every component with a requirement or a number, and finish with weaknesses and next steps.
@@ -1341,133 +1306,36 @@ Requirements (functional and non-functional), estimates, API, data model, high-l
 
 ## Part 1 glossary
 
-| Term | Meaning in one line |
-|---|---|
-| Active-active | All redundant copies serve traffic at once and absorb a failed copy's share |
-| Active-passive | One copy serves traffic while a standby waits to take over |
-| Amdahl's law | Parallel speed-up is limited by the part of the work that must run serially |
-| App server (application server) | Program that runs business logic and answers client requests |
-| Availability | Fraction of time (or requests) the system is up and working |
-| Availability zone | A separate data centre within a cloud region with its own power and network |
-| Back-of-the-envelope estimate | Quick rough calculation to find the order of magnitude of load or storage |
-| Bandwidth | Maximum data a link or device can carry per second |
-| Batching | Grouping many small operations into one to raise throughput at some latency cost |
-| Bit / byte | A bit is a single 0 or 1; a byte is 8 bits |
-| Bottleneck | The resource or component that limits overall capacity |
-| Cache | Fast, usually in-memory store holding copies of frequently used data |
-| CDN | Content Delivery Network; servers worldwide that serve static files close to users |
-| Client | Program that sends requests (browser, app, or another server) |
-| Cold / warm / hot standby | Spares that need starting, are partly ready, or are ready instantly |
-| Concurrency | Making progress on many tasks by interleaving them |
-| Coordinated omission | Load-test flaw that under-reports slow responses |
-| Correlated failure | Several "independent" parts failing together from a shared cause |
-| CPU-bound | Limited by computation speed |
-| CPU cache | Tiny, very fast memory inside the processor |
-| DAU / MAU | Daily / Monthly Active Users |
-| Deadlock | Tasks waiting forever for locks held by each other |
-| Durability | Saved data is not lost, even after crashes or disk failures |
-| Elasticity | Automatically adding and removing resources to match demand |
-| Error budget | Amount of failure an SLO allows (1 minus the SLO) |
-| Event loop | Single thread handling many requests by never blocking on I/O |
-| Failover | Switching work from a failed component to a standby |
-| Failure | The whole system stops providing its service |
-| Failure domain | A group of parts that can fail together (rack, zone, region) |
-| Fan-out | One request triggering many parallel downstream requests |
-| Fault | One component misbehaving (crash, slowness, wrong output) |
-| Fault tolerance | Continuing to work despite faults in some components |
-| Functional requirement | A feature the system must provide |
-| HDD | Hard disk drive; spinning magnetic disk with slow seeks |
-| Health check | Periodic test of whether a component is alive and working |
-| Hedged request | Sending a duplicate request to another replica if the first is slow |
-| Histogram | Counts of measurements per value bucket, used to compute percentiles |
-| Horizontal scaling (scale out) | Adding more machines to share the load |
-| HTTP | Standard protocol for web requests and responses |
-| I/O-bound | Limited by waiting for disk or network |
-| IOPS | Input/output operations per second a storage device can perform |
-| KB / MB / GB / TB / PB | Data sizes, each about 1,000 times the previous |
-| Latency | Time delay for one request or one hop |
-| Little's law | Items in system = arrival rate x time in system (L = lambda x W) |
-| Load balancer | Component that spreads requests across servers and skips dead ones |
-| Load parameters | The numbers that describe load (QPS, data size, users) |
-| Mean (average) | Sum divided by count; hides outliers in skewed data |
-| Median (p50) | Middle value: half are faster, half slower |
-| Message queue | Buffer where jobs wait to be processed later by workers |
-| MTBF | Mean time between failures |
-| MTTD | Mean time to detect a failure |
-| MTTF | Mean time to failure for parts that are replaced, not repaired |
-| MTTR | Mean time to repair or recover |
-| N+1 redundancy | Running one more unit than peak load needs |
-| Nines | Shorthand for availability levels (three nines = 99.9%) |
-| Non-functional requirement | A quality the system must have (latency, availability, scale) |
-| NVMe | Fast interface for SSDs with very high IOPS |
-| Object storage | Service storing large files as objects under keys (e.g. Amazon S3) |
-| Order of magnitude | Rough size as a power of ten |
-| Parallelism | Executing several tasks at the same instant on multiple cores or machines |
-| Peak factor | Ratio of peak traffic to average traffic |
-| Percentile | Value below which a given percentage of measurements fall |
-| Performance | How fast the system is for a single request at current load |
-| Propagation delay | Time for a signal to travel the physical distance |
-| QPS / RPS | Queries / requests per second |
-| Queueing delay | Time spent waiting behind other work |
-| RAM | Main working memory of a computer; fast but volatile |
-| Race condition | Bug where the result depends on the timing of concurrent tasks |
-| Read/write ratio | How many reads happen per write |
-| Redundancy | Having spare copies so one can replace another |
-| Reliability | Working correctly over time despite faults |
-| Request / response | A client's message asking for something and the server's reply |
-| Response time | Total time the client waits, including network, queueing and service |
-| Round trip time (RTT) | Time for a message to go to a destination and back |
-| Scalability | Handling more load by adding resources without redesign |
-| Server | Program (or machine) that waits for and answers requests |
-| Service time | Time the server spends actually working on a request |
-| SLA | Service Level Agreement; contract with penalties for missed targets |
-| SLI | Service Level Indicator; a measurement of service health |
-| SLO | Service Level Objective; internal target for an SLI |
-| Single point of failure (SPOF) | A part whose failure alone brings the whole system down |
-| Split brain | Two nodes both believing they are the primary |
-| SRE | Site Reliability Engineering; running production with engineering methods |
-| SSD | Solid-state drive; flash storage with no moving parts |
-| State | Data a program remembers between requests |
-| Stateful service | Service that keeps client or data state locally |
-| Stateless service | Service that keeps no per-client state between requests |
-| Sticky sessions | Load balancer sending a client to the same server every time |
-| System design | Choosing a system's parts and how they interact to meet its goals |
-| Tail latency | Latency of the slowest requests (p99, p999, max) |
-| Thread | Independent flow of execution inside a process |
-| Throughput | Amount of work completed per unit of time |
-| Transmission delay | Time to push the bits of a message onto a link |
-| Vertical scaling (scale up) | Making one machine bigger |
-| Worker | Background program that processes jobs from a queue |
-
+Every Part 1 term is defined in one line in the [Master A–Z glossary](#master-az-glossary), which merges the glossaries of all six parts into a single alphabetical list.
 
 ## Part 2 — Networking and communication
 
-Every system design diagram is boxes joined by arrows. Part 1 was about the boxes. This part is about the arrows: how one computer finds another, how bytes travel between them, which languages (protocols) they speak, and which helpers sit in the middle, such as proxies, load balancers and CDNs. You do not need to be a network engineer for a system design interview. You do need to know what happens when a browser types `www.example.com`, why HTTP/2 is faster than HTTP/1.1, and what an L7 load balancer can do that an L4 one cannot. This part teaches exactly that, from zero.
+Part 1 was about the boxes of a design diagram; this part is about the arrows: how one computer finds another, how bytes travel, which protocols they speak, and which helpers sit in the middle (proxies, load balancers, CDNs). You need not be a network engineer, but you do need to know what happens when a browser opens `www.example.com`, why HTTP/2 beats HTTP/1.1, and what an L7 load balancer can do that an L4 one cannot.
 
-A **protocol** is an agreed set of rules for how two programs talk, the way "say hello, wait for a reply, then speak" is a protocol for a phone call. Networking is a stack of protocols, each one solving one problem and handing the rest to the layer above or below.
+A **protocol** is an agreed set of rules for how two programs talk ("say hello, wait for a reply, then speak"). Networking is a stack of protocols, each solving one problem and handing the rest to the layer above or below.
 
 ## IP addresses, NAT, ports and sockets
 
 ### What it is
 
-An **IP address** (Internet Protocol address) is the number that identifies a machine's network connection, like a street address on an envelope. Routers — the boxes that forward traffic across the internet — read only this address to decide where to send each **packet** (a small chunk of data, usually up to about 1,500 bytes on Ethernet).
+An **IP address** (Internet Protocol address) identifies a machine's network connection, like a street address. **Routers** forward traffic across the internet reading only this address on each **packet** (a small chunk of data, usually up to about 1,500 bytes on Ethernet).
 
-- **IPv4** addresses are 32 bits, written as four numbers from 0 to 255: `93.184.215.14`. That gives about 4.3 billion addresses (2^32), which the world ran out of in the 2010s.
-- **IPv6** addresses are 128 bits, written as eight groups of hex digits: `2606:2800:21f:cb07:6820:80da:af6b:8b2c` (runs of zeros can be shortened with `::`). That is about 3.4 × 10^38 addresses — effectively unlimited.
+- **IPv4**: 32 bits, four numbers 0–255 (`93.184.215.14`); about 4.3 billion addresses (2^32), which ran out in the 2010s.
+- **IPv6**: 128 bits, eight groups of hex digits (`2606:2800:21f:cb07:6820:80da:af6b:8b2c`, runs of zeros shortened with `::`); about 3.4 × 10^38 addresses — effectively unlimited.
 
-A **port** is a number from 0 to 65535 that picks which program on a machine gets the data. If the IP address is the building, the port is the apartment number. Well-known ports: 22 (SSH, remote login), 53 (DNS), 80 (HTTP), 443 (HTTPS), 5432 (PostgreSQL), 6379 (Redis).
+A **port** (0–65535) picks which program on the machine gets the data — the apartment number in the building. Well-known: 22 (SSH), 53 (DNS), 80 (HTTP), 443 (HTTPS), 5432 (PostgreSQL), 6379 (Redis).
 
-A **socket** is one end of a conversation, identified by IP address plus port. A single TCP connection is uniquely identified by a **5-tuple**: protocol, source IP, source port, destination IP, destination port. That is why one server on port 443 can hold hundreds of thousands of connections at once — each client brings a different source IP or source port.
+A **socket** is one end of a conversation: IP address plus port. A TCP connection is uniquely identified by a **5-tuple**: protocol, source IP, source port, destination IP, destination port — which is why one server on port 443 can hold hundreds of thousands of connections (each client brings a different source IP or port).
 
-**Public vs private IP.** A **public IP** is reachable from anywhere on the internet and is unique worldwide. A **private IP** is only meaningful inside one local network and is reused by millions of networks. The reserved private IPv4 ranges are `10.0.0.0/8`, `172.16.0.0/12` and `192.168.0.0/16`. (The `/8` is **CIDR notation**: the number of leading bits that are fixed. `10.0.0.0/8` means "every address starting with 10", about 16.7 million addresses.) Your laptop at home is almost certainly something like `192.168.1.23`.
+**Public vs private IP.** A **public IP** is unique worldwide and reachable from anywhere. A **private IP** is meaningful only inside one local network and reused by millions of networks; the reserved IPv4 ranges are `10.0.0.0/8`, `172.16.0.0/12` and `192.168.0.0/16`. (`/8` is **CIDR notation**: the number of fixed leading bits; `10.0.0.0/8` is every address starting with 10, about 16.7 million.) Your home laptop is probably something like `192.168.1.23`.
 
-**NAT (Network Address Translation)** lets many private machines share one public IP. Your home router rewrites each outgoing packet's source from `192.168.1.23:51000` to its own public IP and a free port, say `81.2.69.160:40001`, remembers the mapping in a table, and reverses the rewrite on replies. In the cloud, the same job is done by a **NAT gateway** so that servers in a private subnet can download updates without being reachable from outside.
+**NAT (Network Address Translation)** lets many private machines share one public IP: the home router rewrites each outgoing packet's source from `192.168.1.23:51000` to its public IP and a free port (`81.2.69.160:40001`), records the mapping, and reverses it on replies. In the cloud a **NAT gateway** does this so servers in a private subnet can download updates without being reachable from outside.
 
 ### Why it matters
 
-- Servers you design live mostly on private IPs inside a **VPC** (Virtual Private Cloud — your own isolated network inside a cloud provider). Only the load balancer or gateway gets a public address. This is the first layer of security.
-- NAT explains why a server cannot simply "call" a phone or a browser: the client is behind NAT and has no stable public address. That is why push systems keep a long-lived connection open *from* the client (see WebSockets below).
-- The 5-tuple explains connection limits. A proxy that opens connections from one IP to one backend IP and port can use at most about 64,000 source ports (only about 28,000 with Linux's default range), which is a real limit on busy proxies (called **ephemeral port exhaustion**).
+- Your servers live mostly on private IPs inside a **VPC** (Virtual Private Cloud — your own isolated network in a cloud provider); only the load balancer or gateway gets a public address. This is the first layer of security.
+- NAT is why a server cannot simply "call" a phone or browser: the client has no stable public address, so push systems keep a long-lived connection open *from* the client (WebSockets, below).
+- The 5-tuple sets connection limits: a proxy opening connections from one IP to one backend IP and port has at most about 64,000 source ports (about 28,000 with Linux's default range) — **ephemeral port exhaustion** on busy proxies.
 
 ### How it works
 
@@ -1478,43 +1346,43 @@ flowchart LR
     I --> S["Server 93.184.215.14 port 443"]
 ```
 
-1. Your browser asks the operating system for a socket to `93.184.215.14:443`. The OS picks a random **ephemeral port** (a temporary source port, typically from 32768–60999 on Linux) such as 51000.
-2. The router's NAT swaps the private source address for its public one and records the mapping.
-3. Internet routers forward the packet hop by hop based only on the destination IP. A typical path crosses 10–20 routers.
-4. The server replies to `81.2.69.160:40001`. The router looks up its table and forwards the reply to `192.168.1.23:51000`.
+1. The browser asks the OS for a socket to `93.184.215.14:443`; the OS picks a random **ephemeral port** (temporary source port, typically 32768–60999 on Linux) such as 51000.
+2. The router's NAT swaps the private source for its public one and records the mapping.
+3. Internet routers forward the packet hop by hop on the destination IP alone; a typical path crosses 10–20 routers.
+4. The server replies to `81.2.69.160:40001`; the router looks up its table and forwards to `192.168.1.23:51000`.
 
 ### Common mistakes
 
-- Thinking an IP identifies a person or even a device. Behind **carrier-grade NAT** (NAT run by a mobile operator) thousands of users share one public IP, so rate limiting by IP alone can block an entire office or mobile network.
-- Forgetting that IPs change. Cloud instances get new private IPs when they restart, which is why systems use DNS names and service discovery instead of hard-coded addresses.
+- Thinking an IP identifies a person or device. Behind **carrier-grade NAT** (NAT run by a mobile operator or ISP) thousands of users share one public IP, so rate limiting by IP alone can block a whole office or mobile network.
+- Forgetting that IPs change. Cloud instances get new private IPs on restart, so systems use DNS names and service discovery, not hard-coded addresses.
 
 ### TL;DR
 
-An IP address finds the machine, a port finds the program, and the 5-tuple identifies one connection. Private IPs are hidden behind NAT, and only a few edge components in your design should have public IPs.
+An IP address finds the machine, a port finds the program, the 5-tuple identifies one connection. Private IPs hide behind NAT; only a few edge components should have public IPs.
 
 ## DNS — the internet's phone book
 
 ### What it is
 
-**DNS (Domain Name System)** turns human-friendly names like `www.example.com` into IP addresses. It is like your phone's contacts list: you tap "Mum", and the phone dials the number. Without DNS you would type `93.184.215.14` into the browser, and a company could never move its servers without telling every user the new number.
+**DNS (Domain Name System)** turns names like `www.example.com` into IP addresses, like a phone's contacts list. Without it you would type `93.184.215.14`, and a company could never move servers without telling every user.
 
-A **domain name** is read right to left as a hierarchy: `.` (the root, usually invisible) → `com` (the **top-level domain**, TLD) → `example` (the registered domain) → `www` (a **subdomain**). Each level is managed by a different organisation, which is what lets DNS scale to hundreds of millions of domains.
+A **domain name** reads right to left as a hierarchy: `.` (the root, usually invisible) → `com` (the **top-level domain**, TLD) → `example` (the registered domain) → `www` (a **subdomain**). Each level is managed by a different organisation, which lets DNS scale to hundreds of millions of domains.
 
 ### Why it matters
 
-- DNS is the very first step of almost every request, so its speed adds directly to page load time (a cold lookup can cost 20–120 ms).
-- DNS is a cheap, global traffic-steering tool: by answering with different IPs, you can spread users across data centres or send them to the closest one.
-- When DNS breaks, everything looks down even though servers are healthy. Large outages (for example the 2016 Dyn attack, and Facebook's 2021 outage, where its DNS servers became unreachable after a routing change) show it is a critical dependency.
+- DNS is the first step of almost every request, so its speed adds directly to page load (a cold lookup can cost 20–120 ms).
+- It is a cheap, global traffic-steering tool: answering with different IPs spreads users across data centres or sends them to the closest.
+- When DNS breaks, everything looks down though servers are healthy — the 2016 Dyn attack, and Facebook's 2021 outage, when its DNS servers became unreachable after a routing change.
 
 ### How it works
 
 The players:
 
-- **Stub resolver** — the tiny DNS client inside your OS. It does not do the hard work; it just asks someone else.
-- **Recursive resolver** — the server that does the legwork on your behalf and caches answers. It is usually run by your ISP (internet service provider), your company, or a public service like Google `8.8.8.8` or Cloudflare `1.1.1.1`.
-- **Root name servers** — the top of the tree. There are 13 named root server identities (`a.root-servers.net` to `m.root-servers.net`), but each is copied to many locations worldwide using anycast (explained in the CDN section), so there are close to 2,000 physical root server instances.
-- **TLD name servers** — know who is in charge of each domain under `.com`, `.org`, `.uk` and so on.
-- **Authoritative name server** — holds the real records for a domain (for example Route 53, Cloudflare DNS, or your own servers). Its answer is the final truth.
+- **Stub resolver** — the tiny DNS client in your OS; it just asks someone else.
+- **Recursive resolver** — does the legwork for you and caches answers; run by your ISP (internet service provider), your company, or public services like Google `8.8.8.8` or Cloudflare `1.1.1.1`.
+- **Root name servers** — the top of the tree: 13 named identities (`a.root-servers.net` to `m.root-servers.net`), each copied worldwide using anycast (CDN section), so close to 2,000 physical instances.
+- **TLD name servers** — know who is in charge of each domain under `.com`, `.org`, `.uk`…
+- **Authoritative name server** — holds the real records for a domain (Route 53, Cloudflare DNS, or your own); its answer is the final truth.
 
 ```mermaid
 sequenceDiagram
@@ -1533,20 +1401,18 @@ sequenceDiagram
     R-->>B: "93.184.215.14"
 ```
 
-Step by step:
-
 1. The browser checks its own cache, then the OS cache (and the `hosts` file).
-2. On a miss, the stub resolver sends a **recursive query** to the recursive resolver: "give me the final answer".
-3. If the resolver has nothing cached, it asks a root server, which replies with a **referral**: "I don't know, but here are the `.com` servers". These follow-up questions are **iterative queries** — each server just points to the next.
-4. The `.com` TLD server refers it to the domain's authoritative servers (the domain's **NS records**).
+2. On a miss, the stub resolver sends a **recursive query** ("give me the final answer") to the recursive resolver.
+3. With nothing cached, the resolver asks a root server, which replies with a **referral** ("here are the `.com` servers"). These follow-ups are **iterative queries** — each server just points to the next.
+4. The `.com` TLD server refers it to the domain's authoritative servers (its **NS records**).
 5. The authoritative server returns the answer.
-6. The resolver caches every step (root and TLD referrals are cached for days), so the next lookup for any `.com` name skips steps 3–4.
+6. The resolver caches every step (root and TLD referrals for days), so the next `.com` lookup skips steps 3–4.
 
-In practice, a busy resolver almost always has the root and TLD answers cached, so most lookups are one hop to the authoritative server or a pure cache hit (under 1 ms on the same machine, ~10–30 ms to a public resolver).
+In practice a busy resolver has root and TLD answers cached, so most lookups are one hop to the authoritative server or a pure cache hit (under 1 ms on the same machine, ~10–30 ms to a public resolver).
 
 ### Types
 
-**DNS record types** you should know:
+**DNS record types:**
 
 | Record | Maps | Example |
 |---|---|---|
@@ -1557,24 +1423,22 @@ In practice, a busy resolver almost always has the root and TLD answers cached, 
 | NS | domain → its authoritative name servers | `ns1.example-dns.net` |
 | TXT | name → free text | domain-ownership proofs, SPF rules listing which servers may send a domain's email |
 
-Others you may meet: **SOA** (start of authority — admin data for a zone), **SRV** (service location with port), **PTR** (reverse lookup, IP → name), **CAA** (which certificate authorities may issue certificates for the domain). A **zone** is the set of records one authoritative server is responsible for.
+Others: **SOA** (start of authority — admin data for a zone), **SRV** (service location with port), **PTR** (reverse lookup, IP → name), **CAA** (which certificate authorities may issue certificates for the domain). A **zone** is the set of records one authoritative server is responsible for.
 
-A CNAME cannot sit at the bare domain (`example.com`, called the **apex**) because the apex must also hold NS and SOA records. Providers work around this with non-standard "ALIAS" or "ANAME" records, or Cloudflare's "CNAME flattening".
-
-Here is a real-looking lookup with the `dig` tool:
+A CNAME cannot sit at the bare domain (`example.com`, the **apex**) because the apex must also hold NS and SOA records; providers work around this with non-standard "ALIAS"/"ANAME" records or Cloudflare's "CNAME flattening".
 
 ```text
 $ dig www.example.com A +noall +answer
 www.example.com.   300   IN   A   93.184.215.14
 ```
 
-`300` is the **TTL**, `IN` means internet class, and `A` is the record type.
+`300` is the **TTL**, `IN` means internet class, `A` is the record type.
 
-**TTL and DNS caching.** Every record carries a **TTL (time to live)** in seconds: how long any resolver or browser may cache it. A TTL of 300 means "reuse this for 5 minutes". Long TTLs (hours or a day) mean fewer lookups and faster pages, but changes take that long to reach everyone (what people call "propagation" is nothing being pushed out; resolvers simply keep the old answer until their copy times out). Short TTLs (30–60 s) let you fail over quickly but cause more queries. A common trick: lower the TTL a day before a planned migration, switch the record, then raise it again. Some clients and resolvers ignore TTLs and cache longer, so never rely on DNS alone for instant failover.
+**TTL and DNS caching.** Every record carries a **TTL (time to live)** in seconds: how long any resolver or browser may cache it (300 = reuse for 5 minutes). Long TTLs (hours, a day) mean fewer lookups and faster pages but slow changes — "propagation" is not a push; resolvers keep the old answer until their copy times out. Short TTLs (30–60 s) allow quick failover but cause more queries. Common trick: lower the TTL a day before a planned migration, switch the record, raise it again. Some clients and resolvers ignore TTLs and cache longer, so never rely on DNS alone for instant failover.
 
-**DNS-based load balancing.** The authoritative server can return several A records (for example three IPs) and rotate their order on each query — **round-robin DNS**. Clients usually try the first one, so load spreads roughly evenly. It is free and simple but blind: DNS does not know whether a server is busy or dead unless the DNS provider runs health checks and removes bad IPs.
+**DNS-based load balancing.** The authoritative server returns several A records and rotates their order per query — **round-robin DNS**. Clients usually try the first, so load spreads roughly evenly. Free and simple but blind: DNS doesn't know if a server is busy or dead unless the provider runs health checks and removes bad IPs.
 
-**GeoDNS** answers differently depending on where the query comes from: a user in Paris gets the IP of the Frankfurt data centre, a user in Tokyo gets the Tokyo one. The DNS server guesses location from the resolver's IP, or from the **EDNS Client Subnet** extension, which passes part of the user's own IP so the guess is better. **Latency-based routing** (offered by AWS Route 53) picks the region with the lowest measured latency rather than the closest on a map.
+**GeoDNS** answers by where the query comes from: Paris gets the Frankfurt data centre, Tokyo the Tokyo one. The location is guessed from the resolver's IP or from the **EDNS Client Subnet** extension, which passes part of the user's own IP. **Latency-based routing** (AWS Route 53) picks the region with the lowest measured latency rather than the nearest on a map.
 
 ### Trade-offs
 
@@ -1586,9 +1450,9 @@ www.example.com.   300   IN   A   93.184.215.14
 
 ### Common mistakes
 
-- Expecting a DNS change to take effect instantly. Cached answers live until their TTL expires, sometimes longer.
-- Using one DNS provider with no redundancy. Many large sites now use two providers.
-- Treating DNS round robin as a real load balancer. It cannot react to a server being slow.
+- Expecting a DNS change to take effect instantly; cached answers live until their TTL expires, sometimes longer.
+- One DNS provider with no redundancy. Many large sites now use two.
+- Treating DNS round robin as a real load balancer; it cannot react to a slow server.
 
 ### Real-world examples
 
@@ -1598,23 +1462,23 @@ Amazon Route 53, Cloudflare DNS, Google Cloud DNS and NS1 are authoritative DNS 
 
 **Q:** What happens when you type a URL in the browser, up to the IP address?
 
-**A:** Browser cache, OS cache, then a recursive resolver. If the resolver has nothing cached, it walks root → TLD → authoritative server, caches each answer for its TTL, and returns the IP. Then the browser opens a TCP (or QUIC) connection to that IP.
+**A:** Browser cache, OS cache, then a recursive resolver, which (if nothing is cached) walks root → TLD → authoritative server, caches each answer for its TTL, and returns the IP. The browser then opens a TCP (or QUIC) connection to it.
 
 **Q:** How would you move traffic away from a failed region using DNS?
 
-**A:** Use health-checked records with a short TTL (say 60 s) so the provider stops returning the failed region's IP. Accept that some clients will still hit the old IP for a while, so the failed region's load balancer should also redirect or fail fast.
+**A:** Health-checked records with a short TTL (say 60 s) so the provider stops returning the failed region's IP. Some clients will still hit the old IP for a while, so the failed region's load balancer should also redirect or fail fast.
 
 ### TL;DR
 
-DNS maps names to IPs through a cached hierarchy of root, TLD and authoritative servers. TTL controls the trade-off between speed and how quickly changes spread, and DNS can do coarse global load balancing (round robin, GeoDNS, latency-based).
+DNS maps names to IPs through a cached hierarchy of root, TLD and authoritative servers. TTL trades speed against how quickly changes spread; DNS can do coarse global load balancing (round robin, GeoDNS, latency-based).
 
 ## Network layers — OSI and TCP/IP models
 
 ### What it is
 
-Networking is split into **layers**, each solving one job and relying on the layer below. Think of posting a parcel: you write a letter (application), put it in an envelope with an apartment number (transport), the post office adds a city and street address (network), and a van physically drives it (link and physical). Each layer only cares about its own label.
+Networking is split into **layers**, each solving one job and relying on the layer below — like a parcel: letter (application), apartment number (transport), street address (network), the van (link and physical). Each layer only reads its own label.
 
-There are two models. The **OSI model** has seven layers and is mainly a teaching vocabulary. The **TCP/IP model** has four and describes what the internet actually runs. Engineers mix them: when someone says "L4" or "L7", they mean OSI layer numbers.
+The **OSI model** has seven layers and is mainly a teaching vocabulary; the **TCP/IP model** has four and describes what the internet runs. "L4" or "L7" always means OSI layer numbers.
 
 | OSI layer | Name | What it handles | Examples |
 |---|---|---|---|
@@ -1626,41 +1490,41 @@ There are two models. The **OSI model** has seven layers and is mainly a teachin
 | 2 | Data link | One hop on a local network | Ethernet, Wi-Fi, MAC addresses |
 | 1 | Physical | Bits on wire, light or radio | Copper, fibre, radio |
 
-The TCP/IP model merges 5–7 into "application" and 1–2 into "link": Application, Transport, Internet, Link.
+TCP/IP merges 5–7 into "application" and 1–2 into "link": Application, Transport, Internet, Link.
 
 ### Why it matters
 
-The layer a component works at decides what it can see and therefore what it can do:
+A component's layer decides what it can see and do:
 
-- An **L3** device (router, firewall rule on IPs) sees only source and destination IPs.
-- An **L4** device (L4 load balancer) also sees ports and TCP/UDP state, but not the content. It can say "send port 443 traffic to these servers" but not "send `/api/` to these".
-- An **L7** device (L7 load balancer, API gateway) reads the HTTP request itself: URL path, headers, cookies. It can route by path, rewrite headers, and block bad requests — at the cost of more CPU and needing to decrypt TLS (the encryption behind HTTPS, explained below).
+- **L3** (router, firewall rule on IPs): only source and destination IPs.
+- **L4** (L4 load balancer): also ports and TCP/UDP state, not content — "send port 443 traffic to these servers", but not "send `/api/` to these".
+- **L7** (L7 load balancer, API gateway): reads the HTTP request — path, headers, cookies — so it can route by path, rewrite headers and block bad requests, at the cost of more CPU and decrypting TLS (the encryption behind HTTPS, below).
 
 ### How it works
 
-When your app sends an HTTP request, each layer wraps the data with its own header — **encapsulation**. HTTP request → TCP segment (adds ports, sequence numbers) → IP packet (adds IPs) → Ethernet frame (adds MAC addresses, the hardware address of a network card). The receiver unwraps in reverse order.
+Each layer wraps the data with its own header — **encapsulation**: HTTP request → TCP segment (ports, sequence numbers) → IP packet (IPs) → Ethernet frame (**MAC addresses**, the hardware address of a network card). The receiver unwraps in reverse.
 
 ### TL;DR
 
-Layers separate concerns: L3 is IP addresses, L4 is ports and connections (TCP/UDP), L7 is application content (HTTP). "L4 vs L7" in system design always means "can it read the request or only the connection?"
+L3 is IP addresses, L4 ports and connections (TCP/UDP), L7 application content (HTTP). "L4 vs L7" means "can it read the request or only the connection?"
 
 ## TCP, UDP and QUIC
 
 ### What it is
 
-These are the **transport-layer** protocols: they carry data between two programs.
+The **transport-layer** protocols that carry data between two programs:
 
-- **TCP (Transmission Control Protocol)** is like a phone call with a careful note-taker: you connect first, everything arrives, in order, and lost words are repeated.
-- **UDP (User Datagram Protocol)** is like shouting postcards across a room: no setup, each message is independent, some may be lost or arrive out of order, nobody repeats anything.
-- **QUIC** is a newer protocol built on top of UDP that gives TCP-like reliability plus built-in encryption, without some of TCP's weaknesses. HTTP/3 runs on it.
+- **TCP (Transmission Control Protocol)**: a phone call with a careful note-taker — connect first; everything arrives, in order; lost words are repeated.
+- **UDP (User Datagram Protocol)**: postcards shouted across a room — no setup, independent messages, some lost or out of order, nothing repeated.
+- **QUIC**: a newer protocol over UDP with TCP-like reliability plus built-in encryption, minus some of TCP's weaknesses. HTTP/3 runs on it.
 
 ### Why it matters
 
-The choice shapes latency and behaviour under packet loss. Web pages, APIs and databases want every byte correct, so they use TCP (or QUIC). Live voice, video calls, online games and DNS lookups prefer UDP because a late packet is useless — better to skip it than to wait.
+The choice shapes latency and behaviour under packet loss. Web pages, APIs and databases need every byte correct, so they use TCP (or QUIC). Voice, video calls, games and DNS lookups prefer UDP: a late packet is useless, better skipped than waited for.
 
 ### How it works
 
-**TCP three-way handshake.** Before any data, the two sides agree on starting sequence numbers:
+**TCP three-way handshake.** Before any data, the two sides agree starting sequence numbers:
 
 ```mermaid
 sequenceDiagram
@@ -1673,27 +1537,27 @@ sequenceDiagram
     C->>S: "Data, for example an HTTP request"
 ```
 
-This costs one **round trip (RTT)** before the first byte of the request. London to New York is about 70 ms RTT, so the handshake alone is 70 ms — and TLS adds more on top (see HTTPS). This is why reusing connections matters so much.
+This costs one **round trip (RTT)** before the first request byte — 70 ms London–New York — and TLS adds more (HTTPS). Hence reusing connections matters.
 
-**Reliability and ordering.** TCP numbers every byte (**sequence numbers**). The receiver sends **acknowledgements (ACKs)**. If an ACK does not arrive in time, the sender **retransmits**. The receiver reorders out-of-order segments and hands the application a clean, ordered byte stream.
+**Reliability and ordering.** TCP numbers every byte (**sequence numbers**); the receiver sends **acknowledgements (ACKs)**; if an ACK is late the sender **retransmits**. The receiver reorders segments and hands the application a clean, ordered byte stream.
 
-**Flow control.** The receiver advertises a **receive window** — how much buffer space it has — so a fast sender cannot overwhelm a slow receiver.
+**Flow control.** The receiver advertises a **receive window** (its free buffer space) so a fast sender cannot overwhelm a slow receiver.
 
-**Congestion control.** The network in between can also be overwhelmed. TCP starts slowly (**slow start**: send a few packets, roughly double each round trip while ACKs come back), and when it sees loss it backs off. Algorithms include Reno, CUBIC (default on Linux) and Google's BBR, which models bandwidth and RTT instead of waiting for loss. A practical result: a brand-new connection cannot use the full bandwidth immediately, another reason to keep connections warm.
+**Congestion control.** To avoid overwhelming the network in between, TCP starts slowly (**slow start**: a few packets, roughly doubling each round trip while ACKs return) and backs off on loss. Algorithms: Reno, CUBIC (Linux default) and Google's BBR, which models bandwidth and RTT instead of waiting for loss. A new connection cannot use full bandwidth immediately — another reason to keep connections warm.
 
-**Closing.** Either side sends **FIN**; the other acknowledges. The side that closes first keeps the socket in **TIME_WAIT** for a short time (on Linux, 60 s) to catch stray packets — a source of port exhaustion on busy clients that open and close many connections.
+**Closing.** Either side sends **FIN**; the other acknowledges. The side closing first keeps the socket in **TIME_WAIT** briefly (60 s on Linux) to catch stray packets — a source of port exhaustion on clients that open and close many connections.
 
-**Head-of-line (HOL) blocking.** Because TCP delivers bytes strictly in order, one lost packet holds up everything behind it until it is retransmitted, even data that already arrived. Picture a single-lane road where one stalled car stops all traffic behind. If several independent requests share one TCP connection (as in HTTP/2), a single loss stalls all of them.
+**Head-of-line (HOL) blocking.** TCP delivers bytes strictly in order, so one lost packet holds up everything behind it until retransmitted, even data already arrived. If several independent requests share one TCP connection (HTTP/2), one loss stalls them all.
 
-**UDP** has no handshake, no ACKs, no ordering and no congestion control. Each **datagram** is sent and forgotten. The header is 8 bytes versus TCP's 20+. Applications that need some reliability add it themselves.
+**UDP** has no handshake, ACKs, ordering or congestion control; each **datagram** is sent and forgotten. Its header is 8 bytes versus TCP's 20+. Apps needing some reliability add it themselves.
 
-**QUIC** (standardised by the IETF, the Internet Engineering Task Force, in 2021, originally developed at Google) runs over UDP and puts into one protocol what used to take TCP + TLS:
+**QUIC** (standardised by the IETF, the Internet Engineering Task Force, in 2021; originally developed at Google) runs over UDP and merges what took TCP + TLS:
 
-1. **Faster setup** — the transport and TLS 1.3 handshakes are combined, so a new connection takes 1 RTT, and a returning client can send data in the first packet (**0-RTT**).
-2. **Independent streams** — many streams inside one connection, and a lost packet only stalls the stream it belongs to. No transport-level HOL blocking between streams.
-3. **Connection migration** — a connection is identified by a **connection ID**, not the 5-tuple, so your phone switching from Wi-Fi to 4G keeps the same connection.
-4. **Always encrypted** — even most of the transport headers.
-5. **Lives in user space** — it can evolve without operating-system upgrades. The downside is more CPU per byte than kernel TCP, and some corporate firewalls block UDP, so clients fall back to TCP.
+1. **Faster setup** — transport and TLS 1.3 handshakes combined: 1 RTT for a new connection; a returning client can send data in its first packet (**0-RTT**).
+2. **Independent streams** — a lost packet stalls only its own stream; no transport-level HOL blocking between streams.
+3. **Connection migration** — a connection is identified by a **connection ID**, not the 5-tuple, so a phone moving from Wi-Fi to 4G keeps it.
+4. **Always encrypted** — even most transport headers.
+5. **Lives in user space** — evolves without OS upgrades. Downsides: more CPU per byte than kernel TCP, and some corporate firewalls block UDP, so clients fall back to TCP.
 
 ### Types
 
@@ -1707,36 +1571,36 @@ This costs one **round trip (RTT)** before the first byte of the request. London
 
 ### Trade-offs
 
-TCP gives correctness at the cost of setup latency and stalls under loss. UDP gives speed and control at the cost of building whatever reliability you need yourself. QUIC fixes TCP's main pains for the web but costs more CPU and is sometimes blocked.
+TCP: correctness, at the cost of setup latency and stalls under loss. UDP: speed and control, but you build any reliability yourself. QUIC fixes TCP's main web pains but costs more CPU and is sometimes blocked.
 
 ### Common mistakes
 
-- Saying "UDP is faster" without context. On a clean network, a long-lived TCP connection is just as fast for bulk data. UDP wins on setup time and on not waiting for retransmissions.
+- "UDP is faster" without context. On a clean network a long-lived TCP connection is as fast for bulk data; UDP wins on setup and on not waiting for retransmissions.
 - Forgetting that every new TCP + TLS connection costs 2–3 RTTs before the first byte. Use connection pooling and keep-alive.
 
 ### Real-world examples
 
-Zoom, WebRTC (browser video calls), and most online games use UDP. DNS uses UDP for normal queries and switches to TCP for large responses. Google, YouTube, Meta and Cloudflare serve a large share of their traffic over QUIC / HTTP/3.
+Zoom, WebRTC (browser video calls) and most online games use UDP. DNS uses UDP for normal queries and TCP for large responses. Google, YouTube, Meta and Cloudflare serve a large share of traffic over QUIC / HTTP/3.
 
 ### In the interview
 
 **Q:** Why would a video-calling app use UDP instead of TCP?
 
-**A:** Because a frame that arrives 300 ms late is worthless. TCP would pause all later frames while retransmitting the lost one (HOL blocking). With UDP the app just skips the lost frame and stays real-time.
+**A:** A frame 300 ms late is worthless. TCP would pause all later frames while retransmitting the lost one (HOL blocking); with UDP the app skips it and stays real-time.
 
 **Q:** What problem does QUIC solve?
 
-**A:** TCP's head-of-line blocking across multiplexed streams and its slow combined TCP + TLS handshake. QUIC gives independent streams, a 1-RTT (or 0-RTT) encrypted handshake, and survives network changes.
+**A:** TCP's head-of-line blocking across multiplexed streams and the slow combined TCP + TLS handshake. QUIC gives independent streams, a 1-RTT (or 0-RTT) encrypted handshake, and survives network changes.
 
 ### TL;DR
 
-TCP = connected, reliable, ordered, congestion-controlled, but has handshake cost and head-of-line blocking. UDP = fire-and-forget datagrams. QUIC = reliable, encrypted, multi-stream transport over UDP that powers HTTP/3.
+TCP = connected, reliable, ordered, congestion-controlled, with handshake cost and head-of-line blocking. UDP = fire-and-forget datagrams. QUIC = reliable, encrypted, multi-stream transport over UDP that powers HTTP/3.
 
 ## HTTP — the language of the web
 
 ### What it is
 
-**HTTP (HyperText Transfer Protocol)** is the request–response protocol browsers and APIs use. The client sends a **request** (a method, a path, headers, optional body); the server sends a **response** (a status code, headers, optional body). It is like ordering at a counter: "GET me the menu" → "200 OK, here it is".
+**HTTP (HyperText Transfer Protocol)** is the request–response protocol of browsers and APIs. The client sends a **request** (method, path, headers, optional body); the server sends a **response** (status code, headers, optional body).
 
 ```http
 GET /users/42 HTTP/1.1
@@ -1753,7 +1617,7 @@ Cache-Control: max-age=60
 
 ### Why it matters
 
-Almost every API you design in an interview is HTTP. Choosing the right method and status code makes APIs predictable, cache-friendly and safe to retry. The HTTP version decides how many connections you need and how much latency you pay.
+Almost every API you design in an interview is HTTP. The right method and status code make APIs predictable, cache-friendly and safe to retry; the HTTP version decides how many connections you need and how much latency you pay.
 
 ### How it works
 
@@ -1769,7 +1633,7 @@ Almost every API you design in an interview is HTTP. Choosing the right method a
 | DELETE | Remove a resource | No | Yes |
 | OPTIONS | Ask what is allowed (used by CORS, the browser's cross-origin permission check) | Yes | Yes |
 
-**Safe** means it does not change anything on the server. **Idempotent** means doing it once or ten times leaves the server in the same state — so a client can safely retry after a timeout. `DELETE /orders/7` twice still leaves order 7 deleted (the second call may return 404, but the state is the same). `POST /orders` twice creates two orders, which is why payment APIs add an **idempotency key** header so the server can recognise a retry.
+**Safe** = changes nothing on the server. **Idempotent** = doing it once or ten times leaves the same server state, so a client can retry after a timeout: `DELETE /orders/7` twice still leaves order 7 deleted (the second may return 404). `POST /orders` twice creates two orders, which is why payment APIs add an **idempotency key** header so the server recognises a retry.
 
 **Status codes** — the first digit is the category:
 
@@ -1781,21 +1645,21 @@ Almost every API you design in an interview is HTTP. Choosing the right method a
 | 4xx | Client's fault | 400 Bad Request, 401 Unauthorized, 403 Forbidden, 404 Not Found, 409 Conflict, 429 Too Many Requests |
 | 5xx | Server's fault | 500 Internal Server Error, 502 Bad Gateway, 503 Service Unavailable, 504 Gateway Timeout |
 
-401 means "we don't know who you are" (not logged in); 403 means "we know who you are and you may not do this". 502 and 504 typically come from a proxy or load balancer: the backend gave a bad answer (502) or no answer in time (504). 202 Accepted is for "queued, will be processed later".
+401 = "we don't know who you are" (not logged in); 403 = "we know who you are and you may not do this". 502 and 504 usually come from a proxy or load balancer: the backend gave a bad answer (502) or none in time (504). 202 Accepted = "queued, will be processed later".
 
-**Headers** are key–value metadata. Important ones: `Host` (which site — many sites share one IP), `Content-Type` (format of the body), `Authorization` (credentials), `Cache-Control` (who may cache and for how long), `ETag` and `If-None-Match` (let the server reply 304 Not Modified if the client's copy is current), `User-Agent`, `Accept-Encoding: gzip, br` (compression), `X-Forwarded-For` (original client IP, added by proxies).
+**Headers** are key–value metadata: `Host` (which site — many share one IP), `Content-Type` (body format), `Authorization` (credentials), `Cache-Control` (who may cache and how long), `ETag` and `If-None-Match` (server replies 304 Not Modified if the client's copy is current), `User-Agent`, `Accept-Encoding: gzip, br` (compression), `X-Forwarded-For` (original client IP, added by proxies).
 
-**Statelessness and cookies.** HTTP is **stateless**: each request carries everything the server needs, and the server does not remember the previous request by itself. This is what makes it easy to put many identical servers behind a load balancer. To build logins and shopping carts on top, servers use **cookies**: the server sends `Set-Cookie: session=abc123; HttpOnly; Secure; SameSite=Lax`, and the browser automatically sends `Cookie: session=abc123` on every later request to that site. The session data itself lives in a shared store (like Redis) or inside a signed token, so any server can handle the next request.
+**Statelessness and cookies.** HTTP is **stateless**: each request carries everything needed and the server doesn't remember the previous one, so many identical servers can sit behind a load balancer. Logins and carts use **cookies**: the server sends `Set-Cookie: session=abc123; HttpOnly; Secure; SameSite=Lax` and the browser returns `Cookie: session=abc123` on every later request; the session lives in a shared store (Redis) or a signed token (flags and tokens: *Sessions, cookies, tokens and JWT*, Part 5).
 
-**Keep-alive (persistent connections).** HTTP/1.0 opened a new TCP connection per request. HTTP/1.1 keeps the connection open by default for reuse, saving the handshake on every request.
+**Keep-alive (persistent connections).** HTTP/1.0 opened a TCP connection per request; HTTP/1.1 keeps it open by default for reuse, saving the handshake each time.
 
 ### Types
 
-**HTTP/1.1 (1997).** Text-based. One request at a time per connection; the next request waits for the previous response (**HTTP-level HOL blocking**). "Pipelining" was specified but never worked reliably. Browsers work around it by opening about 6 connections per host, and sites used tricks like domain sharding and sprite images.
+**HTTP/1.1 (1997).** Text-based; one request at a time per connection, the next waiting for the previous response (**HTTP-level HOL blocking**). "Pipelining" was specified but never worked reliably, so browsers open about 6 connections per host and sites used tricks like domain sharding and sprite images.
 
-**HTTP/2 (2015).** Binary framing. **Multiplexing**: many requests and responses interleave as **streams** over one TCP connection, so one slow response no longer blocks others at the HTTP level. **Header compression** (HPACK) shrinks repetitive headers. Server push existed but was little used and has been removed from Chrome. Weakness: it still runs on one TCP connection, so one lost packet stalls every stream (TCP-level HOL blocking). On lossy mobile networks this can be worse than six HTTP/1.1 connections.
+**HTTP/2 (2015).** Binary framing. **Multiplexing**: many requests and responses interleave as **streams** over one TCP connection, so one slow response no longer blocks others at the HTTP level. **Header compression** (HPACK) shrinks repetitive headers. Server push was little used and has been removed from Chrome. Weakness: one TCP connection, so one lost packet stalls every stream (TCP-level HOL blocking) — on lossy mobile networks sometimes worse than six HTTP/1.1 connections.
 
-**HTTP/3 (2022).** Same meaning as HTTP/2 but runs on QUIC over UDP. Independent streams remove TCP HOL blocking, setup is faster, and connections survive network switches. Header compression is QPACK. Browsers discover HTTP/3 through an `Alt-Svc` header or a DNS **HTTPS record**, and fall back to HTTP/2 if UDP is blocked.
+**HTTP/3 (2022).** HTTP/2's semantics on QUIC over UDP: independent streams remove TCP HOL blocking, setup is faster, connections survive network switches. Header compression is QPACK. Browsers discover HTTP/3 through an `Alt-Svc` header or a DNS **HTTPS record**, falling back to HTTP/2 if UDP is blocked.
 
 | | HTTP/1.1 | HTTP/2 | HTTP/3 |
 |---|---|---|---|
@@ -1814,42 +1678,40 @@ flowchart TD
 
 ### Common mistakes
 
-- Using GET for actions that change data (a crawler or prefetcher may trigger them).
-- Returning 200 with `{"error": ...}` in the body. Proxies, caches, monitoring and retries all rely on real status codes.
+- GET for actions that change data (a crawler or prefetcher may trigger them).
+- Returning 200 with `{"error": ...}` in the body; proxies, caches, monitoring and retries rely on real status codes.
 - Retrying non-idempotent POSTs blindly. Use idempotency keys.
-- Storing session state in one server's memory, which breaks as soon as there are two servers.
+- Session state in one server's memory, which breaks with two servers.
 
 ### In the interview
 
 **Q:** Which HTTP methods are idempotent and why does it matter?
 
-**A:** GET, HEAD, PUT, DELETE, OPTIONS. It matters because networks time out: if the client does not know whether the request succeeded, it can retry an idempotent request safely. For POST you need an idempotency key.
+**A:** GET, HEAD, PUT, DELETE, OPTIONS. Networks time out; if the client doesn't know whether a request succeeded, it can safely retry an idempotent one. POST needs an idempotency key.
 
 **Q:** What did HTTP/2 improve and what did HTTP/3 fix on top?
 
-**A:** HTTP/2 multiplexed many requests over one connection with header compression, removing HTTP-level head-of-line blocking. HTTP/3 moved to QUIC to remove the remaining TCP-level head-of-line blocking and speed up connection setup.
+**A:** HTTP/2 multiplexed many requests over one connection with header compression, removing HTTP-level head-of-line blocking. HTTP/3 moved to QUIC to remove the remaining TCP-level blocking and speed up connection setup.
 
 ### TL;DR
 
-HTTP is a stateless request–response protocol of methods, status codes and headers. Cookies add sessions on top, keep-alive reuses connections, HTTP/2 multiplexes streams over TCP, and HTTP/3 does the same over QUIC.
+HTTP is a stateless request–response protocol of methods, status codes and headers. Cookies add sessions, keep-alive reuses connections, HTTP/2 multiplexes streams over TCP, HTTP/3 over QUIC.
 
 ## HTTPS and TLS
 
 ### What it is
 
-**HTTPS** is HTTP sent inside a **TLS (Transport Layer Security)** encrypted tunnel. TLS gives three guarantees: **confidentiality** (eavesdroppers see gibberish), **integrity** (nobody can change the bytes undetected) and **authentication** (you really are talking to `bank.com`, not an impostor). Its older name is **SSL**, which is why people still say "SSL certificate" and "SSL termination". The current version is TLS 1.3 (2018); TLS 1.2 is still common; anything older is deprecated.
-
-Analogy: a sealed, tamper-evident envelope, plus a passport check of the person you are handing it to.
+**HTTPS** is HTTP inside a **TLS (Transport Layer Security)** encrypted tunnel. TLS gives **confidentiality** (eavesdroppers see gibberish), **integrity** (bytes can't be changed undetected) and **authentication** (you really are talking to `bank.com`) — a sealed, tamper-evident envelope plus a passport check. Its older name is **SSL**, hence "SSL certificate" and "SSL termination". Current version TLS 1.3 (2018); TLS 1.2 still common; anything older deprecated.
 
 ### Why it matters
 
-Browsers mark plain HTTP as "Not secure", HTTP/2 in browsers and HTTP/3 always require it, and any password, token or personal data on the wire must be encrypted. This is **encryption in transit** (as opposed to **encryption at rest**, which protects stored data on disk). TLS also costs latency and CPU, which affects where you decrypt (see TLS termination in the load balancer section).
+Browsers mark plain HTTP "Not secure", HTTP/2 in browsers and HTTP/3 always require TLS, and passwords, tokens and personal data on the wire must be encrypted. This is **encryption in transit** (vs **encryption at rest**, protecting stored data on disk). TLS costs latency and CPU, which affects where you decrypt (TLS termination, load balancer section).
 
 ### How it works
 
-**Certificates.** A server proves its identity with a **certificate**: a file containing the domain name, the server's **public key**, an expiry date, and a digital signature from a **Certificate Authority (CA)** — an organisation trusted by browsers and operating systems, such as Let's Encrypt or DigiCert. The browser follows the **chain of trust**: server certificate → intermediate CA → **root CA** that is pre-installed in the browser. If the chain is valid, the name matches and it is not expired, the server is trusted. Let's Encrypt issues free certificates, renewed automatically with the ACME protocol. They have been valid for 90 days, and lifetimes across the industry are shrinking: Let's Encrypt plans 64 days in 2027 and 45 days in 2028, so automated renewal is mandatory.
+**Certificates.** A server proves its identity with a **certificate**: domain name, the server's **public key**, an expiry date, and a digital signature from a **Certificate Authority (CA)** trusted by browsers and operating systems (Let's Encrypt, DigiCert). The browser follows the **chain of trust**: server certificate → intermediate CA → **root CA** pre-installed in the browser; if the chain is valid, the name matches and it hasn't expired, the server is trusted. Let's Encrypt issues free certificates renewed automatically with the ACME protocol. They have been valid for 90 days, and lifetimes are shrinking (Let's Encrypt plans 64 days in 2027 and 45 in 2028), so automated renewal is mandatory.
 
-**Public-key vs symmetric encryption.** **Asymmetric (public-key) cryptography** uses a key pair: anything signed by the private key can be verified with the public key. It is slow, so TLS uses it only during the handshake to authenticate the server and agree on a shared secret. After that, all data is encrypted with fast **symmetric** encryption (one shared key, e.g. AES-GCM or ChaCha20).
+**Public-key vs symmetric encryption.** **Asymmetric (public-key) cryptography** uses a key pair: anything signed with the private key can be verified with the public key. It is slow, so TLS uses it only in the handshake to authenticate the server and agree a shared secret; data is then encrypted with fast **symmetric** encryption (one shared key, e.g. AES-GCM or ChaCha20).
 
 **TLS 1.3 handshake (simplified):**
 
@@ -1864,48 +1726,48 @@ sequenceDiagram
     S-->>C: "Encrypted HTTP response"
 ```
 
-1. The client sends supported versions and cipher suites and a **key share** (its half of a Diffie–Hellman key exchange — a method where two sides each mix in a secret and arrive at the same shared key without ever sending it).
-2. The server answers with its key share, its certificate, and a signature proving it owns the certificate's private key.
-3. Both sides derive the same symmetric keys. The client sends Finished and can immediately send the encrypted request.
+1. The client sends supported versions, cipher suites and a **key share** (its half of a **Diffie–Hellman** exchange, where two sides each mix in a secret and arrive at the same key without ever sending it).
+2. The server answers with its key share, certificate, and a signature proving it owns the certificate's private key.
+3. Both derive the same symmetric keys; the client sends Finished and immediately the encrypted request.
 
-TLS 1.3 needs **1 RTT** (TLS 1.2 needed 2). Combined with TCP's 1 RTT, a fresh HTTPS connection over TCP costs about 2 RTTs before the request goes out — 140 ms from London to New York. **Session resumption** and **0-RTT** let returning clients skip work (0-RTT data can be replayed by an attacker, so it should only be used for idempotent requests). Using fresh Diffie–Hellman keys per session gives **forward secrecy**: stealing the server's private key later does not decrypt old recorded traffic.
+TLS 1.3 needs **1 RTT** (TLS 1.2 needed 2). Plus TCP's 1 RTT, a fresh HTTPS connection costs about 2 RTTs before the request goes out — 140 ms London–New York. **Session resumption** and **0-RTT** let returning clients skip work (0-RTT data can be replayed by an attacker, so use it only for idempotent requests). Fresh Diffie–Hellman keys per session give **forward secrecy**: stealing the server's private key later doesn't decrypt old recorded traffic.
 
-**SNI (Server Name Indication).** The ClientHello includes the hostname so one IP can serve certificates for many domains — essential for load balancers and CDNs.
+**SNI (Server Name Indication).** The ClientHello carries the hostname so one IP can serve certificates for many domains — essential for load balancers and CDNs.
 
-**mTLS (mutual TLS)** — both sides present certificates. Used between internal services (service meshes) so each service proves its identity.
+**mTLS (mutual TLS)** — both sides present certificates; used between internal services (service meshes) so each proves its identity.
 
 ### Common mistakes
 
-- Letting certificates expire. It has caused outages at large companies; automate renewal and alert on expiry.
+- Letting certificates expire — it has caused outages at large companies. Automate renewal and alert on expiry.
 - Terminating TLS at the edge and sending plaintext across untrusted networks. Inside one VPC it may be acceptable; across data centres, re-encrypt.
 
 ### In the interview
 
 **Q:** Why does HTTPS use both asymmetric and symmetric encryption?
 
-**A:** Asymmetric crypto solves authentication and key agreement without a shared secret, but it is slow. Once both sides share a key, symmetric encryption is fast enough for bulk data.
+**A:** Asymmetric crypto handles authentication and key agreement without a shared secret but is slow; once a key is shared, symmetric encryption is fast enough for bulk data.
 
 **Q:** How many round trips does a new HTTPS request cost?
 
-**A:** About 1 RTT for TCP, 1 for TLS 1.3, then 1 for the request and response — 3 in total. With HTTP/3 over QUIC the first two merge into one, and resumed connections can send data immediately.
+**A:** 1 RTT for TCP, 1 for TLS 1.3, 1 for request and response — 3 in total. HTTP/3 over QUIC merges the first two, and resumed connections can send data immediately.
 
 ### TL;DR
 
-TLS encrypts and authenticates connections using certificates signed by trusted CAs. The handshake uses public-key crypto to agree on a symmetric key, TLS 1.3 takes 1 RTT, and HTTPS is simply HTTP inside TLS.
+TLS encrypts and authenticates connections with certificates signed by trusted CAs; the handshake uses public-key crypto to agree a symmetric key in 1 RTT (TLS 1.3). HTTPS is HTTP inside TLS.
 
 ## API styles — REST, RPC and gRPC, GraphQL
 
 ### What it is
 
-An **API (Application Programming Interface)** is the menu a service offers to other programs: which operations exist, what inputs they take and what they return. Three styles dominate.
+An **API (Application Programming Interface)** is the menu a service offers other programs: which operations exist, their inputs and outputs. Three styles dominate:
 
-- **REST (Representational State Transfer)** models everything as **resources** (nouns) with URLs, manipulated with standard HTTP methods (verbs). `GET /users/42`, `POST /users/42/orders`. Like a library: every book has a shelf address, and there are a few standard things you can do with any book (look, add, replace, remove).
-- **RPC (Remote Procedure Call)** models the API as functions you call on a remote machine as if they were local: `getUser(42)`, `chargeCard(order, amount)`. Like phoning a colleague and asking them to do a specific task.
-- **GraphQL** gives clients one endpoint and a query language to ask for exactly the fields they want, possibly across several related objects, in one round trip. Like a form where you tick exactly which details you need.
+- **REST (Representational State Transfer)** models everything as **resources** (nouns) with URLs, manipulated with standard HTTP methods: `GET /users/42`, `POST /users/42/orders`.
+- **RPC (Remote Procedure Call)** models the API as functions called on a remote machine as if local: `getUser(42)`, `chargeCard(order, amount)`.
+- **GraphQL** gives clients one endpoint and a query language to ask for exactly the fields they want, across related objects, in one round trip.
 
 ### Why it matters
 
-The API is the contract between teams and between your system and its users. A good style choice makes clients simple and fast; a poor one causes chatty clients, over-fetching (downloading data you don't need) or under-fetching (needing many calls to build one screen).
+The API is the contract between teams and with users. A poor style causes chatty clients, **over-fetching** (downloading data you don't need) or **under-fetching** (many calls to build one screen).
 
 ### How it works
 
@@ -1917,9 +1779,9 @@ The API is the contract between teams and between your system and its users. A g
 4. Keep requests stateless, so any server can answer and GET responses can be cached by browsers and CDNs.
 5. Usually JSON over HTTP/1.1 or HTTP/2.
 
-Idempotent methods (GET, PUT, DELETE) can be retried safely; this is a big reason to prefer `PUT /users/42/avatar` over `POST /changeAvatar`.
+Idempotent methods (GET, PUT, DELETE) are safe to retry — a big reason to prefer `PUT /users/42/avatar` over `POST /changeAvatar`.
 
-**gRPC.** An open-source RPC framework from Google that runs on HTTP/2. You define services and messages in a `.proto` file using **Protocol Buffers (Protobuf)** — a compact binary format with a schema:
+**gRPC.** Google's open-source RPC framework on HTTP/2. Services and messages are defined in a `.proto` file using **Protocol Buffers (Protobuf)**, a compact binary format with a schema:
 
 ```protobuf
 service UserService {
@@ -1929,9 +1791,9 @@ message GetUserRequest { int64 id = 1; }
 message User { int64 id = 1; string name = 2; }
 ```
 
-The numbers (`= 1`, `= 2`) are field tags that identify each field on the wire. A code generator produces client and server code in many languages, so calling another service looks like calling a local function, with types checked at compile time. Protobuf messages are typically several times smaller and faster to parse than the same JSON, and the numbered fields allow **backward-compatible** schema changes (add new field numbers, never reuse old ones). gRPC supports four call shapes: unary (one request, one response), server streaming, client streaming and bidirectional streaming. Browsers cannot speak native gRPC directly, so it is mostly used **service-to-service**, with gRPC-Web or a REST gateway for browsers.
+The numbers (`= 1`, `= 2`) are field tags identifying each field on the wire. A code generator produces client and server code in many languages, so calling another service looks like a local, compile-time type-checked function call. Protobuf messages are typically several times smaller and faster to parse than JSON, and numbered fields allow **backward-compatible** schema changes (add new numbers, never reuse old ones). Four call shapes: unary (one request, one response), server streaming, client streaming, bidirectional streaming. Browsers can't speak native gRPC, so it is mostly **service-to-service**, with gRPC-Web or a REST gateway for browsers.
 
-**GraphQL.** Created at Facebook (open-sourced in 2015). The server publishes a typed **schema**; the client sends a query such as:
+**GraphQL.** Created at Facebook (open-sourced 2015). The server publishes a typed **schema**; the client sends a query:
 
 ```graphql
 query {
@@ -1942,7 +1804,7 @@ query {
 }
 ```
 
-and gets back exactly that shape. Writes are **mutations**, and live updates are **subscriptions**. Each field is filled by a **resolver** function on the server. It is ideal when many different clients (web, iOS, Android) need different slices of the same data. Downsides: usually one POST endpoint, so ordinary HTTP caching does not work; a careless query can be very expensive, so servers limit query depth and cost; and naive resolvers cause the **N+1 query problem** (one query for the list, then one per item), usually fixed with batching (the DataLoader pattern).
+and gets back exactly that shape. Writes are **mutations**, live updates **subscriptions**; each field is filled by a **resolver** function. Ideal when many clients (web, iOS, Android) need different slices of the same data. Downsides: usually one POST endpoint, so ordinary HTTP caching doesn't work; a careless query can be very expensive, so servers limit query depth and cost; naive resolvers cause the **N+1 query problem** (one query for the list, then one per item), fixed with batching (the DataLoader pattern).
 
 ### Types
 
@@ -1954,53 +1816,101 @@ and gets back exactly that shape. Writes are **mutations**, and live updates are
 | Best for | Public APIs, CRUD (create/read/update/delete), caching | Internal service calls, streaming | Many client types, complex screens |
 | Weak spot | Over/under-fetching | Browser support, readability | Caching, query cost control |
 
+### RPC internals: stubs, marshalling, binding and call semantics
+
+RPC's promise is that `getUser(42)` on another machine looks like a local call. The idea was set out by Birrell and Nelson (Xerox PARC, 1984), and every RPC system since, from Sun's ONC RPC (used by NFS) to Java RMI, Thrift and gRPC, has the same five parts:
+
+| Part | What it does | In gRPC |
+|---|---|---|
+| **Interface definition (IDL)** | A language-neutral file listing the procedures and their argument and result types; both sides compile against it | The `.proto` file |
+| **Client stub** | Generated code with the same signature as the remote procedure. It packs the arguments, hands them to the runtime, waits, and unpacks the result, so the caller never sees the network | The generated client class |
+| **Server stub (skeleton)** | Generated code on the server that unpacks the request, calls the real procedure and packs the result | The generated service base class you implement |
+| **Marshalling** | Turning in-memory arguments into a byte sequence (and back: **unmarshalling**). It must fix byte order, sizes and character encoding, and it cannot send pointers: a linked structure is copied by value | Protobuf encoding |
+| **RPC runtime** | Opens and reuses connections, matches each reply to its call by a **call ID**, applies timeouts and retransmissions | HTTP/2 streams, deadlines, retry policy |
+
+```mermaid
+sequenceDiagram
+    participant A as "Caller code"
+    participant CS as "Client stub"
+    participant RT as "RPC runtime + network"
+    participant SS as "Server stub"
+    participant P as "Real procedure"
+    A->>CS: "getUser(42)"
+    CS->>RT: "marshal args, call id 17"
+    RT->>SS: "request bytes"
+    SS->>P: "unmarshal, call getUser(42)"
+    P-->>SS: "User object"
+    SS-->>RT: "marshal result, call id 17"
+    RT-->>CS: "reply bytes"
+    CS-->>A: "unmarshal, return User"
+```
+
+**Binding** is how the client finds a server for the interface. It can be static (an address in config), through a directory (Birrell and Nelson used the Grapevine name database; ONC RPC uses the `rpcbind` service, which maps program numbers to ports), or, today, through DNS or a service-discovery registry feeding a client-side load balancer (gRPC's name resolver and balancing policies; see *Load balancers* and Part 5's *Service discovery*).
+
+**Why a remote call is not a local call.** It is thousands of times slower (half a millisecond inside a data centre versus nanoseconds), it can't share memory, and above all it can **fail partially**: the request may be lost, the server may crash halfway through, or the reply may be lost. When no reply arrives, the caller **cannot know** whether the procedure ran. That uncertainty is why each RPC system states its **call semantics**:
+
+| Semantics | Guarantee | How it is built | Safe for |
+|---|---|---|---|
+| **Maybe** | Ran once or not at all; no retry | Send once, give up on timeout | Hints, metrics |
+| **At-least-once** | Ran one or more times if a reply comes back | Retry until a reply arrives | Idempotent operations only (reads, `PUT`, "set X to 5") |
+| **At-most-once** | Never runs twice; may not run at all | Server remembers recent call IDs and returns the saved reply to a duplicate instead of re-executing | Non-idempotent operations, with the caller told "unknown outcome" on failure |
+| **Exactly-once** | Ran exactly once | Not achievable in general across crashes; approximated by at-least-once retries **plus** at-most-once deduplication with durable call IDs (idempotency keys) | Payments, orders |
+
+Real systems show the spectrum. Birrell and Nelson's RPC promised that a normal return meant the procedure ran exactly once, while an exception meant it ran at most once. ONC RPC (RFC 5531) leaves reliability to the transport: over UDP a reply proves only that the call ran at least once, and servers may use the call's transaction ID (`xid`) to drop duplicates. gRPC sets **no deadline by default** (always set one); it retries automatically only when it is certain the server application never saw the call, and otherwise retries only by an explicit per-method policy listing retryable status codes, which you should enable only for idempotent methods. The same ideas reappear for message queues in Part 4's *Delivery guarantees, idempotency and retries*.
+
+*Sources:* A. Birrell and B. Nelson, "Implementing Remote Procedure Calls", *ACM TOCS* 2(1), 1984; RFC 5531 (ONC RPC v2) and RFC 1833 (rpcbind); gRPC documentation, "Deadlines" and "Retry" guides (grpc.io); J. Waldo et al., "A Note on Distributed Computing", Sun Labs TR-94-29, 1994.
+
 ### Trade-offs
 
-REST is universally understood and cache-friendly, but may need many calls per screen. gRPC is fast, strongly typed and streams well, but is binary (harder to debug with `curl`) and needs a proxy for browsers. GraphQL gives clients flexibility but moves complexity and performance risk to the server.
+REST is universally understood and cache-friendly but may need many calls per screen. gRPC is fast, strongly typed and streams well, but binary (hard to debug with `curl`) and needs a proxy for browsers. GraphQL gives clients flexibility but moves complexity and performance risk to the server.
 
 ### Common mistakes
 
 - Verbs in REST URLs (`/getUser?id=42`) instead of methods on resources.
-- Using GraphQL "because it is modern" for a simple public API where REST with caching would be cheaper.
+- GraphQL "because it is modern" for a simple public API where cached REST is cheaper.
 - Changing Protobuf field numbers, which silently breaks old clients.
 
 ### Real-world examples
 
-Stripe and GitHub's v3 API are classic REST. GitHub also offers a GraphQL API (v4), and Shopify's storefront API is GraphQL. Google, Netflix and many companies use gRPC between internal microservices; Kubernetes uses gRPC for its plug-in interfaces, such as the one between the kubelet and the container runtime.
+Stripe and GitHub's v3 API are classic REST; GitHub also offers GraphQL (v4), and Shopify's storefront API is GraphQL. Google, Netflix and many others use gRPC between internal microservices; Kubernetes uses gRPC for plug-in interfaces such as kubelet ↔ container runtime.
 
 ### In the interview
 
 **Q:** You are designing a mobile app's backend and an internal ranking service. Which API styles?
 
-**A:** REST (or GraphQL if screens need many related objects) for the public mobile API, because it is easy to consume, cache and debug. gRPC between the backend and the ranking service, for compact binary messages, typed contracts and streaming.
+**A:** REST (or GraphQL if screens need many related objects) for the public mobile API — easy to consume, cache and debug. gRPC between backend and ranking service for compact binary messages, typed contracts and streaming.
 
 **Q:** What makes a REST call safe to retry?
 
-**A:** Using an idempotent method (GET, PUT, DELETE), or attaching an idempotency key to a POST so the server returns the original result instead of repeating the action.
+**A:** An idempotent method (GET, PUT, DELETE), or an idempotency key on a POST so the server returns the original result instead of repeating the action.
+
+**Q:** An RPC to `chargeCard` times out. What do you tell the caller, and how do you make a retry safe?
+
+**A:** The outcome is unknown: the charge may or may not have happened. Make the call at-most-once on the server with a client-generated idempotency key stored with the result; the client can then retry (at-least-once) and the combination behaves like exactly-once.
 
 ### TL;DR
 
-REST = resources and HTTP verbs, simple and cacheable. gRPC = typed remote functions over HTTP/2 with Protobuf, great inside the data centre. GraphQL = clients query exactly the fields they need from a typed schema.
+REST = resources and HTTP verbs, simple and cacheable. gRPC = typed remote functions over HTTP/2 with Protobuf, great inside the data centre. GraphQL = clients query exactly the fields they need from a typed schema. Under every RPC: stubs and marshalling hide the network, binding finds the server, and the call semantics (at-least-once, at-most-once, exactly-once via idempotency keys) say what a timeout means.
 
 ## Real-time communication — polling, long polling, WebSockets, SSE, webhooks
 
 ### What it is
 
-Plain HTTP only lets the client ask. Many features need the server to *tell* the client something as soon as it happens: a chat message, a new notification, a stock price, a driver's location. Because the client is usually behind NAT and the server cannot open a connection to it, every solution is some way of keeping a channel open from the client side — or, between servers, of calling back a public URL.
+Plain HTTP only lets the client ask, but many features need the server to *tell* the client as soon as something happens: a chat message, a notification, a stock price, a driver's location. The client is usually behind NAT and cannot be dialled, so every solution keeps a channel open from the client side — or, between servers, calls back a public URL.
 
-- **Short polling** — the client asks "anything new?" every few seconds. Like a child asking "are we there yet?" every minute.
-- **Long polling** — the client asks, and the server holds the request open until there is news or a timeout (say 30 s), then the client immediately asks again. Like asking a shopkeeper to call you over when your order is ready.
-- **WebSockets** — one long-lived, two-way connection over which both sides send messages any time. Like an open phone line.
-- **Server-Sent Events (SSE)** — one long-lived HTTP response that the server keeps writing events into; one-way, server to client. Like a radio broadcast you tune into.
-- **Webhooks** — server-to-server: when an event happens, service A sends an HTTP POST to a URL that service B registered. Like leaving your phone number so the shop calls you.
+- **Short polling** — the client asks "anything new?" every few seconds ("are we there yet?").
+- **Long polling** — the client asks and the server holds the request open until there is news or a timeout (say 30 s); the client then immediately asks again.
+- **WebSockets** — one long-lived, two-way connection over which both sides send messages any time (an open phone line).
+- **Server-Sent Events (SSE)** — one long-lived HTTP response the server keeps writing events into; one-way, server to client (a radio broadcast).
+- **Webhooks** — server-to-server: when an event happens, service A sends an HTTP POST to a URL service B registered (leaving your number so the shop calls you).
 
 ### Why it matters
 
-Choosing wrongly wastes resources (polling a million clients every second is a million requests per second, mostly answering "nothing new") or adds needless complexity. Long-lived connections also change capacity planning: a chat server's limit is often the number of open connections (memory per connection, file descriptors) rather than requests per second.
+The wrong choice wastes resources (polling a million clients every second is a million requests per second, mostly "nothing new") or adds needless complexity. Long-lived connections change capacity planning: a chat server's limit is often open connections (memory per connection, file descriptors), not requests per second.
 
 ### How it works
 
-**WebSocket upgrade.** It starts as an ordinary HTTP/1.1 request, so it passes through normal ports and proxies:
+**WebSocket upgrade.** Starts as an ordinary HTTP/1.1 request, so it passes through normal ports and proxies:
 
 ```mermaid
 sequenceDiagram
@@ -2014,14 +1924,14 @@ sequenceDiagram
     S-->>C: "New message from Carol"
 ```
 
-1. The client sends `GET` with `Upgrade: websocket` and `Connection: Upgrade` headers (URL scheme `ws://` or encrypted `wss://`).
+1. The client sends `GET` with `Upgrade: websocket` and `Connection: Upgrade` headers (scheme `ws://` or encrypted `wss://`).
 2. The server answers `101 Switching Protocols`.
-3. From then on, both sides exchange small **frames** with only a few bytes of overhead each, until either side closes.
-4. Applications send **heartbeats** (ping/pong) every 20–60 s so that idle connections are not silently cut by NAT routers or load balancers, and clients reconnect with backoff if the link drops.
+3. Both sides then exchange small **frames** (a few bytes of overhead each) until either closes.
+4. Applications send **heartbeats** (ping/pong) every 20–60 s so NAT routers or load balancers don't silently cut idle connections; clients reconnect with backoff if the link drops.
 
-**SSE.** The client opens `GET /events` with `Accept: text/event-stream`. The server responds and never finishes, writing lines like `data: {"price": 101.5}` followed by a blank line for each event. The browser's built-in `EventSource` reconnects automatically and sends `Last-Event-ID` so the server can resume. It is plain HTTP, so it works well with HTTP/2 and existing infrastructure. Large language model chat interfaces commonly stream tokens this way.
+**SSE.** The client opens `GET /events` with `Accept: text/event-stream`; the server never finishes the response, writing `data: {"price": 101.5}` plus a blank line per event. The browser's built-in `EventSource` reconnects automatically and sends `Last-Event-ID` so the server can resume. Plain HTTP, so it works with HTTP/2 and existing infrastructure; large language model chat interfaces commonly stream tokens this way.
 
-**Webhooks.** The receiver registers `https://myapp.com/hooks/payments`. When a payment succeeds, the provider POSTs a JSON event there. Good practice: sign each request (an HMAC header: a hash of the body computed with a shared secret key) so the receiver can verify the sender; retry with backoff on failure; and make the receiver idempotent because the same event may arrive twice.
+**Webhooks.** The receiver registers `https://myapp.com/hooks/payments`; when a payment succeeds the provider POSTs a JSON event there. Good practice: sign each request (an HMAC header — a hash of the body computed with a shared secret key) so the receiver can verify the sender; retry with backoff on failure; make the receiver idempotent because an event may arrive twice.
 
 ### Types
 
@@ -2035,56 +1945,56 @@ sequenceDiagram
 
 ### Trade-offs
 
-Persistent connections give instant delivery but make servers **stateful**: each user is attached to one server, so you need a way to route messages to the right server (often a pub/sub layer such as Redis Pub/Sub or Kafka between servers), and deployments must drain connections gracefully. Polling is stateless and trivially scalable but wasteful and slower.
+Persistent connections deliver instantly but make servers **stateful**: each user is attached to one server, so messages must be routed to the right server (often via a pub/sub layer such as Redis Pub/Sub or Kafka between servers), and deployments must drain connections gracefully. Polling is stateless and trivially scalable but wasteful and slower.
 
 ### Common mistakes
 
-- Choosing WebSockets for a one-way feed where SSE would be simpler.
-- Forgetting that a load balancer's idle timeout (for example 60 s by default on AWS ALB) will close quiet WebSockets unless you send heartbeats.
+- WebSockets for a one-way feed where SSE is simpler.
+- Forgetting a load balancer's idle timeout (60 s by default on AWS ALB) closes quiet WebSockets unless you send heartbeats.
 - Assuming webhooks arrive exactly once and in order. They do not.
 
 ### Real-world examples
 
-Slack and Discord use WebSockets for their real-time clients. GitHub, Stripe and Shopify deliver events by webhooks. Many dashboards and AI chat apps stream with SSE.
+Slack and Discord use WebSockets for their real-time clients; GitHub, Stripe and Shopify deliver events by webhooks; many dashboards and AI chat apps stream with SSE.
 
 ### In the interview
 
 **Q:** How would you push new chat messages to 10 million online users?
 
-**A:** WebSocket connections terminated on a fleet of connection servers (each holding perhaps 50,000–100,000 connections). A registry maps user → connection server, and a pub/sub layer delivers each message to the right server, which writes it to the socket. Clients reconnect with backoff and fetch missed messages using their last seen ID.
+**A:** WebSockets terminated on a fleet of connection servers (perhaps 50,000–100,000 connections each). A registry maps user → connection server, and a pub/sub layer delivers each message to the right server, which writes it to the socket. Clients reconnect with backoff and fetch missed messages by last seen ID.
 
 **Q:** When would you choose SSE over WebSockets?
 
-**A:** When only the server needs to push (notifications, live scores, streaming text). SSE is plain HTTP, reconnects automatically and needs no protocol upgrade.
+**A:** When only the server pushes (notifications, live scores, streaming text): SSE is plain HTTP, reconnects automatically, needs no protocol upgrade.
 
 ### TL;DR
 
-Polling asks repeatedly, long polling waits for news, WebSockets keep a two-way channel, SSE streams one-way from server to client, and webhooks are server-to-server callbacks. Persistent connections are fast but make servers stateful.
+Polling asks repeatedly, long polling waits for news, WebSockets keep a two-way channel, SSE streams one-way from server to client, webhooks are server-to-server callbacks. Persistent connections are fast but make servers stateful.
 
 ## API design basics
 
 ### What it is
 
-The small, practical rules that make an API pleasant and safe to evolve: how you version it, how clients page through big lists, how you tell clients about limits and errors.
+The practical rules that make an API pleasant and safe to evolve: versioning, paging through big lists, telling clients about limits and errors.
 
 ### Why it matters
 
-Once a public API is used by thousands of clients, you cannot change it freely. Pagination and rate limits protect your servers from clients asking for too much at once.
+Once thousands of clients use a public API you cannot change it freely; pagination and rate limits protect servers from clients asking for too much at once.
 
 ### How it works
 
-**Versioning.** When you must make a breaking change (removing or renaming a field, changing meaning), publish a new version and keep the old one running for a deprecation period.
+**Versioning.** For a breaking change (removing or renaming a field, changing meaning), publish a new version and keep the old one running for a deprecation period.
 
 - **URL versioning**: `/v1/orders`, `/v2/orders`. Most common, very visible.
-- **Header versioning**: `Accept: application/vnd.example.v2+json`, or a custom header. Cleaner URLs, harder to test in a browser.
+- **Header versioning**: `Accept: application/vnd.example.v2+json` or a custom header. Cleaner URLs, harder to test in a browser.
 - **Date-based versions**: Stripe pins each account to a dated version and lets clients opt in to newer ones.
 
-Prefer **additive** changes (new optional fields) that need no new version at all, and tell clients to ignore fields they do not recognise.
+Prefer **additive** changes (new optional fields) that need no new version, and tell clients to ignore unknown fields.
 
 **Pagination.** Never return an unbounded list.
 
-- **Offset pagination**: `GET /posts?limit=20&offset=40`. Simple, allows "jump to page 5". But the database still reads and skips the first 40 rows, which gets slow at offset 1,000,000, and if a new post is inserted while you page, items shift and you see duplicates or miss items.
-- **Cursor (keyset) pagination**: `GET /posts?limit=20&after=eyJpZCI6MTIzNH0`. The cursor is an opaque token encoding the last item's sort key (e.g. `id=1234`). The server runs `WHERE id < 1234 ORDER BY id DESC LIMIT 20`, which uses an index and is equally fast on page 1 and page 50,000, and stays stable when new items arrive. You cannot jump to an arbitrary page. Feeds and timelines (Twitter/X, Facebook, Slack) use cursors.
+- **Offset pagination**: `GET /posts?limit=20&offset=40`. Simple, allows "jump to page 5", but the database still reads and skips the first 40 rows (slow at offset 1,000,000), and inserts while paging shift items, causing duplicates or misses.
+- **Cursor (keyset) pagination**: `GET /posts?limit=20&after=eyJpZCI6MTIzNH0`. The cursor is an opaque token encoding the last item's sort key (`id=1234`); the server runs `WHERE id < 1234 ORDER BY id DESC LIMIT 20`, which uses an index, is equally fast on page 1 and page 50,000, and stays stable as new items arrive. No jumping to an arbitrary page. Feeds and timelines (Twitter/X, Facebook, Slack) use cursors.
 
 | | Offset | Cursor |
 |---|---|---|
@@ -2093,9 +2003,9 @@ Prefer **additive** changes (new optional fields) that need no new version at al
 | Stable under inserts | No | Yes |
 | Best for | Admin tables, small data | Feeds, large or changing data |
 
-**Rate-limit headers.** When you limit clients (say 5,000 requests per hour), tell them where they stand. Common headers: `X-RateLimit-Limit` (quota), `X-RateLimit-Remaining`, `X-RateLimit-Reset` (when the window resets). GitHub uses exactly these. When a client is over the limit, return **429 Too Many Requests** with a `Retry-After: 30` header (seconds to wait). The IETF is standardising unprefixed `RateLimit` headers for the same purpose. Rate-limiting algorithms themselves are covered in Part 5.
+**Rate-limit headers.** Tell limited clients (say 5,000 requests per hour) where they stand with `X-RateLimit-Limit` (quota), `X-RateLimit-Remaining` and `X-RateLimit-Reset` (GitHub's headers; the IETF is standardising unprefixed `RateLimit` headers), and answer excess with **429 Too Many Requests** plus `Retry-After` (seconds to wait). Example response and algorithms: *Rate limiting and throttling* (Part 5).
 
-**Other basics.** Consistent error bodies (a machine-readable code plus a human message), idempotency keys on POST, filtering and sorting via query parameters (`?status=paid&sort=-created_at`), and documenting the API with an **OpenAPI** (formerly Swagger) specification.
+**Other basics.** Consistent error bodies (machine-readable code plus human message), idempotency keys on POST, filtering and sorting via query parameters (`?status=paid&sort=-created_at`), and documentation as an **OpenAPI** (formerly Swagger) specification.
 
 ### Common mistakes
 
@@ -2113,8 +2023,8 @@ Version only for breaking changes, prefer cursor pagination for big or changing 
 
 A **proxy** is a middleman that receives a request and forwards it on someone else's behalf.
 
-- A **forward proxy** acts for **clients**. The client is configured to send all traffic through it, and the internet sees the proxy instead of the client. Like an assistant who makes calls for you. Used by companies to filter and log employee browsing, by VPN-like services (virtual private networks that tunnel your traffic through another machine) to hide the user's IP, and for caching outbound downloads.
-- A **reverse proxy** acts for **servers**. Clients think they are talking to the website; in reality the reverse proxy receives the request and forwards it to one of the hidden servers behind it. Like a hotel receptionist who passes your request to the right staff member. Used for load balancing, TLS termination, caching, compression and hiding internal structure.
+- A **forward proxy** acts for **clients**: they send all traffic through it and the internet sees the proxy, not the client. Used to filter and log employee browsing, by VPN-like services (virtual private networks tunnelling your traffic through another machine) to hide the user's IP, and to cache outbound downloads.
+- A **reverse proxy** acts for **servers**: clients think they talk to the website, but the proxy receives the request and forwards it to one of the hidden servers behind it. Used for load balancing, TLS termination, caching, compression and hiding internal structure.
 
 ```mermaid
 flowchart LR
@@ -2125,21 +2035,21 @@ flowchart LR
     RP --> S2["App server 2"]
 ```
 
-An **API gateway** is a reverse proxy specialised for APIs. It is the single front door to many backend services (often microservices) and handles cross-cutting concerns once instead of in every service.
+An **API gateway** is a reverse proxy specialised for APIs: the single front door to many backend services (often microservices), handling cross-cutting concerns once instead of in every service.
 
 ### Why it matters
 
-Reverse proxies and gateways are where you put shared concerns: authentication, rate limiting, TLS, logging, routing by path. They also let you change the backend (split a monolith, move a service) without clients noticing.
+Reverse proxies and gateways hold shared concerns — authentication, rate limiting, TLS, logging, routing by path — and let you change the backend (split a monolith, move a service) without clients noticing.
 
 ### How it works
 
 An API gateway receiving `GET /orders/7` typically:
 
 1. Terminates TLS.
-2. Authenticates the caller (validates an API key, a JWT (JSON Web Token, a signed token carrying the user's identity) or an OAuth access token issued by a login service).
-3. Applies rate limits and quotas per client.
+2. Authenticates the caller (API key, a JWT — JSON Web Token, a signed token carrying the user's identity — or an OAuth access token from a login service).
+3. Applies per-client rate limits and quotas.
 4. Routes by path, host or header: `/orders/*` → order service, `/users/*` → user service.
-5. Optionally transforms the request (REST to gRPC, adds headers like a request ID), or **aggregates** several backend calls into one response.
+5. Optionally transforms the request (REST to gRPC, adds a request ID header) or **aggregates** several backend calls into one response.
 6. Records logs, metrics and traces, then returns the response.
 
 A variant is **BFF (Backend for Frontend)**: a separate gateway per client type (web, mobile) that shapes responses for that client.
@@ -2153,47 +2063,45 @@ A variant is **BFF (Backend for Frontend)**: a separate gateway per client type 
 | Load balancer | Spread traffic over healthy servers | AWS ALB/NLB, HAProxy |
 | API gateway | Auth, rate limits, routing for APIs | AWS API Gateway, Kong, Apigee |
 
-The lines blur: NGINX is a reverse proxy, load balancer and basic gateway at once. Think of a load balancer as a reverse proxy whose main job is distribution, and an API gateway as a reverse proxy whose main job is API policy.
+The lines blur: NGINX is a reverse proxy, load balancer and basic gateway at once. A load balancer is a reverse proxy whose main job is distribution; an API gateway one whose main job is API policy.
 
 ### Trade-offs
 
-Every proxy adds a network hop (typically well under 1 ms inside a data centre, but more with heavy logic) and is a potential bottleneck and single point of failure, so it must itself be redundant and scaled. A gateway that grows too much business logic becomes a hard-to-change "god service".
+Every proxy adds a network hop (well under 1 ms inside a data centre, more with heavy logic) and is a potential bottleneck and single point of failure, so it must be redundant and scaled. A gateway that accumulates business logic becomes a hard-to-change "god service".
 
 ### Common mistakes
 
-- Confusing forward and reverse proxies. Ask: whom does it represent — the client or the server?
+- Confusing forward and reverse proxies. Ask: does it represent the client or the server?
 - Putting business rules in the gateway. Keep it to cross-cutting policy.
-- Losing the client's real IP: proxies must pass it on in `X-Forwarded-For` (or the PROXY protocol for L4), and backends must trust that header only from known proxies.
+- Losing the client's real IP: proxies must pass it in `X-Forwarded-For` (or the PROXY protocol for L4), and backends must trust that header only from known proxies.
 
 ### In the interview
 
 **Q:** What is the difference between a reverse proxy, a load balancer and an API gateway?
 
-**A:** All three sit in front of servers. A reverse proxy is the general idea (forward on behalf of servers). A load balancer focuses on spreading traffic across healthy instances. An API gateway focuses on API concerns — auth, rate limits, routing to many services, transformation. One product often plays all three roles.
+**A:** All sit in front of servers. A reverse proxy is the general idea (forwarding on behalf of servers); a load balancer focuses on spreading traffic across healthy instances; an API gateway on API concerns — auth, rate limits, routing to many services, transformation. One product often plays all three roles.
 
 ### TL;DR
 
-A forward proxy represents clients, a reverse proxy represents servers, and an API gateway is a reverse proxy that enforces API policy (auth, rate limits, routing) at the front door.
+A forward proxy represents clients, a reverse proxy represents servers, and an API gateway is a reverse proxy enforcing API policy (auth, rate limits, routing) at the front door.
 
 ## Load balancers
 
 ### What it is
 
-A **load balancer (LB)** is a component that receives incoming traffic and spreads it across a group of servers (often called a **pool**, **backend set** or **target group**), sending each request or connection only to servers that are healthy. Clients see one address; behind it there may be 3 or 3,000 servers.
-
-Analogy: the host at a busy restaurant. Guests do not pick a table themselves; the host looks at which waiters are free, skips the one who has gone home sick, and seats each party so no single waiter is swamped.
+A **load balancer (LB)** receives incoming traffic and spreads it across a group of servers (a **pool**, **backend set** or **target group**), sending each request or connection only to healthy servers. Clients see one address; behind it may be 3 or 3,000 servers — like a restaurant host who seats each party with a free waiter and skips the one who went home sick.
 
 ### Why it matters
 
-The load balancer is what makes **horizontal scaling** (Part 1) actually work:
+The load balancer makes **horizontal scaling** (Part 1) work:
 
-- **Scalability** — add servers to the pool and capacity grows, with no change for clients.
-- **Availability** — if a server dies, health checks notice and traffic flows to the rest. A single server is a single point of failure; a pool behind an LB is not.
-- **Zero-downtime deployments** — take servers out one by one, update them, put them back.
+- **Scalability** — add servers to the pool; capacity grows with no change for clients.
+- **Availability** — health checks notice a dead server and traffic flows to the rest; a pool behind an LB is not a single point of failure.
+- **Zero-downtime deployments** — take servers out one by one, update, put back.
 - **Central place for shared work** — TLS termination, compression, request logging, basic security.
 - **Hiding the backend** — servers keep private IPs; only the LB is public.
 
-Almost every system design answer has a load balancer in front of each tier of stateless servers, and often internal ones between services too.
+Almost every design has an LB in front of each tier of stateless servers, and often internal ones between services.
 
 ### How it works
 
@@ -2207,30 +2115,30 @@ flowchart LR
     B --> DB
 ```
 
-1. DNS resolves `api.example.com` to the load balancer's address (a **virtual IP**, VIP — an address that belongs to the service, not to any one machine).
-2. The client connects to the LB. An L7 LB terminates TLS and reads the HTTP request; an L4 LB just sees the TCP or UDP connection.
-3. The LB picks a backend using its **algorithm** (below), considering only servers that currently pass **health checks**.
-4. It forwards the request (L7 opens or reuses its own connection to the backend) or the connection's packets (L4).
-5. The response flows back through the LB to the client (in most designs; some L4 modes let servers reply directly — see "direct server return").
+1. DNS resolves `api.example.com` to the LB's address (a **virtual IP**, VIP — an address belonging to the service, not one machine).
+2. The client connects to the LB. An L7 LB terminates TLS and reads the HTTP request; an L4 LB sees only the TCP or UDP connection.
+3. The LB picks a backend with its **algorithm** (below), among servers currently passing **health checks**.
+4. It forwards the request (L7, over its own new or reused backend connection) or the connection's packets (L4).
+5. The response flows back through the LB (in most designs; see "direct server return").
 6. The LB records metrics: requests per second, errors, latency per backend.
 
-Because the servers behind an LB may each receive any request, they should be **stateless** — sessions and data live in a shared cache or database, not in one server's memory.
+Since any server may receive any request, servers behind an LB should be **stateless**, with sessions and data in a shared cache or database.
 
 ### Types
 
 #### By network layer: L4 vs L7
 
-**Layer 4 (transport) load balancer.** Works on TCP/UDP connections using IPs and ports. It picks a backend when a connection opens and then shuttles that connection's packets back and forth (either by rewriting addresses, NAT-style, or by proxying the TCP stream), never looking inside. It cannot see URLs, headers or cookies, and with TLS it sees only encrypted bytes (unless it terminates TLS itself, which some L4 products can do).
+**Layer 4 (transport) LB.** Works on TCP/UDP connections by IP and port. It picks a backend when a connection opens, then shuttles that connection's packets (rewriting addresses NAT-style, or proxying the TCP stream) without looking inside — no URLs, headers or cookies; with TLS only encrypted bytes (unless it terminates TLS itself, which some L4 products can).
 
-- Pros: very fast, low latency (microseconds of overhead), handles millions of connections, works for any protocol (databases, MQTT messaging for IoT devices, game servers, raw TCP), cheap.
-- Cons: no content-based routing; balancing is per connection, so one long-lived connection carrying lots of requests (HTTP/2, gRPC) is stuck on one backend.
+- Pros: very fast (microseconds of overhead), millions of connections, any protocol (databases, MQTT messaging for IoT devices, game servers, raw TCP), cheap.
+- Cons: no content-based routing; balancing is per connection, so one long-lived connection carrying many requests (HTTP/2, gRPC) is stuck on one backend.
 
-**Layer 7 (application) load balancer.** Terminates the client connection, parses the HTTP request, then makes a separate request to the chosen backend. Because it understands the content, it can:
+**Layer 7 (application) LB.** Terminates the client connection, parses the HTTP request, then makes a separate request to the chosen backend. It can:
 
-- Route by path (`/api` → API servers, `/images` → image servers), host name (`shop.example.com` vs `blog.example.com`), headers, cookies or query string.
-- Balance **per request**, so many HTTP/2 or gRPC requests on one client connection are spread across many backends.
-- Do TLS termination, compression, caching, retries, redirects (HTTP → HTTPS), add headers like `X-Forwarded-For` and request IDs, enforce auth and rate limits, block malicious patterns (web application firewall, or WAF, features).
-- Pros: smart routing and rich features. Cons: more CPU per request, more latency (typically still around a millisecond), must hold TLS keys, HTTP-family protocols only.
+- Route by path (`/api` → API servers, `/images` → image servers), host (`shop.example.com` vs `blog.example.com`), headers, cookies or query string.
+- Balance **per request**, spreading many HTTP/2 or gRPC requests on one client connection across backends.
+- Terminate TLS, compress, cache, retry, redirect (HTTP → HTTPS), add headers like `X-Forwarded-For` and request IDs, enforce auth and rate limits, block malicious patterns (web application firewall, WAF, features).
+- Pros: smart routing and rich features. Cons: more CPU and latency per request (typically still around a millisecond), must hold TLS keys, HTTP-family protocols only.
 
 | | L4 load balancer | L7 load balancer |
 |---|---|---|
@@ -2245,11 +2153,11 @@ A common layered setup: an L4 balancer in front (cheap, huge scale, static IPs) 
 
 #### By form: hardware, software, cloud, DNS, global
 
-- **Hardware load balancers** — dedicated appliances with specialised chips (for example F5 BIG-IP, Citrix NetScaler, now NetScaler ADC). Very high throughput and vendor support, but expensive (tens of thousands of dollars each), scaled by buying more boxes, and slow to change. Common in traditional enterprises and banks.
-- **Software load balancers** — programs on ordinary servers: **NGINX**, **HAProxy**, **Envoy**, Traefik. Cheap, flexible, configurable as code, scale by adding instances. Hyperscalers built their own software L4 balancers too: Google's **Maglev** and Meta's **Katran** run on commodity Linux servers.
-- **Cloud (managed) load balancers** — a service you rent, where the provider runs and scales the fleet: AWS **ALB** (L7), **NLB** (L4), and **Gateway Load Balancer** (for routing through firewalls and appliances); Google Cloud Load Balancing; Azure Load Balancer (L4) and Application Gateway (L7). You pay per hour plus per traffic unit, and get automatic scaling and high availability across zones.
-- **DNS load balancing** — the DNS server spreads users by returning different IPs (round robin, weighted, GeoDNS, latency-based), as described in the DNS section. Coarse and cached, but global and with no extra hop.
-- **Global server load balancing (GSLB)** — distributing users across **multiple data centres or regions** rather than across servers in one place. It decides which region a user goes to based on geography, latency, region health and capacity, and fails over whole regions. It is built from DNS-based steering (Route 53, Cloudflare Load Balancing, NS1, F5 DNS) and/or **anycast** (one IP announced from many locations, explained in the CDN section), as in Google Cloud's global load balancer and Cloudflare. Inside each region, regular L4/L7 balancers take over.
+- **Hardware LBs** — dedicated appliances with specialised chips (F5 BIG-IP, Citrix NetScaler, now NetScaler ADC). Very high throughput and vendor support, but expensive (tens of thousands of dollars each), scaled by buying boxes, slow to change. Common in traditional enterprises and banks.
+- **Software LBs** — programs on ordinary servers: **NGINX**, **HAProxy**, **Envoy**, Traefik. Cheap, flexible, configurable as code, scale by adding instances. Hyperscalers built software L4 balancers too: Google's **Maglev** and Meta's **Katran**, on commodity Linux servers.
+- **Cloud (managed) LBs** — the provider runs and scales the fleet: AWS **ALB** (L7), **NLB** (L4) and **Gateway Load Balancer** (routing through firewalls and appliances); Google Cloud Load Balancing; Azure Load Balancer (L4) and Application Gateway (L7). Pay per hour plus traffic; automatic scaling and high availability across zones.
+- **DNS load balancing** — returning different IPs (round robin, weighted, GeoDNS, latency-based; DNS section). Coarse and cached, but global with no extra hop.
+- **Global server load balancing (GSLB)** — distributing users across **data centres or regions** by geography, latency, region health and capacity, failing over whole regions. Built from DNS-based steering (Route 53, Cloudflare Load Balancing, NS1, F5 DNS) and/or **anycast** (one IP announced from many locations; CDN section), as in Google Cloud's global LB and Cloudflare. Regular L4/L7 balancers take over inside each region.
 
 ```mermaid
 flowchart TD
@@ -2262,29 +2170,29 @@ flowchart TD
 
 #### Where it runs: client-side vs server-side
 
-Most LBs are **server-side** (a separate box or service in the middle). In **client-side load balancing**, each client gets the list of healthy instances from a service registry and picks one itself (gRPC clients, Netflix's Ribbon library, service-mesh sidecars like Envoy next to each service). This removes a hop and a bottleneck but puts logic in every client. Service discovery is covered in Part 5.
+Most LBs are **server-side** (a separate box or service in the middle). In **client-side load balancing** each client gets the healthy-instance list from a service registry and picks one itself (gRPC clients, Netflix's Ribbon library, service-mesh sidecars like Envoy). This removes a hop and a bottleneck but puts logic in every client. Service discovery is in Part 5.
 
 ### Load-balancing algorithms
 
-The **algorithm** decides which healthy backend gets the next request or connection. They fall into two families: **static** (ignore current load, decide by a fixed rule) and **dynamic** (look at live load signals).
+The **algorithm** picks which healthy backend gets the next request or connection: **static** algorithms follow a fixed rule; **dynamic** ones use live load signals.
 
-**Round robin.** Send requests to servers in turn: A, B, C, A, B, C... Like dealing cards. Simple and fair when all servers are identical and requests cost about the same. Weakness: blind to load — if some requests are heavy (a 10-second report) a server can pile up work while still getting its "turn".
+**Round robin.** Servers in turn: A, B, C, A, B, C… Simple and fair when servers are identical and requests cost about the same; blind to load, so a server stuck with heavy requests (a 10-second report) still gets its "turn".
 
-**Weighted round robin.** Each server gets a weight proportional to its capacity. With weights A=3, B=1, A receives 3 of every 4 requests. Used when servers differ in size (a 16-core next to an 8-core machine), and to send a small share of traffic to a new version (**canary release**: weight 1 for new, 99 for old).
+**Weighted round robin.** Weights proportional to capacity: with A=3, B=1, A gets 3 of every 4 requests. For mixed server sizes (16-core next to 8-core) and for sending a small share to a new version (**canary release**: weight 1 new, 99 old).
 
-**Least connections.** Send the new request or connection to the server with the fewest active connections right now. Good when requests vary a lot in duration or connections are long-lived (WebSockets, database proxies), since busy servers naturally get fewer new ones. **Weighted least connections** divides the count by each server's weight.
+**Least connections.** The server with the fewest active connections now. Good when request durations vary a lot or connections are long-lived (WebSockets, database proxies). **Weighted least connections** divides the count by each server's weight.
 
-**Least response time (least latency).** Prefer the server with the lowest recent response time, often combined with fewest active connections. Routes around a server that is slow because of a noisy neighbour, garbage collection or a bad disk. Needs the LB to measure latency, and can over-react (everyone rushes to the fastest server, which then becomes slow — **herding**), so implementations smooth the measurements. Envoy's and NGINX Plus's "least time" style policies and the **EWMA** (exponentially weighted moving average) balancer used by some proxies are examples.
+**Least response time (least latency).** Prefer the lowest recent response time, often combined with fewest active connections; routes around a server slowed by a noisy neighbour, garbage collection or a bad disk. Needs latency measurement and can over-react — everyone rushes to the fastest server, which then slows (**herding**) — so implementations smooth measurements: Envoy's and NGINX Plus's "least time"-style policies, and the **EWMA** (exponentially weighted moving average) balancer of some proxies.
 
-**IP hash (source hash).** Compute `hash(client IP) mod N` to pick a server, so the same client always lands on the same server — stickiness with no cookies. Problems: many users behind one NAT all hit one server, and when N changes (a server is added or removed) almost every client is remapped to a different server.
+**IP hash (source hash).** `hash(client IP) mod N` picks the server, so the same client always lands on the same server — stickiness without cookies. Problems: many users behind one NAT hit one server, and when N changes almost every client is remapped.
 
-**Consistent hashing.** Fixes the remapping problem. Imagine a ring of hash values from 0 to 2^32. Each server is placed at several points on the ring (**virtual nodes**). A key — client IP, user ID, URL — is hashed onto the ring and goes to the next server clockwise. When a server is added or removed, only the keys in its slice of the ring move, about 1/N of them, instead of almost all. Used when the *same key should reach the same server* so that server's local cache stays useful: caching proxies, sharded caches, chat servers. Google's Maglev uses its own consistent-hashing variant, and HAProxy and Envoy offer **ring hash** and **Maglev** policies. (Consistent hashing is explained more fully with sharding in Part 3.)
+**Consistent hashing.** Fixes the remapping: servers sit at several points (**virtual nodes**) on a hash ring; a key (client IP, user ID, URL) goes to the next server clockwise, so adding or removing a server moves only about 1/N of keys. Used when the *same key should reach the same server* so its local cache stays useful (caching proxies, sharded caches, chat servers). Google's Maglev uses its own variant; HAProxy and Envoy offer **ring hash** and **Maglev** policies. Full explanation: *Consistent hashing and virtual nodes* (Part 3).
 
-**Random.** Pick a server at random. With many requests it evens out statistically, needs no shared state between multiple LB instances, and is surprisingly good. Its weakness is short-term imbalance.
+**Random.** Evens out statistically over many requests, needs no state shared between LB instances, and is surprisingly good; weakness is short-term imbalance.
 
-**Power of two choices (P2C).** Pick **two** servers at random, then send the request to the less loaded of the two (fewest active requests or lowest latency). A famous result from probability (Mitzenmacher's analysis of "two choices") shows this tiny bit of information sharply reduces the worst-case load compared with pure random, while avoiding the herding problem of always choosing the global least-loaded server — because many independent LB instances with slightly stale data will not all pick the same "best" server. Envoy's least-request policy uses P2C by default (Envoy's overall default is round robin), and NGINX supports `random two least_conn`.
+**Power of two choices (P2C).** Pick **two** servers at random and send to the less loaded (fewest active requests or lowest latency). Mitzenmacher's "two choices" analysis shows this sharply reduces worst-case load versus pure random, while avoiding herding: many independent LB instances with slightly stale data won't all pick the same "best" server. Envoy's least-request policy uses P2C by default (Envoy's overall default is round robin); NGINX supports `random two least_conn`.
 
-**Others you may hear.** **Least bandwidth** (fewest bytes per second), **resource-based / adaptive** (backends report CPU or load via an agent), **URL hash** (same URL to the same cache server), and **locality-aware** (prefer backends in the same zone to save cross-zone latency and cost).
+**Others:** **least bandwidth** (fewest bytes per second), **resource-based / adaptive** (backends report CPU or load via an agent), **URL hash** (same URL to the same cache server), **locality-aware** (prefer same-zone backends to save cross-zone latency and cost).
 
 ```mermaid
 flowchart TD
@@ -2307,45 +2215,37 @@ flowchart TD
 
 ### Health checks
 
-A load balancer must know which backends are alive. Two kinds:
+- **Active health checks** — the LB probes each backend on a schedule: a TCP connect (L4) or HTTP `GET /health` expecting 200 (L7). Typical: every 10 s, timeout 5 s, **unhealthy after 2–3 consecutive failures**, **healthy again after 2–5 consecutive successes**, so one blip doesn't flap a server in and out.
+- **Passive health checks (outlier detection)** — the LB watches real traffic; a backend returning several 5xx errors in a row or timing out is ejected for a while (say 30 s), then retried. Envoy calls this outlier detection; NGINX uses `max_fails` and `fail_timeout`.
 
-- **Active health checks** — the LB itself probes each backend on a schedule: a TCP connect (L4), or an HTTP `GET /health` expecting a 200 (L7). Typical settings: every 10 s, timeout 5 s, mark **unhealthy after 2–3 consecutive failures**, mark **healthy again after 2–5 consecutive successes**. These thresholds stop one blip from flapping a server in and out.
-- **Passive health checks (outlier detection)** — the LB watches real traffic. If a backend returns several 5xx errors in a row or times out, it is ejected for a while (say 30 s) and then retried. Envoy calls this outlier detection; NGINX uses `max_fails` and `fail_timeout`.
-
-Good practice: combine both. Make the health endpoint meaningful but cheap. A **liveness** check says "the process is running"; a **readiness** check says "I can serve traffic now" (warm caches loaded, database reachable). Be careful not to make health checks depend deeply on shared dependencies: if the database blips and every server's health check fails, the LB removes all servers at once and turns a partial problem into a total outage. Many LBs therefore **fail open** — if every backend looks unhealthy, they send traffic to all of them anyway (AWS target groups and Envoy's "panic threshold" both do this).
+Combine both, and make the health endpoint meaningful but cheap. A **liveness** check says "the process is running"; a **readiness** check says "I can serve traffic now" (caches warm, database reachable). Don't make health checks depend deeply on shared dependencies: if the database blips and every check fails, the LB removes all servers and turns a partial problem into a total outage. So many LBs **fail open** — if every backend looks unhealthy they send traffic to all of them (AWS target groups, Envoy's "panic threshold").
 
 ### Sticky sessions (session affinity)
 
-**Sticky sessions** make the LB send all requests from one user to the same backend. Implemented by:
+**Sticky sessions** send all of one user's requests to the same backend, via a **cookie** (the LB's own, such as AWS ALB's `AWSALB`, or the app's session cookie) or by **hashing the client IP** (L4 or L7).
 
-- **Cookie-based** — the LB sets a cookie naming the backend (AWS ALB's `AWSALB` cookie) or uses the app's own session cookie.
-- **IP-based** — hashing the client IP (L4 or L7).
-
-Why use it: the server holds in-memory state (an old app storing sessions locally, a WebSocket connection, a shopping cart in memory) or a warm per-user cache. Why avoid it: load becomes uneven (a few heavy users stuck on one server), scaling in or failing a server loses those users' sessions, and deployments are harder. The better design is to make servers stateless and keep session data in a shared store like Redis, or inside a signed token on the client. Use stickiness only where state is unavoidable, such as WebSockets — and even then design for reconnection to a different server.
+Use it when the server holds in-memory state (an old app storing sessions locally, a WebSocket connection, an in-memory cart) or a warm per-user cache. Costs: uneven load (heavy users stuck on one server), lost sessions when a server fails or scales in, harder deployments. Better: stateless servers with session data in a shared store like Redis or a signed client token. Use stickiness only where state is unavoidable (WebSockets) — and even then design for reconnecting elsewhere.
 
 ### SSL/TLS termination
 
-**TLS termination** means the load balancer decrypts HTTPS traffic and forwards plain HTTP to the backends inside the private network.
+**TLS termination**: the LB decrypts HTTPS and forwards plain HTTP to backends inside the private network.
 
-- **Benefits**: certificates live in one place and renew in one place; backends save the CPU cost of handshakes; and the LB can read requests for L7 routing, caching and WAF rules.
-- **Risk**: traffic between LB and servers is unencrypted. Acceptable inside a trusted private network for many companies, not for regulated data or zero-trust designs.
+- **Benefits**: certificates live and renew in one place; backends save handshake CPU; the LB can read requests for L7 routing, caching and WAF rules.
+- **Risk**: LB-to-server traffic is unencrypted — acceptable inside a trusted private network for many companies, not for regulated data or zero-trust designs.
 
-Variants:
-
-- **TLS re-encryption (bridging)** — decrypt at the LB, inspect, then open a new TLS connection to the backend. Secure end to end, costs more CPU.
-- **TLS passthrough** — the LB (typically L4) does not decrypt at all; the backend terminates TLS. The LB cannot route by content, but keys stay only on the servers. It can still route by the SNI host name, which is visible in the ClientHello.
+Variants: **TLS re-encryption (bridging)** — decrypt, inspect, open a new TLS connection to the backend (secure end to end, more CPU). **TLS passthrough** — the LB (typically L4) doesn't decrypt; the backend terminates TLS and keys stay on the servers. No content routing, but it can still route by the SNI host name visible in the ClientHello.
 
 ### Connection draining (deregistration delay)
 
-When a server is removed — for a deployment, scale-in or maintenance — cutting it off instantly would break in-flight requests. **Connection draining** tells the LB to stop sending **new** requests to that server but let **existing** requests and connections finish, up to a timeout. AWS calls this the **deregistration delay** (default 300 s, often lowered to 30–60 s for short API requests). For long-lived WebSockets, the server should also tell clients to reconnect elsewhere, because they may never finish on their own. Draining plus health checks is what makes **rolling deployments** invisible to users.
+Removing a server (deployment, scale-in, maintenance) instantly would break in-flight requests. **Connection draining** stops **new** requests to it but lets **existing** ones finish, up to a timeout — AWS's **deregistration delay** (default 300 s, often lowered to 30–60 s for short API requests). Long-lived WebSockets may never finish, so the server should also tell clients to reconnect elsewhere. Draining plus health checks make **rolling deployments** invisible to users.
 
 ### Making the load balancer itself highly available
 
-A single load balancer is itself a single point of failure. Options:
+A single LB is a single point of failure. Options:
 
-- **Active–passive** — two LB nodes share one virtual IP. The active node serves all traffic; the passive one watches it via heartbeats and takes over the VIP if the active one dies (commonly using **VRRP**, the Virtual Router Redundancy Protocol, via the `keepalived` tool). Simple, but half the hardware sits idle and failover takes a second or more.
-- **Active–active** — all LB nodes serve traffic at once. Traffic is spread across them by DNS (multiple IPs), by anycast, or by **ECMP** (equal-cost multi-path routing, where the network's routers spread flows across several LB machines that all announce the same IP). Better use of capacity and no idle standby; each node must be able to absorb the others' load if they fail. This is how Maglev, Katran and cloud LBs operate.
-- **Managed cloud LBs** handle this for you: AWS ALB and NLB run nodes in every Availability Zone you enable, and NLB offers one static IP per zone.
+- **Active–passive** — two LB nodes share one virtual IP; the passive one watches the active via heartbeats and takes over the VIP if it dies (commonly **VRRP**, the Virtual Router Redundancy Protocol, via `keepalived`). Simple, but half the hardware idles and failover takes a second or more.
+- **Active–active** — all nodes serve at once, traffic spread by DNS (multiple IPs), anycast, or **ECMP** (equal-cost multi-path routing: routers spread flows across several LB machines announcing the same IP). No idle standby; each node must absorb the others' load if they fail. This is how Maglev, Katran and cloud LBs work.
+- **Managed cloud LBs** do it for you: AWS ALB and NLB run nodes in every enabled Availability Zone, and NLB offers one static IP per zone.
 
 ```mermaid
 flowchart TD
@@ -2357,7 +2257,7 @@ flowchart TD
 
 ### Direct server return (bonus detail)
 
-Responses are usually much larger than requests (a small GET returns a big page or video). In **direct server return (DSR)**, an L4 LB forwards incoming packets to the server, and the server sends the response **straight to the client**, bypassing the LB. The LB handles only the small inbound half, so one LB can front far more traffic. Used by large-scale L4 systems such as Maglev, Katran and some LVS (Linux Virtual Server) setups.
+Responses are usually much larger than requests. In **direct server return (DSR)** an L4 LB forwards incoming packets to the server, which replies **straight to the client**, bypassing the LB; handling only the small inbound half, one LB fronts far more traffic. Used by Maglev, Katran and some LVS (Linux Virtual Server) setups.
 
 ### Trade-offs
 
@@ -2372,18 +2272,18 @@ Responses are usually much larger than requests (a small GET returns a big page 
 ### Common mistakes
 
 - Drawing a single LB box and forgetting it needs redundancy.
-- Using round robin for long-lived WebSocket connections; least connections is usually better.
+- Round robin for long-lived WebSocket connections; least connections is usually better.
 - Sticky sessions as a substitute for a shared session store.
-- Health checks that only test "process is up" — the server may be up but unable to reach its database — or, the opposite, deep checks that make the whole fleet fail at once.
-- Using an L4 LB in front of gRPC and wondering why one backend is overloaded: gRPC multiplexes many requests on one long connection, so you need per-request (L7 or client-side) balancing.
-- Forgetting that backends see the LB's IP, not the client's, unless `X-Forwarded-For` or the PROXY protocol is used.
+- Health checks that only test "process is up" (it may be unable to reach its database) — or, the opposite, deep checks that fail the whole fleet at once.
+- An L4 LB in front of gRPC, leaving one backend overloaded: gRPC multiplexes many requests on one long connection, so you need per-request (L7 or client-side) balancing.
+- Forgetting backends see the LB's IP, not the client's, unless `X-Forwarded-For` or the PROXY protocol is used.
 
 ### Real-world examples
 
-- **NGINX** — popular web server and L7 reverse proxy/LB; round robin by default, also least connections, IP hash, generic hash with consistent option, and random with two choices.
-- **HAProxy** — very fast L4/L7 load balancer; round robin, static round robin, least connections, source hash, URI hash, consistent hashing; used at GitHub, Stack Overflow and many others.
-- **Envoy** — modern L7 proxy created at Lyft, used as the data plane in service meshes like Istio. Policies include round robin, least request (P2C), ring hash, Maglev and random, plus outlier detection and automatic retries.
-- **AWS Application Load Balancer (ALB)** — L7; routes by path, host, headers and query; supports HTTP/2, gRPC and WebSockets; round robin, least outstanding requests or weighted random; cookie stickiness.
+- **NGINX** — web server and L7 reverse proxy/LB; round robin by default, also least connections, IP hash, generic hash with consistent option, random with two choices.
+- **HAProxy** — very fast L4/L7 LB; round robin, static round robin, least connections, source hash, URI hash, consistent hashing; used at GitHub, Stack Overflow and many others.
+- **Envoy** — L7 proxy created at Lyft, the data plane of service meshes like Istio; round robin, least request (P2C), ring hash, Maglev, random, plus outlier detection and automatic retries.
+- **AWS Application Load Balancer (ALB)** — L7; routes by path, host, headers and query; HTTP/2, gRPC and WebSockets; round robin, least outstanding requests or weighted random; cookie stickiness.
 - **AWS Network Load Balancer (NLB)** — L4 TCP/UDP/TLS; millions of requests per second; static IP per zone; preserves the client source IP.
 - **Google Maglev** and **Meta Katran** — software L4 balancers on commodity servers, using consistent hashing and ECMP to scale out.
 
@@ -2391,45 +2291,43 @@ Responses are usually much larger than requests (a small GET returns a big page 
 
 **Q:** What is the difference between an L4 and an L7 load balancer, and when would you pick each?
 
-**A:** L4 balances TCP/UDP connections by IP and port without reading content: fast, cheap, any protocol. L7 parses HTTP, so it can route by path or header, balance per request, terminate TLS and apply policies. I would put an L7 balancer in front of HTTP services and gRPC, and use L4 for non-HTTP protocols, extreme throughput, or as the first tier in front of L7 proxies.
+**A:** L4 balances TCP/UDP connections by IP and port without reading content: fast, cheap, any protocol. L7 parses HTTP: routes by path or header, balances per request, terminates TLS, applies policies. L7 in front of HTTP services and gRPC; L4 for non-HTTP protocols, extreme throughput, or as the first tier in front of L7 proxies.
 
-**Q:** Which algorithm would you choose for a fleet of identical stateless API servers? For a cache tier?
+**Q:** Which algorithm for identical stateless API servers? For a cache tier?
 
-**A:** For stateless API servers, least outstanding requests or power of two choices — they adapt to uneven request cost and slow servers. For a cache tier, consistent hashing on the cache key, so each key goes to the same node and adding a node moves only about 1/N of the keys.
+**A:** API servers: least outstanding requests or power of two choices, adapting to uneven request cost and slow servers. Cache tier: consistent hashing on the cache key, so each key hits the same node and adding a node moves only ~1/N of keys.
 
 **Q:** How do you deploy a new version without dropping requests?
 
-**A:** Rolling deployment behind the LB: for each server, deregister it with connection draining (stop new requests, let in-flight ones finish), update it, wait for readiness checks to pass, then re-register it. For extra safety, use weighted routing to canary the new version on a small share of traffic first.
+**A:** Rolling deployment: per server, deregister with connection draining, update, wait for readiness checks, re-register. For extra safety, canary the new version on a small weighted share of traffic first.
 
 **Q:** Isn't the load balancer a single point of failure?
 
-**A:** Only if there is one. Run LB nodes as active–passive with a floating virtual IP, or active–active behind DNS, anycast or ECMP, across multiple availability zones. Managed cloud LBs already do this.
+**A:** Only if there is one. Run LB nodes active–passive with a floating virtual IP, or active–active behind DNS, anycast or ECMP, across availability zones. Managed cloud LBs already do this.
 
 ### TL;DR
 
-A load balancer spreads traffic across healthy servers so you can scale out and survive failures. Know L4 vs L7, the main forms, the algorithms (from round robin to power of two choices), health checks, stickiness, TLS termination, draining, and how to make the LB itself redundant.
+A load balancer spreads traffic across healthy servers so you can scale out and survive failures. Know L4 vs L7, the main forms, the algorithms (round robin to power of two choices), health checks, stickiness, TLS termination, draining, and how to make the LB itself redundant.
 
 ## CDNs and anycast
 
 ### What it is
 
-A **CDN (Content Delivery Network)** is a worldwide network of caching servers that keep copies of your content close to users. Instead of every user in Sydney fetching an image from your server in Virginia (about 200 ms round trip), they fetch it from a CDN server in Sydney (a few milliseconds).
-
-Analogy: rather than everyone driving to one central warehouse, a retailer stocks local shops with the most popular items.
+A **CDN (Content Delivery Network)** is a worldwide network of caching servers that keep copies of your content close to users: a user in Sydney fetches an image from a Sydney CDN server (a few milliseconds) instead of your server in Virginia (~200 ms round trip).
 
 Key terms:
 
-- **Origin** — your real server (or storage like Amazon S3) that holds the master copy.
+- **Origin** — your real server (or storage like Amazon S3) holding the master copy.
 - **Edge server** — a CDN cache server near users.
-- **PoP (Point of Presence)** — a CDN location (a data centre site in a city) containing many edge servers. Large CDNs have hundreds of PoPs.
-- **Cache hit** — the edge already has a fresh copy and answers directly. **Cache miss** — it must fetch from the origin (or an upper tier) first.
-- **Cache hit ratio** — hits ÷ total requests. 95% means only 1 in 20 requests reaches the origin.
+- **PoP (Point of Presence)** — a CDN site in a city containing many edge servers; large CDNs have hundreds.
+- **Cache hit** — the edge has a fresh copy and answers directly. **Cache miss** — it must fetch from the origin (or an upper tier) first.
+- **Cache hit ratio** — hits ÷ total requests; 95% means only 1 in 20 requests reaches the origin.
 
 ### Why it matters
 
-- **Lower latency** — static files (images, JavaScript, CSS, video) are served from nearby, and TLS handshakes finish against a nearby edge, which shortens every round trip.
-- **Origin offload** — at 95% hit ratio the origin handles 20 times less traffic, so you need far fewer servers and less egress bandwidth.
-- **Absorbing spikes and attacks** — the CDN's huge capacity soaks up traffic surges and DDoS (distributed denial-of-service) attacks, where many machines flood a site with junk traffic, before they reach you.
+- **Lower latency** — static files (images, JavaScript, CSS, video) come from nearby, and TLS handshakes finish against a nearby edge, shortening every round trip.
+- **Origin offload** — at 95% hit ratio the origin handles 20× less traffic: far fewer servers and less egress bandwidth.
+- **Absorbing spikes and attacks** — the CDN's huge capacity soaks up surges and DDoS (distributed denial-of-service) attacks, where many machines flood a site with junk traffic.
 - **Video and large downloads** at global scale would be impossible from one origin.
 
 ### How it works
@@ -2452,18 +2350,18 @@ sequenceDiagram
     end
 ```
 
-1. The user's DNS lookup for `cdn.example.com` returns a nearby edge (via GeoDNS or anycast).
-2. The edge checks its cache for the URL (the **cache key**, usually host + path + some query parameters and headers).
-3. On a hit with a fresh copy, it answers immediately.
+1. DNS for `cdn.example.com` returns a nearby edge (via GeoDNS or anycast).
+2. The edge looks up the URL in its cache (the **cache key**: usually host + path + some query parameters and headers).
+3. On a fresh hit, it answers immediately.
 4. On a miss, it fetches from the origin, stores the copy for as long as the **TTL** allows, and returns it.
-5. The origin controls caching through HTTP headers: `Cache-Control: public, max-age=86400` (cache for one day), `s-maxage` (TTL for shared caches like CDNs only), `no-store` (never cache), and validators (`ETag`, `Last-Modified`) so an expired copy can be re-checked cheaply with a 304 Not Modified.
+5. The origin controls caching with HTTP headers: `Cache-Control: public, max-age=86400` (one day), `s-maxage` (TTL for shared caches like CDNs only), `no-store` (never cache), and validators (`ETag`, `Last-Modified`) so an expired copy can be re-checked cheaply with a 304 Not Modified.
 
 ### Types
 
 **Pull CDN vs push CDN.**
 
-- **Pull (origin pull)** — the CDN fetches content from the origin on the first request, lazily. Zero upload effort, and only requested content is cached. Whoever asks for a file first at a given PoP waits for the trip to the origin; later visitors there get the cached copy. Most websites use pull.
-- **Push** — you upload content to the CDN's storage ahead of time. Good for large files you know will be requested (game patches, video libraries) and for content that rarely changes; you manage what is stored and pay for storage.
+- **Pull (origin pull)** — the CDN fetches from the origin lazily on the first request; zero upload effort, only requested content cached. The first requester at each PoP waits for the origin trip. Most websites use pull.
+- **Push** — you upload content to the CDN's storage ahead of time; good for large files you know will be requested (game patches, video libraries) and rarely-changing content. You manage what is stored and pay for storage.
 
 | | Pull CDN | Push CDN |
 |---|---|---|
@@ -2472,68 +2370,68 @@ sequenceDiagram
 | First request | Slower (miss) | Fast |
 | Best for | Websites, mixed traffic | Big known files, video |
 
-**Invalidation (purging).** When content changes before its TTL expires you can:
+**Invalidation (purging).** When content changes before its TTL expires:
 
-1. **Purge** — ask the CDN to delete a URL, a prefix or a tag from all edges (seconds to minutes depending on CDN).
-2. **Versioned file names (cache busting)** — publish `app.3f9a1c.js` instead of overwriting `app.js`; the HTML references the new name, so there is nothing to invalidate. This is the standard for static assets and lets you use very long TTLs (a year) safely.
-3. **Short TTLs** for content that changes often, accepting more origin traffic.
+1. **Purge** — ask the CDN to delete a URL, prefix or tag from all edges (seconds to minutes).
+2. **Versioned file names (cache busting)** — publish `app.3f9a1c.js` instead of overwriting `app.js`; the HTML references the new name, so nothing needs invalidating. Standard for static assets, and allows very long TTLs (a year) safely.
+3. **Short TTLs** for often-changing content, accepting more origin traffic.
 
-**Origin shield (tiered caching).** An extra cache layer between edges and the origin. Without it, a new file that is popular worldwide causes a miss at every one of hundreds of PoPs, each hitting the origin. With a shield, edges miss to the shield, so the origin sees roughly one request per object. It raises the overall hit ratio and protects the origin.
+**Origin shield (tiered caching).** An extra cache layer between edges and origin. Without it, a new globally popular file misses at each of hundreds of PoPs, each hitting the origin; with it, edges miss to the shield and the origin sees roughly one request per object — higher hit ratio, protected origin.
 
-**Static vs dynamic content.** CDNs mostly cache static, shared content. For personalised or dynamic responses they still help by terminating TLS near the user and using optimised, kept-warm connections back to the origin, and some run code at the edge (Cloudflare Workers, Lambda@Edge, Fastly Compute).
+**Static vs dynamic content.** CDNs mostly cache static, shared content. For personalised or dynamic responses they still help by terminating TLS near the user over optimised, warm connections back to the origin, and some run code at the edge (Cloudflare Workers, Lambda@Edge, Fastly Compute).
 
-**Anycast.** Normally one IP address belongs to one location (**unicast**). With **anycast**, the same IP address is announced from many locations at once using **BGP** (Border Gateway Protocol — the protocol internet networks use to tell each other which IP ranges they can reach). Routers send each user to the "nearest" location in network terms. Benefits: automatic proximity routing with no DNS tricks, natural spreading of DDoS traffic across all sites, and fast failover — if a site stops announcing, routes shift to the next site. Cloudflare's whole network, Google's public DNS `8.8.8.8`, Cloudflare's `1.1.1.1` and the DNS root servers all use anycast. "Nearest" means the best path according to BGP routing policy (often the fewest networks crossed), which is usually but not always the lowest-latency site.
+**Anycast.** Normally one IP belongs to one location (**unicast**). With **anycast** the same IP is announced from many locations via **BGP** (Border Gateway Protocol — how internet networks tell each other which IP ranges they can reach), and routers send each user to the "nearest" location in network terms. Benefits: automatic proximity routing without DNS tricks, DDoS traffic naturally spread across all sites, and fast failover (a site that stops announcing has its routes shift to the next). Cloudflare's network, Google's `8.8.8.8`, Cloudflare's `1.1.1.1` and the DNS root servers all use anycast. "Nearest" means the best BGP path by routing policy (often fewest networks crossed) — usually, not always, the lowest-latency site.
 
 ### Trade-offs
 
-Long TTLs give a high hit ratio but stale content; short TTLs give freshness but more origin load. CDNs cost money per GB served, and caching anything personalised risks leaking one user's data to another if the cache key is wrong.
+Long TTLs: high hit ratio but stale content; short TTLs: freshness but more origin load. CDNs cost money per GB served, and caching anything personalised under a wrong cache key risks leaking one user's data to another.
 
 ### Common mistakes
 
-- Caching responses that contain user-specific data under a shared key (use `Cache-Control: private` or vary the key).
+- Caching user-specific responses under a shared key (use `Cache-Control: private` or vary the key).
 - Overwriting files in place with long TTLs, then being unable to update them. Use versioned file names.
-- Forgetting the origin must survive a full cache flush (a "cold" CDN) — the origin shield and gradual warm-up help.
+- Forgetting the origin must survive a full cache flush (a "cold" CDN); the origin shield and gradual warm-up help.
 
 ### Real-world examples
 
-Akamai, Cloudflare, Fastly, Amazon CloudFront, Google Cloud CDN. Netflix runs its own CDN, **Open Connect**, placing caching appliances inside internet providers' networks so most video bytes never cross the wider internet. YouTube uses Google's global cache network in a similar way.
+Akamai, Cloudflare, Fastly, Amazon CloudFront, Google Cloud CDN. Netflix runs its own CDN, **Open Connect**, placing caching appliances inside internet providers' networks so most video bytes never cross the wider internet; YouTube uses Google's global cache network similarly.
 
 ### In the interview
 
 **Q:** How does a CDN reduce latency and origin load?
 
-**A:** It serves cached copies from PoPs near users, cutting round-trip time, and at a high hit ratio most requests never reach the origin. An origin shield collapses many edge misses into one origin request.
+**A:** It serves cached copies from PoPs near users, cutting round-trip time; at a high hit ratio most requests never reach the origin, and an origin shield collapses many edge misses into one origin request.
 
-**Q:** You deploy a new version of your JavaScript and some users still get the old one. Why and how do you fix it?
+**Q:** You deploy new JavaScript and some users still get the old one. Why, and the fix?
 
-**A:** Edges and browsers are still serving the cached file until its TTL expires. Use content-hashed file names so each version has a new URL, and keep long TTLs; purge only as an emergency tool.
+**A:** Edges and browsers serve the cached file until its TTL expires. Use content-hashed file names so each version has a new URL, keep long TTLs, and purge only in emergencies.
 
 ### TL;DR
 
-A CDN caches content at edge PoPs near users to cut latency and offload the origin. Pull fetches on demand, push uploads ahead; manage freshness with TTLs, versioned names and purges; an origin shield protects the origin, and anycast routes users to the nearest site using one IP.
+A CDN caches content at edge PoPs near users to cut latency and offload the origin. Pull fetches on demand, push uploads ahead; manage freshness with TTLs, versioned names and purges; an origin shield protects the origin; anycast routes users to the nearest site using one IP.
 
 ## Bandwidth vs latency, and network partitions
 
 ### What it is
 
-Part 1 defined both terms: **bandwidth** is how much data a link can carry per second (1 Gbps is about 125 MB/s), and **latency** is how long one piece of data takes to get from A to B. A wider road does not make the trip shorter. This section looks at what that means for networked systems.
+From Part 1: **bandwidth** is how much data a link carries per second (1 Gbps ≈ 125 MB/s); **latency** is how long one piece of data takes from A to B. A wider road does not make the trip shorter.
 
-A **network partition** is when the network splits so that some machines cannot reach others, even though all of them are still running. Picture an office building where a corridor door jams: people on both sides keep working, but can no longer talk to each other.
+A **network partition** is when the network splits so some machines cannot reach others, though all are still running — like a jammed corridor door: both sides keep working but can't talk.
 
 ### Why it matters
 
-- Many system designs are latency-bound, not bandwidth-bound. A page that needs 10 sequential round trips across the Atlantic takes at least 700 ms no matter how fast the connection is. Fixes: fewer round trips (batching, HTTP/2, connection reuse), moving data closer (CDN, regional replicas).
-- Large transfers are bandwidth-bound: copying 10 TB over a 1 Gbps link takes about 22 hours (10 × 8 × 10^12 bits ÷ 10^9 bits/s ≈ 80,000 s). That is why cloud providers offer physical data-transfer devices (AWS Snowball).
-- Latency has a physical floor set by the speed of light in fibre (about 200 km per millisecond, see Part 1), so no protocol trick removes it.
-- **Bandwidth-delay product** (bandwidth × RTT) is how much data must be "in flight" to fill a link. A 1 Gbps link with 100 ms RTT needs 12.5 MB in flight, which is why TCP window sizes and congestion control matter on long links.
-- Partitions are not rare: a failed switch, a misconfigured firewall, a cut cable between data centres. Every distributed system must decide what to do during one, which leads to the CAP theorem (Part 4).
+- Many designs are latency-bound: 10 sequential trans-Atlantic round trips take at least 700 ms however fast the connection. Fix with fewer round trips (batching, HTTP/2, connection reuse) and moving data closer (CDN, regional replicas).
+- Large transfers are bandwidth-bound: 10 TB over 1 Gbps takes about 22 hours (10 × 8 × 10^12 bits ÷ 10^9 bits/s ≈ 80,000 s) — why cloud providers offer physical transfer devices (AWS Snowball).
+- Latency has a physical floor, the speed of light in fibre (~200 km per millisecond, Part 1); no protocol trick removes it.
+- **Bandwidth-delay product** (bandwidth × RTT) is the data that must be "in flight" to fill a link: 1 Gbps at 100 ms RTT needs 12.5 MB, which is why TCP window sizes and congestion control matter on long links.
+- Partitions are not rare — a failed switch, a misconfigured firewall, a cut cable between data centres — and every distributed system must decide what to do during one (the CAP theorem, Part 4).
 
 ### How it works
 
-During a partition, a node cannot tell the difference between "the other node crashed" and "the other node is fine but unreachable" — both look like silence. Systems detect trouble with **timeouts** and **heartbeats** and then choose:
+During a partition a node cannot tell "the other node crashed" from "it's fine but unreachable" — both are silence. Systems detect trouble with **timeouts** and **heartbeats**, then choose:
 
-1. **Stay consistent** — refuse writes (or reads) on the side that cannot reach a majority, so data never diverges. The minority side becomes unavailable.
-2. **Stay available** — keep accepting requests on both sides and reconcile the differences after the network heals, accepting temporarily inconsistent data.
+1. **Stay consistent** — refuse writes (or reads) on the side that can't reach a majority, so data never diverges; the minority side becomes unavailable.
+2. **Stay available** — keep serving on both sides and reconcile after the network heals, accepting temporary inconsistency.
 
 ```mermaid
 flowchart LR
@@ -2548,285 +2446,90 @@ flowchart LR
     B -.-x|"link cut, partition"| C
 ```
 
-A partition between nodes that both think they are the leader can cause **split brain** (two leaders accepting conflicting writes); quorum-based systems prevent it by requiring a majority (Part 3 and Part 4).
+Nodes on both sides each believing they are leader cause **split brain** (two leaders accepting conflicting writes); quorum-based systems prevent it by requiring a majority (Parts 3 and 4).
 
 ### Common mistakes
 
 - Assuming "the network is reliable" — the first of the classic **fallacies of distributed computing** (others: latency is zero, bandwidth is infinite, the network is secure, topology does not change).
-- Treating a timeout as proof that the remote operation failed. It may have succeeded, and only the reply was lost — hence idempotent retries.
+- Treating a timeout as proof the remote operation failed; it may have succeeded with only the reply lost — hence idempotent retries.
 - Buying more bandwidth to fix a latency problem.
 
 ### In the interview
 
 **Q:** Our API is slow for users in Asia but fine in the US. More bandwidth?
 
-**A:** Probably not — it is likely latency from distance multiplied by round trips. Reduce round trips (keep-alive, HTTP/2 or HTTP/3, batching) and move things closer: a CDN for static content and TLS termination at the edge, then regional deployments or read replicas.
+**A:** Probably not — it's latency from distance multiplied by round trips. Cut round trips (keep-alive, HTTP/2 or HTTP/3, batching) and move things closer: CDN for static content and edge TLS termination, then regional deployments or read replicas.
 
 **Q:** What is a network partition and why can't you just avoid it?
 
-**A:** It is a break in communication between groups of healthy nodes. Hardware and configuration failures make it unavoidable at scale, so the design must choose between consistency and availability for the duration of the partition.
+**A:** A break in communication between groups of healthy nodes. Hardware and configuration failures make it unavoidable at scale, so the design must choose between consistency and availability while it lasts.
 
 ### TL;DR
 
-Bandwidth is capacity, latency is delay — round trips usually dominate. Partitions split healthy nodes from each other, cannot be avoided, and force a choice between consistency and availability.
+Bandwidth is capacity, latency is delay — round trips usually dominate. Partitions split healthy nodes, can't be avoided, and force a choice between consistency and availability.
 
 ## Part 2 glossary
 
-| Term | Meaning in one line |
-|---|---|
-| Protocol | Agreed rules for how two programs exchange messages |
-| Packet | A small chunk of data (about 1,500 bytes max on Ethernet) routed independently |
-| Router | Device that forwards packets toward their destination IP |
-| IP address | Number identifying a machine's network interface |
-| IPv4 / IPv6 | 32-bit addresses (~4.3 billion) / 128-bit addresses (practically unlimited) |
-| CIDR | Notation like `10.0.0.0/8` giving an address range by its fixed leading bits |
-| Public IP | Globally unique address reachable from the internet |
-| Private IP | Address valid only inside a local network (10/8, 172.16/12, 192.168/16) |
-| NAT | Rewriting addresses so many private machines share one public IP |
-| NAT gateway | Cloud service giving private servers outbound internet access |
-| Carrier-grade NAT | NAT run by an ISP, so many customers share one public IP |
-| VPC | Your own isolated private network inside a cloud provider |
-| Port | Number (0–65535) selecting which program on a machine receives data |
-| Ephemeral port | Temporary source port the OS assigns to an outgoing connection |
-| Socket | One endpoint of a connection: IP address plus port |
-| 5-tuple | Protocol, source IP/port, destination IP/port — identifies a connection |
-| Port exhaustion | Running out of source ports for new outgoing connections |
-| DNS | System that translates domain names into IP addresses |
-| Domain name | Human-readable hierarchical name such as `www.example.com` |
-| TLD | Top-level domain such as `.com` or `.uk` |
-| Subdomain | A name under a domain, such as `api.example.com` |
-| Apex domain | The bare registered domain without a subdomain, such as `example.com` |
-| Stub resolver | Minimal DNS client in the OS that asks a recursive resolver |
-| Recursive resolver | DNS server that finds the full answer for clients and caches it |
-| Root name server | Top of the DNS tree, refers resolvers to TLD servers |
-| TLD name server | Refers resolvers to a domain's authoritative servers |
-| Authoritative name server | Server holding the official records for a domain |
-| Zone | Set of DNS records one authoritative server is responsible for |
-| Recursive vs iterative query | "Give me the final answer" vs "point me to who knows" |
-| A / AAAA record | Name to IPv4 / IPv6 address |
-| CNAME record | Alias from one name to another name |
-| MX record | Mail servers for a domain, with priorities |
-| NS record | Authoritative name servers for a domain |
-| TXT record | Free-text record used for verification and email policy |
-| SOA, SRV, PTR, CAA | Zone admin data, service location, reverse lookup, allowed certificate issuers |
-| TTL (DNS) | Seconds a DNS answer may be cached |
-| Round-robin DNS | Returning several IPs in rotating order to spread load |
-| GeoDNS | Answering DNS queries differently by the user's location |
-| Latency-based routing | DNS steering to the region with the lowest measured latency |
-| EDNS Client Subnet | DNS extension passing part of the user's IP for better geo answers |
-| OSI model | Seven-layer reference model for networking |
-| TCP/IP model | Four-layer model the internet actually uses |
-| L3 / L4 / L7 | Network (IP), transport (TCP/UDP, ports), application (HTTP) layers |
-| Encapsulation | Each layer wrapping data with its own header |
-| MAC address | Hardware address of a network card used on the local link |
-| TCP | Connection-based, reliable, ordered byte-stream transport |
-| UDP | Connectionless, unreliable, unordered datagram transport |
-| Datagram | Self-contained UDP message |
-| Three-way handshake | SYN, SYN-ACK, ACK exchange that opens a TCP connection |
-| RTT | Round-trip time for a message to go and its reply to return |
-| Sequence number | Counter TCP uses to order bytes and detect loss |
-| ACK | Acknowledgement that data was received |
-| Retransmission | Resending data whose acknowledgement did not arrive |
-| Flow control | Receiver limiting how fast the sender sends (receive window) |
-| Congestion control | Sender slowing down to avoid overloading the network |
-| Slow start | TCP ramp-up that grows the sending rate each round trip |
-| CUBIC / BBR | Common TCP congestion-control algorithms |
-| TIME_WAIT | Short wait state after closing a TCP connection |
-| Head-of-line blocking | One delayed item holding up everything queued behind it |
-| QUIC | Encrypted, multi-stream, reliable transport over UDP |
-| 0-RTT | Sending data in the very first packet when resuming a connection |
-| Connection migration | QUIC keeping a connection alive across network changes |
-| Connection ID | QUIC identifier for a connection independent of IPs and ports |
-| HTTP | Stateless request–response protocol of the web |
-| HTTP method | Verb such as GET, POST, PUT, PATCH, DELETE |
-| Safe method | Method that does not change server state |
-| Idempotent | Repeating the operation leaves the same result as doing it once |
-| Idempotency key | Client-supplied ID letting a server detect and ignore retries |
-| Status code | Three-digit result code (2xx success, 4xx client error, 5xx server error) |
-| Header | Key–value metadata on a request or response |
-| Cache-Control | Header telling caches whether and how long to store a response |
-| ETag | Version tag of a resource, used to answer 304 Not Modified |
-| X-Forwarded-For | Header carrying the original client IP through proxies |
-| Stateless | Each request carries all needed context, server keeps no memory between them |
-| Cookie | Small value the browser stores and sends back on each request to a site |
-| Session | Server-side record of a logged-in user, referenced by a cookie or token |
-| Keep-alive | Reusing one TCP connection for many HTTP requests |
-| HTTP/1.1 | Text protocol, one request at a time per connection |
-| HTTP/2 | Binary protocol multiplexing many streams over one TCP connection |
-| HTTP/3 | HTTP over QUIC, removing TCP head-of-line blocking |
-| Multiplexing | Interleaving many independent streams over one connection |
-| HPACK / QPACK | Header compression for HTTP/2 / HTTP/3 |
-| Alt-Svc | Header advertising that a server also speaks HTTP/3 |
-| HTTPS | HTTP inside a TLS-encrypted connection |
-| TLS / SSL | Protocol for encrypted, authenticated connections (SSL is the old name) |
-| Encryption in transit | Protecting data while it moves over the network |
-| Certificate | Signed file binding a domain name to a public key |
-| Certificate Authority | Trusted organisation that signs certificates |
-| Chain of trust | Certificate signed by intermediate, signed by a root the browser trusts |
-| Public-key cryptography | Key pair where the public key verifies or encrypts for the private key |
-| Symmetric encryption | One shared key both encrypts and decrypts, fast |
-| Diffie–Hellman | Method for two sides to agree on a secret key without sending it |
-| Forward secrecy | Stolen long-term keys cannot decrypt past sessions |
-| Session resumption | Reusing earlier TLS secrets to skip handshake work |
-| SNI | Host name sent in the TLS ClientHello so one IP can serve many sites |
-| mTLS | Mutual TLS where both client and server present certificates |
-| API | Defined set of operations a service offers to other programs |
-| REST | API style of resources (URLs) manipulated with HTTP verbs |
-| Resource | A noun the API exposes, addressed by a URL |
-| RPC | Calling a function on another machine as if it were local |
-| gRPC | Google's RPC framework over HTTP/2 using Protobuf |
-| Protocol Buffers | Compact binary serialisation format with a schema |
-| Streaming RPC | gRPC call where client, server or both send a stream of messages |
-| GraphQL | Query language letting clients request exactly the fields they need |
-| Schema (GraphQL) | Typed description of all data and operations an API offers |
-| Resolver | Server function that fetches one GraphQL field |
-| Mutation / subscription | GraphQL write / live-update operation |
-| Over-fetching / under-fetching | Getting more data than needed / needing several calls for one screen |
-| N+1 query problem | One query for a list plus one extra query per item |
-| Short polling | Client repeatedly asking the server for updates on a timer |
-| Long polling | Server holding a request open until data is available |
-| WebSocket | Persistent two-way message channel upgraded from HTTP |
-| Server-Sent Events | One-way server-to-client event stream over HTTP |
-| Webhook | HTTP callback a service sends to your URL when an event occurs |
-| Heartbeat (ping/pong) | Periodic small message keeping a connection alive and detecting failure |
-| API versioning | Running old and new API contracts side by side for breaking changes |
-| Offset pagination | Paging with limit and offset, simple but slow and unstable deep in a list |
-| Cursor pagination | Paging from an opaque marker of the last item seen, fast and stable |
-| Rate-limit headers | Headers telling clients their quota, remaining calls and reset time |
-| 429 Too Many Requests | Status code for a client that exceeded its rate limit |
-| Retry-After | Header telling the client how long to wait before retrying |
-| OpenAPI | Standard format for describing HTTP APIs |
-| Proxy | Middleman that forwards requests on someone's behalf |
-| Forward proxy | Proxy acting for clients toward the internet |
-| Reverse proxy | Proxy acting for servers, receiving client traffic in front of them |
-| API gateway | Reverse proxy handling auth, rate limits and routing for APIs |
-| BFF | Backend for Frontend, a gateway tailored to one client type |
-| Load balancer | Component spreading traffic across healthy servers |
-| Pool / target group | The set of backend servers behind a load balancer |
-| Virtual IP (VIP) | Address owned by a service rather than one machine |
-| L4 load balancer | Balances TCP/UDP connections without reading content |
-| L7 load balancer | Parses HTTP and routes or balances per request |
-| Hardware load balancer | Dedicated appliance such as F5 BIG-IP |
-| Software load balancer | LB program on ordinary servers such as NGINX, HAProxy, Envoy |
-| Cloud load balancer | Provider-managed LB service such as AWS ALB or NLB |
-| GSLB | Global server load balancing across regions or data centres |
-| Client-side load balancing | Each client picks a backend from a list of healthy instances |
-| Round robin | Send requests to servers in turn |
-| Weighted round robin | Round robin where bigger servers get proportionally more |
-| Least connections | Send to the server with the fewest active connections |
-| Least response time | Send to the server answering fastest recently |
-| EWMA | Exponentially weighted moving average, a smoothed recent value |
-| IP hash | Choose a server by hashing the client IP |
-| Consistent hashing | Hash ring where adding or removing a node moves only about 1/N of keys |
-| Virtual nodes | Several ring positions per server for even spread |
-| Random (LB) | Pick a backend at random |
-| Power of two choices | Pick two random backends and use the less loaded one |
-| Herding | Many balancers sending traffic to the same seemingly best server at once |
-| Canary release | Sending a small share of traffic to a new version first |
-| Health check | Test that decides whether a backend should receive traffic |
-| Active health check | LB probes backends on a schedule |
-| Passive health check | LB ejects backends based on errors in real traffic (outlier detection) |
-| Liveness vs readiness | "Process is running" vs "ready to serve traffic" |
-| Fail open | Sending traffic to all backends when all appear unhealthy |
-| Sticky sessions | Routing one user's requests to the same backend |
-| TLS termination | Decrypting HTTPS at the load balancer or proxy |
-| TLS passthrough | LB forwards encrypted traffic, backend decrypts |
-| TLS re-encryption | LB decrypts, inspects, then encrypts again to the backend |
-| Connection draining | Stop new traffic to a server but let in-flight work finish |
-| Deregistration delay | AWS name for the connection-draining timeout |
-| Active–passive | One node serves, a standby takes over on failure |
-| Active–active | All nodes serve traffic simultaneously |
-| VRRP / keepalived | Protocol and tool that move a virtual IP to a standby node |
-| ECMP | Routers spreading flows across several equal-cost paths or machines |
-| Direct server return | Backend replies straight to the client, bypassing the LB |
-| PROXY protocol | Header an L4 proxy prepends to pass the original client address |
-| CDN | Global network of edge caches serving content near users |
-| Origin | Your server or storage that holds the master copy of content |
-| Edge server | CDN cache server close to users |
-| PoP | CDN site in a city containing many edge servers |
-| Cache hit / miss | Content served from cache / fetched from upstream |
-| Cache hit ratio | Hits divided by total requests |
-| Cache key | Values (host, path, some headers) identifying a cached object |
-| Pull CDN | CDN fetching content from origin on first request |
-| Push CDN | You upload content to the CDN in advance |
-| Purge / invalidation | Removing content from CDN caches before its TTL ends |
-| Cache busting | Changing a file's name per version so caches fetch the new one |
-| Origin shield | Middle cache tier that collapses edge misses before the origin |
-| Edge computing | Running code on CDN edge servers |
-| Unicast | One IP address belongs to one location |
-| Anycast | Same IP announced from many locations, routed to the nearest |
-| BGP | Protocol networks use to announce which IP ranges they can reach |
-| Bandwidth | Data a link can carry per second |
-| Bandwidth-delay product | Bandwidth times RTT, the data in flight needed to fill a link |
-| Network partition | Network failure splitting healthy nodes into groups that cannot talk |
-| Split brain | Two sides of a partition each acting as leader |
-| Fallacies of distributed computing | False assumptions such as "the network is reliable" and "latency is zero" |
-
+Every Part 2 term is defined in one line in the [Master A–Z glossary](#master-az-glossary), which merges the glossaries of all six parts into a single alphabetical list.
 
 ## Part 3 — Data storage
 
-Almost every system you will design exists to remember things: who the users are, what they bought, which messages they sent, which photos they posted. The program code can be thrown away and redeployed in minutes. The data cannot. If you lose it, the business may be over. This part explains, from zero, where data lives, how it is organised, how it is kept safe when machines crash, and how it is spread over many machines once one is no longer enough.
-
-Read it in order. Each section uses words defined in the sections before it. Every term is also collected in the glossary at the end of this part.
+Almost every system exists to remember things: users, purchases, messages, photos. Code can be thrown away and redeployed in minutes; data cannot, and losing it may end the business. This part explains, from zero, where data lives, how it is organised, how it is kept safe when machines crash, and how it is spread over many machines once one is not enough. Read it in order: each section uses words defined before it (all collected in the master A–Z glossary).
 
 ## What a database is
 
 ### What it is
 
-A **database** is a program whose job is to store data, keep it safe, and let other programs find it again quickly. The program you talk to is properly called a **database management system (DBMS)**. People say "database" for both the program and the data it holds, and so will we.
+A **database** is a program that stores data, keeps it safe, and lets other programs find it again quickly. Properly the program is a **database management system (DBMS)**; "database" is used for both the program and its data. (Like a library: books shelved in agreed places, a catalogue — an index — to find one without walking every aisle, and a librarian making sure two people can't check out the same copy and nothing is lost if the lights go out mid-shelving.)
 
-**Analogy.** A database is like a well-run library. Books (data) arrive and are shelved in an agreed place. A catalogue (an index) lets you find a book without walking every aisle. A librarian (the DBMS) makes sure two people cannot check out the same copy at the same moment, and that a book is not lost if the lights go out halfway through shelving it.
+Plain files work for a tiny program, but with many concurrent users they give you none of these:
 
-Why not just write data to a plain file? You can, for a tiny program. But as soon as you have many users at once, plain files give you none of these:
-
-- **Fast lookup.** Finding one customer among 50 million by reading the whole file takes seconds. A database index finds it in well under a millisecond.
-- **Safe concurrent access.** Two web servers writing to the same file at the same moment can corrupt it. A database coordinates them.
-- **Crash safety.** If the power fails halfway through a write, a database guarantees that the write either fully happened or did not happen at all.
-- **A query language.** Instead of writing a loop for every question, you ask "give me all orders over $100 from last week" and the database works out how.
+- **Fast lookup.** Finding one customer among 50 million by reading the whole file takes seconds; an index takes well under a millisecond.
+- **Safe concurrent access.** Two servers writing the same file at once can corrupt it; a database coordinates them.
+- **Crash safety.** If power fails mid-write, the write either fully happened or not at all.
+- **A query language.** Ask "all orders over $100 from last week" and the database works out how.
 
 ### Why it matters
 
-In a typical web application, the app servers are **stateless**: they keep nothing important in their own memory between requests, so you can add or remove them freely. All the important **state** (stored facts that must survive) lives in the database. That makes the database the hardest part to scale, the slowest part to change, and the most expensive part to get wrong. In interviews, the data model and the choice of database are usually where most of the deep questions land.
+App servers are **stateless**: they keep nothing important between requests, so you can add or remove them freely. All the important **state** (stored facts that must survive) lives in the database — the hardest part to scale, the slowest to change and the most expensive to get wrong. Interviews' deep questions usually land on the data model and database choice.
 
 ### How it works
 
-At a high level every database does the same few things when your program sends it a request:
+For each request a database:
 
-1. **Parse** the request (for example a SQL statement) and check it is valid.
-2. **Plan** the cheapest way to answer it, such as "use the index on `email`" instead of "read every row". The part that does this is the **query planner** (or optimizer).
-3. **Execute** the plan, reading pages of data from memory if they are already there (the **buffer cache**) or from disk if not.
-4. For writes, **log** the change to a durable file first, then apply it (explained in the Durability section).
-5. **Return** the result to the caller over the network.
+1. **Parses** it (e.g. a SQL statement) and checks it is valid.
+2. **Plans** the cheapest way to answer ("use the index on `email`", not "read every row"); this is the **query planner** (optimizer).
+3. **Executes** the plan, reading data pages from memory if present (the **buffer cache**) or from disk.
+4. For writes, **logs** the change to a durable file first, then applies it (Durability section).
+5. **Returns** the result over the network.
 
-Two words you will see everywhere: **read** means fetching data without changing it, and **write** means inserting, updating or deleting data. Most consumer apps read far more than they write; a ratio of 10 reads to 1 write, or even 100 to 1, is common for social feeds and product catalogues.
+A **read** fetches data without changing it; a **write** inserts, updates or deletes. Most consumer apps read far more than they write: 10:1 or even 100:1 is common for social feeds and product catalogues.
 
 ### TL;DR
 
-A database is a program that stores data safely, finds it quickly, and coordinates many users at once. It holds the state that the rest of the system can afford to forget.
+A database stores data safely, finds it quickly, and coordinates many users at once. It holds the state the rest of the system can afford to forget.
 
 ## Relational databases and SQL
 
 ### What it is
 
-A **relational database** stores data in **tables**. A table looks like a spreadsheet:
+A **relational database** stores data in **tables**, like spreadsheets:
 
-- Each **row** (also called a record or tuple) is one thing, such as one user.
-- Each **column** (also called a field or attribute) is one property of that thing, such as `email`.
-- The **schema** is the formal description of the tables: their names, their columns, and each column's **data type** (integer, text, date and so on). The database refuses data that does not fit the schema.
+- Each **row** (record, tuple) is one thing, such as one user.
+- Each **column** (field, attribute) is one property, such as `email`.
+- The **schema** formally describes the tables: names, columns, and each column's **data type** (integer, text, date…). Data that doesn't fit is refused.
 
-The word "relational" comes from mathematics (a table is a "relation"), not from "relationships", although tables do relate to each other through keys.
+"Relational" comes from mathematics (a table is a "relation"), not from "relationships", though tables do relate through keys.
 
-You talk to a relational database with **SQL (Structured Query Language)**, a language for describing *what* data you want rather than *how* to fetch it. Well-known relational databases include PostgreSQL, MySQL, MariaDB, Oracle Database, Microsoft SQL Server and SQLite. Cloud versions include Amazon RDS and Aurora, Google Cloud SQL and Azure SQL Database.
-
-**Analogy.** Think of a school office with filing cabinets. One cabinet holds a card per student. Another holds a card per class enrolment. Each enrolment card does not copy the student's address; it just writes the student's ID number, and you look the rest up in the student cabinet.
+You talk to it in **SQL (Structured Query Language)**, which describes *what* data you want, not *how* to fetch it. Examples: PostgreSQL, MySQL, MariaDB, Oracle Database, Microsoft SQL Server, SQLite; in the cloud Amazon RDS and Aurora, Google Cloud SQL, Azure SQL Database.
 
 ### How it works
 
-**Keys** tie the tables together:
+**Keys** tie tables together (like an enrolment card that stores only the student's ID, not their address):
 
-- A **primary key** is a column (or set of columns) whose value is unique for every row and never empty. It is the row's identity. Example: `users.id`.
-- A **foreign key** is a column in one table that holds the primary key of a row in another table. Example: `orders.user_id` points to `users.id`. The database can enforce that the referenced row exists (this is called **referential integrity**), so you cannot create an order for a user who does not exist.
-- A **unique constraint** says that no two rows may share a value, for example no two users with the same `email`.
+- A **primary key** is a column (or set) whose value is unique and never empty for every row — the row's identity (`users.id`).
+- A **foreign key** holds the primary key of a row in another table (`orders.user_id` → `users.id`). The database can enforce that the referenced row exists — **referential integrity** — so you can't create an order for a non-existent user.
+- A **unique constraint** says no two rows may share a value (no two users with the same `email`).
 
 ```mermaid
 flowchart LR
@@ -2839,7 +2542,7 @@ flowchart LR
     I -- "product_id points to products.id" --> P
 ```
 
-A **join** combines rows from two tables that match on a key. Here is a short query that lists each order with the buyer's name:
+A **join** combines rows from two tables that match on a key. Each order with the buyer's name:
 
 ```sql
 SELECT o.id, u.name, o.total
@@ -2850,46 +2553,46 @@ ORDER BY o.total DESC
 LIMIT 10;
 ```
 
-The main kinds of join are: **inner join** (only rows that match on both sides), **left join** (every row from the left table, with empty values where the right side has no match), **right join** (the mirror image) and **full outer join** (every row from both sides).
+Join kinds: **inner** (only rows matching on both sides), **left** (every left row, empty values where the right has no match), **right** (the mirror) and **full outer** (every row from both sides).
 
-SQL statements fall into a few groups. `SELECT` reads. `INSERT`, `UPDATE` and `DELETE` change rows. `CREATE TABLE`, `ALTER TABLE` and `DROP TABLE` change the schema; this kind of statement is called **DDL (data definition language)**.
+`SELECT` reads; `INSERT`, `UPDATE` and `DELETE` change rows; `CREATE TABLE`, `ALTER TABLE` and `DROP TABLE` change the schema — **DDL (data definition language)**.
 
 ### Why it matters
 
-Relational databases are the default choice for most applications, and have been for about 50 years, because they give you:
+Relational databases have been the default for about 50 years because they give:
 
-- A **flexible query language**: you can ask questions you did not plan for when you designed the tables.
-- **Strong guarantees** (transactions and ACID, next section) that protect money, inventory and anything else that must add up.
+- A **flexible query language**: ask questions you didn't plan for when designing the tables.
+- **Strong guarantees** (transactions and ACID, next) protecting money, inventory and anything that must add up.
 - **Enforced structure**: bad data is rejected at the door.
-- **Mature tools**: backups, monitoring, replication and decades of operational knowledge.
+- **Mature tools**: backups, monitoring, replication, decades of operational knowledge.
 
 ### Trade-offs
 
-- **Schema changes take care.** Adding a column to a 2-billion-row table can lock it or take hours unless you use online migration tools (for example `gh-ost` or `pt-online-schema-change` for MySQL).
-- **Scaling writes past one machine is hard.** A classic relational database is built around one main server. Spreading it across many machines (sharding, covered later) is possible but you lose cross-machine joins and transactions unless you use a distributed SQL database such as Google Spanner, CockroachDB, YugabyteDB or TiDB.
-- **Joins get expensive** when the tables are huge and the join cannot use an index.
+- **Schema changes take care.** Adding a column to a 2-billion-row table can lock it or take hours without online migration tools (`gh-ost`, `pt-online-schema-change` for MySQL).
+- **Scaling writes past one machine is hard.** Classic relational databases centre on one main server; sharding (later) loses cross-machine joins and transactions unless you use a distributed SQL database (Google Spanner, CockroachDB, YugabyteDB, TiDB).
+- **Joins get expensive** on huge tables when they can't use an index.
 
 ### Common mistakes
 
-- Choosing a NoSQL database "for scale" when the data is a few hundred gigabytes and fits comfortably in one PostgreSQL server. A single modern server with 64 cores, 512 GB of memory and fast SSDs can handle tens of thousands of simple transactions per second.
-- Storing a list as a comma-separated string inside one column. It cannot be indexed or joined properly; use a separate table.
-- Using a natural value such as an email address as a primary key. Emails change; IDs should not.
+- Choosing NoSQL "for scale" when the data is a few hundred gigabytes that fit one PostgreSQL server. One modern server (64 cores, 512 GB memory, fast SSDs) handles tens of thousands of simple transactions per second.
+- Storing a list as a comma-separated string in one column; it can't be indexed or joined. Use a separate table.
+- A natural value such as an email as primary key. Emails change; IDs should not.
 
 ### Real-world examples
 
-Shopify, GitHub and Basecamp run large parts of their products on MySQL. Instagram began on PostgreSQL and sharded it as it grew. Stack Overflow is well known for running one of the web's busiest sites on a handful of SQL Server machines.
+Shopify, GitHub and Basecamp run large parts of their products on MySQL. Instagram began on PostgreSQL and sharded it as it grew. Stack Overflow runs one of the web's busiest sites on a handful of SQL Server machines.
 
 ### TL;DR
 
-A relational database stores data in tables with a fixed schema, links them with primary and foreign keys, and lets you combine them with joins in SQL. It is the safe default for most systems.
+A relational database stores data in tables with a fixed schema, links them with primary and foreign keys, and combines them with joins in SQL. It is the safe default for most systems.
 
 ## Transactions and ACID
 
 ### What it is
 
-A **transaction** is a group of reads and writes that the database treats as one unit: either all of them take effect, or none do. You start one with `BEGIN`, and finish with `COMMIT` (make it permanent) or `ROLLBACK` (throw it all away).
+A **transaction** is a group of reads and writes treated as one unit: all take effect, or none do. Start with `BEGIN`, finish with `COMMIT` (make permanent) or `ROLLBACK` (discard everything).
 
-**Analogy.** Moving money between two bank accounts is two steps: take $100 from Alice, add $100 to Bob. If the system crashes between the steps, $100 vanishes. A transaction is like a sealed envelope: the bank only opens and acts on it when both instructions are inside, and if anything goes wrong the whole envelope is discarded.
+Moving money is two steps — take $100 from Alice, add $100 to Bob; a crash in between makes $100 vanish. A transaction is a sealed envelope acted on only when both instructions are inside:
 
 ```sql
 BEGIN;
@@ -2898,12 +2601,12 @@ UPDATE accounts SET balance = balance + 100 WHERE id = 'bob';
 COMMIT;
 ```
 
-**ACID** is the name for the four promises a transactional database makes:
+**ACID** names the four promises:
 
-- **A — Atomicity.** All or nothing. If any step fails, or the server crashes before `COMMIT`, every change in the transaction is undone. "Atomic" here means "cannot be split", not anything to do with speed or concurrency.
-- **C — Consistency.** The transaction moves the data from one valid state to another valid state, where "valid" means it obeys the rules you declared: constraints, foreign keys, "balance must not go below zero" checks. Note that this C is mostly the application's job (you define the rules); the database only enforces the ones you tell it about. It is a different meaning from the "C" in the CAP theorem (Part 4).
-- **I — Isolation.** Transactions running at the same time do not see each other's half-finished work. Ideally the result is the same as if they had run one after another. In practice databases offer several weaker **isolation levels** for speed (next section).
-- **D — Durability.** Once the database says "committed", the data survives a crash or power cut. This is done by writing the change to a log on disk and forcing it to the physical device before replying (see the Durability section).
+- **A — Atomicity.** All or nothing: if any step fails or the server crashes before `COMMIT`, every change is undone. "Atomic" means "cannot be split", nothing to do with speed or concurrency.
+- **C — Consistency.** The transaction moves data between valid states, "valid" meaning the rules you declared: constraints, foreign keys, "balance must not go below zero" checks. Mostly the application's job (you define the rules; the database enforces only the ones you tell it). A different meaning from the "C" in CAP (Part 4).
+- **I — Isolation.** Concurrent transactions don't see each other's half-finished work — ideally as if they ran one after another. In practice databases offer weaker **isolation levels** for speed (next section).
+- **D — Durability.** Once "committed", data survives a crash or power cut: the change is written to a log on disk and forced to the physical device before replying (Durability section).
 
 ```mermaid
 sequenceDiagram
@@ -2920,51 +2623,49 @@ sequenceDiagram
 
 ### Why it matters
 
-Without transactions, every piece of application code would have to handle "what if we crash halfway?" and "what if someone else changed this row while I was reading it?". Those bugs are rare, hard to reproduce and often cost real money: double-charged customers, oversold concert tickets, negative stock.
+Without transactions every piece of code must handle "what if we crash halfway?" and "what if someone changed this row while I read it?" — rare, hard-to-reproduce bugs that cost real money: double charges, oversold tickets, negative stock.
 
 ### Trade-offs
 
-Stronger guarantees cost speed. Isolation needs locks or version tracking, and durability needs a disk flush on every commit (often 0.1–2 ms on an SSD, more on a spinning disk or a network disk). Spreading a transaction across several machines (a **distributed transaction**, Part 4) is far slower again, because the machines must agree over the network.
+Stronger guarantees cost speed: isolation needs locks or version tracking, durability a disk flush per commit (often 0.1–2 ms on SSD, more on spinning or network disks). A transaction across several machines (a **distributed transaction**, Part 4) is far slower again, as the machines must agree over the network.
 
 ### Common mistakes
 
-- Holding a transaction open while calling a slow external service (for example a payment API). The transaction keeps its locks the whole time and blocks other users. Do the external call outside the transaction.
-- Assuming that a database labelled "ACID" gives you full isolation by default. Most do not (see next section).
+- Holding a transaction open while calling a slow external service (a payment API): it keeps its locks and blocks others. Call outside the transaction.
+- Assuming an "ACID" database gives full isolation by default. Most don't (next section).
 
 ### In the interview
 
-**Q:** What does ACID stand for and which letter is the database's responsibility versus the application's?
+**Q:** What does ACID stand for, and which letters are the database's job versus the application's?
 
-**A:** Atomicity, Consistency, Isolation, Durability. Atomicity, isolation and durability are mechanisms the database provides. Consistency is mostly a property of the application's rules; the database helps by enforcing the constraints you declare.
+**A:** Atomicity, Consistency, Isolation, Durability. A, I and D are database mechanisms; consistency is mostly the application's rules, which the database helps enforce as declared constraints.
 
 **Q:** Why not use transactions for everything across services?
 
-**A:** A transaction that spans several databases needs a coordination protocol such as two-phase commit, which is slow and blocks if the coordinator fails. Across services people usually use sagas and idempotent operations instead (Part 4).
+**A:** Spanning several databases needs a coordination protocol such as two-phase commit, which is slow and blocks if the coordinator fails. Across services, use sagas and idempotent operations (Part 4).
 
 ### TL;DR
 
-A transaction groups several operations so they all succeed or all fail. ACID means all-or-nothing, rules respected, no interference, and nothing lost after commit.
+A transaction groups operations so they all succeed or all fail. ACID: all-or-nothing, rules respected, no interference, nothing lost after commit.
 
 ## Isolation levels and anomalies
 
 ### What it is
 
-**Concurrency** means several transactions running at overlapping times. When they touch the same data, strange results called **anomalies** (or race conditions) can appear. An **isolation level** is a setting that chooses which anomalies the database prevents. Stronger levels prevent more but run slower or abort more transactions.
-
-**Analogy.** Imagine two people editing the same shared shopping list on paper. If one reads the list while the other is halfway through crossing items out, they see a messy in-between state. Isolation levels are house rules about when you are allowed to read or write the list while someone else is using it.
+**Concurrency** means transactions running at overlapping times. When they touch the same data, wrong results called **anomalies** (race conditions) can appear. An **isolation level** chooses which anomalies the database prevents; stronger levels prevent more but run slower or abort more transactions.
 
 ### Types
 
-**The anomalies, from simplest to subtlest:**
+**The anomalies, simplest to subtlest:**
 
-- **Dirty read.** Transaction A reads a value that transaction B has written but not yet committed. If B then rolls back, A has acted on data that never officially existed.
+- **Dirty read.** A reads a value B wrote but hasn't committed; if B rolls back, A acted on data that never officially existed.
 - **Dirty write.** A overwrites B's uncommitted write. Almost every database prevents this at every level.
-- **Non-repeatable read (read skew).** A reads a row, B updates and commits that row, A reads it again and gets a different value within the same transaction.
-- **Phantom read.** A runs a query such as "all bookings for room 7 on Friday" and gets 2 rows. B inserts a new matching booking and commits. A runs the same query again and now sees 3 rows. The new row is the "phantom".
-- **Lost update.** A and B both read a counter as 10, both add 1, both write 11. One increment is lost; the answer should be 12.
-- **Write skew.** A and B each read the same set of rows, each decide something is safe based on what they read, and each write to a *different* row. Classic example: a hospital rule says at least one doctor must be on call. Two doctors on call both click "go off call" at the same moment. Each transaction sees "two doctors on call, so it is fine for me to leave" and each updates only its own row. Result: zero doctors on call. No single row was written twice, so simple row locks do not catch it.
+- **Non-repeatable read (read skew).** A reads a row, B updates and commits it, A re-reads and gets a different value in the same transaction.
+- **Phantom read.** A queries "all bookings for room 7 on Friday" (2 rows); B inserts a matching booking and commits; A's same query now returns 3. The new row is the "phantom".
+- **Lost update.** A and B both read a counter as 10, both add 1, both write 11; one increment is lost (should be 12).
+- **Write skew.** A and B read the same rows, each decides something is safe, and each writes a *different* row. A hospital requires at least one doctor on call; two on-call doctors click "go off call" at once, each sees "two on call, fine for me to leave" and updates only its own row — zero on call. No row was written twice, so row locks don't catch it.
 
-**The standard isolation levels (defined in the SQL standard), weakest to strongest:**
+**SQL-standard isolation levels, weakest to strongest:**
 
 | Level | Dirty read | Non-repeatable read | Phantom read |
 |---|---|---|---|
@@ -2973,78 +2674,76 @@ A transaction groups several operations so they all succeed or all fail. ACID me
 | Repeatable read | Prevented | Prevented | Possible (per standard) |
 | Serializable | Prevented | Prevented | Prevented |
 
-**Snapshot isolation** is a widely used level that is not in the original standard. Each transaction reads from a consistent **snapshot**: a frozen picture of the database as of the moment the transaction started. It prevents dirty reads, non-repeatable reads and most phantoms, but it still allows write skew. It is usually built with **MVCC (multi-version concurrency control)**: instead of overwriting a row, the database keeps several versions of it, each stamped with the transaction that created it, so readers can see the old version while a writer prepares a new one. The practical pay-off: a long report and a busy stream of updates can run side by side without either waiting on the other's locks.
+**Snapshot isolation** (widely used, not in the original standard): each transaction reads from a consistent **snapshot**, a frozen picture of the database as of its start. It prevents dirty reads, non-repeatable reads and most phantoms, but still allows write skew. It is usually built with **MVCC (multi-version concurrency control)**: rows aren't overwritten; several versions are kept, each stamped with its creating transaction, so readers see the old version while a writer prepares a new one. Pay-off: a long report and a busy update stream run side by side without waiting on each other's locks.
 
-**Serializable** means the end result is the same as if the transactions had run one at a time in some order. It prevents every anomaly above, including write skew. Databases achieve it by literally running one at a time (Redis, VoltDB), by **two-phase locking** (readers and writers take locks and hold them until commit), or by **serializable snapshot isolation (SSI)**, which runs optimistically and aborts a transaction if a dangerous pattern is detected (PostgreSQL does this).
+**Serializable**: the result equals some one-at-a-time order of the transactions, preventing every anomaly above including write skew. Achieved by literally running one at a time (Redis, VoltDB), by **two-phase locking** (readers and writers take locks and hold them until commit), or by **serializable snapshot isolation (SSI)**, which runs optimistically and aborts a transaction when a dangerous pattern is detected (PostgreSQL).
 
 ### How it works
 
-Defaults in popular databases (worth knowing because they surprise people):
+Defaults that surprise people:
 
-- **PostgreSQL**: default is *read committed*. Its *repeatable read* is actually snapshot isolation. *Serializable* uses SSI.
-- **MySQL (InnoDB engine)**: default is *repeatable read*, implemented with MVCC snapshots plus some locking.
-- **Oracle**: default is *read committed*; its level called "serializable" is really snapshot isolation.
+- **PostgreSQL**: *read committed*; its *repeatable read* is really snapshot isolation; *serializable* uses SSI.
+- **MySQL (InnoDB)**: *repeatable read*, via MVCC snapshots plus some locking.
+- **Oracle**: *read committed*; its "serializable" is really snapshot isolation.
 
-Tools for preventing lost updates and write skew without going fully serializable:
+Preventing lost updates and write skew without full serializability:
 
-1. **Atomic operations**: `UPDATE counters SET n = n + 1 WHERE id = 7` lets the database do the read-modify-write in one step.
-2. **Explicit locks**: `SELECT ... FOR UPDATE` locks the rows you read so no one else can change them until you commit.
-3. **Optimistic concurrency control**: store a `version` number in the row and write with `UPDATE ... SET ..., version = 6 WHERE id = 7 AND version = 5`. If zero rows were updated, someone else got there first, so retry. Also called **compare-and-set**.
-4. **Constraints**: a unique index on `(room_id, date)` makes the database reject the second double-booking.
+1. **Atomic operations**: `UPDATE counters SET n = n + 1 WHERE id = 7` does the read-modify-write in one step.
+2. **Explicit locks**: `SELECT ... FOR UPDATE` locks the rows you read until you commit.
+3. **Optimistic concurrency control**: keep a `version` column and write `UPDATE ... SET ..., version = 6 WHERE id = 7 AND version = 5`; zero rows updated means someone got there first, so retry. Also called **compare-and-set**.
+4. **Constraints**: a unique index on `(room_id, date)` rejects the second double-booking.
 
 ### Trade-offs
 
-Higher isolation means more aborted transactions (which the application must retry) or more waiting on locks, so lower throughput. Most web applications run at read committed or snapshot isolation and add explicit locks or constraints only where money or inventory is involved.
+Higher isolation means more aborted transactions (to retry) or more lock waiting, so lower throughput. Most web apps run read committed or snapshot isolation and add explicit locks or constraints only where money or inventory is involved.
 
 ### Common mistakes
 
-- Doing "read the balance in the app, check it, then write the new balance" with no lock or version check. That is a lost-update bug waiting to happen.
-- Believing "repeatable read" means the same thing in every database. It does not.
+- "Read the balance in the app, check it, write the new balance" with no lock or version check — a lost-update bug waiting to happen.
+- Believing "repeatable read" means the same in every database.
 
 ### In the interview
 
-**Q:** Two users try to buy the last ticket at the same time. How do you stop overselling?
+**Q:** Two users try to buy the last ticket at once. How do you stop overselling?
 
-**A:** Make the check and the decrement one atomic step, for example `UPDATE tickets SET left = left - 1 WHERE id = 9 AND left > 0` and check that one row was affected. Alternatives are `SELECT ... FOR UPDATE` or an optimistic version column with retry.
+**A:** Make check and decrement one atomic step — `UPDATE tickets SET left = left - 1 WHERE id = 9 AND left > 0` and verify one row was affected — or use `SELECT ... FOR UPDATE`, or an optimistic version column with retry.
 
 **Q:** What is write skew?
 
-**A:** Two transactions read overlapping data, each makes a decision based on it, and each writes a different row, so together they break a rule that each alone respects. Snapshot isolation allows it; serializable isolation prevents it.
+**A:** Two transactions read overlapping data, each decides based on it and writes a different row, so together they break a rule each alone respects. Snapshot isolation allows it; serializable prevents it.
 
 ### TL;DR
 
-Isolation levels decide which concurrency bugs the database blocks. Know the anomalies (dirty read, non-repeatable read, phantom, lost update, write skew) and the fact that most databases default to something weaker than serializable.
+Isolation levels decide which concurrency bugs the database blocks. Know the anomalies (dirty read, non-repeatable read, phantom, lost update, write skew) and that most databases default to something weaker than serializable.
 
 ## NoSQL database families
 
 ### What it is
 
-**NoSQL** ("not only SQL") is an umbrella name for databases that do not use the relational table model as their main way of storing data. The term became popular around 2009, when companies such as Google (Bigtable), Amazon (Dynamo) and Facebook (Cassandra) published or open-sourced systems built to spread huge amounts of data across hundreds of cheap machines.
+**NoSQL** ("not only SQL") covers databases that don't use the relational table model as their main storage. The term spread around 2009, when Google (Bigtable), Amazon (Dynamo) and Facebook (Cassandra) published or open-sourced systems spreading huge data across hundreds of cheap machines.
 
-There is no single "NoSQL design". Each family is shaped around one access pattern and gives up something (often joins, flexible queries or strong transactions) to be very good at it.
-
-**Analogy.** A relational database is a general-purpose kitchen. NoSQL databases are specialist tools: a pizza oven, a deep fryer, an espresso machine. Each is far better than the general kitchen at one thing and poor at everything else.
+There is no single "NoSQL design": each family is shaped around one access pattern and gives up something (often joins, flexible queries or strong transactions) to excel at it — specialist tools (pizza oven, espresso machine) versus the general-purpose kitchen.
 
 ### Types
 
-**Key-value stores.** The simplest model: a giant dictionary. You `put(key, value)` and `get(key)`. The database does not look inside the value. Extremely fast (often well under 1 ms) and easy to spread across machines, because each key can live anywhere. Weak at "find all items where X". Examples: Redis (in memory, also has lists, sets, sorted sets), Memcached (cache only), Amazon DynamoDB (key-value plus document features), etcd (small, strongly consistent configuration data), Riak. Typical use: sessions, caches, shopping carts, feature flags, rate-limit counters.
+**Key-value stores.** A giant dictionary: `put(key, value)`, `get(key)`; the database never looks inside the value. Extremely fast (often well under 1 ms) and easy to spread across machines, since each key can live anywhere; weak at "find all items where X". Examples: Redis (in memory; also lists, sets, sorted sets), Memcached (cache only), Amazon DynamoDB (key-value plus document features), etcd (small, strongly consistent configuration data), Riak. Uses: sessions, caches, carts, feature flags, rate-limit counters.
 
-**Document stores.** Each record is a **document**, usually JSON or a binary form of it, which can hold nested fields and arrays. Documents in the same **collection** do not have to share a schema. You can query and index fields inside documents. Examples: MongoDB (maximum document size 16 MB), Couchbase, Amazon DocumentDB, Google Firestore. Good when each item is naturally a self-contained tree, such as a product with its variants or a blog post with its tags, and you usually read the whole thing at once.
+**Document stores.** Each record is a **document** (usually JSON or a binary form) with nested fields and arrays; documents in one **collection** needn't share a schema, and fields inside them can be queried and indexed. Examples: MongoDB (max document 16 MB), Couchbase, Amazon DocumentDB, Google Firestore. Good when each item is a self-contained tree (a product with its variants, a post with its tags) usually read whole.
 
 ```json
 { "_id": "p42", "title": "Trail shoe", "price": 89.0,
   "sizes": [40, 41, 42], "seller": { "id": "s7", "name": "RunCo" } }
 ```
 
-**Wide-column stores** (also called column-family stores). Data is grouped by a **partition key**; inside one partition, rows are sorted by a **clustering key**, and each row can have many columns, with different rows having different columns. You design one table per query. Built to absorb huge write volumes spread over many machines. Examples: Apache Cassandra, ScyllaDB, Apache HBase, Google Bigtable. Typical use: message histories, activity logs, IoT readings, anything that is "write a lot, read by key and time range". Note: "wide-column" is not the same as "columnar" (column-oriented analytics storage, covered later).
+**Wide-column stores** (column-family stores). Data is grouped by a **partition key**; within a partition rows are sorted by a **clustering key**, and rows can have many, differing columns. You design one table per query; built to absorb huge write volumes across many machines. Examples: Apache Cassandra, ScyllaDB, Apache HBase, Google Bigtable. Uses: message histories, activity logs, IoT readings — "write a lot, read by key and time range". "Wide-column" ≠ "columnar" (column-oriented analytics storage, later).
 
-**Graph databases.** Data is stored as **nodes** (things, such as people) and **edges** (relationships, such as "follows"), both of which can carry properties. Following edges is cheap no matter how big the graph is, so questions like "friends of friends who live in Paris" are natural. Examples: Neo4j (query language Cypher), Amazon Neptune, JanusGraph. Typical use: social graphs, fraud rings, recommendations, knowledge graphs.
+**Graph databases.** **Nodes** (things, such as people) and **edges** (relationships, such as "follows"), both with properties. Following edges is cheap however big the graph, so "friends of friends in Paris" is natural. Examples: Neo4j (query language Cypher), Amazon Neptune, JanusGraph. Uses: social graphs, fraud rings, recommendations, knowledge graphs.
 
-**Time-series databases.** Optimised for data points stamped with a time, arriving in time order, such as "CPU 73% at 10:00:05 on host 12". They compress such data heavily, make "average per minute over the last 6 hours" fast, and expire old data automatically. Examples: InfluxDB, TimescaleDB (a PostgreSQL extension), Prometheus (monitoring), QuestDB. Typical use: metrics, sensor data, stock ticks.
+**Time-series databases.** For time-stamped points arriving in time order ("CPU 73% at 10:00:05 on host 12"): heavy compression, fast "average per minute over the last 6 hours", automatic expiry of old data. Examples: InfluxDB, TimescaleDB (a PostgreSQL extension), Prometheus (monitoring), QuestDB. Uses: metrics, sensor data, stock ticks.
 
-**Search engines.** Built around an **inverted index**: for each word, a list of the documents that contain it, like the index at the back of a book. To find documents containing "red" and "shoe", the engine intersects two lists instead of scanning everything. They also handle **tokenising** (splitting text into words), stemming ("running" matches "run"), typo tolerance and **relevance ranking** (which results are best, for example with the BM25 scoring formula). Examples: Elasticsearch and OpenSearch (both built on the Apache Lucene library), Apache Solr. Usually a *secondary* store: the source of truth is another database and data is copied into the search engine.
+**Search engines.** Built on an **inverted index**: for each word, the list of documents containing it (like a book's index), so "red" AND "shoe" intersects two lists instead of scanning. They also do **tokenising** (splitting text into words), stemming ("running" matches "run"), typo tolerance and **relevance ranking** (e.g. the BM25 scoring formula). Examples: Elasticsearch and OpenSearch (both on the Apache Lucene library), Apache Solr. Usually a *secondary* store, copied from the source-of-truth database.
 
-**Vector databases.** Store **embeddings**: lists of numbers (vectors), often hundreds or thousands long, produced by a machine-learning model so that similar items (images, sentences) get nearby vectors. The key query is **nearest-neighbour search**: "find the 10 vectors closest to this one". Doing that exactly over millions of vectors is slow, so they use **approximate nearest neighbour (ANN)** indexes such as HNSW (a layered graph you walk towards the target). Examples: Pinecone, Milvus, Weaviate, Qdrant, and the pgvector extension for PostgreSQL. Typical use: semantic search, recommendations, and retrieval-augmented generation (feeding relevant documents to a large language model).
+**Vector databases.** Store **embeddings**: vectors of numbers (often hundreds or thousands long) produced by a machine-learning model so similar items (images, sentences) are close. The key query is **nearest-neighbour search** ("the 10 vectors closest to this one"); exact search over millions is slow, so they use **approximate nearest neighbour (ANN)** indexes such as HNSW (a layered graph walked towards the target). Examples: Pinecone, Milvus, Weaviate, Qdrant, pgvector for PostgreSQL. Uses: semantic search, recommendations, retrieval-augmented generation (feeding relevant documents to a large language model).
 
 ```mermaid
 flowchart TD
@@ -3059,29 +2758,29 @@ flowchart TD
 
 ### Trade-offs
 
-NoSQL databases usually give up some of: joins, ad hoc queries, multi-record transactions and enforced schemas. In return they gain easy horizontal scaling, high write throughput, flexible data shapes, or a very fast specialised query. The lines have blurred: MongoDB added multi-document transactions in version 4.0, DynamoDB has transactions, and PostgreSQL stores and indexes JSON with its `jsonb` type.
+NoSQL usually gives up some of: joins, ad hoc queries, multi-record transactions, enforced schemas — gaining easy horizontal scaling, high write throughput, flexible shapes, or a very fast specialised query. The lines have blurred: MongoDB added multi-document transactions in 4.0, DynamoDB has transactions, PostgreSQL stores and indexes JSON with `jsonb`.
 
 ### Real-world examples
 
-Discord stores trillions of chat messages in a wide-column store (it moved from Cassandra to ScyllaDB around 2022–2023). Amazon's shopping cart was the motivating example in the 2007 Dynamo paper. LinkedIn and Uber have published about their graph and time-series systems. Most large sites run Elasticsearch or OpenSearch next to their main database for search.
+Discord stores trillions of messages in a wide-column store (moved from Cassandra to ScyllaDB around 2022–2023). Amazon's shopping cart motivated the 2007 Dynamo paper. LinkedIn and Uber have published on their graph and time-series systems. Most large sites run Elasticsearch or OpenSearch beside their main database.
 
 ### TL;DR
 
-NoSQL is a family of specialist databases: key-value, document, wide-column, graph, time-series, search and vector. Each trades general querying for speed or scale on one access pattern.
+NoSQL is a family of specialist databases — key-value, document, wide-column, graph, time-series, search, vector — each trading general querying for speed or scale on one access pattern.
 
 ## SQL vs NoSQL and BASE
 
 ### What it is
 
-Choosing between a relational (SQL) database and a NoSQL one is one of the most common interview decisions. There is no universal winner; the question is "which access patterns and guarantees does this data need?".
+SQL vs NoSQL is one of the most common interview decisions; there is no universal winner, only "which access patterns and guarantees does this data need?"
 
-**BASE** is a tongue-in-cheek opposite of ACID used to describe many early NoSQL systems:
+**BASE**, a tongue-in-cheek opposite of ACID describing many early NoSQL systems:
 
-- **Basically Available**: the system keeps answering requests even when some machines fail, even if some answers are a bit old.
-- **Soft state**: the data on different copies may be changing even without new writes, because copies are still catching up with each other.
-- **Eventually consistent**: if writes stop, all copies will eventually agree. Until then, two readers may see different values.
+- **Basically Available**: keeps answering when some machines fail, even if some answers are a bit old.
+- **Soft state**: copies may change without new writes, as they catch up with each other.
+- **Eventually consistent**: if writes stop, all copies eventually agree; until then two readers may see different values.
 
-**Analogy.** ACID is a bank teller who will not hand over cash until the ledger is updated and checked. BASE is a busy coffee shop that takes your order immediately and sorts out the odd mix-up afterwards.
+(ACID is a bank teller who won't hand over cash until the ledger is checked; BASE is a coffee shop that takes your order at once and fixes the odd mix-up later.)
 
 ### Trade-offs
 
@@ -3094,47 +2793,43 @@ Choosing between a relational (SQL) database and a NoSQL one is one of the most 
 | Relationship-heavy queries many hops deep | Graph |
 | Team already knows PostgreSQL and data fits on one machine | SQL, almost always |
 
-A good interview answer names the access pattern first: "Users are read by ID and email, orders need transactions with payments, so I will use PostgreSQL. The activity feed is append-heavy and read by user and time, so I will use Cassandra for it." Using more than one database type in one system is normal and is called **polyglot persistence**.
+Name the access pattern first: "Users are read by ID and email, orders need transactions with payments: PostgreSQL. The activity feed is append-heavy and read by user and time: Cassandra." Several database types in one system is normal — **polyglot persistence**.
 
 ### Common mistakes
 
-- "NoSQL is faster." It is faster for the pattern it was designed for, and often slower or impossible for others.
-- "NoSQL has no schema." The schema still exists; it just lives in the application code instead of the database (often called **schema-on-read** versus SQL's **schema-on-write**).
-- Picking eventual consistency for data where users would notice, such as an account balance.
+- "NoSQL is faster." Only for the pattern it was designed for; often slower or impossible for others.
+- "NoSQL has no schema." It lives in the application instead (**schema-on-read**, vs SQL's **schema-on-write**).
+- Eventual consistency for data users would notice, such as an account balance.
 
 ### In the interview
 
 **Q:** When would you choose NoSQL over SQL?
 
-**A:** When the access pattern is simple (mostly by key), the volume of data or writes is beyond one machine, the schema varies a lot, or you need multi-region writes with high availability, and you can live without joins and multi-row transactions.
+**A:** When access is simple (mostly by key), data or write volume exceeds one machine, the schema varies a lot, or you need multi-region writes with high availability — and you can live without joins and multi-row transactions.
 
 ### TL;DR
 
-Pick from the access pattern and the correctness needs, not from fashion. SQL is the default; reach for NoSQL when scale, shape or availability needs justify the lost features.
+Pick from access pattern and correctness needs, not fashion. SQL is the default; reach for NoSQL when scale, shape or availability justify the lost features.
 
 ## Indexes
 
 ### What it is
 
-An **index** is an extra data structure the database keeps next to a table so it can find rows by a column's value without reading the whole table. Without an index, finding `email = 'a@b.com'` means a **full table scan**: reading every row. With 100 million rows, that could take many seconds. With an index, it takes a few page reads and well under a millisecond if the pages are cached.
-
-**Analogy.** The index at the back of a textbook. To find "photosynthesis" you look it up alphabetically and jump to page 212, instead of reading all 600 pages.
+An **index** is an extra structure kept beside a table to find rows by a column's value without reading the whole table. Without one, `email = 'a@b.com'` needs a **full table scan** of every row — many seconds at 100 million rows; with one, a few page reads, well under a millisecond if cached. (Like a textbook's index: look up "photosynthesis", jump to page 212.)
 
 ### How it works
 
-The index stores the indexed column's values in a structure that is fast to search, each paired with a pointer to where the full row lives (or with the row's primary key). The database keeps it up to date on every insert, update and delete.
-
-You create one like this:
+The index stores the column's values in a fast-to-search structure, each paired with a pointer to the full row (or its primary key), and is updated on every insert, update and delete.
 
 ```sql
 CREATE INDEX idx_orders_user_created ON orders (user_id, created_at);
 ```
 
-You can check whether a query uses an index with `EXPLAIN` (PostgreSQL, MySQL), which shows the plan the query planner chose.
+`EXPLAIN` (PostgreSQL, MySQL) shows the plan the query planner chose, including whether an index is used.
 
 ### Types
 
-**B-tree index.** The default in almost every relational database. A **B-tree** is a balanced tree of fixed-size **pages** (blocks of storage, typically 4–16 KB: PostgreSQL uses 8 KB, MySQL InnoDB 16 KB). Each page holds hundreds of sorted keys and pointers to child pages. Because each page has so many children (the **branching factor**), the tree is very shallow: about 4 levels are enough for billions of rows. A lookup walks from the root to a **leaf** page, reading one page per level. Because keys are sorted, B-trees support both exact matches (`=`) and **range queries** (`BETWEEN`, `>`, `ORDER BY`). Updates are done in place, which means random writes on disk.
+**B-tree index.** The default in almost every relational database: a balanced tree of fixed-size **pages** (storage blocks, typically 4–16 KB: PostgreSQL 8 KB, MySQL InnoDB 16 KB), each holding hundreds of sorted keys and child pointers. This high **branching factor** keeps the tree shallow: about 4 levels cover billions of rows. A lookup walks root to **leaf**, one page per level. Sorted keys support exact matches (`=`) and **range queries** (`BETWEEN`, `>`, `ORDER BY`). Updates are in place — random disk writes.
 
 ```mermaid
 flowchart TD
@@ -3149,14 +2844,14 @@ flowchart TD
     B -- "120 to 149" --> L
 ```
 
-**LSM-tree (log-structured merge tree).** Used by write-heavy stores such as Cassandra, ScyllaDB, HBase, RocksDB and LevelDB. Writes never modify data in place:
+**LSM-tree (log-structured merge tree).** Used by write-heavy stores (Cassandra, ScyllaDB, HBase, RocksDB, LevelDB). Writes never modify data in place:
 
-1. A write is appended to a log on disk (for crash safety) and inserted into an in-memory sorted structure called the **memtable**.
-2. When the memtable reaches a size limit (say 64 MB), it is written out as an immutable sorted file called an **SSTable (sorted string table)**. Writing a whole file in order is a fast **sequential write**.
-3. Over time there are many SSTables. A background process called **compaction** merges them, keeping only the newest version of each key and dropping deleted ones (a deletion is first recorded as a marker called a **tombstone**).
-4. A read checks the memtable, then the SSTables from newest to oldest. To avoid opening every file, each SSTable has a **Bloom filter** (a small structure that can say "this key is definitely not here", Part 4) and a sparse index.
+1. A write is appended to an on-disk log (crash safety) and inserted into an in-memory sorted **memtable**.
+2. At a size limit (say 64 MB) the memtable is written out as an immutable sorted **SSTable (sorted string table)** — a fast **sequential write**.
+3. Background **compaction** merges SSTables, keeping the newest version of each key and dropping deleted ones (a deletion is first recorded as a **tombstone** marker).
+4. A read checks the memtable, then SSTables newest to oldest; each SSTable's **Bloom filter** ("definitely not here", Part 4) and sparse index avoid opening every file.
 
-LSM-trees give very high write throughput but reads can be slower, and compaction uses background disk and CPU. B-trees give predictable reads but slower writes. This is the classic **read amplification versus write amplification** trade-off: how many extra disk reads a lookup needs versus how many times each byte is rewritten.
+LSM-trees: very high write throughput, slower reads, background compaction cost. B-trees: predictable reads, slower writes. This is the **read amplification versus write amplification** trade-off: extra disk reads per lookup versus how often each byte is rewritten.
 
 ```mermaid
 flowchart LR
@@ -3168,68 +2863,64 @@ flowchart LR
     C --> S3["One larger merged SSTable"]
 ```
 
-**Hash index.** Keeps a hash map from each key to the location of its value. Exact lookups are O(1) (constant time), but it cannot do range queries or sorting, because hashing scatters neighbouring keys. Example: Bitcask, the storage engine used by Riak, keeps every key in an in-memory hash map pointing into append-only data files. PostgreSQL also offers a `HASH` index type.
+**Hash index.** A hash map from key to value location: O(1) (constant-time) exact lookups, but no range queries or sorting, since hashing scatters neighbouring keys. Bitcask (Riak's storage engine) keeps every key in an in-memory hash map pointing into append-only files; PostgreSQL offers a `HASH` index type.
 
-**Composite (multi-column) index.** One index on several columns, such as `(user_id, created_at)`. It is sorted by the first column, then by the second within each first value, like a phone book sorted by last name then first name. It helps queries that filter on the **leftmost prefix**: `user_id`, or `user_id` plus `created_at`. It does *not* help a query that filters only on `created_at`. Put the column you filter by equality first and the range or sort column after it.
+**Composite (multi-column) index.** One index on `(user_id, created_at)`, sorted by the first column then the second (a phone book by last then first name). It helps queries on the **leftmost prefix** — `user_id`, or `user_id` plus `created_at` — but *not* `created_at` alone. Put the equality-filter column first, the range or sort column after.
 
-**Covering index.** An index that contains every column a query needs, so the database can answer from the index alone without visiting the table (an **index-only scan**). PostgreSQL and SQL Server let you add extra non-key columns with `INCLUDE`.
+**Covering index.** Contains every column a query needs, so it is answered from the index alone (an **index-only scan**). PostgreSQL and SQL Server add non-key columns with `INCLUDE`.
 
-**Clustered vs non-clustered (secondary) index.** In a **clustered index** the table rows themselves are stored in index order; a table can have only one. MySQL InnoDB always clusters rows by the primary key. A **secondary index** is any other index; it points back to the row (in InnoDB, by storing the primary key).
+**Clustered vs non-clustered (secondary) index.** In a **clustered index** the rows themselves are stored in index order (one per table; MySQL InnoDB always clusters by primary key). A **secondary index** is any other; it points back to the row (in InnoDB, via the primary key).
 
-**Other kinds you may meet**: **unique index** (also enforces uniqueness), **partial index** (only rows matching a condition, such as `WHERE deleted = false`), **full-text index** (an inverted index inside a relational database), **GIN/GiST** indexes in PostgreSQL for JSON, arrays and geometry, and **geospatial indexes** (R-trees, geohashes).
+**Others:** **unique index** (also enforces uniqueness), **partial index** (only rows matching a condition, such as `WHERE deleted = false`), **full-text index** (an inverted index inside a relational database), PostgreSQL **GIN/GiST** indexes for JSON, arrays and geometry, **geospatial indexes** (R-trees, geohashes).
 
 ### Trade-offs
 
-Indexes are not free:
+- **Every write gets slower**: an insert into a table with 6 indexes updates 7 structures.
+- **Space**: sometimes as much as the table.
+- **Memory**: fast only when hot pages fit in the buffer cache.
+- **Low-selectivity columns** (few distinct values, like boolean `is_active`) rarely benefit — the database would read most of the table anyway.
 
-- **Every write gets slower.** An insert into a table with 6 indexes means 7 structures to update.
-- **They use space**, sometimes as much as the table itself.
-- **They use memory.** Indexes are fast only when their hot pages fit in the buffer cache.
-- **Low-selectivity columns** (few distinct values, such as a boolean `is_active`) rarely benefit, because the database would read most of the table anyway.
-
-The rule of thumb: index the columns you filter, join and sort on in your frequent queries, and nothing else. Read-heavy tables can afford more indexes than write-heavy ones.
+Index the columns your frequent queries filter, join and sort on, and nothing else; read-heavy tables can afford more indexes than write-heavy ones.
 
 ### Common mistakes
 
-- Wrapping an indexed column in a function, such as `WHERE LOWER(email) = ...`, which stops the plain index from being used (create an index on the expression instead).
-- A leading wildcard `LIKE '%shoe'` cannot use a B-tree index; use full-text search.
-- Creating an index on a big production table in a way that locks writes (PostgreSQL offers `CREATE INDEX CONCURRENTLY`).
+- Wrapping an indexed column in a function (`WHERE LOWER(email) = ...`), which stops the plain index being used (index the expression instead).
+- Leading-wildcard `LIKE '%shoe'` can't use a B-tree; use full-text search.
+- Building an index on a big production table in a way that locks writes (PostgreSQL offers `CREATE INDEX CONCURRENTLY`).
 
 ### In the interview
 
 **Q:** Why do LSM-tree databases handle writes better than B-tree databases?
 
-**A:** LSM-trees buffer writes in memory and flush them as large sequential files, never updating in place, while B-trees do random in-place page updates. The cost is slower reads and background compaction.
+**A:** LSM-trees buffer writes in memory and flush large sequential files, never updating in place; B-trees do random in-place page updates. The cost: slower reads and background compaction.
 
 **Q:** You have an index on `(country, city)`. Does `WHERE city = 'Lyon'` use it?
 
-**A:** Generally no, because the index is sorted by country first. It helps queries on `country` or on `country` and `city` together.
+**A:** Generally no — it is sorted by country first. It helps queries on `country`, or `country` and `city` together.
 
 ### TL;DR
 
-An index is a sorted (or hashed) lookup structure that turns a full scan into a few page reads. B-trees suit reads and ranges, LSM-trees suit heavy writes, and every index makes writes slower.
+An index is a sorted (or hashed) lookup structure turning a full scan into a few page reads. B-trees suit reads and ranges, LSM-trees heavy writes; every index slows writes.
 
 ## Normalization and denormalization
 
 ### What it is
 
-**Normalization** means organising tables so that each fact is stored in exactly one place. **Denormalization** means deliberately storing the same fact in more than one place so that reads are faster.
-
-**Analogy.** A normalized office keeps one master address book; everyone looks addresses up there. A denormalized office writes the customer's address on every invoice. Reading an invoice is faster (no lookup), but when the customer moves, every invoice copy must be updated or it goes stale.
+**Normalization** organises tables so each fact is stored in exactly one place. **Denormalization** deliberately stores the same fact in several places so reads are faster — like writing the customer's address on every invoice: quick to read, but every copy must change when they move.
 
 ### How it works
 
-Normalization is described by **normal forms**. A beginner needs three:
+Normalization is described by **normal forms**; beginners need three:
 
-1. **First normal form (1NF)**: each cell holds one value, not a list. No `tags = "red,blue,green"`.
-2. **Second normal form (2NF)**: every non-key column depends on the *whole* primary key, not part of it. In an `order_items(order_id, product_id, qty, product_title)` table, `product_title` depends only on `product_id`, so it belongs in `products`.
-3. **Third normal form (3NF)**: non-key columns depend only on the key, not on other non-key columns. If `users` has `zip_code` and `city`, and the city follows from the zip code, the city belongs in a zip-code table.
+1. **First normal form (1NF)**: each cell holds one value, not a list (no `tags = "red,blue,green"`).
+2. **Second normal form (2NF)**: every non-key column depends on the *whole* primary key. In `order_items(order_id, product_id, qty, product_title)`, `product_title` depends only on `product_id`, so it belongs in `products`.
+3. **Third normal form (3NF)**: non-key columns depend only on the key, not other non-key columns. If `users` has `zip_code` and `city` and the city follows from the zip, the city belongs in a zip-code table.
 
-A classic mnemonic, usually credited to William Kent (1983), sums up all three: every column should describe "the key, the whole key, and nothing but the key".
+The mnemonic usually credited to William Kent (1983): every column describes "the key, the whole key, and nothing but the key".
 
-Normalization prevents **update anomalies**: if the product title is stored in 10,000 order rows and you rename the product, you must update 10,000 rows, and if one fails they disagree.
+Normalization prevents **update anomalies**: a product title stored in 10,000 order rows must be updated 10,000 times on rename, and partial failure leaves them disagreeing.
 
-Denormalization techniques include: copying a column (store `author_name` on each post), storing a precomputed total (`comment_count` on a post instead of counting each time), storing a nested document with its children (a document database's natural style), and **materialized views** (a stored, periodically refreshed query result).
+Denormalization techniques: copying a column (`author_name` on each post), storing a precomputed total (`comment_count` instead of counting each time), nesting children in a document (a document database's natural style), and **materialized views** (a stored, periodically refreshed query result).
 
 ### Trade-offs
 
@@ -3240,38 +2931,34 @@ Denormalization techniques include: copying a column (store `author_name` on eac
 | Writes | One place to update | Many places to update |
 | Risk | Slow joins at scale | Copies drift out of sync |
 
-Start normalized. Denormalize specific hot read paths once you measure a problem, and decide how the copies will be kept in sync (same transaction, a background job, or events). At large scale and in NoSQL stores without joins, denormalization is the norm: in Cassandra you often keep one table per query, each holding a copy of the data arranged for that query.
+Start normalized; denormalize specific hot read paths once measured, and decide how copies stay in sync (same transaction, background job, or events). At large scale and in NoSQL stores without joins denormalization is the norm: in Cassandra you often keep one table per query, each holding a copy arranged for that query.
 
 ### Common mistakes
 
-- Denormalizing before there is a performance problem, and then spending months fixing drift bugs.
-- Forgetting that a counter like `like_count` updated by many users at once needs an atomic increment.
+- Denormalizing before there is a performance problem, then spending months fixing drift bugs.
+- Forgetting a counter like `like_count` updated by many users at once needs an atomic increment.
 
 ### TL;DR
 
-Normalize so each fact lives once; denormalize selected data to make hot reads fast, accepting extra write work and the risk of stale copies.
+Normalize so each fact lives once; denormalize selected data for fast hot reads, accepting extra write work and the risk of stale copies.
 
 ## Replication
 
 ### What it is
 
-**Replication** means keeping copies of the same data on several machines, each called a **replica** (or node). The copies are kept in sync by sending every change from one machine to the others.
-
-**Analogy.** A company keeps its master price list at head office and sends updated copies to every branch. Customers at any branch can read prices locally. If head office burns down, a branch copy can become the new master.
+**Replication** keeps copies of the same data on several machines, each a **replica** (node), kept in sync by sending every change from one machine to the others — like head office sending updated price lists to every branch, any of which could become the new master if head office burns down.
 
 ### Why it matters
 
-Replication gives you three things:
+1. **Availability and fault tolerance.** If one machine dies, another copy serves requests.
+2. **Read scaling.** Ten replicas serve roughly ten times the reads.
+3. **Lower latency.** A Frankfurt replica answers European readers in ~10–20 ms instead of an ~80–100 ms round trip to Virginia.
 
-1. **Availability and fault tolerance.** If one machine dies, another copy can serve requests.
-2. **Read scaling.** Spread read traffic over many copies. Ten replicas can serve roughly ten times the reads.
-3. **Lower latency.** Put a copy near users: a replica in Frankfurt answers European readers in about 10–20 ms instead of the roughly 80–100 ms round trip to Virginia.
-
-Remember what replication does *not* do: it does not help write throughput, because every copy must still apply every write. To scale writes you split the data (partitioning, next section). A useful rule: **copy for reads, split for writes**.
+Replication does *not* help write throughput: every copy must still apply every write. To scale writes, split the data (partitioning, next). Rule: **copy for reads, split for writes**.
 
 ### Types
 
-**Leader-follower (also called primary-replica, master-slave, or active-passive replication).** One node, the **leader** (primary), accepts all writes. It records each change in its replication log and streams it to the **followers** (replicas, secondaries), which apply the changes in the same order. Clients may read from the leader or the followers. This is the default in PostgreSQL, MySQL, MongoDB replica sets, SQL Server and Redis.
+**Leader-follower (primary-replica, master-slave, active-passive replication).** One **leader** (primary) accepts all writes, records each change in its replication log and streams it to **followers** (replicas, secondaries), which apply changes in the same order. Clients read from leader or followers. Default in PostgreSQL, MySQL, MongoDB replica sets, SQL Server and Redis.
 
 ```mermaid
 flowchart LR
@@ -3282,23 +2969,23 @@ flowchart LR
     C2 --> F2
 ```
 
-**Read replicas** is the common name for followers used mainly to serve reads, for example Amazon RDS read replicas. They are ideal for read-heavy workloads such as product pages, reports and search indexing.
+**Read replicas** are followers used mainly for reads (e.g. Amazon RDS read replicas) — ideal for product pages, reports, search indexing.
 
-**Multi-leader (multi-primary, active-active).** Several nodes accept writes, usually one per data centre or region, and replicate to each other. Users in each region get fast local writes, and a region can keep working if it loses contact with the others. The hard part is **write conflicts**: two leaders change the same record at the same time. Ways to resolve them:
+**Multi-leader (multi-primary, active-active).** Several nodes accept writes, usually one per data centre or region, replicating to each other: fast local writes, and a region keeps working if cut off. The hard part is **write conflicts** (two leaders change the same record at once). Resolutions:
 
-- **Last write wins (LWW)**: keep the write with the latest timestamp, silently dropping the other. Simple but loses data, and clocks on different machines disagree (Part 4).
-- **Merge** the values with application logic, or ask the user.
-- **CRDTs (conflict-free replicated data types)**: special data types, such as counters and sets, designed so that concurrent changes always merge to the same result.
+- **Last write wins (LWW)**: keep the latest-timestamped write, silently dropping the other. Simple but loses data, and clocks disagree (Part 4).
+- **Merge** values with application logic, or ask the user.
+- **CRDTs (conflict-free replicated data types)**: data types (counters, sets) whose concurrent changes always merge to the same result.
 
-Examples: MySQL and PostgreSQL with multi-primary tools, CouchDB, collaborative editors and offline-first mobile apps (each device is effectively a leader).
+Examples: MySQL and PostgreSQL with multi-primary tools, CouchDB, collaborative editors and offline-first mobile apps (each device effectively a leader).
 
-**Leaderless.** Any replica accepts reads and writes. A client (or a coordinator node) sends each write to several replicas at once and considers it successful when enough of them confirm. Reads also query several replicas and take the newest value. With N copies, writing to W of them and reading from R of them, choosing **R + W > N** means every read overlaps at least one up-to-date copy (this is a **quorum**, covered in Part 4). A common setting is N=3, W=2, R=2. Stale copies are fixed by **read repair** (the reader writes back the newest value to replicas that returned an old one), **anti-entropy** (a background process that compares replicas, often using Merkle trees) and **hinted handoff** (a healthy node temporarily holds writes meant for a down node and passes them on later). Examples: Amazon's original Dynamo, Apache Cassandra, ScyllaDB, Riak.
+**Leaderless.** Any replica accepts reads and writes. A client (or coordinator node) sends each write to several replicas and succeeds when enough confirm; reads query several and take the newest value. With N copies, writing W and reading R, **R + W > N** guarantees every read overlaps an up-to-date copy (a **quorum**, Part 4); commonly N=3, W=2, R=2. Stale copies are fixed by **read repair** (the reader writes the newest value back to replicas that returned old ones), **anti-entropy** (background comparison of replicas, often with Merkle trees) and **hinted handoff** (a healthy node holds writes meant for a down node and passes them on later). Examples: Amazon's original Dynamo, Apache Cassandra, ScyllaDB, Riak.
 
-**Synchronous vs asynchronous replication.** This is about *when* the leader tells the client "done":
+**Synchronous vs asynchronous replication** — *when* the leader tells the client "done":
 
-- **Synchronous**: the leader waits until a follower confirms it has the change. If the leader then dies, no committed data is lost. Cost: every write waits for a network round trip, and if the follower is down or slow, writes stall.
-- **Asynchronous**: the leader replies as soon as its own write is durable and ships the change to followers in the background. Fast and unaffected by slow followers, but if the leader dies, the last few changes that had not reached any follower are lost.
-- **Semi-synchronous**: a common middle ground. Wait for *one* follower (or a quorum) to confirm, and replicate to the rest asynchronously. MySQL has a semi-synchronous mode; PostgreSQL lets you list synchronous standbys.
+- **Synchronous**: wait until a follower confirms. No committed data lost if the leader then dies, but every write waits a round trip, and a down or slow follower stalls writes.
+- **Asynchronous**: reply once the leader's own write is durable and ship changes in the background. Fast and unaffected by slow followers, but a dying leader loses the last changes no follower had.
+- **Semi-synchronous**: wait for *one* follower (or a quorum), the rest asynchronous. MySQL has a semi-synchronous mode; PostgreSQL lets you list synchronous standbys.
 
 ```mermaid
 sequenceDiagram
@@ -3315,20 +3002,20 @@ sequenceDiagram
 
 ### How it works
 
-**Replication lag** is how far behind the leader a follower is, usually milliseconds but sometimes seconds or minutes when a follower is overloaded or a huge transaction is being applied. Lag causes visible bugs:
+**Replication lag** is how far a follower trails the leader — usually milliseconds, sometimes seconds or minutes when a follower is overloaded or applying a huge transaction. It causes visible bugs:
 
-- **Read-your-own-writes violation**: a user edits their profile, the page reloads from a lagging replica, and their change seems to have vanished. Fix: read the user's own data from the leader for a short time after they write, or track the write's position in the log and only read from a replica that has caught up to it.
-- **Monotonic reads violation**: two refreshes hit different replicas and the second shows *older* data than the first, as if time went backwards. Fix: pin each user to one replica.
+- **Read-your-own-writes violation**: a user edits their profile, the reload hits a lagging replica, and the change seems gone. Fix: read the user's own data from the leader for a short time after they write, or track the write's log position and read only from a replica that has caught up.
+- **Monotonic reads violation**: two refreshes hit different replicas and the second shows *older* data, as if time went backwards. Fix: pin each user to one replica.
 
-**Failover** is the process of promoting a follower to leader when the leader fails:
+**Failover** promotes a follower when the leader fails:
 
-1. **Detect** the failure, usually because the leader misses **heartbeats** (regular "I am alive" messages) for a timeout such as 10–30 seconds.
-2. **Choose** a new leader, ideally the follower with the most up-to-date data. This may be done by an election among replicas or by an external coordinator.
-3. **Reconfigure**: point clients and the other followers at the new leader (via DNS, a proxy, or a service-discovery system).
+1. **Detect**: the leader misses **heartbeats** (regular "I am alive" messages) for a timeout such as 10–30 seconds.
+2. **Choose** a new leader, ideally the most up-to-date follower, by election among replicas or an external coordinator.
+3. **Reconfigure**: point clients and other followers at it (DNS, a proxy, or service discovery).
 
-Failover can be **automatic** (tools such as Patroni for PostgreSQL, Orchestrator for MySQL, or managed cloud databases that fail over in under a minute or two) or **manual** (a human decides).
+Failover is **automatic** (Patroni for PostgreSQL, Orchestrator for MySQL, managed cloud databases failing over in under a minute or two) or **manual**.
 
-**Split brain** is the nightmare case: two nodes both believe they are the leader and both accept writes, so the data diverges. It happens when the old leader was not dead, just cut off by a network problem, and comes back still thinking it is in charge. Defences: require a **majority (quorum)** of nodes to agree on who the leader is, so an isolated minority cannot elect one; **fencing**, which forcibly stops or blocks the old leader (sometimes called STONITH, "shoot the other node in the head"); and **fencing tokens**, increasing numbers that let storage reject writes from an out-of-date leader (Part 4).
+**Split brain**: two nodes both believe they lead and accept writes, so data diverges — typically an old leader that was only cut off, not dead, returning still in charge. Defences: a **majority (quorum)** must agree on the leader, so an isolated minority can't elect one; **fencing**, forcibly stopping or blocking the old leader (STONITH, "shoot the other node in the head"); **fencing tokens**, increasing numbers that let storage reject writes from a stale leader (Part 4).
 
 ### Trade-offs
 
@@ -3340,58 +3027,51 @@ Failover can be **automatic** (tools such as Patroni for PostgreSQL, Orchestrato
 
 ### Common mistakes
 
-- Treating a replica as a backup. If someone runs `DELETE FROM users` by mistake, the delete replicates to every copy within milliseconds. You also need real backups (see Durability).
+- Treating a replica as a backup: an accidental `DELETE FROM users` replicates to every copy within milliseconds. You need real backups (Durability).
 - Sending all reads to replicas without thinking about read-your-own-writes.
-- Setting the failover timeout too short, so a brief network hiccup triggers a needless and risky failover.
+- A failover timeout so short that a network hiccup triggers a needless, risky failover.
 
 ### Real-world examples
 
-GitHub's October 2018 incident is a famous lesson: a network interruption of about 43 seconds between its US East Coast hub and data centre triggered an automatic MySQL failover to its West Coast data centre; some writes had reached only the old primary, and untangling the two sets of data left the site degraded for just over 24 hours. Amazon Aurora keeps six copies of each piece of data across three **availability zones** (separate data centres within one cloud region, two copies in each) and treats a write as durable after four of the six confirm; reads and repairs need three of the six.
+GitHub's October 2018 incident: a ~43-second network interruption between its US East Coast hub and data centre triggered automatic MySQL failover to the West Coast; some writes had reached only the old primary, and untangling the two data sets left the site degraded for just over 24 hours. Amazon Aurora keeps six copies of each piece of data across three **availability zones** (separate data centres in one region, two copies each) and treats a write as durable after four of six confirm; reads and repairs need three of six.
 
 ### In the interview
 
 **Q:** Synchronous or asynchronous replication for a payments database?
 
-**A:** At least one synchronous (or quorum) copy so a committed payment survives the loss of the leader, with further asynchronous replicas for reads and other regions. Fully synchronous to all copies would make every write as slow as the slowest replica.
+**A:** At least one synchronous (or quorum) copy so a committed payment survives losing the leader, plus asynchronous replicas for reads and other regions. Fully synchronous to all copies makes every write as slow as the slowest replica.
 
-**Q:** A user updates their bio and immediately sees the old one. Why, and how do you fix it?
+**Q:** A user updates their bio and immediately sees the old one. Why, and the fix?
 
-**A:** The read went to a lagging replica. Route that user's reads of their own data to the leader for a short window after a write, or read from a replica only once it has applied the write's log position.
+**A:** The read hit a lagging replica. Route that user's reads of their own data to the leader for a short window after a write, or read from a replica only once it has applied the write's log position.
 
 ### TL;DR
 
-Replication keeps copies for availability, read scaling and locality. Know leader-follower, multi-leader and leaderless; sync versus async; replication lag; failover; and split brain.
+Replication keeps copies for availability, read scaling and locality. Know leader-follower, multi-leader and leaderless; sync vs async; replication lag; failover; split brain.
 
 ## Partitioning and sharding
 
 ### What it is
 
-**Partitioning** means splitting one large dataset into smaller pieces, called **partitions**. **Sharding** is partitioning where the pieces, called **shards**, live on *different machines*. In everyday speech the two words are often used interchangeably, but strictly, you can partition a table inside one database server (PostgreSQL's declarative partitioning splits a table by month on the same machine), whereas sharding always spreads the data across servers.
-
-**Analogy.** A library that outgrows its building opens branches: A–F books at the north branch, G–M at the east branch, and so on. Each branch handles only its share of visitors. A catalogue tells you which branch to go to.
+**Partitioning** splits a large dataset into smaller **partitions**; **sharding** is partitioning where the pieces (**shards**) live on *different machines*. The words are often used interchangeably, but strictly you can partition inside one server (PostgreSQL's declarative partitioning by month), whereas sharding always spreads data across servers — like a library opening branches (A–F north, G–M east) with a catalogue saying which branch to visit.
 
 ### Why it matters
 
-Replication copies everything onto every node, so it cannot help when:
-
-- The data is too big for one machine's disk or memory (say 50 TB).
-- The *writes* per second are more than one machine can handle (say 200,000 writes per second).
-
-Sharding divides both data and write load. With 10 shards, each holds roughly a tenth of the data and takes a tenth of the writes. In practice each shard is also replicated, so you get both: split for writes, copy for reads and safety.
+Replication copies everything to every node, so it can't help when the data is too big for one machine (say 50 TB) or the *writes* per second exceed one machine (say 200,000). Sharding divides both: with 10 shards each holds ~a tenth of the data and takes ~a tenth of the writes. Each shard is usually also replicated: split for writes, copy for reads and safety.
 
 ### Types
 
 **Horizontal vs vertical partitioning.**
 
-- **Horizontal partitioning** splits *rows*: users 1–1,000,000 in one partition, 1,000,001–2,000,000 in another. Every partition has the same columns. Sharding is horizontal partitioning across machines.
-- **Vertical partitioning** splits *columns*: frequently read small columns (`id`, `name`, `avatar_url`) in one table, rarely read large ones (`bio`, `settings_json`) in another, joined by the same ID. It keeps hot data compact. Splitting whole tables or features onto different databases is related and is called federation (below).
+- **Horizontal partitioning** splits *rows* (users 1–1,000,000 in one partition, the next million in another), every partition with the same columns. Sharding is horizontal partitioning across machines.
+- **Vertical partitioning** splits *columns*: small, frequently read ones (`id`, `name`, `avatar_url`) in one table, large rarely read ones (`bio`, `settings_json`) in another, joined by ID — keeping hot data compact. Splitting whole tables or features onto different databases is federation (below).
 
-**Strategies for deciding which shard a row belongs to.** The column used to decide is the **shard key** (also called partition key).
+**Strategies for choosing a row's shard**, by the **shard key** (partition key):
 
-- **Range-based.** Each shard owns a continuous range of key values: A–F, G–M; or January, February. Range queries ("all orders from March") hit one or a few shards. Danger: uneven load. If the key is a timestamp, *all* new writes go to the newest shard. Used by HBase, Bigtable, MongoDB (ranged sharding) and CockroachDB, which split ranges automatically as they grow.
-- **Hash-based.** Compute a hash of the key (a function that turns any input into a number that looks random) and use it to pick the shard, for example `shard = hash(user_id) mod 8`. Keys spread evenly, so load is balanced. Cost: neighbouring keys land on different shards, so range queries must ask every shard. Also, with plain `mod N`, changing N from 8 to 9 moves almost every key, which is why consistent hashing exists (next section).
-- **Directory-based (lookup table).** A separate service stores a map from key (or key range) to shard. Fully flexible: you can move a single big customer to its own shard. Cost: the directory is an extra lookup on every request and must itself be highly available and cached.
-- **Geo-based (geographic).** Shard by the user's region: European users on EU shards, US users on US shards. Lowers latency and helps with data-residency laws such as the EU's GDPR. Load is uneven if regions differ in size.
+- **Range-based.** Each shard owns a continuous key range (A–F, G–M; January, February). Range queries hit one or a few shards. Danger: uneven load — with a timestamp key *all* new writes hit the newest shard. Used by HBase, Bigtable, MongoDB (ranged sharding) and CockroachDB, which split ranges automatically as they grow.
+- **Hash-based.** A **hash function** (any input → random-looking number) picks the shard: `shard = hash(user_id) mod 8`. Even spread and balanced load, but neighbouring keys scatter, so range queries ask every shard; and with plain `mod N`, going from 8 to 9 shards moves almost every key — hence consistent hashing (next section).
+- **Directory-based (lookup table).** A separate service maps key (or range) → shard. Fully flexible (move one big customer to its own shard), but an extra lookup per request, and the directory must be highly available and cached.
+- **Geo-based (geographic).** Shard by user region (EU users on EU shards). Lower latency and helps data-residency laws such as the EU's GDPR; uneven if regions differ in size.
 
 ```mermaid
 flowchart TD
@@ -3402,91 +3082,89 @@ flowchart TD
     RT --> S3["Shard 3"]
 ```
 
-**Where the routing happens.** The application can compute the shard itself; a proxy or **router** can do it (Vitess for MySQL, `mongos` for MongoDB, Citus for PostgreSQL); or any node can accept the request and forward it (Cassandra).
+**Where routing happens.** In the application; in a proxy or **router** (Vitess for MySQL, `mongos` for MongoDB, Citus for PostgreSQL); or any node accepts and forwards (Cassandra).
 
-**Federation (functional partitioning).** Instead of splitting one table, split the database *by feature*: a users database, a products database, an orders database, each on its own server. Each is smaller and gets its own share of traffic. You lose joins and transactions between them, and it only goes as far as the number of features. It is often a first step before true sharding, and it maps naturally onto microservices, each owning its database.
+**Federation (functional partitioning).** Split the database *by feature* — users, products, orders databases on their own servers. Each is smaller with its own traffic share, but you lose joins and transactions between them, and it scales only as far as the number of features. Often a first step before true sharding; maps naturally onto microservices each owning its database.
 
 ### How it works
 
-**Choosing a shard key** is the most important decision in sharding, because changing it later is very expensive. A good shard key:
+**Choosing a shard key** is the most important sharding decision; changing it later is very expensive. A good shard key:
 
-1. **Has high cardinality** (many distinct values), so data can be split finely. `country` is poor (about 200 values, very uneven); `user_id` is good.
+1. **Has high cardinality** (many distinct values): `country` is poor (~200 values, very uneven); `user_id` is good.
 2. **Spreads load evenly**, both data size and traffic.
-3. **Matches the main query**, so most requests touch a single shard. If you almost always look up "orders for a user", shard orders by `user_id`, so all of one user's orders sit together.
-4. **Does not grow in one direction** if you use range sharding (avoid auto-increment IDs and timestamps as the range key).
+3. **Matches the main query**, so most requests touch one shard: if you look up "orders for a user", shard orders by `user_id`.
+4. **Doesn't grow in one direction** under range sharding (avoid auto-increment IDs and timestamps as the range key).
 
-Queries that include the shard key are **single-shard** and fast. Queries that do not must be sent to every shard and the results combined (**scatter-gather**), which is slower and gets worse as shards are added.
+Queries including the shard key are **single-shard** and fast; others go to every shard and merge results (**scatter-gather**), slower and worse as shards are added.
 
-**Hot spots and hot keys.** A **hot spot** is a shard that gets far more load than the others. A **hot key** is a single key that causes it, such as a celebrity's account with 300 million followers, or one viral product during a flash sale. Even perfect hashing cannot split a single key. Fixes:
+**Hot spots and hot keys.** A **hot spot** is a shard with far more load than others; a **hot key** is a single key causing it (a celebrity account with 300 million followers, one viral flash-sale product). Even perfect hashing can't split one key. Fixes:
 
-- **Key salting**: append a small random number to the hot key (`celebrity_42#0` to `celebrity_42#9`) to spread its writes over 10 shards, then read all 10 and combine.
+- **Key salting**: append a small random number (`celebrity_42#0` … `#9`) to spread its writes over 10 shards; read all 10 and combine.
 - **Caching** the hot item's reads in front of the database.
-- **Dedicated shards** for known whales (big customers), using a directory.
-- **Write buffering**: collect increments in memory and apply them in batches.
+- **Dedicated shards** for known whales (big customers), via a directory.
+- **Write buffering**: collect increments in memory and apply in batches.
 
-**Rebalancing (resharding).** Over time you must add shards because data grows, or move data because some shards are hotter. Approaches:
+**Rebalancing (resharding).** Shards must be added as data grows, or data moved off hot shards:
 
-- **Fixed number of logical partitions**: create many more partitions than machines from day one (say 1,024 partitions on 8 machines, 128 each). To add a machine, move whole partitions to it; keys never change partition. Used by Elasticsearch, Couchbase and Riak, and in spirit by many hand-rolled systems.
-- **Dynamic splitting**: when a range partition grows past a size limit (by default 512 MB per range in CockroachDB, 128 MB per chunk in recent MongoDB versions, 10 GB per region in HBase), split it in two and move one half (HBase, MongoDB, CockroachDB).
+- **Fixed number of logical partitions**: create far more partitions than machines from day one (1,024 on 8 machines, 128 each); adding a machine moves whole partitions and keys never change partition. Elasticsearch, Couchbase, Riak, and many hand-rolled systems.
+- **Dynamic splitting**: split a range partition past a size limit (by default 512 MB per range in CockroachDB, 128 MB per chunk in recent MongoDB, 10 GB per region in HBase) and move one half.
 - **Consistent hashing** (next section).
 
-Rebalancing must move data while the system keeps serving traffic, usually by copying in the background, catching up on new writes, then switching the routing. Doing this automatically is convenient but risky; many teams keep a human in the loop.
+Rebalancing moves data while serving traffic: copy in the background, catch up on new writes, switch routing. Automatic rebalancing is convenient but risky; many teams keep a human in the loop.
 
 ### Trade-offs
 
-What you give up when you shard:
+Sharding costs:
 
 - **Cross-shard joins** become application code or scatter-gather.
 - **Cross-shard transactions** need distributed transactions or sagas (Part 4).
-- **Globally unique IDs** cannot come from one auto-increment counter; you need UUIDs or a scheme like Snowflake IDs (Part 4).
-- **Secondary indexes** become harder: either each shard indexes its own rows (**local index**, queries must hit all shards) or a separate **global index** is itself sharded by the indexed value (reads are fast, writes must update another shard).
-- **Operations** (backups, schema changes, monitoring) multiply by the number of shards.
+- **Globally unique IDs** can't come from one auto-increment counter: UUIDs or Snowflake-style IDs (Part 4).
+- **Secondary indexes** get harder: per-shard **local index** (queries hit all shards) or a **global index** sharded by the indexed value (fast reads, writes update another shard).
+- **Operations** (backups, schema changes, monitoring) multiply by shard count.
 
-So shard late. First optimize queries, add indexes, add caching, add read replicas, and scale up the machine. Shard when one primary truly cannot handle the writes or the data size.
+So shard late: first optimise queries, add indexes, caching, read replicas, scale up. Shard when one primary truly can't handle the writes or data size.
 
 ### Common mistakes
 
-- Sharding by a timestamp with range partitioning, so today's shard takes every write.
-- Choosing a shard key that does not appear in the main queries, making most reads scatter-gather.
-- Using `hash mod N`, then discovering that adding one server moves nearly all data.
-- Forgetting that a single hot key cannot be fixed by adding shards.
+- Range-sharding by timestamp, so today's shard takes every write.
+- A shard key absent from the main queries, making most reads scatter-gather.
+- `hash mod N`, then adding one server moves nearly all data.
+- Forgetting a single hot key can't be fixed by adding shards.
 
 ### Real-world examples
 
-Instagram sharded PostgreSQL into thousands of logical shards mapped onto fewer physical servers, so shards could be moved without changing keys. Notion split its single PostgreSQL database into 480 logical shards on 32 physical databases in 2021, then in 2023 spread the same 480 shards over 96 machines without changing any keys. YouTube created Vitess to shard MySQL; it is now used by Slack, GitHub and others. Pinterest shards MySQL by putting a shard ID inside every object ID.
+Instagram sharded PostgreSQL into thousands of logical shards on fewer physical servers, so shards move without changing keys. Notion split its single PostgreSQL database into 480 logical shards on 32 physical databases in 2021, and in 2023 spread the same 480 over 96 machines without changing keys. YouTube created Vitess to shard MySQL (now used by Slack, GitHub and others). Pinterest puts a shard ID inside every object ID.
 
 ### In the interview
 
 **Q:** How would you shard a chat application's messages table?
 
-**A:** Shard by `conversation_id` (hashed), because messages are almost always read per conversation, so each read hits one shard; inside the shard, order by message time. Watch for hot conversations, such as huge group channels.
+**A:** By hashed `conversation_id`, since messages are read per conversation (one shard per read), ordered by time inside the shard. Watch for hot conversations such as huge group channels.
 
 **Q:** What makes a good shard key?
 
-**A:** High cardinality, even spread of data and traffic, present in most queries so they hit one shard, and not monotonically increasing when range-sharded.
+**A:** High cardinality, even spread of data and traffic, present in most queries, and not monotonically increasing when range-sharded.
 
 ### TL;DR
 
-Sharding splits rows across machines so data and writes scale. The shard key decides everything: pick one with many values, even load and alignment with your main queries, and plan for hot keys and rebalancing.
+Sharding splits rows across machines so data and writes scale. The shard key decides everything: many values, even load, aligned with the main queries; plan for hot keys and rebalancing.
 
 ## Consistent hashing and virtual nodes
 
 ### What it is
 
-**Consistent hashing** is a way of assigning keys to servers so that adding or removing a server moves only a small share of the keys, about 1/N of them with N servers, instead of almost all of them.
+**Consistent hashing** assigns keys to servers so adding or removing a server moves only about 1/N of the keys (N servers), instead of almost all.
 
-**Why plain modulo fails.** With `server = hash(key) mod 4`, a key whose hash is 10 goes to server 2. Add a fifth server and it becomes `10 mod 5 = 0`. In general about 80% of keys change servers when going from 4 to 5. For a cache, that is a sudden flood of misses; for a database, a huge data migration.
-
-**Analogy.** Picture a round clock face. Servers stand at a few positions around the rim. Each key is also placed on the rim, then walks clockwise until it meets a server: that server owns it. If a new server steps onto the rim, it only takes over the keys between itself and the previous server. Everyone else keeps their keys.
+**Why plain modulo fails.** With `server = hash(key) mod 4`, hash 10 goes to server 2; add a fifth server and `10 mod 5 = 0`. About 80% of keys move going from 4 to 5 — a flood of cache misses, or a huge database migration.
 
 ### How it works
 
-1. Imagine the output range of a hash function (for example 0 to 2^32 − 1) bent into a circle, the **hash ring**.
-2. Hash each server's name to get its position on the ring.
-3. Hash each key to get its position, then move clockwise to the first server. That server stores the key.
-4. **Adding a server**: it lands at one point and takes over only the keys between its predecessor and itself. On average 1/N of all keys move.
+1. Bend the hash output range (e.g. 0 to 2^32 − 1) into a circle: the **hash ring**.
+2. Hash each server's name to a position on the ring.
+3. Hash each key to a position and walk clockwise to the first server, which stores it.
+4. **Adding a server**: it takes over only the keys between its predecessor and itself — on average 1/N of keys move.
 5. **Removing a server**: its keys move to the next server clockwise; nothing else changes.
-6. **Replication**: store each key on the first server it meets plus the next 2 distinct servers clockwise to keep 3 copies (Cassandra and Dynamo do this).
+6. **Replication**: store each key on its first server plus the next 2 distinct servers clockwise for 3 copies (Cassandra, Dynamo).
 
 ```mermaid
 flowchart LR
@@ -3496,57 +3174,55 @@ flowchart LR
     K4["key 'dave' at position 95"] -- "wraps around past the top" --> A
 ```
 
-**Virtual nodes (vnodes).** With only a few servers, their random positions leave some with big arcs of the ring and some with small arcs, so load is uneven. Also, when a server leaves, *all* its load lands on one neighbour. The fix: give each physical server many positions on the ring, for example 100–256 **virtual nodes** each, by hashing "A-1", "A-2", ... "A-256". Now each server owns many small arcs scattered around the ring, so:
+**Virtual nodes (vnodes).** With few servers, random positions give some big arcs and some small (uneven load), and a departing server dumps *all* its load on one neighbour. Fix: give each physical server many ring positions — 100–256 **virtual nodes**, hashing "A-1", "A-2", … "A-256" — so each owns many small scattered arcs:
 
 - Load evens out statistically.
-- When a server leaves, its many small arcs are picked up by many different servers, spreading the extra load.
-- A more powerful machine can be given more virtual nodes to take a bigger share.
+- A departing server's arcs are picked up by many servers, spreading the extra load.
+- A more powerful machine gets more virtual nodes for a bigger share.
 
-Cassandra used 256 vnodes per node by default for years and lowered the default to 16 in version 4.0 with a smarter token-allocation algorithm.
+Cassandra defaulted to 256 vnodes per node for years, lowering it to 16 in 4.0 with a smarter token-allocation algorithm.
 
 ### Types
 
-Other algorithms solve the same problem: **rendezvous hashing** (highest random weight: compute a score for each key-server pair and pick the highest), **jump consistent hash** (Google, very fast and memory-free, but servers can only be added or removed at the end), and **Maglev hashing** (Google's load balancer, which uses a lookup table for even spread).
+Alternatives: **rendezvous hashing** (highest random weight: score each key-server pair, pick the highest), **jump consistent hash** (Google; very fast and memory-free, but servers can only be added or removed at the end), and **Maglev hashing** (Google's load balancer; a lookup table for even spread).
 
 ### Trade-offs
 
-Consistent hashing minimises data movement and needs no central directory, but plain consistent hashing balances poorly without virtual nodes, and like any hashing it destroys key ordering, so range queries become scatter-gather.
+Minimal data movement and no central directory, but plain consistent hashing balances poorly without virtual nodes, and like any hashing it destroys key order, so range queries become scatter-gather.
 
 ### Real-world examples
 
-Amazon Dynamo (2007 paper), Apache Cassandra, ScyllaDB, Riak, Memcached client libraries (ketama), Discord's routing of users and guilds to servers, and many load balancers (for sticky routing, Part 2) use consistent hashing.
+Amazon Dynamo (2007 paper), Apache Cassandra, ScyllaDB, Riak, Memcached client libraries (ketama), Discord's routing of users and guilds to servers, and many load balancers (sticky routing, Part 2).
 
 ### In the interview
 
-**Q:** Why use consistent hashing instead of `hash mod N`?
+**Q:** Why consistent hashing instead of `hash mod N`?
 
-**A:** With `mod N`, changing N remaps almost every key. With consistent hashing, adding or removing one of N servers moves only about 1/N of the keys.
+**A:** `mod N` remaps almost every key when N changes; consistent hashing moves only ~1/N of keys when one of N servers is added or removed.
 
 **Q:** What problem do virtual nodes solve?
 
-**A:** Uneven arcs and uneven load. Many positions per server spread each server's ownership in small pieces, smooth the load, and let a departing server's keys spread across many others.
+**A:** Uneven arcs and load. Many positions per server spread ownership in small pieces, smooth load, and let a departing server's keys spread across many others.
 
 ### TL;DR
 
-Consistent hashing places servers and keys on a ring so a membership change moves only about 1/N of keys; virtual nodes make the spread even.
+Consistent hashing puts servers and keys on a ring so a membership change moves only ~1/N of keys; virtual nodes make the spread even.
 
 ## Storage types: block, file and object
 
 ### What it is
 
-Beneath every database and every uploaded photo is raw storage. Cloud providers sell it in three shapes, and picking the right one is a common design decision.
-
-**Analogy.** **Block storage** is an empty plot of land: you decide how to build on it. **File storage** is an office building with floors, rooms and labelled cabinets that several people can share. **Object storage** is a giant valet coat check: you hand over an item, get a ticket (the key), and later hand back the ticket to get the item. You cannot rearrange things inside the cloakroom; you can only check in, retrieve or throw away whole items.
+Beneath every database and uploaded photo is raw storage, sold by cloud providers in three shapes. (Block storage is an empty plot you build on; file storage a shared office building with labelled cabinets; object storage a coat check — hand over an item, get a ticket (the key), and you can only check in, retrieve or discard whole items.)
 
 ### Types
 
-**Block storage.** The storage looks like a raw disk divided into fixed-size **blocks**, each with an address. The operating system puts a **file system** (such as ext4 or NTFS) on top, or a database manages the blocks directly. It is attached to one server at a time (usually), offers low latency (well under a millisecond for local NVMe SSDs, roughly one to a few milliseconds for network block storage) and lets you change a few bytes in the middle of a file. Measured in **IOPS** (input/output operations per second) and throughput. Examples: a laptop's SSD, Amazon EBS, Google Persistent Disk, Azure Managed Disks. Use for: database data files, virtual machine boot disks.
+**Block storage.** A raw disk of fixed-size, addressed **blocks**. The OS puts a **file system** (ext4, NTFS) on top, or a database manages blocks directly. Usually attached to one server at a time; low latency (well under a millisecond for local NVMe SSDs, roughly one to a few milliseconds for network block storage); you can change a few bytes mid-file. Measured in **IOPS** and throughput. Examples: a laptop SSD, Amazon EBS, Google Persistent Disk, Azure Managed Disks. Use for database data files and VM boot disks.
 
-**File storage.** A shared file system with folders and files, accessed over the network by many servers at once using protocols such as **NFS** (Network File System, common on Linux) or **SMB** (common on Windows). Familiar to programs that expect files and paths. Examples: Amazon EFS, Azure Files, Google Filestore, a NAS (network-attached storage) box. Use for: shared content between servers, home directories, legacy applications.
+**File storage.** A shared file system of folders and files, accessed over the network by many servers at once via **NFS** (Network File System, common on Linux) or **SMB** (Windows). Examples: Amazon EFS, Azure Files, Google Filestore, a NAS (network-attached storage) box. Use for content shared between servers, home directories, legacy apps expecting paths.
 
-**Object storage.** Stores **objects**: a blob of bytes plus metadata, addressed by a unique key inside a **bucket** (a top-level container). There are no real folders (a key like `photos/2026/cat.jpg` only looks like a path), and you cannot edit part of an object; you replace the whole thing. Accessed over HTTP with simple calls such as `PUT`, `GET` and `DELETE`. It scales to practically unlimited size, is the cheapest per gigabyte, and is extremely durable. Latency is higher, often tens of milliseconds for the first byte. Examples: Amazon S3, Google Cloud Storage, Azure Blob Storage, Cloudflare R2, and the open-source MinIO and Ceph.
+**Object storage.** **Objects** (a blob of bytes plus metadata) addressed by a unique key inside a **bucket** (top-level container). No real folders (`photos/2026/cat.jpg` only looks like a path), and no partial edits — replace the whole object. Accessed over HTTP (`PUT`, `GET`, `DELETE`). Practically unlimited size, cheapest per gigabyte, extremely durable; higher latency (often tens of milliseconds to first byte). Examples: Amazon S3, Google Cloud Storage, Azure Blob Storage, Cloudflare R2, open-source MinIO and Ceph.
 
-A **blob** (binary large object) is any large chunk of unstructured binary data: an image, video, PDF or backup file. "Blob storage" is another name for object storage (Azure literally calls its service Blob Storage).
+A **blob** (binary large object) is any large chunk of unstructured binary data — image, video, PDF, backup. "Blob storage" is another name for object storage (Azure's service is literally Blob Storage).
 
 | | Block | File | Object |
 |---|---|---|---|
@@ -3558,13 +3234,13 @@ A **blob** (binary large object) is any large chunk of unstructured binary data:
 
 ### How it works
 
-The standard pattern for user uploads (photos, videos, documents):
+The standard upload pattern (photos, videos, documents):
 
 1. The client asks the app server for permission to upload.
-2. The app server returns a **pre-signed URL**: a time-limited link that allows one upload to one key in the bucket.
-3. The client uploads the file straight to object storage, so gigabytes never pass through your app servers.
-4. The app server stores only the object's key and metadata (owner, size, type) in the database.
-5. Downloads are served through a CDN (Part 2) in front of the bucket.
+2. The app server returns a **pre-signed URL**: a time-limited link allowing one upload to one key.
+3. The client uploads straight to object storage, so gigabytes never pass through app servers.
+4. The app server stores only the key and metadata (owner, size, type) in the database.
+5. Downloads go through a CDN (Part 2) in front of the bucket.
 
 ```mermaid
 sequenceDiagram
@@ -3582,35 +3258,33 @@ sequenceDiagram
 
 ### Trade-offs
 
-Never store large files inside the relational database: it bloats backups, wastes the buffer cache and makes replication slow. Store the file in object storage and the pointer in the database.
+Never store large files in the relational database: it bloats backups, wastes the buffer cache and slows replication. File in object storage, pointer in the database.
 
 ### Real-world examples
 
-Amazon S3 is designed for 99.999999999% ("eleven nines") durability of objects, stores each object across at least three availability zones in its standard storage classes, allows single objects up to 50 TB (raised from 5 TB in December 2025), and has offered strong read-after-write consistency since December 2020. Netflix, Dropbox (which later moved much of its data to its own Magic Pocket system), and almost every photo-sharing app store media in object storage.
+Amazon S3 is designed for 99.999999999% ("eleven nines") object durability, stores each object across at least three availability zones in its standard classes, allows single objects up to 50 TB (raised from 5 TB in December 2025), and has offered strong read-after-write consistency since December 2020. Netflix, Dropbox (which later moved much of its data to its own Magic Pocket system) and almost every photo app store media in object storage.
 
 ### TL;DR
 
-Block storage is a raw fast disk for one server, file storage is a shared folder tree, and object storage is cheap, huge, durable key-to-blob storage over HTTP. Put media in object storage and keep only its key in the database.
+Block storage is a raw fast disk for one server, file storage a shared folder tree, object storage cheap, huge, durable key-to-blob storage over HTTP. Media goes in object storage; only its key in the database.
 
 ## OLTP vs OLAP, row vs column storage, lakes and warehouses
 
 ### What it is
 
-Databases serve two very different kinds of work:
+Two very different workloads:
 
-- **OLTP (online transaction processing)**: the everyday work of an application. Many small, fast reads and writes that each touch a few rows: "load user 42", "insert this order". Latency matters (milliseconds), and thousands run per second. PostgreSQL, MySQL and DynamoDB are OLTP systems.
-- **OLAP (online analytical processing)**: analysis and reporting. Few, big queries that scan millions or billions of rows but only a few columns: "total revenue per country per month for the last three years". Each query may take seconds. Analysts and dashboards run them.
+- **OLTP (online transaction processing)**: the app's everyday work — many small, fast reads and writes touching a few rows ("load user 42", "insert this order"), millisecond latency, thousands per second. PostgreSQL, MySQL, DynamoDB.
+- **OLAP (online analytical processing)**: analysis and reporting — few big queries scanning millions or billions of rows but few columns ("revenue per country per month for three years"), seconds each, run by analysts and dashboards.
 
-**Analogy.** OLTP is the checkout counter at a supermarket: fast, one customer at a time. OLAP is the head office accountant going through a year of receipts to find trends.
-
-Running heavy OLAP queries on the OLTP database is a classic mistake: one big report can slow down every customer's checkout. So companies copy the data into separate analytical systems.
+(The supermarket checkout vs the accountant combing a year of receipts.) Running heavy OLAP queries on the OLTP database is a classic mistake — one big report slows every checkout — so data is copied into separate analytical systems.
 
 ### Types
 
 **Row-oriented vs column-oriented storage.**
 
-- A **row store** keeps all the columns of one row together on disk. Great for OLTP: "fetch user 42" reads one place and gets everything.
-- A **column store** (columnar storage) keeps all values of one column together: every `country` value in one file, every `amount` value in another. Great for OLAP: "sum of `amount` by `country`" reads just those two columns and skips the other 50. Values in one column are similar, so they compress very well (often several times smaller), and the CPU can process them in batches.
+- A **row store** keeps all columns of a row together: "fetch user 42" reads one place. Great for OLTP.
+- A **column store** (columnar storage) keeps each column's values together (all `country` values in one file, all `amount` in another): "sum of `amount` by `country`" reads two columns and skips 50 others. Similar values compress very well (often several times smaller), and the CPU processes them in batches. Great for OLAP.
 
 ```mermaid
 flowchart TD
@@ -3621,15 +3295,15 @@ flowchart TD
     C --> CU["Good for: aggregate one column over many rows (OLAP)"]
 ```
 
-Columnar databases and formats: ClickHouse, Apache Druid, Apache Pinot, Amazon Redshift, Google BigQuery, Snowflake, DuckDB; and the file formats **Apache Parquet** and **ORC**.
+Columnar databases and formats: ClickHouse, Apache Druid, Apache Pinot, Amazon Redshift, Google BigQuery, Snowflake, DuckDB; file formats **Apache Parquet** and **ORC**.
 
-**Data warehouse.** A central analytical database that holds cleaned, structured data from many sources (orders, payments, marketing), organised for reporting. Data is usually loaded on a schedule, and the schema is defined in advance (schema-on-write). Often modelled as a **star schema**: a big **fact table** of events (each sale) surrounded by **dimension tables** (product, customer, date). Examples: Snowflake, BigQuery, Amazon Redshift, Azure Synapse.
+**Data warehouse.** A central analytical database of cleaned, structured data from many sources (orders, payments, marketing), loaded on a schedule with a schema defined in advance (schema-on-write). Often a **star schema**: a big **fact table** of events (each sale) surrounded by **dimension tables** (product, customer, date). Examples: Snowflake, BigQuery, Amazon Redshift, Azure Synapse.
 
-**Data lake.** A huge, cheap store of raw data in any format (logs, JSON, CSV, images, Parquet files), usually in object storage such as S3. You store first and decide structure when you read (schema-on-read). Flexible and cheap, but without discipline it becomes a "data swamp" nobody can trust. Query engines such as Apache Spark, Trino/Presto and Amazon Athena read it directly.
+**Data lake.** A huge, cheap store of raw data in any format (logs, JSON, CSV, images, Parquet), usually in object storage such as S3: store first, decide structure on read (schema-on-read). Flexible and cheap, but without discipline a "data swamp". Query engines such as Apache Spark, Trino/Presto and Amazon Athena read it directly.
 
-**Lakehouse.** A newer middle ground: data lake files plus a table format that adds transactions, schemas and versioning on top, such as Delta Lake, Apache Iceberg and Apache Hudi.
+**Lakehouse.** Lake files plus a table format adding transactions, schemas and versioning: Delta Lake, Apache Iceberg, Apache Hudi.
 
-**ETL vs ELT.** Data moves from OLTP systems into analytics through a **pipeline**. **ETL (extract, transform, load)** cleans and reshapes the data before loading it into the warehouse. **ELT (extract, load, transform)** loads raw data first and transforms it inside the warehouse, which became popular as cloud warehouses got cheap and powerful. **Change data capture (CDC)** streams every change from the OLTP database's log (for example with Debezium into Kafka) so analytics stay minutes or seconds behind instead of a day.
+**ETL vs ELT.** A **pipeline** moves data from OLTP systems into analytics. **ETL (extract, transform, load)** cleans and reshapes before loading; **ELT (extract, load, transform)** loads raw data and transforms inside the warehouse, popular since cloud warehouses became cheap and powerful. **Change data capture (CDC)** streams every change from the OLTP database's log (e.g. Debezium into Kafka) so analytics lag minutes or seconds, not a day.
 
 ### Trade-offs
 
@@ -3645,7 +3319,7 @@ Columnar databases and formats: ClickHouse, Apache Druid, Apache Pinot, Amazon R
 
 **Q:** Why are column stores faster for analytics?
 
-**A:** An analytic query reads a few columns across many rows. A column store reads only those columns from disk, compresses them well, and processes them in tight batches, so it moves far less data than a row store.
+**A:** Analytic queries read a few columns across many rows; a column store reads only those columns, compresses them well and processes them in tight batches, moving far less data than a row store.
 
 **Q:** Data lake or data warehouse?
 
@@ -3653,13 +3327,13 @@ Columnar databases and formats: ClickHouse, Apache Druid, Apache Pinot, Amazon R
 
 ### TL;DR
 
-OLTP is many small transactional queries on row stores; OLAP is big analytical scans on column stores. Warehouses hold curated structured data, lakes hold raw data cheaply, and pipelines (ETL, ELT, CDC) move data between them.
+OLTP is many small transactional queries on row stores; OLAP big analytical scans on column stores. Warehouses hold curated structured data, lakes raw data cheaply, and pipelines (ETL, ELT, CDC) move data between them.
 
 ## Durability: WAL, fsync, backups and recovery
 
 ### What it is
 
-**Durability** means that once data is saved (committed), it stays saved, even through crashes, power cuts, disk failures and human mistakes. Different tools protect against different threats:
+**Durability** means committed data stays saved through crashes, power cuts, disk failures and human mistakes. Different tools cover different threats:
 
 | Threat | Protection |
 |---|---|
@@ -3669,18 +3343,18 @@ OLTP is many small transactional queries on row stores; OLAP is big analytical s
 | Bug or human deletes data | Backups and point-in-time recovery |
 | Ransomware or account takeover | Immutable, separate-account backups |
 
-**Analogy.** A careful accountant writes each transaction in a pen-and-ink journal *before* updating the neat ledger. If the ledger is ruined halfway through an update, the journal shows exactly what to redo. And every night she photocopies the books and stores the copy in another building.
+(Like an accountant who writes each transaction in an ink journal *before* updating the ledger, and photocopies the books nightly to another building.)
 
 ### How it works
 
-**Write-ahead log (WAL).** Updating the real data files in place is slow (random writes) and dangerous (a crash midway leaves a half-written page). So the database first appends a description of each change to a sequential log file, the **write-ahead log** (also called a redo log in MySQL InnoDB, or a commit log in Cassandra). The rule is: *log first, then data*.
+**Write-ahead log (WAL).** Updating data files in place is slow (random writes) and dangerous (a crash leaves a half-written page). So the database first appends each change to a sequential **write-ahead log** (redo log in MySQL InnoDB, commit log in Cassandra). Rule: *log first, then data*.
 
-1. A transaction changes some rows in memory.
-2. On `COMMIT`, the database appends the changes and a commit record to the WAL.
-3. It forces the WAL to physical storage with **fsync**, a system call that tells the operating system "really write this to the device now, do not just keep it in your memory buffer".
-4. Only then does it tell the client "committed".
-5. Later, a background process writes the changed pages to the data files. A **checkpoint** records how far the data files are up to date, so old WAL can be recycled.
-6. After a crash, the database replays the WAL from the last checkpoint, redoing committed changes and discarding uncommitted ones.
+1. A transaction changes rows in memory.
+2. On `COMMIT`, the changes and a commit record are appended to the WAL.
+3. The WAL is forced to physical storage with **fsync**, the system call meaning "really write this to the device now, not just your memory buffer".
+4. Only then is the client told "committed".
+5. A background process later writes changed pages to the data files; a **checkpoint** records how far the files are up to date, so old WAL can be recycled.
+6. After a crash, the WAL is replayed from the last checkpoint, redoing committed changes and discarding uncommitted ones.
 
 ```mermaid
 sequenceDiagram
@@ -3696,68 +3370,66 @@ sequenceDiagram
     Note over W,F: "After a crash: replay WAL since last checkpoint"
 ```
 
-The same log is reused for replication (followers replay the leader's WAL stream) and for change data capture.
+The same log feeds replication (followers replay the leader's WAL stream) and change data capture.
 
-**Why fsync matters.** Operating systems keep written data in a memory **page cache** and flush it to disk later, for speed. Without fsync, a power cut can lose writes that the program believed were saved. fsync is slow-ish (from tens of microseconds on enterprise SSDs with power-loss protection to several milliseconds on cheaper or network disks), so databases batch many commits into one fsync (**group commit**). Some systems let you trade safety for speed: PostgreSQL's `synchronous_commit = off` and MySQL's `innodb_flush_log_at_trx_commit = 2` can lose the last moment of commits on a crash. Redis's append-only file defaults to fsync once per second, so up to about one second of writes can be lost.
+**Why fsync matters.** The OS keeps written data in its memory **page cache** and flushes later; without fsync a power cut can lose writes the program thought were saved. fsync is slow-ish (tens of microseconds on enterprise SSDs with power-loss protection to several milliseconds on cheaper or network disks), so databases batch many commits into one fsync (**group commit**). Some systems trade safety for speed: PostgreSQL's `synchronous_commit = off` and MySQL's `innodb_flush_log_at_trx_commit = 2` can lose the last moment of commits on a crash; Redis's append-only file defaults to fsync once per second (up to ~1 second of writes lost).
 
-**RAID** (redundant array of independent disks) combines several disks so the failure of one does not lose data: RAID 1 mirrors two disks, RAID 5/6 store parity, RAID 10 stripes across mirrored pairs. It protects against disk failure only.
+**RAID** (redundant array of independent disks) combines disks so one failure loses no data: RAID 1 mirrors two disks, RAID 5/6 store parity, RAID 10 stripes across mirrored pairs. It protects against disk failure only.
 
-**Backups.** A **backup** is a copy of the data stored separately, kept for days or months, so you can recover from things replication would happily copy, such as an accidental `DROP TABLE`.
+**Backups.** A **backup** is a separately stored copy kept for days or months, recovering from things replication happily copies, such as an accidental `DROP TABLE`.
 
-- **Full backup**: a complete copy. Simple, slow and large.
-- **Incremental backup**: only what changed since the last backup. Small and fast, but restoring needs the chain of increments.
-- **Logical backup**: the data exported as SQL statements or rows (`pg_dump`, `mysqldump`). Portable but slow for big databases.
-- **Physical backup**: a copy of the raw data files (`pg_basebackup`, Percona XtraBackup).
-- **Snapshot**: a point-in-time image of a disk or volume (for example an EBS snapshot), usually taken in seconds using copy-on-write, where only blocks changed after the snapshot need extra space.
+- **Full backup**: complete copy. Simple, slow, large.
+- **Incremental backup**: only changes since the last backup. Small and fast, but restore needs the chain.
+- **Logical backup**: data exported as SQL or rows (`pg_dump`, `mysqldump`). Portable, slow for big databases.
+- **Physical backup**: copy of raw data files (`pg_basebackup`, Percona XtraBackup).
+- **Snapshot**: point-in-time image of a disk or volume (an EBS snapshot), taken in seconds with copy-on-write — only blocks changed afterwards need extra space.
 
-**Point-in-time recovery (PITR)** lets you restore to any moment, say 14:31:07, just before a bad deploy deleted data. It works by restoring the last full backup and then replaying archived WAL up to the chosen moment. Managed databases such as Amazon RDS offer it with a retention window of up to 35 days.
+**Point-in-time recovery (PITR)** restores to any moment (say 14:31:07, just before a bad deploy deleted data) by restoring the last full backup and replaying archived WAL up to that moment. Managed databases such as Amazon RDS offer it with retention up to 35 days.
 
-A widely used rule is **3-2-1**: keep 3 copies of the data, on 2 different kinds of media, with 1 copy off-site (today often: another region or another cloud account).
+The **3-2-1** rule: 3 copies, on 2 kinds of media, 1 off-site (today often another region or cloud account).
 
-**Test your restores.** Until you have actually rebuilt a database from a backup, you do not know that the backup works. Measure how long a restore takes, because that number feeds your recovery time objective (RTO, Part 5).
+**Test your restores.** A backup is unproven until you've rebuilt from it. Measure restore time; it feeds your recovery time objective (RTO, Part 5).
 
 ### Common mistakes
 
-- Keeping backups in the same account or region as production, where one compromised credential or one regional outage takes both.
-- Never testing restores. In January 2017 GitLab accidentally deleted a production database directory and found that several of its backup and replication mechanisms had not been working; it restored from a copy about six hours old and lost roughly six hours of changes.
-- Disabling fsync for benchmarks and forgetting to turn it back on.
+- Backups in the same account or region as production: one compromised credential or regional outage takes both.
+- Never testing restores. In January 2017 GitLab accidentally deleted a production database directory and found several backup and replication mechanisms hadn't been working; it restored a copy about six hours old and lost roughly six hours of changes.
+- Disabling fsync for benchmarks and forgetting to re-enable it.
 
 ### In the interview
 
 **Q:** How does a database guarantee durability without writing every change to the data files immediately?
 
-**A:** It appends each change to a sequential write-ahead log and fsyncs the log before acknowledging the commit. The data files are updated later; after a crash, the log is replayed.
+**A:** It appends each change to a sequential write-ahead log and fsyncs the log before acknowledging; data files are updated later, and the log is replayed after a crash.
 
 **Q:** You have three replicas. Do you still need backups?
 
-**A:** Yes. Replicas protect against hardware failure, but a bad deploy, a bug or a human error is copied to every replica in milliseconds. Backups with point-in-time recovery let you go back to before the mistake.
+**A:** Yes. Replicas cover hardware failure, but a bad deploy, bug or human error reaches every replica in milliseconds. Backups with point-in-time recovery go back to before the mistake.
 
 ### TL;DR
 
-Durability comes in layers: WAL and fsync survive crashes, replication survives machine loss, cross-region copies survive site loss, and tested backups with point-in-time recovery survive mistakes.
+Durability is layered: WAL and fsync survive crashes, replication survives machine loss, cross-region copies survive site loss, tested backups with point-in-time recovery survive mistakes.
 
 ## Connection pooling, ORMs and N+1 queries
 
 ### What it is
 
-These three topics are about how application code talks to the database, and they cause a surprising share of real-world performance problems.
+How application code talks to the database — the source of a surprising share of real-world performance problems.
 
-**Connection pooling.** Opening a database connection is expensive: a TCP handshake, often a TLS handshake, authentication, and the database setting up memory for the session. That can cost several milliseconds, sometimes tens. PostgreSQL even starts a whole operating-system process per connection, using several megabytes of memory each, and its default limit (`max_connections`) is 100. A **connection pool** keeps a set of open connections ready; a request borrows one, uses it and returns it, instead of opening and closing one each time.
-
-**Analogy.** A taxi rank. Instead of building a new car for every passenger, a fixed set of taxis waits at the rank; passengers take one and it comes back.
+**Connection pooling.** Opening a database connection is expensive — TCP handshake, often TLS, authentication, session memory — several milliseconds, sometimes tens. PostgreSQL starts a whole OS process per connection (several megabytes each) and defaults to `max_connections` = 100. A **connection pool** keeps open connections ready; a request borrows one and returns it (a taxi rank, rather than building a car per passenger).
 
 ### How it works
 
-There are two places a pool can live:
+A pool lives in one of two places:
 
-1. **In the application** (client-side pool): a library inside each app process, such as HikariCP for Java, or the pools built into most database drivers. Typical settings are a minimum and maximum size, and a timeout for waiting when all connections are busy.
-2. **As a separate proxy** (server-side pool): a small service between all app servers and the database, such as **PgBouncer** or Pgpool-II for PostgreSQL, ProxySQL for MySQL, or Amazon RDS Proxy. Useful when you have hundreds of app instances or serverless functions, which would otherwise open thousands of connections. PgBouncer's **transaction pooling** mode hands a server connection to a client only for the duration of one transaction, so a few dozen real connections can serve thousands of clients.
+1. **In the application** (client-side): a library in each app process, such as HikariCP for Java or the pools built into most drivers, with min and max size and a wait timeout when all are busy.
+2. **As a separate proxy** (server-side): between all app servers and the database — **PgBouncer** or Pgpool-II for PostgreSQL, ProxySQL for MySQL, Amazon RDS Proxy. Useful with hundreds of app instances or serverless functions that would otherwise open thousands of connections. PgBouncer's **transaction pooling** lends a server connection only for one transaction, so a few dozen real connections serve thousands of clients.
 
-Sizing tip: bigger is not better. A database with 16 CPU cores cannot run 500 queries at once; extra connections just wait and compete for memory. Pools of a few times the core count often perform best. Remember the multiplication: 50 app servers × 20 connections each = 1,000 connections at the database.
+Bigger is not better: a 16-core database can't run 500 queries at once; extra connections wait and compete for memory. Pools of a few times the core count often perform best. Mind the multiplication: 50 app servers × 20 connections = 1,000 at the database.
 
-**ORMs.** An **ORM (object-relational mapper)** is a library that maps database rows to objects in your programming language, so you can write `user.orders` instead of SQL. Examples: Hibernate (Java), Django ORM and SQLAlchemy (Python), ActiveRecord (Ruby on Rails), Entity Framework (.NET), Prisma and Sequelize (JavaScript/TypeScript). ORMs speed up development, protect against SQL injection by using parameters, and handle schema **migrations** (versioned scripts that change the schema). The cost is that they hide the queries actually being run, which makes it easy to write very slow code without noticing. Good teams use the ORM for everyday work, read the generated SQL for hot paths, and drop to hand-written SQL where needed.
+**ORMs.** An **ORM (object-relational mapper)** maps rows to objects so you write `user.orders` instead of SQL: Hibernate (Java), Django ORM and SQLAlchemy (Python), ActiveRecord (Rails), Entity Framework (.NET), Prisma and Sequelize (JavaScript/TypeScript). They speed development, prevent SQL injection by using parameters, and handle schema **migrations** (versioned scripts that change the schema). The cost: they hide the queries actually run, making slow code easy to write unnoticed. Use the ORM for everyday work, read the generated SQL on hot paths, and hand-write SQL where needed.
 
-**The N+1 query problem.** The most famous ORM trap. You load a list of N items with 1 query, then loop over them and the ORM quietly runs 1 more query per item to load a related object: N+1 queries in total.
+**The N+1 query problem.** The most famous ORM trap: 1 query loads N items, then the loop quietly runs 1 more query per item for a related object — N+1 queries.
 
 ```python
 posts = Post.objects.all()[:50]       # 1 query
@@ -3765,10 +3437,10 @@ for p in posts:
     print(p.author.name)               # 50 more queries, one per post
 ```
 
-At 1 ms per round trip that is about 51 ms instead of 2 ms, and with 1,000 items it is a full second. The fixes:
+At 1 ms per round trip that's ~51 ms instead of 2 ms; with 1,000 items, a full second. Fixes:
 
-- **Eager loading**: tell the ORM to fetch the related data up front, in a join or one extra query (`select_related` / `prefetch_related` in Django, `includes` in Rails, `JOIN FETCH` in Hibernate).
-- **Batching**: collect all the IDs and fetch them in one `WHERE id IN (...)` query. The **DataLoader** pattern does this automatically in GraphQL servers.
+- **Eager loading**: fetch related data up front in a join or one extra query (`select_related` / `prefetch_related` in Django, `includes` in Rails, `JOIN FETCH` in Hibernate).
+- **Batching**: collect IDs and fetch them in one `WHERE id IN (...)`; the **DataLoader** pattern does this automatically in GraphQL servers.
 - **Detect it**: log query counts per request in development; tools such as Bullet (Rails) flag N+1 patterns.
 
 ```mermaid
@@ -3781,41 +3453,41 @@ flowchart LR
 
 ### Common mistakes
 
-- Opening a new connection per request with no pool, then hitting "too many connections" at peak traffic.
-- Pool size × number of instances exceeding the database limit after autoscaling adds servers.
-- Serverless functions each holding their own connections, without a proxy such as RDS Proxy or PgBouncer.
+- A new connection per request with no pool, then "too many connections" at peak.
+- Pool size × instance count exceeding the database limit after autoscaling adds servers.
+- Serverless functions each holding connections without a proxy such as RDS Proxy or PgBouncer.
 - Trusting the ORM blindly and shipping N+1 queries on a list page.
 
 ### In the interview
 
-**Q:** A list page gets slower as the list grows, and the database shows thousands of tiny identical queries. What is happening?
+**Q:** A list page slows as the list grows, and the database shows thousands of tiny identical queries. What's happening?
 
-**A:** An N+1 query problem: one query for the list and one per item for related data. Use eager loading or batch the lookups into a single `IN` query.
+**A:** N+1: one query for the list and one per item for related data. Eager-load or batch the lookups into one `IN` query.
 
 **Q:** Why put PgBouncer in front of PostgreSQL?
 
-**A:** PostgreSQL connections are heavy (one process each) and limited. PgBouncer lets thousands of client connections share a small number of real database connections.
+**A:** PostgreSQL connections are heavy (one process each) and limited; PgBouncer lets thousands of client connections share a few real ones.
 
 ### TL;DR
 
-Reuse connections through a pool, sized to what the database can actually run in parallel. Use ORMs for productivity but watch the SQL they generate, especially for N+1 queries.
+Reuse connections through a pool sized to what the database can actually run in parallel. Use ORMs for productivity but watch their SQL, especially for N+1 queries.
 
 ## Choosing a database
 
 ### What it is
 
-This section pulls the part together into a quick decision aid. In an interview, always justify the choice from the **access pattern** (how data is read and written), the **consistency** needed, and the **scale** (data size and requests per second), not from brand names.
+A decision aid for this part. Justify the choice from the **access pattern** (how data is read and written), the **consistency** needed, and the **scale** (data size, requests per second) — not brand names.
 
 ### How it works
 
-Ask these questions, in order:
+Ask, in order:
 
-1. **What are the main queries?** By key, by range, full-text, joins across entities, aggregations, graph traversal, similarity?
-2. **How much data, and how fast does it grow?** Gigabytes fit anywhere. Tens of terabytes push towards sharding or a distributed store.
-3. **What is the read-to-write ratio, and the peak writes per second?** Read-heavy suggests replicas and caches; write-heavy suggests LSM-based or sharded stores.
-4. **How strong must consistency be?** Money and inventory need transactions. Likes and view counts can be eventually consistent.
-5. **Does it need to work across regions?** Multi-region writes push towards multi-leader, leaderless or globally distributed databases.
-6. **What does the team know how to run?** Operating a database well is a major cost; a managed service often wins.
+1. **What are the main queries?** By key, by range, full-text, joins, aggregations, graph traversal, similarity?
+2. **How much data, growing how fast?** Gigabytes fit anywhere; tens of terabytes push towards sharding or a distributed store.
+3. **Read-to-write ratio and peak writes per second?** Read-heavy suggests replicas and caches; write-heavy suggests LSM-based or sharded stores.
+4. **How strong must consistency be?** Money and inventory need transactions; likes and view counts can be eventual.
+5. **Across regions?** Multi-region writes push towards multi-leader, leaderless or globally distributed databases.
+6. **What can the team run?** Operating a database well is a major cost; a managed service often wins.
 
 ### Real-world examples
 
@@ -3838,230 +3510,48 @@ Ask these questions, in order:
 ### Common mistakes
 
 - Naming a database without saying why.
-- Using one database type for everything, or a different exotic one for every table.
-- Forgetting the operational cost: backups, upgrades, monitoring and on-call.
+- One database type for everything, or a different exotic one for every table.
+- Forgetting operational cost: backups, upgrades, monitoring, on-call.
 
 ### In the interview
 
 **Q:** Which database would you use for a Twitter-like timeline?
 
-**A:** Users, follows and tweets as the source of truth in a relational database or a wide-column store sharded by user ID; precomputed home timelines in an in-memory store like Redis for fast reads; media in object storage behind a CDN; and a search engine for tweet search. Each choice follows the access pattern.
+**A:** Users, follows and tweets as source of truth in a relational database or a wide-column store sharded by user ID; precomputed home timelines in Redis for fast reads; media in object storage behind a CDN; a search engine for tweet search. Each choice follows the access pattern.
 
 ### TL;DR
 
-Start with PostgreSQL or MySQL unless the access pattern or scale clearly needs something else, and add specialist stores (cache, search, object storage, analytics) beside it as needs appear.
+Start with PostgreSQL or MySQL unless the access pattern or scale clearly needs otherwise, and add specialist stores (cache, search, object storage, analytics) beside it as needs appear.
 
 ## Part 3 glossary
 
-| Term | Meaning in one line |
-|---|---|
-| Database / DBMS | A program that stores data safely, finds it quickly and coordinates concurrent users |
-| State | Stored facts that must survive between requests |
-| Query planner (optimizer) | The part of a database that picks the cheapest way to run a query |
-| Buffer cache | Database memory holding recently used data pages |
-| Read / write | Fetching data without changing it / inserting, updating or deleting data |
-| Relational database | A database storing data in tables of rows and columns with a fixed schema |
-| Table, row, column | A set of records, one record, one property of a record |
-| Schema | The declared structure of tables, columns and data types |
-| Primary key | A column whose unique value identifies each row |
-| Foreign key | A column holding another table's primary key, linking the two |
-| Referential integrity | The guarantee that foreign keys point to rows that exist |
-| Unique constraint | A rule that no two rows share a value in a column |
-| Join | Combining rows from two tables that match on a key |
-| SQL | The standard language for querying relational databases |
-| DDL | SQL statements that change the schema, such as CREATE TABLE |
-| Distributed SQL | Relational databases spread over many machines, such as Spanner or CockroachDB |
-| Transaction | A group of operations that all succeed or all fail |
-| Commit / rollback | Make a transaction permanent / discard all its changes |
-| ACID | Atomicity, Consistency, Isolation, Durability |
-| Atomicity | All-or-nothing execution of a transaction |
-| Consistency (ACID) | A transaction leaves data obeying all declared rules |
-| Isolation | Concurrent transactions do not see each other's unfinished work |
-| Durability | Committed data survives crashes |
-| Concurrency | Several operations running at overlapping times |
-| Anomaly | An incorrect result caused by concurrent transactions |
-| Dirty read | Reading another transaction's uncommitted data |
-| Dirty write | Overwriting another transaction's uncommitted data |
-| Non-repeatable read | Re-reading a row in one transaction and getting a different value |
-| Phantom read | A repeated query returning new rows inserted by another transaction |
-| Lost update | Two read-modify-write cycles overwrite each other, losing one change |
-| Write skew | Two transactions each write different rows based on a shared read and together break a rule |
-| Isolation level | A setting choosing which anomalies the database prevents |
-| Read committed | Isolation level preventing dirty reads only |
-| Repeatable read | Isolation level also preventing non-repeatable reads |
-| Snapshot isolation | Each transaction reads a frozen consistent picture of the data |
-| Serializable | Result equals some one-at-a-time order of the transactions |
-| MVCC | Keeping multiple row versions so readers and writers do not block each other |
-| Two-phase locking | Taking locks and holding them until commit to get serializability |
-| SSI | Serializable snapshot isolation, which aborts transactions on dangerous patterns |
-| SELECT FOR UPDATE | Locking rows that were read until the transaction ends |
-| Optimistic concurrency control | Detecting conflicting writes with a version check and retrying |
-| Compare-and-set | Writing only if the current value still equals what was read |
-| NoSQL | Non-relational databases built around specific access patterns |
-| Key-value store | A database mapping keys to opaque values |
-| Document store | A database storing self-contained JSON-like documents |
-| Collection | A group of documents in a document store |
-| Wide-column store | A database grouping rows by partition key and sorting them by clustering key |
-| Clustering key | The key that sorts rows inside one partition in a wide-column store |
-| Graph database | A database storing nodes and edges for relationship queries |
-| Time-series database | A database optimised for timestamped measurements |
-| Search engine | A store built on an inverted index for full-text queries |
-| Inverted index | A map from each word to the documents containing it |
-| Tokenising | Splitting text into searchable words |
-| Relevance ranking | Ordering search results by how well they match |
-| Vector database | A store for embeddings supporting nearest-neighbour search |
-| Embedding | A list of numbers representing an item so similar items are close |
-| ANN / HNSW | Approximate nearest-neighbour search / a popular graph-based ANN index |
-| BASE | Basically available, soft state, eventually consistent |
-| Eventual consistency | Copies agree eventually once writes stop |
-| Polyglot persistence | Using several database types in one system |
-| Schema-on-read / on-write | Structure applied when reading / enforced when writing |
-| Index | An extra structure that finds rows by value without a full scan |
-| Full table scan | Reading every row to answer a query |
-| B-tree | A shallow balanced tree of sorted pages, the default index |
-| Page | A fixed-size block of storage, typically 4 to 16 KB |
-| Branching factor | Number of children per B-tree page |
-| Range query | A query for values between two bounds |
-| LSM-tree | A write-optimised structure of memtable plus merged sorted files |
-| Memtable | The in-memory sorted buffer of an LSM-tree |
-| SSTable | An immutable sorted file written by an LSM-tree |
-| Compaction | Merging SSTables and dropping old versions |
-| Tombstone | A marker recording that a key was deleted |
-| Read / write amplification | Extra disk reads per lookup / extra rewrites per byte written |
-| Hash index | An index mapping keys to locations via a hash map |
-| Composite index | An index over several columns in order |
-| Leftmost prefix | The rule that a composite index helps queries on its leading columns |
-| Covering index | An index containing every column a query needs |
-| Index-only scan | Answering a query from the index without touching the table |
-| Clustered index | An index whose order is the physical order of the rows |
-| Secondary index | Any index other than the clustered or primary one |
-| Partial index | An index over only rows matching a condition |
-| Selectivity | How few rows a filter value matches |
-| EXPLAIN | A command showing the plan the database will use |
-| Normalization | Storing each fact in exactly one place |
-| Normal forms (1NF, 2NF, 3NF) | Progressive rules removing repeated and misplaced data |
-| Update anomaly | Inconsistency caused by a fact stored in many places |
-| Denormalization | Duplicating data deliberately to speed up reads |
-| Materialized view | A stored, refreshed result of a query |
-| Replication | Keeping copies of data on several machines |
-| Replica | One copy of the data |
-| Leader / follower | The node accepting writes / nodes copying from it |
-| Read replica | A follower used mainly to serve reads |
-| Multi-leader replication | Several nodes accept writes and replicate to each other |
-| Write conflict | Two concurrent writes to the same record on different leaders |
-| Last write wins | Conflict rule keeping the write with the latest timestamp |
-| CRDT | A data type whose concurrent updates always merge to the same result |
-| Leaderless replication | Any replica accepts writes, with quorums for reads and writes |
-| Quorum | The minimum number of replicas that must respond for success |
-| Read repair | Fixing stale replicas during a read |
-| Anti-entropy | Background comparison and repair of replicas |
-| Hinted handoff | Holding writes for a down node and delivering them later |
-| Synchronous replication | Leader waits for a follower before confirming a write |
-| Asynchronous replication | Leader confirms before followers have the write |
-| Semi-synchronous replication | Leader waits for one follower, the rest are asynchronous |
-| Replication lag | How far a follower is behind the leader |
-| Read-your-own-writes | A user always sees their own latest changes |
-| Monotonic reads | A user never sees data go backwards in time |
-| Failover | Promoting a follower to leader after the leader fails |
-| Heartbeat | A periodic "I am alive" message |
-| Split brain | Two nodes both acting as leader and accepting writes |
-| Fencing | Forcibly stopping an old leader from acting |
-| Partitioning | Splitting a dataset into smaller pieces |
-| Sharding | Partitioning across different machines |
-| Shard / partition | One piece of the split data |
-| Horizontal partitioning | Splitting by rows |
-| Vertical partitioning | Splitting by columns |
-| Shard key | The column that decides which shard a row goes to |
-| Range sharding | Each shard owns a continuous range of keys |
-| Hash sharding | The shard is chosen from a hash of the key |
-| Directory-based sharding | A lookup service maps keys to shards |
-| Geo sharding | Sharding by user location |
-| Router | A component that sends each query to the right shard |
-| Cardinality | Number of distinct values in a column |
-| Scatter-gather | Sending a query to all shards and merging results |
-| Hot spot | A shard receiving far more load than others |
-| Hot key | A single key receiving disproportionate traffic |
-| Key salting | Adding a suffix to spread one hot key over several shards |
-| Rebalancing / resharding | Moving data between shards as the cluster changes |
-| Local vs global index | Index per shard / index sharded by the indexed value |
-| Federation | Splitting databases by feature or function |
-| Hash function | A function turning any input into a fixed-size, random-looking number |
-| Consistent hashing | Key placement on a ring so membership changes move about 1/N of keys |
-| Hash ring | The hash output range arranged as a circle |
-| Virtual node | One of many ring positions owned by a single physical server |
-| Rendezvous hashing | Picking the server with the highest score for each key |
-| Block storage | Raw fixed-size blocks presented as a disk |
-| IOPS | Input/output operations per second |
-| File storage | A shared network file system with folders |
-| NFS / SMB | Network file-sharing protocols for Linux / Windows |
-| Object storage | Keyed blobs with metadata accessed over HTTP |
-| Bucket | A top-level container in object storage |
-| Blob | A large chunk of unstructured binary data |
-| Pre-signed URL | A time-limited link allowing one direct upload or download |
-| OLTP | Many small transactional queries from an application |
-| OLAP | Large analytical queries over many rows |
-| Row store | Storage keeping each row's columns together |
-| Column store | Storage keeping each column's values together |
-| Parquet / ORC | Columnar file formats for analytics |
-| Data warehouse | Curated structured store for reporting |
-| Star schema | A fact table surrounded by dimension tables |
-| Data lake | Cheap store of raw data in any format |
-| Lakehouse | A data lake with transactional table formats on top |
-| ETL / ELT | Transform before loading / load then transform |
-| Change data capture (CDC) | Streaming every change from a database's log |
-| Write-ahead log (WAL) | A sequential log of changes written before the data files |
-| fsync | A system call forcing written data onto the physical device |
-| Page cache | Operating-system memory buffering file writes |
-| Group commit | Flushing many commits with one fsync |
-| Checkpoint | A point up to which data files reflect the log |
-| RAID | Combining disks so one failure loses no data |
-| Backup | A separate copy kept to recover from loss or mistakes |
-| Full / incremental backup | Complete copy / only changes since the last backup |
-| Logical / physical backup | Exported rows or SQL / copied raw data files |
-| Snapshot | A point-in-time image of a disk or volume |
-| Point-in-time recovery | Restoring to any moment by replaying logs over a backup |
-| 3-2-1 rule | Three copies, two media types, one off-site |
-| Connection pool | A set of reusable open database connections |
-| PgBouncer | A popular connection-pooling proxy for PostgreSQL |
-| Transaction pooling | Lending a database connection only for one transaction |
-| ORM | A library mapping rows to programming-language objects |
-| Migration | A versioned script that changes the schema |
-| N+1 query problem | One query for a list plus one per item for related data |
-| Eager loading | Fetching related data up front in few queries |
-| DataLoader | A pattern that batches per-item lookups into one query |
-| Access pattern | How an application reads and writes its data |
-
+Every Part 3 term is defined in one line in the [Master A–Z glossary](#master-az-glossary), which merges the glossaries of all six parts into a single alphabetical list.
 
 ## Part 4 — Caching, async processing and consistency
 
-Parts 1 to 3 built a system that works: clients send requests, servers answer them, and databases remember things. This part covers the three ideas that let that system stay fast and correct once it grows past one machine:
+Parts 1 to 3 built a working system. This part covers the three ideas that keep it fast and correct once it grows past one machine:
 
-1. **Caching**: keep a copy of popular data somewhere quicker to reach, so you do less slow work.
-2. **Asynchronous processing**: hand slow work to a queue and answer the user straight away, instead of making them wait.
-3. **Consistency in distributed systems**: once data lives on many machines, decide what "the current value" means and how the machines agree on it.
+1. **Caching**: keep a copy of popular data somewhere quicker to reach, to do less slow work.
+2. **Asynchronous processing**: hand slow work to a queue and answer the user straight away.
+3. **Consistency in distributed systems**: once data lives on many machines, decide what "the current value" means and how machines agree on it.
 
-Most of the vocabulary that makes system design sound hard (CAP, quorum, Raft, idempotency, saga, vector clock, Bloom filter, Snowflake ID) is here. Every term is explained from zero.
+Most of the vocabulary that makes system design sound hard (CAP, quorum, Raft, idempotency, saga, vector clock, Bloom filter, Snowflake ID) is here, each explained from zero.
 
 ## Caching basics
 
 ### What it is
 
-A **cache** is a small, fast store that keeps copies of data that is slow or expensive to get from its real home. The real home is called the **source of truth** or **origin**, usually a database or another service.
+A **cache** is a small, fast store keeping copies of data that is slow or expensive to get from its real home, the **source of truth** or **origin** (usually a database or another service) — like a chef's bowl of chopped onions by the stove instead of trips to the cold room: within reach, small, and slowly going stale.
 
-Analogy: a chef keeps a small bowl of chopped onions next to the stove instead of going to the cold room for one onion at a time. The bowl is the cache, the cold room is the source of truth. The bowl is within arm's reach but holds little, and what is in it slowly stops being fresh.
-
-Some words you will hear constantly:
-
-- **Cache hit**: the data you asked for was in the cache. Fast path.
-- **Cache miss**: it was not, so you go to the source of truth (slow path) and usually put the answer into the cache for next time.
-- **Hit ratio** (or hit rate): hits divided by total lookups. A hit ratio of 0.95 means 95 out of every 100 requests never touch the database.
-- **TTL (time to live)**: how long an entry may stay in the cache before it is treated as expired and dropped or refreshed.
-- **Stale data**: a cached copy that no longer matches the source of truth because the source changed after the copy was taken.
-- **Warm cache / cold cache**: a warm cache already holds the popular data. A cold cache (just started, or just emptied) misses on almost everything until it fills up.
+- **Cache hit**: the data was in the cache (fast path). **Cache miss**: it wasn't, so you go to the source of truth (slow path) and usually store the answer for next time.
+- **Hit ratio** (hit rate): hits ÷ total lookups; 0.95 means 95 of 100 requests never touch the database.
+- **TTL (time to live)**: how long an entry may stay before it is treated as expired and dropped or refreshed.
+- **Stale data**: a cached copy that no longer matches the source of truth because the source changed afterwards.
+- **Warm / cold cache**: a warm cache already holds the popular data; a cold one (just started or emptied) misses on almost everything until it fills.
 
 ### Why it matters
 
-Reading from memory is many times faster than asking a database across the network: a local in-memory lookup takes well under a microsecond, while even a quick indexed query takes about a millisecond. Typical numbers:
+Memory is many times faster than a database across the network:
 
 | Where the data is | Typical time to read a small item |
 |---|---|
@@ -4071,22 +3561,18 @@ Reading from memory is many times faster than asking a database across the netwo
 | Database query doing a big join or scan | 50 ms to seconds |
 | Call to a service in another continent | 70–200 ms |
 
-Caching gives you three wins:
+Three wins: **lower latency** (a 1 ms cache read instead of a 30 ms query); **less database load** (at 95% hits the database sees 5% of reads — the difference between one database and twenty); **lower cost** (memory reads are cheaper than recomputing or buying database capacity).
 
-1. **Lower latency** for the user: a 1 ms cache read instead of a 30 ms query.
-2. **Less load on the database**: with a 95% hit ratio the database sees only 5% of the read traffic, which can be the difference between needing one database and needing twenty.
-3. **Lower cost**: memory reads are cheaper than recomputing a page or paying for database capacity.
-
-The maths of hit ratio is worth remembering. Average read time = hit ratio x cache time + miss ratio x (cache time + database time). With a 1 ms cache, a 20 ms database and a 90% hit ratio the average is about 0.9 x 1 + 0.1 x 21 = 3 ms. Raise the hit ratio to 99% and it falls to about 1.2 ms. Watch the miss ratio, because that is what the database feels: moving from 90% to 99% hits takes misses from 10 in every 100 reads to 1, a tenfold drop in database reads.
+Hit-ratio maths: average read time = hit ratio × cache time + miss ratio × (cache time + database time). With a 1 ms cache, 20 ms database and 90% hits: 0.9 × 1 + 0.1 × 21 ≈ 3 ms; at 99%, ≈ 1.2 ms. Watch the miss ratio — that's what the database feels: 90% → 99% hits cuts misses from 10 per 100 reads to 1, a tenfold drop in database reads.
 
 ### How it works
 
-A cache is usually a **key-value store**: you look things up by a key such as `user:42` and get back a value such as the JSON of user 42's profile. The basic read path:
+A cache is usually a **key-value store**: look up `user:42`, get back user 42's profile JSON. Read path:
 
-1. The application builds a key from the request, for example `product:1001`.
-2. It asks the cache for that key.
-3. On a hit, it returns the cached value.
-4. On a miss, it reads from the database, stores the result in the cache with a TTL (say 5 minutes), and returns it.
+1. Build a key from the request (`product:1001`).
+2. Ask the cache.
+3. On a hit, return the value.
+4. On a miss, read the database, store the result with a TTL (say 5 minutes), return it.
 
 ```mermaid
 flowchart LR
@@ -4097,31 +3583,31 @@ flowchart LR
     A -->|"4. SET with TTL"| C
 ```
 
-Caches work because real traffic is **skewed**: a small fraction of items gets most of the requests (the most popular 20% of products might get 80% of the views). You only need to cache that small hot fraction to get a high hit ratio.
+Caches work because real traffic is **skewed**: a small fraction of items gets most requests (the top 20% of products might get 80% of views), so caching that hot fraction gives a high hit ratio.
 
 ### Trade-offs
 
-- **Speed vs freshness**: the longer you cache, the faster and cheaper, but the more likely users see stale data.
-- **Memory cost**: RAM costs much more per gigabyte than disk, so you cannot cache everything.
-- **Extra moving part**: the cache can fail, fill up, or disagree with the database. You now have two copies of the truth to keep in line.
-- **Cold-start risk**: if the cache is wiped, every request falls through to a database that was sized for 5% of the traffic.
+- **Speed vs freshness**: longer caching is faster and cheaper but more likely stale.
+- **Memory cost**: RAM costs far more per gigabyte than disk; you can't cache everything.
+- **Extra moving part**: the cache can fail, fill up, or disagree with the database — two copies of the truth to keep in line.
+- **Cold-start risk**: a wiped cache sends every request to a database sized for 5% of traffic.
 
 ### Common mistakes
 
-- Caching data that is rarely read twice (low hit ratio, wasted memory).
+- Caching data rarely read twice (low hit ratio, wasted memory).
 - Forgetting a TTL, so a wrong value lives forever.
-- Treating the cache as the source of truth. A cache may lose data at any time; the database must still have it.
-- Sizing the database only for the cache-miss traffic and then crashing when the cache restarts.
+- Treating the cache as the source of truth; it may lose data at any time.
+- Sizing the database only for miss traffic, then crashing when the cache restarts.
 
 ### TL;DR
 
-A cache is a fast copy of slow data. It wins on latency and database load, and the price is memory and the risk of serving stale data.
+A cache is a fast copy of slow data: it wins on latency and database load, at the price of memory and the risk of stale data.
 
 ## Where caches live
 
 ### What it is
 
-Caching is not one box in the diagram. Copies of data can be kept at every hop between the user and the database. The closer to the user, the faster the hit, but the harder it is to update or delete.
+Copies of data can be kept at every hop between user and database. The closer to the user, the faster the hit but the harder to update or delete.
 
 ```mermaid
 flowchart LR
@@ -4134,24 +3620,24 @@ flowchart LR
 
 ### Types
 
-**Client or browser cache.** The browser keeps copies of files (images, CSS, JavaScript, sometimes API responses) on the user's own device. The server controls this with HTTP headers: `Cache-Control: max-age=86400` means "you may reuse this for 86,400 seconds (one day) without asking me". An `ETag` header gives the file a version fingerprint so the browser can ask "has it changed?" and get a tiny `304 Not Modified` reply instead of the whole file. Mobile apps do the same thing with their own local storage. Fastest possible hit (no network at all), but you cannot reach into a user's device to delete a stale copy, so you rely on TTLs and on changing the file name when content changes (for example `app.3f9a1c.js`, called **cache busting**).
+**Client or browser cache.** Copies of files (images, CSS, JavaScript, sometimes API responses) on the user's device, controlled by HTTP headers: `Cache-Control: max-age=86400` ("reuse for one day without asking"); an `ETag` version fingerprint lets the browser ask "changed?" and get a tiny `304 Not Modified`. Mobile apps do the same with local storage. Fastest hit (no network), but you can't delete a stale copy on a user's device, so rely on TTLs and changing the file name when content changes (`app.3f9a1c.js` — **cache busting**).
 
-**CDN cache.** A **CDN (content delivery network)** is a network of servers placed in many cities (Part 2). Each edge server caches responses near users so a viewer in Sydney gets the image from Sydney, not from a server in Virginia. Great for static files and for public pages that are the same for everyone.
+**CDN cache.** Edge servers in many cities (Part 2) cache responses near users — great for static files and public pages identical for everyone.
 
-**Reverse proxy cache.** A **reverse proxy** is a server that sits in front of your app servers and forwards requests to them (Part 2). NGINX, Varnish and similar proxies can store whole HTTP responses and serve repeated requests without touching the app at all.
+**Reverse proxy cache.** NGINX, Varnish and similar proxies in front of app servers (Part 2) store whole HTTP responses and serve repeats without touching the app.
 
-**Application or in-process cache.** A plain in-memory map inside the application process itself (for example a Java Caffeine cache or a Python `functools.lru_cache`). Reads take nanoseconds because there is no network hop. Downsides: each app server has its own copy (ten servers means ten copies that can disagree), the memory is limited to that process, and the cache is lost every time the process restarts or is redeployed.
+**Application or in-process cache.** An in-memory map inside the app process (Java Caffeine, Python `functools.lru_cache`): nanosecond reads, no network hop. But each server has its own copy (ten servers, ten copies that can disagree), memory is limited to the process, and it's lost on every restart or deploy.
 
-**Distributed cache.** A separate cluster of cache servers shared by all app servers, reached over the network. The two famous ones:
+**Distributed cache.** A separate cluster shared by all app servers over the network:
 
-- **Memcached**: a simple, very fast, multi-threaded key-value cache holding plain strings or bytes. No persistence, no replication built in. Facebook ran one of the largest Memcached deployments in the world.
-- **Redis**: a key-value server with rich data types (strings, lists, hashes, sets, sorted sets, streams, HyperLogLog), optional saving to disk, replication and a cluster mode that splits keys across nodes. Used for caching and also for leaderboards, rate limiters, session stores and simple queues. (Valkey is a community fork of Redis created in 2024 when Redis changed its licence.)
+- **Memcached**: simple, very fast, multi-threaded key-value cache of plain strings/bytes; no persistence or built-in replication. Facebook ran one of the world's largest deployments.
+- **Redis**: key-value server with rich data types (strings, lists, hashes, sets, sorted sets, streams, HyperLogLog), optional persistence, replication and a cluster mode splitting keys across nodes. Also used for leaderboards, rate limiters, session stores, simple queues. (Valkey is a community fork created in 2024 when Redis changed its licence.)
 
-All app servers see the same copy, it survives app restarts, and it can hold hundreds of gigabytes across nodes. The cost is a network hop (well under a millisecond inside a data centre) and another system to run.
+Shared by all servers, survives app restarts, holds hundreds of gigabytes across nodes — at the cost of a network hop (well under a millisecond in a data centre) and another system to run.
 
-**Database buffer cache.** Databases keep recently used disk pages in RAM themselves: PostgreSQL's **shared buffers**, MySQL InnoDB's **buffer pool**. You get this for free. It is why the second run of the same query is often much faster than the first.
+**Database buffer cache.** Databases keep recently used pages in RAM — PostgreSQL's **shared buffers**, MySQL InnoDB's **buffer pool** — for free; why a query's second run is often much faster.
 
-Other caches you may meet: **DNS caches** (your laptop and resolver cache name lookups for their TTL, Part 2), CPU caches (L1/L2/L3, inside the processor), and the operating system **page cache** that keeps recently read file data in spare RAM.
+Others: **DNS caches** (laptop and resolver cache lookups for their TTL, Part 2), CPU caches (L1/L2/L3), and the OS **page cache** of recently read file data.
 
 ### Trade-offs
 
@@ -4165,33 +3651,33 @@ Other caches you may meet: **DNS caches** (your laptop and resolver cache name l
 
 ### Real-world examples
 
-- Facebook described in its 2013 paper "Scaling Memcache at Facebook" a Memcached layer handling billions of requests per second in front of MySQL.
+- Facebook's 2013 paper "Scaling Memcache at Facebook" describes a Memcached layer handling billions of requests per second in front of MySQL.
 - Twitter (X) and GitHub use Redis and Memcached heavily for timelines, sessions and counters.
-- Netflix runs EVCache, its own distributed cache built on Memcached, replicated across AWS regions.
+- Netflix runs EVCache, its own Memcached-based distributed cache replicated across AWS regions.
 
 ### In the interview
 
 **Q:** Where would you put a cache in this design?
 
-**A:** Name the layers from outside in: browser and CDN for static assets and public pages, a distributed cache like Redis in front of the database for hot reads such as user profiles, and rely on the database's own buffer cache. Explain what you cache, the key format and the TTL.
+**A:** Outside in: browser and CDN for static assets and public pages, a distributed cache like Redis in front of the database for hot reads such as profiles, and the database's own buffer cache. State what you cache, the key format and the TTL.
 
 **Q:** In-process cache or Redis?
 
-**A:** In-process is fastest but each server has its own copy, so it suits small, rarely changing data such as config or feature flags. Redis is shared, larger and survives deploys, so it suits user data and anything that must look the same from every server.
+**A:** In-process is fastest but per-server, so it suits small, rarely changing data (config, feature flags). Redis is shared, larger and survives deploys, so it suits user data and anything that must look the same from every server.
 
 ### TL;DR
 
-Caches exist at every hop: browser, CDN, reverse proxy, app memory, a shared cache like Redis, and inside the database. Closer to the user is faster but harder to invalidate.
+Caches exist at every hop: browser, CDN, reverse proxy, app memory, a shared cache like Redis, the database. Closer to the user is faster but harder to invalidate.
 
 ## Caching strategies
 
 ### What it is
 
-A **caching strategy** (or caching pattern) is the rule for who reads and writes the cache and in what order relative to the database. The choice decides how stale data can get and what happens when something fails half-way.
+A **caching strategy** (pattern) is the rule for who reads and writes the cache, and in what order relative to the database. It decides how stale data can get and what happens on a half-way failure.
 
 ### Types
 
-**Cache-aside (lazy loading).** The application talks to both the cache and the database. On read: check the cache, on a miss read the database and fill the cache. On write: update the database, then **delete** (invalidate) the cache key so the next read reloads it. This is the most common pattern. Only data that is actually requested gets cached, and if the cache dies the app still works (slower).
+**Cache-aside (lazy loading).** The app talks to both cache and database. Read: check the cache; on a miss read the database and fill the cache. Write: update the database, then **delete** (invalidate) the key so the next read reloads it. The most common pattern: only requested data is cached, and if the cache dies the app still works (slower).
 
 ```mermaid
 sequenceDiagram
@@ -4206,17 +3692,17 @@ sequenceDiagram
     Note over App,DB: On update - write DB first, then DELETE user:42
 ```
 
-Why delete instead of updating the cache on writes? If two writers race, "update cache" can leave the older value in the cache last. Deleting means the next reader fetches the fresh row. A small race still exists (a slow reader can put an old value back just after the delete), which is why you keep a TTL as a safety net.
+Why delete rather than update the cache on writes? Racing writers can leave the older value cached last with "update cache"; deleting makes the next reader fetch the fresh row. A small race remains (a slow reader can put an old value back just after the delete), so keep a TTL as a safety net.
 
-**Read-through.** Like cache-aside, but the cache itself loads from the database on a miss. The application only ever talks to the cache. Simpler application code, but you need a cache library or product that knows how to call your database (for example a loader function in Caffeine, or Amazon DynamoDB Accelerator, DAX, in front of DynamoDB).
+**Read-through.** Like cache-aside, but the cache itself loads from the database on a miss; the app only talks to the cache. Simpler app code, but needs a cache library or product that can call your database (a loader function in Caffeine; Amazon DynamoDB Accelerator, DAX, in front of DynamoDB).
 
-**Write-through.** Every write goes to the cache and the cache synchronously writes it to the database before confirming. Cache and database stay in step, and reads right after a write are hits. Cost: every write pays for two writes, and you fill the cache with data that may never be read.
+**Write-through.** Every write goes to the cache, which synchronously writes the database before confirming. Cache and database stay in step and reads after a write hit; but every write pays twice, and the cache fills with data that may never be read.
 
-**Write-behind (write-back).** The write goes to the cache only, the user gets "done" immediately, and the cache flushes changes to the database later, often in batches (for example every second). Very fast writes and fewer database writes (ten updates to the same counter can become one). Danger: if the cache node crashes before flushing, those writes are lost. Used for things like view counters where losing a few is acceptable. CPUs and disk controllers use write-back caches internally too.
+**Write-behind (write-back).** The write goes only to the cache, the user gets "done" immediately, and the cache flushes to the database later, often in batches (say every second). Very fast, fewer database writes (ten updates to one counter become one) — but a cache crash before flushing loses those writes. For view counters and the like, where losing a few is acceptable. CPUs and disk controllers use write-back caches internally too.
 
-**Write-around.** Writes go straight to the database and skip the cache entirely. The cache is filled only by reads (usually combined with cache-aside). Good when written data is rarely read soon after, such as logs or bulk imports, so the cache isn't flooded with cold data.
+**Write-around.** Writes go straight to the database, skipping the cache, which is filled only by reads (usually with cache-aside). Good when written data is rarely read soon after (logs, bulk imports), so the cache isn't flooded with cold data.
 
-**Refresh-ahead.** The cache reloads popular entries **before** they expire. If an item has a 60-second TTL and is read at second 50, the cache returns the current value and refreshes it in the background. Users never wait on a miss for hot keys. Cost: you may refresh items nobody will ask for again.
+**Refresh-ahead.** The cache reloads popular entries **before** they expire: an item with a 60-second TTL read at second 50 is returned and refreshed in the background, so users never wait on a hot-key miss. Cost: refreshing items nobody asks for again.
 
 | Strategy | Who writes the DB | Read after write | Main risk |
 |---|---|---|---|
@@ -4229,81 +3715,77 @@ Why delete instead of updating the cache on writes? If two writers race, "update
 
 ### Trade-offs
 
-Read-heavy, tolerant of a few seconds of staleness (product pages, profiles): cache-aside with a TTL. Must read your own write immediately: write-through. Extremely write-heavy and loss-tolerant (likes, view counts): write-behind. Data written once and rarely read: write-around.
+Read-heavy and tolerant of seconds of staleness (product pages, profiles): cache-aside with TTL. Must read your own write immediately: write-through. Extremely write-heavy and loss-tolerant (likes, view counts): write-behind. Written once, rarely read: write-around.
 
 ### Common mistakes
 
-- Updating the cache and the database in two steps with no TTL, so a failure between the steps leaves them different forever.
-- Using write-behind for money or orders, where a lost write is unacceptable.
-- Caching `null` results never, so lookups for things that don't exist always hit the database (an attacker can exploit this by requesting random IDs; caching a short-lived "not found" marker, called **negative caching**, fixes it).
+- Updating cache and database in two steps with no TTL, so a failure between them leaves them different forever.
+- Write-behind for money or orders, where a lost write is unacceptable.
+- Never caching `null` results, so lookups for non-existent things always hit the database (exploitable with random IDs). Caching a short-lived "not found" marker — **negative caching** — fixes it.
 
 ### In the interview
 
-**Q:** Which caching pattern would you use for user profiles?
+**Q:** Which caching pattern for user profiles?
 
-**A:** Cache-aside: read from Redis, on miss load from the database and set a TTL of a few minutes. On profile update, write to the database then delete the key. It's simple, survives cache failure, and only caches what's read.
+**A:** Cache-aside: read Redis, on miss load from the database and set a TTL of a few minutes; on update write the database then delete the key. Simple, survives cache failure, caches only what's read.
 
 **Q:** When is write-behind acceptable?
 
-**A:** When speed matters more than losing a few recent writes, such as counters or analytics events. Never for payments or anything a user was told is saved.
+**A:** When speed matters more than losing a few recent writes (counters, analytics events). Never for payments or anything a user was told is saved.
 
 ### TL;DR
 
-Cache-aside is the default: app reads cache, falls back to the database, and deletes the key on writes. Write-through trades write speed for freshness, write-behind trades safety for speed.
+Cache-aside is the default: read the cache, fall back to the database, delete the key on writes. Write-through trades write speed for freshness; write-behind trades safety for speed.
 
 ## Eviction policies
 
 ### What it is
 
-A cache has limited memory. When it is full and a new item arrives, it must throw something out. The rule that picks the victim is the **eviction policy**. Eviction (removing because the cache is full) is different from **expiration** (removing because the TTL ran out), though many caches do both.
-
-Analogy: a small bookshelf next to your bed. When it's full and you buy a new book, you move one to the attic. Which one? The one you haven't touched in longest (LRU), the one you read least often (LFU), or the one that's been there longest (FIFO).
+When a full cache gets a new item it must throw one out; the **eviction policy** picks the victim. Eviction (removal because the cache is full) differs from **expiration** (removal because the TTL ran out); many caches do both.
 
 ### Types
 
-- **LRU (least recently used)**: evict the item that has gone longest without being read. Implemented with a hash map plus a doubly linked list so every read moves the item to the front in O(1) time. The default choice almost everywhere because recent use is a good predictor of near-future use.
-- **LFU (least frequently used)**: evict the item with the fewest reads. Better when some items are steadily popular for a long time. Weakness: an item that was hugely popular yesterday keeps a high count and squats in the cache, so real LFU implementations decay counts over time.
-- **FIFO (first in, first out)**: evict the oldest inserted item regardless of use. Simple, but can throw out a hot item just because it arrived early.
-- **TTL-based**: items leave when their time to live expires. Not strictly a "who to evict when full" policy, but it bounds staleness and frees memory.
-- **Random**: evict a random item. Surprisingly decent and very cheap.
-- Others you may meet: **MRU** (most recently used, useful for some scan patterns), and modern designs like **W-TinyLFU** (used by the Java Caffeine library), which combine recency and frequency.
+- **LRU (least recently used)**: evict the item longest without a read. A hash map plus doubly linked list moves each read item to the front in O(1). The default almost everywhere, since recent use predicts near-future use.
+- **LFU (least frequently used)**: evict the item with fewest reads; better for steadily popular items. Weakness: yesterday's hit keeps a high count and squats, so real LFU decays counts over time.
+- **FIFO (first in, first out)**: evict the oldest inserted item regardless of use; simple, but can evict a hot item that arrived early.
+- **TTL-based**: items leave when their TTL expires — not strictly "who to evict when full", but bounds staleness and frees memory.
+- **Random**: surprisingly decent and very cheap.
+- Others: **MRU** (most recently used, useful for some scan patterns) and modern designs like **W-TinyLFU** (Java Caffeine), combining recency and frequency.
 
-Redis lets you choose with the `maxmemory-policy` setting, for example `allkeys-lru`, `allkeys-lfu`, `volatile-ttl` or `noeviction` (refuse new writes when full). Redis uses an approximate LRU: it samples a handful of keys and evicts the best candidate among them, which saves memory compared with a full linked list.
+Redis's `maxmemory-policy` chooses, e.g. `allkeys-lru`, `allkeys-lfu`, `volatile-ttl` or `noeviction` (refuse new writes when full). Redis uses approximate LRU: it samples a handful of keys and evicts the best candidate, saving the memory of a full linked list.
 
 ### Common mistakes
 
-- Using `noeviction` for a cache, so it starts rejecting writes when full.
-- One huge scan (like a nightly report reading every row) flushing all the hot items out of an LRU cache. LFU or scan-resistant policies avoid this.
+- `noeviction` on a cache, so it rejects writes when full.
+- One huge scan (a nightly report reading every row) flushing all hot items out of an LRU cache; LFU or scan-resistant policies avoid this.
 
 ### TL;DR
 
-When a cache is full it evicts by a rule: LRU (least recently used) is the safe default, LFU for steady favourites, FIFO and random for simplicity, TTL to bound staleness.
+A full cache evicts by rule: LRU is the safe default, LFU for steady favourites, FIFO and random for simplicity, TTL to bound staleness.
 
 ## Cache invalidation, stale data and stampedes
 
 ### What it is
 
-**Cache invalidation** means removing or updating a cached copy when the source of truth changes. There is a well-known joke, credited to Phil Karlton, that "there are only two hard things in computer science: cache invalidation and naming things". It is hard because the cache and the database are two separate systems and there is no single moment where both change together.
+**Cache invalidation** is removing or updating a cached copy when the source of truth changes. Phil Karlton's joke: "there are only two hard things in computer science: cache invalidation and naming things". It is hard because cache and database are separate systems with no single moment where both change.
 
 ### How it works
 
-Ways to keep caches fresh, from simplest to most precise:
+From simplest to most precise:
 
-1. **TTL only.** Accept that data may be up to TTL seconds old. A 60-second TTL on a product price means a price change can take up to a minute to show.
-2. **Delete on write.** After writing to the database, the app deletes the cache key (cache-aside).
-3. **Event-driven invalidation.** The database publishes a change event (for example through **change data capture, CDC**, which reads the database's own change log) and a consumer deletes or updates the affected cache keys. Works even when many services write to the database.
-4. **Versioned keys.** Put a version in the key, such as `user:42:v7`. A write bumps the version to `v8`, so readers look for a new key and the old one simply ages out. No delete needed.
-5. **CDN purge.** CDNs offer an API to purge a URL or a tag; it usually propagates worldwide in seconds.
+1. **TTL only.** Accept data up to TTL seconds old (a 60-second TTL on a price means a change may take a minute to show).
+2. **Delete on write.** After writing the database, delete the key (cache-aside).
+3. **Event-driven invalidation.** The database publishes change events (e.g. **change data capture, CDC**, reading the database's own change log) and a consumer deletes or updates affected keys — works even when many services write.
+4. **Versioned keys.** Put a version in the key (`user:42:v7`); a write bumps it to `v8`, readers look for the new key and the old one ages out. No delete needed.
+5. **CDN purge.** An API purges a URL or tag, usually worldwide in seconds.
 
 ### Stale data
 
-Stale reads happen because of TTLs, lost delete messages, races between readers and writers, and replication lag (the cache was filled from a replica that was behind). Decide per feature how stale is acceptable: a follower count can be minutes old, a bank balance on the transfer screen cannot.
+Stale reads come from TTLs, lost delete messages, reader/writer races, and replication lag (the cache filled from a lagging replica). Decide per feature how stale is acceptable: a follower count can be minutes old; a bank balance on the transfer screen cannot.
 
 ### The thundering herd / cache stampede
 
-A **cache stampede** (also called **thundering herd** or **dog-piling**) happens when a very popular key expires or is deleted and thousands of requests miss at the same instant. They all query the database for the same value at once, the database slows down or falls over, and since nothing has refilled the cache yet, more requests pile in.
-
-Example: the home page key gets 10,000 reads per second. It expires. In the 200 ms it takes to rebuild, 2,000 requests all hit the database with the same expensive query.
+A **cache stampede** (**thundering herd**, **dog-piling**): a very popular key expires or is deleted and thousands of requests miss at once, all querying the database for the same value; the database slows or falls over, nothing refills the cache, and more requests pile in. E.g. a home-page key read 10,000 times per second expires; in the 200 ms rebuild, 2,000 requests hit the database with the same expensive query.
 
 ```mermaid
 flowchart LR
@@ -4315,34 +3797,34 @@ flowchart LR
 
 ### Fixes for stampedes
 
-- **Request coalescing / single flight**: only one request per key is allowed to rebuild. Others wait for its result (inside one process) or briefly retry the cache. CDNs such as Fastly and Cloudflare do the same at the edge and call it **request collapsing**.
-- **Lock or lease**: the first miss takes a short lock in the cache (for example Redis `SET key:lock 1 NX PX 5000`, meaning "set only if not present, expire in 5 s"). Whoever gets the lock rebuilds, the rest serve the old value or wait. Facebook's Memcache paper calls this a **lease**.
-- **Serve stale while revalidating**: keep the expired value and return it while one background job refreshes it. HTTP has a header for exactly this: `Cache-Control: stale-while-revalidate=30`.
-- **Early or probabilistic refresh**: each reader, as expiry approaches, has a small and growing chance to refresh early, so one request refreshes before the deadline instead of everyone at the deadline.
-- **TTL jitter**: add randomness to TTLs (300 s plus or minus 30 s) so keys written together don't all expire together. This also prevents a **cache avalanche**, where a mass expiry or a cache restart sends everything to the database at once.
-- **Warm-up**: pre-load hot keys after a restart or deploy before sending real traffic.
+- **Request coalescing / single flight**: only one request per key rebuilds; others wait for its result (in one process) or briefly retry the cache. CDNs such as Fastly and Cloudflare call it **request collapsing**.
+- **Lock or lease**: the first miss takes a short lock (Redis `SET key:lock 1 NX PX 5000` — set only if absent, expire in 5 s); the winner rebuilds, others serve the old value or wait. Facebook's Memcache paper calls it a **lease**.
+- **Serve stale while revalidating**: return the expired value while one background job refreshes it; HTTP has `Cache-Control: stale-while-revalidate=30`.
+- **Early or probabilistic refresh**: as expiry approaches each reader has a small, growing chance to refresh early, so one request refreshes before the deadline instead of everyone at it.
+- **TTL jitter**: randomise TTLs (300 s ± 30 s) so keys written together don't expire together. Also prevents a **cache avalanche**, where a mass expiry or cache restart sends everything to the database at once.
+- **Warm-up**: pre-load hot keys after a restart or deploy before real traffic.
 
-Two related problems: **cache penetration** (requests for keys that don't exist anywhere, so every one hits the database; fixed with negative caching or a Bloom filter, see later) and **hot key** (one key so popular that the single cache node holding it is overloaded; fixed by replicating that key to several nodes or caching it in-process too).
+Related: **cache penetration** (requests for keys that exist nowhere, each hitting the database; fixed by negative caching or a Bloom filter, later) and **hot key** (one key overloading the single cache node holding it; fixed by replicating it to several nodes or caching it in-process too).
 
 ### Common mistakes
 
-- Setting the same fixed TTL on millions of keys loaded at the same moment.
-- Letting every miss rebuild independently with no coalescing.
-- Assuming "delete after write" is atomic. If the delete fails, the stale value lives until TTL, so always have a TTL.
+- The same fixed TTL on millions of keys loaded at the same moment.
+- Every miss rebuilding independently with no coalescing.
+- Assuming "delete after write" is atomic: if the delete fails, the stale value lives until TTL — so always have a TTL.
 
 ### In the interview
 
-**Q:** A celebrity's profile key expires and the database spikes. What happened and how do you fix it?
+**Q:** A celebrity's profile key expires and the database spikes. What happened, and the fix?
 
-**A:** A cache stampede: thousands of concurrent misses on one hot key all query the database. Fix with single-flight or a short lock so only one request rebuilds, serve the stale value meanwhile, refresh hot keys early, and add jitter to TTLs.
+**A:** A cache stampede: thousands of concurrent misses on one hot key all query the database. Use single-flight or a short lock so one request rebuilds, serve the stale value meanwhile, refresh hot keys early, and jitter TTLs.
 
 **Q:** How do you keep a cache consistent with the database?
 
-**A:** You can't make it perfectly consistent cheaply. Use cache-aside with delete-on-write plus a TTL as a safety net. If many services write, invalidate from a change-data-capture stream. Pick the TTL per data type based on how much staleness users can tolerate.
+**A:** Not perfectly, cheaply. Cache-aside with delete-on-write plus a TTL safety net; if many services write, invalidate from a CDC stream; choose the TTL per data type by how much staleness users tolerate.
 
 ### TL;DR
 
-Invalidation is the hard part of caching: use delete-on-write plus TTLs, and protect hot keys from stampedes with locks, stale-while-revalidate, early refresh and TTL jitter.
+Invalidation is the hard part of caching: delete-on-write plus TTLs, and protect hot keys from stampedes with locks, stale-while-revalidate, early refresh and TTL jitter.
 
 ## Message queues
 
@@ -4350,31 +3832,31 @@ Invalidation is the hard part of caching: use delete-on-write plus TTLs, and pro
 
 A **message queue** is a middleman that holds messages (small pieces of data describing work or an event) until another program is ready to handle them. Three roles:
 
-- **Producer** (or publisher): the program that sends a message, for example the web server saying "send welcome email to user 42".
-- **Broker**: the queue server that stores messages safely until they are taken. Examples: RabbitMQ, Amazon SQS, Apache Kafka.
-- **Consumer** (or worker, subscriber): the program that takes messages and does the work, for example an email worker.
+- **Producer** (publisher): sends a message ("send welcome email to user 42").
+- **Broker**: the queue server storing messages safely until taken — RabbitMQ, Amazon SQS, Apache Kafka.
+- **Consumer** (worker, subscriber): takes messages and does the work (an email worker).
 
-Analogy: a restaurant's order rail. The waiter (producer) clips an order ticket to the rail (broker) and goes back to the customers. The cooks (consumers) take tickets when they have a free hand. The waiter never waits for the food to be cooked, and if the kitchen is busy the tickets just queue up.
+Like a restaurant's order rail: the waiter clips a ticket and returns to customers; cooks take tickets when free; tickets queue up when the kitchen is busy.
 
 ### Why it matters
 
-Without a queue, the web server would call the email service directly and the user would wait for the email to send. Queues give you:
+Without a queue the user waits for the email to send. Queues give:
 
-1. **Faster responses**: the user gets "signed up!" in 50 ms while the slow work (sending email, resizing a photo, charging a card, generating a PDF) happens in the background. This is **asynchronous** processing: the caller doesn't wait for the result.
-2. **Decoupling**: the producer doesn't need to know who consumes, how many consumers there are, or whether they are up right now. You can add a new consumer (say, analytics) without touching the producer.
-3. **Absorbing spikes (load levelling)**: if 10,000 orders arrive in one minute but workers can handle 2,000 a minute, the queue holds the backlog and workers catch up over five minutes instead of the system falling over.
-4. **Reliability**: if a worker crashes mid-task, the message is still in the broker and another worker picks it up.
-5. **Independent scaling**: add more workers when the queue grows, remove them when it shrinks.
+1. **Faster responses**: "signed up!" in 50 ms while slow work (email, photo resizing, card charging, PDF generation) runs in the background — **asynchronous** processing, the caller not waiting for the result.
+2. **Decoupling**: the producer needn't know who consumes, how many, or whether they're up; add a consumer (analytics) without touching the producer.
+3. **Absorbing spikes (load levelling)**: 10,000 orders in a minute with capacity for 2,000 a minute — the queue holds the backlog and workers catch up in five minutes instead of falling over.
+4. **Reliability**: if a worker crashes mid-task, the message is still in the broker for another worker.
+5. **Independent scaling**: add workers as the queue grows, remove them as it shrinks.
 
 ### How it works
 
-A typical lifecycle in a work queue (like SQS or RabbitMQ):
+A work-queue lifecycle (SQS, RabbitMQ):
 
-1. The producer sends the message. The broker writes it to disk (and often to replicas) and replies "accepted".
-2. A consumer asks for messages and receives one. The broker hides it from other consumers for a while (SQS calls this the **visibility timeout**, 30 seconds by default).
+1. The producer sends; the broker writes to disk (often to replicas) and replies "accepted".
+2. A consumer receives a message, which the broker hides from others for a while (SQS's **visibility timeout**, 30 s by default).
 3. The consumer does the work.
-4. The consumer sends an **acknowledgement (ack)**: "done, delete it".
-5. If no ack arrives in time (the consumer crashed or was too slow), the broker makes the message visible again and another consumer gets it. This is why messages can be delivered more than once, discussed below.
+4. It sends an **acknowledgement (ack)**: "done, delete it".
+5. With no ack in time (crash or too slow), the message becomes visible again for another consumer — why messages can be delivered more than once (below).
 
 ```mermaid
 flowchart LR
@@ -4387,9 +3869,9 @@ flowchart LR
 
 ### Types
 
-**Point-to-point (work queue).** Each message is processed by exactly one consumer out of many. Workers compete for messages (the **competing consumers** pattern). Used for jobs: "resize this image" should happen once, not once per worker.
+**Point-to-point (work queue).** Each message goes to exactly one of many consumers, which compete for messages (**competing consumers** pattern) — for jobs like "resize this image" that must happen once.
 
-**Publish/subscribe (pub/sub).** A message is published to a **topic** (a named channel, like "order-placed") and **every** subscriber gets its own copy. The order service publishes "order 9 placed" once, and the email service, the warehouse service and the analytics service each receive it. Used for events that many parts of the system care about.
+**Publish/subscribe (pub/sub).** A message published to a **topic** (a named channel, like "order-placed") gives **every** subscriber its own copy: "order 9 placed" reaches email, warehouse and analytics services. For events many parts of the system care about.
 
 ```mermaid
 flowchart LR
@@ -4399,45 +3881,43 @@ flowchart LR
     T --> A["Analytics service"]
 ```
 
-Many systems combine both: a topic fans out to several queues, and each queue has competing workers (for example Amazon SNS topic feeding several SQS queues, or a RabbitMQ fanout exchange feeding several queues).
+Often combined: a topic fans out to several queues, each with competing workers (an Amazon SNS topic feeding several SQS queues; a RabbitMQ fanout exchange feeding several queues).
 
 ### Trade-offs
 
-- You gain resilience and speed but lose the immediate answer: the user can't be told "email sent", only "email will be sent".
-- Debugging is harder because work happens later, somewhere else. You need tracing and monitoring of **queue depth** (how many messages are waiting) and **consumer lag** (how far behind consumers are).
-- Messages may arrive twice or out of order (see delivery guarantees), so consumers must be written carefully.
+- Resilience and speed, but no immediate answer: "email will be sent", not "email sent".
+- Harder debugging, as work happens later elsewhere: you need tracing and monitoring of **queue depth** (messages waiting) and **consumer lag** (how far behind consumers are).
+- Messages may arrive twice or out of order (delivery guarantees), so consumers need care.
 - The broker is another system to run and size.
 
 ### Common mistakes
 
-- Using a queue for something the user must see immediately (like "is my password correct?").
+- A queue for something the user must see immediately ("is my password correct?").
 - Not monitoring queue depth, so a dead worker goes unnoticed while millions of messages pile up.
-- Putting huge payloads (videos) in messages. Store the file in object storage and send its URL in the message instead (the **claim check** pattern).
+- Huge payloads (videos) in messages. Store the file in object storage and send its URL — the **claim check** pattern.
 
 ### TL;DR
 
-A message queue lets producers hand work to consumers through a broker, so slow tasks run in the background, spikes are absorbed and services are decoupled. Point-to-point gives each message to one worker, pub/sub gives every subscriber a copy.
+A message queue lets producers hand work to consumers through a broker: slow tasks run in the background, spikes are absorbed, services decoupled. Point-to-point gives each message to one worker; pub/sub gives every subscriber a copy.
 
 ## Event streaming: topics, partitions, consumer groups and offsets
 
 ### What it is
 
-Classic queues delete a message once it is acknowledged. An **event streaming platform** (also called a **log-based broker**) such as **Apache Kafka** instead keeps every message in an append-only **log** (a file you only add to the end of) for a set retention period (Kafka's default is 7 days), whether or not anyone has read it. Consumers just remember how far they have read. Many independent consumers can read the same log, and a consumer can rewind and re-read history.
-
-Analogy: a classic queue is a to-do pile where you throw away each note once it's done. A log is a newspaper archive: every reader keeps a bookmark, the papers stay on the shelf, and a new reader can start from last week's issue.
+Classic queues delete a message once acknowledged. An **event streaming platform** (**log-based broker**) such as **Apache Kafka** keeps every message in an append-only **log** for a retention period (Kafka's default 7 days), read or not. Consumers just remember how far they've read, so many independent consumers can read the same log and any can rewind and re-read history — a newspaper archive with a bookmark per reader, rather than a to-do pile thrown away as you go.
 
 ### How it works
 
-Kafka vocabulary, one term at a time:
+Kafka vocabulary:
 
 - **Topic**: a named stream of events, such as `payments`.
-- **Partition**: a topic is split into partitions, each an ordered log stored on one broker (with copies on others for safety). Partitions are how Kafka scales: a topic with 12 partitions can be written and read by 12 machines in parallel.
-- **Key**: each message can carry a key, such as a user ID. Kafka hashes the key to choose the partition, so all events for user 42 always land in the same partition and stay in order.
-- **Offset**: the position number of a message within a partition: 0, 1, 2, ... It never changes. Ordering is guaranteed only **within** one partition, not across the whole topic.
-- **Consumer group**: a set of consumers sharing the work for one application. Kafka assigns each partition to exactly one consumer in the group. With 12 partitions and 4 consumers, each consumer reads 3 partitions. A second group (say, analytics) gets its own full copy of the stream independently.
-- **Committed offset**: each group periodically records "for partition 3 I have processed up to offset 1,500". After a crash, the replacement consumer resumes from the committed offset.
-- **Rebalance**: when a consumer joins or leaves the group, partitions are reassigned.
-- **Consumer lag**: newest offset minus committed offset, the main health metric.
+- **Partition**: a topic is split into partitions, each an ordered log on one broker (copied to others for safety). Partitions are how Kafka scales: 12 partitions can be written and read by 12 machines in parallel.
+- **Key**: a message's key (such as a user ID) is hashed to choose the partition, so all of user 42's events land in one partition, in order.
+- **Offset**: a message's fixed position number within a partition: 0, 1, 2… Ordering is guaranteed only **within** a partition, not across the topic.
+- **Consumer group**: consumers sharing the work for one application; each partition goes to exactly one consumer in the group (12 partitions, 4 consumers → 3 each). Another group (analytics) independently gets its own full copy of the stream.
+- **Committed offset**: each group periodically records "partition 3 processed up to offset 1,500"; after a crash, the replacement resumes from there.
+- **Rebalance**: partitions are reassigned when a consumer joins or leaves.
+- **Consumer lag**: newest offset minus committed offset — the main health metric.
 
 ```mermaid
 flowchart LR
@@ -4450,7 +3930,7 @@ flowchart LR
     P0 --> D1["Group B - one consumer reads all"]
 ```
 
-Note that adding more consumers than partitions doesn't help: extra consumers sit idle. Choose the partition count with future parallelism in mind.
+More consumers than partitions doesn't help — extras sit idle — so choose the partition count with future parallelism in mind.
 
 ### Types
 
@@ -4462,35 +3942,35 @@ Note that adding more consumers than partitions doesn't help: extra consumers si
 | Ordering | weak (FIFO queues exist) | strict per partition |
 | Best for | background jobs, task distribution | event pipelines, analytics, CDC, replay |
 
-**RabbitMQ** is a traditional broker with flexible routing: producers send to an **exchange**, which routes to queues by rules (direct, fanout, topic patterns). **Amazon SQS** is a fully managed queue: standard queues give at-least-once delivery and best-effort ordering, FIFO queues add strict ordering and de-duplication. **Kafka** was created at LinkedIn and is now an Apache project; it now runs its own Raft-based metadata quorum (KRaft) instead of ZooKeeper, and Kafka 4.0 (2025) removed ZooKeeper support entirely. **Amazon Kinesis**, **Apache Pulsar** and **Redpanda** are similar streaming systems.
+**RabbitMQ**: a traditional broker with flexible routing — producers send to an **exchange**, which routes to queues by rules (direct, fanout, topic patterns). **Amazon SQS**: fully managed; standard queues give at-least-once delivery and best-effort ordering, FIFO queues add strict ordering and de-duplication. **Kafka**: created at LinkedIn, now Apache; runs its own Raft-based metadata quorum (KRaft) instead of ZooKeeper, and Kafka 4.0 (2025) removed ZooKeeper support entirely. **Amazon Kinesis**, **Apache Pulsar** and **Redpanda** are similar streaming systems.
 
 ### In the interview
 
 **Q:** Kafka or RabbitMQ/SQS?
 
-**A:** For background jobs where each task runs once and is then forgotten, a queue like SQS or RabbitMQ is simpler. For a high-volume stream of events that several services must read independently, need to replay, or need ordered per key, choose Kafka.
+**A:** Background jobs that run once and are forgotten: a queue like SQS or RabbitMQ is simpler. A high-volume event stream that several services read independently, replay, or need ordered per key: Kafka.
 
 **Q:** How do you keep all events for one order in order?
 
-**A:** Use the order ID as the message key, so they all go to the same partition, which is strictly ordered, and have one consumer per partition.
+**A:** Use the order ID as the message key, so they share a strictly ordered partition, with one consumer per partition.
 
 ### TL;DR
 
-Kafka-style streams keep an ordered, replayable log split into partitions. Consumer groups share partitions and track their position with offsets. Ordering holds only within a partition.
+Kafka-style streams keep an ordered, replayable log split into partitions; consumer groups share partitions and track position with offsets. Ordering holds only within a partition.
 
 ## Delivery guarantees, idempotency and retries
 
 ### What it is
 
-Networks drop packets and machines crash, so a broker can never be sure a message was processed exactly once. A **delivery guarantee** states what the system promises:
+Networks drop packets and machines crash, so a broker can never be sure a message was processed exactly once. A **delivery guarantee** states the promise:
 
-- **At-most-once**: each message is delivered zero or one times. If anything fails, it is lost, never repeated. Done by acknowledging (or committing the offset) **before** processing. Fine for metrics where a lost data point doesn't matter.
-- **At-least-once**: each message is delivered one or more times. Never lost, but may be repeated. Done by acknowledging **after** processing: if the consumer crashes after doing the work but before the ack, the message comes back and is processed again. This is the default for most systems.
-- **Exactly-once**: each message affects the result exactly one time. True exactly-once **delivery** over an unreliable network is impossible in general. What systems offer is **exactly-once processing** or **effectively-once**: messages may be delivered more than once, but duplicates are detected and ignored, so the outcome is as if each was processed once.
+- **At-most-once**: delivered zero or one times — lost on failure, never repeated. Acknowledge (or commit the offset) **before** processing. Fine for metrics where a lost point doesn't matter.
+- **At-least-once**: delivered one or more times — never lost, maybe repeated. Acknowledge **after** processing: a crash after the work but before the ack brings the message back. The default for most systems.
+- **Exactly-once**: each message affects the result exactly once. True exactly-once **delivery** over an unreliable network is impossible in general; systems offer **exactly-once processing** (**effectively-once**): duplicates may be delivered but are detected and ignored.
 
 ### How it works
 
-Why duplicates are unavoidable with at-least-once:
+Why at-least-once means duplicates:
 
 ```mermaid
 sequenceDiagram
@@ -4505,30 +3985,28 @@ sequenceDiagram
     Worker->>DB: charge 20 dollars again
 ```
 
-The fix is to make the consumer **idempotent**.
+The fix is an **idempotent** consumer. **Idempotency**: doing an operation twice has the same effect as once. "Set balance to 100" is idempotent, "add 20" is not; "delete order 9" is, "create a new order" is not.
 
-**Idempotency** means doing an operation twice has the same effect as doing it once. "Set balance to 100" is idempotent; "add 20 to balance" is not. "Delete order 9" is idempotent; "create a new order" is not.
+Making non-idempotent work idempotent:
 
-How to make non-idempotent work idempotent:
+1. Give each operation a unique **idempotency key** (a UUID the client generates once for "pay for order 9" and reuses on every retry).
+2. Before working, check a table of processed keys.
+3. If new, do the work **and** record the key in the same database transaction.
+4. If seen, skip the work and return the saved result.
 
-1. Give each operation a unique **idempotency key**, such as a UUID the client generates once for "pay for order 9" and reuses on every retry.
-2. Before doing the work, the consumer (or API) checks a table of processed keys.
-3. If the key is new, do the work **and** record the key in the same database transaction.
-4. If the key was seen, skip the work and return the saved result.
+Payment APIs such as Stripe accept an `Idempotency-Key` HTTP header so a phone that loses signal and retries "pay $20" isn't charged twice. Other techniques: **upserts** (insert or overwrite by unique ID), database unique constraints, conditional updates ("set SHIPPED only if PAID").
 
-Payment APIs such as Stripe accept an `Idempotency-Key` HTTP header for exactly this reason: a phone that loses signal and retries "pay $20" must not charge twice. Other techniques: **upserts** (insert or overwrite by a unique ID), unique constraints in the database, and conditional updates ("set status to SHIPPED only if it is PAID").
-
-Kafka provides exactly-once semantics inside Kafka (since version 0.11, 2017) by combining an **idempotent producer** (the broker drops duplicate sends using a producer ID and sequence number) with **transactions** that write output messages and the consumer's offset atomically. Once a side effect leaves Kafka (sending an email, calling a bank), you are back to needing idempotency in that system. SQS FIFO queues de-duplicate messages with the same deduplication ID inside a 5-minute window.
+Kafka provides exactly-once semantics inside Kafka (since 0.11, 2017) by combining an **idempotent producer** (the broker drops duplicate sends by producer ID and sequence number) with **transactions** writing output messages and the consumer's offset atomically. Once a side effect leaves Kafka (an email, a bank call), you need idempotency in that system again. SQS FIFO queues de-duplicate messages with the same deduplication ID within a 5-minute window.
 
 ### Ordering
 
-Ordering costs throughput, because strict global order means one line of processing. Practical systems guarantee order **per key** (per user, per order) by routing a key to one partition or FIFO group. Retries can also break order: if message 5 fails and is retried after message 6 succeeds, they are now out of order. Consumers that care can carry a version number and ignore an older version arriving after a newer one.
+Strict global order costs throughput (one line of processing), so practical systems order **per key** (per user, per order) by routing a key to one partition or FIFO group. Retries can break order too (message 5 retried after 6 succeeds); consumers that care carry a version number and ignore an older version arriving after a newer one.
 
 ### Retries, dead-letter queues and backpressure
 
-**Retries.** When processing fails because of something temporary (a timeout, a database briefly unavailable), try again. Use **exponential backoff**: wait 1 s, then 2 s, 4 s, 8 s, so a struggling dependency isn't hammered, and add **jitter** (random variation) so thousands of clients don't retry at the same instant. Cap the number of attempts. Part 5 covers this in depth.
+**Retries.** For temporary failures (a timeout, a database briefly down), try again with **exponential backoff** (1 s, 2 s, 4 s, 8 s) so a struggling dependency isn't hammered, plus **jitter** (random variation) so thousands of clients don't retry in sync, and a cap on attempts. Depth in Part 5.
 
-**Dead-letter queue (DLQ).** A message that keeps failing (a **poison message**, for example malformed JSON, or an order referring to a deleted product) would otherwise be retried forever and block or waste workers. After N attempts (say 5), the broker moves it to a separate dead-letter queue. Engineers get an alert, inspect it, fix the bug, and **redrive** (replay) the messages back to the main queue. SQS, RabbitMQ and most Kafka frameworks support DLQs.
+**Dead-letter queue (DLQ).** A message that keeps failing — a **poison message** (malformed JSON, an order for a deleted product) — would be retried forever, blocking or wasting workers. After N attempts (say 5) the broker moves it to a separate dead-letter queue; engineers are alerted, fix the bug, and **redrive** (replay) the messages to the main queue. SQS, RabbitMQ and most Kafka frameworks support DLQs.
 
 ```mermaid
 flowchart LR
@@ -4539,21 +4017,21 @@ flowchart LR
     DLQ -->|"alert, fix, redrive"| Q
 ```
 
-**Backpressure.** When consumers can't keep up, something must give. Backpressure is any way for a slow downstream part to signal "slow down" to the upstream part, instead of silently drowning. Options:
+**Backpressure.** Any way for a slow downstream part to signal "slow down" upstream instead of silently drowning:
 
 - **Buffer**: let the queue grow (fine for spikes, dangerous if it never drains).
-- **Block or throttle the producer**: the broker or a bounded queue refuses or delays new messages, for example HTTP `429 Too Many Requests` or `503 Service Unavailable`.
+- **Block or throttle the producer**: refuse or delay new messages (HTTP `429 Too Many Requests` or `503 Service Unavailable`).
 - **Drop**: discard low-priority messages (load shedding).
-- **Scale out consumers**: autoscale workers based on queue depth.
+- **Scale out consumers**: autoscale workers on queue depth.
 
-TCP flow control (Part 2) and reactive streams libraries are low-level forms of backpressure.
+TCP flow control (Part 2) and reactive-streams libraries are low-level forms of backpressure.
 
 ### Common mistakes
 
-- Assuming "exactly-once" in a vendor's docs covers your email sends and database writes. It rarely does; design idempotent consumers anyway.
-- Retrying instantly in a tight loop, making an outage worse.
-- No DLQ, so one poison message blocks a partition (Kafka consumers process a partition in order, so a stuck message stalls everything behind it).
-- Unbounded in-memory queues that grow until the process runs out of memory.
+- Assuming a vendor's "exactly-once" covers your email sends and database writes. It rarely does; design idempotent consumers anyway.
+- Retrying instantly in a tight loop, worsening an outage.
+- No DLQ, so one poison message blocks a partition (Kafka processes a partition in order, so a stuck message stalls everything behind it).
+- Unbounded in-memory queues growing until out of memory.
 
 ### Real-world examples
 
@@ -4563,32 +4041,32 @@ TCP flow control (Part 2) and reactive streams libraries are low-level forms of 
 
 ### In the interview
 
-**Q:** How do you guarantee a payment is not charged twice when the queue is at-least-once?
+**Q:** How do you guarantee a payment isn't charged twice when the queue is at-least-once?
 
-**A:** Make the consumer idempotent. Each payment carries an idempotency key; the worker records processed keys in the same transaction as the charge and skips any key it has seen. Duplicates are then harmless.
+**A:** An idempotent consumer: each payment carries an idempotency key, recorded in the same transaction as the charge; any seen key is skipped, so duplicates are harmless.
 
 **Q:** What is a dead-letter queue?
 
-**A:** A side queue where messages go after failing a set number of times, so a poison message doesn't block or waste workers. It's monitored, and messages are replayed after the bug is fixed.
+**A:** A side queue for messages that failed a set number of times, so a poison message doesn't block or waste workers; it is monitored and replayed after the fix.
 
 ### TL;DR
 
-Assume at-least-once delivery, make consumers idempotent with idempotency keys, retry with backoff and jitter, park repeated failures in a dead-letter queue, and apply backpressure when consumers fall behind.
+Assume at-least-once delivery: idempotent consumers with idempotency keys, retries with backoff and jitter, a dead-letter queue for repeated failures, backpressure when consumers fall behind.
 
 ## Batch vs stream processing
 
 ### What it is
 
-Once data is flowing through a system, you often need to compute things from it: daily revenue, recommendations, fraud scores, search indexes.
+Computing things from flowing data — daily revenue, recommendations, fraud scores, search indexes:
 
-- **Batch processing** takes a large, bounded pile of data that has already been collected (say, yesterday's 2 TB of logs) and processes it all in one job, usually on a schedule (nightly, hourly). Think of a bakery that bakes the whole day's bread before the shop opens.
-- **Stream processing** handles each event (or small window of events) continuously as it arrives, within milliseconds or seconds. Think of a barista who makes each coffee the moment it is ordered.
+- **Batch processing** handles a large, bounded, already-collected pile (yesterday's 2 TB of logs) in one job, usually scheduled (nightly, hourly) — baking the day's bread before opening.
+- **Stream processing** handles each event (or small window) continuously as it arrives, within milliseconds or seconds — a barista making each coffee as ordered.
 
 ### How it works
 
-**MapReduce in one paragraph.** MapReduce, published by Google in 2004 and copied by Apache Hadoop, is the classic batch model. The input files are split across many machines. In the **map** step, each machine reads its chunk and emits key-value pairs (for counting words: `("cat", 1)` for every "cat"). In the **shuffle** step, the framework sends all pairs with the same key to the same machine. In the **reduce** step, each machine combines the values for its keys (`("cat", 1+1+1) = ("cat", 3)`). If a machine dies, its piece is simply re-run. Modern engines such as **Apache Spark** keep the same idea but hold intermediate data in memory and are much faster; SQL warehouses like BigQuery, Snowflake and Redshift run batch-style queries over huge tables.
+**MapReduce** (Google, 2004; copied by Apache Hadoop) is the classic batch model. Input files are split across machines. **Map**: each machine reads its chunk and emits key-value pairs (word count: `("cat", 1)` per "cat"). **Shuffle**: the framework sends all pairs with the same key to the same machine. **Reduce**: each machine combines its keys' values (`("cat", 1+1+1) = ("cat", 3)`). A dead machine's piece is simply re-run. **Apache Spark** keeps the idea but holds intermediate data in memory, far faster; SQL warehouses (BigQuery, Snowflake, Redshift) run batch-style queries over huge tables.
 
-**Stream processing** engines such as **Apache Flink**, **Kafka Streams** and **Spark Structured Streaming** read from a stream (usually Kafka), keep state (such as running counts per user), and group events into **windows**, for example "orders per minute" (a tumbling one-minute window) or "logins in the last 5 minutes, updated every 10 seconds" (a sliding window). A subtle point: events can arrive late or out of order, so engines distinguish **event time** (when it happened) from **processing time** (when it arrived) and use **watermarks** to decide when a window is complete.
+**Stream processors** — **Apache Flink**, **Kafka Streams**, **Spark Structured Streaming** — read a stream (usually Kafka), keep state (running counts per user), and group events into **windows**: "orders per minute" (a tumbling one-minute window) or "logins in the last 5 minutes, updated every 10 seconds" (a sliding window). Events can arrive late or out of order, so engines separate **event time** (when it happened) from **processing time** (when it arrived) and use **watermarks** — estimates that all events up to a time have arrived — to decide when a window is complete.
 
 ```mermaid
 flowchart LR
@@ -4609,37 +4087,35 @@ flowchart LR
 | Complexity | simpler, easy to re-run | harder: state, late events, failures |
 | Typical uses | reports, billing, ML training, backfills | fraud detection, live metrics, alerts |
 
-Two named architectures: **Lambda architecture** runs both a batch layer (accurate, slow) and a speed layer (fast, approximate) and merges them. **Kappa architecture** uses only a stream and handles reprocessing by replaying the log from the start. Many companies now prefer Kappa-style designs to avoid writing logic twice.
+**Lambda architecture** runs a batch layer (accurate, slow) and a speed layer (fast, approximate) and merges them. **Kappa architecture** uses only a stream, reprocessing by replaying the log from the start; many companies now prefer it to avoid writing logic twice.
 
 ### In the interview
 
-**Q:** Should a "trending hashtags" feature use batch or streaming?
+**Q:** Should "trending hashtags" use batch or streaming?
 
-**A:** Streaming, because users expect it to reflect the last few minutes. Count hashtags in sliding windows with a stream processor reading from Kafka, possibly with an approximate structure like count-min sketch, and recompute exact daily numbers in batch.
+**A:** Streaming — users expect the last few minutes. Count hashtags in sliding windows with a stream processor reading Kafka, perhaps with a count-min sketch, and recompute exact daily numbers in batch.
 
 ### TL;DR
 
-Batch processes a complete pile of data on a schedule (MapReduce, Spark); streaming processes events continuously as they arrive (Flink, Kafka Streams). Choose by how fresh the result must be.
+Batch processes a complete pile on a schedule (MapReduce, Spark); streaming processes events continuously (Flink, Kafka Streams). Choose by how fresh the result must be.
 
 ## Event-driven architecture, event sourcing and CQRS
 
 ### What it is
 
-**Event-driven architecture (EDA)** is a style where services communicate by publishing **events**, facts about something that already happened ("OrderPlaced", "PaymentFailed"), rather than calling each other with commands ("ship this now"). The publisher doesn't know or care who listens.
+**Event-driven architecture (EDA)**: services communicate by publishing **events** — facts about something already done ("OrderPlaced", "PaymentFailed") — rather than calling each other with commands ("ship this now"). The publisher doesn't know or care who listens, like a town crier.
 
-Analogy: a town crier announces "the market opens at noon" to the square. Anyone who cares acts on it; the crier doesn't keep a list of who should be told.
-
-An **event** reports something that is already done, so a listener can ignore it but cannot say no to it. A **command** is a request that the receiver may reject. Name them to match: events in the past tense (`OrderPlaced`), commands as orders (`ShipOrder`).
+An **event** reports something done, so a listener can ignore it but not refuse it; a **command** is a request the receiver may reject. Name events in the past tense (`OrderPlaced`), commands as orders (`ShipOrder`).
 
 ### How it works
 
-When an order is placed, the order service saves it and publishes `OrderPlaced`. The payment, inventory, email and analytics services each subscribe and react. Adding a loyalty-points service later needs no change to the order service.
+The order service saves an order and publishes `OrderPlaced`; payment, inventory, email and analytics each subscribe and react. A later loyalty-points service needs no change to the order service.
 
-A practical problem: the service must both update its database and publish the event. If it does one and crashes before the other, they disagree (the **dual write** problem). The standard fix is the **transactional outbox**: in the same database transaction as the business change, insert the event into an `outbox` table. A separate relay process (or CDC tool like Debezium) reads the outbox and publishes to the broker, retrying until it succeeds. Combined with idempotent consumers, nothing is lost.
+A service must both update its database and publish the event; crashing between the two leaves them disagreeing — the **dual write** problem. Standard fix, the **transactional outbox**: insert the event into an `outbox` table in the same transaction as the business change; a separate relay (or a CDC tool like Debezium) reads the outbox and publishes, retrying until it succeeds. With idempotent consumers nothing is lost.
 
-**Event sourcing.** Instead of storing only the current state (balance = 70), store the full sequence of events that led there (Deposited 100, Withdrew 50, Deposited 20) as the source of truth. Current state is computed by replaying events, usually with periodic **snapshots** so you don't replay millions every time. Benefits: a complete audit trail, the ability to rebuild state or answer "what was the balance last Tuesday?", and easy new projections. Costs: more complex, events can't be changed once written so schema evolution is harder, and queries need separate read models. Bank ledgers and accounting books have always worked this way.
+**Event sourcing.** Store not just the current state (balance = 70) but the sequence of events that led there (Deposited 100, Withdrew 50, Deposited 20) as the source of truth; state is computed by replay, with periodic **snapshots** to avoid replaying millions each time. Benefits: complete audit trail, rebuild state or answer "what was the balance last Tuesday?", easy new projections. Costs: complexity, immutable events make schema evolution harder, queries need separate read models. Bank ledgers and accounting books have always worked this way.
 
-**CQRS (Command Query Responsibility Segregation).** Use one model (and often one database) for writes (commands) and a different model for reads (queries). Writes go to a normalized database; events or CDC update one or more read-optimised views, such as a denormalized table, a search index in Elasticsearch, or a cache. Reads scale independently and each screen gets data in exactly the shape it needs. Cost: the read side lags the write side slightly (eventual consistency), and there are more moving parts. CQRS pairs naturally with event sourcing but doesn't require it.
+**CQRS (Command Query Responsibility Segregation).** One model (often one database) for writes (commands), another for reads (queries). Writes go to a normalized database; events or CDC update read-optimised views — a denormalized table, an Elasticsearch index, a cache. Reads scale independently and each screen gets exactly the shape it needs. Cost: the read side lags slightly (eventual consistency), and more moving parts. Pairs naturally with event sourcing but doesn't require it.
 
 ```mermaid
 flowchart LR
@@ -4652,50 +4128,48 @@ flowchart LR
 
 ### Trade-offs
 
-EDA gives loose coupling and easy extension, but flows become harder to follow (no single place shows the whole order process), and you live with eventual consistency, duplicates and ordering issues. Use it where many services react to the same facts; keep simple request-response for things needing an immediate answer.
+EDA gives loose coupling and easy extension, but flows are harder to follow (no single place shows the whole order process), with eventual consistency, duplicates and ordering issues. Use it where many services react to the same facts; keep request-response for immediate answers.
 
 ### In the interview
 
 **Q:** How do you reliably update the database and publish an event?
 
-**A:** Transactional outbox: write the event to an outbox table in the same transaction as the change, then a relay publishes it with retries. Consumers are idempotent because the relay may publish twice.
+**A:** Transactional outbox: the event goes into an outbox table in the same transaction as the change; a relay publishes with retries; consumers are idempotent because it may publish twice.
 
 **Q:** What is CQRS and when would you use it?
 
-**A:** Separate write and read models. Use it when reads and writes have very different shapes or scale, for example writes to a relational DB and searches served from Elasticsearch kept up to date by events.
+**A:** Separate write and read models, for when reads and writes differ greatly in shape or scale — e.g. writes to a relational DB, searches served from Elasticsearch kept current by events.
 
 ### TL;DR
 
-Event-driven systems react to published facts instead of direct calls. Event sourcing stores the events themselves as the truth; CQRS splits the write model from read-optimised views. Both add flexibility at the cost of eventual consistency and complexity.
+Event-driven systems react to published facts instead of direct calls. Event sourcing stores the events as the truth; CQRS splits the write model from read-optimised views. Both add flexibility at the cost of eventual consistency and complexity.
 
 ## Consistency models
 
 ### What it is
 
-When data is copied to several machines (replication, Part 3), a read might go to a copy that hasn't received the latest write yet. A **consistency model** is the promise a system makes about what a read can return after a write. It is a contract between the database and the programmer: "if you do X, you will never see Y".
+With replication (Part 3) a read may hit a copy that hasn't received the latest write. A **consistency model** is the system's promise about what a read can return after a write — a contract: "if you do X, you will never see Y". This is not the C in ACID (transactions keep data valid by your rules): same word, different idea.
 
-Note: this "consistency" is different from the C in ACID (Part 3), which means "transactions keep the data valid according to your rules". Same word, different idea.
-
-Analogy: a family shares a shopping list copied onto three fridges in three houses. Strong consistency means that the moment anyone adds "milk", every fridge shows it before anyone can read any list. Eventual consistency means the copies are updated by phone calls over the next few minutes; for a while, different fridges show different lists, but if people stop editing, all three end up the same.
+(A shopping list copied on three family fridges: strong consistency means everyone's fridge shows "milk" the instant it's added; eventual consistency means phone calls update the copies over minutes — they differ for a while, but converge once editing stops.)
 
 ### Types
 
-From strongest (easiest to reason about, most expensive) to weakest:
+Strongest (easiest to reason about, most expensive) to weakest:
 
-**Linearizability (strong consistency).** The system behaves as if there is only one copy of the data and every operation happens at a single instant between its start and its end. Once any read has returned the new value, no later read anywhere can return the old one. Plain words: "it looks like one machine". Needed for things like a username uniqueness check, a lock, or a bank balance check before withdrawal. Cost: every write must reach a majority or a leader before it's confirmed, which adds latency, especially across regions, and the system may refuse requests during a network partition.
+**Linearizability (strong consistency).** The system behaves as if there is one copy and every operation happens at a single instant between its start and end: once any read returns the new value, no later read anywhere returns the old one — "it looks like one machine". Needed for username uniqueness checks, locks, balance checks before withdrawal. Cost: every write must reach a majority or a leader before confirmation (latency, especially across regions), and requests may be refused during a partition.
 
-**Sequential consistency.** All clients see all operations in the same order, and each client's own operations appear in the order it issued them, but that order needn't match real time. Mostly a term you'll meet in theory and CPU memory models.
+**Sequential consistency.** All clients see all operations in the same order, each client's own in issue order, but that order needn't match real time. Mostly met in theory and CPU memory models.
 
-**Causal consistency.** If one operation could have caused another, everyone sees them in that order. If Alice posts "I'm engaged!" and Bob replies "Congratulations!", nobody should see Bob's reply without Alice's post. Unrelated operations (Carol's post in another thread) may appear in different orders to different people. Research has shown that causal consistency (in a slightly strengthened form) is about the strongest model a system can offer while staying available during a network partition, so it's attractive for global systems.
+**Causal consistency.** If one operation could have caused another, everyone sees them in that order: nobody sees Bob's "Congratulations!" without Alice's "I'm engaged!". Unrelated operations (Carol's post elsewhere) may appear in different orders to different people. Research shows causal consistency (slightly strengthened) is about the strongest model that stays available during a partition, so it's attractive for global systems.
 
-**Session guarantees** (also called client-centric consistency) are promises to a single user, cheap to provide and often enough:
+**Session guarantees** (client-centric consistency): cheap promises to a single user, often enough:
 
-- **Read-your-writes** (read-your-own-writes): after you change your profile photo, you always see the new photo, even if other users see the old one for a few seconds. Implemented by reading your own data from the leader for a short time after writing, or by tracking the write's position and only reading from replicas that have caught up.
-- **Monotonic reads**: once you've seen a value, you never see an older one later. Without it, refreshing a page could show a comment, then hide it, then show it, because each refresh hit a different replica. Implemented by sticking each user to one replica.
-- **Monotonic writes**: your writes are applied in the order you made them.
-- **Writes-follow-reads**: if you read something and then write based on it, your write is ordered after what you read.
+- **Read-your-writes** (read-your-own-writes): after changing your profile photo you always see the new one, even if others see the old for a few seconds. Read your own data from the leader briefly after writing, or track the write's position and read only from caught-up replicas.
+- **Monotonic reads**: once you've seen a value you never see an older one (no comment appearing, vanishing, reappearing across refreshes hitting different replicas). Stick each user to one replica.
+- **Monotonic writes**: your writes apply in the order you made them.
+- **Writes-follow-reads**: a write based on something you read is ordered after it.
 
-**Eventual consistency.** If no new writes happen, all replicas will eventually return the same value. No promise about how long "eventually" is (usually milliseconds to seconds) or what you see in the meantime. DNS is a classic example: change a record and different resolvers return old or new answers until TTLs expire. Cheap, fast, and highly available.
+**Eventual consistency.** If writes stop, all replicas eventually return the same value — no promise how long (usually milliseconds to seconds) or what you see meanwhile. DNS is the classic example: resolvers return old or new answers until TTLs expire. Cheap, fast, highly available.
 
 ```mermaid
 sequenceDiagram
@@ -4710,7 +4184,7 @@ sequenceDiagram
     Note over Alice,Replica: Breaks read-your-writes
 ```
 
-**Strong vs eventual in practice.** Many databases let you choose per request. DynamoDB reads are eventually consistent by default, and you can ask for a strongly consistent read at double the read cost. Cassandra lets you set a consistency level per query (ONE, QUORUM, ALL). Google Spanner offers externally consistent (linearizable) transactions globally.
+**Choosing per request.** DynamoDB reads are eventually consistent by default; a strongly consistent read costs double. Cassandra sets a consistency level per query (ONE, QUORUM, ALL). Google Spanner offers externally consistent (linearizable) transactions globally.
 
 ### Trade-offs
 
@@ -4723,40 +4197,40 @@ sequenceDiagram
 
 ### Common mistakes
 
-- Saying "eventually consistent" as if it means "consistent after a short fixed time". It promises no bound.
-- Assuming reading from replicas is safe for a flow like "save, then redirect to the page that shows it". Users will see their own change missing. Use read-your-writes.
-- Confusing consistency in CAP (linearizability) with consistency in ACID (valid data).
+- Reading "eventually consistent" as "consistent after a short fixed time". There is no bound.
+- Reading from replicas in "save, then redirect to the page showing it" flows: users see their change missing. Use read-your-writes.
+- Confusing CAP's consistency (linearizability) with ACID's (valid data).
 
 ### In the interview
 
 **Q:** Where is eventual consistency acceptable?
 
-**A:** Where brief staleness is harmless: like counts, follower counts, view counts, recommendations, search indexes. Not for balances, inventory at checkout, or uniqueness checks.
+**A:** Where brief staleness is harmless: like, follower and view counts, recommendations, search indexes. Not balances, inventory at checkout, or uniqueness checks.
 
 ### TL;DR
 
-Consistency models describe what reads may return after writes, from linearizable (acts like one copy) through causal and session guarantees to eventual (converges sometime). Stronger means simpler reasoning but slower and less available.
+Consistency models describe what reads may return after writes: linearizable (acts like one copy), causal, session guarantees, eventual (converges sometime). Stronger means simpler reasoning but slower and less available.
 
 ## CAP theorem and PACELC
 
 ### What it is
 
-The **CAP theorem**, proposed by Eric Brewer in 2000 and proved by Gilbert and Lynch in 2002, says that a distributed data store facing a **network partition** must choose between consistency and availability.
+The **CAP theorem** (Eric Brewer, 2000; proved by Gilbert and Lynch, 2002): a distributed data store facing a **network partition** must choose between consistency and availability.
 
-- **C, consistency**: here it means linearizability: every read sees the latest write, as if there were one copy.
+- **C, consistency**: linearizability — every read sees the latest write, as if one copy.
 - **A, availability**: every request to a working (non-crashed) node gets a non-error answer, without waiting forever.
-- **P, partition tolerance**: the system keeps operating even when the network between nodes drops or delays messages.
+- **P, partition tolerance**: the system keeps operating when the network between nodes drops or delays messages.
 
-A **network partition** is when the network splits the nodes into groups that can't talk to each other, even though each node is still running. Example: the link between your US and EU data centres fails. Each side is healthy and still receiving user requests, but neither can tell what the other is doing.
+A **network partition** splits nodes into groups that can't talk, though each still runs — e.g. the US–EU link fails; both sides are healthy and serving users, but neither knows what the other is doing.
 
 ### How it works
 
-Suppose two replicas, one in the US and one in the EU, and the link between them is cut. A user in the EU writes `x = 2`. Now a user in the US reads `x`. The US replica has two options:
+Two replicas, US and EU, link cut. An EU user writes `x = 2`; a US user reads `x`. The US replica can:
 
-1. **Refuse or wait** (return an error or block) because it can't confirm it has the latest value. It stays **consistent** but is not **available**. This is **CP**.
-2. **Answer with what it has** (`x = 1`, old). It stays **available** but is not **consistent**. This is **AP**.
+1. **Refuse or wait** (error or block) since it can't confirm the latest value: **consistent** but not **available** — **CP**.
+2. **Answer with what it has** (`x = 1`, old): **available** but not **consistent** — **AP**.
 
-There is no third option: it can't know about a write it can't hear about. Because partitions in real networks are not optional (cables get cut, switches fail, cloud zones lose connectivity), the real choice is between C and A **during a partition**. When the network is healthy, a system can provide both.
+There's no third option: it can't know a write it can't hear about. Since real partitions aren't optional (cut cables, failed switches, cloud zones losing connectivity), the real choice is C or A **during a partition**; with a healthy network a system can provide both.
 
 ```mermaid
 flowchart TD
@@ -4767,37 +4241,37 @@ flowchart TD
 
 ### Types
 
-**CP examples**: systems built on consensus or a single leader, such as ZooKeeper, etcd, Consul, Google Spanner, HBase, and MongoDB with majority reads and writes. On the minority side of a partition they stop accepting writes.
+**CP examples**: consensus or single-leader systems — ZooKeeper, etcd, Consul, Google Spanner, HBase, MongoDB with majority reads and writes. The minority side stops accepting writes.
 
-**AP examples**: Cassandra, Riak, DynamoDB-style leaderless stores at low consistency levels, CouchDB, DNS. Both sides keep serving and reconcile afterwards (using timestamps, version vectors or merge rules).
+**AP examples**: Cassandra, Riak, DynamoDB-style leaderless stores at low consistency levels, CouchDB, DNS. Both sides keep serving and reconcile later (timestamps, version vectors, merge rules).
 
-Many systems are tunable, so "Cassandra is AP" really means "Cassandra with consistency level ONE behaves AP".
+Many systems are tunable: "Cassandra is AP" really means "Cassandra at consistency level ONE behaves AP".
 
 ### PACELC
 
-CAP only talks about the rare partition case. **PACELC**, proposed by Daniel Abadi in 2010, adds the everyday case: **if** there is a **P**artition, choose **A** or **C**; **E**lse (normal operation), choose **L**atency or **C**onsistency. Even with a perfect network, keeping replicas strongly consistent means waiting for other machines, which costs latency.
+CAP covers only the rare partition case. **PACELC** (Daniel Abadi, 2010) adds the everyday case: **if P**artition, choose **A** or **C**; **E**lse, choose **L**atency or **C**onsistency — even on a perfect network, strongly consistent replicas mean waiting for other machines.
 
-- **PA/EL**: Cassandra, DynamoDB (default settings): available in partitions, low latency normally, consistency relaxed both times.
-- **PC/EC**: Spanner, traditional single-leader setups with synchronous replication: consistent always, pay in availability and latency.
-- **PA/EC** and **PC/EL** exist too (for example, MongoDB is often described as PA/EC under some settings; descriptions vary with configuration).
+- **PA/EL**: Cassandra, DynamoDB (defaults): available in partitions, low latency normally, consistency relaxed both times.
+- **PC/EC**: Spanner, single-leader setups with synchronous replication: always consistent, paying in availability and latency.
+- **PA/EC** and **PC/EL** exist too (MongoDB is often described as PA/EC under some settings; descriptions vary with configuration).
 
 ### Common mistakes (misreadings of CAP)
 
-- **"Pick any two of three."** You can't pick CA in a distributed system, because you can't opt out of partitions. A single-node database is "CA" only because it isn't distributed.
-- **"AP means no consistency ever."** It means the system may return stale data during a partition. Normally it's usually consistent within milliseconds.
+- **"Pick any two of three."** You can't opt out of partitions, so CA isn't available to a distributed system; a single-node database is "CA" only because it isn't distributed.
+- **"AP means no consistency ever."** It may return stale data during a partition; normally it's consistent within milliseconds.
 - **"CP means the system goes down."** Only requests that can't be safely served fail, typically on the minority side.
 - **Mixing CAP's C with ACID's C.** CAP's C is linearizability.
-- **Treating CAP as a whole-system label.** Different features of one product can make different choices (a shopping cart can be AP, checkout CP).
+- **Treating CAP as a whole-system label.** Features of one product can choose differently (cart AP, checkout CP).
 
 ### In the interview
 
 **Q:** Explain CAP in one breath.
 
-**A:** When the network splits, a replicated system must either refuse some requests to stay consistent (CP) or keep answering with possibly stale data (AP). Partitions are a fact of life, so the real choice is C or A during them.
+**A:** When the network splits, a replicated system must either refuse some requests to stay consistent (CP) or keep answering with possibly stale data (AP); partitions are a fact of life, so the real choice is C or A during them.
 
 **Q:** Is your design CP or AP?
 
-**A:** Say per component: payment and inventory reservation are CP (we'd rather fail than double-sell), while the product catalogue, likes and feeds are AP (stale is fine, downtime is not). Then mention PACELC: even without partitions, we accept slightly stale reads for lower latency on the AP parts.
+**A:** Per component: payment and inventory reservation are CP (better to fail than double-sell); catalogue, likes and feeds AP (stale is fine, downtime isn't). Then PACELC: even without partitions we accept slightly stale reads for lower latency on the AP parts.
 
 ### TL;DR
 
@@ -4807,19 +4281,15 @@ CAP: during a network partition, choose consistency (refuse) or availability (an
 
 ### What it is
 
-A **quorum** is the minimum number of replicas that must take part in an operation for it to count. In **leaderless replication** (Part 3: Dynamo, Cassandra, Riak), clients write to and read from several replicas at once, and quorums decide how many must answer.
+A **quorum** is the minimum number of replicas that must take part in an operation for it to count. In **leaderless replication** (Part 3: Dynamo, Cassandra, Riak), clients read and write several replicas at once, and quorums decide how many must answer:
 
-Three numbers:
-
-- **N**: number of replicas that store each piece of data (often 3).
-- **W**: number of replicas that must confirm a write before it's considered successful.
-- **R**: number of replicas that must answer a read.
+- **N**: replicas storing each piece of data (often 3).
+- **W**: replicas that must confirm a write.
+- **R**: replicas that must answer a read.
 
 ### How it works
 
-The key rule: if **R + W > N**, every read set overlaps every write set in at least one replica, so a read is guaranteed to reach at least one replica holding the latest successful write. The reader picks the newest version among the answers (by version number or timestamp).
-
-Example with N = 3, W = 2, R = 2: a write reaches replicas A and B. A later read asks B and C. B has the new value, so the reader sees it. 2 + 2 = 4 > 3.
+If **R + W > N**, every read set overlaps every write set in at least one replica, so a read reaches at least one replica with the latest successful write; the reader keeps the newest version (by version number or timestamp). With N = 3, W = 2, R = 2: a write reaches A and B; a read asks B and C; B has it (2 + 2 = 4 > 3).
 
 ```mermaid
 flowchart LR
@@ -4830,7 +4300,7 @@ flowchart LR
     R --> X
 ```
 
-The reader gets v2 from B and v1 from C and keeps v2. It may also fix C on the spot (**read repair**). Background **anti-entropy** processes compare replicas (often with Merkle trees, below) to fix the rest.
+The reader gets v2 from B and v1 from C and keeps v2, possibly fixing C on the spot (**read repair**); background **anti-entropy** compares replicas (often with Merkle trees, below) to fix the rest.
 
 Common settings for N = 3:
 
@@ -4841,51 +4311,47 @@ Common settings for N = 3:
 | 1 | 3 | fast writes, any replica down blocks reads |
 | 1 | 1 | fastest, R + W = 2 is not > 3, so reads may be stale |
 
-A **majority quorum** is more than half: 2 of 3, 3 of 5. Two majorities always overlap, which is why consensus algorithms use them. With N nodes, a majority quorum tolerates `floor((N - 1) / 2)` failures: 1 failure with 3 nodes, 2 with 5. That's why clusters use odd sizes: 4 nodes tolerate only 1 failure, the same as 3.
+A **majority quorum** is more than half (2 of 3, 3 of 5). Two majorities always overlap, which is why consensus uses them. N nodes tolerate `floor((N - 1) / 2)` failures — 1 with 3 nodes, 2 with 5 — hence odd cluster sizes: 4 nodes tolerate only 1 failure, like 3.
 
-**Sloppy quorum and hinted handoff.** If some home replicas are unreachable, Dynamo-style systems may temporarily write to other nodes, which later hand the data back. This boosts availability but breaks the R + W > N guarantee for a while.
+**Sloppy quorum and hinted handoff.** When home replicas are unreachable, Dynamo-style systems may write temporarily to other nodes that hand the data back later — more available, but R + W > N doesn't hold meanwhile.
 
 ### Trade-offs and caveats
 
-Quorums give tunable consistency, but R + W > N is not full linearizability on its own: concurrent writes, sloppy quorums and failed partial writes can still produce odd results. Larger W makes writes slower and less available; larger R does the same for reads.
+Quorums give tunable consistency, but R + W > N alone isn't full linearizability: concurrent writes, sloppy quorums and failed partial writes can still produce odd results. Larger W makes writes slower and less available; larger R the same for reads.
 
 ### In the interview
 
 **Q:** With 3 replicas, how do you make sure reads see the latest write?
 
-**A:** Use quorums with R + W > N, for example W = 2 and R = 2, so read and write sets always overlap. That also tolerates one replica being down.
+**A:** Quorums with R + W > N, e.g. W = 2 and R = 2, so read and write sets always overlap — also tolerating one replica down.
 
 ### TL;DR
 
-Quorums: write to W replicas and read from R out of N. When R + W > N, reads overlap writes and see the latest value; tune R and W to trade read speed, write speed and availability.
+Write to W and read from R of N replicas. When R + W > N, reads overlap writes and see the latest value; tune R and W to trade read speed, write speed and availability.
 
 ## Consensus, leader election and distributed locks
 
 ### What it is
 
-**Consensus** is getting several machines to agree on one value (or one sequence of values) even when some of them crash or messages are lost. "Who is the leader?", "Was this transaction committed?", "Who holds the lock?", "What is the next entry in the log?" are all consensus problems.
-
-Analogy: five friends choosing a restaurant over unreliable text messages, where some phones die mid-conversation. They need a method so that, once a choice is announced, nobody ends up at a different restaurant, and the group can still decide if one or two phones die.
+**Consensus** is getting several machines to agree on one value (or sequence of values) even when some crash or messages are lost. "Who is leader?", "Was this transaction committed?", "Who holds the lock?", "What is the next log entry?" are all consensus problems — like friends choosing a restaurant over unreliable texts so nobody ends up elsewhere, even if a phone or two dies.
 
 ### Why it matters
 
-Without consensus you get **split brain** (Part 3): two nodes both think they're the leader, both accept writes, and the data diverges. Consensus systems are the backbone of coordination services like **etcd** (used by Kubernetes to store all cluster state), **ZooKeeper** (used by Hadoop, older Kafka), **Consul**, and of databases like CockroachDB, TiDB, YugabyteDB and Spanner.
+Without consensus you get **split brain** (Part 3): two self-declared leaders accept writes and data diverges. Consensus is the backbone of coordination services — **etcd** (all Kubernetes cluster state), **ZooKeeper** (Hadoop, older Kafka), **Consul** — and of CockroachDB, TiDB, YugabyteDB and Spanner.
 
 ### How it works
 
-Two famous algorithms:
+- **Paxos**, Leslie Lamport (written up around 1989–1990, published 1998): the first widely known proven solution; correct but famously hard to understand and implement.
+- **Raft**, Diego Ongaro and John Ousterhout (2014), designed to be understandable; used by most new systems (etcd, Consul, CockroachDB, Kafka's KRaft).
 
-- **Paxos**, by Leslie Lamport (first written up around 1989–1990, formally published in 1998), the first widely known proven solution. Correct but famously hard to understand and implement.
-- **Raft**, by Diego Ongaro and John Ousterhout (2014), designed to be understandable. Most new systems use Raft (etcd, Consul, CockroachDB, Kafka's KRaft).
+Raft intuition:
 
-Raft intuition, step by step:
-
-1. Each node is a **follower**, a **candidate** or the **leader**. Time is divided into numbered **terms** (also called **epochs** or generations in other systems). Each term has at most one leader.
-2. The leader sends regular **heartbeats** to followers. If a follower hears nothing for its **election timeout** (randomised, for example 150 to 300 ms, so nodes don't all time out together), it assumes the leader is dead.
-3. That follower becomes a candidate, increments the term (say from 4 to 5), votes for itself, and asks others for votes.
-4. Each node votes for at most one candidate per term, and only for a candidate whose log is at least as up-to-date as its own. A candidate with votes from a **majority** becomes leader for term 5.
-5. Clients send writes to the leader. The leader appends the write to its log and sends it to followers. Once a majority have stored it, the entry is **committed**, applied, and the client gets "ok".
-6. If an old leader from term 4 comes back, any message it sends carries term 4; nodes reject it because they've seen term 5, and it steps down. Terms are how stale leaders are detected.
+1. Each node is a **follower**, **candidate** or **leader**. Time is divided into numbered **terms** (**epochs** or generations elsewhere), each with at most one leader.
+2. The leader sends regular **heartbeats**. A follower hearing nothing for its **election timeout** (randomised, e.g. 150–300 ms, so nodes don't all time out together) assumes the leader is dead.
+3. It becomes a candidate, increments the term (4 → 5), votes for itself and requests votes.
+4. Each node votes for at most one candidate per term, and only one whose log is at least as up-to-date as its own. A **majority** makes the candidate leader for term 5.
+5. Clients write to the leader, which appends to its log and sends to followers; once a majority store it, the entry is **committed**, applied, and the client gets "ok".
+6. A returning term-4 leader's messages are rejected by nodes that have seen term 5, and it steps down. Terms detect stale leaders.
 
 ```mermaid
 stateDiagram-v2
@@ -4897,17 +4363,17 @@ stateDiagram-v2
     Leader --> Follower: sees higher term
 ```
 
-Because a majority is needed, a 5-node Raft cluster keeps working with 2 nodes down; with 3 down it stops accepting writes (it chooses consistency, so it's CP). Consensus clusters are usually 3 or 5 nodes: more nodes means more fault tolerance but slower writes.
+Needing a majority, a 5-node Raft cluster works with 2 nodes down; with 3 down it stops accepting writes (it chooses consistency: CP). Clusters are usually 3 or 5 nodes: more nodes, more fault tolerance but slower writes.
 
-**Leader election** is the most common use: many replicas of a service, but only one should run the nightly billing job or act as database primary. You use a coordination service (etcd, ZooKeeper, Consul) rather than writing your own consensus.
+**Leader election** is the commonest use: many replicas, but only one should run the nightly billing job or act as database primary. Use a coordination service (etcd, ZooKeeper, Consul) rather than writing your own consensus.
 
 ### Distributed locks and fencing tokens
 
-A **distributed lock** ensures that only one process across many machines does something at a time (for example, only one worker processes refund 77). It's usually a key in a coordination service or Redis with a **lease** (an expiry time) so that a crashed holder doesn't block everyone forever.
+A **distributed lock** ensures only one process across many machines does something at a time (only one worker processes refund 77) — usually a key in a coordination service or Redis with a **lease** (expiry time) so a crashed holder doesn't block everyone forever.
 
-The danger: a process takes the lock with a 10-second lease, then pauses (a long garbage-collection pause, a slow disk, its virtual machine being moved to another host) for 15 seconds. The lease expires, another process takes the lock and starts writing. The first process wakes up, still believes it holds the lock, and writes too. Now two "lock holders" are writing.
+The danger: a process takes a 10-second lease, then pauses (a long garbage-collection pause, a slow disk, its VM being migrated) for 15 seconds. The lease expires, another process takes the lock and writes; the first wakes, still believes it holds the lock, and writes too — two "holders".
 
-The fix is a **fencing token**: every time the lock is granted, the lock service hands out a number that always increases (33, then 34). The holder sends its token with every write to the storage system, and storage rejects any write with a token lower than one it has already seen. The paused process with token 33 is rejected because 34 has already written.
+The fix is a **fencing token**: each grant comes with an ever-increasing number (33, then 34). The holder sends its token with every write, and storage rejects any token lower than one already seen, so the paused holder's 33 is rejected after 34 has written.
 
 ```mermaid
 sequenceDiagram
@@ -4926,58 +4392,58 @@ sequenceDiagram
     S-->>A: rejected, token too old
 ```
 
-ZooKeeper's zxid and etcd's revision numbers can serve as fencing tokens. A simple Redis `SET lock NX PX` lock is fine for efficiency (avoiding duplicate work) but should not be trusted alone for correctness, because it provides no fencing token.
+ZooKeeper's zxid and etcd's revision numbers can serve as fencing tokens. A simple Redis `SET lock NX PX` lock is fine for efficiency (avoiding duplicate work) but not alone for correctness, since it gives no fencing token.
 
 ### Common mistakes
 
-- Writing your own consensus or leader election with timestamps and hope. Use etcd, ZooKeeper or Consul.
-- Running consensus with 2 or 4 nodes (no extra fault tolerance over 1 or 3).
+- Home-made consensus or leader election with timestamps and hope. Use etcd, ZooKeeper or Consul.
+- Consensus on 2 or 4 nodes (no extra fault tolerance over 1 or 3).
 - Trusting a lease-based lock without fencing for data correctness.
-- Spreading a consensus cluster across continents without realising every write now waits for an intercontinental round trip (70+ ms).
+- A consensus cluster across continents, so every write waits an intercontinental round trip (70+ ms).
 
 ### In the interview
 
 **Q:** How do you ensure only one instance runs a scheduled job?
 
-**A:** Leader election through a coordination service such as etcd or ZooKeeper, or a lock with a lease. Make the job idempotent and, if it writes shared data, pass a fencing token so a stale leader's writes are rejected.
+**A:** Leader election via etcd or ZooKeeper, or a lock with a lease. Make the job idempotent and, if it writes shared data, pass a fencing token so a stale leader's writes are rejected.
 
 **Q:** Why are consensus clusters 3 or 5 nodes?
 
-**A:** They need a majority to make progress. 3 nodes tolerate 1 failure, 5 tolerate 2. Even numbers add cost without extra tolerance, and more nodes slow every write.
+**A:** A majority is needed to make progress: 3 tolerate 1 failure, 5 tolerate 2. Even numbers add cost without tolerance, and more nodes slow every write.
 
 ### TL;DR
 
-Consensus (Raft, Paxos) lets machines agree on a leader or a log despite failures by requiring a majority and numbering leadership terms. Use a coordination service for leader election and locks, and protect locks with fencing tokens.
+Consensus (Raft, Paxos) lets machines agree on a leader or log despite failures by requiring a majority and numbering leadership terms. Use a coordination service for leader election and locks, and protect locks with fencing tokens.
 
 ## Clocks and ordering
 
 ### What it is
 
-To decide "which write happened last?" it's tempting to compare timestamps. But each machine has its own clock, and clocks are not in perfect agreement.
+Comparing timestamps to find "which write happened last?" is tempting, but each machine's clock differs:
 
-- **Clock skew**: the difference between two machines' clocks at the same moment, for example server A says 12:00:00.000 and server B says 12:00:00.150.
-- **Clock drift**: a clock running slightly fast or slow. A quartz clock can drift by tens of microseconds per second, which adds up to seconds per day if never corrected.
-- **NTP (Network Time Protocol)**: machines periodically ask time servers for the correct time and adjust. Over the internet it typically keeps clocks within a few to tens of milliseconds; inside a good data centre, better than a millisecond. Clocks can still jump backwards after a correction.
+- **Clock skew**: the difference between two machines' clocks at the same moment (A says 12:00:00.000, B 12:00:00.150).
+- **Clock drift**: a clock running slightly fast or slow; quartz can drift tens of microseconds per second — seconds per day if uncorrected.
+- **NTP (Network Time Protocol)**: machines periodically ask time servers and adjust — typically within a few to tens of milliseconds over the internet, better than a millisecond in a good data centre. Clocks can still jump backwards after a correction.
 
-Two kinds of clock in every machine: the **wall clock** (time of day, can jump) and the **monotonic clock** (only moves forward, good for measuring durations like timeouts, meaningless across machines).
+Every machine has a **wall clock** (time of day, can jump) and a **monotonic clock** (only moves forward; for durations like timeouts, meaningless across machines).
 
 ### Why it matters
 
-**Last-write-wins (LWW)** conflict resolution keeps the write with the highest timestamp. If server B's clock is 150 ms fast, a write on B can "win" over a later write on A, and A's write silently disappears. Ordering events by wall-clock timestamps from different machines is unsafe.
+**Last-write-wins (LWW)** keeps the highest-timestamped write. If B's clock is 150 ms fast, B's write can "win" over a later write on A, which silently disappears. Ordering cross-machine events by wall-clock timestamps is unsafe.
 
 ### How it works
 
 **Logical clocks** order events without real time.
 
-**Lamport clock** (Leslie Lamport, 1978). Each process keeps a counter.
+**Lamport clock** (Leslie Lamport, 1978). Each process keeps a counter:
 
-1. Before each local event, increment the counter.
-2. When sending a message, attach the counter.
-3. When receiving a message with counter `c`, set your counter to `max(yours, c) + 1`.
+1. Increment it before each local event.
+2. Attach it to each message sent.
+3. On receiving counter `c`, set yours to `max(yours, c) + 1`.
 
-If event X caused event Y (directly or through a chain of messages), then X's Lamport time is smaller than Y's. Ties are broken by process ID to get a total order. Limitation: a smaller number does not prove X caused Y, so Lamport clocks can't detect concurrent events.
+If X caused Y (directly or via a chain of messages), X's Lamport time is smaller than Y's; ties broken by process ID give a total order. But a smaller number doesn't prove causation, so Lamport clocks can't detect concurrent events.
 
-**Vector clock.** Each process keeps a list of counters, one per process, for example `[A:2, B:0, C:1]`. You increment your own entry on each event and, on receiving, take the element-wise maximum and then increment your own. Comparing two vectors tells you one of three things: X happened before Y (every entry of X is less than or equal to Y's, and at least one is smaller), Y before X, or they are **concurrent** (each has some entry larger). Concurrency detection is exactly what you need to spot conflicting writes, for example two people editing the same shopping cart offline. Dynamo-style stores use similar **version vectors** to keep both conflicting versions ("siblings") and let the application merge them. Cost: the vector grows with the number of participants.
+**Vector clock.** Each process keeps one counter per process, e.g. `[A:2, B:0, C:1]`: increment your own entry per event; on receiving, take the element-wise maximum then increment your own. Comparing vectors gives one of three answers: X before Y (every entry of X ≤ Y's, at least one smaller), Y before X, or **concurrent** (each has some larger entry). Detecting concurrency is exactly what spotting conflicting writes needs (two people editing one cart offline). Dynamo-style stores use similar **version vectors** to keep both conflicting versions ("siblings") for the application to merge. Cost: the vector grows with the number of participants.
 
 | Clock | Detects causality? | Detects concurrency? | Size |
 |---|---|---|---|
@@ -4985,7 +4451,7 @@ If event X caused event Y (directly or through a chain of messages), then X's La
 | Lamport | if X caused Y, then L(X) < L(Y) | no | one number |
 | Vector | yes | yes | one number per node |
 
-**Hybrid logical clocks (HLC)** combine wall time with a logical counter, giving timestamps close to real time that still respect causality; CockroachDB and YugabyteDB use them. **Google TrueTime** (in Spanner) uses GPS receivers and atomic clocks in every data centre and returns an interval "now is between T1 and T2" with a typical uncertainty of a few milliseconds; Spanner waits out that uncertainty before committing so timestamps are globally ordered.
+**Hybrid logical clocks (HLC)** combine wall time with a logical counter: timestamps close to real time that still respect causality (CockroachDB, YugabyteDB). **Google TrueTime** (Spanner) uses GPS receivers and atomic clocks in every data centre and returns an interval "now is between T1 and T2" with typically a few milliseconds of uncertainty; Spanner waits out the uncertainty before committing, so timestamps are globally ordered.
 
 ### Common mistakes
 
@@ -4996,26 +4462,24 @@ If event X caused event Y (directly or through a chain of messages), then X's La
 
 **Q:** Two replicas accepted conflicting writes. How do you tell which came first?
 
-**A:** Wall clocks can't be trusted across machines. Vector clocks (version vectors) tell you whether one write happened before the other or whether they were concurrent; concurrent writes need a merge rule or the user to choose. Lamport clocks give a consistent total order but can't detect concurrency.
+**A:** Not by wall clocks across machines. Vector clocks (version vectors) say whether one write happened before the other or they were concurrent — concurrent writes need a merge rule or a user choice. Lamport clocks give a consistent total order but can't detect concurrency.
 
 ### TL;DR
 
-Machine clocks disagree (skew) and drift, even with NTP, so don't order cross-machine events by timestamps. Lamport clocks give an order consistent with causality; vector clocks also detect concurrent, conflicting updates.
+Machine clocks disagree (skew) and drift even with NTP, so don't order cross-machine events by timestamps. Lamport clocks give a causality-consistent order; vector clocks also detect concurrent, conflicting updates.
 
 ## Distributed transactions: two-phase commit and sagas
 
 ### What it is
 
-A **distributed transaction** is a change that must happen across several databases or services as one unit: either all parts happen or none do. Example: booking a trip charges the card (payment service), reserves a seat (flight service) and books a room (hotel service). Charging the card without the seat is a bug that costs real money.
-
-Inside one database, ACID transactions (Part 3) handle this. Across several, there are two main approaches.
+A **distributed transaction** is a change across several databases or services that must happen as one unit, all or nothing. Booking a trip charges the card (payment service), reserves a seat (flight service) and books a room (hotel service); charging without the seat costs real money. Inside one database ACID transactions (Part 3) handle this; across several there are two main approaches.
 
 ### Types
 
-**Two-phase commit (2PC).** A **coordinator** (also called transaction manager) runs the transaction across **participants** (the databases).
+**Two-phase commit (2PC).** A **coordinator** (transaction manager) runs the transaction across **participants** (the databases):
 
-1. **Prepare phase**: the coordinator asks every participant "can you commit?". Each one does the work, writes it durably, locks the rows involved, and votes **yes** (promising it can commit even after a crash) or **no**.
-2. **Commit phase**: if all voted yes, the coordinator writes "commit" to its own log and tells everyone to commit. If any voted no or didn't answer, it tells everyone to abort.
+1. **Prepare phase**: "can you commit?" Each participant does the work, writes it durably, locks the rows, and votes **yes** (promising it can commit even after a crash) or **no**.
+2. **Commit phase**: if all voted yes, the coordinator logs "commit" and tells everyone to commit; if any voted no or didn't answer, everyone aborts.
 
 ```mermaid
 sequenceDiagram
@@ -5032,21 +4496,19 @@ sequenceDiagram
     P2-->>C: done
 ```
 
-Strength: real atomicity and isolation across databases. Weaknesses: it's **blocking**. If the coordinator crashes after participants voted yes, they must keep their rows locked and wait, possibly for a long time, because they promised to obey whatever the coordinator decides. Every transaction needs several round trips and holds locks meanwhile, so throughput and availability suffer. It's used inside some distributed databases (Spanner runs 2PC over Paxos-replicated groups, so the coordinator itself is replicated and cannot simply vanish) and via the XA standard (a common interface that lets one transaction manager drive several databases) between traditional databases, but rarely across microservices. (Three-phase commit was proposed to reduce blocking but is little used in practice.)
+Strength: real atomicity and isolation across databases. Weakness: it's **blocking** — if the coordinator crashes after yes votes, participants keep rows locked and wait, possibly long, since they promised to obey its decision. Several round trips with locks held hurt throughput and availability. Used inside some distributed databases (Spanner runs 2PC over Paxos-replicated groups, so the coordinator is itself replicated and can't simply vanish) and via the XA standard (a common interface letting one transaction manager drive several databases), but rarely across microservices. (Three-phase commit was proposed to reduce blocking but is little used.)
 
-**Saga.** Break the big transaction into a sequence of **local transactions**, one per service, each committed on its own. If a later step fails, run **compensating transactions** that semantically undo the earlier steps, in reverse order.
+**Saga.** Split the big transaction into a sequence of **local transactions**, one per service, each committed on its own; if a later step fails, run **compensating transactions** that semantically undo earlier steps in reverse order. Trip example:
 
-Trip example:
+1. Payment charges the card. (Compensation: refund.)
+2. Flight reserves a seat. (Compensation: release.)
+3. Hotel booking fails — no rooms.
+4. Compensate: release the seat, refund the card.
 
-1. Payment service charges the card. (Compensation: refund.)
-2. Flight service reserves a seat. (Compensation: release the seat.)
-3. Hotel service books a room. Fails, no rooms.
-4. Run compensations: release the seat, refund the card.
+Two ways to coordinate:
 
-Two ways to coordinate a saga:
-
-- **Choreography**: no central controller. Each service listens for events and reacts ("PaymentCompleted" makes the flight service reserve, "HotelFailed" makes the flight service release). Simple for 2–3 steps, hard to follow with many.
-- **Orchestration**: a central **orchestrator** (a workflow engine such as Temporal, AWS Step Functions or Camunda, or your own service) tells each service what to do next and triggers compensations on failure. Easier to see and change the whole flow.
+- **Choreography**: no central controller; services react to events ("PaymentCompleted" → flight reserves; "HotelFailed" → flight releases). Simple for 2–3 steps, hard to follow with many.
+- **Orchestration**: a central **orchestrator** (a workflow engine such as Temporal, AWS Step Functions or Camunda, or your own service) tells each service what to do next and triggers compensations on failure; the whole flow is easier to see and change.
 
 ```mermaid
 flowchart LR
@@ -5066,43 +4528,43 @@ flowchart LR
 | Availability | blocks if coordinator fails | each step independent |
 | Fits | few databases, short transactions | microservices, long business flows |
 
-Sagas give up isolation: between steps, someone could see "card charged, no seat yet". Designs cope with it using states like `PENDING`, and compensations must be idempotent and retryable because they may run more than once. Some actions can't be undone (an email sent), so you put them last or compensate with another action (a "sorry" email).
+Sagas give up isolation (someone may see "card charged, no seat yet"); designs use states like `PENDING`, and compensations must be idempotent and retryable since they may run more than once. Some actions can't be undone (a sent email), so put them last or compensate with another action (a "sorry" email).
 
 ### In the interview
 
 **Q:** How do you keep data consistent across order, payment and inventory microservices?
 
-**A:** A saga: each service does a local transaction and publishes an event (via outbox), with compensations on failure, coordinated by an orchestrator for visibility. Avoid 2PC across services because it blocks and couples availability.
+**A:** A saga: each service does a local transaction and publishes an event (via outbox), with compensations on failure, coordinated by an orchestrator for visibility. Avoid 2PC across services: it blocks and couples availability.
 
 **Q:** What's the main weakness of 2PC?
 
-**A:** It's blocking: if the coordinator fails after participants vote yes, they hold locks and wait. It also needs every participant up for every transaction.
+**A:** Blocking: if the coordinator fails after yes votes, participants hold locks and wait. It also needs every participant up for every transaction.
 
 ### TL;DR
 
-2PC gives true atomic commits across databases but blocks on coordinator failure; sagas chain local transactions with compensating undo steps, trading isolation for availability, and are the norm in microservices.
+2PC gives true atomic commits across databases but blocks on coordinator failure; sagas chain local transactions with compensating undo steps, trading isolation for availability — the norm in microservices.
 
 ## Heartbeats, gossip and failure detection
 
 ### What it is
 
-In a cluster, nodes need to know which other nodes are alive. But over a network you can never tell the difference between a node that's dead, one that's slow, and a network that's dropping messages. **Failure detection** is the art of making a good guess.
+Nodes need to know which others are alive, but over a network a dead node, a slow node and a lossy network look the same. **Failure detection** is making a good guess.
 
-- **Heartbeat**: a small "I'm alive" message a node sends regularly, say every second. If the monitor misses several in a row (say, nothing for 5 seconds), it marks the node as **suspected dead**. Load balancer health checks (Part 2) and Raft leader heartbeats are the same idea.
-- **Timeout choice**: short timeouts detect failures quickly but cause **false positives** (declaring a slow-but-alive node dead, triggering needless failovers). Long timeouts are safe but slow to react.
+- **Heartbeat**: a small regular "I'm alive" message (say every second). Missing several (nothing for 5 seconds) marks the node **suspected dead**. Load balancer health checks (Part 2) and Raft leader heartbeats are the same idea.
+- **Timeout choice**: short timeouts detect failures fast but cause **false positives** (declaring a slow-but-alive node dead, triggering needless failovers); long ones are safe but slow.
 
 ### How it works
 
-**Centralised monitoring** (every node heartbeats to one coordinator, such as ZooKeeper sessions) is simple, but the monitor must itself be highly available.
+**Centralised monitoring** (every node heartbeats to one coordinator, e.g. ZooKeeper sessions) is simple, but the monitor must itself be highly available.
 
-**Gossip protocol.** In large clusters with no central monitor, nodes spread information the way rumours spread in an office:
+**Gossip protocol.** Large clusters with no central monitor spread information like office rumours:
 
-1. Every second, each node picks one or a few random other nodes.
-2. It sends them what it knows: its membership list, with a heartbeat counter for every node it has heard of.
-3. The receiver merges the lists, keeping the higher counter for each node.
-4. If a node's counter hasn't gone up for a while, it is suspected dead, and that suspicion spreads too.
+1. Every second each node picks one or a few random peers.
+2. It sends its membership list with a heartbeat counter for every node it knows.
+3. The receiver merges, keeping the higher counter per node.
+4. A node whose counter hasn't risen for a while is suspected dead, and the suspicion spreads too.
 
-Information reaches all N nodes in about log(N) rounds: with 1,000 nodes, around 10 rounds. No single point of failure, and load per node stays constant. Cassandra, DynamoDB's original design, Consul (via memberlist, a library based on the SWIM protocol described below) and Redis Cluster use gossip for membership and failure detection.
+Information reaches all N nodes in about log(N) rounds (~10 for 1,000 nodes), with no single point of failure and constant per-node load. Cassandra, DynamoDB's original design, Consul (via memberlist, a library based on SWIM, below) and Redis Cluster use gossip for membership and failure detection.
 
 ```mermaid
 flowchart LR
@@ -5113,61 +4575,61 @@ flowchart LR
     D -->|"round 3"| F["Node F"]
 ```
 
-**Smarter detectors.** The **phi accrual failure detector** (used by Cassandra and Akka) outputs a suspicion level based on the history of heartbeat arrival times, instead of a fixed yes/no timeout, so it adapts to networks that are normally slow. **SWIM** asks a few other nodes to ping a suspected node indirectly before declaring it dead, cutting false positives caused by one bad link.
+**Smarter detectors.** The **phi accrual failure detector** (Cassandra, Akka) outputs a suspicion level from the history of heartbeat arrival times instead of a fixed yes/no timeout, adapting to normally slow networks. **SWIM** asks a few other nodes to ping a suspect indirectly before declaring it dead, cutting false positives from one bad link.
 
 ### Common mistakes
 
-- Very short failure timeouts that cause **flapping**: nodes marked dead and alive over and over, triggering repeated failovers.
-- Assuming a node declared dead has stopped. It may still be running and writing (the paused lock holder from earlier). Use fencing.
+- Very short timeouts causing **flapping**: nodes marked dead and alive repeatedly, triggering repeated failovers.
+- Assuming a node declared dead has stopped; it may still be running and writing (the paused lock holder). Use fencing.
 
 ### TL;DR
 
-Nodes send heartbeats; missing heartbeats mean "suspected dead". Gossip spreads membership and liveness through random peer-to-peer exchanges, reaching everyone in about log N rounds with no central monitor.
+Missing heartbeats mean "suspected dead". Gossip spreads membership and liveness through random peer-to-peer exchanges, reaching everyone in about log N rounds with no central monitor.
 
 ## Probabilistic data structures and Merkle trees
 
-These are clever structures that answer questions using far less memory than an exact answer would need, in exchange for a small, controlled error. Each appears often in interviews.
+Structures that answer questions in far less memory than an exact answer needs, for a small, controlled error. Each appears often in interviews.
 
 ### Bloom filter
 
-**What it is.** A compact structure that answers "is X in the set?" with either **"definitely not"** or **"probably yes"**. It never gives a false negative, but it can give a **false positive**.
+**What it is.** A compact structure answering "is X in the set?" with **"definitely not"** or **"probably yes"**: never a false negative, but possibly a **false positive**.
 
 **How it works.**
 
-1. Start with an array of m bits, all 0 (say 10 million bits, about 1.2 MB).
-2. Pick k hash functions (say 7). A hash function turns any input into a number; here each one maps an item to a bit position.
-3. To add "alice", compute her 7 positions and set those bits to 1.
-4. To check "bob", compute his 7 positions. If any bit is 0, bob was **definitely never added**. If all are 1, bob is **probably** in the set (those bits could have been set by other items).
+1. An array of m bits, all 0 (say 10 million bits, about 1.2 MB).
+2. k hash functions (say 7), each mapping an item to a bit position.
+3. To add "alice", set her 7 positions to 1.
+4. To check "bob": any of his 7 bits 0 → **definitely never added**; all 1 → **probably** present (other items may have set them).
 
-With about 10 bits per item and 7 hash functions, the false-positive rate is about 1%. You can't delete items from a basic Bloom filter (a **counting Bloom filter** variant allows it).
+About 10 bits per item with 7 hash functions gives ~1% false positives. A basic Bloom filter can't delete items (a **counting Bloom filter** variant can).
 
-**Uses.** Databases with LSM-trees (Cassandra, RocksDB, HBase) keep a Bloom filter per data file so a read for a missing key skips files without touching disk. Caches use one to block lookups for keys that don't exist (cache penetration). Web crawlers use them to skip URLs already visited. Chrome once used one to check URLs against a list of malicious sites before a slower exact check.
+**Uses.** LSM-tree databases (Cassandra, RocksDB, HBase) keep one per data file so a read for a missing key skips files without disk access. Caches block lookups for non-existent keys (cache penetration). Web crawlers skip visited URLs. Chrome once used one to check URLs against a malicious-site list before a slower exact check.
 
 ### HyperLogLog
 
-**What it is.** Estimates the **number of distinct items** (cardinality), such as unique visitors today, using a tiny, fixed amount of memory.
+**What it is.** Estimates the **number of distinct items** (cardinality), such as unique visitors today, in a tiny fixed amount of memory.
 
-**How it works (intuition).** Hash each item to a random-looking binary number. Rare patterns such as a long run of leading zeros only show up when you've seen many distinct items: seeing a hash that starts with 20 zeros suggests you've seen roughly 2^20 (about a million) distinct items. HyperLogLog splits items into many buckets, records the longest run in each, and averages them to reduce luck. Duplicates hash the same, so they don't change the estimate.
+**How it works (intuition).** Hash each item to a random-looking binary number. Rare patterns such as a long run of leading zeros appear only after many distinct items: a hash starting with 20 zeros suggests roughly 2^20 (~a million) distinct items. HyperLogLog splits items into many buckets, records the longest run in each, and averages to reduce luck. Duplicates hash the same, so they don't change the estimate.
 
-**Numbers.** Redis's HyperLogLog uses at most 12 KB per counter, has a standard error of 0.81%, and can count billions of distinct items. An exact set of a billion user IDs would need gigabytes. Sketches from different servers can be merged (`PFMERGE`) to get a combined count. Used for unique visitors, distinct search queries, and approximate `COUNT(DISTINCT ...)` in BigQuery and other warehouses.
+**Numbers.** Redis's HyperLogLog uses at most 12 KB per counter with 0.81% standard error and counts billions of distinct items (an exact set of a billion IDs needs gigabytes). Sketches from different servers merge (`PFMERGE`). Used for unique visitors, distinct search queries, and approximate `COUNT(DISTINCT ...)` in BigQuery and other warehouses.
 
 ### Count-min sketch
 
-**What it is.** Estimates **how many times** each item has appeared in a stream (frequency), in fixed memory, for example "how many times was #worldcup posted in the last hour?".
+**What it is.** Estimates **how many times** each item appeared in a stream (frequency) in fixed memory ("how often was #worldcup posted in the last hour?").
 
-**How it works.** Keep a small table of counters with d rows and w columns, and one hash function per row. To add an item, hash it in each row and increment that counter. To query, hash it in each row and take the **minimum** of the d counters. Collisions only ever add counts, so the estimate can be too high but never too low; taking the minimum picks the least-polluted counter.
+**How it works.** A table of counters, d rows × w columns, one hash function per row. To add, hash the item in each row and increment that counter; to query, take the **minimum** of its d counters. Collisions only add counts, so estimates may be too high, never too low; the minimum picks the least-polluted counter.
 
-**Uses.** Finding heavy hitters and trending topics, detecting hot keys in a cache, network traffic monitoring, approximate top-K lists.
+**Uses.** Heavy hitters and trending topics, detecting hot cache keys, network traffic monitoring, approximate top-K lists.
 
 ### Merkle tree
 
-**What it is.** A tree of hashes. Each leaf is the hash of a block of data; each parent is the hash of its children's hashes; the single hash at the top is the **root hash**. If any byte of any block changes, its leaf hash changes, and so does every hash on the path up to the root.
+**What it is.** A tree of hashes: each leaf hashes a data block, each parent hashes its children's hashes, and the top is the **root hash**. Changing any byte changes its leaf hash and every hash up to the root.
 
-**How it works for comparing replicas.** Two replicas each build a Merkle tree over their data, split into ranges.
+**How it works for comparing replicas.** Each replica builds a Merkle tree over its data ranges:
 
-1. Compare root hashes. Equal means all the data is identical: done, with one tiny message.
-2. If different, compare the two children, and only descend into the halves whose hashes differ.
-3. At the bottom you find exactly which ranges differ and copy only those.
+1. Compare root hashes; equal means identical data — done with one tiny message.
+2. If different, compare children and descend only into halves whose hashes differ.
+3. At the bottom, copy exactly the differing ranges.
 
 ```mermaid
 flowchart TD
@@ -5179,7 +4641,7 @@ flowchart TD
     H34 --> H4["H4 - block 4"]
 ```
 
-Finding a few differences among billions of records costs about log(number of blocks) comparisons instead of shipping everything. **Uses**: anti-entropy repair in Cassandra and Dynamo-style stores, Git (commit and tree objects are built from hashes), Bitcoin and other blockchains (proving a transaction is in a block), certificate transparency logs, and file sync tools.
+A few differences among billions of records cost about log(number of blocks) comparisons instead of shipping everything. **Uses**: anti-entropy repair in Cassandra and Dynamo-style stores, Git (commit and tree objects are built from hashes), Bitcoin and other blockchains (proving a transaction is in a block), certificate transparency logs, file sync tools.
 
 ### Summary table
 
@@ -5194,32 +4656,32 @@ Finding a few differences among billions of records costs about log(number of bl
 
 **Q:** How would you count unique daily visitors for a site with 500 million users?
 
-**A:** A HyperLogLog per day (for example Redis `PFADD` and `PFCOUNT`): about 12 KB per day with under 1% error, and daily sketches can be merged into weekly counts. An exact set would take gigabytes.
+**A:** A HyperLogLog per day (Redis `PFADD`, `PFCOUNT`): ~12 KB per day, under 1% error, mergeable into weekly counts. An exact set would take gigabytes.
 
 **Q:** How can a database avoid disk reads for keys that don't exist?
 
-**A:** A Bloom filter per data file: if it says "definitely not here", skip the file. Only "probably yes" answers cost a disk read.
+**A:** A Bloom filter per data file: "definitely not here" skips the file; only "probably yes" costs a disk read.
 
 ### TL;DR
 
-Bloom filter: set membership with false positives only. HyperLogLog: distinct counts in kilobytes. Count-min sketch: approximate frequencies. Merkle tree: find differences between large datasets by comparing hashes top-down.
+Bloom filter: set membership, false positives only. HyperLogLog: distinct counts in kilobytes. Count-min sketch: approximate frequencies. Merkle tree: find differences between large datasets by comparing hashes top-down.
 
 ## Unique ID generation
 
 ### What it is
 
-Every order, user, message and photo needs an **ID** that is unique. On one database this is easy; across many servers and databases, generating unique IDs without them checking with each other is a design problem of its own. Nice extra properties: IDs that sort roughly by creation time (good for database indexes and "newest first" queries), short IDs (64 bits fits a standard integer column), and IDs that don't leak business information.
+Every order, user, message and photo needs a unique **ID**. Easy on one database; across many servers generating IDs without consulting each other, a design problem. Nice extras: IDs roughly sorted by creation time (good for indexes and "newest first"), short (64 bits fits a standard integer column), and not leaking business information.
 
 ### Types
 
-**Auto-increment (database sequence).** The database hands out 1, 2, 3, ... Simple, short and ordered. Problems: one database becomes a bottleneck and single point of failure; after sharding, two shards would both issue ID 1000 (workarounds: each shard steps by the number of shards, so shard 1 issues 1, 3, 5 and shard 2 issues 2, 4, 6, or a central ticket server like Flickr used); and sequential IDs reveal volume (a competitor can see you got 500 orders today) and let attackers guess other users' URLs.
+**Auto-increment (database sequence).** 1, 2, 3… — simple, short, ordered. But one database becomes a bottleneck and single point of failure; after sharding two shards would both issue ID 1000 (workarounds: each shard steps by the shard count — shard 1 issues 1, 3, 5, shard 2 issues 2, 4, 6 — or a central **ticket server**, as Flickr used); and sequential IDs reveal volume (500 orders today) and let attackers guess other users' URLs.
 
-**UUID (universally unique identifier).** A 128-bit value, usually written as 36 characters like `550e8400-e29b-41d4-a716-446655440000`. Any machine can generate one with no coordination.
+**UUID (universally unique identifier).** 128 bits, usually 36 characters like `550e8400-e29b-41d4-a716-446655440000`, generated by any machine with no coordination.
 
-- **UUIDv4** is 122 random bits. The chance of a collision is negligible (you'd need billions of IDs per second for decades). Downside: random order scatters inserts across a B-tree index, causing more page splits and cache misses, and 128 bits is twice the size of a 64-bit integer.
-- **UUIDv7** (standardised in RFC 9562, 2024) puts a millisecond timestamp in the first 48 bits and randomness after, so IDs are unique **and** sort by time, fixing the index problem. A good modern default. (**ULID** is a similar earlier format.)
+- **UUIDv4**: 122 random bits; collisions negligible (billions of IDs per second for decades). But random order scatters inserts across a B-tree index (more page splits, cache misses), and it's twice a 64-bit integer.
+- **UUIDv7** (RFC 9562, 2024): a millisecond timestamp in the first 48 bits, randomness after — unique **and** time-sorted, fixing the index problem. A good modern default. (**ULID** is a similar earlier format.)
 
-**Snowflake ID.** Twitter's 2010 design for 64-bit, time-sortable IDs generated independently by many machines. The 64 bits are split:
+**Snowflake ID.** Twitter's 2010 design: 64-bit, time-sortable IDs generated independently by many machines:
 
 | Bits | Field | Meaning |
 |---|---|---|
@@ -5228,7 +4690,7 @@ Every order, user, message and photo needs an **ID** that is unique. On one data
 | 10 | machine ID | up to 1,024 generators |
 | 12 | sequence | up to 4,096 IDs per machine per millisecond |
 
-So each machine can create about 4 million IDs per second with no coordination, and IDs sort by time. Requirements: each machine needs a unique machine ID (assigned through config or a coordination service like ZooKeeper), and clocks must not go backwards (if they do, the generator waits or refuses). Discord, Instagram (a variant generated inside PostgreSQL shards) and many others use Snowflake-style IDs. Sonyflake and others change the bit split.
+About 4 million IDs per second per machine with no coordination, sorted by time. Each machine needs a unique machine ID (config or a coordination service like ZooKeeper), and clocks must not go backwards (if they do, the generator waits or refuses). Discord, Instagram (a variant generated inside PostgreSQL shards) and many others use Snowflake-style IDs; Sonyflake and others change the bit split.
 
 ```mermaid
 flowchart LR
@@ -5237,17 +4699,17 @@ flowchart LR
     M --> Q["12 bits - sequence"]
 ```
 
-**Other approaches.** **Segment / range allocation**: a central service hands each server a block of 1,000 IDs at a time, so servers rarely talk to it. **Hashing** (for example for URL shorteners, Part 6) derives a short ID from content, with collision checks.
+**Other approaches.** **Segment / range allocation**: a central service hands each server a block of 1,000 IDs at a time, so servers rarely contact it. **Hashing** (e.g. URL shorteners, Part 6) derives a short ID from content, with collision checks.
 
 ### In the interview
 
 **Q:** How would you generate unique IDs for a sharded system with high write volume?
 
-**A:** Snowflake-style 64-bit IDs: timestamp, machine ID and per-millisecond sequence. No coordination per ID, roughly time-ordered, fits a BIGINT (64-bit integer) column. If 128 bits is fine, UUIDv7 gives the same ordering with no machine IDs to manage.
+**A:** Snowflake-style 64-bit IDs (timestamp, machine ID, per-millisecond sequence): no per-ID coordination, roughly time-ordered, fits a BIGINT (64-bit integer) column. If 128 bits is fine, UUIDv7 gives the same ordering with no machine IDs to manage.
 
 **Q:** Why not just use UUIDv4?
 
-**A:** It works and needs no coordination, but random IDs fragment B-tree indexes and are larger. Time-ordered IDs (UUIDv7, Snowflake) insert at the end of the index.
+**A:** It works without coordination, but random IDs fragment B-tree indexes and are larger; time-ordered IDs (UUIDv7, Snowflake) insert at the end of the index.
 
 ### TL;DR
 
@@ -5257,13 +4719,13 @@ Auto-increment is simple but centralised and guessable; UUIDs need no coordinati
 
 ### What it is
 
-"Find restaurants within 2 km" or "find drivers near me" can't be answered efficiently with a normal index on latitude and longitude, because a B-tree index sorts by one value at a time. **Geospatial indexes** turn 2D locations into something you can search quickly.
+"Restaurants within 2 km" or "drivers near me" can't use a normal latitude/longitude index efficiently, because a B-tree sorts by one value at a time. **Geospatial indexes** turn 2D locations into something quickly searchable.
 
 ### Types
 
-**Geohash.** Divide the world map in half by longitude, then by latitude, and keep halving, writing down a bit for which half you're in at each step. The bits are encoded in base-32 letters and digits. Longer strings mean smaller boxes: a 5-character geohash is a cell roughly 5 km x 5 km, 6 characters roughly 1.2 km x 0.6 km. Places that share a prefix are near each other (`gcpvj` and `gcpvm` are side-by-side cells in central London), so "nearby" becomes a **prefix search** on a normal string index. To avoid missing places just over a cell edge, you search the target cell plus its 8 neighbours. Redis's `GEOADD`/`GEOSEARCH` and Elasticsearch support geohash-style indexing.
+**Geohash.** Halve the world map by longitude, then latitude, repeatedly, writing a bit for which half you're in each step; encode the bits as base-32 letters and digits. Longer strings are smaller boxes: 5 characters ≈ 5 km × 5 km, 6 ≈ 1.2 km × 0.6 km. A shared prefix means nearby (`gcpvj` and `gcpvm` are adjacent cells in central London), so "nearby" becomes a **prefix search** on an ordinary string index. To catch places just over a cell edge, search the cell plus its 8 neighbours. Redis's `GEOADD`/`GEOSEARCH` and Elasticsearch support geohash-style indexing.
 
-**Quadtree.** A tree where each node covers a rectangle of the map. When a node holds too many points (say more than 100 businesses), it splits into four children (north-west, north-east, south-west, south-east). Dense cities get small, deep cells; empty oceans stay as one big cell. To find nearby places, walk down to the leaf containing the user and look at it and its neighbours. Quadtrees adapt to uneven density better than fixed-size geohash cells and are typically kept in memory.
+**Quadtree.** Each node covers a map rectangle; a node with too many points (say over 100 businesses) splits into four children (NW, NE, SW, SE). Dense cities get small, deep cells; empty oceans stay one big cell. To find nearby places, walk down to the user's leaf and check it and its neighbours. Adapts to uneven density better than fixed-size geohash cells; typically kept in memory.
 
 ```mermaid
 flowchart TD
@@ -5277,205 +4739,45 @@ flowchart TD
     NE --> D["NE-SE"]
 ```
 
-Others you'll hear: **R-tree** (bounding-box tree used by PostGIS), Google's **S2** (cells on a sphere, used in Google Maps and by MongoDB) and Uber's **H3** (a grid of hexagons, good for ride-demand heatmaps because every neighbour is the same distance away).
+Others: **R-tree** (bounding-box tree used by PostGIS), Google's **S2** (cells on a sphere; Google Maps, MongoDB) and Uber's **H3** (hexagon grid, good for ride-demand heatmaps since every neighbour is equidistant).
 
 ### In the interview
 
 **Q:** How do you find drivers near a rider?
 
-**A:** Drivers send locations every few seconds; store them in an in-memory geo index (geohash cells in Redis, or a quadtree) keyed by cell. Query the rider's cell and its neighbours, then compute exact distances for the handful of candidates.
+**A:** Drivers send locations every few seconds into an in-memory geo index (geohash cells in Redis, or a quadtree) keyed by cell. Query the rider's cell and neighbours, then compute exact distances for the few candidates.
 
 ### TL;DR
 
-Geohash turns locations into strings where a shared prefix means nearby; a quadtree splits the map into four recursively where it's dense. Both turn "what's near me?" into a fast lookup.
+Geohash turns locations into strings where a shared prefix means nearby; a quadtree recursively splits dense areas into four. Both make "what's near me?" a fast lookup.
 
 ## Part 4 glossary
 
-| Term | Meaning in one line |
-|---|---|
-| Cache | Small, fast store holding copies of data from a slower source |
-| Source of truth / origin | The authoritative home of the data, usually a database |
-| Cache hit / miss | Requested item was / was not found in the cache |
-| Hit ratio | Fraction of lookups served by the cache |
-| TTL (time to live) | How long an entry may live before it expires |
-| Stale data | A cached or replicated copy older than the latest write |
-| Warm / cold cache | Cache already full of hot data / empty and missing a lot |
-| Cache-Control, ETag | HTTP headers controlling browser/CDN caching and validating versions |
-| Cache busting | Changing a file name or URL when content changes so old copies aren't used |
-| In-process cache | Cache inside the application's own memory |
-| Distributed cache | Shared cache cluster reached over the network (Redis, Memcached) |
-| Redis | In-memory key-value server with rich data types, often used as a cache |
-| Memcached | Simple, fast, multi-threaded in-memory key-value cache |
-| Buffer cache / buffer pool | Database's own in-memory copy of recently used disk pages |
-| Page cache | Operating system's RAM cache of recently read file data |
-| Cache-aside (lazy loading) | App checks cache, loads from DB on miss, deletes key on write |
-| Read-through | Cache loads from the DB itself on a miss |
-| Write-through | Writes go to cache and DB synchronously |
-| Write-behind / write-back | Writes go to cache, flushed to DB later |
-| Write-around | Writes skip the cache and go only to the DB |
-| Refresh-ahead | Cache reloads hot entries before they expire |
-| Negative caching | Caching "not found" results for a short time |
-| Eviction policy | Rule for what to remove when the cache is full |
-| LRU / LFU / FIFO | Evict least recently used / least frequently used / oldest inserted |
-| Cache invalidation | Removing or updating cached copies when the source changes |
-| Versioned keys | Putting a version in the cache key so new writes use new keys |
-| Change data capture (CDC) | Streaming a database's changes from its log to other systems |
-| Cache stampede / thundering herd | Many simultaneous misses on one key overloading the DB |
-| Request coalescing / single flight | Letting only one request rebuild a missing key |
-| Lease (cache) | Token granting one client the right to refill a key |
-| Stale-while-revalidate | Serve the expired value while refreshing in the background |
-| TTL jitter | Randomising TTLs so keys don't expire together |
-| Cache avalanche | Mass expiry or cache loss sending all traffic to the DB |
-| Cache penetration | Requests for non-existent keys always hitting the DB |
-| Hot key | One key so popular it overloads the node that holds it |
-| Message queue | Broker that holds messages until consumers process them |
-| Producer / consumer / broker | Sender / processor / storage middleman of messages |
-| Asynchronous processing | Doing work later without the caller waiting for it |
-| Decoupling | Letting components work without knowing about each other directly |
-| Load levelling | Using a queue to smooth spikes into a steady processing rate |
-| Acknowledgement (ack) | Consumer's signal that a message is done and can be removed |
-| Visibility timeout | Time a received message is hidden before being redelivered (SQS) |
-| Point-to-point / competing consumers | Each message processed by one of many workers |
-| Publish/subscribe (pub/sub) | Each message delivered to every subscriber of a topic |
-| Topic | Named channel or stream of messages |
-| Exchange | RabbitMQ component that routes messages to queues |
-| Claim check | Store a big payload elsewhere and send only its reference |
-| Queue depth | Number of messages waiting in a queue |
-| Event streaming / log-based broker | Broker keeping an ordered, replayable log of events (Kafka) |
-| Partition (stream) | Ordered sub-log of a topic, the unit of parallelism |
-| Message key | Value hashed to pick a partition, keeping related events ordered |
-| Offset | Position number of a message in a partition |
-| Consumer group | Consumers sharing a topic's partitions for one application |
-| Committed offset | Saved position a consumer group has processed up to |
-| Rebalance | Reassigning partitions when group membership changes |
-| Consumer lag | How far a consumer is behind the newest message |
-| Retention | How long a log keeps messages |
-| At-most-once | Delivered zero or one times, may be lost |
-| At-least-once | Delivered one or more times, may be duplicated |
-| Exactly-once / effectively-once | Each message affects the result once, via de-duplication |
-| Idempotency | Doing an operation twice has the same effect as once |
-| Idempotency key | Unique ID per operation used to detect and skip repeats |
-| Upsert | Insert a row or update it if it already exists |
-| Idempotent producer | Producer whose duplicate sends the broker discards |
-| Exponential backoff | Waiting longer after each failed retry |
-| Jitter | Random variation added to waits or TTLs |
-| Poison message | A message that fails every time it's processed |
-| Dead-letter queue (DLQ) | Side queue for messages that failed too many times |
-| Redrive | Moving DLQ messages back to the main queue |
-| Backpressure | Downstream signalling upstream to slow down |
-| Load shedding | Dropping some work on purpose to stay alive under overload |
-| Batch processing | Processing a bounded pile of data in one scheduled job |
-| Stream processing | Processing events continuously as they arrive |
-| MapReduce | Batch model of map, shuffle and reduce across many machines |
-| Window (streaming) | Time range grouping events, e.g. tumbling or sliding |
-| Event time / processing time | When an event happened / when it was processed |
-| Watermark | Stream engine's estimate that all events up to a time have arrived |
-| Lambda / Kappa architecture | Batch plus speed layer / stream-only with replay |
-| Event-driven architecture | Services reacting to published events instead of direct calls |
-| Event vs command | Fact that happened vs request that something happen |
-| Dual write problem | Updating DB and broker separately, risking disagreement |
-| Transactional outbox | Writing events to an outbox table in the same DB transaction |
-| Event sourcing | Storing the sequence of events as the source of truth |
-| Snapshot (event sourcing) | Saved state to avoid replaying every event |
-| CQRS | Separate models for writes (commands) and reads (queries) |
-| Projection / read model | Read-optimised view built from events |
-| Consistency model | Promise about what reads can return after writes |
-| Linearizability / strong consistency | System behaves as if there were one copy, in real-time order |
-| Sequential consistency | Everyone sees the same order, not necessarily real time |
-| Causal consistency | Causes are always seen before their effects |
-| Read-your-writes | A user always sees their own changes |
-| Monotonic reads | A user never sees data go back in time |
-| Monotonic writes | A user's writes apply in the order made |
-| Eventual consistency | Replicas converge if writes stop, no time bound |
-| CAP theorem | Under a partition, choose consistency or availability |
-| Network partition | Network failure splitting nodes into groups that can't talk |
-| CP / AP | Refuses requests to stay consistent / answers with maybe-stale data |
-| PACELC | If partition: A or C, else: latency or consistency |
-| Quorum | Minimum number of replicas that must take part in an operation |
-| N, R, W | Replica count, read quorum, write quorum |
-| R + W > N | Condition for read and write sets to overlap |
-| Majority quorum | More than half the nodes |
-| Read repair | Fixing stale replicas noticed during a read |
-| Anti-entropy | Background process comparing and syncing replicas |
-| Sloppy quorum / hinted handoff | Temporarily writing to stand-in nodes that hand data back later |
-| Consensus | Getting nodes to agree on a value despite failures |
-| Paxos | First widely known proven consensus algorithm |
-| Raft | Consensus algorithm designed to be understandable |
-| Leader / follower / candidate | Raft node roles |
-| Term / epoch | Number that increases with each new leader |
-| Election timeout | Time without heartbeats before a follower starts an election |
-| Leader election | Choosing one node to act as leader |
-| Split brain | Two nodes both acting as leader |
-| Coordination service | System like etcd, ZooKeeper or Consul for consensus-backed coordination |
-| Distributed lock | Lock that works across machines |
-| Lease | Lock or role that automatically expires after a time |
-| Fencing token | Increasing number that lets storage reject stale lock holders |
-| Clock skew | Difference between two machines' clocks |
-| Clock drift | A clock gradually running fast or slow |
-| NTP | Protocol for synchronising clocks with time servers |
-| Wall clock / monotonic clock | Time of day (can jump) / always-forward timer for durations |
-| Last-write-wins (LWW) | Conflict rule keeping the write with the highest timestamp |
-| Logical clock | Counter-based ordering of events without real time |
-| Lamport clock | Single counter consistent with causality |
-| Vector clock / version vector | Per-node counters that also detect concurrent events |
-| Hybrid logical clock | Timestamp mixing wall time with a logical counter |
-| TrueTime | Spanner's clock API returning a bounded time interval |
-| Distributed transaction | Change spanning several databases or services, all or nothing |
-| Two-phase commit (2PC) | Prepare then commit across participants via a coordinator |
-| Coordinator / participant | Runner of 2PC / database taking part in it |
-| Saga | Sequence of local transactions with compensations on failure |
-| Compensating transaction | Action that semantically undoes an earlier step |
-| Choreography / orchestration | Saga steps triggered by events / by a central controller |
-| Heartbeat | Periodic "I'm alive" message |
-| Failure detection | Deciding whether a node is probably dead |
-| False positive (failure) | Declaring a slow but alive node dead |
-| Flapping | Node repeatedly marked dead and alive |
-| Gossip protocol | Nodes spreading state to random peers each round |
-| Phi accrual detector | Failure detector giving a suspicion level, not yes/no |
-| SWIM | Gossip membership protocol with indirect pings |
-| Bloom filter | Set membership test with false positives but no false negatives |
-| Hash function | Function mapping any input to a fixed-size number |
-| HyperLogLog | Distinct-count estimator using kilobytes of memory |
-| Cardinality | Number of distinct items |
-| Count-min sketch | Fixed-size table estimating item frequencies |
-| Heavy hitters | The most frequent items in a stream |
-| Merkle tree | Tree of hashes for detecting where datasets differ |
-| Root hash | Top hash of a Merkle tree, summarising all data |
-| Auto-increment / sequence | Database-generated increasing integer IDs |
-| Ticket server | Central service issuing unique IDs |
-| UUID | 128-bit identifier generated without coordination |
-| UUIDv4 / UUIDv7 | Random UUID / time-ordered UUID |
-| ULID | Time-sortable 128-bit ID format |
-| Snowflake ID | 64-bit ID of timestamp, machine ID and sequence |
-| Geospatial index | Index for searching by location |
-| Geohash | String encoding of a map cell, shared prefix means nearby |
-| Quadtree | Tree splitting map regions into four as density grows |
-| R-tree / S2 / H3 | Bounding-box tree / sphere cells / hexagon grid geo indexes |
-
+Every Part 4 term is defined in one line in the [Master A–Z glossary](#master-az-glossary), which merges the glossaries of all six parts into a single alphabetical list.
 
 ## Part 5 — Architecture, reliability, operations and security
 
-Parts 1 to 4 covered the building blocks: servers, networks, databases, caches and queues. This part is about how you arrange those blocks into a whole system, how you keep that system running when pieces break, how you ship changes to it safely, how you see what it is doing, and how you stop the wrong people from getting in. These are the topics that separate "it works on my laptop" from "it has served a billion requests this month and nobody noticed when a data centre lost power".
+Parts 1 to 4 covered the building blocks. This part is about arranging them into a whole system, keeping it running when pieces break, shipping changes safely, seeing what it is doing, and keeping the wrong people out — what separates "it works on my laptop" from "it served a billion requests this month and nobody noticed when a data centre lost power".
 
 ## Architectural styles: monolith, modular monolith, SOA, microservices and serverless
 
 ### What it is
 
-An **architectural style** is the big-picture answer to "how is our code split into running programs, and how do those programs talk?". Think of a restaurant. One chef can cook every dish in one kitchen (a monolith). A big kitchen can be divided into stations, grill, pastry, salad, each with its own cook but still one kitchen (a modular monolith). A food court has independent stalls, each with its own staff, menu and till, and customers walk between them (microservices). A catering agency that sends a cook only when an order comes in, and bills you per dish, is serverless.
+An **architectural style** answers "how is our code split into running programs, and how do they talk?" (One chef in one kitchen; one kitchen divided into stations; a food court of independent stalls; a catering agency sending a cook per order and billing per dish.)
 
-- **Monolith**: the whole application (user accounts, product catalogue, checkout, emails) is one codebase, built into one deployable program, usually sharing one database. You run several identical copies behind a load balancer to scale.
-- **Modular monolith**: still one deployable program, but the code is split into modules with strict boundaries (the checkout module may only call the catalogue module through a defined interface, never reach into its tables). It gives most of the tidiness of microservices without the network.
-- **Service-oriented architecture (SOA)**: a 2000s-era style where large enterprise systems were split into services that talked through a central **enterprise service bus (ESB)**, a piece of middleware that routed, transformed and orchestrated messages. Services were often coarse (a whole "billing system") and shared data models.
-- **Microservices**: the application is split into many small services, each owning one business capability (for example "payments" or "search"), each with its **own database**, deployed independently, and talking over the network using HTTP/REST, gRPC or messages. "Smart endpoints, dumb pipes": the logic lives in the services, not in a central bus.
-- **Serverless / Function as a Service (FaaS)**: you upload individual functions; the cloud provider runs them only when an event arrives (an HTTP request, a file upload, a queue message), scales them automatically from zero to thousands of copies, and bills per invocation and per millisecond of run time. You never manage a server. Examples: AWS Lambda, Google Cloud Functions, Azure Functions, Cloudflare Workers. "Serverless" also loosely covers managed services you never size yourself, such as DynamoDB or S3.
+- **Monolith**: the whole application (accounts, catalogue, checkout, emails) is one codebase built into one deployable program, usually sharing one database; scaled by running identical copies behind a load balancer.
+- **Modular monolith**: still one deployable program, but split into modules with strict boundaries (checkout may call the catalogue only through a defined interface, never reach into its tables) — most of the tidiness of microservices without the network.
+- **Service-oriented architecture (SOA)**: a 2000s-era style splitting enterprise systems into services that talked through a central **enterprise service bus (ESB)**, middleware that routed, transformed and orchestrated messages. Services were often coarse (a whole "billing system") and shared data models.
+- **Microservices**: many small services, each owning one business capability ("payments", "search") and its **own database**, deployed independently, talking over HTTP/REST, gRPC or messages. "Smart endpoints, dumb pipes": logic lives in the services, not a central bus.
+- **Serverless / Function as a Service (FaaS)**: upload individual functions; the provider runs them only when an event arrives (HTTP request, file upload, queue message), scales automatically from zero to thousands of copies, and bills per invocation and millisecond of run time. You never manage a server: AWS Lambda, Google Cloud Functions, Azure Functions, Cloudflare Workers. "Serverless" also loosely covers managed services you never size, such as DynamoDB or S3.
 
 ### Why it matters
 
-The style decides how fast teams can move, how failures spread, how much the system costs and how hard it is to debug. A five-person startup and a 2,000-engineer company need different answers. **Conway's law** says a system's structure ends up mirroring the communication structure of the organisation that builds it, so architecture is partly a decision about teams.
+The style decides how fast teams move, how failures spread, cost, and debuggability; a five-person startup and a 2,000-engineer company need different answers. **Conway's law**: a system's structure mirrors the communication structure of the organisation that builds it, so architecture is partly a decision about teams.
 
 ### How it works
 
-A request in a monolith is a chain of in-process function calls: `checkout()` calls `reserveStock()` calls `chargeCard()`, each taking nanoseconds to microseconds and all inside one database transaction. The same request in microservices becomes network calls: the checkout service sends an HTTP request to the inventory service (about 0.5 to 2 ms inside one data centre) and another to the payment service, and there is no single transaction covering both, so you need patterns like sagas (Part 4) to undo work if a later step fails.
+In a monolith a request is in-process calls — `checkout()` → `reserveStock()` → `chargeCard()` — nanoseconds to microseconds each, inside one database transaction. In microservices they become network calls (about 0.5–2 ms each inside one data centre) to inventory and payment services, with no single transaction covering both, so you need patterns like sagas (Part 4) to undo work when a later step fails.
 
 ```mermaid
 flowchart TD
@@ -5503,37 +4805,37 @@ flowchart TD
 
 ### Trade-offs
 
-- **Monolith**: simple to build, test, deploy and debug; one stack trace shows everything; transactions are easy. But as it grows past a few hundred thousand lines and dozens of developers, builds slow down, one bad change can take everything down, and you must scale the whole thing even if only search is busy.
-- **Microservices**: teams deploy independently many times a day, each service scales and fails on its own, and each can pick its own language or database. The price is the **distributed systems tax**: network calls fail and add latency, data is spread across databases so consistency is harder, you need service discovery, tracing, per-service CI/CD and on-call, and a single user action may touch 20 services.
-- **Serverless**: zero servers to manage, scales to zero so idle costs nothing, scales up in seconds. Downsides: **cold starts** (the first call to a fresh copy waits for the runtime to load, from about 100 ms to a few seconds), execution time limits (AWS Lambda caps a single run at 15 minutes), harder local testing, vendor lock-in, and at steady high load it is often more expensive than always-on servers.
+- **Monolith**: simple to build, test, deploy and debug; one stack trace shows everything; transactions are easy. Past a few hundred thousand lines and dozens of developers, builds slow, one bad change takes everything down, and you scale the whole thing even if only search is busy.
+- **Microservices**: teams deploy independently many times a day; each service scales and fails on its own and may choose its own language or database. The price is the **distributed systems tax**: network calls fail and add latency, data spread across databases makes consistency harder, and you need service discovery, tracing, per-service CI/CD and on-call — one user action may touch 20 services.
+- **Serverless**: no servers to manage, scales to zero (idle costs nothing) and up in seconds. Downsides: **cold starts** (the first call to a fresh copy waits for the runtime to load, ~100 ms to a few seconds), execution limits (AWS Lambda caps a run at 15 minutes), harder local testing, vendor lock-in, and often pricier than always-on servers at steady high load.
 
 ### Common mistakes
 
-- Starting a new product with 30 microservices. You do not yet know where the boundaries are, and you pay the tax from day one. The common advice is "monolith first", split later.
-- A **distributed monolith**: services that must all be deployed together, share one database or call each other synchronously in long chains. You pay the network and operations bill of microservices while still moving in lockstep like a monolith.
+- Starting a new product with 30 microservices: boundaries aren't known yet and you pay the tax from day one. Common advice: "monolith first", split later.
+- A **distributed monolith**: services that must deploy together, share one database, or call each other synchronously in long chains — the network and operations bill of microservices while still moving in lockstep.
 - Splitting by technical layer ("database service", "UI service") instead of business capability.
-- Thinking microservices are faster. A network hop is thousands of times slower than a function call.
+- Thinking microservices are faster; a network hop is thousands of times slower than a function call.
 
 ### Real-world examples
 
-- **Shopify** runs one of the largest Ruby on Rails monoliths and deliberately chose a modular monolith, enforcing component boundaries with tooling, instead of breaking it into microservices.
-- **Netflix** and **Amazon** are the classic microservices stories; Uber has written about running around 2,200 critical microservices and then grouping them into "domains" to tame the complexity.
-- In 2023 the **Amazon Prime Video** team publicly described moving an audio/video quality-monitoring tool from a distributed serverless design (AWS Step Functions plus Lambda) into a single process running as one container task, cutting that tool's infrastructure cost by more than 90%. The lesson: pick the style per workload.
-- The **strangler fig pattern** is how most companies migrate: put a proxy in front of the monolith and move one feature at a time into a new service until the old code can be deleted.
+- **Shopify** runs one of the largest Ruby on Rails monoliths and deliberately chose a modular monolith, enforcing component boundaries with tooling, over microservices.
+- **Netflix** and **Amazon** are the classic microservices stories; Uber has written about running around 2,200 critical microservices, then grouping them into "domains" to tame complexity.
+- In 2023 **Amazon Prime Video** moved an audio/video quality-monitoring tool from a distributed serverless design (Step Functions plus Lambda) into a single process running as one container task, cutting its infrastructure cost by more than 90%. Pick the style per workload.
+- The **strangler fig pattern** is how most companies migrate: a proxy in front of the monolith, moving one feature at a time into new services until the old code can be deleted.
 
 ### In the interview
 
 **Q:** Would you start this design with microservices?
 
-**A:** Usually no. I would start with a well-modularised monolith, then extract a service when there is a clear reason: a part that needs to scale independently, a team that needs to deploy on its own schedule, or a component with very different reliability needs.
+**A:** Usually no: a well-modularised monolith first, extracting a service when there's a clear reason — a part needing independent scaling, a team needing its own deploy schedule, a component with very different reliability needs.
 
-**Q:** What does "database per service" buy you and what does it cost?
+**Q:** What does "database per service" buy and cost?
 
-**A:** It lets each team change its schema and scale its store without coordinating with others, and stops one service's bad query from hurting another. It costs you cross-service joins and transactions: you need APIs, events and sagas, and you accept eventual consistency between services.
+**A:** Each team changes its schema and scales its store without coordinating, and one service's bad query can't hurt another. It costs cross-service joins and transactions: APIs, events and sagas instead, with eventual consistency between services.
 
 **Q:** When is serverless a good fit?
 
-**A:** Spiky or unpredictable, event-driven work such as image thumbnails on upload, webhooks or nightly jobs, where scaling to zero saves money. It is a poor fit for long-running jobs, latency-critical paths that cannot tolerate cold starts, or steady high traffic.
+**A:** Spiky, unpredictable, event-driven work (thumbnails on upload, webhooks, nightly jobs) where scaling to zero saves money. Poor for long-running jobs, latency-critical paths that can't tolerate cold starts, or steady high traffic.
 
 ### TL;DR
 
@@ -5543,20 +4845,20 @@ Monoliths are simple and fast to start; microservices trade simplicity for team 
 
 ### What it is
 
-When one service needs another, it can either **wait for the answer** or **leave a message and carry on**. A phone call is synchronous: you speak, you wait, you get a reply. A text message is asynchronous: you send it and continue your day; the reply comes whenever it comes.
+When one service needs another it can **wait for the answer** (a phone call) or **leave a message and carry on** (a text).
 
-- **Synchronous**: service A calls service B (REST, gRPC) and blocks until B responds or a timeout fires. The caller needs the answer to continue.
-- **Asynchronous**: A puts a message on a queue or event stream (Part 4) and returns immediately. B processes it later. A may get a result through a callback, a webhook or by checking a status endpoint.
+- **Synchronous**: A calls B (REST, gRPC) and blocks until B responds or a timeout fires; A needs the answer to continue.
+- **Asynchronous**: A puts a message on a queue or event stream (Part 4) and returns at once; B processes it later. A may learn the result via a callback, a webhook or a status endpoint.
 
 ### Why it matters
 
-A synchronous chain ties the callers' fate to the callee: if B is slow or down, A is slow or down. Availability multiplies, too. If a request must pass through five services that are each 99.9% available, the chain is at best 0.999^5, about 99.5%, which is roughly 44 hours of downtime a year instead of 9. Asynchronous messaging breaks that chain: if the email service is down, orders still succeed and the emails go out when it recovers.
+A synchronous chain ties the caller's fate to the callee: if B is slow or down, so is A. Availability multiplies too: five services each 99.9% available give at best 0.999^5 ≈ 99.5% — about 44 hours of downtime a year instead of 9. Async messaging breaks the chain: if the email service is down, orders still succeed and emails go out on recovery.
 
 ### How it works
 
-1. User clicks "Place order". The order service must check the card synchronously because the user is waiting for "approved" or "declined".
-2. Once the order is saved, the order service publishes an `OrderPlaced` event to a queue and replies to the user in, say, 200 ms.
-3. Email, analytics and warehouse services each consume the event at their own pace. If the warehouse system is down for ten minutes, events wait in the queue.
+1. "Place order": the order service checks the card synchronously, because the user is waiting for "approved" or "declined".
+2. Once saved, it publishes `OrderPlaced` to a queue and replies in, say, 200 ms.
+3. Email, analytics and warehouse services consume the event at their own pace; if the warehouse is down for ten minutes, events wait in the queue.
 
 ```mermaid
 sequenceDiagram
@@ -5585,19 +4887,19 @@ sequenceDiagram
 
 ### Common mistakes
 
-- Making every call synchronous "because it is simpler", building deep call chains.
-- Using async for something the user must see immediately (like "is my payment approved?") and then building awkward polling.
-- Forgetting that async consumers must be idempotent, because queues usually deliver at least once.
+- Making every call synchronous "because it's simpler", building deep call chains.
+- Async for something the user must see immediately ("is my payment approved?"), then awkward polling.
+- Forgetting async consumers must be idempotent, since queues usually deliver at least once.
 
 ### In the interview
 
 **Q:** How do you decide sync vs async between two services?
 
-**A:** Ask whether the caller needs the result to answer the user right now. If yes, call synchronously with a timeout. If the work can finish later (notifications, analytics, search indexing), publish an event so failures and slowness do not reach the user.
+**A:** Does the caller need the result to answer the user right now? If yes, call synchronously with a timeout. If the work can finish later (notifications, analytics, search indexing), publish an event so failures and slowness don't reach the user.
 
-**Q:** How do you tell the user about an async job's result?
+**Q:** How do you tell the user an async job's result?
 
-**A:** Return a job ID immediately (HTTP 202 Accepted), then let the client poll a status endpoint, or push the result with WebSockets, server-sent events or a webhook.
+**A:** Return a job ID immediately (HTTP 202 Accepted), then the client polls a status endpoint, or push the result via WebSockets, server-sent events or a webhook.
 
 ### TL;DR
 
@@ -5607,28 +4909,28 @@ Synchronous calls are simple but chain failures and latency together; asynchrono
 
 ### What it is
 
-In a system with many services, each running many copies that start and stop all the time, a caller needs to know "which IP addresses currently run the payment service?". **Service discovery** answers that. It is like a hospital switchboard: you ask for "cardiology" rather than memorising which doctor is on shift today.
+With many services, each running many copies that start and stop constantly, a caller must learn "which IPs currently run the payment service?" — **service discovery**, a switchboard where you ask for "cardiology" rather than memorising who is on shift.
 
-- **Service registry**: a database of live service instances and their addresses. Instances **register** when they start, send **heartbeats** to say they are alive, and are removed when they stop or miss heartbeats. Examples: Consul, etcd, ZooKeeper, Netflix Eureka, and the built-in registry inside Kubernetes.
-- **Sidecar**: a helper process deployed right next to each service instance (in the same pod or host) that handles cross-cutting jobs such as networking, TLS, retries, logging. Like a motorbike sidecar, it rides alongside and goes everywhere the main process goes.
-- **Service mesh**: a fleet of sidecar proxies, one per service instance, that intercept all service-to-service traffic, plus a **control plane** that configures them all. The sidecars form the **data plane**. Examples: Istio and Linkerd; Envoy is the most common sidecar proxy.
+- **Service registry**: a database of live instances and addresses. Instances **register** on start, send **heartbeats**, and are removed when they stop or miss heartbeats. Examples: Consul, etcd, ZooKeeper, Netflix Eureka, the registry built into Kubernetes.
+- **Sidecar**: a helper process deployed beside each service instance (same pod or host) handling cross-cutting jobs — networking, TLS, retries, logging — riding along everywhere the main process goes.
+- **Service mesh**: a fleet of sidecar proxies, one per instance, intercepting all service-to-service traffic (the **data plane**), plus a **control plane** configuring them all. Examples: Istio, Linkerd; Envoy is the commonest sidecar proxy.
 
 ### Why it matters
 
-Hard-coding IP addresses breaks the moment autoscaling adds a machine or a container is rescheduled. And every service needs the same plumbing (timeouts, retries, encryption between services, metrics); writing it into every codebase in every language is slow and inconsistent. A mesh moves that plumbing out of application code.
+Hard-coded IPs break as soon as autoscaling adds a machine or a container is rescheduled. And every service needs the same plumbing (timeouts, retries, encryption between services, metrics); writing it into every codebase in every language is slow and inconsistent. A mesh moves that plumbing out of application code.
 
 ### How it works
 
-1. A new payment-service instance starts on `10.0.3.17:8080` and registers itself in the registry.
+1. A new payment instance starts on `10.0.3.17:8080` and registers.
 2. The registry health-checks it every few seconds.
-3. The checkout service wants to call payments. It either asks the registry itself or goes through a router that asks for it.
-4. The call goes to one healthy instance. If that instance dies, it misses heartbeats and is removed, usually within seconds.
+3. Checkout asks the registry itself, or goes through a router that does.
+4. The call goes to a healthy instance; a dead instance misses heartbeats and is removed, usually within seconds.
 
 ### Types
 
-- **Client-side discovery**: the caller queries the registry, gets the list of instances and picks one with its own load-balancing logic. Fewer hops, but every client needs a discovery library. Netflix Eureka with the Ribbon client library worked this way.
-- **Server-side discovery**: the caller sends the request to a fixed address (a load balancer or router), which looks up the registry and forwards it. Clients stay simple. AWS load balancers with target groups and Kubernetes Services work this way.
-- **DNS-based discovery**: the registry publishes instances as DNS records (Consul and Kubernetes both do), so any program can find a service by a name such as `payments.default.svc.cluster.local`. Simple, but DNS caching can leave stale addresses.
+- **Client-side discovery**: the caller queries the registry and picks an instance with its own load-balancing logic. Fewer hops, but every client needs a discovery library (Netflix Eureka with the Ribbon library).
+- **Server-side discovery**: the caller sends to a fixed address (load balancer or router) that consults the registry and forwards. Clients stay simple (AWS load balancers with target groups, Kubernetes Services).
+- **DNS-based discovery**: the registry publishes instances as DNS records (Consul, Kubernetes), so any program finds a service by name, e.g. `payments.default.svc.cluster.local`. Simple, but DNS caching can leave stale addresses.
 
 ```mermaid
 flowchart LR
@@ -5645,54 +4947,54 @@ flowchart LR
 
 ### Trade-offs
 
-A service mesh gives you, without code changes, mutual TLS (both sides prove their identity with certificates) between all services, uniform retries and timeouts, traffic splitting for canary releases and per-call metrics and traces. It costs an extra proxy hop on each side of every call (usually well under a millisecond, but not zero), extra memory and CPU per pod, and a complex control plane your team must understand when things go wrong. For ten services it is often overkill.
+A mesh gives, without code changes, mutual TLS (both sides prove identity with certificates) between all services, uniform retries and timeouts, traffic splitting for canaries, and per-call metrics and traces. It costs an extra proxy hop on each side of every call (usually well under a millisecond, not zero), extra memory and CPU per pod, and a complex control plane to understand when things go wrong. For ten services it's often overkill.
 
 ### Common mistakes
 
-- Running a registry with no health checks, so dead instances keep receiving traffic.
-- Adopting a full service mesh before you have the operational skills to debug it.
-- Configuring retries both in application code and in the mesh, multiplying retries (see the next section).
+- A registry without health checks, so dead instances keep receiving traffic.
+- Adopting a full mesh before having the operational skills to debug it.
+- Retries both in application code and in the mesh, multiplying them (next section).
 
 ### In the interview
 
 **Q:** Client-side or server-side discovery?
 
-**A:** Server-side keeps clients thin and language-neutral, so it is the usual default, especially on Kubernetes. Client-side saves a hop and gives the caller control over load balancing, which matters at very high call rates.
+**A:** Server-side keeps clients thin and language-neutral — the usual default, especially on Kubernetes. Client-side saves a hop and gives the caller load-balancing control, which matters at very high call rates.
 
 **Q:** What is a service mesh in one sentence?
 
-**A:** A sidecar proxy beside every service instance that handles service-to-service networking (discovery, load balancing, mTLS, retries, metrics), all configured centrally by a control plane.
+**A:** A sidecar proxy beside every service instance handling service-to-service networking (discovery, load balancing, mTLS, retries, metrics), configured centrally by a control plane.
 
 ### TL;DR
 
-Service discovery is a live phone book of service instances; a sidecar is a helper process beside each instance; a service mesh is a centrally managed fleet of sidecars that handles networking for you.
+Service discovery is a live phone book of instances; a sidecar is a helper process beside each instance; a service mesh is a centrally managed fleet of sidecars handling networking for you.
 
 ## Timeouts, retries, exponential backoff and jitter
 
 ### What it is
 
-- A **timeout** is the maximum time a caller will wait for a response before giving up. Like hanging up after the phone rings 10 times.
-- A **retry** is trying the same request again after a failure, in case the failure was temporary (a **transient fault**, such as a dropped packet or a server that was restarting).
-- **Exponential backoff** means waiting longer after each failed attempt, doubling the wait: 100 ms, 200 ms, 400 ms, 800 ms, up to a cap.
-- **Jitter** means adding randomness to that wait so that thousands of clients do not all retry at exactly the same moment.
+- A **timeout** is the maximum time a caller waits for a response before giving up.
+- A **retry** repeats a failed request in case the failure was temporary (a **transient fault**, such as a dropped packet or a restarting server).
+- **Exponential backoff** doubles the wait after each failed attempt: 100 ms, 200 ms, 400 ms, 800 ms, up to a cap.
+- **Jitter** adds randomness to that wait so thousands of clients don't retry at exactly the same moment.
 
 ### Why it matters
 
-Without a timeout, a caller waiting on a dead service holds a thread, a connection and memory forever; soon it runs out and dies too. That is how one slow service takes down everything upstream, a **cascading failure**. Retries turn many transient failures into successes, but careless retries are dangerous: if a struggling service gets every request three times, its load triples exactly when it is weakest. This is a **retry storm**.
+Without a timeout, a caller waiting on a dead service holds a thread, connection and memory forever, soon runs out and dies too — how one slow service takes down everything upstream: a **cascading failure**. Retries turn transient failures into successes, but carelessly: if a struggling service gets every request three times, its load triples exactly when it's weakest — a **retry storm**.
 
 ### How it works
 
-**Setting a timeout.** Base it on the callee's measured latency, not a guess. If payment calls have a p99 of 300 ms, a timeout around 500 ms to 1 s is sensible. Use a **deadline** across the whole request: if the user-facing budget is 2 s and 1.5 s has already gone, the next call gets at most 0.5 s. gRPC propagates deadlines between services for exactly this reason.
+**Setting a timeout.** Base it on the callee's measured latency: with a p99 of 300 ms, around 500 ms to 1 s. Use a **deadline** across the whole request: with a 2 s user-facing budget and 1.5 s spent, the next call gets at most 0.5 s. gRPC propagates deadlines between services for this reason.
 
 **Retrying safely.**
 
-1. Retry only errors that may be temporary: timeouts, connection resets, HTTP 502/503/504, HTTP 429 (after the `Retry-After` delay). Never retry 400 Bad Request or 403 Forbidden; they will fail again.
-2. Retry only **idempotent** operations (doing them twice has the same effect as once), or make them idempotent with an idempotency key (Part 4). Retrying "charge card $50" without a key can charge twice.
-3. Limit attempts, typically 2 to 3 retries in total.
+1. Retry only possibly-temporary errors: timeouts, connection resets, HTTP 502/503/504, HTTP 429 (after the `Retry-After` delay). Never 400 Bad Request or 403 Forbidden — they'll fail again.
+2. Retry only **idempotent** operations, or make them idempotent with an idempotency key (Part 4); retrying "charge card $50" without one can charge twice.
+3. Limit attempts, typically 2–3 retries in total.
 4. Wait with exponential backoff and jitter between attempts.
-5. Retry at one layer only. If the browser, gateway, service A and service B each make up to 3 attempts, one user click can become 3 x 3 x 3 x 3 = 81 calls to the database.
+5. Retry at one layer only: if browser, gateway, service A and service B each make up to 3 attempts, one click can become 3 × 3 × 3 × 3 = 81 database calls.
 
-**Backoff with jitter.** With "full jitter", the wait before attempt n is a random number between 0 and `min(cap, base * 2^n)`.
+**Backoff with jitter.** With "full jitter", the wait before attempt n is random between 0 and `min(cap, base * 2^n)`:
 
 ```text
 base = 100 ms, cap = 10 s
@@ -5701,34 +5003,34 @@ attempt 2: wait random(0, 400 ms)
 attempt 3: wait random(0, 800 ms)
 ```
 
-Without jitter, 10,000 clients that failed at the same second all retry at exactly +100 ms, then +200 ms, in synchronised waves. With jitter, their retries spread across the window and the server sees a smooth trickle.
+Without jitter, 10,000 clients failing in the same second all retry at exactly +100 ms, +200 ms… in synchronised waves; with jitter the server sees a smooth trickle.
 
-A **retry budget** is a further guard: allow retries to add at most, say, 10% extra load. If more than 10% of calls are already retries, stop retrying and fail fast.
+A **retry budget** adds a guard: retries may add at most, say, 10% extra load; beyond that, stop retrying and fail fast.
 
 ### Trade-offs
 
-Short timeouts free resources quickly but may cut off requests that would have succeeded; long ones risk resource exhaustion. More retries improve success rates for rare blips but amplify load during real outages. **Hedged requests** (sending a second copy to another replica if the first has not answered by the p95 time, and taking whichever answers first) cut tail latency at the cost of a few percent extra load.
+Short timeouts free resources quickly but may cut off requests that would have succeeded; long ones risk resource exhaustion. More retries help with rare blips but amplify load during real outages. **Hedged requests** (a second copy to another replica if the first hasn't answered by the p95 time, taking whichever answers first) cut tail latency for a few percent extra load.
 
 ### Common mistakes
 
-- No timeout at all. Many HTTP client libraries default to waiting forever or for minutes.
+- No timeout at all; many HTTP client libraries default to waiting forever or for minutes.
 - A caller timeout shorter than the callee's, so the callee keeps working on an answer nobody will read.
 - Retrying non-idempotent writes.
 - Retrying immediately in a tight loop.
 
 ### Real-world examples
 
-AWS SDKs retry throttled and transient errors with exponential backoff and jitter by default, and the AWS Architecture Blog popularised the "full jitter" formula. Google's **Site Reliability Engineering (SRE)** book describes per-client retry budgets to prevent retry storms.
+AWS SDKs retry throttled and transient errors with exponential backoff and jitter by default; the AWS Architecture Blog popularised the "full jitter" formula. Google's **Site Reliability Engineering (SRE)** book describes per-client retry budgets to prevent retry storms.
 
 ### In the interview
 
 **Q:** Why add jitter to backoff?
 
-**A:** To break synchronisation. When many clients fail together, plain backoff makes them retry together in waves that knock the service over again. Random jitter spreads them out.
+**A:** To break synchronisation: clients that fail together would otherwise retry together in waves that knock the service over again.
 
 **Q:** Where should retries live in a deep call chain?
 
-**A:** At one layer, ideally close to the user or at the edge of each service boundary, with a small attempt limit, so retries do not multiply across layers.
+**A:** At one layer — ideally near the user or at each service boundary's edge — with a small attempt limit, so retries don't multiply across layers.
 
 ### TL;DR
 
@@ -5738,21 +5040,21 @@ Always set timeouts; retry only transient failures on idempotent operations, a f
 
 ### What it is
 
-- A **circuit breaker** is a wrapper around calls to a dependency that "trips" after too many failures and then fails calls instantly for a while instead of waiting on a broken service. It is named after the electrical breaker in your house that cuts power when a wire overloads, protecting the rest of the house.
-- A **bulkhead** isolates resources so one failing part cannot consume everything. Ships are divided into watertight compartments (bulkheads) so a hole floods one compartment, not the whole hull.
-- A **fallback** is what you do instead when a call fails: return cached data, a default, or a reduced answer.
+- A **circuit breaker** wraps calls to a dependency, "trips" after too many failures, then fails calls instantly for a while instead of waiting on a broken service — like the household breaker that cuts an overloaded wire to protect the rest.
+- A **bulkhead** isolates resources so one failing part can't consume everything — like a ship's watertight compartments.
+- A **fallback** is what you do instead when a call fails: cached data, a default, or a reduced answer.
 
 ### Why it matters
 
-Suppose a recommendation service hangs. Every product page waits 2 seconds for its timeout. Web server threads pile up waiting, the thread pool fills, and now product pages, which could have rendered without recommendations, fail too. A circuit breaker notices recommendations are broken and stops calling them; a bulkhead makes sure recommendation calls can only use, say, 20 of the 200 threads; a fallback shows "popular items" instead.
+A recommendation service hangs: every product page waits 2 s for its timeout, web threads pile up, the pool fills, and product pages — which could render without recommendations — fail too. A circuit breaker stops calling the broken service; a bulkhead limits recommendation calls to, say, 20 of 200 threads; a fallback shows "popular items".
 
 ### How it works
 
-A circuit breaker has three states.
+A circuit breaker has three states:
 
-1. **Closed** (normal): calls pass through. The breaker counts failures in a rolling window, for example the last 100 calls or last 10 seconds.
-2. If failures exceed a threshold (say 50% of at least 20 calls), it moves to **Open**: every call fails immediately with an error or goes straight to the fallback, without touching the dependency. This gives the dependency time to recover and frees the caller's threads.
-3. After a cool-down (say 30 seconds) it moves to **Half-open**: it lets a few trial calls through. If they succeed, it returns to Closed. If they fail, back to Open for another cool-down.
+1. **Closed** (normal): calls pass; failures are counted over a rolling window (last 100 calls or 10 seconds).
+2. Past a threshold (say 50% of at least 20 calls) it goes **Open**: every call fails immediately or goes straight to the fallback, giving the dependency time to recover and freeing the caller's threads.
+3. After a cool-down (say 30 s) it goes **Half-open**: a few trial calls pass. Success → Closed; failure → Open for another cool-down. This is how it discovers recovery without flooding the dependency.
 
 ```mermaid
 stateDiagram-v2
@@ -5763,55 +5065,55 @@ stateDiagram-v2
     HalfOpen --> Open: trial call fails
 ```
 
-**Bulkheads** in practice: separate thread pools or connection pools per dependency, separate queues per customer tier, separate clusters for internal batch jobs and user-facing traffic, or **cell-based architecture**, where users are split into independent copies of the whole stack ("cells") so a bad deploy or poison request only affects one cell's users.
+**Bulkheads** in practice: separate thread or connection pools per dependency, separate queues per customer tier, separate clusters for internal batch jobs and user traffic, or **cell-based architecture** — users split across independent copies of the whole stack ("cells"), so a bad deploy or poison request affects only one cell's users.
 
-**Fallback options**: a cached last-known value, a static default ("free shipping info unavailable"), a simpler algorithm, an empty section of the page, or queueing the work to finish later.
+**Fallback options**: a cached last-known value, a static default ("free shipping info unavailable"), a simpler algorithm, an empty page section, or queueing the work to finish later.
 
 ### Trade-offs
 
-Breakers add a little state and configuration per dependency, and thresholds tuned badly either trip on normal noise or never trip. Bulkheads waste some capacity, because a reserved pool sits idle even when another is overloaded. Fallbacks give users stale or partial data, which is fine for recommendations but not for a bank balance.
+Breakers add state and configuration per dependency; badly tuned thresholds trip on noise or never trip. Bulkheads waste capacity (a reserved pool idles while another is overloaded). Fallbacks give stale or partial data — fine for recommendations, not a bank balance.
 
 ### Common mistakes
 
-- Using a fallback that calls another fragile service, which then fails too.
+- A fallback that calls another fragile service, which fails too.
 - One global breaker for a dependency with many endpoints, so one bad endpoint blocks healthy ones.
-- Never testing the open state, so the fallback code path has a bug nobody has seen.
+- Never testing the open state, so the fallback path hides an unseen bug.
 
 ### Real-world examples
 
-Netflix popularised circuit breakers with its Hystrix library (now in maintenance mode); Resilience4j is the common Java successor, and service meshes such as Istio offer breakers and outlier ejection at the proxy. Amazon describes cell-based architectures to limit the "blast radius" of failures.
+Netflix popularised circuit breakers with Hystrix (now in maintenance mode); Resilience4j is the common Java successor, and meshes such as Istio offer breakers and outlier ejection at the proxy. Amazon describes cell-based architectures to limit the "blast radius" of failures.
 
 ### In the interview
 
 **Q:** Explain the half-open state.
 
-**A:** After the breaker has been open for a cool-down period, it lets a small number of test requests through. Success closes the breaker and resumes normal traffic; failure re-opens it. It is how the breaker discovers that the dependency has recovered without flooding it.
+**A:** After the open cool-down, the breaker lets a few test requests through: success closes it and resumes normal traffic, failure re-opens it — discovering recovery without flooding the dependency.
 
-**Q:** How would you stop a slow non-critical service from taking down your homepage?
+**Q:** How would you stop a slow non-critical service taking down your homepage?
 
-**A:** Tight timeout on the call, a circuit breaker around it, a separate small thread pool (bulkhead) for it, and a fallback such as cached or default content, so the page renders without that section.
+**A:** Tight timeout, a circuit breaker, a small separate thread pool (bulkhead), and a fallback such as cached or default content, so the page renders without that section.
 
 ### TL;DR
 
-A circuit breaker stops calling a failing dependency (Closed, Open, Half-open); a bulkhead caps how many resources any one dependency can consume; a fallback gives a degraded answer instead of an error.
+A circuit breaker stops calling a failing dependency (Closed, Open, Half-open); a bulkhead caps the resources any one dependency can consume; a fallback gives a degraded answer instead of an error.
 
 ## Rate limiting and throttling
 
 ### What it is
 
-**Rate limiting** caps how many requests a client may make in a time window, for example 100 requests per minute per user. **Throttling** is often used as a synonym; strictly, throttling slows requests down (delays or queues them) while rate limiting rejects the excess. A nightclub bouncer who lets in only 50 people per hour is rate limiting; one who makes people wait in line until there is room is throttling.
+**Rate limiting** caps how many requests a client may make per time window (say 100 per minute per user). **Throttling** is often a synonym; strictly, throttling slows requests (delays or queues them) while rate limiting rejects the excess — a bouncer admitting 50 per hour versus one making people wait in line.
 
 ### Why it matters
 
-- **Protection**: stops one buggy script or abusive client from overwhelming the service for everyone.
+- **Protection**: one buggy script or abusive client can't overwhelm the service for everyone.
 - **Fairness**: each customer gets a fair share.
-- **Cost control**: expensive operations (sending SMS, calling a paid AI model) cannot run away.
+- **Cost control**: expensive operations (sending SMS, calling a paid AI model) can't run away.
 - **Security**: slows brute-force password guessing and scraping.
-- **Business tiers**: free plan 1,000 calls per day, paid plan 100,000.
+- **Business tiers**: free plan 1,000 calls per day, paid 100,000.
 
 ### How it works
 
-When a client exceeds its limit, the server returns **HTTP 429 Too Many Requests**, ideally with a `Retry-After` header saying how many seconds to wait. Many APIs also send headers so clients can pace themselves:
+Over the limit, the server returns **HTTP 429 Too Many Requests**, ideally with `Retry-After` (seconds to wait), plus headers so clients can pace themselves:
 
 ```http
 HTTP/1.1 429 Too Many Requests
@@ -5821,17 +5123,17 @@ X-RateLimit-Remaining: 0
 X-RateLimit-Reset: 1767225600
 ```
 
-The limit is applied per **key**: user ID, API key, IP address, or a combination such as (user, endpoint).
+Limits apply per **key**: user ID, API key, IP address, or a combination such as (user, endpoint).
 
 ### Types
 
 **Algorithms.**
 
-- **Token bucket**: a bucket holds up to B tokens and is refilled at R tokens per second. Each request takes one token; if the bucket is empty, the request is rejected. It allows short **bursts** up to B, then a steady rate R. Example: B = 10, R = 1 per second lets a user fire 10 requests at once, then one per second. Only two numbers per key (token count, last refill time), so it is cheap. The most widely used algorithm.
-- **Leaky bucket**: requests enter a queue (the bucket) and leave at a fixed rate, like water dripping from a hole. If the bucket is full, new requests are dropped. It smooths bursts into a perfectly steady outflow, good for protecting a downstream that cannot handle bursts, but adds queueing delay.
-- **Fixed window counter**: count requests in each calendar window (12:00:00 to 12:00:59). Reset at the boundary. Very simple, one counter per key, but a client can send the full limit at 12:00:59 and again at 12:01:00, doubling the rate across the boundary.
-- **Sliding window log**: store the timestamp of every request; on each new request, drop timestamps older than the window and count the rest. Exact, but stores one entry per request, which is memory-hungry at high limits.
-- **Sliding window counter**: keep counters for the current and previous fixed windows and estimate the sliding count as `current + previous x (fraction of previous window still inside the sliding window)`. If the limit is 100 per minute, we are 15 s into the current minute with 30 requests, and the previous minute had 80, the estimate is 30 + 80 x 0.75 = 90, so the request is allowed. Nearly as accurate as the log with the memory of fixed windows.
+- **Token bucket**: a bucket holds up to B tokens, refilled at R per second; each request takes one, and an empty bucket rejects. Allows **bursts** up to B, then steady rate R (B = 10, R = 1/s: 10 at once, then one per second). Only two numbers per key (token count, last refill time), so cheap. The most widely used.
+- **Leaky bucket**: requests enter a queue (the bucket) and leave at a fixed rate, like water dripping from a hole; a full bucket drops new ones. Smooths bursts into a perfectly steady outflow, protecting a downstream that can't handle bursts, but adds queueing delay.
+- **Fixed window counter**: count requests per calendar window (12:00:00–12:00:59), reset at the boundary. One counter per key, very simple — but a client can send the full limit at 12:00:59 and again at 12:01:00, doubling the rate across the boundary.
+- **Sliding window log**: store every request timestamp, drop those older than the window, count the rest. Exact, but one entry per request — memory-hungry at high limits.
+- **Sliding window counter**: counters for the current and previous fixed windows, estimating `current + previous x (fraction of previous window still inside the sliding window)`. Limit 100/minute, 15 s into the minute with 30 requests, previous minute 80: 30 + 80 × 0.75 = 90 → allowed. Nearly the log's accuracy with fixed windows' memory.
 
 | Algorithm | Allows bursts | Memory per key | Accuracy |
 |---|---|---|---|
@@ -5843,13 +5145,13 @@ The limit is applied per **key**: user ID, API key, IP address, or a combination
 
 **Where to rate limit.**
 
-- **Client side**: polite clients self-limit, but you cannot trust them.
+- **Client side**: polite clients self-limit, but can't be trusted.
 - **Edge / CDN / WAF**: block floods by IP before they reach you (Cloudflare, AWS WAF rate rules).
-- **API gateway or load balancer**: the common place for per-API-key limits.
-- **Inside each service**: protects the service itself, for example limiting calls to an expensive endpoint.
+- **API gateway or load balancer**: the usual place for per-API-key limits.
+- **Inside each service**: protects the service itself, e.g. an expensive endpoint.
 - **In front of a fragile dependency**: an outbound limiter so you never exceed a partner API's quota.
 
-**Distributed rate limiting.** With 20 gateway servers, each must see the same count. The usual answer is a shared fast store such as Redis, with an atomic increment-and-check (often a small Lua script so the read and write happen in one step). To avoid a Redis call on every request, some systems give each node a local share of the limit and sync periodically, accepting slight inaccuracy.
+**Distributed rate limiting.** With 20 gateway servers, all must see the same count: a shared fast store such as Redis with an atomic increment-and-check (often a small Lua script so read and write happen in one step). To avoid a Redis call per request, some systems give each node a local share of the limit and sync periodically, accepting slight inaccuracy.
 
 ```mermaid
 flowchart LR
@@ -5861,72 +5163,72 @@ flowchart LR
 
 ### Trade-offs
 
-Strict, globally exact limits need a central store on the hot path (added latency, a dependency that can fail). Local per-node limits are fast but approximate. If the limiter's store is down, you must choose **fail open** (allow traffic, risk overload) or **fail closed** (reject traffic, guaranteed outage); most choose fail open for user traffic.
+Strict, globally exact limits put a central store on the hot path (latency, a dependency that can fail); local per-node limits are fast but approximate. If the limiter's store is down, choose **fail open** (allow traffic, risk overload) or **fail closed** (reject traffic, guaranteed outage); most fail open for user traffic.
 
 ### Common mistakes
 
-- Limiting only by IP address, which punishes many users behind one corporate NAT and is dodged by attackers with many IPs.
-- Returning 500 or 503 instead of 429, so clients do not know to back off.
-- Forgetting to tell clients their remaining quota.
+- Limiting only by IP, punishing many users behind one corporate NAT while attackers with many IPs dodge it.
+- Returning 500 or 503 instead of 429, so clients don't know to back off.
+- Not telling clients their remaining quota.
 
 ### Real-world examples
 
-GitHub's REST API allows 5,000 requests per hour for an authenticated user and 60 per hour unauthenticated, and reports usage in `x-ratelimit-*` headers. Stripe has written about using token buckets for its API rate limiters. NGINX's `limit_req` module implements a leaky bucket. Cloudflare has described using the sliding window counter approximation at its edge.
+GitHub's REST API allows 5,000 requests per hour authenticated and 60 unauthenticated, reporting usage in `x-ratelimit-*` headers. Stripe has written about token buckets for its API limiters. NGINX's `limit_req` module is a leaky bucket. Cloudflare has described the sliding window counter approximation at its edge.
 
 ### In the interview
 
 **Q:** Design a rate limiter for an API used by millions of users.
 
-**A:** Token bucket per API key, stored in Redis with an atomic script, enforced at the API gateway. Return 429 with `Retry-After` and rate-limit headers. Shard Redis by key, keep limits in config so they change without deploys, and fail open if Redis is unavailable.
+**A:** Token bucket per API key in Redis with an atomic script, enforced at the API gateway; 429 with `Retry-After` and rate-limit headers. Shard Redis by key, keep limits in config so they change without deploys, fail open if Redis is unavailable.
 
 **Q:** Token bucket vs leaky bucket?
 
-**A:** Token bucket permits bursts up to the bucket size while enforcing an average rate, which suits APIs. Leaky bucket outputs a constant rate, which suits protecting a downstream that cannot absorb bursts.
+**A:** Token bucket allows bursts up to the bucket size while enforcing an average rate — suits APIs. Leaky bucket outputs a constant rate — suits protecting a downstream that can't absorb bursts.
 
 ### TL;DR
 
-Rate limiting caps requests per client per time window and answers excess with 429; token bucket is the default algorithm; enforce it at the edge or gateway with a shared counter store.
+Rate limiting caps requests per client per window and answers excess with 429; token bucket is the default; enforce at the edge or gateway with a shared counter store.
 
 ## Load shedding and graceful degradation
 
 ### What it is
 
-- **Load shedding** means deliberately rejecting some requests when the system is overloaded so that the rest still succeed. Like an electricity company switching off some neighbourhoods for an hour so the whole grid does not collapse.
-- **Graceful degradation** means turning off non-essential features under stress so the core keeps working. An online shop at peak may hide personalised recommendations and reviews but keep search and checkout.
+- **Load shedding**: deliberately rejecting some requests when overloaded so the rest still succeed — like rolling blackouts that save the grid.
+- **Graceful degradation**: turning off non-essential features under stress so the core keeps working (a shop at peak hides recommendations and reviews but keeps search and checkout).
 
 ### Why it matters
 
-When a server receives more work than it can do, things do not just get a bit slower. Queues grow, every request waits longer, many time out after the server has already done the work, clients retry, and the server ends up spending all its effort on requests nobody is waiting for. Throughput can collapse to near zero. This is **congestion collapse**. Shedding the excess early keeps **goodput** (useful completed work) high.
+Overload doesn't just slow things a bit: queues grow, every request waits longer, many time out after the server has already done the work, clients retry, and the server spends all its effort on requests nobody awaits. Throughput can collapse to near zero — **congestion collapse**. Shedding the excess early keeps **goodput** (useful completed work) high.
 
 ### How it works
 
-1. Measure a sign of overload: CPU above 90%, concurrent in-flight requests above a limit, queue wait time above, say, 100 ms.
+1. Measure an overload signal: CPU above 90%, in-flight requests above a limit, queue wait above, say, 100 ms.
 2. When overloaded, reject new low-priority requests immediately and cheaply with 503 Service Unavailable (with `Retry-After`) rather than queueing them.
-3. Prioritise: shed background jobs and bots first, then logged-out traffic, and keep checkout and login last.
+3. Prioritise: shed background jobs and bots first, then logged-out traffic; keep checkout and login last.
 4. Drop requests that have already waited longer than the client's timeout; working on them is wasted.
-5. Combine with degradation flags: a "kill switch" turns off expensive features during an incident.
+5. Combine with degradation flags: a **kill switch** turns off expensive features during an incident.
 
-**Backpressure** (Part 4) is the cooperative cousin: a consumer signals producers to slow down rather than silently dropping.
+**Backpressure** (Part 4) is the cooperative cousin: a consumer signals producers to slow down instead of silently dropping.
 
 ### Trade-offs
 
-Some users see errors on purpose. But controlled, partial failure beats total failure. The hard parts are picking the right overload signal and making the rejection path cheap: if rejecting a request costs as much as serving it, shedding does not help.
+Some users see errors on purpose, but controlled partial failure beats total failure. The hard parts: the right overload signal, and a cheap rejection path — if rejecting costs as much as serving, shedding doesn't help.
 
 ### Common mistakes
 
-- Unbounded queues: they hide overload until latency is minutes long.
+- Unbounded queues hiding overload until latency is minutes long.
 - Shedding at random, dropping a checkout while serving a crawler.
-- No degradation switches, so the only lever during an incident is "add servers and hope".
+- No degradation switches, leaving "add servers and hope" as the only incident lever.
 
 ### Real-world examples
 
-Google's SRE book describes per-request criticality levels so overloaded servers shed the least important traffic first. Amazon has written about using in-flight request limits and dropping requests whose callers have already timed out. Netflix serves a generic, non-personalised home page row when its personalisation services are degraded.
+Google's SRE book describes per-request criticality levels so overloaded servers shed the least important traffic first. Amazon has written about in-flight request limits and dropping requests whose callers already timed out. Netflix serves a generic, non-personalised home-page row when personalisation services are degraded.
 
 ### In the interview
 
-**Q:** What happens if traffic is 3x your capacity and autoscaling takes 5 minutes?
+**Q:** Traffic is 3x your capacity and autoscaling takes 5 minutes. What happens?
 
-**A:** Without protection, queues grow and the service collapses. I would shed load at the edge by priority with fast 503s, rate limit heavy clients, turn off non-essential features, and serve cached content where possible until new capacity arrives.
+**A:** Unprotected, queues grow and the service collapses. Shed load at the edge by priority with fast 503s, rate limit heavy clients, switch off non-essential features, and serve cached content until new capacity arrives.
 
 ### TL;DR
 
@@ -5936,70 +5238,70 @@ When overloaded, reject some work early and cheaply (load shedding) and switch o
 
 ### What it is
 
-**Autoscaling** automatically adds servers (or containers, or function copies) when load rises and removes them when it falls. Adding capacity is **scaling out**; removing it is **scaling in**. A supermarket that opens more tills when queues get long and closes them in the quiet afternoon is autoscaling its cashiers. It is the practical form of the **elasticity** introduced in Part 1.
+**Autoscaling** automatically adds servers (containers, function copies) when load rises — **scaling out** — and removes them when it falls — **scaling in** — like opening tills as queues lengthen. It is the practical form of Part 1's **elasticity**.
 
 ### Why it matters
 
-Traffic is rarely flat. A food-delivery app may see 5x more orders at 7 pm than at 3 pm. Without autoscaling you either buy for the peak (and pay for idle machines most of the day) or buy for the average (and fall over at dinner time). In the cloud you pay by the second or hour, so matching capacity to demand saves real money.
+Traffic is rarely flat: a food-delivery app may see 5× more orders at 7 pm than at 3 pm. Without autoscaling you buy for the peak (idle machines most of the day) or the average (falling over at dinner). Cloud billing by the second or hour makes matching capacity to demand real savings.
 
 ### How it works
 
-1. Choose a **metric** that tracks load: average CPU utilisation, requests per second per instance, queue length (messages waiting), p95 latency, or a custom business metric.
-2. Choose a **target**: for example "keep average CPU at 60%". The headroom (40%) absorbs spikes while new instances boot.
-3. A controller checks the metric periodically (Kubernetes' Horizontal Pod Autoscaler checks every 15 seconds by default) and computes the needed count: `desired = current x (current metric / target)`. With 10 instances at 90% CPU and a 60% target, desired = 10 x 90/60 = 15.
-4. It launches 5 more instances. They boot, pass health checks and join the load balancer. This takes seconds for containers and roughly 1 to 5 minutes for virtual machines.
-5. When load drops, it scales in slowly, after a **cool-down** period (often 5 to 10 minutes), so it does not flap up and down, and it **drains** connections from instances before terminating them.
-6. **Minimum and maximum** bounds stop it from scaling to zero by mistake or to 10,000 machines during an attack.
+1. Choose a **metric** tracking load: average CPU, requests per second per instance, queue length, p95 latency, or a business metric.
+2. Choose a **target**, e.g. "average CPU 60%"; the 40% headroom absorbs spikes while instances boot.
+3. A controller checks periodically (Kubernetes' Horizontal Pod Autoscaler every 15 seconds by default) and computes `desired = current x (current metric / target)`: 10 instances at 90% CPU with a 60% target → 10 × 90/60 = 15.
+4. It launches 5 more, which boot, pass health checks and join the load balancer — seconds for containers, roughly 1–5 minutes for VMs.
+5. It scales in slowly after a **cool-down** (often 5–10 minutes) to avoid flapping, **draining** connections before terminating instances.
+6. **Minimum and maximum** bounds prevent scaling to zero by mistake or to 10,000 machines during an attack.
 
 ### Types
 
-- **Reactive (dynamic) scaling**: responds to current metrics as above. Simple, but always slightly late, because capacity arrives minutes after the spike begins.
-- **Scheduled scaling**: scale by the clock. "Every weekday at 08:30 set minimum to 40 instances." Perfect for known patterns such as business hours, a TV ad slot or a ticket sale opening at 10:00.
-- **Predictive scaling**: a model learns daily and weekly patterns from history and adds capacity before the forecasted rise. AWS Auto Scaling offers this.
-- **Horizontal vs vertical autoscaling**: horizontal adds instances (the common case); vertical gives an instance more CPU or memory (Kubernetes' Vertical Pod Autoscaler), which usually needs a restart.
-- **Cluster autoscaling**: in Kubernetes, adds whole machines (nodes) when pods cannot fit on the existing ones.
+- **Reactive (dynamic) scaling**: responds to current metrics as above. Simple, but always slightly late — capacity arrives minutes after the spike begins.
+- **Scheduled scaling**: by the clock ("weekdays at 08:30 set minimum to 40"), for known patterns: business hours, a TV ad slot, a ticket sale opening at 10:00.
+- **Predictive scaling**: a model learns daily and weekly patterns and adds capacity before the forecast rise (AWS Auto Scaling offers it).
+- **Horizontal vs vertical autoscaling**: horizontal adds instances (the common case); vertical gives an instance more CPU or memory (Kubernetes' Vertical Pod Autoscaler), usually needing a restart.
+- **Cluster autoscaling**: Kubernetes adds whole machines (nodes) when pods can't fit.
 
 ### Trade-offs
 
-Reactive scaling is cheap but lags; keep headroom or combine it with scheduled or predictive scaling. Scaling on CPU is easy but misleading for services that wait on I/O; requests per instance or queue depth is often better. Autoscaling the stateless web tier is easy; databases and other stateful systems scale far more slowly because data must be copied.
+Reactive scaling is cheap but lags; keep headroom or combine with scheduled or predictive. CPU is easy but misleading for I/O-waiting services; requests per instance or queue depth is often better. The stateless web tier autoscales easily; databases and other stateful systems scale far more slowly because data must be copied.
 
 ### Common mistakes
 
-- Scaling the web tier to 200 instances that then exhaust the database's connection limit, moving the bottleneck rather than fixing it.
-- Targets set too high (90% CPU), leaving no buffer for the minutes it takes to boot.
+- Scaling the web tier to 200 instances that exhaust the database's connection limit — moving the bottleneck, not fixing it.
+- Targets too high (90% CPU), leaving no buffer for boot time.
 - Slow startup (large images, long cache warm-up) making autoscaling useless for sudden spikes.
-- No maximum, so a bug or a DDoS attack produces a huge bill.
+- No maximum, so a bug or DDoS produces a huge bill.
 
 ### Real-world examples
 
-AWS EC2 Auto Scaling groups, Google Cloud managed instance groups, Kubernetes Horizontal Pod Autoscaler and KEDA (Kubernetes Event-driven Autoscaling, which scales on event sources such as Kafka consumer lag). Netflix built a predictive autoscaler called Scryer to pre-provision capacity before its daily evening peak.
+AWS EC2 Auto Scaling groups, Google Cloud managed instance groups, Kubernetes Horizontal Pod Autoscaler, and KEDA (Kubernetes Event-driven Autoscaling, scaling on event sources such as Kafka consumer lag). Netflix built a predictive autoscaler, Scryer, to pre-provision capacity before its evening peak.
 
 ### In the interview
 
 **Q:** Your service gets a 10x spike every evening at 8 pm. How do you scale?
 
-**A:** Scheduled or predictive scaling to raise capacity before 8 pm, reactive scaling on requests per instance to handle surprises, and make sure the database, caches and connection pools can handle the higher instance count.
+**A:** Scheduled or predictive scaling to raise capacity before 8 pm, reactive scaling on requests per instance for surprises, and check the database, caches and connection pools can take the higher instance count.
 
 **Q:** Which metric would you autoscale a queue worker on?
 
-**A:** Queue depth or consumer lag divided by the rate one worker can process, because CPU does not tell you how far behind you are.
+**A:** Queue depth or consumer lag divided by one worker's processing rate; CPU doesn't say how far behind you are.
 
 ### TL;DR
 
-Autoscaling adds and removes capacity based on a metric and a target; reactive is late, scheduled and predictive are early; set min and max bounds and keep headroom.
+Autoscaling adds and removes capacity based on a metric and target; reactive is late, scheduled and predictive are early; set min and max bounds and keep headroom.
 
 ## Virtual machines, containers and Docker
 
 ### What it is
 
-- A **virtual machine (VM)** is a software-emulated computer. A program called a **hypervisor** (such as KVM, Xen, VMware ESXi, or AWS's Nitro) splits one physical server into several VMs, each with its own complete operating system (its own Linux or Windows kernel). It is like dividing a house into flats, each with its own kitchen, plumbing and front door.
-- A **container** is an isolated process (or group of processes) that shares the host machine's operating-system kernel but has its own view of files, network and process list, and its own limits on CPU and memory. It is like rooms in a shared house: private rooms, shared kitchen and plumbing. Linux implements it with **namespaces** (what a process can see) and **cgroups** (how much it can use).
-- A **container image** is a packaged, read-only snapshot of an application and everything it needs (runtime, libraries, config defaults). Run the image and you get a container.
-- **Docker** is the tool that made containers popular from 2013: a simple file format (the `Dockerfile`) to build images, a way to run them and **registries** (Docker Hub, Amazon ECR) to share them.
+- A **virtual machine (VM)** is a software-emulated computer. A **hypervisor** (KVM, Xen, VMware ESXi, AWS Nitro) splits one physical server into several VMs, each with its own complete operating system and kernel — flats in a house, each with its own kitchen and plumbing.
+- A **container** is an isolated process (or group) sharing the host's OS kernel but with its own view of files, network and process list, and its own CPU and memory limits — private rooms with a shared kitchen. Linux implements it with **namespaces** (what a process can see) and **cgroups** (how much it can use).
+- A **container image** is a packaged, read-only snapshot of an application and everything it needs (runtime, libraries, config defaults); running it gives a container.
+- **Docker** made containers popular from 2013: a simple file format (the `Dockerfile`) to build images, a way to run them, and **registries** (Docker Hub, Amazon ECR) to share them.
 
 ### Why it matters
 
-"It works on my machine" disappears: the same image runs on a laptop, in testing and in production. Containers start in under a second to a few seconds and use megabytes rather than gigabytes of overhead, so you can pack dozens onto a server and scale them quickly. They are the unit that modern platforms like Kubernetes schedule.
+"It works on my machine" disappears: the same image runs on a laptop, in testing and in production. Containers start in under a second to a few seconds with megabytes (not gigabytes) of overhead, so dozens pack onto a server and scale quickly. They are the unit platforms like Kubernetes schedule.
 
 ### How it works
 
@@ -6014,9 +5316,9 @@ COPY . .
 CMD ["gunicorn", "-b", "0.0.0.0:8080", "app:server"]
 ```
 
-1. `docker build` turns this into an image made of stacked **layers** (base OS files, then the installed libraries, then your code). Unchanged layers are cached, so rebuilding after a code change takes seconds.
+1. `docker build` produces an image of stacked **layers** (base OS files, installed libraries, your code); unchanged layers are cached, so rebuilding after a code change takes seconds.
 2. The image is pushed to a registry with a tag such as `shop-api:1.4.2`.
-3. Any server pulls it and runs it as a container, with its own isolated filesystem and network interface.
+3. Any server pulls and runs it as a container with its own isolated filesystem and network interface.
 
 ```mermaid
 flowchart TD
@@ -6042,19 +5344,19 @@ flowchart TD
 | Density per host | Few to tens | Tens to hundreds |
 | Typical use | Multi-tenant clouds, different OSes | Packaging and running apps |
 
-In practice they are combined: cloud providers give you VMs, and you run containers inside them. Lightweight "micro-VMs" such as AWS Firecracker (used by Lambda and Fargate) blend the two, booting a minimal VM in around 125 ms.
+In practice they combine: clouds give you VMs and you run containers inside. "Micro-VMs" such as AWS Firecracker (used by Lambda and Fargate) blend the two, booting a minimal VM in around 125 ms.
 
 ### Common mistakes
 
-- Storing important data inside the container's filesystem; it vanishes when the container is replaced. Use volumes or external storage.
-- Huge images (several GB) that slow down every deploy and scale-out.
+- Important data in the container's filesystem; it vanishes when the container is replaced. Use volumes or external storage.
+- Huge images (several GB) slowing every deploy and scale-out.
 - Running containers as root and baking secrets into images.
 
 ### In the interview
 
 **Q:** Container vs VM in one line?
 
-**A:** A VM virtualises hardware and runs its own OS kernel; a container virtualises the OS, sharing the host kernel, so it is lighter and faster to start but less isolated.
+**A:** A VM virtualises hardware and runs its own OS kernel; a container virtualises the OS, sharing the host kernel — lighter and faster to start but less isolated.
 
 ### TL;DR
 
@@ -6064,29 +5366,29 @@ VMs are full emulated computers with their own OS; containers are isolated proce
 
 ### What it is
 
-**Kubernetes** (often written **K8s**) is a **container orchestrator**: software that runs and manages containers across a fleet of machines. You tell it *what* you want ("run 5 copies of `shop-api:1.4.2`, each with 1 CPU and 512 MB of memory, reachable at the name `shop-api`") and it continuously works to make reality match. Picture a harbour master for a busy port: it assigns each shipping container to a free berth, notices when one falls into the water and orders a replacement, and moves cargo elsewhere when a crane breaks. Google open-sourced it in 2014, based on its internal system Borg; it is now run by the Cloud Native Computing Foundation (CNCF).
+**Kubernetes** (**K8s**) is a **container orchestrator**: it runs and manages containers across a fleet of machines. You declare *what* you want ("5 copies of `shop-api:1.4.2`, each with 1 CPU and 512 MB, reachable at `shop-api`") and it continuously works to make reality match — a harbour master assigning containers to berths and replacing any that fall in the water. Google open-sourced it in 2014, based on its internal Borg; it is now run by the Cloud Native Computing Foundation (CNCF).
 
 ### Why it matters
 
-With 300 containers across 40 machines, nobody can place, restart and wire them up by hand. Kubernetes automates scheduling, self-healing, scaling, rolling updates, service discovery and configuration, and it works the same on every major cloud (Amazon EKS, Google GKE, Azure AKS) and on your own servers.
+Nobody can place, restart and wire up 300 containers on 40 machines by hand. Kubernetes automates scheduling, self-healing, scaling, rolling updates, service discovery and configuration, the same way on every major cloud (Amazon EKS, Google GKE, Azure AKS) and on your own servers.
 
 ### How it works
 
-Key words, beginner level:
+Key words:
 
-- **Cluster**: the whole Kubernetes installation, a set of machines plus the brain that controls them.
-- **Node**: one machine (physical or VM) in the cluster that runs containers. Each node runs an agent called the **kubelet**.
-- **Control plane**: the brain. The **API server** receives your instructions, **etcd** stores the cluster's desired and current state, the **scheduler** decides which node each pod goes on, and **controllers** keep fixing differences.
-- **Pod**: the smallest unit Kubernetes runs. One or more tightly coupled containers that share a network address and storage, for example your app plus its sidecar. Pods are disposable: they are replaced, not repaired.
-- **Deployment**: a description of a stateless app ("5 replicas of this pod template"). It creates and replaces pods and performs rolling updates when you change the image.
-- **Service**: a stable name and virtual IP address that load-balances traffic across the current set of matching pods, even as pods come and go. This is Kubernetes' built-in server-side service discovery.
-- **Ingress** (or the newer **Gateway API**): rules that route outside HTTP traffic (`shop.com/api`) to Services.
-- **ConfigMap** and **Secret**: configuration values and sensitive values injected into pods.
-- **Namespace**: a folder-like grouping to separate teams or environments.
-- **StatefulSet**: like a Deployment but for stateful apps (databases), giving each pod a stable name and its own persistent storage.
-- **Probes**: a **liveness probe** tells Kubernetes to restart a stuck container; a **readiness probe** tells it whether to send the pod traffic yet.
+- **Cluster**: the whole installation — machines plus the brain controlling them.
+- **Node**: one machine (physical or VM) running containers, each with an agent called the **kubelet**.
+- **Control plane**: the brain. The **API server** receives instructions, **etcd** stores desired and current state, the **scheduler** picks each pod's node, and **controllers** keep fixing differences.
+- **Pod**: the smallest unit Kubernetes runs — one or more tightly coupled containers sharing a network address and storage (your app plus its sidecar). Pods are replaced, not repaired.
+- **Deployment**: describes a stateless app ("5 replicas of this pod template"); creates and replaces pods and performs rolling updates when the image changes.
+- **Service**: a stable name and virtual IP load-balancing across the current matching pods as they come and go — Kubernetes' built-in server-side service discovery.
+- **Ingress** (or the newer **Gateway API**): rules routing outside HTTP traffic (`shop.com/api`) to Services.
+- **ConfigMap** and **Secret**: configuration and sensitive values injected into pods.
+- **Namespace**: folder-like grouping separating teams or environments.
+- **StatefulSet**: a Deployment for stateful apps (databases), giving each pod a stable name and its own persistent storage.
+- **Probes**: a **liveness probe** tells Kubernetes to restart a stuck container; a **readiness probe** whether to send the pod traffic yet.
 
-The heart of Kubernetes is the **reconciliation loop**: controllers repeatedly compare desired state with actual state and act on any difference. If a node dies and 2 of your 5 pods vanish, the Deployment's controller sees "3, want 5" and creates 2 new pods on healthy nodes.
+At its heart is the **reconciliation loop**: controllers repeatedly compare desired with actual state and act on differences. If a node dies taking 2 of 5 pods, the Deployment controller sees "3, want 5" and creates 2 on healthy nodes.
 
 ```mermaid
 flowchart TD
@@ -6101,41 +5403,41 @@ flowchart TD
 
 ### Trade-offs
 
-Kubernetes is powerful but complex: networking, storage, security policies and upgrades all need expertise, and a small team can spend more time running the platform than building the product. Managed offerings (EKS, GKE, AKS) and simpler platforms (AWS ECS, Google Cloud Run, Fly.io, or a Heroku-style **platform as a service (PaaS)**, where you hand over code and the provider runs it) are often the better first choice.
+Powerful but complex: networking, storage, security policies and upgrades need expertise, and a small team can spend more time running the platform than building the product. Managed offerings (EKS, GKE, AKS) and simpler platforms (AWS ECS, Google Cloud Run, Fly.io, or a Heroku-style **platform as a service (PaaS)**, where you hand over code and the provider runs it) are often the better first choice.
 
 ### Common mistakes
 
 - No resource requests and limits, so one pod hogs a node's memory and others get killed.
-- Missing readiness probes, so traffic arrives before the app has finished starting.
-- Running a production database on Kubernetes without understanding StatefulSets, persistent volumes and backups.
+- Missing readiness probes, so traffic arrives before the app has started.
+- A production database on Kubernetes without understanding StatefulSets, persistent volumes and backups.
 
 ### In the interview
 
 **Q:** What happens if a node crashes?
 
-**A:** The control plane notices the node has stopped reporting, marks its pods as lost, and the Deployment controller creates replacement pods on healthy nodes. The Service automatically stops routing to the dead pods.
+**A:** The control plane sees it stop reporting and marks its pods lost; the Deployment controller creates replacements on healthy nodes, and the Service stops routing to the dead pods.
 
 **Q:** Pod vs container?
 
-**A:** A container is one isolated process image; a pod is Kubernetes' wrapper around one or more containers that share an IP address and volumes and are scheduled together.
+**A:** A container is one isolated process image; a pod wraps one or more containers that share an IP and volumes and are scheduled together.
 
 ### TL;DR
 
-Kubernetes runs containers across many machines, keeping the actual state equal to the desired state you declare: pods run on nodes, Deployments manage replicas and rollouts, Services give them a stable address.
+Kubernetes runs containers across many machines, keeping actual state equal to the declared desired state: pods run on nodes, Deployments manage replicas and rollouts, Services give a stable address.
 
 ## Infrastructure as code
 
 ### What it is
 
-**Infrastructure as code (IaC)** means describing your servers, networks, load balancers, databases and permissions in text files that are kept in version control and applied by a tool, instead of clicking around a cloud console. It is like a recipe instead of cooking from memory: anyone can reproduce the same dish, and you can see exactly what changed between versions.
+**Infrastructure as code (IaC)**: servers, networks, load balancers, databases and permissions described in version-controlled text files applied by a tool, instead of clicks in a cloud console — a recipe anyone can reproduce, with a visible diff between versions.
 
 ### Why it matters
 
-Hand-built environments drift apart ("staging has a setting production does not"), cannot be rebuilt quickly after a disaster and have no review trail. With IaC, a new region or a test environment is one command away, every change is code-reviewed, and the files themselves document the system.
+Hand-built environments drift apart ("staging has a setting production doesn't"), can't be rebuilt quickly after a disaster and have no review trail. With IaC a new region or test environment is one command, every change is code-reviewed, and the files document the system.
 
 ### How it works
 
-1. Write a **declarative** description of the desired resources, for example in Terraform:
+1. Write a **declarative** description of the desired resources, e.g. Terraform:
 
 ```hcl
 resource "aws_s3_bucket" "images" {
@@ -6143,33 +5445,33 @@ resource "aws_s3_bucket" "images" {
 }
 ```
 
-2. Run a **plan**: the tool compares the files with what actually exists and shows the diff ("will create 1 bucket").
+2. Run a **plan**: the tool compares the files with what exists and shows the diff ("will create 1 bucket").
 3. A teammate reviews the plan in a pull request.
-4. **Apply** it; the tool calls the cloud APIs to create or change resources and records what it built in a **state file**.
+4. **Apply**: the tool calls cloud APIs to create or change resources and records what it built in a **state file**.
 
-**Declarative** tools describe the end state (Terraform, AWS CloudFormation, Kubernetes YAML, Pulumi); **imperative** scripts describe the steps. **Configuration management** tools (Ansible, Chef, Puppet) configure software on existing servers. **Immutable infrastructure** is the related idea of never patching a running server: build a new image and replace the old server instead.
+**Declarative** tools describe the end state (Terraform, AWS CloudFormation, Kubernetes YAML, Pulumi); **imperative** scripts describe steps. **Configuration management** tools (Ansible, Chef, Puppet) configure software on existing servers. **Immutable infrastructure**: never patch a running server; build a new image and replace it.
 
 ### Trade-offs and common mistakes
 
-IaC has a learning curve and its state files must be stored and locked carefully (two people applying at once can corrupt them). The classic mistake is mixing IaC with manual console edits, which creates **drift** the next apply may silently undo.
+A learning curve, and state files must be stored and locked carefully (two people applying at once can corrupt them). The classic mistake is mixing IaC with manual console edits, creating **drift** (**configuration drift**) the next apply may silently undo.
 
 ### TL;DR
 
-Infrastructure as code keeps your cloud setup in reviewed, versioned files that a tool applies, so environments are reproducible and changes are auditable.
+Infrastructure as code keeps cloud setup in reviewed, versioned files a tool applies, so environments are reproducible and changes auditable.
 
 ## CI/CD
 
 ### What it is
 
-- **Continuous integration (CI)**: every developer merges small changes into the main branch frequently (at least daily), and each change automatically triggers a build and test run. It catches conflicts and bugs within minutes.
+- **Continuous integration (CI)**: developers merge small changes into the main branch frequently (at least daily), each automatically triggering a build and test run, catching conflicts and bugs within minutes.
 - **Continuous delivery (CD)**: every change that passes the pipeline is automatically packaged and ready to release to production at the push of a button.
-- **Continuous deployment**: one step further, every passing change goes to production automatically, with no human button.
+- **Continuous deployment**: one step further — every passing change goes to production automatically, no button.
 
-A **pipeline** is the automated sequence of steps. Think of a car factory line: each station checks or adds something, and a faulty car is pulled off before it reaches the showroom.
+A **pipeline** is the automated sequence of steps, like a factory line pulling faulty cars before the showroom.
 
 ### Why it matters
 
-Small, frequent releases are less risky than big, rare ones: if a release contains one change and breaks something, you know exactly what to roll back. The research programme behind the **DORA metrics** (deployment frequency, lead time for changes, change failure rate, time to restore service) found that high-performing teams deploy more often *and* have fewer failures.
+Small, frequent releases are less risky than big, rare ones: a release with one change that breaks something tells you exactly what to roll back. The research behind the **DORA metrics** (deployment frequency, lead time for changes, change failure rate, time to restore service) found high performers deploy more often *and* fail less.
 
 ### How it works
 
@@ -6183,40 +5485,40 @@ flowchart LR
 ```
 
 1. A developer pushes a commit or opens a pull request.
-2. The CI server (GitHub Actions, GitLab CI, Jenkins, CircleCI) compiles the code, runs linters and unit tests and security scans, typically in under 10 minutes.
-3. It builds one versioned artifact, such as a container image, and stores it. The **same artifact** is promoted through every environment, never rebuilt.
-4. It deploys to a staging environment and runs integration or end-to-end tests.
-5. It deploys to production using a safe strategy (next section), watches health metrics and rolls back automatically if they worsen.
+2. The CI server (GitHub Actions, GitLab CI, Jenkins, CircleCI) compiles, runs linters, unit tests and security scans, typically in under 10 minutes.
+3. It builds one versioned artifact (a container image); the **same artifact** is promoted through every environment, never rebuilt.
+4. It deploys to staging and runs integration or end-to-end tests.
+5. It deploys to production with a safe strategy (next section), watches health metrics and rolls back automatically if they worsen.
 
 ### Common mistakes
 
-- Flaky tests that fail randomly, so people learn to ignore red builds.
-- Rebuilding separately for production, so what you tested is not what you ship.
-- Long-lived feature branches merged once a month, which defeats the point of integration.
-- Database schema changes that are not backward compatible, so the new code and old code cannot run side by side during a rollout. Use **expand and contract**: add the new column first, deploy code that writes both, migrate, then remove the old column in a later release.
+- Flaky tests that fail randomly, teaching people to ignore red builds.
+- Rebuilding separately for production, so what you tested isn't what you ship.
+- Long-lived feature branches merged monthly, defeating integration.
+- Schema changes that aren't backward compatible, so old and new code can't run side by side during a rollout. Use **expand and contract**: add the new column, deploy code writing both, migrate, remove the old column in a later release.
 
 ### TL;DR
 
-CI builds and tests every change automatically; CD keeps every passing build ready to release (or releases it automatically); small frequent releases are safer releases.
+CI builds and tests every change automatically; CD keeps every passing build releasable (or releases it automatically); small frequent releases are safer.
 
 ## Deployment strategies and rollback
 
 ### What it is
 
-A **deployment strategy** is how you replace the old version of a running service with a new one without taking the site down, and how you limit damage if the new version is bad. The **blast radius** is how many users a bad change can hurt; good strategies keep it small.
+A **deployment strategy** is how you replace a running service's old version with a new one without downtime, limiting damage if the new version is bad. The **blast radius** is how many users a bad change can hurt; good strategies keep it small.
 
 ### Why it matters
 
-Most outages are caused by changes: a new code release, a config edit, a schema migration. How you release decides whether a bug hits 1% of users for two minutes or 100% of users for an hour.
+Most outages are caused by changes — code releases, config edits, schema migrations. How you release decides whether a bug hits 1% of users for two minutes or 100% for an hour.
 
 ### Types
 
-- **Recreate (big bang)**: stop all old instances, start new ones. Simple, but there is downtime. Only acceptable for internal tools or maintenance windows.
-- **Rolling deployment**: replace instances a few at a time (say 2 of 20). Each new instance must pass health checks before the next batch goes. No extra servers needed and no downtime, but for a while both versions serve traffic side by side, and rollback means rolling back through the batches. Kubernetes Deployments do this by default.
-- **Blue-green deployment**: run two full environments. **Blue** serves all live traffic on the old version; **green** gets the new version and is tested privately. Then the load balancer (or DNS) switches all traffic to green in one step. Rollback is instant: switch back to blue. The cost is double capacity during the release, and databases are shared, so schema changes must work for both.
-- **Canary release**: send a small slice of real traffic, say 1%, to the new version, compare its error rate and latency with the old version, then step up (1%, 5%, 25%, 50%, 100%) if healthy, or pull it back automatically if not. Named after canaries that miners carried to detect gas before it hurt people. Smallest blast radius, but needs good metrics and automation.
-- **Shadow (dark) launch**: copy real traffic to the new version but throw away its responses. Tests performance under real load with zero user impact; you must be careful that it does not write data or send emails.
-- **Feature flags (feature toggles)**: ship new code turned off, then turn it on at runtime through configuration, for internal users first, then 5% of customers, then everyone. This separates **deploy** (code is on the servers) from **release** (users see the feature). A flag is also a kill switch: turn it off in seconds without a deploy. Tools: LaunchDarkly, Unleash, Flagsmith, or in-house systems.
+- **Recreate (big bang)**: stop all old instances, start new ones. Simple, with downtime; only for internal tools or maintenance windows.
+- **Rolling deployment**: replace instances a few at a time (2 of 20), each batch passing health checks before the next. No extra servers or downtime, but both versions serve side by side for a while, and rollback means rolling back through batches. Kubernetes Deployments' default.
+- **Blue-green deployment**: two full environments; **blue** serves live traffic on the old version, **green** gets the new one and is tested privately, then the load balancer (or DNS) switches all traffic to green at once. Instant rollback (switch back), but double capacity during the release, and the shared database means schema changes must work for both.
+- **Canary release**: send a small slice of real traffic (1%) to the new version, compare its error rate and latency with the old, step up (1%, 5%, 25%, 50%, 100%) while healthy or pull back automatically. Named after miners' gas-detecting canaries. Smallest blast radius, but needs good metrics and automation.
+- **Shadow (dark) launch**: copy real traffic to the new version and discard its responses — real-load testing with zero user impact, provided it writes no data and sends no emails.
+- **Feature flags (feature toggles)**: ship code turned off, then enable it at runtime via configuration — internal users, then 5% of customers, then everyone. Separates **deploy** (code on servers) from **release** (users see it); a flag is also a **kill switch** (off in seconds without a deploy). Tools: LaunchDarkly, Unleash, Flagsmith, in-house systems.
 
 ```mermaid
 flowchart LR
@@ -6226,7 +5528,7 @@ flowchart LR
     M -- "healthy: increase share" --> LB
 ```
 
-**Rollback** means returning to the last known-good version. During an incident, going back beats going forward: restore the last good version, then investigate calmly. Make it boring: keep the previous artifact, automate the button, practise it. Rollback is easy for stateless code, hard when the release changed data or the schema in a non-backward-compatible way; then you need **roll forward** (ship a quick fix) instead.
+**Rollback** returns to the last known-good version. During an incident going back beats going forward: restore, then investigate calmly. Make it boring: keep the previous artifact, automate the button, practise it. Easy for stateless code; hard when the release changed data or schema non-backward-compatibly — then **roll forward** (ship a quick fix).
 
 ### Trade-offs
 
@@ -6240,23 +5542,23 @@ flowchart LR
 
 ### Common mistakes
 
-- Canary without automated metric comparison, so nobody notices the 1% is failing.
+- Canary without automated metric comparison, so nobody notices the 1% failing.
 - Old feature flags never cleaned up, leaving confusing dead code paths.
 - Treating config changes as safe and pushing them globally at once.
 
 ### Real-world examples
 
-In 2012 **Knight Capital** deployed new trading code to only 7 of its 8 servers; a reused flag activated old dormant code on the eighth, which sent more than 4 million orders into the market and lost the firm about $440 million in roughly 45 minutes (the SEC later put the loss above $460 million). In July 2024 a faulty **CrowdStrike** content update was pushed to all customers at once and crashed about 8.5 million Windows machines (Microsoft's estimate); staged, canary-style rollout was the main lesson. Large companies such as Google and Meta release most changes through progressive rollouts with automatic rollback.
+In 2012 **Knight Capital** deployed new trading code to only 7 of 8 servers; a reused flag activated dormant old code on the eighth, which sent more than 4 million orders and lost about $440 million in roughly 45 minutes (the SEC later put the loss above $460 million). In July 2024 a faulty **CrowdStrike** content update pushed to all customers at once crashed about 8.5 million Windows machines (Microsoft's estimate); the main lesson was staged, canary-style rollout. Google and Meta release most changes through progressive rollouts with automatic rollback.
 
 ### In the interview
 
 **Q:** Blue-green or canary?
 
-**A:** Blue-green gives an instant switch and instant rollback but exposes everyone at once and needs double capacity. Canary exposes a small percentage first and grows only if metrics stay healthy, so a bad release hurts far fewer users. For high-traffic user-facing services I prefer canary, ideally combined with feature flags.
+**A:** Blue-green: instant switch and rollback, but everyone exposed at once and double capacity. Canary exposes a small percentage first and grows only while metrics stay healthy, so a bad release hurts far fewer users. For high-traffic user-facing services, canary, ideally with feature flags.
 
 **Q:** How do you deploy a database schema change safely?
 
-**A:** Make it backward compatible with expand and contract: add new columns or tables first, deploy code that works with both shapes, backfill data, switch reads, and only drop the old structure in a later release once nothing uses it.
+**A:** Expand and contract: add new columns or tables first, deploy code that works with both shapes, backfill, switch reads, and drop the old structure in a later release once unused.
 
 ### TL;DR
 
@@ -6266,23 +5568,23 @@ Release gradually (rolling, canary, feature flags) or switch whole environments 
 
 ### What it is
 
-**Monitoring** is watching known numbers to check the system is healthy. **Observability** is the broader ability to understand *why* a system is behaving as it is, including problems you never predicted, purely from the data it emits. A car dashboard (speed, fuel, warning lights) is monitoring; a mechanic's diagnostic computer that lets you ask any question about the engine is closer to observability. The data comes in three main kinds, often called the **three pillars**.
+**Monitoring** watches known numbers to check health. **Observability** is the broader ability to understand *why* a system behaves as it does — including unpredicted problems — purely from the data it emits (a car's dashboard versus a mechanic's diagnostic computer). The data has three main kinds, the **three pillars**:
 
-- **Logs**: timestamped text records of individual events. `2026-10-07T09:14:03Z ERROR order=8812 payment declined: card expired`. Best written as **structured logs** (JSON with named fields) so tools can search and filter them.
-- **Metrics**: numbers measured over time, cheap to store and fast to graph. Examples: requests per second, error count, p99 latency, CPU %, queue depth. Common shapes are **counters** (only go up, such as total requests), **gauges** (go up and down, such as memory in use) and **histograms** (distribution of values, such as latency buckets, from which percentiles are computed).
-- **Traces**: the path of one request through many services. A trace is a tree of **spans**; each span is one operation (a service handling the request, a database query) with a start time and duration. All spans share a **trace ID** passed along in request headers, so you can see that a 2.1 s checkout spent 1.8 s waiting on the tax service.
+- **Logs**: timestamped records of individual events: `2026-10-07T09:14:03Z ERROR order=8812 payment declined: card expired`. Best as **structured logs** (JSON with named fields) so tools can search and filter.
+- **Metrics**: numbers over time, cheap to store and fast to graph: requests per second, error count, p99 latency, CPU %, queue depth. Shapes: **counters** (only rise, e.g. total requests), **gauges** (up and down, e.g. memory in use), **histograms** (distributions, e.g. latency buckets for percentiles).
+- **Traces**: one request's path through many services — a tree of **spans**, each one operation (a service handling it, a database query) with start time and duration, all sharing a **trace ID** passed in request headers, so you see that a 2.1 s checkout spent 1.8 s waiting on the tax service.
 
 ### Why it matters
 
-In a monolith you can read one log file. In microservices, one click touches 15 services on 200 machines. Without metrics you do not know something is wrong; without traces you do not know where; without logs you do not know why. Observability also drives decisions: capacity planning, SLOs and whether a canary is healthy.
+A monolith has one log file; in microservices one click touches 15 services on 200 machines. Without metrics you don't know something is wrong; without traces, where; without logs, why. Observability also drives capacity planning, SLOs and canary decisions.
 
 ### How it works
 
-1. **Instrument** code with a library, today usually **OpenTelemetry**, the vendor-neutral standard for emitting logs, metrics and traces.
-2. Every incoming request gets a **correlation ID** or trace ID, which is logged and forwarded to every downstream call (the W3C `traceparent` header is the standard).
-3. **Collect and ship**: agents or collectors send logs to a store (Elasticsearch/OpenSearch, Loki, Splunk), metrics to a time-series database (Prometheus, Datadog, CloudWatch) and traces to a tracing backend (Jaeger, Zipkin, Tempo, Honeycomb).
-4. **Visualise**: dashboards (Grafana, Datadog, Kibana) graph key metrics.
-5. **Alert**: rules on metrics notify a human when something needs attention.
+1. **Instrument** code, usually with **OpenTelemetry**, the vendor-neutral standard for logs, metrics and traces.
+2. Each incoming request gets a **correlation ID** or trace ID, logged and forwarded to every downstream call (the W3C `traceparent` header is the standard).
+3. **Collect and ship**: logs to a store (Elasticsearch/OpenSearch, Loki, Splunk), metrics to a time-series database (Prometheus, Datadog, CloudWatch), traces to a tracing backend (Jaeger, Zipkin, Tempo, Honeycomb).
+4. **Visualise**: dashboards (Grafana, Datadog, Kibana).
+5. **Alert**: rules on metrics notify a human.
 
 ```mermaid
 flowchart LR
@@ -6294,46 +5596,46 @@ flowchart LR
     MET --> DASH["Dashboards and alerts"]
 ```
 
-**Sampling.** Storing every trace at 100,000 requests per second is too expensive, so systems keep a sample, for example 1% of normal requests but 100% of errors and slow requests (**tail-based sampling**, which decides after seeing the whole trace).
+**Sampling.** Storing every trace at 100,000 requests per second is too expensive, so keep a sample — e.g. 1% of normal requests but 100% of errors and slow requests (**tail-based sampling**, deciding after seeing the whole trace).
 
-**Cardinality.** Each unique combination of metric labels is a separate time series. A label like `user_id` with 10 million values creates 10 million series and can crash a metrics system. Put high-cardinality details in logs and traces, not metric labels.
+**Cardinality.** Each unique combination of metric labels is a separate time series; a `user_id` label with 10 million values creates 10 million series and can crash a metrics system. Put high-cardinality details in logs and traces, not metric labels.
 
 ### Types: what to measure
 
-- **Four golden signals** (from Google's SRE book), for any user-facing service:
-  - **Latency**: how long requests take, tracking successful and failed requests separately (a fast error is not a success).
-  - **Traffic**: demand, such as requests per second.
+- **Four golden signals** (Google's SRE book), for any user-facing service:
+  - **Latency**: request duration, successful and failed tracked separately (a fast error isn't a success).
+  - **Traffic**: demand, e.g. requests per second.
   - **Errors**: rate of failed requests (explicit 5xx, wrong answers, too slow).
   - **Saturation**: how full the most constrained resource is (CPU, memory, connection pool, queue).
-- **RED method** (Tom Wilkie), for request-driven services: **Rate** (requests per second), **Errors** (failed requests per second), **Duration** (latency distribution).
-- **USE method** (Brendan Gregg), for resources like CPU, disks and network: **Utilisation** (% of time busy), **Saturation** (extra work queued, waiting), **Errors** (error events).
+- **RED method** (Tom Wilkie), for request-driven services: **Rate** (requests/s), **Errors** (failed requests/s), **Duration** (latency distribution).
+- **USE method** (Brendan Gregg), for resources (CPU, disks, network): **Utilisation** (% time busy), **Saturation** (extra work queued), **Errors** (error events).
 
-RED looks at a service from the outside (what users feel); USE looks at the machines underneath (why it might be happening).
+RED views a service from outside (what users feel); USE the machines underneath (why it might be happening).
 
 ### Trade-offs
 
-Observability data can cost a lot: large companies spend a noticeable share of their infrastructure bill on logging and monitoring. Logs are rich but expensive per event; metrics are cheap but aggregated (they say *that* p99 rose, not *which* request); traces are precise but sampled. Use all three, linked by trace ID.
+Observability can cost a lot — large companies spend a noticeable share of their infrastructure bill on it. Logs are rich but expensive per event; metrics cheap but aggregated (they say *that* p99 rose, not *which* request); traces precise but sampled. Use all three, linked by trace ID.
 
 ### Common mistakes
 
-- Logging everything at debug level in production, then paying to store terabytes nobody reads.
+- Debug-level logging of everything in production, storing terabytes nobody reads.
 - Logging secrets, passwords or personal data.
 - Averages instead of percentiles on latency dashboards (Part 1).
-- No correlation ID, so logs from different services cannot be stitched together.
+- No correlation ID, so logs from different services can't be stitched together.
 
 ### Real-world examples
 
-Google's **Dapper** paper (2010) introduced large-scale distributed tracing and inspired Zipkin (Twitter) and Jaeger (Uber). Prometheus, created at SoundCloud, is the standard open-source metrics system in the Kubernetes world, usually paired with Grafana dashboards.
+Google's **Dapper** paper (2010) introduced large-scale distributed tracing and inspired Zipkin (Twitter) and Jaeger (Uber). Prometheus, created at SoundCloud, is the standard open-source metrics system in the Kubernetes world, usually with Grafana.
 
 ### In the interview
 
 **Q:** A user says checkout is slow. How do you find out why?
 
-**A:** Check the RED metrics for checkout to confirm and size the problem (which percentile, since when, which regions), correlate with recent deploys, then open slow traces to see which span is slow, and read that service's logs for those trace IDs. Then use USE metrics on the slow component's machines or database.
+**A:** Check checkout's RED metrics to confirm and size it (which percentile, since when, which regions), correlate with recent deploys, open slow traces to find the slow span, read that service's logs for those trace IDs, then USE metrics on the slow component's machines or database.
 
 **Q:** Logs vs metrics vs traces?
 
-**A:** Metrics are the cheap early warning: a number moved, and by how much. A trace pinpoints which hop in the call chain was slow or failed. Logs give the detailed story of what one component did at that moment.
+**A:** Metrics are the cheap early warning (a number moved, by how much); a trace pinpoints which hop was slow or failed; logs tell the detailed story of what one component did then.
 
 ### TL;DR
 
@@ -6343,25 +5645,25 @@ Emit metrics (cheap numbers), logs (detailed events) and traces (one request acr
 
 ### What it is
 
-- A **dashboard** is a page of graphs showing a system's key metrics at a glance.
-- An **alert** is an automated notification fired when a rule on a metric is broken, for example "error rate above 2% for 5 minutes".
-- **On-call** is the rota of engineers responsible for responding to alerts, including at night. A **page** is an urgent alert that wakes someone up (via PagerDuty, Opsgenie and similar tools); a **ticket** is a non-urgent alert handled in working hours.
-- A **runbook** (or playbook) is a written guide for what to do when a specific alert fires.
-- A **postmortem** (incident review) is a written analysis after an incident: timeline, impact, root causes and follow-up actions, written **blameless**, focusing on how the system allowed the mistake rather than who made it.
+- A **dashboard** is a page of graphs showing key metrics at a glance.
+- An **alert** is an automated notification when a metric rule breaks ("error rate above 2% for 5 minutes").
+- **On-call** is the rota of engineers responding to alerts, including at night. A **page** is an urgent alert that wakes someone (PagerDuty, Opsgenie); a **ticket** is non-urgent, handled in working hours.
+- A **runbook** (playbook) is a written guide for a specific alert.
+- A **postmortem** (incident review) analyses an incident afterwards — timeline, impact, root causes, follow-ups — written **blameless**: how the system allowed the mistake, not who made it.
 
 ### Why it matters
 
-Alerts are how humans learn something is broken before customers flood support. But too many alerts cause **alert fatigue**: if on-call is paged 30 times a night for things that fix themselves, they start ignoring pages and miss the real one.
+Alerts tell humans something is broken before customers flood support. Too many cause **alert fatigue**: paged 30 times a night for self-healing blips, on-call starts ignoring pages and misses the real one.
 
 ### How it works
 
 **Good alerting rules:**
 
-1. Page on **symptoms users feel** (high error rate, high latency, checkout failures), not on causes (one server at 90% CPU, which may be fine).
-2. Every page must be urgent, actionable and needing human judgement. Otherwise make it a ticket or automate the fix.
+1. Page on **symptoms users feel** (high error rate, latency, checkout failures), not causes (one server at 90% CPU, which may be fine).
+2. Every page must be urgent, actionable and need human judgement; otherwise make it a ticket or automate the fix.
 3. Attach a runbook link and a dashboard to every alert.
 
-**SLO-based alerting.** Recall from Part 1: an **SLI** is a measured indicator (fraction of successful requests), an **SLO** is the target (99.9% over 30 days), and the **error budget** is the allowed failure (0.1%, about 43 minutes of full downtime per 30 days). Instead of alerting on any blip, alert on the **burn rate**: how fast you are spending the budget. A burn rate of 1 uses exactly the whole budget in 30 days; a burn rate of 14.4 sustained for one hour uses 2% of the monthly budget in that hour, and would exhaust the budget in about two days.
+**SLO-based alerting.** From Part 1: the **SLI** is the measured indicator (fraction of successful requests), the **SLO** the target (99.9% over 30 days), the **error budget** the allowed failure (0.1%, ~43 minutes of full downtime per 30 days). Alert not on any blip but on the **burn rate** — how fast the budget is being spent. Burn rate 1 spends exactly the whole budget in 30 days; 14.4 sustained for an hour spends 2% of the monthly budget in that hour and would exhaust it in about two days.
 
 A common scheme from Google's SRE workbook:
 
@@ -6371,60 +5673,52 @@ A common scheme from Google's SRE workbook:
 | 6 hours | 6 | 5% | Page |
 | 3 days | 1 | 10% | Ticket |
 
-Pairing each long window with a short one (for example 1 hour and 5 minutes) makes the alert fire fast and also stop quickly once the problem is fixed.
+Pairing each long window with a short one (1 hour and 5 minutes) makes the alert fire fast and stop quickly once fixed.
 
-**Incident response roles.** In a serious incident, one **incident commander** coordinates, others investigate, one person communicates with stakeholders and customers. The first goal is **mitigation** (stop the bleeding: roll back, fail over, shed load), not finding the root cause.
+**Incident response roles.** An **incident commander** coordinates, others investigate, one person communicates with stakeholders and customers. The first goal is **mitigation** (stop the bleeding: roll back, fail over, shed load), not root cause.
 
 ### Common mistakes
 
-- Alerting on every metric someone thought of, and never deleting noisy alerts.
-- Dashboards with 80 graphs and no clear "is it healthy?" panel at the top.
+- Alerting on every metric someone thought of, never deleting noisy alerts.
+- Dashboards with 80 graphs and no "is it healthy?" panel at the top.
 - Debugging the root cause during an outage instead of rolling back first.
-- Postmortems that blame a person, which teaches people to hide mistakes.
+- Postmortems that blame a person, teaching people to hide mistakes.
 
 ### In the interview
 
 **Q:** What would you alert on for this service?
 
-**A:** SLO burn rate for availability and latency of the main user journeys, plus a few critical saturation signals that predict imminent failure, such as disk nearly full or queue lag growing. Everything else goes on dashboards or tickets, not pages.
+**A:** SLO burn rate for availability and latency of the main user journeys, plus a few saturation signals predicting imminent failure (disk nearly full, queue lag growing). Everything else on dashboards or tickets, not pages.
 
 ### TL;DR
 
-Page on user-facing symptoms and fast error-budget burn, keep every page actionable with a runbook, mitigate first, and write blameless postmortems.
+Page on user-facing symptoms and fast error-budget burn, keep every page actionable with a runbook, mitigate first, write blameless postmortems.
 
 ## Disaster recovery
 
 ### What it is
 
-**Disaster recovery (DR)** is your plan for getting the service and its data back after a large failure: a data-centre fire, a whole cloud region going down, a ransomware attack, or an engineer deleting the production database. **Business continuity** is the wider plan for keeping the business running. Two numbers define a DR target:
+**Disaster recovery (DR)** is the plan for getting service and data back after a large failure: a data-centre fire, a whole cloud region down, ransomware, an engineer deleting the production database. **Business continuity** is the wider plan for keeping the business running. Two numbers define a DR target:
 
-- **RPO (recovery point objective)**: how much data, measured in time, you can afford to lose. RPO of 1 hour means after recovery you may be missing at most the last hour of writes. Think "how far back is my last save point?".
-- **RTO (recovery time objective)**: how long the service may be down before it is restored. RTO of 4 hours means you must be running again within 4 hours. Think "how long until I am playing again?".
+- **RPO (recovery point objective)**: how much data, measured in time, you can afford to lose ("how far back is my last save point?"). RPO 1 hour: at most the last hour of writes missing.
+- **RTO (recovery time objective)**: how long the service may be down before restoration ("how long until I'm playing again?"). RTO 4 hours: running again within 4 hours.
 
 ### Why it matters
 
-Redundancy within one site (Part 1) protects against a disk or server failing. It does not help if the whole site goes, or if a bug or human corrupts data that is then faithfully replicated to every copy. Only backups and DR plans protect you there. Lower RPO and RTO cost more, so they must be agreed with the business: a bank's payment ledger may need RPO near zero and RTO of minutes; an internal wiki can accept a day.
+Redundancy within one site (Part 1) survives a disk or server failing, not losing the whole site, nor a bug or human corruption faithfully replicated to every copy — only backups and DR plans cover those. Lower RPO and RTO cost more, so agree them with the business: a bank's payment ledger may need RPO near zero and RTO of minutes; an internal wiki can accept a day.
 
 ### How it works
 
-**Backups.** Copies of data stored separately from the original, ideally following the **3-2-1 rule**: 3 copies, on 2 different media or services, with 1 off-site (another region or account). Kinds:
+**Backups.** The kinds — full, incremental, snapshot, continuous WAL archiving for **point-in-time recovery**, and the **3-2-1 rule** (3 copies, 2 media or services, 1 off-site) — are in *Durability: WAL, fsync, backups and recovery* (Part 3). For DR add **immutable / air-gapped backups**, which can't be deleted or altered for a set period, protecting against ransomware and rogue deletes. A backup is unproven until restored: rehearse and time restores on a schedule, since restore time is part of your RTO.
 
-- **Full backup**: everything, every time. Simple, large.
-- **Incremental backup**: only what changed since the last backup. Small, but restoring needs the chain.
-- **Snapshot**: a point-in-time image of a disk or database, usually fast and incremental under the hood.
-- **Continuous archiving** of the write-ahead log (Part 3), which allows **point-in-time recovery** to any second.
-- **Immutable / air-gapped backups** that cannot be deleted or altered for a set period, protecting against ransomware and rogue deletes.
+**Availability zones and regions.** A cloud **region** is a geographic area (AWS `eu-west-1`, Ireland) containing several **availability zones (AZs)**: separate data centres with independent power, cooling and networking, a few to tens of kilometres apart, with ~1–2 ms round trips. AZs fail independently; regions are hundreds or thousands of kilometres apart.
 
-Until you have actually restored from a backup, you do not know it works. Rehearse restores on a schedule and time them, because restore time is part of your RTO.
-
-**Availability zones and regions.** A cloud **region** is a geographic area (for example AWS `eu-west-1` in Ireland). Each region contains several **availability zones (AZs)**: one or more separate data centres with independent power, cooling and networking, a few to tens of kilometres apart, linked by fast connections with round trips of roughly 1 to 2 ms. AZs fail independently; regions are hundreds or thousands of kilometres apart.
-
-- **Multi-AZ**: run copies in 2 or 3 AZs of one region. Protects against a data-centre failure. Synchronous database replication is practical because AZs are close. This is the normal baseline for production.
-- **Multi-region**: run in two or more regions. Protects against a whole-region outage and serves users nearer home, but cross-region round trips are 50 to 150 ms or more, so replication is usually asynchronous (RPO greater than zero), and it costs much more and is much more complex.
+- **Multi-AZ**: copies in 2–3 AZs of one region. Survives a data-centre failure, and AZs are close enough for synchronous database replication. The normal production baseline.
+- **Multi-region**: two or more regions. Survives a whole-region outage and serves users nearer home, but cross-region round trips are 50–150 ms or more, so replication is usually asynchronous (RPO > 0), and it costs much more and is far more complex.
 
 ### Types: DR strategies
 
-From cheapest and slowest to most expensive and fastest:
+Cheapest and slowest to most expensive and fastest:
 
 | Strategy | What runs in the DR site | Typical RTO | Typical RPO |
 |---|---|---|---|
@@ -6433,8 +5727,8 @@ From cheapest and slowest to most expensive and fastest:
 | Warm standby | Scaled-down full copy | Minutes | Seconds to minutes |
 | Active-active | Full copy serving traffic | Near zero | Near zero to seconds |
 
-- **Active-passive**: one site serves all traffic; the other is on standby (pilot light or warm) and takes over on **failover**. Simpler, but standby capacity sits idle and failover is a risky moment that is rarely exercised.
-- **Active-active**: all sites serve live traffic at the same time; if one fails, the others absorb its share. Fast recovery and no idle capacity, but each site must have spare headroom, and writes in several places raise hard consistency problems (Part 3 multi-leader replication, Part 4 conflict resolution).
+- **Active-passive**: one site serves; the other (pilot light or warm) takes over on **failover**. Simpler, but standby capacity idles and failover is a risky, rarely exercised moment.
+- **Active-active**: all sites serve live traffic and absorb a failed site's share. Fast recovery, no idle capacity, but each site needs headroom, and writes in several places raise hard consistency problems (Part 3 multi-leader replication, Part 4 conflict resolution).
 
 ```mermaid
 flowchart TD
@@ -6445,62 +5739,62 @@ flowchart TD
     R2 --> DB2
 ```
 
-**Chaos engineering** is the practice of deliberately injecting failures into a system (killing servers, adding network latency, blocking a dependency, even taking out a whole AZ) in a controlled way to prove that redundancy, failover and alerting actually work, and to find weaknesses before real outages do. Start small: a hypothesis ("if one cache node dies, p99 stays under 300 ms"), a limited blast radius, an abort button. **Game days** are scheduled team exercises of this kind, including practising a full regional failover.
+**Chaos engineering** deliberately injects failures (killing servers, adding latency, blocking a dependency, even removing a whole AZ) in a controlled way to prove redundancy, failover and alerting work and find weaknesses before real outages do. Start small: a hypothesis ("if one cache node dies, p99 stays under 300 ms"), a limited blast radius, an abort button. **Game days** are scheduled team exercises of this kind, including full regional failover.
 
 ### Common mistakes
 
-- Backups stored in the same account and region as the data, so the same disaster or attacker removes both.
-- Never testing restores; discovering during the disaster that backups were silently failing.
-- Assuming replication is a backup. A `DELETE` replicates too.
-- A DR region that depends on a service in the failed region (shared DNS, auth, or deployment tooling).
+- Backups in the same account and region as the data, so one disaster or attacker removes both.
+- Never testing restores, discovering mid-disaster that backups were silently failing.
+- Assuming replication is a backup; a `DELETE` replicates too.
+- A DR region that depends on a service in the failed region (shared DNS, auth, deployment tooling).
 
 ### Real-world examples
 
-In 2017 **GitLab** accidentally deleted a production database directory; none of its five backup and replication methods turned out to be working reliably, and it restored from a six-hour-old copy, losing about six hours of data. Netflix created **Chaos Monkey** (open-sourced in 2012) to randomly terminate production instances, and later tools that simulate whole-region outages; it runs active-active across several AWS regions. The October 2021 **Facebook** outage, where a mistaken maintenance command cut its backbone network and its DNS servers then withdrew their **BGP** routes (the announcements that tell the rest of the internet how to reach them), lasted about six hours and also locked engineers out of internal tools they needed to fix it, a reminder that recovery tooling must not depend on the thing that failed.
+**GitLab**'s 2017 database deletion (Part 3, *Durability*): none of its five backup and replication methods was working reliably, and about six hours of data were lost. Netflix created **Chaos Monkey** (open-sourced 2012) to randomly terminate production instances, later adding tools simulating whole-region outages; it runs active-active across several AWS regions. In October 2021 a mistaken maintenance command cut **Facebook**'s backbone, its DNS servers then withdrew their **BGP** routes (the announcements telling the internet how to reach them), and the ~six-hour outage also locked engineers out of internal tools needed for the fix — recovery tooling must not depend on the thing that failed.
 
 ### In the interview
 
 **Q:** Explain RPO and RTO with an example.
 
-**A:** If the database is backed up every 6 hours and a restore takes 2 hours, the worst-case RPO is 6 hours of lost data and RTO is at least 2 hours of downtime. Adding continuous log shipping to another region could bring RPO to seconds, and a warm standby could bring RTO to minutes.
+**A:** Backups every 6 hours and a 2-hour restore: worst-case RPO 6 hours of lost data, RTO at least 2 hours down. Continuous log shipping to another region could bring RPO to seconds; a warm standby, RTO to minutes.
 
 **Q:** Multi-AZ or multi-region?
 
-**A:** Multi-AZ is the standard baseline: it survives a data-centre failure with low latency and synchronous replication. Multi-region adds protection against a regional outage and lower latency for global users, but costs much more and usually means asynchronous replication, so I would choose it only when the SLA or user geography demands it.
+**A:** Multi-AZ is the baseline: survives a data-centre failure with low latency and synchronous replication. Multi-region adds regional-outage protection and lower latency for global users but costs much more and usually means asynchronous replication — only when the SLA or user geography demands it.
 
 ### TL;DR
 
-RPO is how much data you can lose, RTO is how long you can be down; backups (tested!) and multi-AZ are the baseline, multi-region active-passive or active-active buys more at a higher price, and chaos engineering proves it works.
+RPO is how much data you can lose, RTO how long you can be down; tested backups and multi-AZ are the baseline, multi-region active-passive or active-active buys more at a higher price, and chaos engineering proves it works.
 
 ## Authentication and authorization
 
 ### What it is
 
-- **Authentication (AuthN)** answers "who are you?". It proves identity, usually with something you know (a password), something you have (a phone or security key) or something you are (a fingerprint). Using two or more of these is **multi-factor authentication (MFA)**.
-- **Authorization (AuthZ)** answers "what are you allowed to do?". It checks permissions after identity is known.
+- **Authentication (AuthN)** answers "who are you?" — proving identity with something you know (password), have (phone, security key) or are (fingerprint). Two or more of these is **multi-factor authentication (MFA)**.
+- **Authorization (AuthZ)** answers "what may you do?" — checking permissions once identity is known.
 
-At an airport, showing your passport is authentication; your boarding pass deciding which plane and seat you may board is authorization. Failing authentication returns HTTP **401 Unauthorized** (confusingly named; it really means "unauthenticated"); being known but not permitted returns **403 Forbidden**.
+At an airport, the passport is authentication; the boarding pass deciding your plane and seat is authorization. Failed authentication returns **401 Unauthorized** (confusingly named; it means "unauthenticated"); known but not permitted returns **403 Forbidden**.
 
 ### Why it matters
 
-Nearly every system has users, and nearly every security breach involves either stolen identities or missing permission checks. Getting the vocabulary right is also one of the most common interview probes.
+Nearly every system has users, and nearly every breach involves stolen identities or missing permission checks. The vocabulary is also a common interview probe.
 
 ### How it works
 
 **Authorization models:**
 
 - **Access control list (ACL)**: each resource lists who may do what ("doc 42: Alice can edit, Bob can read"). Fine-grained but hard to manage at scale.
-- **Role-based access control (RBAC)**: permissions are attached to roles (admin, editor, viewer) and users are given roles. Simple and auditable; most business software uses it.
-- **Attribute-based access control (ABAC)**: rules evaluate attributes of the user, resource and context: "a doctor may read a patient record if they are in the same hospital department and it is during their shift". Very flexible, harder to reason about.
-- **Relationship-based access control (ReBAC)**: permissions follow relationships in a graph ("can view if member of a group that owns the folder containing the file"). Google's Zanzibar system, which powers sharing in Drive and other products, is the famous example.
+- **Role-based access control (RBAC)**: permissions attach to roles (admin, editor, viewer) given to users. Simple, auditable; most business software.
+- **Attribute-based access control (ABAC)**: rules over attributes of user, resource and context ("a doctor may read a patient record if in the same department and on shift"). Very flexible, harder to reason about.
+- **Relationship-based access control (ReBAC)**: permissions follow relationships in a graph ("can view if member of a group that owns the folder containing the file"). Google's Zanzibar, powering sharing in Drive and other products, is the famous example.
 
-Authorization must be checked on the server for every request, never only by hiding buttons in the user interface.
+Check authorization on the server for every request — never only by hiding buttons in the UI.
 
 ### In the interview
 
 **Q:** Authentication vs authorization?
 
-**A:** Authentication proves who the caller is (login, token validation, returns 401 on failure); authorization decides whether that identity may perform this action on this resource (roles, policies, returns 403 on failure).
+**A:** Authentication proves who the caller is (login, token validation; 401 on failure); authorization decides whether that identity may do this action on this resource (roles, policies; 403 on failure).
 
 ### TL;DR
 
@@ -6510,11 +5804,11 @@ AuthN is who you are; AuthZ is what you may do; RBAC grants permissions through 
 
 ### What it is
 
-HTTP is stateless (Part 2): each request stands alone, so after you log in the server needs a way to recognise you on the next request.
+HTTP is stateless (Part 2), so after login the server needs a way to recognise you on the next request.
 
-- **Session-based authentication**: after login, the server creates a **session** record (user ID, expiry) in its memory, a database or Redis, and gives the browser a random **session ID** inside a **cookie** (a small piece of data the browser stores and automatically sends back to the same site on every request). Like a cloakroom ticket: the ticket itself means nothing, the server looks it up.
-- **Token-based authentication**: after login, the server gives the client a **token**, a string the client sends with each request, usually in the header `Authorization: Bearer <token>`. An **opaque token** is a random string the server must look up; a **self-contained token** carries the user's details inside it and is signed so it cannot be forged.
-- **JWT (JSON Web Token)**, pronounced "jot", is the most common self-contained token format: three Base64URL-encoded parts separated by dots, `header.payload.signature`.
+- **Session-based authentication**: the server creates a **session** record (user ID, expiry) in memory, a database or Redis, and gives the browser a random **session ID** in a **cookie** (small data the browser stores and automatically sends back to the same site on every request) — a cloakroom ticket the server looks up.
+- **Token-based authentication**: the server gives the client a **token**, sent with each request, usually as `Authorization: Bearer <token>` (a **bearer token**: whoever holds it gets access). An **opaque token** is a random string the server must look up; a **self-contained token** carries the user's details, signed so it can't be forged.
+- **JWT (JSON Web Token)**, pronounced "jot", is the commonest self-contained format: three Base64URL-encoded parts, `header.payload.signature`.
 
 ```text
 header:    {"alg":"RS256","typ":"JWT"}
@@ -6524,11 +5818,11 @@ signature: RSA signature over header + payload, made with the server's private k
 
 ### How it works
 
-**JWT verification**: any service with the issuer's key (a shared secret for HS256, an HMAC-based signature, or the public key for RS256, an RSA signature) recomputes or checks the signature and the `exp` (expiry) claim. If valid, it trusts the claims without calling a database. That is why JWTs suit microservices: every service can verify a request locally.
+**JWT verification**: any service with the issuer's key (a shared secret for HS256, an HMAC-based signature; the public key for RS256, an RSA signature) checks the signature and the `exp` (expiry) claim, then trusts the claims without a database call — why JWTs suit microservices, each verifying locally.
 
-A JWT is **signed, not encrypted**. Anyone can Base64-decode the payload and read it, so never put secrets in it. And because no database lookup happens, a stolen JWT works until it expires and cannot easily be revoked. The usual answer is short-lived **access tokens** (5 to 15 minutes) plus a long-lived **refresh token**, stored more carefully and checked against a database, used to obtain new access tokens; revoking the refresh token logs the user out within minutes.
+A JWT is **signed, not encrypted**: anyone can Base64-decode and read the payload, so never put secrets in it. With no lookup, a stolen JWT works until expiry and can't easily be revoked. The usual answer: short-lived **access tokens** (5–15 minutes) plus a long-lived **refresh token**, stored more carefully and checked against a database, used to get new access tokens; revoking it logs the user out within minutes.
 
-**Cookie safety flags**: `HttpOnly` (JavaScript cannot read the cookie, protecting it from XSS theft), `Secure` (sent only over HTTPS), `SameSite=Lax` or `Strict` (not sent on most cross-site requests, protecting against CSRF), plus an expiry.
+**Cookie safety flags**: `HttpOnly` (JavaScript can't read it, protecting against XSS theft), `Secure` (HTTPS only), `SameSite=Lax` or `Strict` (not sent on most cross-site requests, protecting against CSRF), plus an expiry.
 
 ### Trade-offs
 
@@ -6542,40 +5836,40 @@ A JWT is **signed, not encrypted**. Anyone can Base64-decode the payload and rea
 
 ### Common mistakes
 
-- Accepting JWTs with `alg: none` or not checking the signature and expiry.
-- Storing tokens in browser `localStorage`, where any XSS script can steal them; an `HttpOnly` cookie is safer for browser apps.
+- Accepting JWTs with `alg: none`, or not checking signature and expiry.
+- Tokens in browser `localStorage`, where any XSS script can steal them; an `HttpOnly` cookie is safer for browser apps.
 - Very long-lived access tokens.
 
 ### TL;DR
 
-Sessions keep login state on the server and give the browser an ID in a cookie; tokens like JWT carry signed claims the client presents on each request, easy to verify anywhere but hard to revoke, so keep them short-lived.
+Sessions keep login state on the server with an ID in a cookie; tokens like JWT carry signed claims presented on each request — easy to verify anywhere, hard to revoke, so keep them short-lived.
 
 ## OAuth 2.0, OpenID Connect, SSO and API keys
 
 ### What it is
 
-- **OAuth 2.0** is a standard for **delegated authorization**: letting one app access your data in another app *without giving it your password*. "Allow PhotoPrinter to read your Google Photos?" is OAuth. Analogy: a hotel key card that opens only your room and expires at checkout, instead of handing over the master key.
-- **OpenID Connect (OIDC)** is a thin identity layer on top of OAuth 2.0 that adds **authentication**: it returns an **ID token** (a JWT) saying who the user is. "Sign in with Google" or "Sign in with Apple" is OIDC.
-- **Single sign-on (SSO)**: log in once with one identity provider and get access to many applications. At work you sign in to Okta or Microsoft Entra ID once and reach email, chat and dashboards without logging in again. Enterprise SSO uses OIDC or the older XML-based **SAML**.
-- **API key**: a long random secret string that identifies a calling program (not a person), sent in a header such as `X-API-Key`. Simple for server-to-server use, metering and rate limiting, but it is a bearer secret with no built-in expiry or user identity.
+- **OAuth 2.0** is a standard for **delegated authorization**: letting one app access your data in another *without your password* ("Allow PhotoPrinter to read your Google Photos?") — a hotel key card for one room that expires at checkout, not the master key.
+- **OpenID Connect (OIDC)** is a thin identity layer on OAuth 2.0 adding **authentication**: it returns an **ID token** (a JWT) saying who the user is. "Sign in with Google/Apple" is OIDC.
+- **Single sign-on (SSO)**: log in once with one identity provider to reach many applications (sign in to Okta or Microsoft Entra ID once for email, chat, dashboards). Enterprise SSO uses OIDC or the older XML-based **SAML**.
+- **API key**: a long random secret identifying a calling program (not a person), sent in a header such as `X-API-Key`. Simple for server-to-server use, metering and rate limiting, but a bearer secret with no built-in expiry or user identity.
 
 ### How it works
 
 **The four OAuth roles:**
 
 - **Resource owner**: the user who owns the data.
-- **Client**: the app that wants access (PhotoPrinter).
+- **Client**: the app wanting access (PhotoPrinter).
 - **Authorization server**: issues tokens after the user consents (Google's login and consent service).
-- **Resource server**: the API holding the data (Google Photos API), which accepts the access token.
+- **Resource server**: the API holding the data (Google Photos API), accepting the access token.
 
-**Authorization code flow (with PKCE)**, the recommended flow for web and mobile apps:
+**Authorization code flow (with PKCE)**, recommended for web and mobile apps:
 
-1. The user clicks "Connect Google Photos". The client redirects the browser to the authorization server with its client ID, the **scopes** it wants (for example `photos.read`) and a redirect URL. With **PKCE** (Proof Key for Code Exchange) it also sends a hash of a one-time random secret.
+1. The user clicks "Connect Google Photos"; the client redirects the browser to the authorization server with its client ID, the **scopes** wanted (e.g. `photos.read`, each a named permission) and a redirect URL. With **PKCE** (Proof Key for Code Exchange) it also sends a hash of a one-time random secret.
 2. The user logs in at Google (the client never sees the password) and approves the scopes.
-3. The authorization server redirects back to the client with a short-lived, single-use **authorization code**.
-4. The client exchanges the code (plus the PKCE secret, and for server apps its client secret) at the authorization server's token endpoint, server to server.
-5. It receives an **access token** (and often a refresh token; with OIDC also an ID token).
-6. The client calls the Photos API with `Authorization: Bearer <access token>`; the resource server validates it and checks the scopes.
+3. The authorization server redirects back with a short-lived, single-use **authorization code**.
+4. The client exchanges the code (plus the PKCE secret, and for server apps its client secret) at the token endpoint, server to server.
+5. It receives an **access token** (often a refresh token; with OIDC an ID token too).
+6. It calls the Photos API with `Authorization: Bearer <access token>`; the resource server validates it and checks scopes.
 
 ```mermaid
 sequenceDiagram
@@ -6594,23 +5888,23 @@ sequenceDiagram
     R->>C: Protected data
 ```
 
-Other flows: **client credentials** for machine-to-machine calls with no user, and **device code** for TVs and devices without a keyboard. The old "implicit" and "password" flows are discouraged.
+Other flows: **client credentials** for machine-to-machine calls with no user; **device code** for TVs and keyboardless devices. The old "implicit" and "password" flows are discouraged.
 
 ### Common mistakes
 
-- Using OAuth access tokens as proof of identity. OAuth says what a client may access; OIDC's ID token says who logged in.
+- Using OAuth access tokens as proof of identity: OAuth says what a client may access; OIDC's ID token says who logged in.
 - Requesting far broader scopes than needed.
-- Committing API keys to Git repositories. Automated scanners find leaked keys within minutes.
+- Committing API keys to Git; automated scanners find leaked keys within minutes.
 
 ### In the interview
 
 **Q:** OAuth vs OpenID Connect?
 
-**A:** OAuth 2.0 is for authorization: it gives an app a scoped access token to call an API on the user's behalf. OIDC builds on it for authentication, adding a signed ID token that tells the app who the user is, which is what "Sign in with Google" uses.
+**A:** OAuth 2.0 is authorization: a scoped access token to call an API on the user's behalf. OIDC adds authentication: a signed ID token saying who the user is — what "Sign in with Google" uses.
 
-**Q:** When would you use an API key instead of OAuth?
+**Q:** When an API key instead of OAuth?
 
-**A:** For simple server-to-server access by a known customer's backend, where you mainly need identification, metering and rate limiting. For acting on behalf of users, or anything needing scopes and expiry, use OAuth.
+**A:** Simple server-to-server access by a known customer's backend, needing mainly identification, metering and rate limiting. Acting for users, or needing scopes and expiry: OAuth.
 
 ### TL;DR
 
@@ -6620,46 +5914,44 @@ OAuth 2.0 delegates scoped access without sharing passwords (owner, client, auth
 
 ### What it is
 
-- **Encryption** scrambles data with a **key** so only someone with the right key can unscramble (**decrypt**) it. It is two-way.
-  - **Symmetric encryption**: the same key locks and unlocks (AES). Fast; used for bulk data.
-  - **Asymmetric (public-key) encryption**: a **public key** anyone can use to encrypt or verify, and a **private key** only the owner holds to decrypt or sign (RSA, elliptic-curve). Slower; used for key exchange and digital signatures, as in TLS.
-- **Encryption in transit**: protecting data while it travels over a network, almost always with **TLS** (Part 2), the "S" in HTTPS. Inside a data centre, service-to-service **mutual TLS (mTLS)** has both sides present certificates.
-- **Encryption at rest**: protecting stored data on disks, databases, backups and object storage, so a stolen disk or backup file is unreadable. Cloud services typically do this with AES-256 and keys from a **key management service (KMS)**.
-- **Hashing** turns any input into a fixed-size **fingerprint** (a **hash** or **digest**) that cannot be reversed. SHA-256 of any file is 256 bits. The same input always gives the same hash; a tiny change gives a completely different one. It is one-way: you can grind coffee beans into powder, but you cannot rebuild the beans from the powder.
+- **Encryption** scrambles data with a **key** so only the right key can **decrypt** it — two-way. **Symmetric** (same key both ways, AES; fast, for bulk data) and **asymmetric / public-key** (public key to encrypt or verify, private key to decrypt or sign; RSA, elliptic-curve; slower, for key exchange and signatures, as in TLS) are explained in *HTTPS and TLS* (Part 2).
+- **Encryption in transit**: protecting data moving over a network, almost always **TLS** (the "S" in HTTPS); between services, **mutual TLS (mTLS)** with certificates on both sides.
+- **Encryption at rest**: protecting stored data on disks, databases, backups and object storage so a stolen disk or backup is unreadable — in the cloud typically AES-256 with keys from a **key management service (KMS)**.
+- **Hashing** turns any input into an irreversible fixed-size **fingerprint** (**hash**, **digest**); SHA-256 of any file is 256 bits. Same input, same hash; a tiny change, a completely different one. One-way, like grinding coffee beans.
 
 ### How it works
 
-**Hashing vs encryption.** Use encryption when you need the original back (a stored credit-card number you will charge later). Use hashing when you only need to check a match (passwords, file integrity, deduplication).
+**Hashing vs encryption.** Encrypt when you need the original back (a card number to charge later); hash when you only need to check a match (passwords, file integrity, deduplication).
 
-**Password hashing.** Never store passwords in plain text or encrypted (if the key leaks, all passwords leak). Store a **slow, salted hash**:
+**Password hashing.** Never store passwords in plain text or encrypted (a leaked key leaks all). Store a **slow, salted hash**:
 
-1. Generate a random **salt** (for example 16 bytes) per user, so two users with the same password get different hashes and precomputed "rainbow tables" are useless.
-2. Hash password + salt with a deliberately slow algorithm: **bcrypt** (with a cost factor), **scrypt**, or **Argon2id** (a variant of Argon2, which won the 2015 Password Hashing Competition; it is the current first choice of OWASP, the Open Worldwide Application Security Project), tuned so one hash takes tens to hundreds of milliseconds and, for scrypt and Argon2, lots of memory.
-3. Store the algorithm, parameters, salt and hash together.
+1. Generate a random per-user **salt** (e.g. 16 bytes), so identical passwords get different hashes and precomputed "rainbow tables" are useless.
+2. Hash password + salt with a deliberately slow algorithm — **bcrypt** (with a cost factor), **scrypt**, or **Argon2id** (a variant of Argon2, winner of the 2015 Password Hashing Competition; current first choice of OWASP, the Open Worldwide Application Security Project) — tuned so one hash takes tens to hundreds of milliseconds and, for scrypt and Argon2, lots of memory.
+3. Store algorithm, parameters, salt and hash together.
 4. At login, recompute with the stored salt and compare.
 
-Fast hashes like SHA-256 or MD5 are wrong for passwords: a single modern GPU can try billions of SHA-256 guesses per second, but only thousands to tens of thousands of bcrypt guesses at typical cost settings.
+Fast hashes (SHA-256, MD5) are wrong for passwords: one modern GPU tries billions of SHA-256 guesses per second, but only thousands to tens of thousands of bcrypt guesses at typical cost.
 
-**Envelope encryption.** A KMS holds a master key that never leaves it. Each piece of data is encrypted with its own **data key**, and the data key is itself encrypted by the master key and stored beside the data. Rotating or revoking the master key controls access to everything.
+**Envelope encryption.** A KMS holds a master key that never leaves it. Each piece of data is encrypted with its own **data key**, which is itself encrypted by the master key and stored beside the data; rotating or revoking the master key controls access to everything.
 
-**Secrets management.** Secrets are passwords, API keys, database credentials, private keys and tokens. Keep them out of source code, container images and logs. Store them in a secrets manager (HashiCorp Vault, AWS Secrets Manager, Google Secret Manager, Kubernetes Secrets backed by a KMS), give each service access only to its own secrets, **rotate** them regularly and automatically, and prefer short-lived dynamically issued credentials where possible.
+**Secrets management.** Secrets — passwords, API keys, database credentials, private keys, tokens — stay out of source code, container images and logs. Store them in a secrets manager (HashiCorp Vault, AWS Secrets Manager, Google Secret Manager, Kubernetes Secrets backed by a KMS), give each service only its own, **rotate** them automatically, and prefer short-lived dynamically issued credentials.
 
 ### Common mistakes
 
-- Inventing your own cryptography; always use well-known libraries.
+- Inventing your own cryptography; use well-known libraries.
 - Confusing encoding (Base64, reversible by anyone) with encryption.
-- Encrypting data at rest but keeping the key on the same disk.
+- Encrypting at rest but keeping the key on the same disk.
 - Passwords hashed with plain SHA-256 and no salt.
 
 ### In the interview
 
 **Q:** How should you store user passwords?
 
-**A:** Hash each one with a unique random salt using a deliberately slow algorithm such as Argon2id (which is also memory-hard) or bcrypt with a tuned cost, store only the hash and parameters, and compare by re-hashing at login. Never store them plain or reversibly encrypted.
+**A:** Hash each with a unique random salt using a deliberately slow algorithm — Argon2id (also memory-hard) or bcrypt with tuned cost — store only hash and parameters, and compare by re-hashing at login. Never plain or reversibly encrypted.
 
 **Q:** Encryption in transit vs at rest?
 
-**A:** In transit protects data moving over networks, using TLS (and mTLS between services). At rest protects stored data on disks, databases and backups, usually AES with keys managed by a KMS. You need both.
+**A:** In transit protects data on networks with TLS (mTLS between services); at rest protects stored data on disks, databases and backups, usually AES with KMS-managed keys. You need both.
 
 ### TL;DR
 
@@ -6669,26 +5961,26 @@ Encryption is reversible with a key (in transit via TLS, at rest via AES and a K
 
 ### What it is
 
-- A **firewall** filters network traffic by rules on IP addresses, ports and protocols (layers 3 and 4): "allow TCP 443 from anywhere, allow TCP 5432 only from the app servers' subnet, deny everything else". Cloud **security groups** and network ACLs are firewalls. It is the building's security desk checking which doors visitors may use.
-- A **web application firewall (WAF)** inspects HTTP requests (layer 7) and blocks those that look like attacks: SQL injection patterns, cross-site scripting payloads, known bad bots, too many requests from one source. Examples: AWS WAF, Cloudflare WAF, ModSecurity, often using the OWASP Core Rule Set.
-- A **DDoS (distributed denial-of-service) attack** floods a service with traffic from many machines at once (often a **botnet** of hijacked devices) to make it unavailable to real users.
-- **Network segmentation**: placing databases and internal services in **private subnets** with no route from the internet, reachable only through load balancers or a **bastion host** (a hardened jump server).
+- A **firewall** filters traffic by rules on IPs, ports and protocols (layers 3 and 4): "allow TCP 443 from anywhere, TCP 5432 only from the app subnet, deny everything else". Cloud **security groups** and network ACLs are firewalls.
+- A **web application firewall (WAF)** inspects HTTP requests (layer 7) and blocks attack-like ones: SQL injection patterns, cross-site scripting payloads, known bad bots, too many requests from one source. AWS WAF, Cloudflare WAF, ModSecurity, often with the OWASP Core Rule Set.
+- A **DDoS (distributed denial-of-service) attack** floods a service from many machines at once (often a **botnet** of hijacked devices) to make it unavailable.
+- **Network segmentation**: databases and internal services in **private subnets** with no route from the internet, reachable only via load balancers or a **bastion host** (hardened jump server).
 
 ### How it works
 
 **Kinds of DDoS:**
 
-- **Volumetric** (layer 3/4): saturate the network pipe, for example UDP floods or **amplification** attacks that send small spoofed requests to open DNS or memcached servers, which reply with much larger responses to the victim.
-- **Protocol**: exhaust connection state, for example a **SYN flood** sending millions of half-open TCP handshakes.
+- **Volumetric** (layer 3/4): saturate the pipe — UDP floods, or **amplification** attacks sending small spoofed requests to open DNS or memcached servers that reply with much larger responses to the victim.
+- **Protocol**: exhaust connection state — a **SYN flood** of millions of half-open TCP handshakes.
 - **Application layer** (layer 7): many legitimate-looking HTTP requests to expensive pages such as search.
 
 **Mitigation:**
 
-1. Absorb with scale: a CDN or DDoS-protection network with huge capacity, often using anycast (Part 2) to spread the attack across hundreds of data centres (Cloudflare, AWS Shield, Google Cloud Armor, Akamai).
+1. Absorb with scale: a CDN or DDoS-protection network, often using anycast (Part 2) to spread the attack over hundreds of data centres (Cloudflare, AWS Shield, Google Cloud Armor, Akamai).
 2. Filter at the edge: drop malformed packets, use SYN cookies, block known bad sources.
 3. Rate limit and challenge suspicious clients (CAPTCHAs, JavaScript challenges).
-4. Cache aggressively so most requests never reach the origin, and hide origin IP addresses so attackers cannot bypass the CDN.
-5. Autoscale, with a cost ceiling, and keep graceful degradation switches ready.
+4. Cache aggressively so most requests never reach the origin, and hide origin IPs so attackers can't bypass the CDN.
+5. Autoscale with a cost ceiling, and keep graceful degradation switches ready.
 
 ```mermaid
 flowchart LR
@@ -6701,7 +5993,7 @@ flowchart LR
 
 ### Real-world examples
 
-In October 2023 Google disclosed that, that August, it had mitigated an attack peaking at about 398 million HTTP requests per second, exploiting an HTTP/2 weakness called "Rapid Reset"; Cloudflare and AWS reported record attacks from the same technique. The 2016 **Mirai** botnet of hacked cameras and routers took down the DNS provider Dyn and, with it, many major websites for hours.
+In October 2023 Google disclosed that in August it had mitigated an attack peaking at about 398 million HTTP requests per second, exploiting an HTTP/2 weakness called "Rapid Reset"; Cloudflare and AWS reported record attacks from the same technique. The 2016 **Mirai** botnet of hacked cameras and routers took down DNS provider Dyn and, with it, many major websites for hours.
 
 ### TL;DR
 
@@ -6709,52 +6001,52 @@ Firewalls filter by IP and port, WAFs filter malicious HTTP, private subnets hid
 
 ## Common web vulnerabilities: CORS, CSRF, XSS and SQL injection
 
-These four come up constantly. One-line ideas plus the fix.
+Four that come up constantly — the idea plus the fix.
 
-**Same-origin policy and CORS.** Browsers stop a page from one **origin** (scheme + domain + port, such as `https://shop.com`) reading responses from another origin. **CORS (Cross-Origin Resource Sharing)** is how a server opts in: it replies with headers such as `Access-Control-Allow-Origin: https://shop.com`, and for non-simple requests the browser first sends an `OPTIONS` **preflight** request to ask permission. CORS is a browser safety relaxation, not server protection: `curl` ignores it. Mistake: `Access-Control-Allow-Origin: *` on APIs that use cookies or private data.
+**Same-origin policy and CORS.** Browsers stop a page from one **origin** (scheme + domain + port, e.g. `https://shop.com`) reading responses from another. **CORS (Cross-Origin Resource Sharing)** is how a server opts in, replying with headers such as `Access-Control-Allow-Origin: https://shop.com`; for non-simple requests the browser first sends an `OPTIONS` **preflight** request. CORS relaxes browser safety; it doesn't protect servers (`curl` ignores it). Mistake: `Access-Control-Allow-Origin: *` on APIs using cookies or private data.
 
-**CSRF (cross-site request forgery).** An evil site tricks your logged-in browser into sending a request to another site, and the browser attaches your cookies, for example a hidden form that posts "transfer $1,000" to your bank. Fixes: `SameSite` cookies, anti-CSRF tokens (a random value the real page includes and the server checks), and never changing state on GET.
+**CSRF (cross-site request forgery).** An evil site tricks your logged-in browser into sending a request to another site with your cookies attached (a hidden form posting "transfer $1,000" to your bank). Fixes: `SameSite` cookies, anti-CSRF tokens (a random value the real page includes and the server checks), and never changing state on GET.
 
-**XSS (cross-site scripting).** An attacker gets their JavaScript to run inside your site in other users' browsers, for example by posting a comment containing `<script>`, which can then steal data or act as the user. Fixes: escape all user content when rendering (modern frameworks like React do by default), a **Content Security Policy (CSP)** header that restricts which scripts may run, and `HttpOnly` cookies so scripts cannot read session cookies.
+**XSS (cross-site scripting).** An attacker's JavaScript runs inside your site in other users' browsers (a comment containing `<script>`), stealing data or acting as the user. Fixes: escape all user content when rendering (React and other modern frameworks do by default), a **Content Security Policy (CSP)** header restricting which scripts may run, and `HttpOnly` cookies scripts can't read.
 
-**SQL injection.** User input is glued into a SQL string, so input like `' OR '1'='1` changes the query's meaning and can read or delete data. Fix: **parameterised queries** (prepared statements), where the input is always treated as data, never as SQL.
+**SQL injection.** User input glued into a SQL string lets input like `' OR '1'='1` change the query's meaning and read or delete data. Fix: **parameterised queries** (prepared statements), where input is always data, never SQL.
 
 ```text
 Unsafe: "SELECT * FROM users WHERE email = '" + input + "'"
 Safe:   "SELECT * FROM users WHERE email = ?"   with parameter [input]
 ```
 
-The **OWASP Top 10** (from the Open Worldwide Application Security Project) is the widely used list of the most critical web application risks; broken access control has been at the top of its most recent editions.
+The **OWASP Top 10** is the widely used list of the most critical web application risks; broken access control tops its recent editions.
 
 ### In the interview
 
 **Q:** What is the difference between XSS and CSRF?
 
-**A:** XSS runs the attacker's script inside your site, so it can do anything the user can. CSRF does not run code in your site; it makes the victim's browser send a forged request to your site with their cookies. XSS is fixed by output escaping and CSP; CSRF by SameSite cookies and CSRF tokens.
+**A:** XSS runs the attacker's script inside your site, so it can do anything the user can; CSRF runs no code in your site but makes the victim's browser send a forged request with their cookies. XSS: output escaping and CSP; CSRF: SameSite cookies and CSRF tokens.
 
 ### TL;DR
 
-CORS lets servers allow cross-origin browser reads; CSRF forges requests with the victim's cookies; XSS injects scripts; SQL injection injects query text; use SameSite cookies, CSRF tokens, escaping, CSP and parameterised queries.
+CORS lets servers allow cross-origin browser reads; CSRF forges requests with the victim's cookies; XSS injects scripts; SQL injection injects query text. Use SameSite cookies, CSRF tokens, escaping, CSP and parameterised queries.
 
 ## Least privilege and zero trust
 
 ### What it is
 
-- **Principle of least privilege**: every user, service and process gets only the permissions it needs for its job, for only as long as it needs them. A cleaner gets keys to the offices, not the safe. If the image-resizing service is hacked, it should only be able to read one bucket, not delete the customer database.
-- **Defence in depth**: several independent layers of protection (firewall, WAF, authentication, authorization, encryption, monitoring), so one failed layer is not fatal.
-- **Zero trust**: never trust a request just because it comes from "inside" the network. The old **perimeter model** was a castle with a moat: once inside the office network or the **VPN** (virtual private network, an encrypted tunnel into that network), everything trusted you. Zero trust verifies every request: authenticate the user and device, check authorization, encrypt the connection (often mTLS between services), and log it, wherever it comes from.
+- **Principle of least privilege**: every user, service and process gets only the permissions its job needs, only for as long as needed (a cleaner gets office keys, not the safe). A hacked image-resizing service should read one bucket, not delete the customer database.
+- **Defence in depth**: several independent layers (firewall, WAF, authentication, authorization, encryption, monitoring), so one failed layer isn't fatal.
+- **Zero trust**: never trust a request for coming from "inside". The old **perimeter model** was a castle and moat: inside the office network or **VPN** (virtual private network, an encrypted tunnel into it), everything trusted you. Zero trust verifies every request wherever it comes from: authenticate user and device, check authorization, encrypt the connection (often mTLS between services), log it.
 
 ### Why it matters
 
-Attackers who get one foothold (a phished laptop, a vulnerable server) then move sideways ("lateral movement") through a flat, trusting network. Least privilege and zero trust shrink what that foothold can reach.
+Attackers with one foothold (a phished laptop, a vulnerable server) move sideways — **lateral movement** — through a flat, trusting network. Least privilege and zero trust shrink what that foothold can reach.
 
 ### How it works
 
-Practical steps: separate **IAM** (identity and access management) roles per service with narrowly scoped policies; no shared admin accounts; just-in-time access for engineers that expires; private subnets; mTLS through a service mesh; device health checks; audit logs reviewed for unusual access. Google's **BeyondCorp** (described publicly from 2014) moved its employees off a privileged corporate network so that access to internal apps depends on user and device identity, not network location.
+Separate **IAM** (identity and access management) roles per service with narrowly scoped policies; no shared admin accounts; just-in-time engineer access that expires; private subnets; mTLS through a service mesh; device health checks; audit logs reviewed for unusual access. Google's **BeyondCorp** (described publicly from 2014) moved employees off a privileged corporate network, so access to internal apps depends on user and device identity, not network location.
 
 ### Common mistakes
 
-- Giving every service an all-powerful cloud role "to get it working", then never narrowing it.
+- An all-powerful cloud role for every service "to get it working", never narrowed.
 - Long-lived engineer credentials on laptops.
 - Treating the VPN as the only security boundary.
 
@@ -6764,263 +6056,46 @@ Grant the minimum access needed, layer defences, and verify every request regard
 
 ## Cost awareness
 
-Interviewers increasingly ask "and what would this cost?". A few rules of thumb:
+Interviewers increasingly ask "and what would this cost?":
 
-- **Big cost drivers**: compute (servers, containers, functions), storage (per GB-month, with cheaper "cold" tiers for rarely read data), managed databases, and **data transfer**. Data entering a cloud is usually free; data leaving to the internet (**egress**) is charged, roughly $0.05 to $0.09 per GB on AWS depending on volume, and even traffic between availability zones costs around $0.01 per GB in each direction. Heavy video or download traffic is mostly a bandwidth bill, which is one reason CDNs matter.
-- **Pricing models**: **on-demand** (pay per second or hour, flexible), **reserved instances or savings plans** (commit for 1 to 3 years for large discounts), **spot or preemptible instances** (spare capacity at up to around 90% off, but can be taken back at short notice, fine for batch jobs).
-- **Levers**: autoscale and turn off idle environments at night; right-size oversized instances; cache to cut database and egress costs; move old data to cheaper tiers with lifecycle rules; sample logs and traces; compare serverless vs always-on at your real traffic level.
-- **Trade-off to mention**: every extra nine of availability, extra region and lower RPO costs real money. Engineering time is a cost too, so a managed service that costs more per hour may still be cheaper overall.
-- **FinOps** is the practice of making teams see and own their cloud spend, with tags per team and per service and regular reviews.
+- **Big cost drivers**: compute (servers, containers, functions), storage (per GB-month, with cheaper "cold" tiers for rarely read data), managed databases, and **data transfer**. Data in is usually free; data out to the internet (**egress**) costs roughly $0.05–0.09 per GB on AWS depending on volume, and even cross-AZ traffic costs about $0.01 per GB each way. Heavy video or download traffic is mostly a bandwidth bill — one reason CDNs matter.
+- **Pricing models**: **on-demand** (per second or hour, flexible), **reserved instances or savings plans** (1–3 year commitment for large discounts), **spot or preemptible instances** (spare capacity at up to ~90% off, reclaimable at short notice; fine for batch jobs).
+- **Levers**: autoscale and switch off idle environments at night; right-size oversized instances; cache to cut database and egress costs; tier old data with lifecycle rules; sample logs and traces; compare serverless vs always-on at your real traffic level.
+- **Trade-off to mention**: every extra nine, extra region and lower RPO costs real money; engineering time is a cost too, so a pricier managed service may be cheaper overall.
+- **FinOps**: making teams see and own their cloud spend, with per-team and per-service tags and regular reviews.
 
-**In the interview:** state the expensive component of your design (for a video site, egress bandwidth; for a logging system, storage), and one way you would reduce it.
+**In the interview:** name your design's expensive component (egress for a video site, storage for a logging system) and one way to reduce it.
 
 ## Part 5 glossary
 
-| Term | Meaning in one line |
-|---|---|
-| Architectural style | The overall way code is split into running programs and how they communicate |
-| Monolith | Whole application built and deployed as one program |
-| Modular monolith | One deployable program with strictly separated internal modules |
-| SOA | Older style of coarse services connected through a central service bus |
-| Enterprise service bus (ESB) | Middleware that routes and transforms messages between SOA services |
-| Microservices | Many small, independently deployed services, each owning one capability and its data |
-| Database per service | Each microservice owns its private data store |
-| Distributed monolith | Microservices so coupled they must change and deploy together |
-| Serverless | Running code or using services without managing servers, billed per use |
-| FaaS | Function as a Service: upload functions, provider runs them per event |
-| Cold start | Extra delay when a serverless function runs on a freshly created instance |
-| Conway's law | Systems mirror the communication structure of the teams that build them |
-| Strangler fig pattern | Migrating a monolith piece by piece behind a routing layer |
-| Synchronous / asynchronous call | Caller waits for the response / sends a message and carries on |
-| Service discovery | Finding the current network addresses of a service's instances |
-| Service registry | Live database of service instances and their addresses |
-| Client-side / server-side discovery | Caller queries the registry itself / a router or load balancer does it for the caller |
-| Sidecar | Helper process deployed beside each service instance |
-| Service mesh | Centrally configured sidecar proxies handling all service-to-service traffic |
-| Data plane / control plane | The proxies that carry traffic / the component that configures them |
-| mTLS | Mutual TLS: both client and server prove identity with certificates |
-| Timeout | Maximum time a caller waits before giving up |
-| Deadline propagation | Passing the remaining time budget along to downstream calls |
-| Retry | Repeating a failed request in case the fault was temporary |
-| Transient fault | A short-lived failure likely to succeed on retry |
-| Exponential backoff | Doubling the wait between successive retries |
-| Jitter | Randomness added to retry waits to avoid synchronised retries |
-| Retry storm | Retries multiplying load on an already struggling service |
-| Retry budget | Cap on the share of traffic that may be retries |
-| Hedged request | Sending a duplicate request to another replica if the first is slow |
-| Cascading failure | One component's failure spreading to the components that depend on it |
-| Circuit breaker | Wrapper that stops calling a failing dependency for a while |
-| Closed / Open / Half-open | Circuit breaker states: normal, failing fast, testing recovery |
-| Bulkhead | Isolating resource pools so one failure cannot consume everything |
-| Cell-based architecture | Splitting users across independent copies of the stack to limit blast radius |
-| Fallback | Alternative response used when a call fails |
-| Rate limiting | Capping requests per client per time window and rejecting the excess |
-| Throttling | Slowing or queuing excess requests instead of rejecting them |
-| HTTP 429 | Status code meaning too many requests |
-| Retry-After | Header telling a client how long to wait before retrying |
-| Token bucket | Rate limiter with refilling tokens that allows bursts up to bucket size |
-| Leaky bucket | Rate limiter that outputs requests at a fixed steady rate |
-| Fixed window counter | Rate limiter counting requests per calendar time window |
-| Sliding window log | Rate limiter storing each request timestamp for an exact count |
-| Sliding window counter | Rate limiter estimating a sliding count from two fixed windows |
-| Fail open / fail closed | Allowing or denying traffic when a safety component itself fails |
-| Load shedding | Deliberately rejecting some work when overloaded so the rest succeeds |
-| Graceful degradation | Turning off non-essential features under stress to keep the core working |
-| Goodput | Useful work completed, as opposed to raw throughput |
-| Congestion collapse | Overload where throughput falls towards zero due to wasted work |
-| Kill switch | Flag that instantly disables a feature |
-| Autoscaling | Automatically adding or removing capacity based on load |
-| Scale out / scale in | Adding or removing instances |
-| Reactive / scheduled / predictive scaling | Scaling on current metrics / at preset times / ahead of forecast demand |
-| Cool-down period | Wait after a scaling action before another, to avoid flapping |
-| Cluster autoscaler | Adds or removes Kubernetes nodes as pods need room |
-| Virtual machine (VM) | Emulated computer with its own operating system |
-| Hypervisor | Software that runs and isolates virtual machines on a physical host |
-| Container | Isolated process sharing the host's OS kernel |
-| Namespaces and cgroups | Linux features that isolate what a process sees and limit what it uses |
-| Container image | Read-only package of an app and its dependencies |
-| Docker | Popular tool for building, sharing and running container images |
-| Dockerfile | Text recipe for building a container image |
-| Container registry | Storage service for container images |
-| Kubernetes (K8s) | Container orchestrator that keeps declared state running across machines |
-| Cluster | The set of machines and control plane managed by Kubernetes |
-| Node | One machine in a Kubernetes cluster |
-| Kubelet | Agent on each node that runs its pods |
-| etcd | Consistent key-value store holding Kubernetes cluster state |
-| Pod | Smallest Kubernetes unit: one or more containers sharing network and storage |
-| Deployment (Kubernetes) | Object managing replicas and rolling updates of stateless pods |
-| Service (Kubernetes) | Stable name and virtual IP load-balancing to matching pods |
-| Ingress | Kubernetes rules routing external HTTP traffic to services |
-| ConfigMap / Secret | Kubernetes objects for configuration and sensitive values |
-| StatefulSet | Kubernetes object for stateful pods with stable identity and storage |
-| Liveness / readiness probe | Checks for whether to restart a container or send it traffic |
-| Reconciliation loop | Controllers continually driving actual state towards desired state |
-| Infrastructure as code (IaC) | Defining infrastructure in versioned files applied by tools |
-| Terraform | Popular declarative infrastructure-as-code tool |
-| Configuration drift | Real infrastructure diverging from its definition |
-| Immutable infrastructure | Replacing servers with new images instead of modifying them |
-| Continuous integration (CI) | Automatically building and testing every merged change |
-| Continuous delivery | Keeping every passing build releasable on demand |
-| Continuous deployment | Automatically releasing every passing build to production |
-| Pipeline | Automated sequence of build, test and deploy steps |
-| DORA metrics | Deployment frequency, lead time, change failure rate, time to restore |
-| Expand and contract | Backward-compatible schema change done in several releases |
-| Deployment strategy | Method for replacing a running version with a new one |
-| Blast radius | How much of the system or user base a failure can affect |
-| Recreate deployment | Stop old version, start new, with downtime |
-| Rolling deployment | Replacing instances in small batches |
-| Blue-green deployment | Switching traffic between two full environments |
-| Canary release | Sending a small share of traffic to a new version first |
-| Shadow launch | Copying real traffic to a new version and discarding its responses |
-| Feature flag | Runtime switch that turns code paths on or off for chosen users |
-| Rollback | Returning to the previous known-good version |
-| Roll forward | Fixing a bad release by shipping a new fix instead of reverting |
-| Monitoring | Watching known metrics to check health |
-| Observability | Ability to understand system behaviour from its emitted data |
-| Log | Timestamped record of a single event |
-| Structured logging | Logs written as fields (such as JSON) for easy querying |
-| Metric | Numeric measurement tracked over time |
-| Counter / gauge / histogram | Metric that only rises / goes up and down / records a distribution |
-| Trace | Record of one request's path across services |
-| Span | One timed operation inside a trace |
-| Trace ID / correlation ID | Identifier passed along to link all data for one request |
-| OpenTelemetry | Vendor-neutral standard and libraries for telemetry |
-| Sampling | Keeping only a fraction of traces or logs to control cost |
-| Cardinality | Number of distinct label combinations in metrics |
-| Four golden signals | Latency, traffic, errors, saturation |
-| RED method | Rate, Errors, Duration for services |
-| USE method | Utilisation, Saturation, Errors for resources |
-| Saturation | How full the most constrained resource is |
-| Dashboard / alert | Page of graphs showing key metrics / automated notification when a metric rule breaks |
-| Page / ticket | Urgent alert waking someone / non-urgent work item |
-| Alert fatigue | Ignoring alerts because there are too many noisy ones |
-| On-call | Rota of engineers responding to alerts |
-| Runbook | Step-by-step guide for handling a specific alert |
-| Burn rate | Speed at which the error budget is being consumed |
-| Incident commander | Person coordinating the response to an incident |
-| Mitigation | Action that stops user impact before the root cause is fixed |
-| Postmortem | Blameless written review of an incident |
-| Disaster recovery (DR) | Plan for restoring service and data after a major failure |
-| RPO | Maximum acceptable data loss, measured in time |
-| RTO | Maximum acceptable downtime before restoration |
-| Backup | Separate copy of data for restoration |
-| Full / incremental backup | Copy of everything / only changes since the last backup |
-| Snapshot | Point-in-time image of a disk or database |
-| Point-in-time recovery | Restoring data to any chosen moment using logs |
-| 3-2-1 rule | Three copies, two media, one off-site |
-| Immutable backup | Backup that cannot be altered or deleted for a set period |
-| Region | Geographic cloud area containing several availability zones |
-| Availability zone (AZ) | Independent data centre group within a region |
-| Multi-AZ | Running across several zones in one region |
-| Multi-region | Running across several geographic regions |
-| Backup and restore / pilot light / warm standby | DR strategies from cheapest and slowest to faster and costlier |
-| Active-passive | One site serves traffic while another waits to take over |
-| Active-active | All sites serve traffic at the same time |
-| Chaos engineering | Deliberately injecting failures to prove resilience |
-| Game day | Planned exercise practising failures and recovery |
-| Authentication (AuthN) | Proving who someone is |
-| Authorization (AuthZ) | Deciding what an identity may do |
-| MFA | Multi-factor authentication using two or more kinds of proof |
-| 401 / 403 | Not authenticated / authenticated but not permitted |
-| ACL | List of who may access a specific resource |
-| RBAC | Permissions granted through roles |
-| ABAC | Permissions decided by rules over attributes |
-| ReBAC | Permissions derived from relationships between users and objects |
-| Session | Server-side record of a logged-in user |
-| Cookie | Small data stored by the browser and sent back to the site automatically |
-| HttpOnly / Secure / SameSite | Cookie flags: no script access / HTTPS only / limit cross-site sending |
-| Token | String a client presents to prove identity or access |
-| Bearer token | Token that grants access to whoever holds it |
-| JWT | Signed, self-contained JSON token: header.payload.signature |
-| Access token / refresh token | Short-lived API credential / long-lived credential to get new access tokens |
-| OAuth 2.0 | Standard for delegated, scoped access without sharing passwords |
-| Resource owner / client / authorization server / resource server | The four OAuth roles |
-| Scope | Named permission an OAuth token grants |
-| Authorization code flow | OAuth flow exchanging a one-time code for tokens |
-| PKCE | One-time secret proving the code exchanger started the flow |
-| Client credentials flow | OAuth flow for machine-to-machine access |
-| OpenID Connect (OIDC) | Identity layer on OAuth that adds an ID token for login |
-| ID token | JWT stating who the user is |
-| SSO | Single sign-on: one login for many applications |
-| SAML | Older XML-based standard for enterprise SSO |
-| API key | Secret string identifying a calling program |
-| Encryption | Reversible scrambling of data with a key |
-| Symmetric / asymmetric encryption | Same key both ways / public and private key pair |
-| Encryption in transit / at rest | Protecting data moving over a network (TLS) / stored on disks and backups |
-| KMS | Key management service that stores and uses encryption keys |
-| Envelope encryption | Encrypting data keys with a master key held in a KMS |
-| Hashing | One-way conversion of data into a fixed-size fingerprint |
-| Salt | Random per-user value added before hashing a password |
-| bcrypt / scrypt / Argon2id | Deliberately slow password-hashing algorithms |
-| Secrets management | Storing, distributing and regularly rotating (replacing) credentials securely |
-| Firewall | Filters traffic by IP, port and protocol |
-| Security group | Cloud firewall attached to instances |
-| WAF | Web application firewall filtering malicious HTTP requests |
-| DDoS | Flooding a service from many machines to make it unavailable |
-| Botnet | Network of hijacked devices controlled by an attacker |
-| Amplification attack | Spoofed small requests causing large replies to hit a victim |
-| SYN flood | Attack exhausting servers with half-open TCP connections |
-| Private subnet | Network segment with no direct route from the internet |
-| Bastion host | Hardened server used as the only entry point to private machines |
-| Same-origin policy | Browser rule blocking pages from reading other origins' responses |
-| CORS | Headers letting a server allow cross-origin browser requests |
-| Preflight request | Browser OPTIONS request checking CORS permission first |
-| CSRF | Forged request sent by the victim's browser with their cookies |
-| XSS | Attacker's script running inside a trusted site |
-| Content Security Policy (CSP) | Header restricting which scripts and resources a page may load |
-| SQL injection | Input altering the meaning of a SQL query |
-| Parameterised query | Query where inputs are passed separately as data |
-| OWASP Top 10 | Widely used list of top web application security risks |
-| Least privilege | Granting only the minimum access needed |
-| Defence in depth | Multiple independent layers of security |
-| Lateral movement | Attacker spreading from one compromised system to others |
-| Zero trust | Verifying every request regardless of network location |
-| Perimeter security | Trusting everything inside the network boundary |
-| Egress | Data leaving a cloud network, usually billed |
-| On-demand / reserved / spot instances | Pay as you go / committed discount / cheap but reclaimable |
-| FinOps | Practice of making teams see and manage their cloud costs |
-
+Every Part 5 term is defined in one line in the [Master A–Z glossary](#master-az-glossary), which merges the glossaries of all six parts into a single alphabetical list.
 
 ## Part 6 — Putting it together
 
-Parts 1 to 5 took the system apart and looked at each piece by itself: latency in Part 1, DNS and load balancers in Part 2, databases in Part 3, caches and queues in Part 4, and reliability and security in Part 5. This part puts the pieces back together. It has five sections, and each one is useful on its own:
+Parts 1 to 5 took the system apart; this part puts it back together in five self-contained sections:
 
-1. **A request's journey** follows one click from the browser all the way to the database and back, and names every concept along the way. If you can tell this story without notes, you understand the fundamentals.
-2. **Worked example: a URL shortener** designs a small but real system from scratch, step by step, with real numbers. It shows the interview method from Part 1 in action.
-3. **Decision cheat sheet** is a lookup table: "if you need X, reach for Y".
-4. **Top 60 interview questions** are the beginner questions interviewers ask most, with short model answers.
-5. **Master A–Z glossary** lists close to 300 of the most important terms, one line each, so you can quickly look up a word you meet in this module or in an interview.
+1. **A request's journey** follows one click from browser to database and back, naming every concept on the way. If you can tell this story without notes, you understand the fundamentals.
+2. **Worked example: a URL shortener** designs a small real system step by step with real numbers — the Part 1 interview method in action.
+3. **Decision cheat sheet**: "if you need X, reach for Y".
+4. **Top 60 interview questions**: the beginner questions asked most, with short model answers.
+5. **Master A–Z glossary**: every term in the module, one line each.
 
-When this part says "see *Load balancers* in Part 2", it means the section with that name in Part 2 of this module. Go back to it whenever a one-line reminder here is not enough.
+"See *Load balancers* in Part 2" means the section of that name in Part 2; go back to it whenever a one-line reminder isn't enough.
 
 ---
 
 ## A request's journey
 
 ### What it is
-A **request's journey** is the full path one user action takes through a system. You click "Like" on a photo, and about a tenth of a second later the heart turns red. In that tenth of a second your request may touch fifteen different machines and use almost every concept in this module. Following that path is the best way to see how the pieces fit.
-
-**Analogy:** sending a parcel. You write an address (a domain name), the post office looks up the route (DNS), the parcel goes to a local sorting office near you (a CDN edge), then to the main depot (the load balancer), where a clerk checks the label (the API gateway) and hands it to a worker (an app server). The worker looks in a quick-access drawer first (the cache) before going down to the archive (the database). Anything that can wait, like sending you a receipt, goes into an out-tray (a queue) for someone else to handle later (a worker).
+A **request's journey** is the full path one user action takes through a system. You click "Like" and a tenth of a second later the heart turns red; in that time the request may touch fifteen machines and use almost every concept in this module. Following the path is the best way to see how the pieces fit.
 
 ### Why it matters
-- **It is the most common warm-up question.** "What happens when you type a URL into the browser and press Enter?" is asked at every level, from internships to senior roles.
-- **It shows where time goes.** Every hop adds latency. Knowing the hops tells you which ones to remove (with caches, CDNs and connection reuse) when a page is slow.
-- **It shows where things break.** Every hop is something that can fail. Knowing the path lets you ask "what if this hop is down?" one hop at a time, which is how you find single points of failure.
+- **It is the most common warm-up question**: "What happens when you type a URL into the browser and press Enter?" — asked from internships to senior roles.
+- **It shows where time goes**: every hop adds latency, so knowing the hops tells you which to remove (caches, CDNs, connection reuse) when a page is slow.
+- **It shows where things break**: asking "what if this hop is down?" one hop at a time is how you find single points of failure.
 
 ### The map
-Here is the whole path for our example. The user is in London and opens `https://photos.example.com/feed`, a page that shows the latest photos from people they follow.
-
-```mermaid
-flowchart TD
-    U["Browser in London"] --> D["DNS lookup"]
-    D --> C["CDN edge in London"]
-    C --> L["Load balancer"]
-    L --> G["API gateway"]
-    G --> A["App servers"]
-    A --> S["Cache, database, queue"]
-```
-
-And here is the same journey as a sequence of messages over time. Read it top to bottom.
+A user in London opens `https://photos.example.com/feed`, the latest photos from people they follow. Read top to bottom:
 
 ```mermaid
 sequenceDiagram
@@ -7051,17 +6126,17 @@ sequenceDiagram
 ```
 
 ### How it works
-We walk through it one step at a time. The times are typical figures for a user in London talking to a well-run site; your numbers will differ, but the order of magnitude is what matters.
+Times are typical for a London user and a well-run site; the order of magnitude is what matters. Each step names the section that explains it.
 
-**Step 1 — The browser checks what it already knows (0 ms).** You type the address and press Enter. The browser splits the URL into a **scheme** (`https`, meaning "HTTP over TLS"), a **host** (`photos.example.com`) and a **path** (`/feed`). Before using the network it checks its own **browser cache**: maybe it already has a fresh copy of this page, or at least a remembered IP address for the host. This is caching at the client, the cheapest cache of all because it involves no network at all. See *Where caches live* in Part 4 and *Clients, servers and the request/response cycle* in Part 1.
+**Step 1 — The browser checks what it already knows (0 ms).** It splits the URL into **scheme** (`https`, HTTP over TLS), **host** (`photos.example.com`) and **path** (`/feed`), then checks its **browser cache** for a fresh copy of the page or a remembered IP — the cheapest cache, no network at all. (*Where caches live*, Part 4; *Clients, servers and the request/response cycle*, Part 1.)
 
-**Step 2 — DNS turns the name into an IP address (0–50 ms).** Computers talk using **IP addresses** such as `203.0.113.10`, not names. The browser asks the operating system, which asks a **recursive resolver** (usually run by your internet provider, or a public one like 1.1.1.1 or 8.8.8.8). If the resolver has the answer cached and its **TTL** (time to live) has not run out, it replies in a few milliseconds. If not, it asks a **root server**, then the **TLD server** for `.com`, then the **authoritative server** for `example.com`. Because `photos.example.com` uses a CDN, the authoritative answer is often a **CNAME** (an alias) pointing at the CDN, and the CDN's DNS returns the IP of an edge server close to the user. This is **GeoDNS** or **anycast** at work. See *DNS — the internet's phone book* and *CDNs and anycast* in Part 2.
+**Step 2 — DNS turns the name into an IP address (0–50 ms).** The OS asks a **recursive resolver** (your ISP's, or 1.1.1.1 / 8.8.8.8); a cached answer within its **TTL** returns in milliseconds, otherwise it asks a **root server**, the `.com` **TLD server** and the **authoritative server**. Since the site uses a CDN, the answer is often a **CNAME** pointing at the CDN, whose DNS returns a nearby edge's IP (**GeoDNS** or **anycast**). (*DNS*, *CDNs and anycast*, Part 2.)
 
-**Step 3 — TCP opens a connection (about 1 round trip).** The browser opens a **TCP** connection to the edge server on **port** 443. TCP needs a **three-way handshake** (SYN, SYN-ACK, ACK) before any data flows. The edge is in London, so a round trip takes maybe 5–10 ms. If the server were in New York it would be around 70 ms, which is the whole reason CDNs exist. See *TCP, UDP and QUIC* in Part 2.
+**Step 3 — TCP opens a connection (about 1 round trip).** A **three-way handshake** (SYN, SYN-ACK, ACK) to the edge on **port** 443: 5–10 ms to a London edge versus ~70 ms to New York — the reason CDNs exist. (*TCP, UDP and QUIC*, Part 2.)
 
-**Step 4 — TLS sets up encryption (about 1 more round trip).** Because the scheme is `https`, the browser and edge now run a **TLS handshake**. The server shows a **certificate** that proves it really is `photos.example.com`, and the two sides agree on encryption keys. With TLS 1.3 this costs one extra round trip (zero for a repeat visit that uses 0-RTT resumption). If the browser and site support **HTTP/3**, it runs over **QUIC**, which combines the transport and TLS handshakes into one round trip. See *HTTPS and TLS* in Part 2.
+**Step 4 — TLS sets up encryption (about 1 more round trip).** The edge presents a **certificate** proving it is `photos.example.com` and both sides agree keys: one extra round trip with TLS 1.3 (zero on a repeat visit with **0-RTT** resumption). **HTTP/3** over **QUIC** merges the transport and TLS handshakes into one round trip. (*HTTPS and TLS*, Part 2.)
 
-**Step 5 — The browser sends the HTTP request.** Now the real request goes out:
+**Step 5 — The browser sends the HTTP request:**
 
 ```http
 GET /feed HTTP/2
@@ -7070,30 +6145,30 @@ Cookie: session=7f3a9c...
 Accept: application/json
 ```
 
-`GET` is the **HTTP method** (read, do not change anything), the **headers** carry extra information, and the **cookie** carries the session token that says who you are. HTTP itself is **stateless**: the server remembers nothing between requests, so every request must carry its own identity. See *HTTP — the language of the web* in Part 2.
+`GET` is the **HTTP method** (read only), **headers** carry metadata, and the **cookie** carries the session token saying who you are — needed because HTTP is **stateless**. (*HTTP*, Part 2.)
 
-**Step 6 — The CDN edge decides: serve or forward (1–5 ms at the edge).** A **CDN** (content delivery network) is a set of servers spread around the world, each location called a **point of presence (PoP)**. The edge checks its cache. Static files such as images, JavaScript and CSS are almost always a **cache hit**, served straight from London in a few milliseconds. But `/feed` is personal to you, so it is marked as not cacheable and the edge forwards the request to the **origin** (the company's own servers), often over a fast, already-open connection. Many CDNs also absorb **DDoS** attacks and run a **WAF** (web application firewall) here. See *CDNs and anycast* in Part 2 and *Network security: firewalls, WAF and DDoS* in Part 5.
+**Step 6 — The CDN edge serves or forwards (1–5 ms at the edge).** At this **point of presence (PoP)**, static files (images, JavaScript, CSS) are almost always a **cache hit** served from London. `/feed` is personal, so it is marked uncacheable and forwarded to the **origin**, often over a fast, already-open connection. Many CDNs also absorb **DDoS** attacks and run a **WAF** here. (*CDNs and anycast*, Part 2; *Network security*, Part 5.)
 
-**Step 7 — The load balancer picks a server (under 1 ms).** The request reaches the origin's **load balancer**, which spreads traffic across many identical machines. A **layer 7** load balancer can read the HTTP path and headers. It often does **TLS termination** (decrypting here so the servers behind it do not have to). It only sends traffic to targets that pass **health checks**, and it chooses among them with an algorithm such as **round robin** or **least connections**. The load balancer is itself run as a redundant pair or a managed cloud service, so it is not a **single point of failure**. See *Load balancers* in Part 2 and *Redundancy, single points of failure and failover* in Part 1.
+**Step 7 — The load balancer picks a server (under 1 ms).** A **layer 7** load balancer reads path and headers, often does **TLS termination**, sends only to targets passing **health checks**, choosing by **round robin** or **least connections**. It runs as a redundant pair or managed service, so it isn't a **single point of failure**. (*Load balancers*, Part 2; *Redundancy, single points of failure and failover*, Part 1.)
 
-**Step 8 — The API gateway checks the request (1–5 ms).** The **API gateway** is the front door for all the company's APIs. It **authenticates** the request (checks the session or **JWT** to learn that you are user 42), applies **rate limiting** (are you sending too many requests? If so, reply **429 Too Many Requests**), and **routes** `/feed` to the feed service. In smaller systems the load balancer and gateway are the same product. See *Proxies and API gateways* in Part 2, and *Authentication and authorization* and *Rate limiting and throttling* in Part 5.
+**Step 8 — The API gateway checks the request (1–5 ms).** It **authenticates** (the session or **JWT** says you are user 42), applies **rate limiting** (**429 Too Many Requests** if exceeded) and **routes** `/feed` to the feed service. In smaller systems load balancer and gateway are one product. (*Proxies and API gateways*, Part 2; *Authentication and authorization*, *Rate limiting and throttling*, Part 5.)
 
-**Step 9 — An app server runs the business logic.** The feed service runs on many **stateless** app servers, usually as **containers** managed by **Kubernetes**. Stateless means any server can handle any request, because nothing about you is stored in the server's memory between requests. That is what lets the system **scale horizontally**: add more servers when traffic grows, and let **autoscaling** remove them when it drops. The service may find other services it needs through **service discovery**, and every call it makes has a **timeout**. See *Stateless and stateful services* and *Vertical and horizontal scaling* in Part 1, and *Service discovery, sidecars and service mesh* and *Autoscaling* in Part 5.
+**Step 9 — An app server runs the business logic.** The feed service runs on many **stateless** app servers, usually **containers** on **Kubernetes**: any server can handle any request, so the system **scales horizontally**, with **autoscaling** adding and removing servers. It finds other services via **service discovery**, and every outgoing call has a **timeout**. (*Stateless and stateful services*, *Vertical and horizontal scaling*, Part 1; *Service discovery*, *Autoscaling*, Part 5.)
 
-**Step 10 — Check the cache first (about 0.5 ms).** The feed service asks a **distributed cache** such as **Redis**: "do you have the feed for user 42?" This is the **cache-aside** pattern. If it is a **cache hit**, the answer comes back in well under a millisecond and steps 11 and 12 are skipped. A well-tuned cache serves 90–99% of reads this way, which is the main reason big sites are fast and their databases survive. See *Caching strategies* in Part 4.
+**Step 10 — Check the cache first (about 0.5 ms).** **Cache-aside**: ask a **distributed cache** such as **Redis** for user 42's feed. A **cache hit** returns in well under a millisecond and skips steps 11–12; a well-tuned cache serves 90–99% of reads, the main reason big sites are fast and their databases survive. (*Caching strategies*, Part 4.)
 
-**Step 11 — On a miss, query the database (2–20 ms).** On a **cache miss** the service asks the **database**. Reads usually go to a **read replica** (a copy of the data kept in sync from the **primary**), so the primary is free for writes. The query uses an **index** so the database does not scan every row. If the data is too big for one machine, it is **sharded**, and the service (or a routing layer) uses the **shard key** — here, the user ID — to pick the right shard. The service talks to the database through a **connection pool** so it does not pay for a new connection every time. See *Indexes*, *Replication* and Partitioning and sharding in Part 3.
+**Step 11 — On a miss, query the database (2–20 ms).** Reads usually go to a **read replica** (kept in sync from the **primary**, leaving it free for writes), using an **index** rather than scanning every row. If the data is **sharded**, the **shard key** (user ID) picks the shard. A **connection pool** avoids paying for a new connection each time. (*Indexes*, *Replication*, *Partitioning and sharding*, Part 3.)
 
-**Step 12 — Fill the cache.** The service stores the result in the cache with a **TTL** (say 60 seconds), so the next request for the same feed is a hit. Because replicas can be slightly behind (**replication lag**) and the cache can be up to 60 seconds old, the user sees **eventual consistency**: new posts appear within a minute, not instantly. For a feed that is fine. For a bank balance it would not be. See *Consistency models* in Part 4.
+**Step 12 — Fill the cache.** Store the result with a **TTL** (say 60 s) so the next request hits. With **replication lag** and a cache up to 60 s old, the user sees **eventual consistency**: new posts within a minute — fine for a feed, not for a bank balance. (*Consistency models*, Part 4.)
 
-**Step 13 — The response travels back.** The service builds a **JSON** response, and it travels back through the gateway, load balancer and CDN edge. The edge may **compress** it. The browser receives `200 OK`, renders the page, and then fetches the photo files themselves, which are almost all cache hits at the CDN edge.
+**Step 13 — The response travels back** as **JSON** through gateway, load balancer and edge (which may **compress** it). The browser gets `200 OK`, renders, then fetches the photos — almost all CDN cache hits.
 
-**Step 14 — Asynchronous work happens later.** Suppose you now click "Like". That is a **write** (`POST /photos/991/likes`). The service writes the like to the **primary** database and replies at once. But several other things should happen too: notify the photo's owner, update the like counter, feed the recommendation system. None of those need to finish before you see the red heart, so the service puts an event on a **message queue** or **event stream** (such as **Kafka**) and moves on. **Workers** (consumers) pick up the event in the background. Because queues usually give **at-least-once delivery**, the workers must be **idempotent** so a duplicate event does not send two notifications. See *Message queues* and *Delivery guarantees, idempotency and retries* in Part 4.
+**Step 14 — Asynchronous work happens later.** Clicking "Like" is a **write** (`POST /photos/991/likes`) to the **primary**, answered at once. Notifying the owner, updating the counter and feeding recommendations needn't finish first, so the service publishes an event to a **message queue** or **event stream** (**Kafka**) for background **workers**. Queues usually give **at-least-once delivery**, so workers must be **idempotent** (no duplicate notifications). (*Message queues*, *Delivery guarantees, idempotency and retries*, Part 4.)
 
-**Step 15 — Everything is watched.** Every hop writes **logs**, emits **metrics** (request rate, errors, duration) and passes along a **trace ID**, so an engineer can follow this exact request through all the services later. If the error rate rises above the **SLO**, an **alert** pages the **on-call** engineer. See *Observability: logs, metrics and traces* in Part 5.
+**Step 15 — Everything is watched.** Every hop writes **logs**, emits **metrics** (rate, errors, duration) and forwards a **trace ID** so engineers can follow this exact request later; an error rate threatening the **SLO** fires an **alert** to the **on-call** engineer. (*Observability*, Part 5.)
 
 ### Where the time goes
-A rough budget for the feed request on a first visit, user in London, origin in the same region:
+Rough budget for the feed request, first visit, London user, origin in the same region:
 
 | Step | Typical time | How to shrink it |
 |---|---|---|
@@ -7104,7 +6179,7 @@ A rough budget for the feed request on a first visit, user in London, origin in 
 | Cache hit / DB query | 0.5 ms / 5–20 ms | Higher cache hit ratio, indexes |
 | Browser rendering | 50–200 ms | Smaller pages, fewer scripts |
 
-The lesson: on a first visit, the **network round trips** often cost more than the server work. That is why repeat visits feel faster: the DNS answer is cached, the connection is reused (**keep-alive**), and static files come from the browser cache.
+On a first visit **network round trips** often cost more than server work; repeat visits feel faster because the DNS answer is cached, the connection reused (**keep-alive**), and static files come from the browser cache.
 
 ### What can go wrong at each hop
 
@@ -7120,23 +6195,23 @@ The lesson: on a first visit, the **network round trips** often cost more than t
 | Any call | Slow dependency | Timeouts, circuit breaker, fallback |
 
 ### Common mistakes
-- **Forgetting DNS and TLS.** Beginners jump straight from "browser" to "server". The handshakes are often the slowest part of a first visit.
-- **Making everything synchronous.** If the like request waits for the notification email to send, a slow email provider makes liking slow. Push side effects to a queue.
-- **Treating the cache as the source of truth.** The database is the truth. The cache is a copy that can be lost or stale at any moment.
-- **Forgetting that every box is redundant.** In a design drawing, one "load balancer" box really means at least two machines.
+- **Forgetting DNS and TLS**, jumping from "browser" to "server"; handshakes are often the slowest part of a first visit.
+- **Making everything synchronous**: if a like waits for the notification email, a slow email provider makes liking slow. Push side effects to a queue.
+- **Treating the cache as the source of truth**: the database is the truth; the cache can be lost or stale any moment.
+- **Forgetting every box is redundant**: one "load balancer" box means at least two machines.
 
 ### In the interview
 **Q:** What happens when you type a URL and press Enter?
 
-**A:** The browser checks its cache, then resolves the name with DNS (resolver, root, TLD, authoritative) to get an IP, usually a nearby CDN edge. It opens a TCP connection and does a TLS handshake, then sends an HTTP GET. The edge serves cached static content or forwards to the origin, where a load balancer picks a healthy server, a gateway authenticates and rate-limits, and the app checks a cache before the database. The response returns the same way, and the browser renders it and fetches images and scripts, mostly from the CDN.
+**A:** Browser cache; DNS (resolver, root, TLD, authoritative) gives an IP, usually a nearby CDN edge; TCP connection and TLS handshake; HTTP GET. The edge serves cached static content or forwards to the origin, where a load balancer picks a healthy server, a gateway authenticates and rate-limits, and the app checks a cache before the database. The response returns the same way; the browser renders and fetches images and scripts, mostly from the CDN.
 
 **Q:** Where would you put a cache in this path?
 
-**A:** At every layer where it pays: the browser cache for static files, the CDN for public content, a distributed cache like Redis in front of the database for hot data, and the database's own buffer cache. The closer the cache is to the user, the more latency it saves, but the harder it is to invalidate.
+**A:** Wherever it pays: browser cache for static files, CDN for public content, Redis in front of the database for hot data, plus the database's buffer cache. Closer to the user saves more latency but is harder to invalidate (*Where caches live*, Part 4).
 
 **Q:** Which of these steps would you make asynchronous?
 
-**A:** Anything the user does not need to see before getting a response: notifications, emails, counters, analytics, search indexing, thumbnails. The request writes the essential data, publishes an event, and returns. Workers do the rest with retries.
+**A:** Anything the user needn't see before the response: notifications, emails, counters, analytics, search indexing, thumbnails. Write the essential data, publish an event, return; workers do the rest with retries.
 
 ### TL;DR
 One click goes browser cache → DNS → TCP/TLS → CDN → load balancer → API gateway → stateless app server → cache → database, and back; side effects go through a queue to workers. Each hop costs time and can break, so good designs cache it, duplicate it or take it off the user's critical path.
@@ -7146,31 +6221,27 @@ One click goes browser cache → DNS → TCP/TLS → CDN → load balancer → A
 ## Worked example: designing a URL shortener
 
 ### What it is
-A **URL shortener** turns a long web address into a short one. You give it `https://www.example.com/blog/2026/10/a-very-long-article-title?ref=newsletter` and it gives back `https://sho.rt/aZ3kQ9b`. When anyone opens the short link, the service **redirects** their browser to the long one. Bitly and TinyURL are well-known examples.
-
-Interviewers love it as a first problem: you can finish it in 45 minutes, yet it still needs estimates, an API, a data model, ID generation, caching, sharding and a read-heavy design. Below we design it with the six-step method from *How to approach a system design interview* in Part 1: requirements, estimates, API, data model, high-level design, deep dives.
+A **URL shortener** turns `https://www.example.com/blog/2026/10/a-very-long-article-title?ref=newsletter` into `https://sho.rt/aZ3kQ9b`; opening the short link **redirects** the browser to the long one (Bitly, TinyURL). A favourite first problem: finishable in 45 minutes, yet it needs estimates, an API, a data model, ID generation, caching, sharding and a read-heavy design. We follow the method of *How to approach a system design interview* (Part 1).
 
 ### Step 1 — Requirements
-Always start by asking questions. Write down the answers as two lists.
-
-**Functional requirements** (what the system does):
+**Functional requirements:**
 - Given a long URL, create a short URL.
 - Opening the short URL redirects to the long URL.
-- Optional: a user may choose a **custom alias** (`sho.rt/my-party`).
-- Optional: links can **expire** after a date.
-- Optional: show **click counts** to the link's owner.
+- Optional: a user-chosen **custom alias** (`sho.rt/my-party`).
+- Optional: links **expire** after a date.
+- Optional: **click counts** for the link's owner.
 
-**Non-functional requirements** (how well it does it):
-- **Very high availability** for redirects. If redirects fail, every link anyone ever shared is broken. Target 99.99% (about 52 minutes of downtime a year — see *Availability and the nines* in Part 1).
+**Non-functional requirements:**
+- **Very high availability** for redirects — if they fail, every link ever shared is broken. Target 99.99% (~52 minutes of downtime a year; *Availability and the nines*, Part 1).
 - **Low latency** for redirects: p99 under 50 ms at the server.
-- **Short links must not be guessable in order**, so people cannot walk through everyone's links by counting.
-- **Durability**: once created, a link must never be lost.
-- **Read-heavy**: far more redirects than creations. We assume 100 reads per write.
+- **Short links not guessable in order**, so nobody can walk everyone's links by counting.
+- **Durability**: a created link is never lost.
+- **Read-heavy**: assume 100 redirects per creation.
 
-Also say what is **out of scope**: user accounts, a full analytics dashboard, link previews.
+**Out of scope**: user accounts, a full analytics dashboard, link previews.
 
 ### Step 2 — Estimates (back of the envelope)
-Assume **100 million new short links per month**. A month has about 2.6 million seconds (30 × 86,400 = 2,592,000).
+Assume **100 million new links per month**; a month ≈ 2.6 million seconds (30 × 86,400 = 2,592,000).
 
 | Quantity | Calculation | Result |
 |---|---|---|
@@ -7182,16 +6253,16 @@ Assume **100 million new short links per month**. A month has about 2.6 million 
 | Total storage over 5 years | 6 B × 500 B | about 3 TB |
 | Read bandwidth | 4,000 × 500 B | about 2 MB/s |
 
-What these numbers tell us:
-- **40 writes per second is tiny.** One ordinary database handles that easily.
-- **12,000 reads per second at peak is moderate.** One database could perhaps cope, but with no headroom. A cache will take most of it.
-- **3 TB is too much for one cheap machine's memory, but fine for a few database machines.** Sharding is a "later" concern, not day one.
-- **How many characters do we need?** If each character can be one of 62 symbols (a–z, A–Z, 0–9, called **base62**), then 6 characters give 62⁶ ≈ 56.8 billion codes and 7 characters give 62⁷ ≈ 3.5 trillion. We need 6 billion, so 7 characters gives over 500 times headroom. We choose 7.
+What they tell us:
+- **40 writes/s is tiny** — one ordinary database handles it.
+- **12,000 peak reads/s is moderate** — one database might cope with no headroom; a cache will take most of it.
+- **3 TB** exceeds one cheap machine's memory but suits a few database machines; sharding is a "later" concern.
+- **Code length**: with 62 symbols per character (a–z, A–Z, 0–9: **base62**), 6 characters give 62⁶ ≈ 56.8 billion codes, 7 give 62⁷ ≈ 3.5 trillion. We need 6 billion, so 7 gives over 500× headroom.
 
-**Cache sizing:** clicks are very uneven: a small minority of links collects most of the traffic (people often quote this as the 80/20 rule). A day brings about 350 million redirects (4,000 × 86,400), but far fewer distinct links; suppose 50 million. Keeping the busiest fifth of those, 10 million entries at roughly 500 bytes each, needs about 5 GB. That fits in the memory of a single cache node, and we run a few for redundancy.
+**Cache sizing:** clicks are very uneven — a small minority of links gets most traffic (often quoted as the **80/20 rule**). A day brings ~350 million redirects (4,000 × 86,400) over far fewer distinct links, say 50 million; caching the busiest fifth, 10 million entries × ~500 bytes ≈ 5 GB, fits one cache node's memory (run a few for redundancy).
 
 ### Step 3 — API
-Two endpoints are enough. See *API styles — REST, RPC and gRPC, GraphQL* and *API design basics* in Part 2.
+Two endpoints (*API styles*, *API design basics*, Part 2):
 
 ```http
 POST /api/v1/links
@@ -7211,16 +6282,15 @@ GET /aZ3kQ9b
 Location: https://www.example.com/blog/...
 ```
 
-Design notes:
-- The `v1` in the path is **API versioning**, so we can change the API later without breaking old clients.
-- The **idempotency key** means that if the client times out and retries, it gets the same short link back instead of creating two. See *Delivery guarantees, idempotency and retries* in Part 4.
-- The create endpoint is **rate limited** per API key or IP (for example 100 per hour) to stop spammers. Over the limit, it replies `429`. See *Rate limiting and throttling* in Part 5.
-- A missing or expired code returns `404 Not Found` (or `410 Gone` for an expired link).
+- `v1` in the path is **API versioning**, so the API can change without breaking old clients.
+- The **idempotency key** makes a timed-out, retried create return the same link instead of two (*Delivery guarantees*, Part 4).
+- Creation is **rate limited** per API key or IP (say 100 per hour) against spammers, replying `429` over the limit (*Rate limiting*, Part 5).
+- A missing code returns `404 Not Found`; an expired one `410 Gone` (or 404).
 
-**301 or 302?** Both are **HTTP redirect** status codes. A **301 Moved Permanently** tells the browser it may remember the redirect and skip our server next time. That saves load, but we stop seeing repeat clicks, so click counts are wrong and we cannot change or expire the link for browsers that cached it. A **302 Found** (temporary) makes the browser ask us every time. Choose 302 if analytics or expiry matter, 301 if pure speed and low cost matter. Saying this trade-off out loud is worth points in the interview.
+**301 or 302?** Both are **redirect** status codes. **301 Moved Permanently** lets the browser remember the redirect and skip our server next time: less load, but repeat clicks go uncounted and we can't change or expire the link for browsers that cached it. **302 Found** (temporary) makes the browser ask every time. 302 if analytics or expiry matter, 301 if pure speed and cost do — say this trade-off out loud.
 
 ### Step 4 — Data model
-One main table. A relational database such as PostgreSQL works well; a key-value store such as DynamoDB or Cassandra works too, because every read is "look up one row by its code". See *SQL vs NoSQL and BASE* in Part 3.
+One main table. PostgreSQL works; so does a key-value store like DynamoDB or Cassandra, since every read is "one row by code" (*SQL vs NoSQL and BASE*, Part 3).
 
 | Column | Type | Notes |
 |---|---|---|
@@ -7230,10 +6300,10 @@ One main table. A relational database such as PostgreSQL works well; a key-value
 | `created_at` | timestamp | |
 | `expires_at` | timestamp | Nullable |
 
-The primary key on `code` gives us an **index** for free, so a redirect is a single index lookup. Clicks are **not** stored by updating a counter in this row on every redirect — that would turn every read into a write. Instead they go to a separate analytics pipeline (see the deep dives).
+The primary key on `code` gives an **index** for free: a redirect is one index lookup. Clicks are **not** counted by updating this row per redirect (that turns every read into a write); they go to a separate analytics pipeline (deep dives).
 
 ### Step 5 — Generating the short code
-This is the heart of the problem. Four common options:
+The heart of the problem:
 
 | Approach | How | Pros | Cons |
 |---|---|---|---|
@@ -7242,16 +6312,16 @@ This is the heart of the problem. Four common options:
 | Counter + base62 | Global counter 1, 2, 3 … encoded in base62 | No collisions | Counter is a bottleneck, guessable |
 | Key generation service | Pre-make unused codes, hand out in batches | Fast, no collisions | One more service to run |
 
-A good beginner answer is **counter ranges plus base62, with shuffling**:
+(A **hash collision** is two inputs producing the same short hash; a **key generation service (KGS)** pre-creates unused keys.) A good beginner answer is **counter ranges plus base62, with shuffling**:
 
-1. A small coordination store (a database row, or ZooKeeper/etcd) hands each app server a **range** of numbers, for example server A gets 1,000,000–1,999,999 and server B gets 2,000,000–2,999,999.
-2. Each server counts through its own range in memory, with no network call per link. When it runs out, it asks for a new range. If a server crashes, the rest of its range is simply skipped — we have trillions to spare.
-3. The number is **scrambled** with a reversible mixing function (or a block cipher) before encoding, so consecutive links do not get consecutive codes. That meets the "not guessable in order" requirement.
-4. The scrambled number is written in **base62**, giving a 7-character code.
+1. A small coordination store (a database row, or ZooKeeper/etcd) hands each app server a **counter range** (A: 1,000,000–1,999,999; B: 2,000,000–2,999,999).
+2. Each server counts through its range in memory, with no network call per link, requesting a new range when exhausted. A crashed server's leftover range is simply skipped — trillions to spare.
+3. The number is **scrambled** with a reversible mixing function (or a block cipher) so consecutive links don't get consecutive codes — meeting "not guessable in order".
+4. The scrambled number is written in **base62**: a 7-character code.
 
-Alternatively a **Snowflake-style ID** (a 64-bit number built from timestamp + machine ID + sequence) needs no coordination at all, but the resulting code is 11 characters in base62, longer than we want. See *Unique ID generation* in Part 4.
+A **Snowflake-style ID** (64 bits from timestamp + machine ID + sequence) needs no coordination at all, but encodes to 11 base62 characters — longer than we want (*Unique ID generation*, Part 4).
 
-**Custom aliases** skip the generator. We simply try to insert the alias as the primary key; if the insert fails because the key exists, we reply `409 Conflict`. The database's uniqueness check is what makes this safe when two people race for the same alias.
+**Custom aliases** skip the generator: insert the alias as primary key; if it exists, reply `409 Conflict`. The database's uniqueness check makes two people racing for one alias safe.
 
 ### Step 6 — High-level design
 
@@ -7267,67 +6337,68 @@ flowchart TD
 ```
 
 **Redirect path (read, 99% of traffic):**
-1. `GET /aZ3kQ9b` arrives through DNS, the CDN and the load balancer at any link-service instance.
-2. The service looks up `aZ3kQ9b` in **Redis** (cache-aside). On a hit (most of the time) it has the long URL in under a millisecond.
-3. On a miss it reads from a **database replica**, then writes the result into Redis with a TTL of, say, 24 hours.
-4. It checks `expires_at`, publishes a small "click" event to the queue without waiting, and returns `302` with the `Location` header.
+1. `GET /aZ3kQ9b` arrives via DNS, CDN and load balancer at any link-service instance.
+2. It looks up `aZ3kQ9b` in **Redis** (cache-aside); a hit (most of the time) yields the long URL in under a millisecond.
+3. On a miss it reads a **database replica** and writes the result to Redis with a TTL of, say, 24 hours.
+4. It checks `expires_at`, publishes a small "click" event to the queue without waiting, and returns `302` with `Location`.
 
 **Create path (write, 1% of traffic):**
 1. `POST /api/v1/links` passes the gateway's authentication and rate limiter.
 2. The service validates the URL (well-formed, not on a malware blocklist), takes the next number from its range, scrambles and encodes it.
-3. It inserts the row into the **primary** database and returns `201` with the short URL. No cache write is needed; the first redirect fills the cache.
+3. It inserts into the **primary** and returns `201`. No cache write; the first redirect fills the cache.
 
 ### Step 7 — Deep dives
 
-**Caching.** With a 90%+ hit ratio, the 12,000 peak reads per second become about 1,200 database reads per second, which two read replicas handle easily. Links almost never change, so the cache rarely needs invalidating. When a link is deleted or expires, we delete its cache key. To stop a viral link causing a **cache stampede** when its entry expires, we let only one request refill it (request coalescing). See *Cache invalidation, stale data and stampedes* in Part 4.
+**Caching.** At 90%+ hit ratio the 12,000 peak reads/s become ~1,200 database reads/s — easy for two read replicas. Links almost never change, so invalidation is rare: delete the key when a link is deleted or expires. Stop a viral link's **cache stampede** on expiry by letting one request refill it (**request coalescing**) (*Cache invalidation, stale data and stampedes*, Part 4).
 
-**Even faster: cache at the edge.** For links without analytics we can let the CDN cache the redirect response itself for a few minutes, so most clicks never reach our servers at all.
+**Even faster: cache at the edge.** For links without analytics, let the CDN cache the redirect response itself for a few minutes, so most clicks never reach our servers.
 
-**Scaling the database.** 3 TB over five years fits in a primary with a few replicas at first. When it outgrows that, we **shard by hash of `code`**. Every redirect knows its code, so every query goes to exactly one shard — the ideal shard key. Using **consistent hashing** makes adding shards move only a small share of the keys. See Partitioning and sharding in Part 3.
+**Scaling the database.** 3 TB over five years fits a primary with a few replicas at first. Later, **shard by hash of `code`**: every redirect knows its code, so every query hits exactly one shard — the ideal shard key. **Consistent hashing** makes adding shards move only a small share of keys (*Partitioning and sharding*, Part 3).
 
-**Availability.** Every tier runs at least two copies across **availability zones**. The link service is stateless, so a dead instance is simply removed by the load balancer's health checks. The database fails over to a replica if the primary dies. Because the redirect path only needs reads, it can keep working from replicas and cache even while the primary is being replaced — a form of **graceful degradation**: creating links pauses for a minute, but existing links keep working.
+**Availability.** Every tier runs at least two copies across **availability zones**. The stateless link service loses dead instances via load-balancer health checks; the database fails over to a replica. The redirect path needs only reads, so it keeps working from replicas and cache while the primary is replaced — **graceful degradation**: creation pauses for a minute, existing links keep working.
 
-**Analytics.** Writing a counter on every click would put 12,000 writes per second on the database. Instead each click becomes an event on **Kafka**. Workers batch them and update counts once a minute in an analytics store (for example a column store such as ClickHouse). Counts are a little delayed — **eventual consistency** — which owners accept. If a worker crashes, the events are re-read from the queue (**at-least-once**); de-duplicating by event ID keeps counts honest.
+**Analytics.** A counter per click would put 12,000 writes/s on the database. Instead each click is a **Kafka** event; workers batch them and update counts once a minute in an analytics store (a column store such as ClickHouse). Counts lag slightly — **eventual consistency**, acceptable to owners. A crashed worker's events are re-read (**at-least-once**); de-duplicating by event ID keeps counts honest.
 
-**Abuse.** Short links are popular with spammers. Rate-limit creation, check long URLs against malware lists, and allow links to be disabled.
+**Abuse.** Spammers love short links: rate-limit creation, check long URLs against malware lists, allow links to be disabled.
 
 ### Trade-offs we made
-- **302 over 301:** more load on us, but accurate analytics and the ability to expire links.
-- **Counter ranges over hashing:** no collision checks, at the cost of a small coordination store.
+- **302 over 301:** more load, but accurate analytics and expirable links.
+- **Counter ranges over hashing:** no collision checks, for a small coordination store.
 - **Eventual consistency for click counts:** much cheaper writes, slightly stale numbers.
 - **Cache with long TTL:** fast and cheap, safe because links are effectively immutable.
 
 ### Common mistakes
-- **Skipping the estimates.** Without them you cannot justify 7 characters, the cache size or whether you need sharding at all.
-- **Using a single auto-increment column in one database as the generator** and calling it scalable. It works at 40 writes per second, but say out loud that it is a bottleneck and a single point of failure, and how you would fix it.
-- **Taking the first 7 characters of an MD5 hash and ignoring collisions.** With billions of links, collisions are certain. You must detect and retry.
-- **Updating a click counter on the redirect path.** It makes the cheapest, most common operation expensive.
-- **Over-engineering.** Do not open with 50 shards and three regions for 40 writes per second. Start simple, then show how it grows.
+- **Skipping the estimates**, leaving 7 characters, cache size and sharding unjustified.
+- **One auto-increment column in one database as the generator**, called scalable. Fine at 40 writes/s, but say it is a bottleneck and single point of failure, and how you'd fix it.
+- **First 7 characters of an MD5 hash, ignoring collisions** — with billions of links collisions are certain; detect and retry.
+- **Updating a click counter on the redirect path**, making the cheapest, commonest operation expensive.
+- **Over-engineering**: no 50 shards and three regions for 40 writes/s. Start simple, then show how it grows.
 
 ### In the interview
 **Q:** How long should the short code be?
 
-**A:** It depends on how many links we must hold. With base62, 7 characters give about 3.5 trillion codes; we expect about 6 billion in five years, so 7 leaves plenty of headroom. 6 characters (about 57 billion) would also work but with less margin.
+**A:** Depends on the link count: base62 7 characters ≈ 3.5 trillion codes for ~6 billion links in five years — plenty of headroom. 6 characters (~57 billion) would work with less margin.
 
 **Q:** How would you handle one link going viral with millions of clicks a minute?
 
-**A:** It is a hot key, but a read-only one, so caching solves it: the entry sits in Redis, we can add a small in-process cache on each app server for the very hottest keys, and we can let the CDN cache the redirect for a short time. Request coalescing prevents a stampede when the entry expires.
+**A:** A hot but read-only key, so caching solves it: Redis, a small in-process cache on each app server for the very hottest keys, and briefly CDN-cached redirects. Request coalescing prevents a stampede on expiry.
 
 **Q:** SQL or NoSQL?
 
-**A:** Either works because access is a simple key lookup and the write rate is low. I would start with PostgreSQL for its familiarity and strong uniqueness guarantees, and note that a key-value store such as DynamoDB scales out more simply if we reach many terabytes.
+**A:** Either — access is a simple key lookup at a low write rate. Start with PostgreSQL for familiarity and strong uniqueness guarantees; a key-value store like DynamoDB scales out more simply at many terabytes.
 
 ### TL;DR
-At heart the service maps a code to a URL and is read about a hundred times per write: generate a unique 7-character base62 code (counter ranges plus scrambling), store code → URL in a database, put Redis and optionally the CDN in front for the 100:1 reads, return a 302, and push click analytics through a queue.
+The service maps a code to a URL and is read ~100 times per write: generate a unique 7-character base62 code (counter ranges plus scrambling), store code → URL in a database, put Redis and optionally the CDN in front for the 100:1 reads, return a 302, and push click analytics through a queue.
 
 ---
+
 ## Decision cheat sheet
 
 ### What it is
-A lookup table of the most common design needs and the tool or pattern people usually reach for. It is a starting point, not a rule: in an interview, name the tool, then say **why** and **what it costs**. The "Watch out for" column is the part that earns the marks.
+Common design needs and the tool or pattern usually reached for — a starting point, not a rule. Name the tool, then say **why** and **what it costs**; the "Watch out for" column earns the marks.
 
 ### How to use it
-Read the left column as "the interviewer just told me…". For example, "the system is read-heavy" → add a cache and read replicas. Then check the right column before committing.
+Read the left column as "the interviewer just told me…" ("read-heavy" → cache and read replicas), then check the right column before committing.
 
 ```mermaid
 flowchart TD
@@ -7405,266 +6476,280 @@ Every "reach for" brings a "watch out for". Naming both in one sentence — "I'd
 ## Top 60 interview questions
 
 ### What it is
-These are the beginner-level questions that come up most in system design interviews and phone screens. Each answer is 2–4 sentences: about what you would say out loud before the interviewer asks a follow-up. The section in brackets tells you where to read more.
+The beginner questions asked most in design interviews and phone screens, each with a short model answer — what you'd say before the follow-up. The bracket names the section with the full explanation; use the list as a self-test.
 
 ### Foundations and performance
 
 **Q1: What is system design?**
 
-**A:** System design is deciding how the parts of a software system — servers, databases, caches, queues, networks — fit together so it meets its requirements for features, scale, speed and reliability. It is about trade-offs rather than one right answer. (*What system design is*, Part 1.)
+**A:** Deciding how the parts — servers, databases, caches, queues, networks — fit together to meet requirements for features, scale, speed and reliability; trade-offs, not one right answer. (*What system design is*, Part 1.)
 
-**Q2: What is the difference between latency and throughput?**
+**Q2: Latency vs throughput?**
 
-**A:** Latency is how long one request takes, for example 120 ms. Throughput is how many requests the system completes per unit of time, for example 5,000 requests per second. The two can move apart: a cargo ship carries thousands of containers per trip (huge throughput) yet each one takes weeks to arrive (high latency). (*Latency, throughput and bandwidth*, Part 1.)
+**A:** Latency is how long one request takes (120 ms); throughput is how many complete per unit time (5,000/s). They can diverge: a cargo ship has huge throughput and high latency. (*Latency, throughput and bandwidth*, Part 1.)
 
-**Q3: Why do we measure p99 latency instead of the average?**
+**Q3: Why measure p99 latency instead of the average?**
 
-**A:** The average hides the slow requests: a few 5-second requests disappear among thousands of fast ones. p99 means 99% of requests are faster than this value, so it shows what the unluckiest 1% of users feel. A page that makes 100 backend calls will almost always hit at least one p99-slow call, so tail latency matters a lot at scale. (*Percentiles, tail latency and why averages lie*, Part 1.)
+**A:** The average hides the slow few; p99 is what the unluckiest 1% feel. A page making 100 backend calls almost always hits one p99-slow call, so the tail matters at scale. (*Percentiles, tail latency and why averages lie*, Part 1.)
 
 **Q4: What is Little's law and why is it useful?**
 
-**A:** It says the average number of requests in a system equals the arrival rate times the average time each spends inside: L = λ × W. If 1,000 requests per second each take 0.2 seconds, about 200 are in flight at any moment, which tells you how many threads or connections you need. (*Little's law*, Part 1.)
+**A:** L = λ × W: requests in the system = arrival rate × time inside. 1,000 requests/s at 0.2 s each means ~200 in flight — the threads or connections you need. (*Little's law*, Part 1.)
 
-**Q5: How do you estimate QPS for a system?**
+**Q5: How do you estimate QPS?**
 
-**A:** Start from daily active users and actions per user: 10 million DAU × 10 requests each = 100 million requests per day. Divide by about 86,400 seconds (round to 100,000) to get about 1,000 QPS on average, then multiply by a peak factor of 2–3 for busy hours. (*Back-of-the-envelope estimation*, Part 1.)
+**A:** DAU × actions per user (10 M × 10 = 100 M/day), ÷ ~10^5 seconds ≈ 1,000 QPS average, × 2–3 for peak. (*Back-of-the-envelope estimation*, Part 1.)
 
-**Q6: What does "four nines" availability mean?**
+**Q6: What does "four nines" mean?**
 
-**A:** 99.99% availability: the service may be down for about 52.6 minutes a year, or about 4.4 minutes a month. Each extra nine cuts allowed downtime by ten times and usually costs much more to achieve. (*Availability and the nines*, Part 1.)
+**A:** 99.99%: about 52.6 minutes down a year, ~4.4 a month. Each extra nine is 10× less downtime and usually far more cost. (*Availability and the nines*, Part 1.)
 
-**Q7: What is the difference between an SLA, an SLO and an SLI?**
+**Q7: SLA vs SLO vs SLI?**
 
-**A:** An SLI (indicator) is a measurement, such as the percentage of requests that succeed. An SLO (objective) is the internal target for it, such as 99.9% over 30 days. An SLA (agreement) is a contract with customers, usually looser than the SLO, with refunds or penalties if it is missed. (*SLA, SLO, SLI and error budgets*, Part 1.)
+**A:** SLI: a measurement (% successful requests). SLO: the internal target (99.9% over 30 days). SLA: the customer contract, usually looser, with refunds or penalties. (*SLA, SLO, SLI and error budgets*, Part 1.)
 
 **Q8: What is an error budget?**
 
-**A:** It is the amount of failure the SLO allows: a 99.9% SLO leaves 0.1% of requests (or about 43 minutes a month) that may fail. While budget remains, teams can ship fast; when it is spent, they slow down and focus on reliability. (*SLA, SLO, SLI and error budgets*, Part 1.)
+**A:** The failure the SLO allows — 0.1% of requests (~43 minutes a month) for 99.9%. Ship fast while it lasts; focus on reliability once spent. (*SLA, SLO, SLI and error budgets*, Part 1.)
 
-**Q9: What is the difference between vertical and horizontal scaling?**
+**Q9: Vertical vs horizontal scaling?**
 
-**A:** Vertical scaling (scale up) means a bigger machine: more CPU, memory or disk. Horizontal scaling (scale out) means more machines sharing the work. Vertical is simpler but has a ceiling and stays a single point of failure; horizontal grows further and adds redundancy but needs load balancing and stateless services. (*Vertical and horizontal scaling*, Part 1.)
+**A:** Vertical: a bigger machine — simple, but a ceiling and still a single point of failure. Horizontal: more machines — grows further with redundancy, but needs load balancing and stateless services. (*Vertical and horizontal scaling*, Part 1.)
 
-**Q10: What does "stateless service" mean and why does it help scaling?**
+**Q10: What is a stateless service and why does it help scaling?**
 
-**A:** A stateless service keeps no per-user data in its own memory between requests; session data lives in a shared store such as Redis or a database, or in a token the client sends. Any instance can then serve any request, so you can add, remove or replace instances freely behind a load balancer. (*Stateless and stateful services*, Part 1.)
+**A:** It keeps no per-user data in memory between requests (sessions in Redis, a database, or a client token), so any instance serves any request and instances can be added or replaced freely. (*Stateless and stateful services*, Part 1.)
 
 **Q11: What is a single point of failure and how do you remove one?**
 
-**A:** It is any component whose failure takes the whole system down, such as one database server or one load balancer. You remove it with redundancy — two or more copies — plus automatic failover and health checks so traffic moves to a healthy copy. (*Redundancy, single points of failure and failover*, Part 1.)
+**A:** A component whose failure takes everything down (one database, one load balancer). Add redundant copies with health checks and automatic failover. (*Redundancy, single points of failure and failover*, Part 1.)
 
-**Q12: What is the difference between reliability, availability and durability?**
+**Q12: Reliability vs availability vs durability?**
 
-**A:** Availability is whether the system answers right now. Reliability is whether it keeps doing the right thing correctly over time. Durability is whether saved data survives — Amazon S3, for example, is designed for 99.999999999% (eleven nines) annual durability of stored objects. (*Reliability, availability and durability*, Part 1.)
+**A:** Availability: answers now. Reliability: keeps doing the right thing over time. Durability: saved data survives (S3 is designed for eleven nines annual object durability). (*Reliability, availability and durability*, Part 1.)
 
-**Q13: How do you approach a system design interview question?**
+**Q13: How do you approach a design question?**
 
-**A:** Clarify functional and non-functional requirements, do quick estimates, define the API and data model, draw a simple high-level design, then deep-dive into the hardest parts and discuss trade-offs and failures. Keep talking through your reasoning, and start simple before adding complexity. (*How to approach a system design interview*, Part 1.)
+**A:** Requirements (functional and non-functional), estimates, API and data model, a simple high-level design, then deep dives, trade-offs and failures — thinking aloud, simple first. (*How to approach a system design interview*, Part 1.)
 
 ### Networking and communication
 
 **Q14: How does DNS work?**
 
-**A:** Your device asks a recursive resolver for a name. If not cached, the resolver asks a root server, which points to the TLD server (for `.com`), which points to the domain's authoritative server, which returns the IP address. Every answer is cached for its TTL so most lookups take only milliseconds. (*DNS — the internet's phone book*, Part 2.)
+**A:** A recursive resolver walks root → TLD → authoritative server to get the IP, caching every answer for its TTL, so most lookups take milliseconds. (*DNS — the internet's phone book*, Part 2.)
 
-**Q15: What is the difference between TCP and UDP?**
+**Q15: TCP vs UDP?**
 
-**A:** TCP sets up a connection with a handshake and guarantees that bytes arrive complete, in order, with congestion control; it is used for web pages, APIs and databases. UDP just sends individual packets with no guarantees, so it has less overhead and no waiting for lost packets; it is used for video calls, games and DNS queries, and as the base of QUIC. (*TCP, UDP and QUIC*, Part 2.)
+**A:** TCP: handshake, complete in-order delivery, congestion control — web, APIs, databases. UDP: independent packets, no guarantees, no waiting for losses — video calls, games, DNS, and the base of QUIC. (*TCP, UDP and QUIC*, Part 2.)
 
-**Q16: What changed between HTTP/1.1, HTTP/2 and HTTP/3?**
+**Q16: HTTP/1.1 vs HTTP/2 vs HTTP/3?**
 
-**A:** HTTP/1.1 handles one request at a time per connection, so browsers open several connections. HTTP/2 multiplexes many requests over one TCP connection with compressed headers, but a lost TCP packet still stalls all of them (head-of-line blocking). HTTP/3 runs over QUIC on UDP, so streams are independent and connection set-up is faster. (*HTTP — the language of the web*, Part 2.)
+**A:** 1.1: one request at a time per connection. 2: many multiplexed requests on one TCP connection with compressed headers, but a lost packet stalls all (head-of-line blocking). 3: over QUIC/UDP, independent streams and faster setup. (*HTTP — the language of the web*, Part 2.)
 
 **Q17: What does HTTPS add to HTTP?**
 
-**A:** HTTPS is HTTP inside a TLS connection. TLS encrypts the traffic so others on the network cannot read or change it, and the server's certificate, signed by a trusted certificate authority, proves you are talking to the real site. (*HTTPS and TLS*, Part 2.)
+**A:** TLS encryption so nobody on the network can read or change traffic, plus a CA-signed certificate proving you reached the real site. (*HTTPS and TLS*, Part 2.)
 
 **Q18: Which HTTP methods are idempotent and why does it matter?**
 
-**A:** GET, PUT, DELETE, HEAD and OPTIONS are idempotent: repeating them has the same effect as doing them once. POST (and usually PATCH) is not. It matters because networks fail and clients retry; idempotent requests are safe to retry, while non-idempotent ones need an idempotency key. (*HTTP — the language of the web*, Part 2.)
+**A:** GET, PUT, DELETE, HEAD, OPTIONS; not POST (usually not PATCH). Clients retry after network failures, and only idempotent requests are safe to repeat — others need an idempotency key. (*HTTP — the language of the web*, Part 2.)
 
-**Q19: REST vs gRPC vs GraphQL — when would you use each?**
+**Q19: REST vs gRPC vs GraphQL?**
 
-**A:** REST over JSON is the simple, widely understood default for public APIs. gRPC uses Protobuf over HTTP/2 and is fast and strongly typed, so it suits internal service-to-service calls. GraphQL lets clients ask for exactly the fields they need in one request, which helps mobile apps and complex UIs with many data sources. (*API styles — REST, RPC and gRPC, GraphQL*, Part 2.)
+**A:** REST/JSON: the simple default for public APIs. gRPC (Protobuf over HTTP/2): fast, typed, for internal service calls. GraphQL: clients request exactly the fields they need in one call, for mobile and complex UIs. (*API styles — REST, RPC and gRPC, GraphQL*, Part 2.)
 
 **Q20: How do you push real-time updates to a browser?**
 
-**A:** Short polling asks repeatedly on a timer; long polling holds a request open until there is news; Server-Sent Events keep one HTTP response open for a server-to-client stream; WebSockets give a full two-way connection. Use SSE for one-way feeds such as live scores and WebSockets for chat or games. (*Real-time communication — polling, long polling, WebSockets, SSE, webhooks*, Part 2.)
+**A:** Short polling, long polling, Server-Sent Events (one-way stream: live scores, feeds) or WebSockets (two-way: chat, games). (*Real-time communication*, Part 2.)
 
-**Q21: What is a load balancer and why do you need one?**
+**Q21: What is a load balancer and why?**
 
-**A:** It sits in front of a group of servers and spreads incoming requests across them. It lets you scale horizontally, sends traffic only to healthy servers (via health checks), and lets you deploy or remove servers without users noticing. (*Load balancers*, Part 2.)
+**A:** It spreads requests across a server pool, enabling horizontal scaling, sending traffic only to healthy servers, and allowing invisible deploys. (*Load balancers*, Part 2.)
 
-**Q22: What is the difference between an L4 and an L7 load balancer?**
+**Q22: L4 vs L7 load balancer?**
 
-**A:** An L4 load balancer routes by IP address and port without looking inside the traffic, so it is very fast and works for any TCP or UDP protocol (for example AWS NLB). An L7 load balancer understands HTTP, so it can route by path, header or cookie, terminate TLS and retry requests, at somewhat higher cost (for example AWS ALB, NGINX, Envoy). (*Load balancers*, Part 2.)
+**A:** L4 routes by IP and port without reading content — fast, any protocol (AWS NLB). L7 understands HTTP — routes by path, header or cookie, terminates TLS, retries — at higher cost (AWS ALB, NGINX, Envoy). (*Load balancers*, Part 2.)
 
 **Q23: Name some load-balancing algorithms.**
 
-**A:** Round robin sends requests to each server in turn; weighted round robin gives bigger servers more; least connections picks the server with the fewest open connections; IP hash or consistent hashing sends the same client or key to the same server; power of two choices picks two random servers and uses the less busy one. (*Load balancers*, Part 2.)
+**A:** Round robin, weighted round robin, least connections, IP hash or consistent hashing (same key → same server), power of two choices. (*Load balancers*, Part 2.)
 
-**Q24: What are sticky sessions and why are they often avoided?**
+**Q24: What are sticky sessions and why avoid them?**
 
-**A:** Sticky sessions make the load balancer send a user to the same server every time, usually via a cookie, so in-memory session data keeps working. They cause uneven load and lost sessions when a server dies, so the better fix is stateless servers with sessions in a shared store. (*Load balancers*, Part 2.)
+**A:** The LB sends a user to the same server (usually by cookie) so in-memory sessions work — but load gets uneven and sessions die with the server. Prefer stateless servers with a shared session store. (*Load balancers*, Part 2.)
 
 **Q25: What is a CDN and how does it help?**
 
-**A:** A content delivery network is a set of servers in many cities that cache your content close to users. It cuts latency (a few milliseconds instead of a cross-ocean round trip), offloads traffic from your origin servers, and helps absorb DDoS attacks. (*CDNs and anycast*, Part 2.)
+**A:** Servers in many cities caching content near users: milliseconds instead of cross-ocean round trips, origin offload, DDoS absorption. (*CDNs and anycast*, Part 2.)
 
-**Q26: What is the difference between a forward proxy and a reverse proxy?**
+**Q26: Forward vs reverse proxy?**
 
-**A:** A forward proxy sits in front of clients and makes requests on their behalf, for example a company proxy that filters web access. A reverse proxy sits in front of servers and receives requests on their behalf, providing load balancing, TLS termination, caching and protection; NGINX is a common one. (*Proxies and API gateways*, Part 2.)
+**A:** A forward proxy acts for clients (a company web filter); a reverse proxy acts for servers — load balancing, TLS termination, caching, protection (NGINX). (*Proxies and API gateways*, Part 2.)
 
 **Q27: What is an API gateway?**
 
-**A:** It is a reverse proxy that acts as the single entry point for many backend services. It handles shared concerns such as authentication, rate limiting, routing, request transformation and logging so each service does not have to. (*Proxies and API gateways*, Part 2.)
+**A:** A reverse proxy as the single entry point to many services, handling authentication, rate limiting, routing, transformation and logging once. (*Proxies and API gateways*, Part 2.)
 
 **Q28: Offset or cursor pagination?**
 
-**A:** Offset pagination (`?page=5` or `OFFSET 100`) is simple but gets slow on deep pages and can skip or repeat items when data changes. Cursor pagination passes a pointer to the last item seen (`?after=abc`), stays fast and stable, and suits feeds and large lists. (*API design basics*, Part 2.)
+**A:** Offset (`?page=5` or `OFFSET 100`) is simple but slow on deep pages and skips or repeats items as data changes; cursor (`?after=abc`) stays fast and stable — use it for feeds and big lists. (*API design basics*, Part 2.)
 
 ### Data storage
 
-**Q29: SQL or NoSQL — how do you choose?**
+**Q29: SQL or NoSQL?**
 
-**A:** Choose SQL when you need transactions, joins and a well-defined schema, such as orders and payments. Choose a NoSQL family when you need a specific shape at large scale: key-value for simple lookups, document for flexible records, wide-column for heavy writes, graph for relationships. Many systems use both. (*SQL vs NoSQL and BASE*, Part 3.)
+**A:** SQL for transactions, joins and a defined schema (orders, payments); a NoSQL family for a specific shape at scale — key-value, document, wide-column, graph. Many systems use both. (*SQL vs NoSQL and BASE*, Part 3.)
 
 **Q30: What does ACID mean?**
 
-**A:** Atomicity: a transaction happens completely or not at all. Consistency: it moves the database from one valid state to another, respecting rules. Isolation: concurrent transactions do not see each other's half-finished work. Durability: once committed, data survives crashes. (*Transactions and ACID*, Part 3.)
+**A:** Atomicity (all or nothing), Consistency (valid state to valid state), Isolation (no half-finished work visible), Durability (committed data survives crashes). (*Transactions and ACID*, Part 3.)
 
 **Q31: What is an index and what does it cost?**
 
-**A:** An index is an extra data structure, usually a B-tree, that lets the database find rows by a column without scanning the whole table — like the index at the back of a book. It makes reads much faster but slows writes, because every insert or update must also update the index, and it uses storage. (*Indexes*, Part 3.)
+**A:** A structure, usually a B-tree, that finds rows without scanning the table; faster reads, but slower writes and extra storage. (*Indexes*, Part 3.)
 
-**Q32: What is the difference between replication and sharding?**
+**Q32: Replication vs sharding?**
 
-**A:** Replication keeps full copies of the same data on several machines, which improves availability and read capacity. Sharding splits the data so each machine holds a different part, which increases write capacity and total storage. Large systems usually do both: each shard is replicated. (*Replication* and Partitioning and sharding, Part 3.)
+**A:** Replication copies all data to several machines (availability, read capacity); sharding splits data so each machine holds a part (write capacity, storage). Large systems replicate each shard. (*Replication*, *Partitioning and sharding*, Part 3.)
 
 **Q33: Synchronous vs asynchronous replication?**
 
-**A:** With synchronous replication, the primary waits for the replica to confirm before telling the client the write succeeded: no data loss on failover, but slower writes. With asynchronous replication, the primary confirms immediately: faster, but recent writes can be lost if the primary dies and replicas may lag behind. (*Replication*, Part 3.)
+**A:** Synchronous waits for a replica's confirmation — no loss on failover, slower writes. Asynchronous confirms at once — faster, but recent writes can be lost and replicas lag. (*Replication*, Part 3.)
 
 **Q34: What is replication lag and how does it affect users?**
 
-**A:** It is the delay before a write on the primary shows up on a replica, usually milliseconds but sometimes seconds. A user who posts a comment and then reads from a lagging replica may not see it. Fixes include reading your own recent writes from the primary or tracking the write position. (*Replication*, Part 3, and *Consistency models*, Part 4.)
+**A:** The delay before a primary's write reaches a replica (milliseconds, sometimes seconds); a user may not see their own comment. Read own recent writes from the primary or track the write position. (*Replication*, Part 3; *Consistency models*, Part 4.)
 
 **Q35: How do you choose a shard key?**
 
-**A:** Pick a key that spreads data and traffic evenly and that most queries include, so each query hits one shard. User ID is a common choice; a timestamp is usually bad because all new writes go to the same shard, creating a hot spot. (*Partitioning and sharding*, Part 3.)
+**A:** One that spreads data and traffic evenly and appears in most queries (user ID); not a timestamp, which sends all new writes to one hot shard. (*Partitioning and sharding*, Part 3.)
 
 **Q36: What is consistent hashing?**
 
-**A:** Servers and keys are placed on the same hash ring, and each key belongs to the next server clockwise. When a server is added or removed, only the keys next to it move, about 1/N of them, instead of almost all keys as with `hash mod N`. Virtual nodes give each server many points on the ring for an even spread. (*Consistent hashing and virtual nodes*, Part 3.)
+**A:** Servers and keys on one hash ring, each key owned by the next server clockwise, so adding or removing a server moves ~1/N of keys instead of almost all; virtual nodes even the spread. (*Consistent hashing and virtual nodes*, Part 3.)
 
 **Q37: Normalization or denormalization?**
 
-**A:** Normalization stores each fact once and links tables with keys, which avoids inconsistent copies but needs joins. Denormalization copies data into the shape you read it, making reads fast at the cost of more storage and keeping copies in sync. Read-heavy systems often denormalize their hottest paths. (*Normalization and denormalization*, Part 3.)
+**A:** Normalized: each fact once, joined by keys — consistent but needs joins. Denormalized: data copied into its read shape — fast reads, more storage and sync work. Read-heavy systems denormalize hot paths. (*Normalization and denormalization*, Part 3.)
 
 **Q38: When would you use object storage?**
 
-**A:** For large, unstructured files that are written once and read many times: images, videos, backups, logs, data-lake files. Services like Amazon S3 are cheap, extremely durable and scale without limit; you store the file there and keep only its URL and metadata in the database. (*Storage types: block, file and object*, Part 3.)
+**A:** Large, unstructured, write-once read-many files (images, video, backups, logs, data-lake files): cheap, extremely durable, unlimited; keep only the URL and metadata in the database. (*Storage types: block, file and object*, Part 3.)
 
-**Q39: What is the difference between OLTP and OLAP?**
+**Q39: OLTP vs OLAP?**
 
-**A:** OLTP (online transaction processing) handles many small, fast reads and writes for the live application, such as placing an order. OLAP (online analytical processing) runs large queries over lots of historical data for reports, usually in a column-oriented data warehouse. (*OLTP vs OLAP, row vs column storage, lakes and warehouses*, Part 3.)
+**A:** OLTP: many small fast reads and writes for the live app (placing an order). OLAP: big analytical queries over history, usually in a column-oriented warehouse. (*OLTP vs OLAP*, Part 3.)
 
 **Q40: What is the N+1 query problem?**
 
-**A:** Code fetches a list with one query, then runs one more query per item to fetch related data: 1 + N queries instead of 1 or 2. It often hides behind an ORM and makes pages slow. Fix it with a join, an `IN (...)` batch query or eager loading. (*Connection pooling, ORMs and N+1 queries*, Part 3.)
+**A:** One query for a list, then one per item for related data — often hidden by an ORM. Fix with a join, an `IN (...)` batch or eager loading. (*Connection pooling, ORMs and N+1 queries*, Part 3.)
 
 ### Caching, async and consistency
 
 **Q41: Explain cache-aside.**
 
-**A:** The application checks the cache first. On a hit it returns the cached value; on a miss it reads the database, stores the result in the cache with a TTL, and returns it. On writes, it updates the database and deletes the cache entry. It is the most common caching pattern. (*Caching strategies*, Part 4.)
+**A:** Check the cache; on a miss read the database, store with a TTL, return. On writes update the database and delete the key. The most common pattern. (*Caching strategies*, Part 4.)
 
-**Q42: Write-through vs write-back caching?**
+**Q42: Write-through vs write-back?**
 
-**A:** Write-through writes to the cache and the database together, so the cache is always fresh but each write pays both costs. Write-back (write-behind) writes to the cache and saves to the database later in batches, giving fast writes but risking data loss if the cache fails before flushing. (*Caching strategies*, Part 4.)
+**A:** Write-through writes cache and database together — always fresh, both costs per write. Write-back (write-behind) writes the cache and flushes later in batches — fast, but data lost if the cache fails first. (*Caching strategies*, Part 4.)
 
 **Q43: What is LRU eviction?**
 
-**A:** Least Recently Used: when the cache is full, it removes the item that has gone longest without being read. It works well because recently used data tends to be used again soon. Alternatives include LFU (least frequently used) and simple TTL expiry. (*Eviction policies*, Part 4.)
+**A:** Least Recently Used: when full, evict the item longest unread, since recent use predicts reuse. Alternatives: LFU, TTL expiry. (*Eviction policies*, Part 4.)
 
 **Q44: What is a cache stampede and how do you prevent it?**
 
-**A:** When a popular cache entry expires, thousands of requests miss at once and all hit the database together, which can knock it over. Prevent it with request coalescing (only one request refills, others wait), a lock around the refill, random jitter on TTLs, or refreshing popular entries before they expire. (*Cache invalidation, stale data and stampedes*, Part 4.)
+**A:** A hot entry expires and thousands of simultaneous misses hit the database. Use request coalescing, a refill lock, TTL jitter, or early refresh of hot entries. (*Cache invalidation, stale data and stampedes*, Part 4.)
 
 **Q45: Why use a message queue?**
 
-**A:** It decouples the sender from the worker: the sender drops a message and returns immediately, and workers process it at their own pace. This smooths traffic spikes, lets the worker be down for a while without losing work, and lets you scale producers and consumers separately. (*Message queues*, Part 4.)
+**A:** The sender drops a message and returns; workers process at their own pace — smoothing spikes, surviving worker downtime, scaling producers and consumers separately. (*Message queues*, Part 4.)
 
 **Q46: Queue vs publish/subscribe?**
 
-**A:** In a queue (point-to-point), each message is handled by exactly one consumer — good for jobs. In publish/subscribe, every subscriber gets its own copy of each message — good for events that several services care about. Kafka can do both using consumer groups. (*Message queues*, Part 4.)
+**A:** Queue: each message to exactly one consumer (jobs). Pub/sub: every subscriber gets a copy (events many services care about). Kafka does both via consumer groups. (*Message queues*, Part 4.)
 
-**Q47: At-most-once, at-least-once, exactly-once — what do they mean?**
+**Q47: At-most-once, at-least-once, exactly-once?**
 
-**A:** At-most-once may lose messages but never duplicates them. At-least-once never loses them but may deliver some twice, which is the common default. Exactly-once is very hard end to end; in practice it means at-least-once delivery plus idempotent processing, sometimes called effectively-once. (*Delivery guarantees, idempotency and retries*, Part 4.)
+**A:** At-most-once may lose, never duplicates; at-least-once never loses, may duplicate (the default); exactly-once in practice means at-least-once plus idempotent processing ("effectively-once"). (*Delivery guarantees, idempotency and retries*, Part 4.)
 
 **Q48: What is idempotency and how do you implement it?**
 
-**A:** An operation is idempotent if doing it twice has the same effect as doing it once. Implement it by giving each request or message a unique ID (an idempotency key), recording processed IDs, and skipping or returning the stored result when an ID repeats. (*Delivery guarantees, idempotency and retries*, Part 4.)
+**A:** Doing it twice equals doing it once. Give each request a unique idempotency key, record processed keys, and return the stored result on repeats. (*Delivery guarantees, idempotency and retries*, Part 4.)
 
 **Q49: What is a dead-letter queue?**
 
-**A:** A separate queue where messages go after failing processing a set number of times. It stops one bad message from blocking or endlessly retrying, and lets engineers inspect and replay failures later. (*Delivery guarantees, idempotency and retries*, Part 4.)
+**A:** Where messages go after failing a set number of times, so one bad message doesn't block or retry forever and can be inspected and replayed. (*Delivery guarantees, idempotency and retries*, Part 4.)
 
 **Q50: Strong vs eventual consistency?**
 
-**A:** With strong consistency, every read sees the latest successful write, as if there were one copy of the data. With eventual consistency, replicas may briefly disagree, but if writes stop they all converge. Strong is simpler to reason about but costs latency and availability; eventual is faster and more available. (*Consistency models*, Part 4.)
+**A:** Strong: every read sees the latest write, as if one copy — simpler, but costs latency and availability. Eventual: replicas briefly disagree but converge — faster, more available. (*Consistency models*, Part 4.)
 
 **Q51: Explain the CAP theorem.**
 
-**A:** When a network partition splits a distributed system, it must choose between consistency (refuse or delay some requests so no one sees stale data) and availability (answer everything, possibly with stale data). Partitions cannot be ruled out, so the real choice is CP vs AP during a partition; when there is no partition you can have both. (*CAP theorem and PACELC*, Part 4.)
+**A:** During a network partition a system must refuse some requests to stay consistent (CP) or answer with possibly stale data (AP); without a partition it can have both. (*CAP theorem and PACELC*, Part 4.)
 
 **Q52: What is a quorum?**
 
-**A:** With N replicas, a write must be confirmed by W of them and a read must ask R of them. If R + W > N, every read overlaps at least one replica holding the latest write. A common setting is N = 3, W = 2, R = 2. (*Quorums*, Part 4.)
+**A:** Write to W and read from R of N replicas; R + W > N guarantees reads overlap the latest write (commonly N = 3, W = 2, R = 2). (*Quorums*, Part 4.)
 
-**Q53: Why do distributed systems need consensus algorithms like Raft?**
+**Q53: Why do distributed systems need consensus like Raft?**
 
-**A:** Several nodes must agree on one value — such as who the leader is or the order of log entries — even when some nodes crash or messages are delayed. Raft and Paxos do this safely as long as a majority is reachable. Tools like etcd and ZooKeeper provide it so you do not have to build it. (*Consensus, leader election and distributed locks*, Part 4.)
+**A:** Nodes must agree on one value (the leader, the log order) despite crashes and delays; Raft and Paxos do it safely while a majority is reachable, and etcd or ZooKeeper provide it ready-made. (*Consensus, leader election and distributed locks*, Part 4.)
 
-**Q54: 2PC or saga for a transaction across services?**
+**Q54: 2PC or saga across services?**
 
-**A:** Two-phase commit has a coordinator ask everyone to prepare, then commit; it gives atomicity but blocks if the coordinator fails and couples services tightly. A saga runs a chain of local transactions and, on failure, runs compensating actions to undo earlier steps; it is the usual choice for microservices, accepting temporary inconsistency. (*Distributed transactions: two-phase commit and sagas*, Part 4.)
+**A:** 2PC (prepare, then commit) gives atomicity but blocks if the coordinator fails and couples services. A saga chains local transactions with compensating actions — the usual microservices choice, accepting temporary inconsistency. (*Distributed transactions*, Part 4.)
 
 ### Architecture, reliability and security
 
 **Q55: Monolith or microservices?**
 
-**A:** A monolith is one deployable application: simple to build, test and deploy, and the right default for small teams. Microservices split the system into independently deployable services owned by separate teams, helping large organizations scale but adding network calls, distributed failures and operational work. Many teams start with a modular monolith. (*Architectural styles: monolith, modular monolith, SOA, microservices and serverless*, Part 5.)
+**A:** A monolith is simple to build, test and deploy — the default for small teams. Microservices let many teams deploy independently, at the cost of network calls, distributed failures and operations. Many start with a modular monolith. (*Architectural styles*, Part 5.)
 
 **Q56: What is a circuit breaker?**
 
-**A:** It wraps calls to a dependency and counts failures. After too many, it "opens" and fails fast without calling, giving the dependency time to recover; after a pause it goes "half-open" and lets a few test calls through, closing again if they succeed. It stops one slow service from tying up all your threads. (*Circuit breakers, bulkheads and fallbacks*, Part 5.)
+**A:** It counts failures to a dependency; past a threshold it opens and fails fast, after a pause goes half-open to test a few calls, closing if they succeed — so one slow service can't tie up all threads. (*Circuit breakers, bulkheads and fallbacks*, Part 5.)
 
 **Q57: Why add jitter to exponential backoff?**
 
-**A:** Exponential backoff waits 1, 2, 4, 8 seconds between retries so a struggling service gets breathing room. Without jitter, thousands of clients that failed together retry together, in synchronized waves. Adding randomness spreads retries out. (*Timeouts, retries, exponential backoff and jitter*, Part 5.)
+**A:** Backoff (1, 2, 4, 8 s) gives a struggling service room; without jitter, clients that failed together retry together in waves. Randomness spreads them. (*Timeouts, retries, exponential backoff and jitter*, Part 5.)
 
-**Q58: How does the token bucket rate limiter work?**
+**Q58: How does a token bucket rate limiter work?**
 
-**A:** A bucket holds up to B tokens and is refilled at R tokens per second. Each request takes one token; if the bucket is empty the request is rejected with 429. It allows short bursts up to B while enforcing an average rate of R. (*Rate limiting and throttling*, Part 5.)
+**A:** Up to B tokens, refilled at R per second; each request takes one, an empty bucket returns 429 — bursts up to B, average rate R. (*Rate limiting and throttling*, Part 5.)
 
-**Q59: What is the difference between authentication and authorization?**
+**Q59: Authentication vs authorization?**
 
-**A:** Authentication answers "who are you?" — for example by checking a password or a token. Authorization answers "what are you allowed to do?" — for example whether user 42 may delete this post. Authentication always comes first. (*Authentication and authorization*, Part 5.)
+**A:** Authentication: who are you (password, token check) — always first. Authorization: what may you do (may user 42 delete this post?). (*Authentication and authorization*, Part 5.)
 
 **Q60: What are RPO and RTO?**
 
-**A:** RPO (recovery point objective) is how much data you can afford to lose, measured in time: an RPO of 5 minutes means backups or replication must be at most 5 minutes behind. RTO (recovery time objective) is how long you can be down before service is restored. Lower values of either cost more. (*Disaster recovery*, Part 5.)
+**A:** RPO: how much data (in time) you can lose — RPO 5 minutes means backups or replication at most 5 minutes behind. RTO: how long you can be down. Lower values cost more. (*Disaster recovery*, Part 5.)
 
 ### TL;DR
-If you can answer these 60 in your own words, with a number or an example in each answer, you have the fundamentals an interviewer expects from a beginner.
+If you can answer these 60 in your own words, each with a number or an example, you have the fundamentals an interviewer expects from a beginner.
 
 ---
+
 ## Master A–Z glossary
 
 ### What it is
-The most important terms from Parts 1 to 5, plus a few related words you will meet in system design reading and interviews, in alphabetical order with a one-line meaning. Closely related terms share a row (for example "LRU / LFU"). Use it as a quick reminder; each part's own glossary has the complete list, and the parts themselves have the full explanations.
+Every term defined in Parts 1 to 6, in one alphabetical list with a one-line meaning (the part glossaries point here). Closely related terms share a row (for example "LRU / LFU / FIFO"); the parts themselves have the full explanations. Terms starting with a digit come first.
+
+| Term | Meaning in one line |
+|---|---|
+| 0-RTT (resumption) | TLS 1.3 / QUIC feature letting a returning client send data in its very first message |
+| 301 Moved Permanently | Redirect the browser may cache forever |
+| 302 Found | Temporary redirect the browser re-checks each time |
+| 3-2-1 rule | Three copies, two media types, one off-site |
+| 401 / 403 | Not authenticated / authenticated but not permitted |
+| 409 Conflict | Status code for a request that clashes with existing data |
+| 410 Gone | Status code for a resource that existed but was removed |
+| 429 Too Many Requests | Status code for a client that exceeded its rate limit |
+| 5-tuple | Protocol, source IP/port, destination IP/port — identifies a connection |
+| 80/20 rule | Rough rule that 20% of items get 80% of the traffic |
 
 ### A
 
@@ -7672,37 +6757,76 @@ The most important terms from Parts 1 to 5, plus a few related words you will me
 |---|---|
 | A / AAAA record | DNS records that map a name to an IPv4 / IPv6 address |
 | ABAC | Attribute-based access control: permissions decided by attributes of user, resource and context |
+| Access pattern | How an application reads and writes its data |
+| Access token / refresh token | Short-lived API credential / long-lived credential to get new access tokens |
 | ACID | Transaction guarantees: atomicity (all or nothing), consistency (rules kept), isolation (no interference), durability (survives crashes) |
-| Active-active | Two or more sites or nodes all serving traffic at once |
-| Active-passive | One node serves traffic while a standby waits to take over |
-| Active / passive health check | Load balancer probes servers on a schedule / ejects them after real requests fail |
+| ACK | Acknowledgement that data was received |
+| Acknowledgement (ack) | Consumer's signal that a message is done and can be removed |
+| ACL | List of who may access a specific resource |
+| Active-active | All redundant copies serve traffic at once and absorb a failed copy's share |
+| Active-passive | One copy serves traffic while a standby waits to take over |
+| Active / passive health check | Load balancer probes backends on a schedule / ejects them after errors in real traffic (outlier detection) |
+| Alert fatigue | Ignoring alerts because there are too many noisy ones |
+| Alt-Svc | Header advertising that a server also speaks HTTP/3 |
+| Amdahl's law | Parallel speed-up is limited by the part of the work that must run serially |
+| Amplification attack | Spoofed small requests causing large replies to hit a victim |
+| ANN / HNSW | Approximate nearest-neighbour search / a popular graph-based ANN index |
+| Anomaly | An incorrect result caused by concurrent transactions |
+| Anti-entropy | Background process comparing and syncing replicas |
 | Anycast | Many servers announce the same IP address and the network routes each user to the nearest one |
+| Apex domain | The bare registered domain without a subdomain, such as `example.com` |
 | API | Application programming interface: the defined way one program asks another to do something |
 | API gateway | Single entry point for APIs that handles auth, rate limits and routing |
 | API key | Secret string that identifies a calling application |
+| API versioning | Running old and new API contracts side by side for breaking changes |
+| App server (application server) | Program that runs business logic and answers client requests |
+| Architectural style | The overall way code is split into running programs and how they communicate |
+| Asynchronous processing | Doing work later without the caller waiting for it |
+| Asynchronous replication | Leader confirms before followers have the write |
 | At-least-once / at-most-once delivery | Messages never lost but maybe duplicated / never duplicated but maybe lost |
-| Authentication | Proving who you are |
+| Atomicity | All-or-nothing execution of a transaction |
+| Authentication (AuthN) | Proving who someone is |
 | Authoritative name server | DNS server that holds the real records for a domain |
-| Authorization | Deciding what an identified user may do |
-| Autoscaling | Automatically adding or removing servers based on load |
-| Availability | Share of time a system is up and answering correctly |
+| Authorization (AuthZ) | Deciding what an identified user may do |
+| Authorization code flow | OAuth flow exchanging a one-time code for tokens |
+| Auto-increment / sequence | Database-generated increasing integer IDs |
+| Autoscaling | Automatically adding or removing capacity based on load |
+| Availability | Fraction of time (or requests) the system is up and working |
 | Availability zone (AZ) | One or more isolated data centres with independent power and networking inside a cloud region |
 
 ### B
 
 | Term | Meaning in one line |
 |---|---|
-| Back-of-the-envelope estimate | Quick rough calculation of load, storage and bandwidth |
+| Back-of-the-envelope estimate | Quick rough calculation to find the order of magnitude of load or storage |
 | Backpressure | A slow consumer signalling producers to slow down |
-| Bandwidth | Maximum data a link can carry per second |
+| Backup | A separate copy kept to recover from loss or mistakes |
+| Backup and restore / pilot light / warm standby | DR strategies from cheapest and slowest to faster and costlier |
+| Bandwidth | Maximum data a link or device can carry per second |
+| Bandwidth-delay product | Bandwidth times RTT, the data in flight needed to fill a link |
 | BASE | Basically available, soft state, eventually consistent: the NoSQL alternative to ACID |
 | Base62 | Writing numbers using 62 symbols (a–z, A–Z, 0–9) to make short codes |
+| Bastion host | Hardened server used as the only entry point to private machines |
+| Batching | Grouping many small operations into one to raise throughput at some latency cost |
 | Batch processing | Processing a large set of stored data in one job, often on a schedule |
-| bcrypt | Deliberately slow, salted password-hashing function |
+| bcrypt / scrypt / Argon2id | Deliberately slow, salted password-hashing algorithms |
+| Bearer token | Token that grants access to whoever holds it |
+| BFF | Backend for Frontend, a gateway tailored to one client type |
+| BGP | Protocol networks use to announce which IP ranges they can reach |
+| Binding (RPC) | How a client finds the server address for an interface: config, directory or service discovery |
+| Bit / byte | A bit is a single 0 or 1; a byte is 8 bits |
+| Blast radius | How much of the system or user base a failure can affect |
+| Blob | A large chunk of unstructured binary data |
 | Block storage | Raw fixed-size disk blocks attached to one machine, like a virtual hard drive |
 | Bloom filter | Compact structure that says "definitely not present" or "probably present" |
 | Blue-green deployment | Run old (blue) and new (green) versions side by side and switch traffic at once |
-| B-tree | Balanced tree structure used by most database indexes |
+| Botnet | Network of hijacked devices controlled by an attacker |
+| Bottleneck | The resource or component that limits overall capacity |
+| Branching factor | Number of children per B-tree page |
+| Browser cache | Copies of pages, files and DNS answers kept by the browser |
+| B-tree | A shallow balanced tree of sorted pages, the default index |
+| Bucket | A top-level container in object storage |
+| Buffer cache / buffer pool | Database's own in-memory copy of recently used disk pages |
 | Bulkhead | Separate resource pools so one failing part cannot exhaust everything |
 | Burn rate | How fast the error budget is being spent; 1 means exactly on budget for the SLO window |
 
@@ -7710,135 +6834,304 @@ The most important terms from Parts 1 to 5, plus a few related words you will me
 
 | Term | Meaning in one line |
 |---|---|
-| Cache | Fast storage holding copies of data to serve repeat reads quickly |
-| Cache-aside | App checks cache, on miss loads from database and fills the cache |
+| Cache | Fast, usually in-memory store holding copies of frequently used data |
+| Cache-aside (lazy loading) | App checks cache, on miss loads from the database and fills the cache; on write deletes the key |
+| Cache avalanche | Mass expiry or cache loss sending all traffic to the DB |
+| Cache busting | Changing a file name or URL when content changes so old copies aren't used |
+| Cache-Control | Header telling caches whether and how long to store a response |
 | Cache hit / miss | Requested data was / was not found in the cache; hits ÷ all requests is the hit ratio |
-| Cache invalidation | Removing or updating cached data when the source changes |
-| Cache stampede | Many requests miss the same expired key and hit the database at once |
-| Canary deployment | Release a new version to a small share of traffic first |
+| Cache invalidation | Removing or updating cached copies when the source changes |
+| Cache key | Values (host, path, some headers) identifying a cached object |
+| Cache penetration | Requests for non-existent keys always hitting the DB |
+| Cache stampede / thundering herd | Many requests miss the same expired key at once and overload the database |
+| Call semantics | What a reply or timeout guarantees: maybe, at-least-once, at-most-once, exactly-once |
+| Canary deployment (release) | Sending a small share of traffic to a new version first |
 | CAP theorem | During a network partition a system must choose consistency or availability |
-| Causal consistency | Effects are never seen before their causes |
-| CDN | Content delivery network: servers worldwide that cache content near users |
+| Cardinality | Number of distinct label combinations in metrics |
+| Carrier-grade NAT | NAT run by an ISP, so many customers share one public IP |
+| Cascading failure | One component's failure spreading to the components that depend on it |
+| Causal consistency | Causes are always seen before their effects |
+| CDN | Content Delivery Network; servers worldwide that serve static files close to users |
+| Cell-based architecture | Splitting users across independent copies of the stack to limit blast radius |
+| Certificate Authority | Trusted organisation that signs certificates |
 | Certificate (TLS) | Document signed by a trusted certificate authority (CA) proving a server owns a domain name |
-| Chaos engineering | Deliberately injecting failures to test resilience |
+| Chain of trust | Certificate signed by intermediate, signed by a root the browser trusts |
+| Change data capture (CDC) | Streaming a database's changes from its log to other systems |
+| Chaos engineering | Deliberately injecting failures to prove resilience |
+| Checkpoint | A point up to which data files reflect the log |
+| Choreography / orchestration | Saga steps triggered by events / by a central controller |
 | CI/CD | Continuous integration and continuous delivery/deployment: automated build, test and release |
+| CIDR | Notation like `10.0.0.0/8` giving an address range by its fixed leading bits |
 | Circuit breaker | Stops calling a failing dependency for a while so it can recover |
+| Claim check | Store a big payload elsewhere and send only its reference |
+| Client | Program that sends requests (browser, app, or another server) |
+| Client credentials flow | OAuth flow for machine-to-machine access |
+| Client-side load balancing | Each client picks a backend from a list of healthy instances |
+| Client-side / server-side discovery | Caller queries the registry itself / a router or load balancer does it for the caller |
+| Clock drift | A clock gradually running fast or slow |
+| Clock skew | Difference between two machines' clocks |
+| Closed / Open / Half-open | Circuit breaker states: normal, failing fast, testing recovery |
+| Cloud load balancer | Provider-managed LB service such as AWS ALB or NLB |
+| Cluster | The set of machines and control plane managed by Kubernetes |
+| Cluster autoscaler | Adds or removes Kubernetes nodes as pods need room |
+| Clustered index | An index whose order is the physical order of the rows |
+| Clustering key | The key that sorts rows inside one partition in a wide-column store |
 | CNAME record | DNS record that makes one name an alias of another |
-| Cold start | Extra delay when a new instance or serverless function starts |
-| Column-oriented storage | Stores each column together, great for analytics scans |
-| Compensating action | Step that undoes an earlier step in a saga |
-| Concurrency / parallelism | Many tasks in progress at once by taking turns / tasks literally running at the same moment |
+| Cold start | Extra delay when a serverless function runs on a freshly created instance |
+| Cold / warm / hot standby | Spares that need starting, are partly ready, or are ready instantly |
+| Collection | A group of documents in a document store |
+| Column-oriented storage (column store) | Stores each column's values together, great for analytics scans |
+| Commit / rollback | Make a transaction permanent / discard all its changes |
+| Committed offset | Saved position a consumer group has processed up to |
+| Compaction | Merging SSTables and dropping old versions |
+| Compare-and-set | Writing only if the current value still equals what was read |
+| Compensating transaction (action) | Saga step that semantically undoes an earlier step |
+| Composite index | An index over several columns in order |
+| Concurrency | Making progress on many tasks by interleaving them |
+| ConfigMap / Secret | Kubernetes objects for configuration and sensitive values |
+| Configuration drift | Real infrastructure diverging from its definition |
+| Congestion collapse | Overload where throughput falls towards zero due to wasted work |
+| Congestion control | Sender slowing down to avoid overloading the network |
 | Connection draining | Letting a server finish in-flight requests before removing it |
-| Connection pool | Set of reusable open database connections |
-| Consensus | Nodes agreeing on a single value despite failures |
-| Consistency (ACID) | Transactions keep the data valid under all rules |
+| Connection ID | QUIC identifier for a connection independent of IPs and ports |
+| Connection migration | QUIC keeping a connection alive across network changes |
+| Connection pool | A set of reusable open database connections |
+| Consensus | Getting nodes to agree on a value despite failures |
+| Consistency (ACID) | A transaction leaves data obeying all declared rules |
 | Consistency (distributed) | Whether all readers see the same, latest data |
-| Consistent hashing | Hash ring placement that moves few keys when nodes change |
+| Consistency model | Promise about what reads can return after writes |
+| Consistent hashing | Hash ring where adding or removing a node moves only about 1/N of keys |
 | Consumer | Program that reads messages from a queue or stream |
-| Consumer group | Set of consumers that share a topic's partitions |
+| Consumer group | Consumers sharing a topic's partitions for one application |
+| Consumer lag | How far a consumer is behind the newest message |
 | Container | Lightweight packaged app with its dependencies, sharing the host OS kernel |
+| Container image | Read-only package of an app and its dependencies |
+| Container registry | Storage service for container images |
+| Content Security Policy (CSP) | Header restricting which scripts and resources a page may load |
+| Continuous delivery | Keeping every passing build releasable on demand |
+| Continuous deployment | Automatically releasing every passing build to production |
+| Continuous integration (CI) | Automatically building and testing every merged change |
+| Conway's law | Systems mirror the communication structure of the teams that build them |
 | Cookie | Small piece of data a site stores in the browser and receives with each request |
+| Cool-down period | Wait after a scaling action before another, to avoid flapping |
+| Coordinated omission | Load-test flaw that under-reports slow responses |
+| Coordination service | System like etcd, ZooKeeper or Consul for consensus-backed coordination |
+| Coordinator / participant | Runner of 2PC / database taking part in it |
+| Correlated failure | Several "independent" parts failing together from a shared cause |
 | CORS | Cross-origin resource sharing: headers by which a server lets pages from other origins read its responses |
+| Counter / gauge / histogram | Metric that only rises / goes up and down / records a distribution |
+| Counter range | Block of numbers handed to one server for ID generation |
 | Count-min sketch | Compact structure that estimates how often items appear |
-| Covering index | Index that contains every column a query needs |
+| Covering index | An index containing every column a query needs |
+| CP / AP | Refuses requests to stay consistent / answers with maybe-stale data |
+| CPU-bound | Limited by computation speed |
+| CPU cache | Tiny, very fast memory inside the processor |
 | CQRS | Command query responsibility segregation: separate models for writes and reads |
+| CRDT | A data type whose concurrent updates always merge to the same result |
 | CSRF | Cross-site request forgery: tricking a logged-in browser into sending a request |
+| CUBIC / BBR | Common TCP congestion-control algorithms |
+| Cursor pagination | Paging from an opaque marker of the last item seen, fast and stable |
+| Custom alias | User-chosen short code |
 
 ### D
 
 | Term | Meaning in one line |
 |---|---|
+| Dashboard / alert | Page of graphs showing key metrics / automated notification when a metric rule breaks |
+| Database / DBMS | A program that stores data safely, finds it quickly and coordinates concurrent users |
+| Database per service | Each microservice owns its private data store |
+| Datagram | Self-contained UDP message |
 | Data lake | Cheap storage of raw data in many formats for later analysis |
+| DataLoader | A pattern that batches per-item lookups into one query |
+| Data plane / control plane | The proxies that carry traffic / the component that configures them |
 | Data warehouse | Structured store optimized for analytical queries |
-| DAU | Daily active users |
+| DAU / MAU | Daily / Monthly Active Users |
+| DDL | SQL statements that change the schema, such as CREATE TABLE |
 | DDoS | Distributed denial of service: flooding a system from many machines |
-| Dead-letter queue (DLQ) | Queue for messages that keep failing |
-| Denormalization | Duplicating data to make reads faster |
-| Dirty / non-repeatable / phantom read | Isolation anomalies: seeing uncommitted data / a row changing / new rows appearing on re-read |
-| Disaster recovery (DR) | Plans and systems to restore service after a major outage |
-| Distributed cache | Cache spread over several servers and shared by many app servers |
+| Dead-letter queue (DLQ) | Side queue for messages that failed too many times |
+| Deadline propagation | Passing the remaining time budget along to downstream calls |
+| Deadlock | Tasks waiting forever for locks held by each other |
+| Decision cheat sheet | Table mapping common needs to standard tools and their costs |
+| Decoupling | Letting components work without knowing about each other directly |
+| Defence in depth | Multiple independent layers of security |
+| Denormalization | Duplicating data deliberately to speed up reads |
+| Deployment (Kubernetes) | Object managing replicas and rolling updates of stateless pods |
+| Deployment strategy | Method for replacing a running version with a new one |
+| Deregistration delay | AWS name for the connection-draining timeout |
+| Diffie–Hellman | Method for two sides to agree on a secret key without sending it |
+| Directory-based sharding | A lookup service maps keys to shards |
+| Direct server return | Backend replies straight to the client, bypassing the LB |
+| Dirty read | Reading another transaction's uncommitted data |
+| Dirty write | Overwriting another transaction's uncommitted data |
+| Disaster recovery (DR) | Plan for restoring service and data after a major failure |
+| Distributed cache | Shared cache cluster reached over the network (Redis, Memcached) |
 | Distributed lock | Lock that coordinates processes across machines |
+| Distributed monolith | Microservices so coupled they must change and deploy together |
+| Distributed SQL | Relational databases spread over many machines, such as Spanner or CockroachDB |
 | Distributed system | Many computers working together over a network as one system |
-| DNS | Domain name system: turns names into IP addresses |
-| Document database | NoSQL store of JSON-like documents (e.g. MongoDB) |
-| Durability | Committed data survives crashes and failures |
+| Distributed transaction | Change spanning several databases or services, all or nothing |
+| DNS | System that translates domain names into IP addresses |
+| Docker | Popular tool for building, sharing and running container images |
+| Dockerfile | Text recipe for building a container image |
+| Document database (store) | NoSQL store of self-contained JSON-like documents (e.g. MongoDB) |
+| Domain name | Human-readable hierarchical name such as `www.example.com` |
+| DORA metrics | Deployment frequency, lead time, change failure rate, time to restore |
+| Dual write problem | Updating DB and broker separately, risking disagreement |
+| Durability | Saved data is not lost, even after crashes or disk failures |
 
 ### E
 
 | Term | Meaning in one line |
 |---|---|
-| Elasticity | Ability to grow and shrink resources quickly with demand |
+| Eager loading | Fetching related data up front in few queries |
+| ECMP | Routers spreading flows across several equal-cost paths or machines |
+| Edge computing | Running code on CDN edge servers |
+| Edge server | CDN cache server close to users |
+| EDNS Client Subnet | DNS extension passing part of the user's IP for better geo answers |
+| Egress | Data leaving a cloud network, usually billed |
+| Elasticity | Automatically adding and removing resources to match demand |
+| Election timeout | Time without heartbeats before a follower starts an election |
+| Embedding | A list of numbers representing an item so similar items are close |
+| Encapsulation | Each layer wrapping data with its own header |
+| Encryption | Reversible scrambling of data with a key |
 | Encryption in transit / at rest | Protecting data moving over a network (TLS) / stored on disks and backups |
-| Error budget | Amount of failure allowed by an SLO |
-| Event-driven architecture | Services communicate by publishing and reacting to events |
+| Enterprise service bus (ESB) | Middleware that routes and transforms messages between SOA services |
+| Envelope encryption | Encrypting data keys with a master key held in a KMS |
+| Ephemeral port | Temporary source port the OS assigns to an outgoing connection |
+| Error budget | Amount of failure an SLO allows (1 minus the SLO) |
+| ETag | Version tag of a resource, used to answer 304 Not Modified |
+| etcd | Consistent key-value store holding Kubernetes cluster state |
+| ETL / ELT | Transform before loading / load then transform |
+| Event-driven architecture | Services reacting to published events instead of direct calls |
+| Event loop | Single thread handling many requests by never blocking on I/O |
 | Event sourcing | Storing every change as an event and rebuilding state from them |
-| Event streaming | Durable, ordered, replayable log of events (e.g. Kafka) |
+| Event streaming / log-based broker | Broker keeping an ordered, replayable log of events (Kafka) |
+| Event time / processing time | When an event happened / when it was processed |
 | Eventual consistency | Replicas may differ briefly but converge if writes stop |
-| Exactly-once | Each message's effect happens once; in practice at-least-once plus idempotency |
+| Event vs command | Fact that happened vs request that something happen |
+| Eviction policy | Rule for what to remove when the cache is full |
+| EWMA | Exponentially weighted moving average, a smoothed recent value |
+| Exactly-once / effectively-once | Each message affects the result once; in practice at-least-once delivery plus idempotency / de-duplication |
+| Exchange | RabbitMQ component that routes messages to queues |
+| Expand and contract | Backward-compatible schema change done in several releases |
+| EXPLAIN | A command showing the plan the database will use |
 | Exponential backoff | Doubling the wait after each failed retry (100, 200, 400 ms …), up to a cap |
 
 ### F
 
 | Term | Meaning in one line |
 |---|---|
-| FaaS | Function as a service: run code per event without managing servers |
+| FaaS | Function as a Service: upload functions, provider runs them per event |
+| Fail open / fail closed | Allowing / denying traffic when a safety component itself fails; an LB fails open by sending to all backends when all look unhealthy |
 | Failover | Switching to a standby when the active component fails |
+| Failure | The whole system stops providing its service |
+| Failure detection | Deciding whether a node is probably dead |
+| Failure domain | A group of parts that can fail together (rack, zone, region) |
+| Failure model | Assumption about how a faulty part behaves: fail-stop, crash, crash-recovery, omission, timing, Byzantine |
+| Fallacies of distributed computing | False assumptions such as "the network is reliable" and "latency is zero" |
 | Fallback | Alternative response used when the normal path fails |
-| Fault / failure | One component going wrong / the whole system no longer delivering its service |
-| Fault tolerance | Continuing to work correctly despite faults |
-| Feature flag | Switch to turn a feature on or off without redeploying |
+| False positive (failure) | Declaring a slow but alive node dead |
+| Fan-out | One request triggering many parallel downstream requests |
+| Fault | One component misbehaving (crash, slowness, wrong output) |
+| Fault tolerance | Continuing to work despite faults in some components |
+| Feature flag | Runtime switch that turns code paths on or off for chosen users |
 | Federation | Splitting databases by function (users DB, orders DB) |
+| Fencing | Forcibly stopping an old leader from acting |
 | Fencing token | Increasing number that lets storage reject requests from a stale lock holder |
 | File storage | Shared files and folders over the network (e.g. NFS) |
+| FinOps | Practice of making teams see and manage their cloud costs |
 | Firewall | Filter that allows or blocks network traffic by rules |
-| Foreign key | Column that refers to a primary key in another table |
-| Forward proxy | Proxy acting on behalf of clients |
-| fsync | System call that forces written data onto disk |
-| Functional requirement | What the system must do |
+| Fixed window counter | Rate limiter counting requests per calendar time window |
+| Flapping | Node repeatedly marked dead and alive |
+| Flow control | Receiver limiting how fast the sender sends (receive window) |
+| Foreign key | A column holding another table's primary key, linking the two |
+| Forward proxy | Proxy acting for clients toward the internet |
+| Forward secrecy | Stolen long-term keys cannot decrypt past sessions |
+| Four golden signals | Latency, traffic, errors and saturation |
+| fsync | A system call forcing written data onto the physical device |
+| Full / incremental backup | Copy of everything / only changes since the last backup |
+| Full table scan | Reading every row to answer a query |
+| Functional requirement | A feature the system must provide |
 
 ### G
 
 | Term | Meaning in one line |
 |---|---|
+| Game day | Planned exercise practising failures and recovery |
 | GeoDNS | DNS that answers differently depending on the user's location |
 | Geohash | Encoding of a location as a short string where shared prefixes mean nearby |
-| Global server load balancing (GSLB) | Spreading traffic across data centres or regions |
-| Golden signals | Latency, traffic, errors and saturation |
-| Gossip protocol | Nodes share state by chatting with random peers |
-| Graceful degradation | Keeping core features working when parts fail |
+| Geo sharding | Sharding by user location |
+| Geospatial index | Index for searching by location |
+| Goodput | Useful work completed, as opposed to raw throughput |
+| Gossip protocol | Nodes spreading state to random peers each round |
+| Graceful degradation | Turning off non-essential features under stress to keep the core working |
 | Graph database | Store of nodes and edges for relationship queries (e.g. Neo4j) |
-| GraphQL | Query language where clients ask for exactly the fields they need |
+| GraphQL | Query language letting clients request exactly the fields they need |
+| Group commit | Flushing many commits with one fsync |
 | gRPC | High-performance RPC framework using Protobuf over HTTP/2 |
+| GSLB (global server load balancing) | Spreading traffic across regions or data centres |
 
 ### H
 
 | Term | Meaning in one line |
 |---|---|
+| Hardware load balancer | Dedicated appliance such as F5 BIG-IP |
+| Hash collision | Two different inputs producing the same short hash |
+| Hash function | A function turning any input into a fixed-size, random-looking number |
+| Hash index | An index mapping keys to locations via a hash map |
 | Hashing | One-way function that turns data into a fixed-size fingerprint |
-| Head-of-line blocking | One stuck item delays everything queued behind it |
-| Health check | Test that tells whether a server can take traffic |
-| Heartbeat | Periodic "I'm alive" message |
-| Horizontal scaling | Adding more machines (scale out) |
+| Hash ring | The hash output range arranged as a circle |
+| Hash sharding | The shard is chosen from a hash of the key |
+| HDD | Hard disk drive; spinning magnetic disk with slow seeks |
+| Header | Key–value metadata on a request or response |
+| Head-of-line blocking | One delayed item holding up everything queued behind it |
+| Health check | Test that decides whether a backend should receive traffic |
+| Heartbeat (ping/pong) | Periodic small "I am alive" message keeping a connection alive and detecting failure |
+| Heavy hitters | The most frequent items in a stream |
+| Hedged request | Sending a duplicate request to another replica if the first is slow |
+| Herding | Many balancers sending traffic to the same seemingly best server at once |
+| Hinted handoff | Holding writes for a down node and delivering them later |
+| Histogram | Counts of measurements per value bucket, used to compute percentiles |
+| Horizontal scaling (scale out) | Adding more machines to share the load |
 | Horizontal / vertical partitioning | Splitting a table by rows / by columns |
-| Hot key / hot spot | One key or shard receiving far more traffic than others |
+| Host | The domain-name part of a URL, such as photos.example.com |
+| Hot key | One key so popular it overloads the node that holds it |
+| Hot spot | A shard receiving far more load than others |
+| HPACK / QPACK | Header compression for HTTP/2 / HTTP/3 |
 | HTTP | Hypertext transfer protocol: request/response protocol of the web |
-| HTTP/2 / HTTP/3 | HTTP multiplexing many streams over one TCP connection / HTTP over QUIC (UDP), avoiding TCP head-of-line blocking |
-| HTTPS | HTTP over TLS encryption |
-| HyperLogLog | Compact structure for estimating distinct counts |
+| HTTP/1.1 | Text protocol, one request at a time per connection |
+| HTTP/2 | Binary protocol multiplexing many streams over one TCP connection |
+| HTTP/3 | HTTP over QUIC, removing TCP head-of-line blocking |
+| HTTP method | Verb such as GET, POST, PUT, PATCH, DELETE |
+| HttpOnly / Secure / SameSite | Cookie flags: no script access / HTTPS only / limit cross-site sending |
+| HTTPS | HTTP inside a TLS-encrypted connection |
+| Hybrid logical clock | Timestamp mixing wall time with a logical counter |
+| HyperLogLog | Distinct-count estimator using kilobytes of memory |
+| Hypervisor | Software that runs and isolates virtual machines on a physical host |
 
 ### I
 
 | Term | Meaning in one line |
 |---|---|
-| Idempotency | Doing an operation twice has the same effect as once |
-| Idempotency key | Unique request ID used to detect and ignore repeats |
-| Index | Data structure that speeds up lookups on a column |
+| Idempotency (idempotent) | Doing an operation twice has the same effect as doing it once |
+| Idempotency key | Client-supplied ID letting a server detect and ignore retries |
+| Idempotent producer | Producer whose duplicate sends the broker discards |
+| ID token | JWT stating who the user is |
+| Immutable backup | Backup that cannot be altered or deleted for a set period |
+| Immutable infrastructure | Replacing servers with new images instead of modifying them |
+| Incident commander | Person coordinating the response to an incident |
+| Index | An extra structure that finds rows by value without a full scan |
+| Index-only scan | Answering a query from the index without touching the table |
 | Infrastructure as code (IaC) | Defining servers and networks in versioned files (e.g. Terraform) |
+| Ingress | Kubernetes rules routing external HTTP traffic to services |
 | In-process cache | Cache inside the application's own memory |
 | Inverted index | Map from each word to the documents containing it, used by search engines |
-| IOPS | Input/output operations per second a disk can do |
+| I/O-bound | Limited by waiting for disk or network |
+| IOPS | Input/output operations per second a storage device can perform |
 | IP address | Numeric address of a device on a network: 32-bit IPv4 or 128-bit IPv6 |
 | IP hash | Load-balancing by hashing the client IP to pick a server |
+| IPv4 / IPv6 | 32-bit addresses (~4.3 billion) / 128-bit addresses (practically unlimited) |
+| Isolation | Concurrent transactions do not see each other's unfinished work |
 | Isolation level | How strictly a database isolates transactions (read committed, serializable …) |
 
 ### J
@@ -7846,86 +7139,155 @@ The most important terms from Parts 1 to 5, plus a few related words you will me
 | Term | Meaning in one line |
 |---|---|
 | Jitter | Random variation, added to retry delays or TTLs to avoid synchronized spikes |
-| JWT | JSON Web Token: signed token carrying user claims |
+| Join | Combining rows from two tables that match on a key |
+| JWT | Signed, self-contained JSON token: header.payload.signature |
 
 ### K
 
 | Term | Meaning in one line |
 |---|---|
 | Kafka | Distributed event streaming platform built on a partitioned log |
+| KB / MB / GB / TB / PB | Data sizes, each about 1,000 times the previous |
 | Keep-alive | Reusing one TCP connection for many HTTP requests |
+| Key generation service (KGS) | Service that pre-creates unused unique keys |
+| Key salting | Adding a suffix to spread one hot key over several shards |
 | Key-value store | Database that stores values looked up by a key |
-| Kubernetes | System for running and managing containers across many machines |
+| Kill switch | Flag that instantly disables a feature |
+| KMS | Key management service that stores and uses encryption keys |
+| Kubelet | Agent on each node that runs its pods |
+| Kubernetes (K8s) | Container orchestrator that keeps declared state running across machines |
 
 ### L
 
 | Term | Meaning in one line |
 |---|---|
-| L4 / L7 | Transport layer (TCP/UDP) / application layer (HTTP) of the network model |
+| L3 / L4 / L7 | Network (IP), transport (TCP/UDP, ports), application (HTTP) layers |
+| L4 load balancer | Balances TCP/UDP connections without reading content |
+| L7 load balancer | Parses HTTP and routes or balances per request |
+| Lakehouse | A data lake with transactional table formats on top |
+| Lambda / Kappa architecture | Batch plus speed layer / stream-only with replay |
 | Lamport clock | Logical counter that orders events without real time |
+| Last-write-wins (LWW) | Conflict rule keeping the write with the highest timestamp |
 | Latency | Time for one operation or message to complete or arrive |
+| Latency-based routing | DNS steering to the region with the lowest measured latency |
+| Latency budget | A latency target split into allowances for each hop of a request |
+| Lateral movement | Attacker spreading from one compromised system to others |
 | Leader election | Choosing one node to coordinate the others |
-| Leader-follower replication | One node (leader, or primary) takes writes and copies them to followers (replicas) |
-| Leaderless replication | Any replica accepts writes, using quorums (e.g. Cassandra) |
+| Leader / follower / candidate | Raft node roles |
+| Leader / follower (leader-follower replication) | One node (leader, or primary) accepts writes and copies them to followers (replicas) |
+| Leaderless replication | Any replica accepts writes, with quorums for reads and writes |
 | Leaky bucket | Rate limiter that processes requests at a fixed outflow rate |
+| Lease | Lock or role that automatically expires after a time |
+| Lease (cache) | Token granting one client the right to refill a key |
 | Least connections | Send each request to the server with the fewest active connections |
 | Least privilege | Give each user or service only the access it needs |
-| Linearizability | Strongest single-object consistency: behaves like one copy with instant operations |
-| Little's law | Items in system = arrival rate × time in system |
-| Load balancer | Spreads requests across a group of servers |
+| Least response time | Send to the server answering fastest recently |
+| Leftmost prefix | The rule that a composite index helps queries on its leading columns |
+| Linearizability / strong consistency | System behaves as if there were one copy, in real-time order |
+| Linearizability / strong consistency | Strongest single-object consistency: every read sees the latest write, as if there were one copy with instant operations in real-time order |
+| Little's law | Items in system = arrival rate x time in system (L = lambda x W) |
+| Liveness / readiness probe | Checks whether the process is running (else restart it) / ready to serve traffic (else send it none) |
+| Load balancer | Component that spreads requests across servers and skips dead ones |
+| Load levelling | Using a queue to smooth spikes into a steady processing rate |
+| Load parameters | The numbers that describe load (QPS, data size, users) |
 | Load shedding | Rejecting some requests on purpose to protect the system under overload |
-| Long polling | Client request held open until the server has news |
-| Lost update | Two concurrent writes where one silently overwrites the other |
-| LRU / LFU | Eviction of the least recently / least frequently used item |
-| LSM-tree | Log-structured merge tree: write-optimized storage structure |
+| Local vs global index | Index per shard / index sharded by the indexed value |
+| Log | Timestamped record of a single event |
+| Logical clock | Counter-based ordering of events without real time |
+| Logical / physical backup | Exported rows or SQL / copied raw data files |
+| Long polling | Server holding a request open until data is available |
+| Lost update | Two read-modify-write cycles overwrite each other, losing one change |
+| LRU / LFU / FIFO | Evict least recently used / least frequently used / oldest inserted |
+| LSM-tree | A write-optimised structure of memtable plus merged sorted files |
 
 ### M
 
 | Term | Meaning in one line |
 |---|---|
+| MAC address | Hardware address of a network card used on the local link |
+| Maintainability | How easily a system is operated, understood and changed (operability, simplicity, evolvability) |
+| Majority quorum | More than half the nodes |
 | MapReduce | Batch model: map data into key-value pairs, then reduce each key's values |
+| Marshalling | Converting call arguments and results to bytes for the network, and back |
+| Materialized view | A stored, refreshed result of a query |
+| Mean (average) | Sum divided by count; hides outliers in skewed data |
+| Median (p50) | Middle value: half are faster, half slower |
+| Memcached | Simple, fast, multi-threaded in-memory key-value cache |
+| Memtable | The in-memory sorted buffer of an LSM-tree |
 | Merkle tree | Tree of hashes used to find differences between data sets quickly |
-| Message queue | Buffer where producers leave messages for consumers |
-| Microservices | System built from small independently deployable services |
-| Modular monolith | One deployable app with strong internal module boundaries |
-| Monolith | Whole application built and deployed as one unit |
+| Message key | Value hashed to pick a partition, keeping related events ordered |
+| Message queue | Buffer where jobs wait to be processed later by workers |
+| Metric | Numeric measurement tracked over time |
+| MFA | Multi-factor authentication using two or more kinds of proof |
+| Microservices | Many small, independently deployed services, each owning one capability and its data |
+| Migration | A versioned script that changes the schema |
+| Mitigation | Action that stops user impact before the root cause is fixed |
+| Modular monolith | One deployable program with strictly separated internal modules |
+| Monitoring | Watching known metrics to check health |
+| Monolith | Whole application built and deployed as one program |
 | Monotonic reads | A user never sees data go backwards in time |
+| Monotonic writes | A user's writes apply in the order made |
 | MTBF | Mean time between failures |
+| mTLS | Mutual TLS: both client and server prove identity with certificates |
+| MTTD | Mean time to detect a failure |
+| MTTF | Mean time to failure for parts that are replaced, not repaired |
 | MTTR | Mean time to recovery (or repair) |
-| Multi-leader replication | Several nodes accept writes and sync with each other |
+| Multi-AZ | Running across several zones in one region |
+| Multi-leader replication | Several nodes accept writes and replicate to each other |
+| Multiplexing | Interleaving many independent streams over one connection |
 | Multi-region | Running in several geographic cloud regions |
+| Mutation / subscription | GraphQL write / live-update operation |
+| MVCC | Keeping multiple row versions so readers and writers do not block each other |
+| MX record | Mail servers for a domain, with priorities |
 
 ### N
 
 | Term | Meaning in one line |
 |---|---|
-| N+1 query | One query for a list plus one per item |
+| N+1 query problem | One query for a list plus one per item for related data |
+| N+1 redundancy | Running one more unit than peak load needs |
+| Namespaces and cgroups | Linux features that isolate what a process sees and limit what it uses |
 | NAT | Network address translation: many private IPs share one public IP |
-| Network partition | Network failure that splits nodes into groups that cannot talk |
-| Nines | Shorthand for availability (99.9% = three nines) |
+| NAT gateway | Cloud service giving private servers outbound internet access |
+| Negative caching | Caching "not found" results for a short time |
+| Network partition | Network failure splitting healthy nodes into groups that cannot talk |
+| NFS / SMB | Network file-sharing protocols for Linux / Windows |
+| Nines | Shorthand for availability levels (three nines = 99.9%) |
 | Node | One machine (or process) in a cluster or distributed system |
-| Non-functional requirement | How well the system must work: speed, scale, availability |
+| Non-functional requirement | A quality the system must have (latency, availability, scale) |
+| Non-repeatable read | Re-reading a row in one transaction and getting a different value |
+| Normal forms (1NF, 2NF, 3NF) | Progressive rules removing repeated and misplaced data |
 | Normalization | Organizing tables so each fact is stored once |
 | NoSQL | Non-relational databases: key-value, document, wide-column, graph … |
+| N, R, W | Replica count, read quorum, write quorum |
 | NS record | DNS record naming a domain's authoritative servers |
-| NTP | Network time protocol: keeps machine clocks in sync |
+| NTP | Protocol for synchronising clocks with time servers |
+| NVMe | Fast interface for SSDs with very high IOPS |
 
 ### O
 
 | Term | Meaning in one line |
 |---|---|
 | OAuth 2.0 | Standard for granting an app limited access to a user's resources |
-| Object storage | Flat store of files with metadata, accessed over HTTP (e.g. S3) |
+| Object storage | Service storing large files as objects under keys (e.g. Amazon S3) |
 | Observability | Ability to understand a system's internal state from its outputs |
-| Offset (messaging) | A consumer's position in a partition |
+| Offset (messaging) | Position number of a message in a partition; a consumer's position in it |
+| Offset pagination | Paging with limit and offset, simple but slow and unstable deep in a list |
 | OLAP | Online analytical processing: large queries for analysis |
 | OLTP | Online transaction processing: many small live reads and writes |
 | On-call | Engineer responsible for responding to alerts in a given period |
-| OpenID Connect (OIDC) | Identity layer on OAuth 2.0 for login |
+| On-demand / reserved / spot instances | Pay as you go / committed discount / cheap but reclaimable |
+| OpenAPI | Standard format for describing HTTP APIs |
+| OpenID Connect (OIDC) | Identity layer on OAuth that adds an ID token for login |
+| OpenTelemetry | Vendor-neutral standard and libraries for telemetry |
+| Optimistic concurrency control | Detecting conflicting writes with a version check and retrying |
+| Order of magnitude | Rough size as a power of ten |
 | Origin | Your own servers or storage holding the master copy of content behind a CDN |
-| Origin shield | Extra CDN cache layer that protects the origin |
+| Origin shield | Middle cache tier that collapses edge misses before the origin |
 | ORM | Object-relational mapper: library mapping objects to database rows |
-| OSI model | Seven-layer reference model of networking |
+| OSI model | Seven-layer reference model for networking |
+| Over-fetching / under-fetching | Getting more data than needed / needing several calls for one screen |
+| OWASP Top 10 | Widely used list of top web application security risks |
 
 ### P
 
@@ -7933,183 +7295,353 @@ The most important terms from Parts 1 to 5, plus a few related words you will me
 |---|---|
 | p50 / p95 / p99 / p999 | Latency below which 50 / 95 / 99 / 99.9% of requests fall |
 | PACELC | Extends CAP: else (no partition), choose latency or consistency |
+| Packet | A small chunk of data (about 1,500 bytes max on Ethernet) routed independently |
+| Page | A fixed-size block of storage, typically 4 to 16 KB |
+| Page cache | Operating system's RAM cache of recently read file data |
+| Page / ticket | Urgent alert waking someone / non-urgent work item |
 | Pagination | Returning large results in pages, by offset (skip N rows) or by cursor (after the last item seen) |
-| Partition | A subset of data stored separately; in Kafka, an ordered sub-log of a topic and the unit of parallelism |
-| Paxos | Classic consensus algorithm |
-| Peak factor | Ratio of peak load to average load |
-| Percentile | Value below which a given share of measurements fall |
+| Parallelism | Executing several tasks at the same instant on multiple cores or machines |
+| Parameterised query | Query where inputs are passed separately as data |
+| Parquet / ORC | Columnar file formats for analytics |
+| Partial index | An index over only rows matching a condition |
+| Partitioning | Splitting a dataset into smaller pieces |
+| Partition (stream) | A subset of data stored separately; in Kafka, an ordered sub-log of a topic and the unit of parallelism |
+| Path | The part of a URL after the host, such as /feed |
+| Paxos | First widely known proven consensus algorithm |
+| Peak factor | Ratio of peak traffic to average traffic |
+| Percentile | Value below which a given percentage of measurements fall |
+| Performance | How fast the system is for a single request at current load |
+| Perimeter security | Trusting everything inside the network boundary |
+| PgBouncer | A popular connection-pooling proxy for PostgreSQL |
+| Phantom read | A repeated query returning new rows inserted by another transaction |
+| Phi accrual detector | Failure detector giving a suspicion level, not yes/no |
+| Pipeline | Automated sequence of build, test and deploy steps |
 | PKCE | Proof Key for Code Exchange: one-time secret proving the app that started an OAuth flow is the one finishing it |
-| Point of presence (PoP) | A CDN or network location in a city |
-| Port | Number identifying a service on a machine (443 for HTTPS) |
-| Power of two choices | Pick two random servers and use the less loaded |
-| Primary key | Column(s) uniquely identifying each row |
-| Private / public IP | Address valid only inside a private network / reachable from the internet |
-| Protobuf | Protocol Buffers: compact binary format for structured data |
-| Pub/sub | Publish/subscribe: every subscriber gets a copy of each message |
-| Push / pull CDN | You upload content to the CDN in advance / the CDN fetches it from origin on first request |
+| Pod | Smallest Kubernetes unit: one or more containers sharing network and storage |
+| Point-in-time recovery | Restoring to any moment by replaying logs over a backup |
+| Point-to-point / competing consumers | Each message processed by one of many workers |
+| Poison message | A message that fails every time it's processed |
+| Polyglot persistence | Using several database types in one system |
+| Pool / target group | The set of backend servers behind a load balancer |
+| PoP (point of presence) | CDN or network site in a city containing many edge servers |
+| Port | Number (0–65535) selecting which program on a machine receives data |
+| Port exhaustion | Running out of source ports for new outgoing connections |
+| Postmortem | Blameless written review of an incident |
+| Power of two choices | Pick two random backends and use the less loaded one |
+| Preflight request | Browser OPTIONS request checking CORS permission first |
+| Pre-signed URL | A time-limited link allowing one direct upload or download |
+| Primary key | A column whose unique value identifies each row |
+| Private IP | Address valid only inside a local network (10/8, 172.16/12, 192.168/16) |
+| Private subnet | Network segment with no direct route from the internet |
+| Producer / consumer / broker | Sender / processor / storage middleman of messages |
+| Projection / read model | Read-optimised view built from events |
+| Propagation delay | Time for a signal to travel the physical distance |
+| Protocol | Agreed rules for how two programs exchange messages |
+| Protocol Buffers (Protobuf) | Compact binary serialisation format with a schema |
+| Proxy | Middleman that forwards requests on someone's behalf |
+| PROXY protocol | Header an L4 proxy prepends to pass the original client address |
+| Public IP | Globally unique address reachable from the internet |
+| Public-key cryptography | Key pair where the public key verifies or encrypts for the private key |
+| Publish/subscribe (pub/sub) | Each message delivered to every subscriber of a topic |
+| Pull CDN | CDN fetching content from origin on first request |
+| Purge / invalidation | Removing content from CDN caches before its TTL ends |
+| Push CDN | You upload content to the CDN in advance |
 
 ### Q
 
 | Term | Meaning in one line |
 |---|---|
-| QPS | Queries (requests) per second |
-| Quadtree | Tree that splits a map into four squares recursively |
+| QPS / RPS | Queries / requests per second |
+| Quadtree | Tree splitting map regions into four as density grows |
+| Query planner (optimizer) | The part of a database that picks the cheapest way to run a query |
+| Queue depth | Number of messages waiting in a queue |
+| Queueing delay | Time spent waiting behind other work |
 | QUIC | UDP-based transport with built-in TLS, used by HTTP/3 |
-| Quorum | Minimum replicas that must agree for a read or write |
+| Quorum | Minimum number of replicas that must take part in an operation |
 
 ### R
 
 | Term | Meaning in one line |
 |---|---|
+| Race condition | Bug where the result depends on the timing of concurrent tasks |
 | Raft | Understandable consensus algorithm with leaders and terms |
+| RAID | Combining disks so one failure loses no data |
+| RAM | Main working memory of a computer; fast but volatile |
+| Random (LB) | Pick a backend at random |
+| Range query | A query for values between two bounds |
+| Range sharding | Each shard owns a continuous range of keys |
+| Rate-limit headers | Headers telling clients their quota, remaining calls and reset time |
 | Rate limiting | Capping how many requests a client may make per time window, rejecting the excess (HTTP 429) |
 | RBAC | Role-based access control: permissions attached to roles |
-| Reactive / scheduled / predictive scaling | Scaling on current metrics / at set times / ahead of forecast load |
+| Reactive / scheduled / predictive scaling | Scaling on current metrics / at preset times / ahead of forecast demand |
+| Read committed | Isolation level preventing dirty reads only |
+| Read repair | Fixing stale replicas noticed during a read |
 | Read replica | Copy of a database used to serve reads |
-| Read-through / write-through / write-around | Cache loads from the DB on a miss / writes go to cache and DB together / writes skip the cache |
-| Read-your-writes | A user always sees their own recent writes |
-| Recursive resolver | DNS server that does the full lookup for clients |
-| Redis | In-memory data store used as a cache, queue and more |
+| Read-through | Cache loads from the DB itself on a miss |
+| Read / write | Fetching data without changing it / inserting, updating or deleting data |
+| Read / write amplification | Extra disk reads per lookup / extra rewrites per byte written |
+| Read/write ratio | How many reads happen per write |
+| Read-your-writes (read-your-own-writes) | A user always sees their own recent writes |
+| ReBAC | Permissions derived from relationships between users and objects |
+| Rebalance | Reassigning partitions when group membership changes |
+| Rebalancing / resharding | Moving data between shards as the cluster changes |
+| Reconciliation loop | Controllers continually driving actual state towards desired state |
+| Recreate deployment | Stop old version, start new, with downtime |
+| Recursive resolver | DNS server that finds the full answer for clients and caches it |
+| Recursive vs iterative query | "Give me the final answer" vs "point me to who knows" |
+| Redirect | HTTP response telling the browser to go to another URL |
+| Redis | In-memory key-value server with rich data types, often used as a cache |
 | RED method | Rate, errors, duration: metrics for each service |
+| Redrive | Moving DLQ messages back to the main queue |
 | Redundancy | Extra copies of components so one failure is survivable |
-| Region | Geographic area of a cloud provider with several AZs |
-| Relational database | Stores data in tables with schemas and supports SQL |
+| Referential integrity | The guarantee that foreign keys point to rows that exist |
+| Refresh-ahead | Cache reloads hot entries before they expire |
+| Region | Geographic cloud area containing several availability zones |
+| Relational database | A database storing data in tables of rows and columns with a fixed schema |
+| Relevance ranking | Ordering search results by how well they match |
 | Reliability | Working correctly over time, even when things go wrong |
-| Replication | Keeping copies of data on multiple nodes |
-| Replication lag | Delay before a write reaches replicas |
+| Rendezvous hashing | Picking the server with the highest score for each key |
+| Repeatable read | Isolation level also preventing non-repeatable reads |
+| Replica | One copy of the data |
+| Replication | Keeping copies of data on several machines |
+| Replication lag | How far a follower is behind the leader |
+| Request coalescing | Letting one request refill a cache entry while others wait for it |
+| Request coalescing / single flight | Letting only one request rebuild a missing key |
+| Request / response | A client's message asking for something and the server's reply |
+| Request's journey | The full path one user action takes through every component and back |
 | Resharding | Changing the number of shards and moving data |
-| Response time | What the client sees: latency plus queueing and processing |
-| REST | API style using resources, URLs and HTTP methods |
-| Reverse proxy | Proxy acting on behalf of servers |
+| Resolver | Server function that fetches one GraphQL field |
+| Resource | A noun the API exposes, addressed by a URL |
+| Resource owner / client / authorization server / resource server | The four OAuth roles |
+| Response time | Total time the client waits, including network, queueing and service |
+| REST | API style of resources (URLs) manipulated with HTTP verbs |
+| Retention | How long a log keeps messages |
+| Retransmission | Resending data whose acknowledgement did not arrive |
+| Retry | Repeating a failed request in case the fault was temporary |
+| Retry-After | Header telling the client how long to wait before retrying |
+| Retry budget | Cap on the share of traffic that may be retries |
+| Retry storm | Retries multiplying load on an already struggling service |
+| Reverse proxy | Proxy acting for servers, receiving client traffic in front of them |
 | Rollback | Returning to the previous version after a bad deploy |
-| Rolling deployment | Updating servers a few at a time |
-| Root server | Top of the DNS hierarchy, points to TLD servers |
+| Roll forward | Fixing a bad release by shipping a new fix instead of reverting |
+| Rolling deployment | Replacing instances in small batches |
+| Root hash | Top hash of a Merkle tree, summarising all data |
+| Root name server | Top of the DNS tree, refers resolvers to TLD servers |
 | Round robin | Send requests to each server in turn |
-| Round trip time (RTT) | Time for a message to go there and back |
+| Round-robin DNS | Returning several IPs in rotating order to spread load |
+| Round trip time (RTT) | Time for a message to go to a destination and back |
+| Router | Device that forwards packets toward their destination IP |
+| Row store | Storage keeping each row's columns together |
 | RPC | Remote procedure call: calling a function on another machine |
 | RPO | Recovery point objective: maximum acceptable data loss |
 | RTO | Recovery time objective: maximum acceptable downtime |
+| R-tree / S2 / H3 | Bounding-box tree / sphere cells / hexagon grid geo indexes |
+| Runbook | Step-by-step guide for handling a specific alert |
+| R + W > N | Condition for read and write sets to overlap |
 
 ### S
 
 | Term | Meaning in one line |
 |---|---|
+| Safe method | Method that does not change server state |
 | Saga | Sequence of local transactions with compensations on failure |
 | Salt | Random per-user value mixed into a password before hashing |
+| Same-origin policy | Browser rule blocking pages from reading other origins' responses |
+| SAML | Older XML-based standard for enterprise SSO |
+| Sampling | Keeping only a fraction of traces or logs to control cost |
 | Saturation | How full a resource is (CPU, queue length) |
-| Scalability | Ability to handle more load by adding resources |
-| Secrets management | Securely storing and rotating passwords and keys |
-| Serverless | Running code without managing servers, billed per use |
+| Scalability | Handling more load by adding resources without redesign |
+| Scale out / scale in | Adding or removing instances |
+| Scatter-gather | Sending a query to all shards and merging results |
+| Schema | The declared structure of tables, columns and data types |
+| Schema (GraphQL) | Typed description of all data and operations an API offers |
+| Schema-on-read / on-write | Structure applied when reading / enforced when writing |
+| Scheme | First part of a URL, such as `https`, saying which protocol to use |
+| Scope | Named permission an OAuth token grants |
+| Search engine | A store built on an inverted index for full-text queries |
+| Secondary index | Any index other than the clustered or primary one |
+| Secrets management | Storing, distributing and regularly rotating (replacing) credentials securely |
+| Security group | Cloud firewall attached to instances |
+| SELECT FOR UPDATE | Locking rows that were read until the transaction ends |
+| Selectivity | How few rows a filter value matches |
+| Semi-synchronous replication | Leader waits for one follower, the rest are asynchronous |
+| Sequence number | Counter TCP uses to order bytes and detect loss |
+| Sequential consistency | Everyone sees the same order, not necessarily real time |
+| Serializable | Result equals some one-at-a-time order of the transactions |
+| Server | Program (or machine) that waits for and answers requests |
+| Serverless | Running code or using services without managing servers, billed per use |
 | Server-Sent Events (SSE) | One-way stream of events from server to browser over HTTP |
-| Service discovery | How services find each other's current addresses |
-| Service mesh | Network of sidecar proxies handling service-to-service traffic |
-| Session | Server-side record of a logged-in user |
+| Service discovery | Finding the current network addresses of a service's instances |
+| Service (Kubernetes) | Stable name and virtual IP load-balancing to matching pods |
+| Service mesh | Centrally configured sidecar proxies handling all service-to-service traffic |
+| Service registry | Live database of service instances and their addresses |
+| Service time | Time the server spends actually working on a request |
+| Session | Server-side record of a logged-in user, referenced by a cookie or token |
+| Session resumption | Reusing earlier TLS secrets to skip handshake work |
+| Shadow launch | Copying real traffic to a new version and discarding its responses |
 | Sharding | Splitting data across machines by a shard key |
-| Shard key | Field that decides which shard holds a record |
+| Shard key | The column that decides which shard a row goes to |
+| Shard / partition | One piece of the split data |
+| Short code | The few characters (e.g. aZ3kQ9b) that identify a short link |
+| Short polling | Client repeatedly asking the server for updates on a timer |
 | Sidecar | Helper process deployed next to each service instance |
-| SLA | Service level agreement: promise to customers with penalties |
-| SLI | Service level indicator: a measured value |
-| Sliding window | Rate limiter that counts requests in a moving time window |
-| SLO | Service level objective: internal target for an SLI |
+| Single point of failure (SPOF) | A part whose failure alone brings the whole system down |
+| SLA | Service Level Agreement; contract with penalties for missed targets |
+| SLI | Service Level Indicator; a measurement of service health |
+| Sliding window counter | Rate limiter estimating a sliding count from two fixed windows |
+| Sliding window log | Rate limiter storing each request timestamp for an exact count |
+| SLO | Service Level Objective; internal target for an SLI |
+| Sloppy quorum / hinted handoff | Temporarily writing to stand-in nodes that hand data back later |
+| Slow start | TCP ramp-up that grows the sending rate each round trip |
+| Snapshot | Point-in-time image of a disk, volume or database |
+| Snapshot (event sourcing) | Saved state to avoid replaying every event |
+| Snapshot isolation | Each transaction reads a frozen consistent picture of the data |
+| SNI | Host name sent in the TLS ClientHello so one IP can serve many sites |
 | Snowflake ID | 64-bit, roughly time-ordered ID made from timestamp, machine ID and sequence |
-| SOA | Service-oriented architecture: earlier, coarser form of services |
-| Split brain | Two nodes both believe they are the leader |
+| SOA | Older style of coarse services connected through a central service bus |
+| SOA, SRV, PTR, CAA | Zone admin data, service location, reverse lookup, allowed certificate issuers |
+| Socket | One endpoint of a connection: IP address plus port |
+| Software load balancer | LB program on ordinary servers such as NGINX, HAProxy, Envoy |
+| Source of truth / origin | The authoritative home of the data, usually a database |
+| Span | One timed operation inside a trace |
+| Split brain | Two nodes both acting as leader and accepting writes |
+| SQL | The standard language for querying relational databases |
 | SQL injection | Attack that smuggles SQL commands into input |
-| SSO | Single sign-on: log in once for many apps |
-| Stateless / stateful service | Keeps no client data between requests / keeps client or data state locally |
-| Sticky session | Load balancer sends a user to the same server each time |
+| SRE | Site Reliability Engineering; running production with engineering methods |
+| SSD | Solid-state drive; flash storage with no moving parts |
+| SSI | Serializable snapshot isolation, which aborts transactions on dangerous patterns |
+| SSO | Single sign-on: one login for many applications |
+| SSTable | An immutable sorted file written by an LSM-tree |
+| Stale data | A cached or replicated copy older than the latest write |
+| Stale-while-revalidate | Serve the expired value while refreshing in the background |
+| Star schema | A fact table surrounded by dimension tables |
+| State | Stored facts that must survive between requests |
+| Stateful service | Service that keeps client or data state locally |
+| StatefulSet | Kubernetes object for stateful pods with stable identity and storage |
+| Stateless service | Each request carries all needed context; the server keeps no per-client memory between requests |
+| Status code | Three-digit result code (2xx success, 4xx client error, 5xx server error) |
+| Sticky sessions | Load balancer sending a client to the same server every time |
+| Strangler fig pattern | Migrating a monolith piece by piece behind a routing layer |
+| Streaming RPC | gRPC call where client, server or both send a stream of messages |
 | Stream processing | Processing events continuously as they arrive |
-| Strong consistency | Every read sees the latest write |
-| Synchronous / asynchronous | Caller waits for the result / caller hands off the work and carries on |
-| Synchronous replication | Primary waits for replicas before confirming a write |
+| Structured logging | Logs written as fields (such as JSON) for easy querying |
+| Stub resolver | Minimal DNS client in the OS that asks a recursive resolver |
+| Stub / skeleton | Generated client / server code that hides the network behind an ordinary function call |
+| Subdomain | A name under a domain, such as `api.example.com` |
+| SWIM | Gossip membership protocol with indirect pings |
+| Symmetric / asymmetric encryption | One shared key encrypts and decrypts, fast / public and private key pair |
+| Synchronous / asynchronous call | Caller waits for the response / sends a message and carries on |
+| Synchronous replication | Leader waits for a follower before confirming a write |
+| SYN flood | Attack exhausting servers with half-open TCP connections |
+| System design | Choosing a system's parts and how they interact to meet its goals |
 
 ### T
 
 | Term | Meaning in one line |
 |---|---|
-| Tail latency | The slowest requests (p99 and above) |
-| TCP | Reliable, ordered, connection-based transport protocol |
+| Table, row, column | A set of records, one record, one property of a record |
+| Tail latency | Latency of the slowest requests (p99, p999, max) |
+| TCP | Connection-based, reliable, ordered byte-stream transport |
+| TCP/IP model | Four-layer model the internet actually uses |
+| Term / epoch | Number that increases with each new leader |
+| Terraform | Popular declarative infrastructure-as-code tool |
+| Thread | Independent flow of execution inside a process |
 | Three-way handshake | SYN, SYN-ACK, ACK exchange that opens a TCP connection |
 | Throttling | Slowing or queuing requests that exceed a rate instead of rejecting them |
-| Throughput | Work completed per unit of time |
+| Throughput | Amount of work completed per unit of time |
 | Thundering herd | Many clients waking or retrying at the same moment |
+| Ticket server | Central service issuing unique IDs |
 | Timeout | Maximum time a caller waits before giving up on a call |
-| Time-series database | Store optimized for timestamped measurements |
-| TLD | Top-level domain such as .com or .org |
-| TLS | Transport layer security: encryption and identity for connections |
-| TLS termination | Decrypting TLS at a proxy or load balancer |
-| Token bucket | Rate limiter allowing bursts up to a bucket size |
+| Time-series database | A database optimised for timestamped measurements |
+| TIME_WAIT | Short wait state after closing a TCP connection |
+| TLD | Top-level domain such as `.com` or `.uk` |
+| TLD name server | Refers resolvers to a domain's authoritative servers |
+| TLS passthrough | LB forwards encrypted traffic, backend decrypts |
+| TLS re-encryption | LB decrypts, inspects, then encrypts again to the backend |
+| TLS / SSL | Protocol for encrypted, authenticated connections (SSL is the old name) |
+| TLS termination | Decrypting HTTPS at the load balancer or proxy |
+| Token | String a client presents to prove identity or access |
+| Token bucket | Rate limiter with refilling tokens that allows bursts up to bucket size |
+| Tokenising | Splitting text into searchable words |
+| Tombstone | A marker recording that a key was deleted |
 | Topic | Named stream of messages in pub/sub or Kafka |
 | Trace | Record of one request's path across services |
-| Transaction | Group of operations treated as one unit |
-| TTL | Time to live: how long cached data or a DNS answer stays valid |
+| Trace ID / correlation ID | Identifier passed along to link all data for one request |
+| Transaction | A group of operations that all succeed or all fail |
+| Transactional outbox | Writing events to an outbox table in the same DB transaction |
+| Transaction pooling | Lending a database connection only for one transaction |
+| Transient fault | A short-lived failure likely to succeed on retry |
+| Transmission delay | Time to push the bits of a message onto a link |
+| TrueTime | Spanner's clock API returning a bounded time interval |
+| TTL jitter | Randomising TTLs so keys don't expire together |
+| TTL (time to live) | How long cached data, a cache entry or a DNS answer (in seconds) stays valid before it expires |
 | Two-phase commit (2PC) | Prepare then commit protocol for atomic distributed transactions |
+| Two-phase locking | Taking locks and holding them until commit to get serializability |
+| TXT record | Free-text record used for verification and email policy |
 
 ### U
 
 | Term | Meaning in one line |
 |---|---|
 | UDP | Connectionless transport without delivery or ordering guarantees |
+| ULID | Time-sortable 128-bit ID format |
+| Unicast | One IP address belongs to one location |
+| Unique constraint | A rule that no two rows share a value in a column |
+| Update anomaly | Inconsistency caused by a fact stored in many places |
+| Upsert | Insert a row or update it if it already exists |
+| URL shortener | Service that maps a short code to a long URL and redirects |
 | USE method | Utilization, saturation, errors: metrics for each resource |
-| UUID | 128-bit universally unique identifier |
+| UUID | 128-bit identifier generated without coordination |
+| UUIDv4 / UUIDv7 | Random UUID / time-ordered UUID |
 
 ### V
 
 | Term | Meaning in one line |
 |---|---|
-| Vector clock | Per-node counters that detect concurrent updates |
-| Vector database | Store that finds items with similar embedding vectors |
-| Vertical scaling | Making one machine bigger (scale up) |
-| Virtual machine (VM) | Software-emulated computer with its own OS |
-| Virtual node | Many ring positions per server in consistent hashing |
+| Vector clock / version vector | Per-node counters that also detect concurrent events |
+| Vector database | A store for embeddings supporting nearest-neighbour search |
+| Versioned keys | Putting a version in the cache key so new writes use new keys |
+| Vertical scaling (scale up) | Making one machine bigger (scale up) |
+| Virtual IP (VIP) | Address owned by a service rather than one machine |
+| Virtual machine (VM) | Emulated computer with its own operating system |
+| Virtual node | One of many ring positions owned by a single physical server |
+| Visibility timeout | Time a received message is hidden before being redelivered (SQS) |
+| VPC | Your own isolated private network inside a cloud provider |
+| VRRP / keepalived | Protocol and tool that move a virtual IP to a standby node |
 
 ### W
 
 | Term | Meaning in one line |
 |---|---|
-| WAF | Web application firewall: filters malicious HTTP traffic |
-| WAL | Write-ahead log: changes written to a log before applying, for crash recovery |
-| Webhook | HTTP callback a system sends to another when an event happens |
+| WAF | Web application firewall filtering malicious HTTP requests |
+| Wall clock / monotonic clock | Time of day (can jump) / always-forward timer for durations |
+| WAL (write-ahead log) | Sequential log of changes written (and fsynced) before the data files, for crash recovery |
+| Warm / cold cache | Cache already full of hot data / empty and missing a lot |
+| Watermark | Stream engine's estimate that all events up to a time have arrived |
+| Webhook | HTTP callback a service sends to your URL when an event occurs |
 | WebSocket | Persistent two-way connection between browser and server |
+| Weighted round robin | Round robin where bigger servers get proportionally more |
 | Wide-column store | NoSQL store that groups rows by a partition key and sorts them within it (e.g. Cassandra) |
-| Worker | Background process that consumes and handles jobs |
-| Write-back / write-behind | Writes go to the cache and reach the database later |
-| Write skew | Two transactions read the same data, each update different rows, and together break a rule |
+| Window (streaming) | Time range grouping events, e.g. tumbling or sliding |
+| Worker | Background program that processes jobs from a queue |
+| Write-around | Writes skip the cache and go only to the DB |
+| Write-behind / write-back | Writes go to cache, flushed to DB later |
+| Write conflict | Two concurrent writes to the same record on different leaders |
+| Write skew | Two transactions each write different rows based on a shared read and together break a rule |
+| Write-through | Writes go to cache and DB synchronously |
 
 ### X, Y, Z
 
 | Term | Meaning in one line |
 |---|---|
+| X-Forwarded-For | Header carrying the original client IP through proxies |
 | XSS | Cross-site scripting: injecting malicious script into pages others view |
 | Zero trust | Security model that verifies every request, inside the network or not |
+| Zone | Set of DNS records one authoritative server is responsible for |
 | ZooKeeper | Coordination service for config, locks and leader election |
 
 ---
 
 ## Part 6 glossary
 
-| Term | Meaning in one line |
-|---|---|
-| Request's journey | The full path one user action takes through every component and back |
-| Scheme | First part of a URL, such as `https`, saying which protocol to use |
-| Host | The domain-name part of a URL, such as photos.example.com |
-| Path | The part of a URL after the host, such as /feed |
-| Browser cache | Copies of pages, files and DNS answers kept by the browser |
-| 0-RTT resumption | TLS 1.3 feature letting a returning client send data in its first message |
-| URL shortener | Service that maps a short code to a long URL and redirects |
-| Short code | The few characters (e.g. aZ3kQ9b) that identify a short link |
-| Custom alias | User-chosen short code |
-| Redirect | HTTP response telling the browser to go to another URL |
-| 301 Moved Permanently | Redirect the browser may cache forever |
-| 302 Found | Temporary redirect the browser re-checks each time |
-| 409 Conflict | Status code for a request that clashes with existing data |
-| 410 Gone | Status code for a resource that existed but was removed |
-| Counter range | Block of numbers handed to one server for ID generation |
-| Key generation service (KGS) | Service that pre-creates unused unique keys |
-| Hash collision | Two different inputs producing the same short hash |
-| Request coalescing | Letting one request refill a cache entry while others wait for it |
-| 80/20 rule | Rough rule that 20% of items get 80% of the traffic |
-| Decision cheat sheet | Table mapping common needs to standard tools and their costs |
-| Master glossary | A–Z list of all system design terms in this module |
-
-
+Every Part 6 term is defined in one line in the [Master A–Z glossary](#master-az-glossary), which merges the glossaries of all six parts into a single alphabetical list.

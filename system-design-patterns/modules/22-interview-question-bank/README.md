@@ -6,8 +6,9 @@ This module collects the system design questions that come up again and again in
 
 - **★** marks a question that is asked very often. Do those first.
 - **Part A** is the "Design X" prompts (URL shortener, news feed, Uber, Ticketmaster …). When this book has a full case study, the entry is a two-minute outline plus a link to the full design. When it doesn't, the entry is a longer outline that stands on its own, with links to the modules that teach each building block.
-- **Part B** is the concept questions ("What is consistent hashing?", "SQL vs NoSQL?", "How does a circuit breaker work?"). Each has a short answer you can say out loud and a link to the full explanation.
+- **Part B** is the concept questions ("What is consistent hashing?", "SQL vs NoSQL?", "How does a circuit breaker work?"). Each has a short answer you can say out loud and a link to the full explanation. Part B ends with **More design prompts** (Q213–Q219), design questions added after the numbering was fixed.
 - **Part C** is a minute-by-minute plan for a 45-minute system design round.
+- **Part D** is how to prepare and practise: a 4/8/12-week plan, a mock-interview rubric, traps that sink candidates, API-design rounds and what each level is expected to show.
 
 **How to drill:** read the question, cover the answer, say your answer out loud (or sketch the boxes), then compare. Mark the ones you stumbled on and come back to them the next day. For Part A, time yourself: two minutes for the outline, then pick one deep dive.
 
@@ -51,7 +52,7 @@ Two kinds of answer follow. When this book already has a full design, you get a 
 - **Probe 3, store outage:** fail open (allow traffic) or fail closed (block it). Most public APIs fail open and keep a local in-memory limit as a backstop.
 - **Scale:** shard counters by key; for global limits across regions, accept slight overshoot or sync counts asynchronously.
 
-→ *Full design:* [Module 8 — Rate Limiting](../08-api-and-edge/README.md) · [Module 0 — Rate limiting and throttling](../00-system-design-fundamentals/README.md)
+→ *Full design:* [Module 23 — Case 2: Design a Rate Limiter](../23-case-studies-building-blocks-ii/README.md#case-2--design-a-rate-limiter) · [Module 8 — Rate Limiting](../08-api-and-edge/README.md) · [Module 0 — Rate limiting and throttling](../00-system-design-fundamentals/README.md)
 
 **Q4. ★ Design a Unique ID Generator in distributed systems (Twitter Snowflake)**
 
@@ -147,7 +148,7 @@ Two kinds of answer follow. When this book already has a full design, you get a 
 - **Probe 3:** routing users to the nearest healthy PoP and failing over when one dies.
 - **Scale:** the origin shield collapses many edge misses into one origin fetch.
 
-→ *Full design:* [Module 8 — CDN](../08-api-and-edge/README.md) · [Module 0 — CDNs and anycast](../00-system-design-fundamentals/README.md)
+→ *Full design:* [Module 23 — Case 1: Design a CDN](../23-case-studies-building-blocks-ii/README.md#case-1--design-a-cdn) · [Module 8 — CDN](../08-api-and-edge/README.md) · [Module 0 — CDNs and anycast](../00-system-design-fundamentals/README.md)
 
 **Q12. Design a load balancer**
 
@@ -204,7 +205,7 @@ Two kinds of answer follow. When this book already has a full design, you get a 
 - **Probe 3:** stop "SMS pumping" fraud with per-number, per-IP and per-country limits and CAPTCHAs.
 - **Scale:** OTPs get their own high-priority queue, separate from marketing messages.
 
-→ *Full design:* [Module 2 — Capstone: Designing a Notification System](../02-moving-data/README.md) (the OTP pieces are the add-on)
+→ *Full design:* [Module 2 — Capstone: Designing a Notification System](../02-moving-data/README.md) (the OTP pieces are the add-on) · [Module 25 — Case 6: Twilio-style platform](../25-case-studies-commerce-media-platforms/README.md#case-6--a-twilio-style-communications-api-platform) (per-sender queues, carrier limits)
 
 **Q17. Design a key-value store / query cache for a search engine**
 
@@ -255,24 +256,14 @@ Two kinds of answer follow. When this book already has a full design, you get a 
 
 **Q21. Design TikTok / short-video feed**
 
-**Requirements.** Functional: upload short videos (mostly under a minute or two), an endless "For You" feed chosen by a recommender rather than by who you follow, likes, comments, shares, follow. Non-functional: the next video must start almost instantly (under 200 ms), the feed must feel fresh, and new uploads must reach some viewers within minutes.
+- **Requirements:** upload short videos; an endless "For You" feed picked by a recommender, not by follows; next video starts in under ~200 ms; new uploads reach viewers within minutes.
+- **Numbers:** 600M daily users × 100 views ≈ 700K views/s; ~140K feed requests/s at peak, each ranking ~1,000 candidates.
+- **Components:** the video upload/transcode/CDN pipeline; a funnel of embedding retrieval → multi-task ranker → diversity re-ranker over precomputed candidate pools; an event log feeding real-time features.
+- **Probe 1:** instant start: preload the first seconds of the next 2–3 videos, short segments, warm connections.
+- **Probe 2:** learning in minutes: streamed features plus online training that pushes only updated embeddings.
+- **Probe 3:** cold start by staged exposure; fall back to trending if the ranker fails.
 
-**Estimates.** 1B monthly users, about 600M daily; each watches roughly 100 videos a day, so about 60B views a day (about 700k per second). 30M uploads a day at about 20 MB each after transcoding is around 600 TB a day of new media.
-
-**API.** `POST /videos` (returns a pre-signed upload URL), `GET /feed?cursor=` (returns a batch of 10 video IDs with CDN URLs), `POST /events` (batched watch, like, skip and share signals).
-
-**Data model.** Video metadata (id, author, duration, tags, renditions) in a sharded NoSQL store; engagement events in a log (Kafka) and a data lake; per-user feature vectors and a candidate cache in a feature store.
-
-**Architecture.** Upload goes to object storage, then a transcoding pipeline produces several bitrates for adaptive streaming (HLS or DASH), then a content-moderation check, then the CDN. The feed service asks the recommender for candidates: a retrieval stage (embedding nearest-neighbour search, plus follows and trending) returns about 1,000 videos, a ranking model scores them by predicted watch time and engagement, and a re-ranker adds diversity and removes things you have already seen.
-
-**Deep dives.**
-1. *Preloading:* the client downloads the first seconds of the next 2 to 3 videos while you watch, which is the main trick behind instant playback.
-2. *Feedback loop:* watch time and skips stream into the feature store within minutes, so the feed adapts during a session.
-3. *Cold start:* a new video goes to a small test audience; if it holds viewers, it is shown to larger pools in steps.
-
-**Failures and trade-offs.** If the ranker is slow or down, fall back to cached or trending candidates; a slightly worse feed beats an empty one. Precomputing feeds saves latency but goes stale; most systems precompute a candidate pool and rank at request time.
-
-→ *Building blocks:* [Module 14 — Case 3: Video Platform](../14-case-studies-messaging-and-media/README.md) · [Module 19 — Feed ranking](../19-algorithms-deep-dive/README.md) · [Module 11 — Feature Store](../11-ai-era-systems/README.md) · [Module 8 — CDN](../08-api-and-edge/README.md)
+→ *Full design:* [Module 25 — Case 1: TikTok-Style Short-Video Feed](../25-case-studies-commerce-media-platforms/README.md#case-1--tiktok-style-short-video-feed)
 
 **Q22. Design Tinder**
 
@@ -669,24 +660,14 @@ Two kinds of answer follow. When this book already has a full design, you get a 
 
 *Asked at:* Swiggy, Flipkart
 
-**Requirements.** Functional: browse nearby restaurants and menus, place an order and pay, the restaurant accepts and prepares it, a delivery partner is assigned, the customer tracks the order live, then ratings. Non-functional: restaurant search under 200 ms, no lost or double-charged orders, assignment within about a minute, and survival of the lunch and dinner peaks (5 to 10 times average traffic).
+- **Requirements:** browse nearby restaurants, order and pay, restaurant accepts, courier assigned, live tracking; no lost or double-charged orders; survive meal peaks.
+- **Numbers:** 3M orders/day → ~125 orders/s at dinner peak; 300K couriers × GPS every 5 s = 60K location writes/s, the heaviest write load.
+- **Components:** discovery by delivery-area cells, order service owning the state machine, payments (authorize, capture at delivery), merchant gateway, per-zone dispatch planner, location and tracking services.
+- **Probe 1:** dispatch to the predicted food-ready time, not the order time.
+- **Probe 2:** batch 2–3 orders per courier with a per-zone optimiser.
+- **Probe 3:** the order as a saga with durable timers for silent restaurants; pickup is the point of no return.
 
-**Estimates.** 3M orders a day, with 30 % in a two-hour dinner peak: about 900k orders in 7,200 s, about 125 orders a second at peak. 300k active delivery partners sending GPS every 5 s is 60k location writes a second, which is the heaviest write load.
-
-**API.** `GET /restaurants?lat=&lng=`, `GET /restaurants/{id}/menu`, `POST /orders {items, address, idempotency_key}`, `GET /orders/{id}` plus a live tracking channel, partner app `POST /location` and `POST /orders/{id}/status`.
-
-**Data model.** Restaurants and menus in a relational database with a search index (Elasticsearch with geo queries) for discovery; orders in a relational database, sharded by city or order ID, with an order state machine (placed, accepted, preparing, picked up, delivered, cancelled); partner locations in an in-memory geo index (Redis GEO or H3 cells); payments in a ledger.
-
-**Architecture.** Discovery service, cart and order service, payment service (calls a payment gateway with idempotency keys), restaurant service (tablet or app to accept orders), dispatch service, location service, tracking service (WebSocket or SSE to the customer), notification service. Services talk through events (Kafka): `OrderPlaced`, `OrderAccepted`, `PartnerAssigned`, and so on.
-
-**Deep dives.**
-1. *Dispatch:* assign when the food will be ready, not when ordered. Score nearby partners by time to reach the restaurant against the predicted prep time; batch two orders from the same area onto one partner when it does not hurt freshness.
-2. *Order consistency:* placing an order spans payment, the restaurant and dispatch, so use a saga with compensations (refund if the restaurant rejects); the order service owns the state machine.
-3. *Menu availability and peaks:* cache menus at the edge; restaurants can toggle items or pause; rate-limit and queue at peaks instead of failing.
-
-**Failures and trade-offs.** If dispatch is down, orders queue and are assigned when it recovers. Location data can be lossy; order data cannot. ETAs come from ML models (prep time plus travel time) and should be shown as a range.
-
-→ *Building blocks:* [Module 12 — Design 2: Ride-Sharing Dispatch](../12-capstones/README.md) · [Module 15 — Design 1: Proximity Service](../15-case-studies-location-and-realtime/README.md) · [Module 7 — Saga](../07-consistency/README.md) · [Module 5 — Idempotency](../05-reliability/README.md) · [Module 2 — Event-Driven Architecture](../02-moving-data/README.md)
+→ *Full design:* [Module 25 — Case 2: Food Delivery](../25-case-studies-commerce-media-platforms/README.md#case-2--food-delivery-uber-eats--doordash-style)
 
 **Q51. Design a heat map of delivery agents (Swiggy/Zomato)**
 
@@ -893,24 +874,14 @@ downloader.onComplete(id, result) / onError(id, error)
 
 **Q63. ★ Design an e-commerce site (Amazon / BigBasket)**
 
-**Requirements.** Functional: browse and search a product catalog, product pages with price and stock, cart, checkout with payment, order tracking, returns; sellers manage listings and stock. Non-functional: browsing is fast and always available (read-heavy, cacheable); checkout is correct (never take money without an order, avoid overselling); survive sale-day peaks 10 times normal.
+- **Requirements:** catalog, search, product pages, cart, checkout, orders, returns, sellers; browsing always fast and available; checkout never wrong (no money without an order, no overselling deals); sale-day peaks at 10× normal.
+- **Numbers:** 2B page views/day × ~30 backend calls per page ≈ 1.5M backend req/s; 5M orders/day ≈ 60/s, thousands/s at deal launches.
+- **Components:** CDN and BFF page composition (critical vs optional widgets), always-writable cart, checkout saga (reserve → authorize → durable accept with outbox), inventory per (SKU, warehouse), search fed by CDC.
+- **Probe 1:** hot deal stock: split into buckets, claim tokens, waiting room.
+- **Probe 2:** a slow recommender must not break the page: deadlines, bulkheads, circuit breakers.
+- **Probe 3:** peak-day readiness: forecast, load tests, game days, pre-provisioning, kill switches, change freeze.
 
-**Estimates.** 100M daily users, 2B page views a day (about 25k per second, 100k+ at peak); 5M orders a day (about 60 a second, 1k+ a second during sales). A catalog of 500M products at about 10 KB of metadata each is 5 TB, plus images on a CDN.
-
-**API.** `GET /search?q=&filters=`, `GET /products/{id}`, `POST /cart/items`, `POST /checkout {cart_id, address, payment_method, idempotency_key}`, `GET /orders/{id}`.
-
-**Data model.** Catalog in a document store (attributes vary by category) and fed into a search index; price and stock per (product, warehouse) in a relational database, because they must be accurate; carts in a key-value store keyed by user; orders and payments in a relational database sharded by user or order ID; an inventory reservations table.
-
-**Architecture.** Microservices behind an API gateway: catalog, search, pricing, inventory, cart, checkout and order, payment, fulfilment, notifications. Product pages are assembled from cached parts (the static catalog through the CDN and cache; price and stock fetched fresh or cached for seconds). Events flow through Kafka (`OrderPlaced`, `PaymentCaptured`, `Shipped`).
-
-**Deep dives.**
-1. *Inventory:* reserve stock at checkout with a conditional decrement (`UPDATE ... SET available = available - 1 WHERE available >= 1`) and an expiry on the reservation; release it if payment fails. For hot items, keep stock counters in Redis and reconcile.
-2. *Checkout as a saga:* reserve stock, then authorise payment, then create the order, then confirm; each step has a compensation step. Idempotency keys stop double orders when users click twice or the client retries.
-3. *Search and browse:* the search index is updated from catalog change events (CDC); facets come from aggregations; personalised ranking sits on top.
-
-**Failures and trade-offs.** If recommendations or reviews fail, degrade gracefully and still show the page; only checkout must be strongly consistent. Show stock as "in stock" from a cache, and confirm the truth at checkout.
-
-→ *Building blocks:* [Module 4 — Capstone: Caching the Product Catalog](../04-caching/README.md) · [Module 7 — Capstone: Order Fulfillment, Built Twice](../07-consistency/README.md) · [Module 5 — Idempotency](../05-reliability/README.md) · [Module 20 — Case 1: Distributed Search](../20-case-studies-content-search-and-platforms/README.md) · [Module 10 — Change Data Capture](../10-batch-and-streaming/README.md)
+→ *Full design:* [Module 25 — Case 3: E-Commerce Platform and Peak-Day Readiness](../25-case-studies-commerce-media-platforms/README.md#case-3--e-commerce-platform-and-peak-day-prime-day-readiness)
 
 **Q64. Design Facebook Marketplace**
 
@@ -1989,6 +1960,59 @@ A skip list is a sorted linked list with extra "express lane" levels. Each node 
 Text or images are turned into embeddings, which are vectors where similar meaning gives nearby points. Search then means finding the nearest vectors to the query vector. Exact search compares against everything, which is too slow at millions of items. So systems use approximate nearest neighbour (ANN) indexes. HNSW builds a layered graph that is walked greedily. IVF clusters vectors and searches only the closest clusters. Product quantization compresses vectors to save memory. You trade a little recall for big speed gains, and you shard the index as it grows.
 → *More:* [Module 19 — Vector search with HNSW, IVF and product quantization](../19-algorithms-deep-dive/README.md) · [Module 11 — Vector Database Sharding](../11-ai-era-systems/README.md)
 
+## More design prompts
+
+Designs added to the book after Part A was numbered. Because numbering runs through Parts A and B, they continue after Q212 here instead of joining their topic group above.
+
+**Q213. Design a pub-sub service (Google Cloud Pub/Sub / Amazon SNS)**
+
+- **Core:** store each message once in a replicated per-topic log (ack after a majority write); each subscription is ack state over that log (floor, ranges, leases), so fan-out to thousands of subscriptions costs no copies.
+- **Probes:** per-message redelivery and dead-lettering; push windows (AIMD) isolating slow endpoints; ordering keys; seek/replay. When to choose Kafka instead.
+
+→ *Full design:* [Module 23 — Case 3: Design a Pub-Sub Service](../23-case-studies-building-blocks-ii/README.md#case-3--design-a-pub-sub-service)
+
+**Q214. Design an online learning platform (Coursera / Udemy)**
+
+- **Core:** CDN video behind entitlement-signed URLs; progress as monotonic merges (max, OR of a watched bitmap) so retries and devices never go backwards; server-side quizzes with pools, seeds and server clocks; async sandboxed code grading.
+- **Probes:** the Sunday-deadline spike (pre-scale, deadline = upload time); an append-only grade ledger for regrades; verifiable certificates.
+
+→ *Full design:* [Module 25 — Case 4: Online Education Platform](../25-case-studies-commerce-media-platforms/README.md#case-4--online-education-platform-coursera--udemy-style)
+
+**Q215. Design Spotify Wrapped (a yearly personalised recap)**
+
+- **Core:** batch over a year of immutable listening events with reusable yearly aggregates; one re-runnable job per story writing a row-per-user store; read-only launch-day service.
+- **Probes:** shuffle cost, distribution checks before release, pre-scaling and load tests for the first hours, pre-rendered vs on-demand share images.
+
+→ *Full design:* [Module 25 — Case 5: Spotify Wrapped](../25-case-studies-commerce-media-platforms/README.md#case-5--spotify-wrapped-a-yearly-batch-personalisation-pipeline)
+
+**Q216. Design a communications API platform (Twilio)**
+
+- **Core:** accept, durably log and return `queued`; drain millions of logical per-sender token-bucket queues to carriers with a fair scheduler; idempotency keys on every send.
+- **Probes:** webhook delivery that isolates bad endpoints; billing that never acts on missing balance data; cells per account group.
+
+→ *Full design:* [Module 25 — Case 6: Twilio-Style Communications API Platform](../25-case-studies-commerce-media-platforms/README.md#case-6--a-twilio-style-communications-api-platform)
+
+**Q217. Design an AI code assistant (GitHub Copilot / Cursor)**
+
+- **Core:** a ~250 ms keystroke-to-suggestion loop: debounce and cancel on the client, fill-in-the-middle prompts with stable context first for prefix-cache hits, a small regional model with speculative decoding.
+- **Probes:** repository index kept fresh by Merkle sync; tenant isolation including caches; acceptance and retention telemetry gating every change.
+
+→ *Full design:* [Module 24 — Case 1: AI-Powered Code Assistant](../24-case-studies-ai-systems/README.md#case-1--ai-powered-code-assistant)
+
+**Q218. Design an LLM customer support bot**
+
+- **Core:** RAG over versioned policies plus tools that act with the customer's delegated token; one-owner conversation state machine; warm handoff to human agents with the CRM as case of record.
+- **Probes:** PII redaction before the model; promises only from tool results; resolution rate without repeat contact; LLM-judge plus human-audited evaluation loop.
+
+→ *Full design:* [Module 24 — Case 2: LLM Customer Support Bot](../24-case-studies-ai-systems/README.md#case-2--llm-customer-support-bot)
+
+**Q219. Design the data platform for ML training (lakehouse, labeling, loaders)**
+
+- **Core:** lakehouse tables with atomic snapshot commits; datasets as manifests of snapshots, label sets and code (reproducible and deletable); large shards streamed with a two-level shuffle so GPUs never wait.
+- **Probes:** labeling cost and quality; right-to-erasure vs immutable datasets; drift (PSI) and training/serving skew.
+
+→ *Full design:* [Module 24 — Case 3: Data Infrastructure for AI/ML](../24-case-studies-ai-systems/README.md#case-3--data-infrastructure-for-aiml)
+
 ---
 
 ## Part C — How to answer a system design question in 45 minutes
@@ -2030,6 +2054,312 @@ A system design round is a structured conversation, not a quiz. The interviewer 
 Practise with a timer. Take one prompt from Part A, say each phase out loud, and stop at 45 minutes. After a few rounds the plan becomes automatic, and your attention goes to the design itself.
 
 → *More:* [Module 00 — How to approach a system design interview](../00-system-design-fundamentals/README.md) · [Module 01 — The Five Questions](../01-thinking-in-patterns/README.md) · [Module 01 — Back-of-Envelope Math](../01-thinking-in-patterns/README.md)
+
+## Part D — Preparing and practising
+
+Part C covers the 45 minutes; this part covers everything around them, linking to Part C and [Module 01](../01-thinking-in-patterns/README.md) rather than repeating them. Two terms: a **signal** is evidence the interviewer writes down ("asked for the read:write ratio before choosing a store"); a **rubric** is the fixed list of qualities every candidate is scored on, so interviewers grade alike (Google's hiring guide calls this structured interviewing). You never see the rubric, so leave a signal on every likely line of it.
+
+### Our method vs the RESHADED-style checklist
+
+Courses often teach a lettered checklist, best known **RESHADED** from *Grokking the Modern System Design Interview* (only its step names are used here). Our method is Step 0 plus the five questions (move, live, fast, fail, grow) from [Module 01](../01-thinking-in-patterns/README.md) inside Part C's timed plan, and every case study (Modules 12–25) uses the same headings.
+
+| Course step (name only) | What it means | Our equivalent | Case-study heading |
+|---|---|---|---|
+| Requirements | Features, qualities (scale, latency, availability, consistency), out of scope | Part C min 0–5 | `1. Requirements and numbers` |
+| Estimation | Rough QPS, peak, storage, bandwidth, machines, each tied to a decision | Step 0, Module 01 "Back-of-Envelope Math" | `1. Requirements and numbers` |
+| Storage schema (optional) | Entities, keys, access patterns, the store that fits | Five Questions Q2 (live) | `4. Data model` |
+| High-level design | Simplest boxes and arrows meeting every feature | Q1 (move) gives the arrows | `5. The architecture, annotated` |
+| APIs | The few client calls with inputs, outputs, key headers | Part C min 10–15 | `3. API` |
+| Detailed design | Deep dives on the hardest parts, options compared | Q3 (fast), Q4 (fail), Q5 (grow) | `6. Deep dives`, `7. The failure walk` |
+| Evaluation | Check the design against the agreed requirements, name weak spots | Part C wrap-up, "every pattern is a trade" | `8. Trade-offs` |
+| Distinctive component | The one thing that makes this problem unlike a generic web app | Module 01 "find the problems" | Named in `2. The five-questions pass` |
+
+**Where we differ, and why:**
+
+- **API before the diagram.** Three to five calls take two minutes and pin down what the system does. If the interviewer prefers the other order, follow them; nothing depends on it.
+- **Failure is its own step** (Q4 and the failure walk), not folded into "detailed design". It is the most-skipped step and the most-probed one.
+- **Questions, not stages.** The five questions say *what to look for* and work inside any stage, so the method survives an interviewer who reorders the round.
+- **Name the distinctive component early** (around minute 10, from the five-questions pass), not at the end, so deep-dive time goes to it.
+
+```mermaid
+flowchart TD
+    S0["Step 0 numbers (Estimation)"] --> R["Requirements"]
+    R --> API["API: 3 to 5 calls (APIs)"]
+    API --> DM["Data model (Storage schema)"]
+    DM --> HL["Arrows and stores: Q1, Q2 (High-level design)"]
+    HL --> DC["Name the hard part (Distinctive component)"]
+    DC --> DD["Q3 fast, Q4 fail, Q5 grow (Detailed design)"]
+    DD --> EV["Check against requirements (Evaluation)"]
+```
+
+*Figure — Our flow, with the course step names in brackets.*
+
+### Do's and don'ts per phase
+
+Part C's "Common mistakes" covers the general errors (silence, products without reasons, over-engineering, ignoring hints). This table adds the phase-specific ones and the signal each phase is meant to produce.
+
+| Phase | Do | Don't | Signal collected |
+|---|---|---|---|
+| **Before the round** | Ask the recruiter the round type (product, infrastructure, API, client, ML) and the drawing tool. Practise twice in that tool. Prepare a 60-second story of a system you built, with one number and one trade-off. | Assume all design rounds are alike (client rounds: [Module 18](../18-client-and-mobile-system-design/README.md)). Cram a new topic the night before. | — |
+| **Requirements** | Restate the prompt. Ask five to eight questions whose answers change the design (scale, staleness, money or safety involved). Propose assumptions for the rest. Write them where you can point to them later. | Ask questions that change nothing ("which language?"). Ask twenty questions. | Can you turn a vague prompt into a clear problem? |
+| **Estimates** | One significant figure. Estimate peak (state the factor, often 2–5× average). End each number with a conclusion. | Spend ten minutes. Insist on estimates after the interviewer says skip them. | Feel for scale; numbers drive choices. |
+| **API and data model** | Three to five calls with one key detail each (cursor, idempotency key). Name keys and the main access pattern, then choose the store from it. | Write every column. Say "SQL or NoSQL, both work". | Clean interfaces matched to access patterns. |
+| **High-level design** | Label each arrow sync or async. Walk one read and one write. Say the distinctive component aloud. | Add a box no requirement or number asked for. | A complete, working, explainable system. |
+| **Deep dives** | Offer the interviewer a menu of two or three hard parts. Reuse your numbers to size shards and caches. Time-box each dive to about 7 minutes. | Let one dive run 15 minutes without a decision. | Depth, trade-offs, design for failure. |
+| **Wrap-up** | Name two real weak spots, what you would monitor, what breaks first at 10×. | Add a major component in the last two minutes. Claim there are no weaknesses. | Judgment and self-awareness. |
+
+Check in every 8–10 minutes ("Is this the right level of detail?"), and when you do not know something, reason aloud instead of bluffing.
+
+### Why engineers fail: trap patterns
+
+Strong engineers rarely fail for lack of knowledge; they fall into one of these patterns:
+
+| Trap | What the interviewer sees | Fix |
+|---|---|---|
+| **Early dive** | Partitioning a table in minute two. | Requirements and Step 0 first; breadth before depth. |
+| **Memorised architecture** | A famous blog diagram that collapses when one requirement changes. | For every case you study, write which requirement caused each box; practise changed requirements. |
+| **Happy path only** | Every call succeeds, nothing is slow. | Run Q4 on every arrow: slow, fails once, down ten minutes, what the user sees ([Module 05](../05-reliability/README.md)). |
+| **Trade-off dodge** | "Either would work." | "A is simpler, B scales further; given our numbers, A, and I switch when X." |
+| **Rabbit hole** | 25 minutes on the ID generator, no end-to-end design. | 7-minute dives; park items out loud. |
+| **Hint deflection** | "That's handled," then moving on. | Every question points to a rubric line: stop and answer fully. |
+| **Forgotten requirement** | "Never double-charge" agreed in minute 3, never mentioned again. | Read each requirement in the wrap-up and point to what meets it. |
+| **Numbers that decide nothing** | A neat estimate followed by an unrelated design. | Every number ends in "so…". |
+| **Level mismatch** | A staff candidate with no cost, migration or ownership view; a mid candidate who never finishes. | See "Level expectations" below. |
+| **Stress collapse** | Good start, one hard question, then guessing. | Timed mocks with strangers; a recovery line: "Let me restate what we have, then answer." |
+
+Candidates who pass drive the conversation, make every box and number earn its place, state each choice's cost with the choice, spend their depth on the distinctive component, and close by tying the design to the requirements.
+
+### 4-, 8- and 12-week prep plans
+
+**Pick a plan.** 12 weeks if you cannot yet explain, unaided, what a load balancer, cache, replica, shard and queue each do and cost. 8 weeks if you know the blocks but have done fewer than five full designs. 4 weeks if you have prepared before and need to sharpen.
+
+All plans assume 8–10 hours a week and rest on two findings: **retrieval practice** (recalling before looking) beats re-reading for long-term memory (Roediger and Karpicke, 2006), and **deliberate practice** at the edge of your ability with quick feedback builds skill (Ericsson et al., 1993), which is what a scored mock is. So each week mixes reading with recall drills (Part B answered aloud first) and, from mid-plan, timed designs and scored mocks. "Q" numbers refer to Part A.
+
+#### 4 weeks
+
+| Week | Read | Practise | Checkpoint |
+|---|---|---|---|
+| 1 | [Module 01](../01-thinking-in-patterns/README.md); TL;DRs of [02](../02-moving-data/README.md)–[06](../06-scaling/README.md) | Part B: Performance, Load balancing and caching, Databases. Timed Q1 (vs [Module 13](../13-case-studies-building-blocks/README.md) Case 2), Q3 (vs [Module 08](../08-api-and-edge/README.md) Rate Limiting) | Five-questions pass on any prompt in under 3 min |
+| 2 | [Module 12](../12-capstones/README.md) Designs 1–3; [Module 07](../07-consistency/README.md) Saga, Quorum | Part B: Replication, Consistency, Reliability. Timed Q18, Q44, Q73. One mock | Defend a shard key, a fan-out choice, an idempotent payment |
+| 3 | By target company: [14](../14-case-studies-messaging-and-media/README.md), [17](../17-case-studies-money-and-reservations/README.md) or [21](../21-case-studies-developer-and-ai-platforms/README.md) | Q38, Q52, Q70 (or the company's ★ questions). Two scored mocks | No rubric line below 2 |
+| 4 | Weakest rubric line; [Module 09](../09-operating-in-production/README.md) skim; level table below | Three mocks with different people; redo the worst prompt | Two mocks in a row at target level |
+
+#### 8 weeks
+
+| Week | Read | Practise | Checkpoint |
+|---|---|---|---|
+| 1 | [Module 01](../01-thinking-in-patterns/README.md); [Module 00](../00-system-design-fundamentals/README.md) Part 1 | Ten estimation drills on Part A prompts | Each under 3 min, each ending in a conclusion |
+| 2 | [02](../02-moving-data/README.md), [03](../03-storing-data/README.md); Module 00 Part 3 | Part B: Databases, Replication. Untimed Q1, Q2 vs [13](../13-case-studies-building-blocks/README.md) Case 2 | When to replicate, when to shard, which key |
+| 3 | [04](../04-caching/README.md), [05](../05-reliability/README.md) | Part B: Caching, Reliability. Timed Q6 (vs [21](../21-case-studies-developer-and-ai-platforms/README.md) Case 4) | Failure walk without being asked |
+| 4 | [06](../06-scaling/README.md), [07](../07-consistency/README.md), [08](../08-api-and-edge/README.md) | Timed Q3, Q9 (vs 13 Case 4). First scored mock | Baseline rubric score |
+| 5 | [12](../12-capstones/README.md) Designs 1–3; [14](../14-case-studies-messaging-and-media/README.md) Cases 1, 3 | Timed Q18, Q38, Q52. Scored mock | Distinctive component named by minute 10 |
+| 6 | Two cases each from [15](../15-case-studies-location-and-realtime/README.md), [16](../16-case-studies-infrastructure/README.md), [17](../17-case-studies-money-and-reservations/README.md) | Timed Q47, Q84, Q70. Scored mock | No rubric line below 2 |
+| 7 | [10](../10-batch-and-streaming/README.md), [11](../11-ai-era-systems/README.md) TL;DRs; [20](../20-case-studies-content-search-and-platforms/README.md) Cases 1, 5; 21 Case 3; API section below | Timed Q35, Q98, one API-design prompt. Two scored mocks | One data, one AI, one API prompt at target level |
+| 8 | Two weakest areas; level table | Three mocks, different partners; redo two worst prompts | Two mocks in a row at target level |
+
+#### 12 weeks
+
+| Weeks | Read | Practise | Checkpoint |
+|---|---|---|---|
+| 1–2 | [Module 00](../00-system-design-fundamentals/README.md) Parts 1–2 | Part B: Performance, Networking and APIs, five a day aloud | Trace a request browser → database → back, naming every hop |
+| 3 | Module 00 Parts 3–4; [Module 01](../01-thinking-in-patterns/README.md) | Part B: Databases. Ten estimation drills | Choose a store from an access pattern, with reasons |
+| 4 | [02](../02-moving-data/README.md), [03](../03-storing-data/README.md) | Untimed Q1, Q2 vs [13](../13-case-studies-building-blocks/README.md) Case 2 | First complete end-to-end design |
+| 5 | [04](../04-caching/README.md), [05](../05-reliability/README.md) | Untimed Q4 (vs 13 Case 1), Q6 | Failure walk on every arrow |
+| 6 | [06](../06-scaling/README.md), [07](../07-consistency/README.md) | Timed Q5 (vs 13 Case 3). Part B: Replication, Consistency | Explain quorums and when a saga is needed |
+| 7 | [08](../08-api-and-edge/README.md), [09](../09-operating-in-production/README.md) | Timed Q3, Q7, Q9. First scored mock | Baseline rubric score |
+| 8 | [12](../12-capstones/README.md) all | Timed Q18, Q44, Q73. Scored mock | Defend fan-out, dispatch, payment choices |
+| 9 | [14](../14-case-studies-messaging-and-media/README.md), [15](../15-case-studies-location-and-realtime/README.md) | Timed Q38, Q52, Q47, Q49. Scored mock | No rubric line below 2 |
+| 10 | [16](../16-case-studies-infrastructure/README.md), [17](../17-case-studies-money-and-reservations/README.md); [19](../19-algorithms-deep-dive/README.md) algorithms your targets use | Timed Q83, Q89, Q70, Q78. Two scored mocks | Two levels deep on one algorithm |
+| 11 | [10](../10-batch-and-streaming/README.md), [11](../11-ai-era-systems/README.md), [20](../20-case-studies-content-search-and-platforms/README.md), [21](../21-case-studies-developer-and-ai-platforms/README.md); [18](../18-client-and-mobile-system-design/README.md) if a client round is possible; API section below | Timed Q24, Q35, Q98, one API prompt. Two scored mocks | Data, AI and API prompts at target level |
+| 12 | Weak areas; level table; Part C | Three or four mocks; redo three worst prompts; rest the last day | Two mocks in a row at target level |
+
+**Tune to the company:** swap timed designs for its ★ and "asked at" questions in Part A. Payments companies lean on Module 17; social products on 12, 14, 20; infrastructure teams on 13, 16, 19; AI product teams on 11 and 21.
+
+**Keep an error log:** one line per mistake after every design or mock (prompt, what went wrong, trap from the table above, fix). Read it before each mock; most people repeat the same three mistakes.
+
+### Mock-interview protocol and self-scoring rubric
+
+**Partners, best first:** someone who has interviewed candidates; a peer preparing for the same round (swap roles, since interviewing teaches what scores); a recording of yourself, scored the next day; an AI model as interviewer (good for follow-up drills at any hour, but its praise is not a reliable score, so still self-score).
+
+```mermaid
+flowchart LR
+    P["Pick prompt, prep 3 follow-ups"] --> I["45 min timed"]
+    I --> F["Interviewer scores rubric"]
+    F --> S["Candidate self-scores, then compares"]
+    S --> L["Error log"]
+```
+
+*Figure — One 60-minute mock session.*
+
+| Step | Interviewer | Candidate |
+|---|---|---|
+| Prepare (5 min) | Pick a Part A prompt unseen by the candidate; read its outline and full case. Prepare three follow-ups: 10× scale, a dependency down for ten minutes, one changed requirement. | — |
+| Run (45 min) | Give a one-sentence prompt. Answer questions with sensible numbers, "your call" otherwise. Interrupt at least three times with the follow-ups. Note positive and negative signals with the minute. Stop at 45 even if unfinished. | Run the round with a visible timer. |
+| Score (5 min) | Score the rubric, then give feedback: the one thing that helped most, the one that hurt most, the rest. | Score yourself *before* seeing their score; large gaps show where your self-image is off. |
+| Log (5 min) | — | One error-log line per mistake. |
+
+**Interviewer prompts for untrained partners:** "Why that rather than [alternative]?" (choice without a reason) · "What if [component] is down for ten minutes?" (arrow without failure story) · "What's the simplest thing that would work?" (stuck over a minute) · "Ten minutes left — where do you want to spend them?" (minute 35, no wrap-up) · "With another hour, what would you change?" (close).
+
+**Rubric.** Score each line 1–4. No company publishes its full rubric; this one reflects commonly scored qualities and is a practice tool.
+
+| Line | 1 | 2 | 3 | 4 |
+|---|---|---|---|---|
+| **Requirements** | Draws at once | Misses the deciding quality | Clear lists, scope agreed | Finds and confirms the requirement that decides the design |
+| **Estimation** | None or unused | Errors, no conclusions | Quick, roughly right, each tied to a decision | Reused in deep dives to size shards, caches, machines |
+| **High-level design** | Incomplete | Works, with unexplained boxes | Simple, complete, read and write walked | Minimal, sync/async labelled, hard part named |
+| **API and data** | Store by habit, no API | Weakly tied to access patterns | Matches access patterns | Keys, indexes, pagination, idempotency chosen with reasons |
+| **Depth** | Box level only | Deep on an unimportant part | Deep on the hard part, two options | Mechanisms explained, limits quantified |
+| **Trade-offs** | No alternatives | Alternatives, no choice | Choice with reasons | Plus the condition that would change it |
+| **Failure and operations** | Happy path | "Add redundancy" | Failure walk with user impact | Plus monitoring, rollout, recovery |
+| **Communication** | Silent or chaotic | Hard to follow, ignores hints | Clear agenda, follows hints | Drives, adapts, ends on time with a summary |
+
+**Reading the total (8–32), this book's guide, not any company's:** under 16, keep studying; 16–23, around mid-level if no line is 1; 24–28, senior; above 28 with depth, trade-offs and failure at 4, staff. The **lowest line** matters more than the total, because panels often reject for one clear weakness. Fix it first.
+
+### How AI changed system design interviews and roles
+
+**New prompts and priorities.** ChatGPT-like services, RAG bots, code assistants, support agents, recommendation systems and ML data platforms joined the standard list (Part A Q98, Q100; [Module 11](../11-ai-era-systems/README.md); [Module 21](../21-case-studies-developer-and-ai-platforms/README.md) Case 3). They shift the priorities:
+
+| New priority | What to discuss | Where taught |
+|---|---|---|
+| Cost per request | GPU scarcity, batching, semantic caching, routing easy requests to small models, capacity in GPU-hours | Module 11: Model Serving, GPU Auto-Scaling, Semantic Caching |
+| Latency shape | **Time to first token** (delay before text starts) and tokens per second; stream the response | Module 02 Server-Sent Events |
+| Non-determinism | **Evaluation**: a fixed graded test set run before every model or prompt change, plus quality monitoring in production | Module 21 Case 3 |
+| New failure modes | **Prompt injection** (text that tries to override instructions), private-data leaks, hallucination, provider limits and outages: guardrail filters, a gateway with fallbacks, circuit breakers | Module 11 LLM Gateway; [Module 05](../05-reliability/README.md) |
+| Data pipelines | Fresh chunked embeddings for retrieval, versioned datasets for training | [Module 10](../10-batch-and-streaming/README.md), Module 11 RAG Pipeline, Feature Store |
+
+Classic prompts remain, often with an AI feature added ("add smart replies to the chat app"). The method is unchanged: the AI part usually becomes the distinctive component.
+
+**New interview formats.** Real-time AI help undermined remote rounds, and companies went different ways (as reported in 2025): Google said engineering candidates would again have at least one in-person interview; Meta was reported to be piloting coding rounds with a built-in AI assistant; Canva expects candidates in several engineering roles to use AI tools and assesses how; others ask candidates to declare they will not use AI. For design rounds this means:
+
+- **Reasoning outweighs recall.** A model can draw a textbook architecture, so interviewers push on judgment: why this choice for these numbers, what breaks, what changes if one requirement does.
+- **If AI is allowed,** use it for mechanical work (arithmetic, an API draft, a list of failure cases), then check its output aloud. Accepting a wrong suggestion unnoticed is a strong negative signal.
+- **If AI is not allowed,** hidden use is misconduct. Ask the recruiter which format applies.
+
+**New roles.** Loops for ML engineers, ML-infrastructure engineers and **AI engineers** (who build products on top of models) now include design rounds: classic systems, ML systems (training pipeline, feature store, serving), or LLM applications (retrieval, agents, evaluation, guardrails). A separate **ML system design** round adds problem framing (what to predict, how to measure it), training data, offline and online evaluation, and model monitoring. For these roles add Modules 10, 11 and 21 Case 3 to your plan and do at least two AI prompts timed. On the job, as assistants write more routine code, choosing designs, reviewing generated code against system invariants, and owning reliability and cost become a larger share of the work, and interviews follow.
+
+### API-design interview vs system design interview
+
+Companies whose product is an API (payments, communications, developer platforms) often run a separate **API-design round**.
+
+| | System design round | API-design round |
+|---|---|---|
+| Question | "Design a system that does X at scale." | "Design the interface developers use to do X." |
+| Main output | Components, stores, scaling, failure plans | Resources, endpoints, payloads, errors, evolution rules |
+| The "user" | End users, the business | Developers outside your company who cannot read your code |
+| "Scale" means | Requests per second, data size | Many clients, many versions, years of compatibility |
+| Deep dives | Sharding, caching, consistency, failure | Pagination, partial updates, idempotency, concurrency, errors, auth, rate limits, versioning, webhooks |
+| Fails on | No trade-offs, no failure handling | Verbs in URLs, inconsistent names, no pagination, unsafe retries, breaking changes, unactionable errors |
+| Taught in | Modules 01–07, 12–21 | [Module 00](../00-system-design-fundamentals/README.md) "API design basics", "API styles"; [Module 08](../08-api-and-edge/README.md) Gateway, Rate Limiting, Cursor-Based Pagination, Versioning, Authorization; Module 05 Idempotency; [Module 02](../02-moving-data/README.md) Webhooks |
+
+**Round checklist:** use cases and callers → resources and relationships → standard methods (custom actions only when a state change does not fit an update) → field shapes → pagination, filtering, sorting → safe retries and concurrency → errors → auth, scopes, rate limits → versioning → events. Requirements are **use cases** ("a partner lists open tasks assigned to a user, newest first"), not traffic. A short backend sketch is welcome but must not take over.
+
+#### Worked answer: public REST API for a team task tracker
+
+*Prompt:* "Design the public REST API for a team task tracker. Workspaces have projects, projects have tasks, tasks have comments. Partners build integrations on it."
+
+**1. Use cases.** Partner servers list projects and tasks (filter by status and assignee, sort by last update); create tasks without duplicates on retry; change a few fields without overwriting a colleague's concurrent edit; add and list comments; learn about changes without polling. Out of scope: attachments, cross-workspace search, billing. Auth: **OAuth 2.0** access tokens (a user grants an app limited, revocable access).
+
+**2. Resources.** Nested by ownership; IDs are opaque server-generated strings (`tsk_8Kq2…`), not sequential integers, so they leak no counts, cannot be enumerated, and let the ID scheme change later. Because task IDs are globally unique, `/v1/tasks/{t}` is a short alias.
+
+```
+GET    /v1/workspaces/{ws}/projects
+GET    /v1/workspaces/{ws}/projects/{p}/tasks?status=open&assignee=usr_42&order_by=-updated_at&page_size=50&page_token=...
+POST   /v1/workspaces/{ws}/projects/{p}/tasks       Idempotency-Key header
+GET    /v1/tasks/{t}
+PATCH  /v1/tasks/{t}                                If-Match header
+DELETE /v1/tasks/{t}
+GET    /v1/tasks/{t}/comments?page_size=50&page_token=...
+POST   /v1/tasks/{t}/comments                       Idempotency-Key header
+POST   /v1/workspaces/{ws}/webhooks
+```
+
+Conventions: nouns in paths, HTTP methods as verbs, plural collections, one casing everywhere (`snake_case`), UTC timestamps in RFC 3339 (`2026-10-15T09:30:00Z`). A custom action such as `POST /v1/tasks/{t}:complete` is justified only if completing does more than set one field (closes subtasks, notifies watchers).
+
+**3. The task resource.**
+
+```
+{
+  "id": "tsk_8Kq2...", "project_id": "prj_3Lm...",
+  "title": "Fix login timeout", "description": "...",
+  "status": "open",              // open | in_progress | done, more may be added
+  "assignee_id": "usr_42", "due_date": "2026-11-01", "labels": ["auth"],
+  "created_at": "...", "updated_at": "...", "etag": "\"v7\""   // read-only
+}
+```
+
+Documenting that enum values may be added (clients must tolerate unknown ones) prevents a whole class of breaking changes.
+
+**4. Lists.** **Cursor pagination** ([Module 08](../08-api-and-edge/README.md)): the client sends `page_size` and the previous `page_token`; the server returns `next_page_token`, empty on the last page. The token is opaque and signed (it encodes the last item's sort key and ID plus the filter), so clients cannot edit it. Default page size 50, maximum 200, larger values clamped rather than rejected. Offsets (`?page=7`) skip or repeat items when tasks are inserted mid-scan and get slow at depth; a cursor resumes exactly after the last item seen. Google's AIP-158 sets the same rules for its APIs. Allow only a few `order_by` keys, each backed by an index.
+
+**5. Safe creates.** If a POST times out, the client cannot know whether the task exists. It sends an **`Idempotency-Key`** (a UUID generated once per logical operation and reused on retries).
+
+```mermaid
+sequenceDiagram
+    participant C as Partner server
+    participant A as Task API
+    participant K as Idempotency store
+    participant D as Task database
+    C->>A: POST task, Idempotency-Key k1
+    A->>K: reserve k1 with request hash
+    A->>D: insert task
+    A->>K: save response for k1
+    A--xC: 201 Created, lost in network
+    C->>A: retry with k1
+    A->>K: look up k1
+    K-->>A: saved response
+    A-->>C: same 201, same task id
+```
+
+*Figure — A retried create returns the stored response instead of a second task.*
+
+Server rules: keep key, request hash and response for at least 24 hours; same key and body → stored response; same key, different body → error (client bug); first request still running → 409, retry shortly. Stripe works this way (keys kept at least 24 hours, mismatched parameters rejected); an IETF Internet-Draft is standardising the header. GET, PUT and DELETE are idempotent by HTTP definition and need no key. Storage side: [Module 05](../05-reliability/README.md) Idempotency.
+
+**6. Updates without lost changes.** `PATCH` with a **JSON Merge Patch** body (RFC 7396): only the fields to change, `null` clears a field, so changing status cannot wipe a description the client never loaded (Google-style APIs use an `update_mask` instead). Every task has an **ETag** (a version tag that changes on every write); the client sends it in `If-Match`, and a stale one gets `412 Precondition Failed`, after which the client re-reads and retries. This is HTTP's conditional-request mechanism (RFC 9110) and needs no locks.
+
+**7. Errors.** One body shape everywhere, the **problem details** format (RFC 9457): `type` (a URI naming the error kind), `title`, `status`, `detail` ("due_date must not be in the past"), a per-field `errors` list, and a `request_id` for support. Codes: 400 malformed · 401 unauthenticated · 403 forbidden (or 404 when revealing existence would leak data) · 409 conflict · 412 stale ETag · 422 validation · 429 rate limited · 5xx server fault, safe to retry with backoff.
+
+**8. Auth and limits.** Tokens carry **scopes** (named permissions such as `tasks:read`, `tasks:write`) so a reporting integration cannot delete. Every request is checked against the token's workspace. A per-token token bucket ([Module 08](../08-api-and-edge/README.md) Rate Limiting) answers `429` with `Retry-After` (RFC 6585, RFC 9110), and responses report remaining budget so clients slow down early.
+
+**9. Webhooks.** Partners register a URL and event types (`task.created`, `task.updated`, `comment.created`). Each delivery is signed with a per-partner secret, retried with exponential backoff for about a day, carries an event ID for de-duplication (delivery is at-least-once) and `updated_at` to discard stale events (no ordering promise). A "list recent events" endpoint lets a partner catch up after downtime ([Module 02](../02-moving-data/README.md) Webhooks).
+
+**10. Versioning.** Major version in the path (`/v1/`), easy to route and spot in logs ([Module 08](../08-api-and-edge/README.md) API Versioning). Within a version only additive changes: new optional fields, endpoints, enum values. Removing or renaming a field, changing a type or making a field required means `/v2/`, run in parallel through an announced deprecation period. Date-pinned per-client versions are the alternative to mention.
+
+**11. Behind the API (if time allows).** Stateless servers behind a gateway doing auth and rate limits; a relational store sharded by `workspace_id` (every query is workspace-scoped), indexed on `(project_id, status, updated_at, id)`; a key-value idempotency store with 24-hour TTL; task changes written to an outbox table in the same transaction and relayed to the webhook dispatcher, so no webhook fires for a rolled-back change (Part A Q15).
+
+**Scoring.** Interviewers look for consistent naming, resources that match the use cases, correct methods and status codes, pagination that cannot skip items, safe retries, no lost updates, actionable errors and a clear compatibility rule. With ten minutes left, spend them on idempotency, concurrency and versioning before the database.
+
+### Level expectations: mid, senior, staff
+
+Rough equivalents: **mid** ≈ Google L4 / Meta E4 / Amazon SDE II; **senior** ≈ L5 / E5 / SDE III; **staff** ≈ L6 / E6 / Amazon Principal. Cross-company mappings are approximate (sources such as Levels.fyi disagree on some rows), so ask the recruiter which level the loop targets; published ladders such as Dropbox's show what each level owns.
+
+| | Mid | Senior | Staff |
+|---|---|---|---|
+| **Who drives** | Interviewer guides; candidate completes the design | Candidate drives; interviewer asks follow-ups | Candidate drives and reshapes the problem: which constraints are real, what to cut |
+| **Requirements** | The obvious functional and non-functional ones | Finds the deciding requirement ("never oversell a seat") | Phasing, build vs buy, business definition of success |
+| **Breadth** | Complete design with standard components | Right components for the numbers, nothing extra | Fits the organisation: team ownership, existing systems, migration path |
+| **Depth** | One component, when prompted | Self-chosen depth on the hard part, options compared with numbers | Two or three areas, at least one cross-cutting (consistency model, multi-region, migration) |
+| **Trade-offs** | Knows them when asked | Raises them unprompted with switch conditions | Ties them to cost, risk, team effort and time |
+| **Failure and operations** | Replication and retries | Full failure walk, idempotency, degradation, monitoring | Plus blast radius, cells, disaster recovery, on-call load, safe evolution over years |
+| **Typical miss** | Does not finish or needs heavy help | Correct but generic, no depth where it mattered | An excellent senior answer with no organisational, cost or long-term view |
+
+**Practice per level.** Mid: speed and completeness. Senior: make the deep dive, the trade-off sentence and the failure walk automatic. Staff: add a framing opening (problem, phases) and a closing on migration, cost, operations and first-year risks. Staff roles take several shapes (tech lead, architect, solver, right hand, in Will Larson's terms), but all reach beyond a single component, and your wrap-up should show it. A higher-level candidate giving a lower-level answer may be down-levelled or simply rejected, depending on the company, so prepare for the level you want.
+
+### Sources
+
+- Google re:Work, "A guide to structured interviewing for better hiring practices" — https://rework.withgoogle.com/intl/en/guides/a-guide-to-structured-interviewing-for-better-hiring-practices
+- Educative, *Grokking the Modern System Design Interview* (step names only) — https://www.educative.io/courses/grokking-the-system-design-interview
+- H. L. Roediger III and J. D. Karpicke, "Test-Enhanced Learning", *Psychological Science* 17(3), 2006.
+- K. A. Ericsson, R. T. Krampe and C. Tesch-Römer, "The Role of Deliberate Practice in the Acquisition of Expert Performance", *Psychological Review* 100(3), 1993.
+- S. Newton, "Yes, You Can Use AI in Our Interviews", Canva Engineering Blog, 2025 — https://canva.dev/blog/engineering/yes-you-can-use-ai-in-our-interviews
+- Meta AI-assisted coding interview pilot (404 Media report, July 2025, via Business Today) — https://www.businesstoday.in/amp/technology/news/story/meta-to-test-job-applicants-with-ai-assisted-coding-interviews-amid-ai-expansion-plans-487200-2025-07-31
+- CNBC (syndicated by NBC New York), "Meet the 21-year-old helping coders use AI to cheat in Google and other tech job interviews" (2025; covers Google's return to in-person rounds) — https://www.nbcnewyork.com/news/business/money-report/meet-the-21-year-old-helping-coders-use-ai-to-cheat-in-google-and-other-tech-job-interviews/6178911/
+- Google AIP-158 "Pagination" — https://google.aip.dev/158 · AIP-134 "Standard methods: Update" — https://google.aip.dev/134
+- Stripe API reference, "Idempotent requests" — https://docs.stripe.com/api/idempotent_requests
+- IETF HTTPAPI WG, "The Idempotency-Key HTTP Header Field" (Internet-Draft) — https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/
+- RFC 9110 *HTTP Semantics* (2022); RFC 7396 *JSON Merge Patch* (2014); RFC 9457 *Problem Details for HTTP APIs* (2023); RFC 6585 *Additional HTTP Status Codes* (2012); RFC 6749 *OAuth 2.0* (2012); RFC 3339 *Timestamps* (2002).
+- Dropbox Engineering Career Framework — https://dropbox.github.io/dbx-career-framework/
+- W. Larson, "Staff archetypes" — https://staffeng.com/guides/staff-archetypes/
+- Levels.fyi (approximate level comparisons) — https://www.levels.fyi/
 
 ## Sources of the question lists
 

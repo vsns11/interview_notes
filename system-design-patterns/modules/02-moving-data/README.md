@@ -5,12 +5,12 @@
 
 
 ### What this module covers
-Any system design diagram is made of boxes and arrows. The boxes are services, such as an **API** (application programming interface: the set of requests a program accepts from other programs), a database, or an email sender. The arrows show data traveling between them. Most engineers pay attention to the boxes. This module is about the **arrows**, because each arrow hides a design decision. Any time service A sends something to service B, you pick *how* it gets there. That pick decides three behaviors:
-- **Waiting:** does someone have to sit and wait for the answer?
+A design diagram is boxes (services such as an **API** — application programming interface, the set of requests a program accepts — a database, an email sender) and arrows (data moving between them). This module is about the **arrows**: each one hides a choice of *how* A reaches B, and that choice decides three behaviors:
+- **Waiting:** must someone wait for the answer?
 - **Downtime:** what happens if B is offline?
-- **Duplicates:** what happens if the message shows up two times?
+- **Duplicates:** what happens if the message arrives twice?
 
-Getting these choices wrong leads to real outages. Here are two from the lessons coming up. A **flash sale** (a short, heavily advertised sale that makes huge crowds arrive at the same moment) took down a store even though the store had enough capacity overall. And a "real-time" dashboard burned most of its budget asking "anything new?" only to be told "no."
+Wrong choices cause real outages. Two from the coming lessons: a **flash sale** (a short, heavily advertised sale that brings huge simultaneous crowds) took down a store that had enough total capacity, and a "real-time" dashboard spent most of its budget asking "anything new?" to hear "no."
 
 ### The seven patterns
 
@@ -25,25 +25,25 @@ Getting these choices wrong leads to real outages. Here are two from the lessons
 | Both sides keep sending messages to each other | Bidirectional Streaming |
 
 ### Two rules for the whole module
-- **Rule 1: request-response is the default.** When someone has to wait for the answer, make a direct call. The other six patterns are for situations where waiting is pointless or can't work. Every alternative comes with costs, so switching to one isn't automatically an improvement. Less experienced engineers often grab a fancy pattern when a direct call would be clearer and safer.
-- **Rule 2: anything that retries can deliver twice.** Queues, events and webhooks send a message again whenever they can't be sure it got through. This is on purpose, because it stops data from being lost. But it means your code has to handle receiving the same message twice without doing its effect twice. That property is called **idempotency**: running an operation two times gives the same result as running it once. A later lesson covers it in full. For now, assume duplicates will happen and plan for them from the very first day.
+- **Rule 1: request-response is the default.** If someone waits for the answer, make a direct call. The other six patterns are for when waiting is pointless or impossible, and each has costs; switching isn't automatically an improvement. Less experienced engineers often reach for a fancy pattern where a direct call is clearer and safer.
+- **Rule 2: anything that retries can deliver twice.** Queues, events and webhooks resend whenever unsure a message got through — deliberately, so nothing is lost. Your code must therefore receive a message twice without applying its effect twice: **idempotency** (running an operation twice gives the same result as once; full lesson in [Module 5](../05-reliability/README.md#idempotency)). Plan for duplicates from day one.
 
 ### Four terms used throughout
-- **Job vs fact.** A *job* is a piece of work that should be done one time ("resize this image"). A *fact* is a record that something happened ("an order was placed"). Jobs go onto **queues**, and facts get **published**. Confusing the two is the most frequent mistake people make with communication.
-- **At-least-once delivery.** The system guarantees your message will never be lost, but it might hand it over more than once (this is Rule 2).
-- **Push vs pull.** With *pull*, the client keeps asking "anything new?" With *push*, the server sends updates as soon as they happen. Pull costs you requests; push costs you connections that stay open. Neither one is free.
-- **Synchronous vs asynchronous.** *Synchronous* means the caller pauses and waits for the answer. *Asynchronous* means the caller passes the message along and carries on with other work.
+- **Job vs fact.** A *job* is work to do once ("resize this image"); a *fact* records that something happened ("an order was placed"). Jobs go on **queues**; facts get **published**. Mixing them up is the most common communication mistake.
+- **At-least-once delivery.** A message is never lost but may be delivered more than once (Rule 2).
+- **Push vs pull.** *Pull*: the client keeps asking "anything new?" *Push*: the server sends updates as they happen. Pull costs requests; push costs open connections.
+- **Synchronous vs asynchronous.** *Synchronous*: the caller waits for the answer. *Asynchronous*: the caller hands off the message and continues.
 
 ### How to read this module
-The lessons track a single online store as it makes one decision after another. At first, everything is synchronous: every step waits for the one before it. A flash sale breaks that setup, which is why we bring in the **queue**. The queue does its job, but then five more teams want its data, which is why we bring in **pub/sub**. The published events hold too little information, though, so every consumer has to call back for the details. That leads to **event-driven architecture**. Next, an outside payment provider needs to send data *into* the store, which brings in **webhooks**. Read those five lessons in order. After that, **Server-Sent Events** and **Bidirectional Streaming** deal with live streams, and the **capstone** uses all seven together in a notification system.
+One online store drives the story: a flash sale breaks its synchronous design (**queue**); more teams want the data (**pub/sub**); thin events cause callbacks (**event-driven architecture**); a payment provider sends data in (**webhooks**). Read those five in order; **SSE** and **Bidirectional Streaming** cover live streams, and the **capstone** combines all seven.
 
-Not much time before an interview? The four that come up most are request-response, message queue, pub/sub and webhooks.
+Short on time? The four most asked: request-response, message queue, pub/sub, webhooks.
 
 ### Before you start
-Pick a system you've worked on and think about these ("I don't know" is a perfectly good first answer; this module shows you how to find out):
-- Which of your API calls is slowest? Is a real person waiting for what it returns?
-- Suppose your code puts a message on a queue and it gets delivered twice. What happens?
-- Is anything refreshed on a timer? Out of 100 refreshes, how many actually find something new?
+For a system you've worked on ("I don't know" is a fine first answer):
+- Which API call is slowest, and is a person waiting for its result?
+- If a queued message is delivered twice, what happens?
+- What refreshes on a timer, and out of 100 refreshes, how many find something new?
 
 ---
 
@@ -52,80 +52,66 @@ Pick a system you've worked on and think about these ("I don't know" is a perfec
 
 
 ### What it is
-The caller sends a request and then **waits**. It does nothing else until the answer comes back, either as a result or as an error. This is the normal way services communicate, and the other six patterns are intentional alternatives to it. **Analogy:** you ask a shop assistant something at the counter. You stay put until they reply, and you can't complete your purchase without their answer.
+The caller sends a request and **waits**, doing nothing else, until a result or error returns. It's the normal way services communicate; the other six patterns are deliberate alternatives. **Analogy:** asking a shop assistant at the counter — you stay put, and can't finish buying without the answer.
 
 ![Request-Response](images/request-response-1.png)
 *Figure — Request-Response (course diagram)*
 
-In the figure above, the caller (the one that "needs the answer to proceed") sends (1) a request. The service works on it, and then (2) a response or an error travels back. The clock drawn between them shows the most important property. The call is **synchronous**, so the caller is stuck for the entire round trip.
+The caller (which "needs the answer to proceed") sends (1) a request; (2) a response or error returns. The clock between them marks the key property: the call is **synchronous**, so the caller is blocked for the whole round trip.
 
 ### Why it needs a lesson
-Engineers who have recently discovered queues and events often use them in places that don't need them. In most systems, a plain synchronous call is the right choice for most of the traffic. Think of loading a page, running a search, checking a password, looking up a price, or authorizing a payment. When a user is sitting there waiting for the result, adding a queue doesn't make the wait go away. It only hides the wait behind extra machinery.
+Engineers new to queues and events overuse them. A plain synchronous call is right for most traffic — page loads, searches, password checks, price lookups, payment authorization. When a user waits, a queue doesn't remove the wait; it hides it behind machinery.
 
 ### What it gives you
-- **You get the answer right away.** The very next line of code can use the result. You don't have to design a "we received your request, come back later" state.
-- **Errors show up where you can deal with them.** If the call fails, the code that made it can retry, show a message, or fall back to something else. A background job that fails is far harder to track down, because it fails apart from the request that started it.
-- **Debugging is easy.** One request travels one path and leaves one **trace** (a record of the path that request took through the services).
+- **The answer immediately.** The next line of code uses it; no "received, come back later" state to design.
+- **Errors where you can handle them.** The caller can retry, show a message or fall back. A failed background job is far harder to trace, since it fails apart from the request that caused it.
+- **Easy debugging.** One request, one path, one **trace** (record of the path through services).
 
-**One small detail with a big effect on speed: reusing connections.** Setting up a new connection is costly. It begins with **TCP and TLS handshakes**, which are setup messages that create the link and encrypt it (TCP is the protocol that gives a reliable, ordered connection between two machines; TLS is the encryption layer behind the padlock in `https`). The [System Design Fundamentals](../00-system-design-fundamentals/README.md) primer covers these building blocks in more depth. They take 1–3 network round trips, which is around 100 ms between regions. **Connection pooling** (also known as **keep-alive**) leaves connections open so that later calls can reuse them. Every HTTP client used in production supports this; make sure it's really switched on.
+**Reusing connections matters a lot.** A new connection starts with **TCP and TLS handshakes** (TCP gives a reliable, ordered connection; TLS adds the encryption behind `https`; see [Module 0](../00-system-design-fundamentals/README.md#https-and-tls)), costing 1–3 round trips — ~100 ms between regions. **Connection pooling** (**keep-alive**) keeps connections open for reuse; every production HTTP client supports it, so verify it's on.
 
 ### What it costs
-Each cost seems minor by itself, but a *chain* of calls piles them up:
-- **Both sides have to be running at the same time.** If the receiver is down, the call fails straight away. This is known as **temporal coupling** (being tied together in time).
-- **Availability multiplies along a chain.** Availability is the fraction of time a service answers correctly. Say an **endpoint** (one URL/operation a service exposes, such as `POST /checkout`) calls 5 services one after another, and each is 99.9% available. The endpoint only works when all five work: 0.999⁵ ≈ **99.5%**. That looks high, but it adds up to roughly **44 hours of failures a year**, and every extra dependency drags it lower.
-- **Latency adds up.** **Latency** is the time one call takes from start to finish. Five 80 ms calls made one after another take **400 ms**. If the calls don't rely on each other, make them **in parallel**. Then the endpoint only waits for the slowest one (~80 ms). Turning accidental one-after-another work into parallel work is often the quickest way to speed up a slow endpoint.
-- **Waiting ties up resources.** A caller that's waiting takes up a thread or a connection. At 300 requests/s, with each taking 2 s, there are 600 requests in progress at the same time, and each one holds a thread (this is Little's law from Module 1).
+Each cost is small alone, but a *chain* of calls compounds them:
+- **Both sides must be up at once.** If the receiver is down, the call fails immediately: **temporal coupling**.
+- **Availability multiplies along a chain.** An **endpoint** (one operation a service exposes, e.g. `POST /checkout`) calling 5 services in series at 99.9% each works only when all do: 0.999⁵ ≈ **99.5%**, roughly **44 hours of failures a year**, and every added dependency lowers it.
+- **Latency adds up.** Five sequential 80 ms calls take **400 ms**. Independent calls made **in parallel** cost only the slowest (~80 ms); turning accidental sequencing into parallelism is often the quickest speed-up.
+- **Waiting ties up resources.** Each waiting caller holds a thread or connection: 300 requests/s × 2 s = 600 in flight (Little's law, [Module 1](../01-thinking-in-patterns/README.md#back-of-envelope-math)).
 
-That's why request-response at scale needs three safeguards, each covered in its own later lesson. A **timeout** stops waiting after a deadline. **Retries** repeat a call after a short-lived failure. A **circuit breaker** stops calling a service that is obviously down.
+So request-response at scale needs three safeguards, each with its own lesson: a **timeout** (stop waiting after a deadline), **retries** (repeat after a transient failure), and a **circuit breaker** (stop calling an obviously down service).
 
 ### One question per arrow
-Before you draw any arrow, ask: **does the caller's next step need the answer, *and* is someone waiting for it?** If both answers are yes, make a direct call. If not:
-
-| Situation | Use |
-|---|---|
-| The next step needs the answer, and someone is waiting | Request-response |
-| The work can be done later | Message Queue |
-| Several services need to hear that something happened | Publish-Subscribe |
-| A system at another company needs to be told | Webhooks |
-| A steady flow of updates going one way | Server-Sent Events |
-| Both sides keep sending | Bidirectional Streaming |
-
-Each alternative brings its own cost. It might be a **pending state** (work that's been accepted but isn't finished yet), the chance of duplicate delivery, or a connection you have to manage. Change patterns because an instant answer *isn't needed*, not because the other option sounds fancier.
+Before drawing an arrow, ask: **does the caller's next step need the answer, *and* is someone waiting for it?** Both yes → direct call. Otherwise pick from [the seven patterns](#the-seven-patterns) table. Each alternative has its own cost: a **pending state** (accepted but unfinished work), possible duplicates, or a connection to manage. Switch because an instant answer *isn't needed*, not because the alternative sounds fancier.
 
 ### When not to use it
-- **Work that runs a long time** (longer than a few seconds). Don't make the caller wait. Accept the job, answer "job started" right away, and hand over the result later through a queue, a status endpoint, or a webhook.
-- **Telling many services about one event.** If five services each need the same order update and you call each one separately, you tie them all together. Publish the event instead (see the Pub/Sub lesson).
-- **Bursty work that has loose deadlines.** Bursty means it shows up in sudden spikes. If no one is waiting, handle it later through a queue (see the Message Queue lesson).
-- **Chains that have become too long.** Once you have six synchronous calls in a row, availability has already fallen and latency has already climbed. Make the chain shorter, run calls in parallel, cache, or move work that can wait onto a queue.
-- **The opposite mistake: going async out of habit.** Examples are putting search behind Kafka (a popular high-throughput message log), or making login event-driven. The user still waits, but now the wait goes through a **message broker** (a server that holds messages and passes them on). That adds latency and the risk of duplicates to a path that needs an answer in ~200 ms. Async is the right call when waiting is optional. It isn't "better" across the board.
+- **Long-running work** (more than a few seconds): accept the job, reply "started" immediately, deliver the result later via queue, status endpoint or webhook.
+- **Telling many services about one event:** calling five services separately couples them all; publish the event (Pub/Sub).
+- **Bursty work** (arriving in spikes) **with loose deadlines:** if no one waits, queue it.
+- **Chains that are too long:** by six synchronous hops, availability has dropped and latency climbed. Shorten, parallelize, cache, or queue what can wait.
+- **The opposite mistake, async by habit:** search behind Kafka (a high-throughput message log) or event-driven login. The user still waits, now via a **message broker** (a server that holds and forwards messages), adding latency and duplicate risk to a ~200 ms path. Async is right when waiting is optional, not better across the board.
 
 ### In the interview
-Interviewers seldom ask about it by name. More often they point at a synchronous arrow and ask "why is this synchronous?" A full answer names what depends on it: "Checkout can't move on without the payment result, and the user is waiting. So it stays synchronous, protected by a timeout, a limited number of retries, and a circuit breaker."
+Rarely asked by name; more often the interviewer points at a sync arrow: "why is this synchronous?" Name the dependency: "Checkout can't proceed without the payment result and the user is waiting, so it stays synchronous, protected by a timeout, bounded retries and a circuit breaker."
 
-**30-second answer:** "Request-response is my default for anything the caller's next step depends on: auth (authentication, checking who the user is), pricing, payment authorization, interactive reads. I get the answer immediately, errors come back where I can handle them, and tracing is simple. The costs are that both sides must be up at once, availability multiplies down a chain, and latency adds up. So I run independent calls in parallel, reuse pooled connections, and wrap every call in timeout, retry and circuit breaker. Anything nobody waits on moves to a queue or an event."
+**30-second answer:** "Request-response is my default whenever the caller's next step needs the answer: auth (authentication, checking who the user is), pricing, payment authorization, interactive reads. Immediate answers, local error handling, simple tracing. Costs: both sides up at once, availability multiplying down a chain, latency adding up. So I parallelize independent calls, pool connections, and wrap every call in timeout, retry and circuit breaker. Anything nobody waits on goes to a queue or an event."
 
 **Likely follow-ups:**
-- *"Your endpoint calls five services and is slow. Fix it without going async."* Make the independent calls in parallel, so total latency drops from the *sum* of all calls to just the *slowest* one. Cache answers that hardly ever change, check that every call is truly needed, and make sure connections get reused.
-- *"When do you switch a call to async?"* When no person or service needs the answer to keep going, or when the work takes longer than a connection should be held open. Going async makes the system tougher, but it also brings pending states, duplicates and questions about order. So it's a trade-off, not an upgrade.
+- *"Your endpoint calls five services and is slow. Fix it without going async."* Parallelize independent calls (latency drops from *sum* to *slowest*), cache rarely changing answers, drop unneeded calls, confirm connection reuse.
+- *"When do you switch a call to async?"* When nothing needs the answer to proceed, or the work outlasts a reasonable open connection. Async adds resilience but also pending states, duplicates and ordering questions: a trade-off, not an upgrade.
 
-**Mistake that fails candidates:** turning a user-facing path async (like search through Kafka), or drawing six synchronous calls with nothing protecting them. Both show you don't grasp what synchronous calls cost, or when their instant answer is worth having.
+**Mistake that fails candidates:** making a user-facing path async (search through Kafka), or drawing six unprotected synchronous calls. Both show you don't understand what sync calls cost or when their instant answer is worth it.
 
 ### Self-check
-- **Q1: Which two questions decide sync vs async, and what costs does each sync call add to a chain?** → Does the next step need the answer, and is someone waiting for it? The costs are temporal coupling, availability that multiplies down, extra latency, and one thread held for each waiting caller. That's why timeout, retry and breaker are a must at scale.
-- **Q2: Checkout makes five sequential 80 ms calls to services at 99.9% each. Latency, availability, and how to improve both without async?** → 400 ms and ~99.5% (~44 h/year of failed checkouts). Run the independent calls in parallel (~80–120 ms), cache answers that rarely change such as pricing rules, and drop calls you don't need. For availability, let optional parts of the page show less instead of breaking the whole page (this is graceful degradation).
-- **Q3: A teammate wants payment authorization async "for resilience" via a `payment.requested` event. Assess it.** → It breaks the rule, because checkout needs the result and the user is waiting. It creates a pending state the product has to design for, and duplicate delivery could authorize a payment more than once. Protect the sync call instead: a timeout, retries that carry an **idempotency key** (a unique ID that lets the provider spot a repeat so it doesn't charge twice), a circuit breaker, and a plan for outages (save the cart, send an email once payment goes through). The part that should be async is the *receipt email*.
+- **Q1: Which two questions decide sync vs async, and what costs does each sync call add to a chain?** → Does the next step need the answer, and is someone waiting? Costs: temporal coupling, multiplying availability, added latency, and a thread held per waiting caller — hence timeout, retry and breaker at scale.
+- **Q2: Checkout makes five sequential 80 ms calls to services at 99.9% each. Latency, availability, and how to improve both without async?** → 400 ms and ~99.5% (~44 h/year of failed checkouts). Parallelize independent calls (~80–120 ms), cache rarely changing answers like pricing rules, drop unneeded calls. For availability, let optional page parts degrade instead of failing the page (graceful degradation).
+- **Q3: A teammate wants payment authorization async "for resilience" via a `payment.requested` event. Assess it.** → Wrong: checkout needs the result and the user is waiting. It creates a pending state the product must design for, and duplicate delivery could authorize twice. Protect the sync call instead: timeout, retries with an **idempotency key** (unique ID so the provider can ignore a repeat), a circuit breaker, and an outage plan (save the cart, email once payment succeeds). The *receipt email* is what should be async.
 
 ### Related patterns
-- **Timeout, Retry, Circuit Breaker:** the three safeguards. Request-response at scale isn't safe unless you have all three.
-- **Message Queue:** the first alternative, used for work no one is waiting on.
-- **Load Balancing:** how one logical service turns into many physical servers behind a single call.
-- **API Gateway:** the place where request-response traffic from outside gets authenticated and rate-limited.
+Timeout, Retry and Circuit Breaker (the mandatory safeguards) · Message Queue (for work no one waits on) · Load Balancing (one logical service, many servers) · API Gateway (where external calls are authenticated and rate-limited).
 
 ### TL;DR
-- **Problem:** every arrow needs a default. Teams go wrong in both directions: making things async when someone is waiting, or piling up sync calls until latency and fragility snowball.
-- **Mechanism:** the caller waits for a result or an error. Pool your connections, run independent calls in parallel, and wrap every call in a timeout, retry and breaker.
-- **Costs:** both sides must be up together, availability multiplies down, latency adds up (when calls run in sequence), and every waiting caller holds a thread.
-- **Skip it when:** no one is waiting, the work takes too long to hold a connection open, many services care about the same event, or the chain has grown too long.
+- **Problem:** every arrow needs a default; teams err both ways — async where someone waits, or sync chains until latency and fragility snowball.
+- **Mechanism:** the caller waits for result or error. Pool connections, parallelize independent calls, wrap every call in timeout, retry and breaker.
+- **Costs:** both sides up together, availability multiplies down, sequential latency adds, each waiting caller holds a thread.
+- **Skip it when:** no one waits, the work outlasts a connection, many services care about one event, or the chain is too long.
 
 ---
 
@@ -134,41 +120,41 @@ Interviewers seldom ask about it by name. More often they point at a synchronous
 
 
 ### What it is
-A **message queue** is a durable to-do list placed between the service that creates work (the **producer**) and the service that carries it out (the **consumer**, also called the **worker**). *Durable* means the list is saved to disk, so a crash won't wipe it out. The producer drops in a task and immediately moves on. Workers pick up tasks at whatever speed they can manage. The queue keeps each task safe until a worker says it's finished. **Analogy:** picture the ticket rail in a restaurant kitchen. Waiters clip up tickets as quickly as customers order. Cooks take them down one by one, as fast as they can cook. When there's a rush, the rail just gets longer; the kitchen doesn't blow up.
+A **message queue** is a durable to-do list between the service that creates work (the **producer**) and the one that does it (the **consumer** or **worker**). *Durable* means saved to disk, surviving crashes. The producer drops a task in and moves on; workers take tasks at their own pace; the queue keeps each task until a worker says it's done. **Analogy:** a kitchen ticket rail — waiters clip tickets as fast as customers order, cooks take them as fast as they can cook, and a rush just lengthens the rail.
 
 ### The problem: the flash sale
-The store puts 10,000 signed editions on sale at 10:00 AM. Usual traffic is 200 orders/s. At 10:00:01 it jumps to **5,000 orders/s for two minutes**. The order pipeline is synchronous. While the buyer waits, the API takes the order, reserves the stock, writes to the database, and schedules fulfillment, and only then says "success." The pipeline can handle **400 orders/s**, and that was plenty for years.
+The store sells 10,000 signed editions at 10:00 AM. Normal traffic is 200 orders/s; at 10:00:01 it jumps to **5,000 orders/s for two minutes**. The pipeline is synchronous: while the buyer waits, the API takes the order, reserves stock, writes the database and schedules fulfillment before saying "success." Its capacity is **400 orders/s**, plenty for years.
 
-Do the math. Every second, 5,000 orders come in and 400 get finished, so **4,600 per second** are left waiting, timing out, or failing. **92% of buyers get an error page**, and when they hit refresh they pile on even more load.
+5,000 in, 400 done per second leaves **4,600/s** waiting, timing out or failing: **92% of buyers see an error**, and their refreshes add load.
 
-The postmortem (the review after an incident) uncovers the actual problem. The pipeline could have worked through 600,000 orders from those two minutes in far less than a day. Buyers didn't need their orders fulfilled within two minutes. They needed a *confirmation* right away. But confirmation and fulfillment were fused into a single synchronous call, so every bit of fulfillment work had to beat the confirmation deadline. **That tight coupling is what caused the outage.**
+The postmortem (post-incident review) finds the real cause. The pipeline could have processed those 600,000 orders well within a day; buyers needed a *confirmation* immediately, not fulfillment within two minutes. Fusing confirmation and fulfillment into one synchronous call forced all fulfillment work to beat the confirmation deadline. **That coupling caused the outage.**
 
 ### Why the obvious fixes fail
-- **"Scale up for the peak."** Handling 5,000/s would mean running **12x** the usual number of servers all year long for an event lasting two minutes. On top of that, the database has its own ceiling, so the extra traffic would simply fail there instead. This shifts the **bottleneck** (the slowest part, which limits how much gets through) rather than getting rid of it.
-- **"Buffer orders in memory."** The API holds a list and slowly works through it. That's an unsafe queue, though. If the process crashes, paid orders vanish. Other API servers can't see the list. And monitoring can't see how big it is until memory runs out.
-- **"Reject the extra traffic."** Anything above 400/s gets "too busy, try later." That's okay for traffic that doesn't matter much. Here, though, it sends away **9 of 10 customers** during the quarter's biggest sale, for work the pipeline could safely have done an hour later.
+- **"Scale up for the peak."** **12x** the servers all year for a two-minute event, and the database has its own ceiling, so traffic fails there instead. The **bottleneck** (the slowest part, limiting throughput) moves rather than disappears.
+- **"Buffer orders in memory."** An unsafe queue: a crash loses paid orders, other API servers can't see it, and monitoring can't see its size until memory runs out.
+- **"Reject the excess."** Fine for unimportant traffic, but here it turns away **9 of 10 customers** in the biggest sale of the quarter, for work that could safely run an hour later.
 
-All three fixes assume this is a capacity problem. It's really a **coupling** problem. Two things that should run on their own schedules (orders coming in, orders being processed) were forced to go at the same speed every single second.
+All three treat it as a capacity problem. It's a **coupling** problem: arrivals and processing, which should run on separate schedules, were forced to the same rate every second.
 
 ### How it works
-There are four mechanics, and each one answers a "what if it fails?" question:
+Four mechanics, each answering a "what if it fails?":
 
-1. **The queue saves the message before it confirms.** The **broker** (the software that runs the queue) writes every message to disk, and *only after that* tells the producer it got it. From then on, a crashed worker, a **deploy** (rolling out a new version of the software, which restarts its servers), or an hour of downtime can't make the work disappear.
-2. **Workers confirm when they finish, not when they start.** A worker grabs a message, does the job, and then sends an **ack** (acknowledgment). If the worker crashes in the middle of the job, no ack comes. Once a set **visibility timeout** passes, the broker gives the message to another worker. *Consequence:* a worker could finish the job and then crash right before sending the ack. The broker can't distinguish that from a crash halfway through, so it sends the message again and the job runs twice. That's **at-least-once delivery**: each message shows up one or more times, but never zero times. Protecting against lost work leads to the occasional repeated job, so every consumer needs to be **idempotent**.
-3. **Many workers pull from the same queue (competing consumers).** Each message goes to just one worker. Want more **throughput** (messages finished per second)? Add more workers. You don't need to write any special coordination code.
-4. **Queue depth tells you how healthy things are.** **Depth** is the number of tasks waiting (what's arrived minus what's been finished over time). If depth climbs during a brief spike, the buffering is doing its job. If depth climbs for a *week*, you have a capacity problem.
+1. **Save before confirming.** The **broker** (the software running the queue) writes each message to disk and *only then* acknowledges the producer. A worker crash, a **deploy** (rolling out a new version, restarting servers) or an hour of downtime can't lose the work.
+2. **Workers confirm on finish, not on start.** A worker takes a message, does the job, then sends an **ack** (acknowledgment). If it crashes mid-job, no ack arrives, and after a **visibility timeout** the broker hands the message to another worker. *Consequence:* a worker that finishes but crashes just before acking looks identical to a mid-job crash, so the job runs twice. That's **at-least-once delivery** (one or more times, never zero), so every consumer must be **idempotent**.
+3. **Competing consumers.** Many workers pull from one queue; each message goes to exactly one. More **throughput** (messages per second)? Add workers; no coordination code needed.
+4. **Queue depth is the health signal.** **Depth** is tasks waiting (arrivals minus completions). Rising during a brief spike: buffering is working. Rising for a *week*: a capacity problem.
 
 ![Message Queue](images/message-queue-1.png)
 *Figure — Message Queue (course diagram)*
 
-In the figure above, several producers (the order, payment and user services) drop messages into the broker. The broker stores them durably ("Queue Storage: messages are stored until consumed") and passes them out to consumers at whatever pace the consumers can handle. The three properties in the dashed box, **durable, ordered (per queue), decouples producers and consumers**, are the whole reason for the pattern.
+Producers drop messages into the broker, which stores them until consumed and releases them at the consumers' pace. The figure's three properties — **durable, ordered (per queue), decouples producers and consumers** — are the point of the pattern.
 
-Taken together, these mechanics pull apart three concerns that the synchronous design had stuck together:
-- **Rate:** producers can burst up to 5,000/s while workers keep a steady 400/s.
-- **Time:** workers can be down, in the middle of a deploy, or not built yet; the work just waits.
-- **Failure:** when a worker crashes, the message is redelivered rather than lost, and the producer never even knows.
+Together these separate three concerns the synchronous design fused:
+- **Rate:** producers burst to 5,000/s while workers hold 400/s.
+- **Time:** workers can be down, mid-deploy, or not yet built; the work waits.
+- **Failure:** a worker crash means redelivery, not loss, invisible to the producer.
 
-The sequence below shows exactly where the duplicate comes from:
+Where the duplicate comes from:
 
 *Ack and redelivery producing at-least-once delivery*
 ```mermaid
@@ -185,44 +171,42 @@ sequenceDiagram
     W2->>B: ack
 ```
 
-Worker 1 finished the work but died before it could ack. The broker gets no ack before the visibility timeout runs out, so it sends message 42 again, this time to Worker 2. Worker 2's idempotency check makes sure the work only takes effect once.
-
 ### Walkthrough with numbers
-Run the flash sale again, this time with a queue between the API and the pipeline:
-- **10:00–10:02.** 5,000 orders/s come in. For each one, the API checks it, puts it on the queue, and answers "Order confirmed" in **~50 ms**. The queue grows by 4,600/s. Over 120 s, that builds a **backlog** (work that's accepted but not done yet) of ~**552,000 messages**, which sit cheaply on disk.
-- **10:02–10:25.** The workers keep going at 400/s. Time to clear it: 552,000 / 400 = **1,380 s ≈ 23 minutes**. Some orders start fulfillment 20 minutes after they were bought, but the confirmation only promised "ships today." The business signed off on this delay ahead of time, so it's a design choice, not a failure.
-- **10:07, the failure drill.** A worker dies partway through a message. Its visibility timeout runs out, another worker picks the message up, and the idempotency check keeps the half-finished work from being applied twice. Not a single order is lost.
-- **The bill.** A queue service that costs pennies per million messages takes the place of a 12x server fleet.
+The flash sale with a queue between API and pipeline:
+- **10:00–10:02.** 5,000 orders/s arrive. The API validates, enqueues and replies "Order confirmed" in **~50 ms**. The queue grows 4,600/s; over 120 s that's a **backlog** (accepted, not yet done) of ~**552,000 messages**, cheap on disk.
+- **10:02–10:25.** Workers continue at 400/s: 552,000 / 400 = **1,380 s ≈ 23 minutes** to drain. Some orders start fulfillment 20 minutes after purchase, but the confirmation promised "ships today" — a delay the business approved in advance, so a design choice, not a failure.
+- **10:07, failure drill.** A worker dies mid-message; after the visibility timeout another takes it, and the idempotency check prevents double application. No order lost.
+- **The bill.** A queue service costing pennies per million messages replaces a 12x fleet.
 
-The big takeaway: the queue added **no** processing power at all. What it did was remove the rule that processing had to keep up with arrivals second by second. The business never actually needed that rule.
+Key point: the queue added **no** processing power. It removed the requirement that processing keep pace with arrivals second by second, which the business never needed.
 
 ### Trade-offs
 **You gain:**
-- Spikes turn into a backlog instead of errors. The limit becomes disk space, not your slowest service.
-- A worker outage turns into a longer to-do list, not an outage. Deploys stop being scary.
-- Producers and workers can scale on their own, and queue depth is a ready-made signal for **autoscaling** (adding or removing workers automatically).
-- Redelivery gives you retries without writing any retry code.
+- Spikes become backlog, not errors; the limit becomes disk space, not your slowest service.
+- A worker outage becomes a longer list, not an outage; deploys stop being scary.
+- Producers and workers scale independently, and depth is a ready-made **autoscaling** signal (adding/removing workers automatically).
+- Redelivery provides retries with no retry code.
 
 **You pay:**
-- **Latency, on purpose.** Work gets done seconds or minutes later, so anything a user is actively waiting on shouldn't go on a queue.
-- **Duplicates.** Idempotent workers are required, not optional.
-- **Lost ordering.** With 20 workers, messages can finish in a different order from how they came in. Ordering by key (explained below) helps, at some cost to throughput.
-- **A gap between "accepted" and "done."** The order is confirmed before fulfillment begins, so the product team has to decide what users see in the meantime.
-- **More to run.** You need a broker, monitoring of depth and message age, a **dead letter queue (DLQ)** for messages that keep failing (it has its own lesson), and debugging that jumps across systems instead of following one **stack trace** (the list of function calls a program prints when it errors).
+- **Latency, deliberately.** Work finishes seconds or minutes later, so nothing a user actively waits on belongs here.
+- **Duplicates.** Idempotent workers are mandatory.
+- **Lost ordering.** With 20 workers, messages can finish out of arrival order; ordering by key (below) helps at some throughput cost.
+- **A gap between "accepted" and "done"** that the product must design for.
+- **More to run:** a broker, monitoring of depth and message age, a **dead letter queue (DLQ)** for repeatedly failing messages ([its own lesson](../05-reliability/README.md#dead-letter-queue)), and debugging across systems instead of one **stack trace** (the call list printed on an error).
 
-**Ordering, in more detail:** split the work up by a key. Kafka's **partition key** or SQS FIFO's **message group** (SQS is Amazon's managed queue service; FIFO means "first in, first out," i.e. it keeps order) sends all of one customer's messages to the same **partition** (a slice of the queue that keeps its own order). Each customer's messages stay in order, while different customers are still processed in parallel. The costs: one very busy customer can go no faster than a single partition allows, a stuck message blocks everything in its partition, and moving a failed message to the DLQ can break strict order.
+**Ordering by key:** Kafka's **partition key** or SQS FIFO's **message group** (SQS is Amazon's managed queue; FIFO = first in, first out) sends all of one customer's messages to the same **partition** (an independently ordered slice of the queue). Each customer stays in order while customers process in parallel. Costs: one very busy customer is capped at one partition's speed, a stuck message blocks its partition, and moving a failed message to the DLQ can break strict order.
 
-**Depth that keeps growing for days** means more work arrives than you can ever handle. Raising the storage limit only pushes the failure back. Add capacity or fix the bottleneck, drop or reprioritize work, and alert on the **oldest message's age**, because that's the delay users actually experience.
+**Depth growing for days** means arrivals permanently exceed processing (self-check Q2); alert on **oldest-message age**, the delay users actually feel.
 
 ### When not to use it
-1. **The caller needs the answer.** Login, price lookups, search results: the user is sitting there waiting. No one wants their search results sent by email.
-2. **Tight deadlines from start to finish.** If the whole operation has to be done within ~200 ms, a trip through the broker plus a wait for a worker adds risk without any useful separation.
-3. **Small, simple systems.** At ~10 requests/s, don't put a broker between two functions. Just call the function until scale, spikes or failure boundaries give you a real reason.
-4. **As a database.** A queue moves work around; it isn't a place to store data you can query. If messages need to be searched, changed, or kept forever, use a database.
-5. **Covering up a permanent lack of capacity.** Queues soak up short bursts. They don't create capacity.
+1. **The caller needs the answer:** login, price lookups, search. No one wants search results by email.
+2. **Tight end-to-end deadlines:** within ~200 ms, a broker hop plus worker wait adds risk with no useful decoupling.
+3. **Small, simple systems:** at ~10 requests/s, call the function until scale, spikes or failure boundaries justify a broker.
+4. **As a database:** queues move work; data you need to search, modify or keep forever belongs in a database.
+5. **Masking a permanent capacity shortfall:** queues absorb bursts; they don't create capacity.
 
 ### Message Queue vs Publish-Subscribe
-Both rely on a broker and deliver asynchronously, so people mix them up. But they answer different questions:
+Both use a broker and asynchronous delivery, but they answer different questions:
 
 | | Message Queue | Publish-Subscribe |
 |---|---|---|
@@ -231,43 +215,39 @@ Both rely on a broker and deliver asynchronously, so people mix them up. But the
 | Adding a consumer | Adds more workers for the same job | Adds another use for the same fact |
 | Question it answers | "Who does this task?" | "Who cares that this happened?" |
 
-"Resize this image" is a single job for a single worker, so it goes on a queue. "An order was placed" is a fact that fulfillment, email, analytics and fraud each need on their own, so it's pub/sub. The two fit together nicely: publish the fact once, and feed it into a separate work queue for each team (AWS **SNS → SQS**, where SNS is Amazon's managed pub/sub service; Kafka **consumer groups**, where each group is a named set of readers that together get one full copy of the stream).
+"Resize this image" is one job for one worker: queue. "An order was placed" is a fact that fulfillment, email, analytics and fraud each need: pub/sub. They combine well — publish the fact once and feed a separate work queue per team (AWS **SNS → SQS**, SNS being Amazon's managed pub/sub; or Kafka **consumer groups**, each a named set of readers that together receive one full copy of the stream).
 
 ### Real-world examples
-- **AWS SQS:** the pattern in its simplest form. It has visibility timeouts, dead-letter support, almost unlimited depth, and costs pennies per million messages.
-- **RabbitMQ:** the classic broker you run yourself. It adds rich routing options on top of the same ack-and-redeliver core.
-- **Kafka:** strictly speaking it's a **replicated log** (a record you can only add to, copied across machines), not a queue, but its consumer groups act like a queue. Because it can **replay** old messages, it drives event-driven architecture and stream processing later in the course.
-- **Celery, Sidekiq, BullMQ:** the pattern wrapped up as libraries for applications. This is where most engineers first run into it.
-- **For AI engineers:** GPU work (on the graphics chips that run AI models) is costly, comes in bursts, and is seldom urgent, which makes it perfect for queues. Examples include embedding pipelines (turning text into lists of numbers called **embeddings** that capture meaning), **batch inference** (running a model over many inputs at once), **fine-tuning** (further training an existing model on your own data), and evaluation runs. Queue depth, or even better **oldest-message age**, is the usual signal for autoscaling GPUs. **RAG** (retrieval-augmented generation: fetching relevant documents and handing them to the model with the question) ingestion pipelines use a queue with a DLQ to catch failures. The **batch APIs** from Anthropic and OpenAI sell exactly this trade-off: it's cheaper if the work is allowed to finish later.
+- **AWS SQS:** the pattern in simplest form — visibility timeouts, dead-letter support, near-unlimited depth, pennies per million messages.
+- **RabbitMQ:** the classic self-hosted broker, adding rich routing on the same ack-and-redeliver core.
+- **Kafka:** strictly a **replicated log** (an append-only record copied across machines), but consumer groups behave like a queue, and **replay** of old messages powers event-driven architecture and stream processing later in the course.
+- **Celery, Sidekiq, BullMQ:** the pattern as application libraries; most engineers meet it here.
+- **For AI engineers:** GPU work (on the graphics chips that run models) is costly, bursty and rarely urgent — ideal for queues: embedding pipelines (turning text into number lists called **embeddings** that capture meaning), **batch inference** (running a model over many inputs at once), **fine-tuning** (further training a model on your data) and evaluation runs. Depth, or better **oldest-message age**, drives GPU autoscaling. **RAG** (retrieval-augmented generation: fetching relevant documents to give the model with the question) ingestion uses a queue plus DLQ. Anthropic's and OpenAI's **batch APIs** sell exactly this trade: cheaper if it can finish later.
 
 ### In the interview
-It comes up in prompts like "handle a 10x traffic spike" or "design an order pipeline." It also comes up when the interviewer points to a sync arrow and asks "does the user need to wait for this?" If the answer is no, that work might belong on a queue.
+Appears in "handle a 10x traffic spike" or "design an order pipeline," or when the interviewer points at a sync arrow: "does the user need to wait for this?" If not, it may belong on a queue.
 
-**30-second answer:** "I put a durable queue between the API and the pipeline. The API validates, enqueues, and confirms in milliseconds. Workers process at a sustainable rate, so a 5,000/s spike becomes backlog instead of errors. The broker saves each message before confirming and redelivers if a worker dies. That's at-least-once, so consumers are idempotent and repeatedly failing messages go to a monitored DLQ. Depth drives autoscaling and alerts. The trade is latency, which works only because the business agreed fulfillment can take minutes. Anything the user waits for stays synchronous."
+**30-second answer:** "A durable queue between API and pipeline: the API validates, enqueues and confirms in milliseconds; workers process at a sustainable rate, so a 5,000/s spike becomes backlog, not errors. The broker persists before confirming and redelivers if a worker dies — at-least-once, so consumers are idempotent and repeated failures go to a monitored DLQ. Depth drives autoscaling and alerts. The trade is latency, acceptable only because the business agreed fulfillment can take minutes; anything the user waits for stays synchronous."
 
 **Likely follow-ups:**
-- *"A worker crashes halfway through a message. Walk me through it."* The visibility timeout runs out, the broker gives the message to a different worker, and idempotency stops the effect from happening twice. If the message fails several times in a row, it gets moved to a DLQ and an alert goes off.
-- *"Orders for the same customer must be processed in order. Now what?"* Partition by customer ID (a Kafka partition key or an SQS FIFO message group). Each customer's order is kept, while different customers are handled in parallel. One catch: a single very busy customer is held to the capacity of one partition.
+- *"A worker crashes halfway through a message. Walk me through it."* Visibility timeout expires, another worker gets it, idempotency prevents a double effect; repeated failures go to the DLQ with an alert.
+- *"Orders for the same customer must be processed in order. Now what?"* Partition by customer ID (ordering by key, above); a very busy customer is then capped at one partition.
 
-**Mistake that fails candidates:** putting a queue on a path the user is waiting on (like search through Kafka), or suggesting a queue without saying how duplicates are handled. The first shows you don't get *why* queues exist. The second ignores at-least-once delivery.
+**Mistake that fails candidates:** a queue on a path the user waits on (search through Kafka), or a queue with no plan for duplicates. The first misses *why* queues exist; the second ignores at-least-once delivery.
 
 ### Self-check
-- **Q1: Name the three ways a queue decouples producer and consumer, and explain step by step where at-least-once delivery comes from.** → Rate (bursts in, steady processing out), time (work waits while workers are down), and failure (a crash leads to redelivery, not loss). Workers only ack once they've finished. So the broker has to redeliver in two cases: a job that got interrupted, and a job that finished but whose worker died before acking. That second case is what creates the duplicate.
-- **Q2: Depth has grown steadily for six days; a teammate proposes raising the storage limit. What is depth telling you, and why is that a trap?** → More work is coming in than you can ever process; the oldest message is already six days late. A larger limit just delays the failure. Add worker capacity or fix the bottleneck, cut down or reprioritize incoming work, send some work elsewhere, and alert on oldest-message age.
-- **Q3: Charges and refunds for a customer share a queue with 20 workers; a refund got processed before its charge, leaving a negative balance. Explain and fix without losing parallelism.** → Two different workers picked up the two messages, and the refund happened to finish first (with many workers, overall order is lost). Partition by customer ID so each customer's messages run one after another while different customers still run in parallel. The costs: a hot customer is limited to one partition, a stuck message blocks its partition, and moving messages to the DLQ can break strict order, so some streams need to pause and be repaired instead.
+- **Q1: Name the three ways a queue decouples producer and consumer, and explain step by step where at-least-once delivery comes from.** → Rate (bursts in, steady out), time (work waits while workers are down), failure (crash means redelivery, not loss). Workers ack only after finishing, so the broker must redeliver both an interrupted job and a finished job whose worker died before acking — the latter is the duplicate.
+- **Q2: Depth has grown steadily for six days; a teammate proposes raising the storage limit. What is depth telling you, and why is that a trap?** → Arrivals permanently exceed processing; the oldest message is six days late. A bigger limit only delays failure. Add workers or fix the bottleneck, shed or reprioritize work, route some elsewhere, alert on oldest-message age.
+- **Q3: Charges and refunds for a customer share a queue with 20 workers; a refund got processed before its charge, leaving a negative balance. Explain and fix without losing parallelism.** → Two workers took the two messages and the refund finished first (many workers lose global order). Partition by customer ID: each customer's messages run in sequence, customers in parallel. Costs: a hot customer is capped at one partition, a stuck message blocks its partition, and DLQ moves can break strict order, so some streams must pause and be repaired instead.
 
 ### Related patterns
-- **Idempotency:** the one thing a queue can't do without, since every consumer can receive a retry.
-- **Dead Letter Queue:** where messages end up once redelivery gives up.
-- **Retry with Exponential Backoff:** redelivery *is* retrying, just done by the broker. Use that lesson to tune how many attempts and how long the delays are.
-- **Publish-Subscribe:** the matching pattern for facts. It's often combined with queues by copying one event into a queue for each team.
-- **Auto-Scaling:** queue depth and backlog age are about the clearest scaling signals you can get.
+Idempotency (mandatory for every consumer) · Dead Letter Queue (where redelivery gives up) · Retry with Exponential Backoff (redelivery *is* broker-driven retrying; tune attempts and delays there) · Publish-Subscribe (the counterpart for facts) · Auto-Scaling (depth and backlog age are its clearest signals).
 
 ### TL;DR
-- **Problem:** a synchronous pipeline makes work happen as fast as it arrives, so a spike turns into an outage even when there's plenty of capacity overall.
-- **Mechanism:** a durable task list between producer and consumer. Save before confirming, give each message to one worker, redeliver after a crash, and drain at whatever pace the workers can manage.
-- **Costs:** latency by design, duplicates (so idempotency is required), no overall ordering, a gap between accepted and done that you have to own, and a broker to run.
-- **Skip it when:** the caller needs the answer right now, the deadline from start to finish is tight, the scale doesn't justify a broker, or you'd be covering up a permanent shortage.
+- **Problem:** a synchronous pipeline must process work as fast as it arrives, so a spike becomes an outage despite ample total capacity.
+- **Mechanism:** a durable task list between producer and consumer: save before confirming, one worker per message, redeliver after a crash, drain at worker pace.
+- **Costs:** latency by design, duplicates (idempotency required), no global ordering, an accepted-vs-done gap to own, a broker to run.
+- **Skip it when:** the caller needs the answer now, end-to-end deadlines are tight, scale doesn't justify a broker, or it would mask a permanent shortfall.
 
 ---
 
@@ -276,67 +256,67 @@ It comes up in prompts like "handle a 10x traffic spike" or "design an order pip
 
 
 ### What it is
-With **publish-subscribe (pub/sub)**, a producer announces a fact one time to a named channel, called a **topic**. It doesn't know or care who is listening. The broker hands a separate copy to every **subscription**. Each subscriber works through its own copy at its own speed and deals with its own failures. **Analogy:** think of a newspaper. It prints each edition once. Every subscriber gets a personal copy delivered and reads it whenever they want. The paper has no need to know what each reader does with it. When a new reader wants in, they just subscribe, and nothing changes in the newsroom.
+With **publish-subscribe (pub/sub)**, a producer announces a fact once to a named channel (a **topic**) without knowing who listens. The broker gives every **subscription** its own copy, which each subscriber processes at its own pace with its own failure handling. **Analogy:** a newspaper prints once, every subscriber gets a copy, and a new reader subscribes without changing anything in the newsroom.
 
 ### The problem: checkout delivering to five teams
-Once the queue solved the flash sale, other teams started asking for order data. Email wanted it for receipts. Then analytics, fraud and loyalty asked too. Each request added one more "send to this team's queue" call inside checkout. After eighteen months, checkout writes to **five queues** one after another, and this causes three ongoing problems:
-1. **Each new consumer requires a checkout deploy.** Checkout is the company's most important money-making service. Yet every team's request for data now means changing it and redeploying it, so its release schedule holds everyone up.
-2. **A crash leaves teams with mismatched data.** Last Tuesday, checkout crashed after writing to 3 of 5 queues. Fulfillment shipped the order, but fraud never saw it. Five separate writes can't all succeed or all fail together as one unit. So a crash can leave any mix of teams without the event.
-3. **Other teams' troubles turn into checkout's troubles.** When loyalty's queue was slow for an hour, checkout's five back-to-back writes got slow as well.
+After the queue fixed the flash sale, email wanted order data for receipts, then analytics, fraud and loyalty. Each request added a "send to this team's queue" call inside checkout. Eighteen months later checkout writes to **five queues** in sequence, causing three ongoing problems:
+1. **Every new consumer needs a checkout deploy.** The company's most important revenue service must change for each team's data request, so its release schedule blocks everyone.
+2. **A crash leaves teams with mismatched data.** Checkout crashed after writing 3 of 5 queues: fulfillment shipped, fraud never saw it. Five separate writes can't succeed or fail as one unit.
+3. **Other teams' problems become checkout's.** When loyalty's queue was slow for an hour, checkout's sequential writes slowed too.
 
-Next, data science wanted *historical* order events to train models. They had to open a **pull request** (a proposed code change submitted for review) against checkout and wait for a release. When the producer has to hand-deliver to every consumer, each new consumer brings extra work, risk and coordination. That approach doesn't scale across many teams.
+Then data science wanted *historical* order events for training and had to open a **pull request** (a proposed code change) against checkout and wait for a release. When the producer hand-delivers to every consumer, each new one adds work, risk and coordination; it doesn't scale across teams.
 
 ### Why the obvious fixes fail
-- **"It works; keep adding queues."** It does run. But checkout ends up owning every connection, every retry policy and every delivery guarantee. And each extra write raises the odds that a crash leaves consumers out of sync.
-- **"Let teams read the orders database directly."** Now five teams rely on the exact shape of the table. A future **schema migration** (changing the table's structure, e.g. renaming or removing columns) could quietly break dashboards and models that checkout doesn't even know about. Their constant **polling** (asking "did anything change?" over and over) also puts load on the production DB. **Change data capture (CDC)** turns the database's change log into a stream of events; it's the careful, controlled way to do this. Uncontrolled table access has none of CDC's safety.
-- **"One shared queue that everyone reads."** A queue hands each message to just **one** worker. If fraud, email and analytics all share it, each one gets a random slice of the orders, and no error shows up anywhere. Every team quietly works with incomplete data.
+- **"Keep adding queues."** It runs, but checkout owns every connection, retry policy and delivery guarantee, and each extra write raises the odds of a partial crash.
+- **"Let teams read the orders database."** Five teams now depend on the table's exact shape; a **schema migration** (changing table structure, e.g. renaming columns) silently breaks dashboards and models checkout doesn't know about, and their constant **polling** (repeatedly asking "anything changed?") loads production. **Change data capture (CDC)**, which turns the database's change log into an event stream, is the controlled way to do this; raw table access has none of its safety.
+- **"One shared queue everyone reads."** A queue gives each message to **one** worker, so fraud, email and analytics each get a random slice of orders, with no error anywhere.
 
-The teams don't need five jobs. They each need their own access to a single *fact*: an order was placed. So publish it once.
+The teams don't need five jobs; each needs its own access to one *fact*. Publish it once.
 
 ### How it works
-1. **The topic** is a named stream of facts, for example `order.placed`. Checkout publishes one time and moves on. The broker makes **one durable write** (saved to disk before it confirms), no matter how many teams are listening. Since there's just one write, a crash can't leave some destinations with the event and others without it.
-2. **A subscription** is one team's own separate copy of the stream. It acts like that team's private queue. It has its own backlog, its own spot in the stream (the **offset**), and its own acks, redeliveries and DLQ. If fraud is offline for an hour, only fraud's backlog grows. Email and checkout keep going.
-3. **Joining takes configuration, not code.** Data science sets up a subscription without touching checkout at all. Brokers that keep history (such as Kafka) let a new subscriber **replay** old events. For example, they can train on months of data and then switch over to live traffic.
-4. **The event format turns into a public contract.** Consumers you don't know about will treat its fields like an API. So publish **facts, not commands**: "an order was placed, here are the details," not "send a receipt." The publisher says what happened, and each consumer decides what that means for it. Keep changes **additive**. Adding new optional fields is safe. Renaming or removing fields breaks subscribers you can't see. A **schema registry** checks event formats before they go out.
+1. **The topic** is a named stream of facts, e.g. `order.placed`. Checkout publishes once and moves on; the broker makes **one durable write** regardless of listener count, so a crash can't deliver to some and not others.
+2. **A subscription** is one team's independent copy — effectively its private queue, with its own backlog, position in the stream (the **offset**), acks, redeliveries and DLQ. If fraud is down an hour, only fraud's backlog grows.
+3. **Joining is configuration, not code.** Data science subscribes without touching checkout. Brokers that keep history (e.g. Kafka) let new subscribers **replay** old events — train on months of data, then switch to live.
+4. **The event format becomes a public contract** that unknown consumers treat like an API. Publish **facts, not commands** ("order placed, here are the details," not "send a receipt"): the publisher says what happened, each consumer decides what it means. Keep changes **additive** (new optional fields are safe; renames and removals break invisible subscribers). A **schema registry** validates event formats before publishing.
 
-The main idea: the producer states *what happened*, and each consumer decides *what it means*. Checkout doesn't even have to know that receipts exist.
+The producer states *what happened*; each consumer decides *what it means*. Checkout needn't know receipts exist.
 
 ![Publish-Subscribe](images/publish-subscribe-1.png)
 *Figure — Publish-Subscribe (course diagram)*
 
-In the figure above, checkout publishes `order.placed` **once** to the topic. The broker then fans it out to five separate subscriptions (fulfillment, email, fraud, analytics, loyalty), and each one feeds its own service. To add a sixth team, you add one more subscription box on the right. Nothing on the left has to change.
+Checkout publishes `order.placed` **once**; the broker fans it out to five subscriptions (fulfillment, email, fraud, analytics, loyalty). A sixth team adds one subscription on the right; nothing on the left changes.
 
 ### Walkthrough with numbers (200 orders/s)
-- **Cost of publishing:** before, there were five queue writes one after another, taking ≈ **25 ms** and getting longer with every new team. After, there's one durable write taking ≈ **5 ms**, and it stays flat however many subscribers there are.
-- **The data-science request:** the subscription is set up in an afternoon with no change to checkout. The topic holds **30 days** of history, so they replay ~**500 million** old events for training before going live. Before, the same request needed a PR plus a release cycle, and came with *no* history at all.
-- **Failure drill:** fraud is offline for **40 minutes**. Its subscription piles up 200 × 2,400 s = **480,000 events**, which get processed once it's back. Email sends every receipt on time, and checkout isn't affected. In the old design, fraud's outage would have either slowed down checkout or lost 40 minutes of events.
-- **The audit passes now:** each subscription can report whether it processed order X, still has it waiting in the backlog, or sent it to the dead letter queue.
+- **Publish cost:** before, five sequential queue writes ≈ **25 ms**, growing per team; after, one durable write ≈ **5 ms**, flat regardless of subscribers.
+- **Data science:** subscribed in an afternoon with no checkout change; **30 days** of retained history lets them replay ~**500 million** events before going live. Previously: a PR, a release cycle, and *no* history.
+- **Failure drill:** fraud down **40 minutes** → its subscription accumulates 200 × 2,400 s = **480,000 events**, processed on return. Email and checkout unaffected; before, fraud's outage would have slowed checkout or lost 40 minutes of events.
+- **Audits pass:** each subscription can say whether order X was processed, is in backlog, or went to the DLQ.
 
 ### Trade-offs
 **You gain:**
-- The producer's cost and risk stay the same no matter how many consumers there are.
-- Teams release on their own schedules. This separation between teams is the biggest benefit in practice.
-- Failures stay inside one subscription. With history kept around, new consumers can start with the whole past.
+- Producer cost and risk independent of consumer count.
+- Teams release independently — the biggest practical benefit.
+- Failures contained per subscription; with retained history, new consumers start with the full past.
 
 **You pay:**
-- **The event format has become a public API.** Renaming a field can break consumers you've never heard of. Instead of being tied together at deploy time, teams now need *contract discipline*: a schema registry, changes that only add, and **deprecation windows** (a fixed period during which the old version still works).
-- **Duplicates, times N.** Each subscription is at-least-once on its own, so five subscribers means five places that all have to be idempotent.
-- **Hidden coupling.** The dependencies are still there, but they no longer show up in the producer's code, so teams lose track of who uses what. Mature organizations keep a **subscriber catalog**. It lists each topic's owner, **schema** (the agreed shape of the event's fields), **retention period** (how long old events are kept), and **data classification** (how sensitive the data is), plus the owner of every subscription. This makes schema changes, incidents and deletion requests manageable, and it reveals consumers nobody is maintaining anymore.
-- **No "all done" signal.** Each subscription only knows how far it has gotten. So pub/sub can't tell you "order X is fully processed." When inventory, payment and shipping must all finish before you can call it a success, something has to act as a coordinator and track them (see orchestration below).
-- **Slow consumers can lose data.** Brokers only keep history for a **retention window**. A subscriber that falls further behind than that window loses events forever. Alert on backlog age long before retention runs out, so there's time to add capacity or rebuild from another trusted copy.
+- **The event format is a public API.** A renamed field breaks consumers you've never heard of. Deploy-time coupling becomes *contract discipline*: registry, additive changes, **deprecation windows** (a period when the old version still works).
+- **Duplicates, times N.** Each subscription is at-least-once, so every subscriber must be idempotent.
+- **Hidden coupling.** Dependencies still exist but vanish from the producer's code. Mature organizations keep a **subscriber catalog** listing each topic's owner, **schema** (agreed field shape), **retention period** (how long events are kept) and **data classification** (sensitivity), plus every subscription's owner — making schema changes, incidents and deletion requests manageable and exposing unmaintained consumers.
+- **No "all done" signal.** Each subscription only knows its own progress, so pub/sub can't say "order X is fully processed." When inventory, payment and shipping must all succeed, a coordinator must track them (orchestration, below).
+- **Slow consumers can lose data.** Brokers keep history only for a **retention window**; a subscriber further behind loses events permanently. Alert on backlog age well before retention runs out.
 
-Rule of thumb: **broadcast across services, compete within a service.** When a schema change truly has to break things, publish v2 next to v1 for a deprecation window.
+Rule of thumb: **broadcast across services, compete within a service.** For a truly breaking schema change, publish v2 alongside v1 for a deprecation window.
 
 ### When not to use it
-1. **It's a job, not a fact.** "Resize this image" is one task for one worker, so use a queue.
-2. **The producer needs the result.** Checkout can't move on without knowing if the payment was authorized, and publishing `payment.requested` doesn't fix that. Use request-response or an orchestrated workflow.
-3. **Two services and little traffic.** One producer and one consumer only need a plain queue between them, which is simpler.
-4. **Request-response rebuilt out of events.** Pairing `user.lookup.requested` with `user.lookup.completed` just recreates a synchronous call, but with more latency and harder debugging. Seeing the word "request" in an event name is a warning sign.
+1. **It's a job, not a fact:** "resize this image" → queue.
+2. **The producer needs the result:** checkout must know if payment was authorized; publishing `payment.requested` doesn't change that. Use request-response or an orchestrated workflow.
+3. **Two services, low traffic:** one producer and one consumer just need a queue.
+4. **Request-response rebuilt from events:** `user.lookup.requested` + `user.lookup.completed` recreates a sync call with more latency and harder debugging. "Request" in an event name is a warning sign.
 
-Across a big organization, pub/sub without management turns into **topic sprawl**: hundreds of topics with no owners, no schema rules and no visible consumers. If you take away the required coordination between teams, you have to put explicit contracts and a catalog in its place.
+Unmanaged pub/sub in a big organization becomes **topic sprawl**: hundreds of topics without owners, schema rules or visible consumers. Removing required coordination means explicit contracts and a catalog must replace it.
 
 ### Choreography vs Orchestration
-Pub/sub makes **choreography** possible. Each service reacts to events on its own, and the overall process *emerges* from how they all behave together. **Orchestration** instead uses a single coordinator that runs the workflow one step at a time.
+Pub/sub enables **choreography**: each service reacts to events independently and the overall process *emerges*. **Orchestration** uses one coordinator that runs the workflow step by step.
 
 | | Choreography (pub/sub) | Orchestration (coordinator) |
 |---|---|---|
@@ -346,43 +326,39 @@ Pub/sub makes **choreography** possible. Each service reacts to events on its ow
 | Failure handling | Each consumer deals with its own | The coordinator retries, undoes, or escalates |
 | Best for | Reactions that don't depend on each other (analytics, email, indexing) | Steps that depend on each other (inventory → payment → shipping) |
 
-Decide by asking if the steps are really independent. Email and analytics don't care what order the other runs in, so choreography fits them. Reserving inventory, charging the payment, shipping, and undoing earlier steps when something fails make up a dependent workflow. The **Saga** lesson covers how to orchestrate that. Lots of systems use both: they orchestrate the order workflow and publish facts from each stage for independent consumers.
+Ask whether the steps are truly independent. Email and analytics are: choreography. Reserve inventory → charge → ship → undo on failure is a dependent workflow; the **Saga** lesson covers orchestrating it. Many systems do both: orchestrate the workflow and publish facts from each stage.
 
 ### Real-world examples
-- **AWS SNS → SQS:** the pattern built from managed pieces. SNS is the topic, and each team's SQS queue is its subscription. It broadcasts first, and then each team has its own task list.
-- **Kafka:** every consumer group is a separate subscription reading a stored log. That gives you broadcast, replay and per-team queue behavior in a single system, which is why Kafka dominates.
-- **Google Cloud Pub/Sub:** the same model, fully managed. Subscriptions are objects you create and manage yourself.
-- **Redis Pub/Sub, the warning story:** it's fire-and-forget. If a subscriber is offline, the message is lost forever. "Pub/sub" without durable subscriptions is a much weaker promise wearing the same name, so always check which kind you're getting.
-- **For AI engineers:** a `user.interacted` topic often powers an entire ML platform. It feeds the analytics warehouse, a **feature store** (a service that holds the input features for models), jobs that refresh embeddings, and real-time features for a recommender. It also keeps replayable history for future models. Agent platforms publish each tool call and decision once, so observability, evaluation and audit systems can read them without slowing the agent down.
+- **AWS SNS → SQS:** SNS is the topic, each team's SQS queue its subscription: broadcast first, then per-team task lists.
+- **Kafka:** each consumer group is an independent subscription over a stored log — broadcast, replay and per-team queueing in one system, hence its dominance.
+- **Google Cloud Pub/Sub:** the same model, fully managed, with subscriptions as first-class objects.
+- **Redis Pub/Sub, the warning:** fire-and-forget; an offline subscriber loses the message forever. Without durable subscriptions, "pub/sub" is a much weaker promise under the same name.
+- **For AI engineers:** a `user.interacted` topic often feeds a whole ML platform — the analytics warehouse, a **feature store** (service holding model input features), embedding refresh jobs and real-time recommender features — with replayable history for future models. Agent platforms publish each tool call and decision once so observability, evaluation and audit read them without slowing the agent.
 
 ### In the interview
-It can be asked straight out ("how should five teams get order data?") or sideways ("a sixth service needs this too"). If you keep drawing yet another arrow out of the producer each time, that signals coupling that keeps growing. Interviewers may also check whether you wrongly use choreography for a dependent order→payment→shipping flow that really needs orchestration.
+Asked directly ("how should five teams get order data?") or sideways ("a sixth service needs this too"). Drawing yet another arrow out of the producer each time signals growing coupling. Interviewers also check you don't choreograph a dependent order→payment→shipping flow that needs orchestration.
 
-**30-second answer:** "Checkout publishes an `order.placed` fact to a topic, once. Each team gets its own subscription with its own backlog, retries and DLQ, so a slow or crashed consumer affects nobody else. Adding a consumer is configuration, not a checkout deploy, and with Kafka the newcomer can replay history. What I manage: the schema is now a public API, so changes are additive and registry-checked; every subscription is idempotent; and I alert on backlog age so no one falls past retention. If the steps are really a workflow needing completion tracking, I orchestrate that part."
+**30-second answer:** "Checkout publishes `order.placed` once to a topic. Each team has its own subscription with its own backlog, retries and DLQ, so a slow or crashed consumer affects nobody else; adding one is configuration, not a checkout deploy, and with Kafka it can replay history. I manage the costs: the schema is a public API (additive, registry-checked), every subscription is idempotent, and I alert on backlog age before retention. A workflow needing completion tracking gets orchestrated instead."
 
 **Likely follow-ups:**
-- *"One subscriber runs at half the speed of the others. What happens?"* Only that subscriber's backlog grows; the rest aren't affected. If its backlog goes beyond retention, events are lost for good. Watch backlog age and scale that subscription with competing consumers (which is the queue pattern used inside a single subscription).
-- *"How do you change a schema without breaking consumers you don't know about?"* Only ever add optional fields; never rename or remove anything. A schema registry blocks builds that would break things. For a change that truly breaks compatibility, publish v2 next to v1 for a deprecation window. Keep a consumer catalog so you know who depends on what.
+- *"One subscriber runs at half the speed of the others. What happens?"* Only its backlog grows; past retention, events are lost. Watch backlog age and scale that subscription with competing consumers.
+- *"How do you change a schema without breaking consumers you don't know about?"* Additive optional fields only, registry-enforced; for a truly breaking change, v2 beside v1 for a deprecation window; the catalog shows who depends on what.
 
-**Mistake that fails candidates:** hooking several services up to one shared queue and calling that broadcast (each one only gets a sample), or rebuilding request-response out of paired events. Both mix up jobs and facts.
+**Mistake that fails candidates:** wiring several services to one shared queue and calling it broadcast (each gets a sample), or rebuilding request-response from paired events. Both confuse jobs and facts.
 
 ### Self-check
-- **Q1: Topic vs subscription, and what does adding a sixth consumer cost the producer?** → A topic is a single durable stream of facts. A subscription is one consumer's own feed, with its own position, backlog, acks and DLQ. The cost to the producer is nothing: no code, no deploy, no added latency, and it doesn't even need to know. The new consumer is responsible for idempotency and for watching its backlog, and the system now has one more dependency on the schema.
-- **Q2: Argue against "pub/sub decouples services."** → Consumers are still tied to the event schema, so changing a field can break systems the producer can't see. Pub/sub shifts the coupling out of the release schedule and into a data contract. That contract has to be governed with a registry, additive changes, deprecation windows, a consumer catalog, and named owners for subscriptions.
-- **Q3: Fraud scores ~20% of orders and email sends ~30% of receipts, yet nothing was lost and publish counts match orders. Diagnose.** → The services are sharing one subscription/queue, which turns them into *competing* consumers, so each event reaches only one of them. Give every service its own subscription, and only use competing consumers among the workers of a single service. *Broadcast across services, compete within a service.*
+- **Q1: Topic vs subscription, and what does adding a sixth consumer cost the producer?** → A topic is one durable stream of facts; a subscription is one consumer's feed with its own position, backlog, acks and DLQ. Cost to the producer: nothing — no code, deploy, latency or awareness. The newcomer owns idempotency and backlog monitoring, and the system gains one more dependency on the schema.
+- **Q2: Argue against "pub/sub decouples services."** → Consumers stay coupled to the event schema, so a field change can break systems the producer can't see. Pub/sub moves coupling from the release schedule into a data contract, which needs a registry, additive changes, deprecation windows, a consumer catalog and named subscription owners.
+- **Q3: Fraud scores ~20% of orders and email sends ~30% of receipts, yet nothing was lost and publish counts match orders. Diagnose.** → The services share one subscription/queue and have become *competing* consumers, so each event reaches only one. Give each service its own subscription; compete only among one service's workers. *Broadcast across services, compete within a service.*
 
 ### Related patterns
-- **Message Queue:** each subscription basically is one; SNS → SQS puts the two together directly.
-- **Idempotency:** N subscribers means N chances to apply something twice.
-- **Event-Driven Architecture:** the next lesson. Pub/sub is how events travel; EDA decides what goes inside them.
-- **Change Data Capture:** turns a DB's change log into events. It's the careful version of "just read my tables."
-- **Webhooks:** the same idea, but between companies, over plain HTTP, with the guarantees worked out again.
+Message Queue (each subscription essentially is one) · Idempotency (N subscribers, N chances of double application) · Event-Driven Architecture (decides what goes in the events) · Change Data Capture (the controlled "just read my tables") · Webhooks (the same idea between companies over HTTP).
 
 ### TL;DR
-- **Problem:** when the producer delivers to every consumer on its own, each new team means producer deploys, slower fan-out, and partial crashes where some teams get the event and some don't.
-- **Mechanism:** publish each fact once to a topic. Every subscription gets its own full copy, backlog, retries and DLQ. Subscribing is just configuration, and log-based brokers add replay.
-- **Costs:** the schema turns into a public API, duplicates in every subscription, coupling that becomes invisible without a catalog, no signal for "done," and retention as a hard limit.
-- **Skip it when:** it's a job (use a queue), the producer needs the result (use request-response/orchestration), or it's really a step-by-step workflow (use a saga).
+- **Problem:** a producer delivering to each consumer itself means a deploy per new team, slower fan-out, and partial crashes where some teams get the event and some don't.
+- **Mechanism:** publish each fact once to a topic; each subscription gets its own copy, backlog, retries and DLQ. Subscribing is configuration; log-based brokers add replay.
+- **Costs:** schema becomes a public API, duplicates per subscription, invisible coupling without a catalog, no "done" signal, retention as a hard limit.
+- **Skip it when:** it's a job (queue), the producer needs the result (request-response/orchestration), or it's a step-by-step workflow (saga).
 
 ---
 
@@ -391,19 +367,19 @@ It can be asked straight out ("how should five teams get order data?") or sidewa
 
 
 ### What it is
-**Event-driven architecture (EDA)** means services talk to each other mostly through events. Its core design question is: **how much information should each event hold?** Should it hold enough that consumers can act by themselves, without calling the producer back? **Analogy:** an order ticket that only says "Order #7f3a" makes the cook walk out to the front desk to ask what was ordered. A ticket that says "3 items, $142, ships to Austin" lets the cook get straight to cooking. Pub/sub settled *how* events get delivered. This lesson settles *what goes inside them*.
+**Event-driven architecture (EDA)** means services communicate mainly through events. Its core question: **how much should each event carry** — enough for consumers to act without calling the producer back? **Analogy:** a ticket saying "Order #7f3a" sends the cook to the front desk to ask what was ordered; "3 items, $142, ships to Austin" lets them start cooking. Pub/sub settled *how* events travel; this lesson settles *what goes inside*.
 
 ### The problem: the callback storm
-Pub/sub did its job: checkout publishes `order.placed` one time, and five teams subscribe. But every event held only `{event: "order.placed", order_id: "ord_7f3a"}`. That's a **notification**. It says an order exists and nothing else. So fraud got the event and then called `GET /orders/ord_7f3a` to find the amount and items. Email, analytics, loyalty and fulfillment did the same (and fulfillment did it twice by accident). **Every event checkout published bounced back at it as five API calls.**
+Checkout publishes `order.placed` once to five subscribers, but each event is only `{event: "order.placed", order_id: "ord_7f3a"}` — a **notification** that an order exists. Fraud then calls `GET /orders/ord_7f3a` for amount and items, as do email, analytics, loyalty and fulfillment (twice, by accident). **Every published event bounced back as five API calls.**
 
-At the next flash sale, 5,000 orders/s turned into 5,000 events/s, which turned into **25,000 GET requests/s** against checkout's API. That happened right during the spike the queue was supposed to soak up. Checkout's read service went down, consumer calls timed out, retries added even more load, and fraud scoring fell minutes behind during the time of year with the most fraud.
+At the next flash sale, 5,000 orders/s became 5,000 events/s became **25,000 GET requests/s** on checkout's API — during the very spike the queue was meant to absorb. Checkout's read service fell over, consumer calls timed out, retries added load, and fraud scoring fell minutes behind in peak fraud season.
 
-The communication was asynchronous now, yet the old load came right back. The reason: events said *that* something happened but not *what* happened. This is **asynchronous delivery wrapped around a synchronous dependency**, not true event-driven design.
+Events said *that* something happened, not *what*: **asynchronous delivery wrapped around a synchronous dependency**, not real event-driven design.
 
 ### Why the obvious fixes fail
-- **"Cache the lookups."** Every consumer asks about each new order right away, and that order didn't exist a second before. So all five miss the cache at the same moment and hit the API anyway. They also still need checkout to be up.
-- **"Slow the consumers down."** Rate-limiting consumers shields checkout. But then every team downstream can only work as fast as checkout allows. Backlogs grow during the bursts that matter most, and fraud detection becomes limited by checkout's capacity. The dependency is only postponed, not removed.
-- **"Could we just put the details in the event?"** Yes, and that's exactly the pattern. Copying data does have real costs (covered below). But the first two ideas only make callbacks cheaper, while complete events make callbacks unnecessary.
+- **"Cache the lookups."** Every consumer asks about a brand-new order that didn't exist a second ago, so all five miss and hit the API anyway — and still need checkout up.
+- **"Slow the consumers down."** Rate-limiting protects checkout, but caps every downstream team at checkout's capacity, growing backlogs in exactly the bursts that matter. The dependency is postponed, not removed.
+- **"Put the details in the event?"** Yes — that's the pattern. Copying data has real costs (below), but the first two ideas make callbacks cheaper while complete events make them unnecessary.
 
 ### How it works: three levels of event content
 ```
@@ -412,21 +388,21 @@ The communication was asynchronous now, yet the old load came right back. The re
            Transfer                ships to Austin." → consumers act without calling
   Level 3: Event Sourcing         The events ARE the data; state is rebuilt by replay
 ```
-- **Level 1, notification.** The event says something happened and sends consumers somewhere else for the details. Events stay small and no data gets copied. But this is precisely what caused the callback storm.
-- **Level 2, event-carried state transfer.** The event includes the facts that consumers need. Each consumer keeps a **local view**, which is a small table with just the fields it cares about, kept up to date from events. Fraud stores the order fields it uses for scoring and reads them locally in **under a millisecond**, even while checkout is down. Consumers are no longer callers; they own *copies they can throw away*. **This is the sensible default in practice.**
-- **Level 3, event sourcing.** The event log *is* the **system of record** (the official data), and tables are rebuilt from it. That's a decision about storage, it has its own lesson, and you don't need it to fix a callback storm.
+- **Level 1, notification.** Says something happened and points elsewhere for details. Small events, no copied data — and exactly what caused the callback storm.
+- **Level 2, event-carried state transfer.** The event includes the facts consumers need. Each consumer keeps a **local view** (a small table of just the fields it uses, updated from events). Fraud reads its order fields locally in **under a millisecond**, even with checkout down. Consumers stop being callers and own *disposable copies*. **This is the sensible default.**
+- **Level 3, event sourcing.** The event log *is* the **system of record** (the official data) and tables are rebuilt from it — a storage decision with its own [lesson](../03-storing-data/README.md#event-sourcing), not needed to fix a callback storm.
 
 **Three rules for Level 2:**
-1. **Events are facts, never commands.** Publish "order placed," not "send a receipt." A command ties the publisher back to one particular consumer's job, which defeats the whole point of a topic.
-2. **Local views are copies, never the truth.** Any view can be wiped and rebuilt by replaying the topic's history, and checkout stays the official owner. **Each fact belongs to exactly one owning service.** If a consumer spots a wrong value, it must not fix it in its own copy, because that creates a rival version of the truth. Instead, it sends a command to the owner. The owner checks the change and publishes a new fact, so every view gets corrected the same way.
-3. **Freshness is about "when," not "if."** A local view is always a little behind the source. Usually that's milliseconds, but during a backlog it can be minutes. This is called **eventual consistency**: all the copies agree *once* the updates finish spreading. Make the delay visible. Store the source version or event timestamp in each view, publish view age as a metric, show an "as of" time on screens like support dashboards, and alert when a view goes past its agreed freshness limit (its **freshness SLO**, where SLO means service-level objective).
+1. **Events are facts, never commands.** "Order placed," not "send a receipt"; a command ties the publisher to one consumer's job, defeating the topic.
+2. **Local views are copies, never the truth.** Any view can be wiped and rebuilt by replay; checkout remains the owner. **Each fact belongs to exactly one owning service.** A consumer that spots a wrong value must not patch its copy (creating a rival truth); it sends a command to the owner, which validates and publishes a new fact so every view corrects the same way.
+3. **Freshness is about "when," not "if."** Views always lag the source — milliseconds normally, minutes during a backlog. This is **eventual consistency**: copies agree *once* updates finish propagating. Make the lag visible: store the source version or event timestamp in each view, publish view age as a metric, show "as of" times on screens like support dashboards, and alert when a view exceeds its **freshness SLO** (SLO = service-level objective).
 
 ![Event-Driven Architecture](images/event-driven-architecture-1.png)
 *Figure — Event-Driven Architecture (course diagram)*
 
-The figure above shows the overall shape. Many producers (a web app, a mobile app, a **legacy system** (an older system still in use), an **IoT** device ("Internet of Things": a small networked gadget such as a sensor)) publish events into a broker's event bus/topic, where they're stored and made available. Consumers (the order, inventory, notification and analytics services) subscribe and react asynchronously. With Level 2 events, no consumer on the right ever has to call back to a producer on the left.
+Producers (web, mobile, a **legacy system** — an older system still in use — and an **IoT** device, "Internet of Things" gadgets like sensors) publish to an event bus; consumers subscribe and react asynchronously. With Level 2 events, none calls a producer back.
 
-The mermaid diagram below compares the two levels you'll actually use:
+The two levels you'll actually use:
 
 *Callback storm vs local views*
 ```mermaid
@@ -441,34 +417,32 @@ flowchart LR
     end
 ```
 
-At Level 1, an event with only an ID becomes 25,000 GET/s hitting checkout. At Level 2, a ~2 KB event carrying the facts lets those same five consumers read from their own local views in about 1 ms.
-
 ### Walkthrough with numbers
-- **The event gets bigger**, from ~100 bytes to ~**2 KB**. At 5,000 events/s, the broker moves **10 MB/s**, which is a small load for a production broker. In return, the **25,000 GET/s vanish**. You trade a bit of bandwidth for independence.
-- **Checkout's read traffic stays flat during the sale.** With no callbacks, its API can serve real users.
-- **Fraud reads locally in ~1 ms** rather than making a 50 ms network call wrapped in a timeout and retry. During the busiest hour, its speed and availability no longer rely on checkout.
-- **A new consumer replays the history.** With 30 days of retention, that's ≈ **500 million events**, replayed in a few hours to build its view before it goes live. Without replay, it would have to **backfill** (load all the past data in one go) through checkout's API and add a lot of load.
+- **Events grow** from ~100 bytes to ~**2 KB**: at 5,000 events/s the broker moves **10 MB/s**, a small load. In exchange the **25,000 GET/s vanish** — a little bandwidth for independence.
+- **Checkout's read traffic stays flat** during the sale, serving real users.
+- **Fraud reads locally in ~1 ms** instead of a 50 ms network call with timeout and retry; its speed and availability no longer depend on checkout at peak.
+- **A new consumer replays history:** 30 days ≈ **500 million events**, replayed in hours to build its view. Without replay it would **backfill** (load all past data at once) through checkout's API.
 
 ### Trade-offs
 **You gain:**
-- Independence. Consumers read locally, keep running when the producer is down, and never flood anyone with callbacks.
-- Load on the producer that doesn't depend on how many consumers there are or what data they want.
-- Views you can rebuild from history, so recovering a view and onboarding a new one are the same thing: a replay.
+- Independence: consumers read locally, survive producer outages, never flood anyone with callbacks.
+- Producer load independent of how many consumers there are or what data they want.
+- Rebuildable views: recovering a view and onboarding a new one are the same replay.
 
 **You pay:**
-- **Copies all over the place.** Six services might each hold order data in six different shapes. Storage is cheap, but everyone has to remember the copies can be thrown away and the owner is the authority.
-- **Eventual consistency, all the time.** Products have to cope with things like a support dashboard showing data that's 40 seconds old.
-- **Personal data spreads out.** If a customer's email goes into an event, it gets copied into every subscriber and into the retained topic. A deletion request then has to clean up **N+1** places. Decide this *before* you publish: include only facts that many consumers need, label sensitive fields, and record the owner of every subscription. Encryption protects **data at rest** (data sitting in storage, as opposed to travelling over the network), but it doesn't remove the need to delete or limit copies you don't need. A field added for convenience can turn into a long-term legal obligation.
-- **The schema matters even more.** Bigger events expose more public fields, so a registry, additive-only changes and a consumer catalog become a must.
-- **Debugging gets harder.** Every service has its own timestamped version of order X. **Correlation IDs** (one ID that tags the same business request across events and logs) and **distributed tracing** (recording a request's path and timing across every service it touches) become essential.
-- **Replay has to be safe to run again.** Rebuilding a view must never resend emails or charge cards again. Keep *state-building* consumers separate from consumers that *cause side effects*, and test replay against production-sized history before you count on it during an incident.
+- **Copies everywhere.** Six services may hold order data in six shapes; storage is cheap, but everyone must remember copies are disposable and the owner is authoritative.
+- **Constant eventual consistency.** Products must cope with, e.g., a support dashboard 40 seconds behind.
+- **Personal data spreads.** A customer email in an event is copied into every subscriber and the retained topic, so deletion touches **N+1** places. Decide *before* publishing: include only widely needed facts, label sensitive fields, record every subscription owner. Encryption protects **data at rest** (stored, not in transit) but doesn't remove the duty to delete or minimize copies. A convenience field can become a lasting legal obligation.
+- **Schema matters more:** bigger events expose more public fields, so registry, additive-only changes and a consumer catalog become mandatory.
+- **Harder debugging.** Each service has its own timestamped version of order X, so **correlation IDs** (one ID tagging a business request across events and logs) and **distributed tracing** (recording a request's path and timing across services) are essential.
+- **Replay must be safe to rerun.** Rebuilding a view must never resend emails or recharge cards: separate *state-building* consumers from *side-effecting* ones, and test replay on production-sized history before relying on it in an incident.
 
 ### When not to use it
-- **Inside a single service.** The functions in a **monolith** (one big application deployed as a single unit) already share **transactions** (groups of changes that succeed or fail together) and consistency. EDA is for the boundaries between services and teams.
-- **When a read has to be exactly up to date.** Selling the very last item in stock or approving a withdrawal needs the latest value. Send those reads synchronously to the owning service, and use local views for data that's allowed to lag.
-- **Request-response rebuilt from events.** Events full of state don't help a flow that is still a synchronous dependency underneath.
-- **Before the team is ready for it.** Without schema enforcement, tracing and backlog alerts, EDA is hard to run. Until those exist, fewer services with direct calls may be the safer choice.
-- **As a way to dodge deciding who owns what.** If six services keep views but nobody owns the fact, the copies drift apart and there's no official answer.
+- **Inside one service:** a **monolith** (one application deployed as a unit) already shares **transactions** (changes that succeed or fail together) and consistency. EDA is for service and team boundaries.
+- **When a read must be exactly current:** selling the last item or approving a withdrawal needs the latest value; read synchronously from the owner, and use views for lag-tolerant data.
+- **Request-response rebuilt from events:** state-rich events don't help a flow that is still a sync dependency underneath.
+- **Before the team is ready:** without schema enforcement, tracing and backlog alerts, EDA is hard to run; fewer services with direct calls may be safer for now.
+- **To dodge ownership decisions:** six views with no owner of the fact drift apart with no official answer.
 
 ### Notification events vs Full-state events
 
@@ -481,43 +455,39 @@ At Level 1, an event with only an ID becomes 25,000 GET/s hitting checkout. At L
 | Freshness | The lookup is always current | Views run slightly behind |
 | Best when | Only a few consumers need details; the data is sensitive | Many consumers need the same data; independence matters |
 
-A sensible middle path is to decide **one field at a time**. Put fields that many consumers need into the event, and leave sensitive or rarely used fields with the owner, reachable through an ID lookup.
+A sensible middle path: decide **field by field**. Widely needed fields go in the event; sensitive or rarely used ones stay with the owner behind an ID lookup.
 
 ### Real-world examples
-- **LinkedIn** created Kafka for exactly this. Activity events formed one big stream, and every team read it to keep its own view. Kafka's nickname, "central nervous system," began there.
-- **Uber:** a trip exists as a stream of events well before it becomes a database row. Pricing, ETA (estimated time of arrival) prediction, fraud and driver payments each read that stream on their own.
-- **Bank ledgers:** a very old form of this pattern. Transactions are facts that never change, and your balance is a view calculated from them.
-- **Netflix:** viewing events travel through a central stream into recommendations, artwork personalization and capacity planning.
-- **For AI engineers:** full-state events keep model features up to date without API callbacks. A feature store's online values get updated from interaction events. A **vector index** (a search index over embeddings that finds items with similar meaning) re-embeds content when a `content.updated` event arrives carrying that content. Training pipelines use the retained history as a dataset (it's the same replay that sets up a **microservice**, a small service that owns one narrow job). A recommender can see a purchase within **200 ms** without ever calling checkout.
+- **LinkedIn** built Kafka for this: activity events formed one stream every team read into its own view — the origin of Kafka's "central nervous system" nickname.
+- **Uber:** a trip exists as an event stream before it's a database row; pricing, ETA (estimated time of arrival) prediction, fraud and driver payments each consume it independently.
+- **Bank ledgers:** an ancient form — immutable transaction facts, with your balance a derived view.
+- **Netflix:** viewing events flow through a central stream into recommendations, artwork personalization and capacity planning.
+- **For AI engineers:** full-state events keep model features fresh without callbacks. A feature store's online values update from interaction events; a **vector index** (search index over embeddings finding similar meaning) re-embeds content when a `content.updated` event carries it; training pipelines use retained history as a dataset (the same replay that bootstraps a **microservice**, a small service owning one narrow job); a recommender sees a purchase within **200 ms** without calling checkout.
 
 ### In the interview
-They might ask "how does service B get A's data without calling A?" More often, once you draw a topic, they'll ask **"what's in the event?"** That choice decides how much callback load there is, how independent consumers are, and how far personal data spreads.
+"How does B get A's data without calling A?" — or, once you draw a topic, **"what's in the event?"** That choice decides callback load, consumer independence and how far personal data spreads.
 
-**30-second answer:** "The event's contents are the main design decision. Thin notifications make every consumer call back, so coupling and load return. For widely consumed facts I put the state in the event, and each consumer keeps a local view: updated from the stream, rebuildable by replay, fast to read, available when the producer is down. Every view is eventually consistent, so exactly-current reads go synchronously to the owner. Sensitive fields stay out or get encrypted. The larger schema is a registry-governed public API. And one service owns each fact; views are copies, never the truth."
+**30-second answer:** "What's in the event is the main decision. Thin notifications make consumers call back, so coupling and load return. For widely consumed facts I carry state in the event and each consumer keeps a local view — replay-rebuildable, fast, available when the producer is down, but eventually consistent, so exactly-current reads go synchronously to the owner. Sensitive fields stay out or are encrypted, the schema is a registry-governed public API, and one service owns each fact."
 
 **Likely follow-ups:**
-- *"A support agent updates an order but doesn't see the change on their dashboard. Why, and what do you do?"* The dashboard reads from a local view that hasn't caught up with the write yet. You have options. Show an "as of 12:04:31" timestamp. Give the writer **read-your-writes** behavior, which means sending their next read to the source. Or wait until the view reaches the version of that write. Choose the guarantee screen by screen.
-- *"A user invokes their right to be deleted; their data is in a 30-day retained topic and six local views."* Delete it from the owning store and publish a **tombstone**, which is a special event telling every view to wipe that user. If the retained history has to be gone before it would expire naturally, use **crypto-shredding**. You encrypt personal fields with a key unique to each user and then destroy the key. That makes every retained copy, replay and backup unreadable.
+- *"A support agent updates an order but doesn't see the change on their dashboard. Why, and what do you do?"* The dashboard's view hasn't caught up with the write. Options: show "as of 12:04:31"; give the writer **read-your-writes** (route their next read to the source); or wait until the view reaches that write's version. Choose per screen.
+- *"A user invokes their right to be deleted; their data is in a 30-day retained topic and six local views."* Delete from the owning store and publish a **tombstone** (an event telling every view to wipe that user). If retained history must disappear before natural expiry, use **crypto-shredding**: encrypt personal fields with a per-user key, then destroy the key, making every retained copy, replay and backup unreadable.
 
-**Mistake that fails candidates:** calling notification events "decoupled" while every consumer still calls the producer, or suggesting full-state events without dealing with staleness, deletion or ownership.
+**Mistake that fails candidates:** calling notification events "decoupled" while every consumer calls back, or proposing full-state events without addressing staleness, deletion or ownership.
 
 ### Self-check
-- **Q1: Name the three levels and where the truth lives in each.** → Notification: the producer holds all of the truth. State transfer: the producer is still the authority, and consumers hold copies they can throw away. Event sourcing: the log itself is the truth, and tables are rebuilt from it.
-- **Q2: Fraud wants `customer.lifetime_value` added to `order.placed` "since it's already flowing." Argue both sides, then decide.** → For it: fraud needs the value, adding it doesn't break anything, and it saves a callback. Against it: the value describes the *customer*, not the order. It goes out of date fast, and it shows a sensitive business number to every subscriber. Decision: keep `order.placed` focused on facts about the order. Publish lifetime value on its own, or have fraud read it from the feature store, and then combine the two inside fraud's own view.
-- **Q3: Eight months in, legal forwards a deletion request. The email exists in checkout's DB, the 30-day topic, and six local views, two with no listed owner. Design the deletion and name the process failure.** → Delete it in checkout, publish a tombstone, and confirm that every consumer wipes it. Check whether the 30-day expiry meets the legal deadline; if it doesn't, crypto-shred. The two views without owners point to the real failure: subscribing to personal data didn't require a named owner, a catalog entry and approval for handling the data. The long-term fix might be taking the email out of the event completely.
+- **Q1: Name the three levels and where the truth lives in each.** → Notification: all truth with the producer. State transfer: producer still authoritative; consumers hold disposable copies. Event sourcing: the log is the truth; tables are rebuilt from it.
+- **Q2: Fraud wants `customer.lifetime_value` added to `order.placed` "since it's already flowing." Argue both sides, then decide.** → For: fraud needs it, it's non-breaking, saves a callback. Against: it describes the *customer*, not the order, goes stale fast, and exposes a sensitive business number to every subscriber. Decision: keep `order.placed` about the order; publish lifetime value separately or have fraud read it from the feature store, and join them in fraud's own view.
+- **Q3: Eight months in, legal forwards a deletion request. The email exists in checkout's DB, the 30-day topic, and six local views, two with no listed owner. Design the deletion and name the process failure.** → Delete in checkout, publish a tombstone, verify every consumer wipes it; if 30-day expiry misses the legal deadline, crypto-shred. The ownerless views reveal the real failure: subscribing to personal data didn't require a named owner, catalog entry and data-handling approval. Long term, consider removing the email from the event.
 
 ### Related patterns
-- **Publish-Subscribe:** how events travel; this lesson decides what goes inside them.
-- **Event Sourcing:** Level 3, where the log *is* the truth.
-- **Change Data Capture:** creates full-state events from a DB change log when the producer can't or won't publish them itself.
-- **Saga:** for workflows with several steps, which events shouldn't try to mimic.
-- **Idempotency:** view updates arrive at-least-once, so applying one twice must still leave the view correct.
+Publish-Subscribe (how events travel) · Event Sourcing (Level 3) · Change Data Capture (produces full-state events from a DB change log when the producer can't or won't) · Saga (for multi-step workflows events shouldn't imitate) · Idempotency (view updates arrive at-least-once).
 
 ### TL;DR
-- **Problem:** events that are only notifications send every consumer back to the producer's API, so the coupling and load come back, just asynchronously.
-- **Mechanism:** put the facts inside the event. Each consumer keeps a local view it can rebuild by replay. Each fact has one owner, and views are copies, never the truth.
-- **Costs:** data copied into every subscriber, views that always lag, personal data spread so widely that deletion becomes a project, and a bigger public schema.
-- **Skip it when:** you're inside one service, the read has to be exactly current, it's really a sync call or a workflow in disguise, or the team can't yet support schema rules, tracing and alerts.
+- **Problem:** notification-only events send every consumer back to the producer's API, so coupling and load return, just asynchronously.
+- **Mechanism:** put the facts in the event; each consumer keeps a replay-rebuildable local view; one owner per fact, views never the truth.
+- **Costs:** data copied to every subscriber, always-lagging views, personal data spread so widely deletion becomes a project, a bigger public schema.
+- **Skip it when:** inside one service, the read must be exactly current, it's a sync call or workflow in disguise, or the team lacks schema rules, tracing and alerts.
 
 ---
 
@@ -526,65 +496,63 @@ They might ask "how does service B get A's data without calling A?" More often, 
 
 
 ### What it is
-A **webhook** is an event that reaches you as an **HTTP POST sent by another organization's system** (POST is the HTTP method for sending data to a server; GET is the one for reading). For example, your payment provider calls a URL on your server to tell you "payment succeeded." Think of it as pub/sub that crosses a company boundary, using plain HTTP. The rule for receiving one: **confirm it's genuine, save it, answer "received" within milliseconds, and do the actual work later behind your own queue.** **Analogy:** a courier brings a parcel to your door. You sign for it in a few seconds and open it later. You don't keep the courier standing there while you unpack, put together and test everything. If you do, they give up, mark the delivery "failed," and return later with a second copy.
+A **webhook** is an event that arrives as an **HTTP POST from another organization's system** (POST sends data to a server; GET reads). E.g. your payment provider calls a URL on your server to say "payment succeeded." It's pub/sub across a company boundary over plain HTTP. The receiving rule: **verify it's genuine, save it, answer "received" within milliseconds, and do the real work later behind your own queue.** **Analogy:** sign for the courier's parcel in seconds and unpack later; keep the courier waiting while you assemble everything and they mark it "failed" and come back with a second copy.
 
 ### The problem: the handler that did everything
-The payment provider POSTs `payment.succeeded` to `https://api.yourstore.com/webhooks/payments`. The handler marked the order as paid, reserved stock, told the warehouse, sent a receipt, and only *after all that* returned 200 (the HTTP status code for "OK"; status codes are the 3-digit numbers every HTTP reply carries, e.g. 401 = "not authenticated", 202 = "accepted, will process later"). When things got busy, that took **~7.5 s**. The provider only waits **5 s** before it hangs up.
+The provider POSTs `payment.succeeded` to `https://api.yourstore.com/webhooks/payments`. The handler marked the order paid, reserved stock, notified the warehouse, sent a receipt, and only *then* returned 200 (HTTP "OK"; status codes are the 3-digit numbers on every HTTP reply, e.g. 401 = "not authenticated", 202 = "accepted, will process later"). Under load that took **~7.5 s**; the provider waits only **5 s**.
 
-So as far as the provider could tell, **40%** of deliveries failed, and it **retried** them. But your handler usually finished its work anyway, after the provider had stopped listening. So each retry did every action again, leading to **two shipments** for payments that had really gone through. The failure rate kept climbing until it passed the provider's health threshold. Following its published policy, the provider then **disabled your endpoint**.
+So the provider saw **40%** of deliveries fail and **retried** them — but your handler usually finished anyway after the provider hung up, so each retry repeated everything: **two shipments** for real payments. The failure rate crossed the provider's health threshold and, per its published policy, it **disabled your endpoint**.
 
-That failure made no noise. No requests came in, so your logs showed no errors. For **three hours**, customers kept paying while their orders stayed "pending," and support tickets spotted the problem before monitoring did.
-
-Here is the key difference from the earlier lessons: the other side is run by **another company**. Its timeout, retry schedule and disable policy are set in stone, and your system has to work inside them.
+The failure was silent (no requests, no errors): for **three hours** customers paid while orders stayed "pending," and support tickets found it before monitoring. Unlike earlier lessons, the other side is **another company** whose timeout, retry schedule and disable policy are fixed; you work within them.
 
 ### Why the obvious fixes fail
-- **"Make the handler faster."** Getting it down to 4 s gets you through today. But one slow warehouse call, database hiccup or traffic spike breaks it again. The structure (doing business work inside the request) still allows the same chain: delay → retry → duplicate → disable.
-- **"Ask the provider for a longer timeout or fewer retries."** Their short timeout shields *their* service from your slowness. Their retries shield *you* from losing financial events during short failures. Taking either one away pushes risk onto both companies.
-- **"Forget webhooks; poll their API."** Polling every minute burns through your **rate limit** (the cap the provider puts on your API calls), adds up to a minute of delay, and usually finds nothing. Still, polling *does* guarantee you'll eventually see everything, while webhooks give you speed. The right answer uses both.
+- **"Make the handler faster."** 4 s works today, but one slow warehouse call, DB hiccup or spike breaks it again. Business work inside the request still allows delay → retry → duplicate → disable.
+- **"Ask for a longer timeout or fewer retries."** Their short timeout protects *them* from your slowness; their retries protect *you* from losing financial events. Removing either shifts risk onto both companies.
+- **"Poll their API instead."** Polling every minute burns your **rate limit** (the provider's cap on your API calls), adds up to a minute of delay, and mostly finds nothing. But polling *guarantees* eventual completeness while webhooks give speed — the right answer uses both.
 
 ### How it works: five receiver rules, in the order a request hits them
 
 ![Webhooks](images/webhooks-1.png)
 *Figure — Webhooks (course diagram)*
 
-The figure above follows a request through your edge, with a target of under 500 ms. The provider POSTs with a signature. The handler checks the HMAC and the timestamp; if either is invalid, it sends back 401 and rejects the request. Valid events are saved in raw form, put on a queue, and then 200 is returned. Behind the queue, workers **dedupe** (detect and discard duplicates) by event ID, do the processing, and fetch state when needed. Separately, a reconciliation poller runs every hour, uses a watermark, and asks the provider for anything that was missed. Here are the five rules in detail:
+The figure traces a request through your edge (target under 500 ms): signature check (invalid → 401), raw store, enqueue, 200; workers behind the queue **dedupe** (detect and discard duplicates) and process; an hourly reconciliation poller catches anything missed. The five rules:
 
-1. **Verify before you believe.** The webhook URL is public, so anyone can POST `{"type": "payment.succeeded"}` to it. Providers attach an **HMAC**: a hash of the message made with a secret key that only you and the provider know. Compute it again over the **raw body** and compare the two. Use a **constant-time comparison**, which takes the same time no matter how close a guess is, so it gives nothing away. Also check the provider's **timestamp** against an allowed time window. That stops an attacker from **replaying** an old message that was validly signed. Reject bad requests *before* you parse them. Skip this step, and anyone could mark unpaid orders as paid. (An **IP allowlist**, accepting requests only from the provider's known network addresses, is a nice extra layer, but it isn't authentication.)
-2. **Save it and acknowledge. Do nothing else.** Store the raw event, put it on your message queue, and return 200 in **~15 ms**. **200 means "safely received," never "fully processed."** Inventory, the warehouse and receipts all happen later behind your queue, under your own retry and failure rules. The provider's 5 s deadline no longer has anything to do with business processing.
-3. **Deduplicate on the event ID.** Every provider says in its docs that delivery is at-least-once: they send again whenever they're unsure it worked. Use each event's unique ID as an idempotency key so repeats only take effect once. This is what prevents double shipments.
-4. **Don't trust the order, or how fresh the payload is.** A "refund updated" event might show up before its "charge succeeded." A retried payload could be hours old. For decisions that depend on the current state, treat the webhook as a *heads-up* and **fetch the current state from the provider's API**, which is the source of truth (this is Stripe's own advice). You can skip that fetch for self-contained events that only ever add records, when fetching would go over the API rate limit, or when the action is cheap, idempotent and easy to fix.
-5. **Reconcile, because silence doesn't mean success.** Sometimes events just never show up: the endpoint got disabled, an outage lasted longer than the retry window, or a network path broke without anyone noticing. So every so often, ask the provider for "everything that changed since my **watermark**" (a saved bookmark of how far you've already checked). Webhooks give you quick notice; reconciliation makes sure nothing is missing. Only move the watermark forward *after* the recovered events are safely on the queue (if you crash in between, you'd create a new silent gap). Record which time range each run covered, for audits. And dedupe by event ID across both paths, so replaying from an older watermark does no harm.
+1. **Verify before you believe.** The URL is public; anyone can POST `{"type": "payment.succeeded"}`. Providers attach an **HMAC** (a hash of the message keyed with a secret only you and they know). Recompute it over the **raw body** and compare with a **constant-time comparison** (same duration however close the guess, leaking nothing). Check the provider's **timestamp** against an allowed window to block **replay** of old validly signed messages. Reject before parsing. Skip this and anyone can mark unpaid orders paid. (An **IP allowlist** — accepting only the provider's known addresses — is a useful extra layer, not authentication.)
+2. **Save and acknowledge; nothing else.** Store the raw event, enqueue it, return 200 in **~15 ms**. **200 means "safely received," never "fully processed."** Inventory, warehouse and receipts happen behind your queue under your own retry and failure rules, so the provider's 5 s deadline no longer touches business processing.
+3. **Deduplicate on event ID.** Every provider documents at-least-once delivery. Use each event's unique ID as an idempotency key so repeats take effect once. This prevents double shipments.
+4. **Don't trust order or freshness.** "Refund updated" can arrive before "charge succeeded"; a retried payload can be hours old. For state-dependent decisions, treat the webhook as a *heads-up* and **fetch current state from the provider's API**, the source of truth (Stripe's own advice). Skip the fetch for self-contained append-only events, when it would exceed the API rate limit, or when the action is cheap, idempotent and easily corrected.
+5. **Reconcile, because silence isn't success.** Events can simply never arrive: endpoint disabled, outage longer than the retry window, a silently broken network path. Periodically ask the provider for "everything changed since my **watermark**" (a saved bookmark of how far you've checked). Webhooks give speed; reconciliation gives completeness. Advance the watermark only *after* recovered events are safely queued (crashing in between creates a new silent gap), record each run's covered time range for audits, and dedupe by event ID across both paths so replaying from an older watermark is harmless.
 
-**Also:** check the event type and object before you enqueue it, and have the worker confirm that each state change is allowed. A valid signature proves *who* sent the message. It doesn't prove the change it asks for is permitted in your system.
+**Also:** validate event type and object before enqueueing, and have the worker check each state transition is allowed. A valid signature proves *who* sent it, not that the requested change is permitted.
 
-**If you're the sender** (your product sends webhooks to customers), these rules turn into your duties. Sign payloads using **rotatable secrets** (keys you can swap out). Give every event a unique ID. Publish your retry/backoff schedule. Keep delivery timeouts short. Use a durable queue for each endpoint. Automatically disable endpoints that keep failing. And offer a dashboard with a **delivery log** (event ID, destination, attempt number, response code, latency, next retry, with no secrets shown) plus a **redeliver** button. That way customers can tell "never attempted" apart from "your server rejected it."
+**If you're the sender**, these become your duties: sign with **rotatable secrets** (swappable keys), give every event a unique ID, publish your retry/backoff schedule, keep delivery timeouts short, use a durable queue per endpoint, auto-disable persistently failing endpoints, and provide a dashboard with a **delivery log** (event ID, destination, attempt number, response code, latency, next retry; no secrets) plus a **redeliver** button, so customers can tell "never attempted" from "your server rejected it."
 
 ### Walkthrough with numbers
-- **Handler time ~15 ms:** ~1 ms to check the signature, ~10 ms to save and enqueue, then 200. With no slow dependency inside the request, the provider sees a **100% success rate** through spikes and deploys.
-- **The actual work** happens behind the queue, just as in the queue lesson. Spikes turn into backlog, crashes turn into redeliveries, and messages that keep failing go to the DLQ.
-- **A duplicate** shows up 90 s later because the first 200 was lost on the way back. The worker sees that event ID was already handled and stops. Result: **one shipment**. That's idempotency working across a company boundary.
-- **Hourly reconciliation** normally finds nothing. During one delivery incident at the provider, it found **217** missing confirmations and quietly queued them, with no emergency needed.
-- **A new alarm for silence:** if an endpoint that's usually busy goes quiet for **15 minutes**, **page** someone (send an urgent alert to the on-call engineer's phone). This catches failures that don't produce any errors on your side.
+- **Handler time ~15 ms:** ~1 ms signature check, ~10 ms store and enqueue, then 200. No slow dependency in the request, so the provider sees **100% success** through spikes and deploys.
+- **The real work** runs behind the queue as in the queue lesson: spikes become backlog, crashes become redeliveries, persistent failures go to the DLQ.
+- **A duplicate** arrives 90 s later because the first 200 was lost in transit. The worker sees the event ID already handled and stops: **one shipment** — idempotency across a company boundary.
+- **Hourly reconciliation** normally finds nothing; during one provider delivery incident it found **217** missing confirmations and quietly queued them.
+- **A silence alarm:** if a normally busy endpoint is quiet for **15 minutes**, **page** someone (urgent alert to the on-call engineer). It catches failures that produce no local errors.
 
 ### Trade-offs
 **You gain:**
-- Almost real-time updates from other companies without constantly polling them.
-- The provider's retry system working *on your behalf*, now that you acknowledge quickly.
-- A single, consistent way in for outside events, which feeds the queue-and-worker setup you already run.
+- Near-real-time updates from other companies without constant polling.
+- The provider's retry machinery working *for* you, now that you ack fast.
+- One consistent entry for external events, feeding your existing queue-and-worker setup.
 
 **You pay:**
-- **You take on their rules.** Every provider has its own delivery guarantees, ordering, retry schedule, disable policy and payload versioning. Each integration is its own separate contract.
-- **A public endpoint to protect.** Signature checks, timestamp windows and secret rotation are now part of your security boundary. If a signing secret leaks, anyone can fake "payment succeeded."
-- **Debugging across company lines.** Figuring out whether they never sent it or you dropped it requires their dashboard, your raw-event store, and timestamps you can line up. Keep one **correlation record per event ID** that covers receipt, queue processing, business effects and reconciliation.
-- **The polling loop stays forever.** In production, both run permanently. Monitor how far behind reconciliation is, too.
+- **You inherit their rules:** each provider's delivery guarantees, ordering, retry schedule, disable policy and payload versioning — a separate contract per integration.
+- **A public endpoint to defend.** Signature checks, timestamp windows and secret rotation join your security boundary; a leaked signing secret lets anyone fake "payment succeeded."
+- **Cross-company debugging.** "They never sent it" vs "we dropped it" needs their dashboard, your raw-event store and alignable timestamps; keep one **correlation record per event ID** spanning receipt, queue processing, business effects and reconciliation.
+- **The polling loop is permanent.** Both run forever in production; monitor reconciliation lag too.
 
 ### When not to use it
-- **Between your own services.** A webhook mimics a broker over HTTP, but without durable subscriptions, replay or managed redelivery. When you own both ends, use pub/sub.
-- **When being complete matters more than being fast.** Billing reconciliation, financial close and compliance exports should begin from polling or bulk-export APIs. Webhooks can add freshness on top.
-- **Very high-frequency streams.** Thousands of separate POSTs every second is wasteful. Use the provider's streaming or bulk interface.
-- **When someone is waiting for the answer.** An interactive question needs request-response. A webhook round trip only adds latency and new ways to fail.
+- **Between your own services:** a webhook imitates a broker over HTTP without durable subscriptions, replay or managed redelivery. Use pub/sub when you own both ends.
+- **When completeness beats speed:** billing reconciliation, financial close and compliance exports start from polling or bulk-export APIs, with webhooks adding freshness.
+- **Very high-frequency streams:** thousands of POSTs per second is wasteful; use the provider's streaming or bulk interface.
+- **When someone waits for the answer:** interactive questions need request-response.
 
-The root mistake in the incident was using the webhook request to *do* the business work, rather than just *accepting* the notification.
+The incident's root mistake was using the webhook request to *do* the business work instead of just *accepting* the notification.
 
 ### Webhooks vs Polling
 
@@ -596,42 +564,39 @@ The root mistake in the incident was using the webhook request to *do* the busin
 | Who controls delivery | The sender | You |
 | Worst failure looks like | A quiet day | Stale (but visible) data |
 
-The sneaky danger of webhooks sits in that last row: a failed delivery looks *exactly the same* as no activity. That's why the motto is **webhooks for speed, polling for truth**, with a bookmark that lets polling pick up whatever push missed. (For continuous streams to browsers or apps you control, persistent connections such as Server-Sent Events take the place of separate POSTs. Webhooks are specifically server-to-server push across company boundaries.)
+The danger is the last row: a failed delivery looks *exactly* like no activity. Hence **webhooks for speed, polling for truth**, with a bookmark so polling catches what push missed. (For continuous streams to browsers or apps you control, persistent connections such as Server-Sent Events replace separate POSTs; webhooks are specifically server-to-server push across company boundaries.)
 
 ### Real-world examples
-- **Stripe:** the model example. It has signed payloads with timestamp checks, event IDs for dedupe, retries spread out over days, automatic disabling, and official advice to fetch the current state instead of trusting how fresh the payload is.
-- **GitHub:** signs every delivery with the `X-Hub-Signature-256` header and provides a delivery log with a redeliver button. In other words, it does the sender's duties well.
-- **Slack:** demands a 200 within **3 seconds**. No business logic can fit into 3 s, and that's intentional: the contract forces you to accept first and work later.
-- **Twilio, Shopify, PayPal:** every platform built around integrations ends up with the same terms, because they all face the same ways of failing.
-- **For AI engineers:** async AI services use webhooks to report when work finishes (batch inference, long fine-tuning jobs). Receivers still verify, store, ack quickly and queue. Agent products get webhook triggers from email, calendars and CRMs (customer relationship management tools such as Salesforce). There, deduplication matters twice as much, because a repeated event can kick off an expensive agent run a second time.
+- **Stripe:** the model — signed payloads with timestamp checks, event IDs for dedupe, retries spread over days, automatic disabling, and official advice to fetch current state rather than trust payload freshness.
+- **GitHub:** signs every delivery with the `X-Hub-Signature-256` header and offers a delivery log with a redeliver button — sender duties done well.
+- **Slack:** demands a 200 within **3 seconds**; no business logic fits, deliberately forcing accept-now, work-later.
+- **Twilio, Shopify, PayPal:** every integration platform converges on the same terms because they face the same failures.
+- **For AI engineers:** async AI services report completion by webhook (batch inference, long fine-tuning jobs); receivers still verify, store, ack fast and queue. Agent products receive webhook triggers from email, calendars and CRMs (customer relationship management tools such as Salesforce), where dedupe matters doubly: a repeated event can rerun an expensive agent.
 
 ### In the interview
-It can be asked straight out ("integrate Stripe") or indirectly ("how does payment settlement reach your system?"). Expect questions about work done before returning 200, about duplicates, and about spotting events that never arrive. The completeness question usually reveals the most.
+Asked directly ("integrate Stripe") or indirectly ("how does payment settlement reach your system?"). Expect probes on work done before the 200, duplicates, and detecting events that never arrive — the completeness question reveals the most.
 
-**30-second answer:** "My webhook handler does three things: verify the signature and timestamp, save the raw event, enqueue it. It returns 200 in about 15 ms, because 200 means received, not processed. Workers dedupe on event ID, since delivery is at-least-once, and fetch current state from the provider's API before state-dependent decisions. Then two protections: an hourly reconciliation poll from a bookmark, because webhooks are best-effort and the worst failure is silence, and an alarm if a normally busy endpoint goes quiet. Speed from push, truth from poll."
+**30-second answer:** "The handler verifies signature and timestamp, saves the raw event, enqueues it, and returns 200 in ~15 ms — 200 means received, not processed. Workers dedupe on event ID (delivery is at-least-once) and fetch current state from the provider before state-dependent decisions. Because webhooks are best-effort and the worst failure is silence, I add hourly reconciliation from a bookmark and an alarm when a busy endpoint goes quiet. Speed from push, truth from poll."
 
 **Likely follow-ups:**
-- *"How do you know you missed one?"* The webhook path can't tell you by itself, because a missing event leaves no trace. Reconciliation eventually fills in every gap, and the silence alarm catches big gaps fast. Treat "no traffic" as a state you monitor.
-- *"Secure the endpoint."* Check the HMAC over the raw body using the shared secret and a constant-time comparison. Check the timestamp to block replays. Rotate secrets safely. Reject invalid requests before parsing them. IP allowlists can add a layer, but the signatures are what authenticate.
+- *"How do you know you missed one?"* The webhook path alone can't tell — a missing event leaves no trace. Reconciliation eventually fills every gap and the silence alarm catches large gaps fast. Treat "no traffic" as a monitored state.
+- *"Secure the endpoint."* Receiver rule 1: HMAC over the raw body, constant-time compare, timestamp window against replays, safe secret rotation, reject before parsing. IP allowlists add a layer; signatures authenticate.
 
-**Mistake that fails candidates:** doing business processing before replying, or ignoring duplicate delivery. Either design only works as long as every dependency behaves.
+**Mistake that fails candidates:** processing business logic before replying, or ignoring duplicate delivery. Either design works only while every dependency behaves.
 
 ### Self-check
-- **Q1: List the five receiver rules in order and say exactly what 200 means.** → Verify the signature + timestamp; save the raw event durably; ack with 200 within milliseconds; process later through a queue with event-ID dedupe (fetching the current state where needed); reconcile from a bookmark. 200 means the event is safely in your hands, *not* that its effects are finished.
-- **Q2: The payload already has everything; why still fetch current state, and when would you skip it?** → The payload shows things as they were when that delivery attempt was created. After retries it can be out of date, or it can arrive out of order, while the API holds the current official state. Skip the fetch for self-contained events that only add records, when the volume would go over the API rate limit, or when the action is idempotent and cheap to fix.
-- **Q3: Confirmations quietly stopped; no handler errors for 3 weeks; the dashboard shows the endpoint was auto-disabled 20 days ago after a failure spike during a deploy. Reconstruct and redesign.** → The deploy caused slow responses or errors. Retries ran into the same problem. The failure rate triggered the auto-disable, and deliveries stopped without any local error. Redesign: a 15 ms save-and-ack handler (no business work inside the request), a silence alarm that catches a disable within minutes, hourly reconciliation to limit any gap, and deploy checks that confirm the endpoint is healthy. Never let completeness rest only on another company's retry window.
+- **Q1: List the five receiver rules in order and say exactly what 200 means.** → Verify signature + timestamp; durably save the raw event; ack 200 within milliseconds; process later via a queue with event-ID dedupe (fetching current state where needed); reconcile from a bookmark. 200 means the event is safely yours, *not* that its effects are done.
+- **Q2: The payload already has everything; why still fetch current state, and when would you skip it?** → The payload reflects state when that delivery attempt was created; after retries it can be stale or out of order, while the API holds current official state. Skip for self-contained append-only events, when volume would exceed the rate limit, or when the action is idempotent and cheap to fix.
+- **Q3: Confirmations quietly stopped; no handler errors for 3 weeks; the dashboard shows the endpoint was auto-disabled 20 days ago after a failure spike during a deploy. Reconstruct and redesign.** → The deploy caused slow responses or errors, retries hit the same problem, the failure rate triggered auto-disable, and deliveries stopped with no local error. Redesign: a 15 ms save-and-ack handler (no business work inline), a silence alarm catching a disable within minutes, hourly reconciliation bounding any gap, and deploy checks confirming endpoint health. Never let completeness depend solely on another company's retry window.
 
 ### Related patterns
-- **Message Queue:** keeps accepting the news separate from doing the work; the handler's only job is to feed it.
-- **Idempotency:** dedupe by event ID is the cross-company version of idempotency keys.
-- **Publish-Subscribe:** structurally, this is what a webhook is, carried over HTTP across a company boundary, with the guarantees worked out again as contract terms.
-- **Retry with Exponential Backoff:** runs on the sender's side, and can work both for you and against you.
+Message Queue (the handler only feeds it) · Idempotency (event-ID dedupe is its cross-company form) · Publish-Subscribe (what a webhook structurally is, with guarantees renegotiated as contract terms) · Retry with Exponential Backoff (runs on the sender's side, for or against you).
 
 ### TL;DR
-- **Problem:** outside events arrive as POSTs under the sender's timeout, retry and disable rules. Doing the work inline leads to duplicates, a disabled endpoint, and a silent 3-hour gap that support tickets uncover.
-- **Mechanism:** verify the signature + timestamp, save the raw event, return 200 within ms, process behind your queue with event-ID dedupe, fetch current state when deciding, and reconcile by polling from a bookmark.
-- **Costs:** you take on the sender's rules, defend a public endpoint, debug across companies, and run the polling check forever.
-- **Skip it when:** you own both ends (use pub/sub), completeness is the requirement (poll first), or the volume calls for a stream.
+- **Problem:** external events arrive as POSTs under the sender's timeout, retry and disable rules; working inline leads to duplicates, a disabled endpoint, and a silent 3-hour gap found by support tickets.
+- **Mechanism:** verify signature + timestamp, save raw, 200 within ms, process behind your queue with event-ID dedupe, fetch current state for decisions, reconcile by polling from a bookmark.
+- **Costs:** inherited sender rules, a public endpoint to defend, cross-company debugging, a permanent polling check.
+- **Skip it when:** you own both ends (pub/sub), completeness is the requirement (poll first), or volume calls for a stream.
 
 ---
 
@@ -640,69 +605,69 @@ It can be asked straight out ("integrate Stripe") or indirectly ("how does payme
 
 
 ### What it is
-**Server-Sent Events (SSE)** is a single HTTP response that never finishes. The client connects one time. The server keeps that connection open and sends a small text message down it whenever there's something new. **Analogy:** rather than phoning the pizza place every 3 minutes to ask "is it ready yet?" (that's polling), you stay on the line, and they tell you the second anything changes.
+**Server-Sent Events (SSE)** is one HTTP response that never finishes: the client connects once, and the server keeps the connection open, sending a small text message whenever there's news. **Analogy:** instead of phoning the pizza place every 3 minutes (polling), you stay on the line and they tell you the moment anything changes.
 
 ### The problem: polling that mostly says "nothing"
-A food-delivery app shows the driver's location, the order status and the ETA. The page **polls**: it calls `GET /orders/{id}/status` every 3 seconds. It's simple, it's reliable, and it's in production.
+A food-delivery page shows driver location, order status and ETA by **polling** `GET /orders/{id}/status` every 3 seconds — simple, reliable, in production.
 
-On a rainy Friday evening, **200,000** customers have that page open. One request every 3 s from each of them = **~66,000 requests/s**. Each is a full round trip with TLS, authentication, a DB read and a response. And **99 of every 100 responses say "no change."** Most of the capacity and cost is spent answering "nothing yet."
+On a rainy Friday, **200,000** customers have it open: one request per 3 s each = **~66,000 requests/s**, each a full round trip with TLS, authentication, a DB read and a response, and **99 in 100 say "no change."**
 
-Users still grumble that updates feel slow. With a 3 s interval, a new status waits **1.5 s on average** until the next poll picks it up. Polling every 1 s would shrink that, but it would push traffic up to **200,000 req/s**. Meanwhile, an order changes status maybe **12 times in 40 minutes**. The key line of this lesson: **with polling, cost grows with the audience; it should grow with the news.**
+Users still find updates slow: a new status waits **1.5 s on average** for the next poll. Polling every 1 s would mean **200,000 req/s** — for an order that changes maybe **12 times in 40 minutes**. The lesson's key line: **with polling, cost grows with the audience; it should grow with the news.**
 
 ### Why the obvious fixes fail
-- **"Tune the polling interval."** Shorter means fresher but more expensive; longer means cheaper but staler. You're only sliding along the same trade-off curve. The server already *knows* when the data changes; it just has no way to say so.
-- **"Long polling."** The server holds each request open until the data changes or a timer runs out, and then the client immediately asks again. That gets rid of most empty responses and nearly all the staleness; it's an older kind of push. But each update still costs a disconnect and a fresh request. So a burst of updates means a burst of reconnections, and proxy timeouts need extra care. It's push faked through repeated pulls.
-- **"Just use WebSockets."** That does work, but it gives you *two-way* communication for a page that only listens. The direction you don't use still costs a protocol upgrade, special load-balancer handling, and your own reconnect logic (see the comparison table below).
+- **"Tune the interval."** Shorter is fresher but costlier, longer cheaper but staler — the same trade-off curve. The server *knows* when data changes; it has no way to say so.
+- **"Long polling."** The server holds each request until data changes or a timer expires, and the client immediately asks again. That removes most empty responses and staleness (an older form of push), but every update still costs a disconnect and new request, so bursts of updates mean bursts of reconnections, and proxy timeouts need care. Push faked through repeated pulls.
+- **"Just use WebSockets."** Works, but gives *two-way* communication to a page that only listens; the unused direction still costs a protocol upgrade, special load-balancer handling and your own reconnect logic (see the table below).
 
 ### How it works
 
 ![Server-Sent Events](images/server-sent-events-1.png)
 *Figure — Server-Sent Events (course diagram)*
 
-The figure above shows the entire protocol in seven steps. The browser's `EventSource` opens `GET /orders/ord_7f3a/stream`. The server answers `200` with `Content-Type: text/event-stream` and leaves the response open. It pushes numbered events (`id: 41` status picked_up, `id: 42` a location). The connection drops (because of a deploy or a network blip). The browser reconnects **automatically** and sends `Last-Event-ID: 42`. And the server replays what was missed (`id: 43` "arriving"). Four properties make this work:
+The whole protocol: `EventSource` opens `GET /orders/ord_7f3a/stream`; the server replies `200` with `Content-Type: text/event-stream`, keeps it open and pushes numbered events (`id: 41`, `id: 42`); after a drop the browser reconnects **automatically** with `Last-Event-ID: 42` and the server replays what was missed (`id: 43`). Four properties make it work:
 
-1. **It's just HTTP.** An SSE stream is a normal HTTP response that stays open, with the content type `text/event-stream`. There's no protocol upgrade and no special handshake, so your existing load balancers (servers that spread requests across many backends), TLS, authentication **middleware** (shared code that runs on every request before your handler, e.g. to check logins) and proxies all handle it. Most of its operational simplicity comes from this.
-2. **The browser handles reconnecting.** Deploys, tunnels and closed laptops break connections constantly. The browser's `EventSource` API reconnects by itself and sends a **`Last-Event-ID`** header naming the last message it received. The server keeps a short **replay buffer** of recent events and resends everything after that ID. A reconnect could deliver a message twice, so **event IDs also serve as dedupe keys**, and the client skips IDs it has already handled.
-3. **Only one direction, on purpose.** The server talks and the client listens. A client action, like cancelling an order, goes through an ordinary request-response call. A lot of real-time UIs have exactly this shape.
-4. **Held-open connections change the server math.** 200,000 connections can't each tie up a thread. **Async I/O** (Node, Go, Nginx; I/O means input/output such as network reads, and *async* means the thread doesn't sit blocked waiting for it) lets a single **event-loop** thread keep watch over thousands of idle connections and only do work when data shows up. Each connection costs a few tens of KB of memory, so one server can hold **tens of thousands of connections**.
+1. **It's just HTTP.** A normal response held open with content type `text/event-stream` — no upgrade or special handshake — so existing load balancers (servers spreading requests across backends), TLS, authentication **middleware** (shared code running on every request before your handler) and proxies all handle it. Most of its operational simplicity comes from this.
+2. **The browser reconnects.** Deploys, tunnels and closed laptops break connections constantly; `EventSource` reconnects on its own with a **`Last-Event-ID`** header naming the last message received. The server keeps a short **replay buffer** of recent events and resends everything after that ID. A reconnect can deliver a message twice, so **event IDs double as dedupe keys** and the client skips IDs already handled.
+3. **One direction, by design.** The server talks, the client listens; client actions (e.g. cancelling an order) go via ordinary request-response. Many real-time UIs have exactly this shape.
+4. **Held-open connections change the server math.** 200,000 connections can't each hold a thread. **Async I/O** (Node, Go, Nginx; I/O = input/output such as network reads; *async* = the thread doesn't block waiting) lets one **event-loop** thread watch thousands of idle connections, working only when data arrives. At a few tens of KB of memory per connection, one server holds **tens of thousands of connections**.
 
-The SSE server normally gets its updates by **subscribing to internal pub/sub** and passing each event on to the right open streams. **Keep streams tightly scoped:** each stream should only carry events the logged-in user is allowed to see, and routing has to be checked again after account or membership changes. Piping a wide internal topic straight to browsers turns a routing bug into a data leak.
+The SSE server usually gets updates by **subscribing to internal pub/sub** and forwarding each event to the right open streams. **Keep streams tightly scoped:** each carries only events the logged-in user may see, with routing rechecked after account or membership changes. Piping a broad internal topic to browsers turns a routing bug into a data leak.
 
-**Infrastructure gotchas.** Some load balancers, **reverse proxies** (servers that sit in front of your app and forward requests to it) and corporate networks **buffer** responses, meaning they collect the output before passing it on. That's harmless for normal responses but deadly for streams: events show up in batches every 30–60 s. So:
-- Turn off buffering on stream routes (for example, the header `X-Accel-Buffering: no`, plus `Cache-Control: no-cache`).
-- Raise idle timeouts, and send a **heartbeat** comment roughly every **15 s** so equipment in the middle doesn't close what looks like an idle connection.
-- Use **HTTP/2** (the newer version of HTTP that can carry many requests over one connection) at the **edge** (the servers that face the internet) so many streams can share one connection. This gets around browsers' old limit of **6 connections per domain**.
+**Infrastructure gotchas.** Some load balancers, **reverse proxies** (servers in front of your app forwarding requests to it) and corporate networks **buffer** responses (collect output before passing it on) — harmless normally, fatal for streams: events arrive in 30–60 s batches. So:
+- Disable buffering on stream routes (e.g. header `X-Accel-Buffering: no`, plus `Cache-Control: no-cache`).
+- Raise idle timeouts and send a **heartbeat** comment every ~**15 s** so middleboxes don't close a seemingly idle connection.
+- Use **HTTP/2** (newer HTTP carrying many requests over one connection) at the **edge** (internet-facing servers) so streams share connections, avoiding browsers' old **6 connections per domain** limit.
 
-**Authentication has to last longer than a normal request.** Check the session when the stream opens. Close the stream when the credentials expire or get revoked, because a single connection may stay open for hours. The reconnect then re-authenticates the usual way.
+**Authentication must outlast a normal request.** Check the session when the stream opens and close it when credentials expire or are revoked, since one connection may stay open for hours; the reconnect re-authenticates normally.
 
 ### Walkthrough with numbers
-- **When nothing happens, nothing gets sent** (except heartbeats). There are 200,000 open connections and almost no requests, so the **66,000 req/s** of "nothing yet" disappear. Work now follows events, not audience size.
-- **When there's news,** the customer sees it in **under a second**, compared with up to 3 s of staleness when polling.
-- **Capacity:** one async server holds ~**50,000** connections, so **4 machines** handle a rainy Friday. The cost moves from CPU (for 66k req/s) to memory (for the held connections).
-- **Deploy drill:** restarting a server drops 50,000 connections, and all of them reconnect automatically. If they all come back at the same instant, that burst (a **reconnect stampede**) can overwhelm the fleet. The SSE **`retry:`** field lets the server set the reconnect delay. Randomize that delay (this is called **jitter**) to spread the load out. Returning clients send `Last-Event-ID`, and the buffer fills in what they missed. So keep **several minutes** of events, which is longer than a typical deploy.
+- **Nothing happens, nothing is sent** (except heartbeats): 200,000 open connections, almost no requests, so the **66,000 req/s** of "nothing yet" disappear. Work follows events, not audience.
+- **News arrives in under a second**, versus up to 3 s staleness with polling.
+- **Capacity:** ~**50,000** connections per async server → **4 machines** for a rainy Friday. Cost shifts from CPU (66k req/s) to memory (held connections).
+- **Deploy drill:** restarting a server drops 50,000 connections that all reconnect; arriving at the same instant, that **reconnect stampede** can overwhelm the fleet. The SSE **`retry:`** field lets the server set the reconnect delay; randomize it (**jitter**) to spread load. Returning clients send `Last-Event-ID` and the buffer fills gaps, so keep **several minutes** of events — longer than a typical deploy.
 
 ### Trade-offs
 **You gain:**
-- Push over plain HTTP: middleware, proxies and tools keep working with no changes.
-- A client built into the browser, with reconnect-and-resume you didn't have to write.
-- Cost that tracks events, not audience size or polling frequency.
+- Push over plain HTTP: middleware, proxies and tooling work unchanged.
+- A built-in browser client with reconnect-and-resume you didn't write.
+- Cost that tracks events, not audience size or poll frequency.
 
 **You pay:**
-- **Only one direction.** As soon as the client has to stream typing, cursors or voice back, SSE isn't enough (see Bidirectional Streaming).
-- **Running long-lived connections.** Plan capacity by *connections*, not requests. **Drain** servers before deploys: stop taking new connections and let the existing ones move elsewhere. Use **least-connections** load balancing, because two servers can have similar request rates while one holds far more streams and memory. Treat active connections, memory per connection, disconnect and reconnect rates, and replay-buffer misses as top-level metrics. Load-test idle connections and simultaneous broadcasts separately, since they strain different resources.
-- **A window for resuming, not a history.** The replay buffer covers short disconnects, not yesterday. If a client comes back after its ID has aged out of the buffer, it has to notice the gap and refetch the current state through the normal API. Spell this out in the protocol. The server sends a named reset event (or closes with a status that means "refetch"). The client replaces its local state with the refetched data *before* reopening the stream, so old and new data never get mixed together. **The stream is for delivery, never for storage.**
-- **Text only.** Text and **JSON** (a common text format for structured data) work fine; binary audio/video needs a media protocol.
+- **One direction only.** Once the client must stream typing, cursors or voice back, use Bidirectional Streaming.
+- **Long-lived connection operations.** Plan capacity by *connections*, not requests. **Drain** servers before deploys (stop accepting new connections; let existing ones move). Use **least-connections** balancing, since similar request rates can hide very different stream and memory counts. Treat active connections, memory per connection, disconnect/reconnect rates and replay-buffer misses as top-level metrics; load-test idle connections and simultaneous broadcasts separately, as they strain different resources.
+- **A resume window, not a history.** The buffer covers short disconnects, not yesterday. A client returning after its ID has aged out must detect the gap and refetch current state through the normal API. Make it explicit in the protocol: the server sends a named reset event (or closes with a "refetch" status), and the client replaces local state with refetched data *before* reopening, so old and new never mix. **The stream is for delivery, never for storage.**
+- **Text only.** Text and **JSON** (common structured text format) are fine; binary audio/video needs a media protocol.
 
 ### When not to use it
-- **The client talks as well** (typing indicators, collaborative editing, multiplayer games): use Bidirectional Streaming.
-- **Updates are rare and viewers are many.** A price that changes once a day doesn't justify a million idle connections; relaxed polling plus a cache is simpler.
-- **Binary media where latency is critical** (voice, video): use **WebRTC**, which is designed for media.
-- **Between your own backend services:** use pub/sub or **gRPC** streams (typed streaming from server to server).
+- **The client talks too** (typing indicators, collaborative editing, multiplayer): Bidirectional Streaming.
+- **Rare updates, many viewers:** a once-a-day price doesn't justify a million idle connections; relaxed polling plus a cache is simpler.
+- **Latency-critical binary media** (voice, video): **WebRTC**, built for media.
+- **Between your own backends:** pub/sub or **gRPC** streams (typed server-to-server streaming).
 
-Anti-patterns: a homemade chat built from SSE going down plus constant POSTs going up (that's a two-way protocol in disguise), and treating the stream as storage with no way to recover once a client falls outside the replay window.
+Anti-patterns: homemade chat from SSE down plus constant POSTs up (a two-way protocol in disguise), and using the stream as storage with no recovery once a client falls outside the replay window.
 
 ### Four levels of push
-Choose the lightest method that meets the direction and freshness you need:
+Pick the lightest method that meets your direction and freshness needs:
 
 | | Polling | Long polling | SSE | WebSocket |
 |---|---|---|---|---|
@@ -713,42 +678,39 @@ Choose the lightest method that meets the direction and freshness you need:
 | Reconnect handling | Not needed | You write it | Built into the browser | You write it |
 | Best for | Rare changes, relaxed deadlines | Old infrastructure limits | Feeds, tickers, progress, LLM (AI chat model) tokens | Conversations |
 
-Ask **who has data to send**. Poll when the server speaks now and then, use SSE when it speaks constantly, and use WebSocket when *both* sides speak constantly. Long polling mostly survives in places where old infrastructure can't carry SSE reliably.
+Ask **who has data to send**: poll when the server speaks occasionally, SSE when it speaks constantly, WebSocket when *both* do. Long polling survives mainly where old infrastructure can't carry SSE reliably.
 
 ### Real-world examples
-- **Every LLM chat app streams over SSE.** (An **LLM**, large language model, is the kind of AI model behind chat assistants; it produces text in small pieces called **tokens**, roughly word fragments.) Anthropic's and OpenAI's APIs send tokens as SSE events, which is why the words appear one at a time. It's a perfect match: strictly one-way, text, and plain HTTP that every proxy and **SDK** (software development kit: a ready-made client library) understands.
+- **Every LLM chat app streams over SSE.** An **LLM** (large language model) produces text in small pieces called **tokens** (roughly word fragments); Anthropic's and OpenAI's APIs send them as SSE events, which is why words appear one at a time. A perfect fit: one-way, text, plain HTTP every proxy and **SDK** (software development kit: a ready-made client library) understands.
 - **Live dashboards and tickers:** log tails, stock and sports feeds, live news.
-- **Build and deploy logs:** **CI** (continuous integration: servers that automatically build and test every code change) output that streams into your browser is nearly always SSE.
-- **Notification feeds:** one SSE stream per session that carries all in-app events (the capstone builds this).
-- **For AI engineers:** streaming tokens makes latency *feel* shorter even when generation takes just as long. A 30 s answer feels snappy if the first token shows up in **300 ms**, so **time-to-first-token** is the metric that counts. A buffering proxy ruins this by holding tokens back. Agent UIs send **named event types** (tool started, result arrived, thinking), and an LLM gateway has to pass streams straight through rather than collecting whole responses first.
+- **Build and deploy logs:** **CI** (continuous integration: servers that build and test every change) output streaming into your browser is nearly always SSE.
+- **Notification feeds:** one SSE stream per session for all in-app events (the capstone builds this).
+- **For AI engineers:** token streaming makes latency *feel* shorter: a 30 s answer feels snappy if the first token arrives in **300 ms**, so **time-to-first-token** is the metric that matters. A buffering proxy ruins it. Agent UIs send **named event types** (tool started, result arrived, thinking), and an LLM gateway must pass streams through rather than collecting whole responses.
 
 ### In the interview
-Live order tracking, notification feeds and token-by-token AI output all check the same skill: can you choose among the four push levels instead of reaching for WebSockets by default or sticking with expensive polling?
+Live order tracking, notification feeds and token-by-token AI output all test the same skill: choosing among the four push levels instead of defaulting to WebSockets or sticking with expensive polling.
 
-**30-second answer:** "For one-way live updates I use SSE. Each client holds one long-lived HTTP response, and the server pushes events as they happen, so cost tracks news, not audience. Polling here would be hundreds of thousands of requests a second, mostly 'nothing yet.' SSE is plain HTTP, so auth, load balancers and proxies just work. EventSource reconnects automatically with Last-Event-ID, and the server replays from a buffer sized to cover a deploy. Async I/O servers hold tens of thousands of connections each, and randomized reconnect delays prevent stampedes. When the client needs to stream back, for chat or collaboration, I move to WebSockets, not before."
+**30-second answer:** "For one-way live updates, SSE: one long-lived HTTP response per client, server pushes as things happen, so cost tracks news, not audience — polling here would be hundreds of thousands of mostly empty requests a second. It's plain HTTP, so auth, load balancers and proxies just work. EventSource reconnects with Last-Event-ID against a replay buffer sized to cover a deploy; async I/O holds tens of thousands of connections per server; jittered reconnects prevent stampedes. WebSockets only once the client must stream back."
 
 **Likely follow-ups:**
-- *"A server holding 50,000 streams restarts. Walk me through it."* Drain it first: refuse new streams so the load balancer sends them to other servers. Clients that got dropped reconnect after randomized delays, carrying `Last-Event-ID`, and the replay buffer restores the events they missed. Size the buffer to match how long a deploy takes.
-- *"Why not WebSockets for everything?"* Two-way communication needs a protocol upgrade, special handling in the infrastructure, and your own resume logic. All of that is wasted when the client only listens. Switch to WebSockets only when you actually need to stream upward.
+- *"A server holding 50,000 streams restarts. Walk me through it."* Drain, then jittered reconnects with `Last-Event-ID` against a buffer sized to the deploy (the deploy drill above).
+- *"Why not WebSockets for everything?"* Two-way needs a protocol upgrade, special infrastructure handling and your own resume logic — all wasted when the client only listens. Move up only when you need upstream streaming.
 
-**Mistake that fails candidates:** using WebSockets by default for a feed that's read-only; brushing off per-user polling traffic as "cacheable" (it isn't, because each user's status is different); or treating the stream as storage with no refetch path once a client is past the replay window.
+**Mistake that fails candidates:** defaulting to WebSockets for a read-only feed; dismissing per-user polling as "cacheable" (each user's status differs); or treating the stream as storage with no refetch path past the replay window.
 
 ### Self-check
-- **Q1: What single transport fact explains most of SSE's operational advantages, and which two mechanisms make a dropped connection invisible?** → It's plain HTTP with no upgrade, so the TLS, auth, load balancers, HTTP/2 and proxies you already have can carry it. What makes drops invisible: EventSource's automatic, jittered reconnect, plus `Last-Event-ID` checked against a server replay buffer (with event IDs also acting as dedupe keys).
-- **Q2: The replay buffer holds 60 s; deploys take 4 minutes. What happens, to whom, and what are your three options?** → Clients that got disconnected early in the deploy come back after their last event has already aged out. They'd quietly miss events unless the server notices. Options: make the buffer bigger; have clients refetch the current state before reopening (you need this no matter what); drain servers so disconnections are shorter.
-- **Q3: Corporate-network users get "live" updates in 30–60 s bursts; home users are smooth; server logs show immediate writes. Diagnose and fix.** → A corporate proxy is buffering the response. Turn off buffering on the route (`X-Accel-Buffering: no` or the equivalent), set `Cache-Control: no-cache`, send heartbeats, and prefer end-to-end HTTP/2. Where you can't change their infrastructure, detect the batching and fall back to long polling. The SSE path includes *every* proxy sitting between the server and the browser.
+- **Q1: What single transport fact explains most of SSE's operational advantages, and which two mechanisms make a dropped connection invisible?** → It's plain HTTP with no upgrade, so existing TLS, auth, load balancers, HTTP/2 and proxies carry it. Invisible drops come from EventSource's automatic, jittered reconnect plus `Last-Event-ID` against a server replay buffer (event IDs also dedupe).
+- **Q2: The replay buffer holds 60 s; deploys take 4 minutes. What happens, to whom, and what are your three options?** → Clients disconnected early in the deploy return after their last event aged out and silently miss events unless the server detects it. Options: enlarge the buffer; have clients refetch current state before reopening (needed regardless); drain servers so disconnections are shorter.
+- **Q3: Corporate-network users get "live" updates in 30–60 s bursts; home users are smooth; server logs show immediate writes. Diagnose and fix.** → A corporate proxy is buffering. Disable buffering on the route (`X-Accel-Buffering: no` or equivalent), set `Cache-Control: no-cache`, send heartbeats, prefer end-to-end HTTP/2; where you can't change their infrastructure, detect the batching and fall back to long polling. The SSE path includes *every* proxy between server and browser.
 
 ### Related patterns
-- **Publish-Subscribe:** where the news comes from; the SSE server is a subscriber that forwards events to open streams.
-- **Request-Response:** carries the client's actions upward, and is the refetch path after a gap in resuming.
-- **Bidirectional Streaming:** the next step up once the client starts talking.
-- **Load Balancing:** held connections need least-connections balancing and planned draining.
+Publish-Subscribe (the news source) · Request-Response (client actions upward; refetch after a resume gap) · Bidirectional Streaming (once the client talks) · Load Balancing (least-connections and draining for held connections).
 
 ### TL;DR
-- **Problem:** polling makes cost grow with the audience and staleness grow with the interval; lots of heavy infrastructure mostly answers "nothing yet."
-- **Mechanism:** one HTTP response per client that never ends; the server pushes text events; EventSource reconnects on its own with Last-Event-ID against a replay buffer; async I/O holds the connections; randomized reconnect delays prevent stampedes.
-- **Costs:** only one direction, the work of running long-lived connections (draining, heartbeats, proxy buffering), a window for resuming rather than a history, and text only.
-- **Skip it when:** the client streams too (WebSockets), changes are rare (polling), the payload is media (WebRTC), or both ends are your own servers (pub/sub).
+- **Problem:** polling makes cost grow with audience and staleness with interval; heavy infrastructure mostly answers "nothing yet."
+- **Mechanism:** one never-ending HTTP response per client; server pushes text events; EventSource auto-reconnects with Last-Event-ID against a replay buffer; async I/O holds connections; jittered reconnects prevent stampedes.
+- **Costs:** one direction, long-lived connection operations (draining, heartbeats, proxy buffering), a resume window not a history, text only.
+- **Skip it when:** the client streams too (WebSockets), changes are rare (polling), the payload is media (WebRTC), or both ends are your servers (pub/sub).
 
 ---
 
@@ -757,46 +719,46 @@ Live order tracking, notification feeds and token-by-token AI output all check t
 
 
 ### What it is
-**Bidirectional streaming** keeps a single connection open, and *both* sides can send messages over it whenever they want. Think chat, collaborative editing, multiplayer games, or live voice. In browsers this is normally a **WebSocket**, which is an ordinary HTTP connection that gets "upgraded" into an open channel that works both ways. Between backend services it's normally a **gRPC** bidirectional stream. The big insight of this lesson: opening the socket is the easy bit. The hard bit is that a conversation is **shared state spread over many machines**. **Analogy:** placing a phone call is simple. The real challenge is running a conference call where the people dialed into *different* switchboards. Someone has to pass along what each person says to every switchboard that has a listener on it.
+**Bidirectional streaming** keeps one connection open over which *both* sides send whenever they like: chat, collaborative editing, multiplayer games, live voice. In browsers it's usually a **WebSocket** (an HTTP connection "upgraded" to a two-way channel); between backends, a **gRPC** bidirectional stream. The lesson's insight: opening the socket is easy; the hard part is that a conversation is **shared state spread across many machines**. **Analogy:** placing a call is simple; running a conference call where participants dialed into *different* switchboards means someone must relay each speaker to every switchboard with a listener.
 
 ### The problem: messages that silently vanish
-A team launches WebSocket chat. It works flawlessly in the demo and in **staging** (a test copy of the production environment). Production, though, has **three gateway servers** behind a load balancer (a **gateway** is a server that holds client connections). Alice connects to server A. Bob joins the same room through server B. Alice sends "hey." Server A looks at its own local list of connections in that room, sees only Alice, and so Bob gets nothing.
+A team launches WebSocket chat; it works in the demo and in **staging** (a test copy of production). Production has **three gateway servers** (a **gateway** holds client connections) behind a load balancer. Alice connects to server A, Bob joins the same room via server B. Alice sends "hey"; server A checks its local list for the room, sees only Alice, and Bob gets nothing.
 
-Nothing shows up in the error logs. People on the same server chat just fine. People on different servers miss messages, or see them only one way. Room membership was stored only in each server's own memory. Staging had just one server, which saw everyone, and that hid the flaw.
+No errors anywhere: same-server users chat fine, cross-server messages vanish or flow one way. Room membership lived only in each server's memory, and staging's single server hid it.
 
-**The socket was never the hard part.** SSE usually sends outward from a single central source. With two-way chat, a message *that a client creates* has to reach recipients who are connected to other machines.
+**The socket was never the hard part.** SSE usually sends outward from one central source; in two-way chat a *client-created* message must reach recipients connected to other machines.
 
 ### Why the obvious fixes fail
-- **"Sticky sessions."** (Sticky means the load balancer keeps sending a client to the same server.) A load balancer should keep each client on the same server, because a live connection can't be moved. But stickiness pins *clients*, not *rooms*, so Alice and Bob can still end up on different servers. You need it, but it isn't enough.
-- **"Route each room to one server."** This works as long as a room fits on one machine. But large all-hands rooms outgrow it, one server failing takes down every room on it, and moving busy rooms means transferring state. You've accidentally built a stateful, sharded distributed system that can fail over, without ever designing one.
-- **"One big server."** Scaling up one machine (vertical scaling) pushes the limit back but can't get rid of it. The biggest machine still has a ceiling, and when it fails, everyone gets disconnected.
+- **"Sticky sessions"** (the load balancer keeps sending a client to the same server). Needed, since a live connection can't move, but it pins *clients*, not *rooms*: Alice and Bob can still land on different servers. Necessary, not sufficient.
+- **"Route each room to one server."** Works while a room fits one machine, but big all-hands rooms outgrow it, one server failure takes down all its rooms, and rebalancing busy rooms means moving state. You've accidentally built a stateful, sharded, failover-capable distributed system without designing one.
+- **"One big server."** Vertical scaling delays the limit but doesn't remove it, and its failure disconnects everyone.
 
-All three try to solve **message routing** by controlling **where connections land**. The design that scales keeps those two things separate.
+All three try to solve **message routing** by controlling **where connections land**. The scalable design separates the two.
 
 ### How it works: two tiers
 
 ![Bidirectional Streaming](images/bidirectional-streaming-1.png)
 *Figure — Bidirectional Streaming (course diagram)*
 
-The figure above shows the gateway-and-backplane design. Alice's socket sits on Gateway A ("holds sockets only"), and Bob and Carol are on Gateway B. Both gateways connect to a **backplane** (pub/sub, with one topic per room). Next to it are a **presence and session store** (who's online) and a **message history store** (the durable record of every message).
+Alice's socket is on Gateway A ("holds sockets only"); Bob and Carol are on Gateway B. Both connect to a **backplane** (pub/sub, one topic per room), alongside a **presence and session store** (who's online) and a **message history store** (the durable record of every message).
 
-Here is the reasoning, one step at a time:
-1. A connection is a physical fact: it exists on exactly one machine.
-2. A room is a group of people whose connections exist on different machines.
-3. So machines have to pass messages to each other. But making machines keep track of "who is on which machine" is fragile.
-4. Instead, reuse pub/sub. **Each room is a topic.** Every gateway subscribes to the topics of the rooms its connected users are in. To send to a room, you publish to its topic. Each gateway passes what it receives on to its own local sockets. **No gateway ever has to know that any other gateway exists.**
+The reasoning:
+1. A connection is physical: it exists on exactly one machine.
+2. A room is people whose connections are on different machines.
+3. So machines must relay messages, but having them track "who is on which machine" is fragile.
+4. Reuse pub/sub instead: **each room is a topic.** Every gateway subscribes to the topics of rooms its users are in; sending to a room means publishing to its topic; each gateway forwards to its local sockets. **No gateway needs to know any other exists.**
 
-So Alice's "hey" travels socket → Gateway A → room topic → every gateway subscribed to that room (A and B) → local sockets. That removes the launch bug by design. **Presence** is kept in a shared store and **messages** in a history database: **the stream carries data; the history database holds the truth.**
+Alice's "hey" goes socket → Gateway A → room topic → every subscribed gateway (A and B) → local sockets, fixing the launch bug by design. **Presence** lives in a shared store and **messages** in a history database: **the stream carries data; the history database holds the truth.**
 
-**You now own a protocol.** A WebSocket or gRPC stream gives you raw transport and nothing else. Everything that SSE's `EventSource` handed you for free, you now have to design yourself:
-1. **Message framing and types, with versioning.** Define how each message is structured and how that structure changes over time. Keep **durable messages** apart from **ephemeral signals** (short-lived ones). A chat message needs an ID, sender, room, sequence number, timestamp and version, because it gets stored and may be replayed. A typing indicator is overwritten by the next one, expires by itself, and is never stored. Keeping these two classes clearly separate stops cheap signals from getting costly durability guarantees.
-2. **Sequence numbers.** Give each room message a number when it's published, so clients can spot duplicates and gaps.
-3. **Heartbeats.** A regular ping/pong lets both ends notice a dead connection instead of sending into nothing.
-4. **Auth and acks.** Check the user when the socket opens, and check again from time to time during long sessions (room access or account status can change). Where delivery matters, add **acks** at the application level: a successful write to the socket does *not* mean the client got the message.
-5. **Reconnect and resume.** The client saves its last sequence number for each room. After reconnecting, it fetches the messages it missed from the history store (using request-response), then rejoins the live stream and throws away any overlap by sequence number. Resuming makes delivery at-least-once, so sequence numbers act as dedupe keys. **History has to be written before publishing to the backplane, or in the same atomic step** (*atomic* = it either fully happens or doesn't happen at all); otherwise the query for the gap can miss messages.
-6. **Backpressure.** What happens when a client receives more slowly than the system sends? With no limit, one weak mobile connection can pile up enough buffered data to use up the gateway's memory. That takes down everyone on that gateway (this is the shared-resource risk that the **bulkhead** pattern deals with). So: put a cap on each connection's outgoing buffer. **Coalesce** updates that replace each other (typing and cursors only need the newest value). And once the cap is hit, **disconnect with a "please resync" hint**. The normal reconnect-and-resume path then brings back the durable messages safely.
+**You now own a protocol.** WebSocket or gRPC gives raw transport only; everything `EventSource` gave SSE for free you must design:
+1. **Framing and message types, with versioning.** Separate **durable messages** from **ephemeral signals**. A chat message needs ID, sender, room, sequence number, timestamp and version because it's stored and may be replayed; a typing indicator is overwritten by the next, expires on its own and is never stored. The split keeps cheap signals from getting costly durability guarantees.
+2. **Sequence numbers** assigned at publish per room, so clients detect duplicates and gaps.
+3. **Heartbeats:** regular ping/pong so both ends detect a dead connection instead of sending into the void.
+4. **Auth and acks.** Authenticate on socket open and recheck periodically in long sessions (room access or account status can change). Where delivery matters, add application-level **acks**: a successful socket write does *not* mean the client received it.
+5. **Reconnect and resume.** The client stores its last sequence number per room; after reconnecting it fetches missed messages from history (request-response), rejoins the live stream and drops overlap by sequence number. Resume makes delivery at-least-once, so sequence numbers are dedupe keys. **History must be written before publishing to the backplane, or in the same atomic step** (*atomic* = fully happens or not at all), or the gap query can miss messages.
+6. **Backpressure.** If a client receives slower than the system sends, an unbounded buffer for one weak mobile connection can exhaust gateway memory and take down everyone on it (the shared-resource risk the [**bulkhead**](../05-reliability/README.md#bulkhead) pattern addresses). So cap each connection's outbound buffer, **coalesce** superseding updates (typing and cursors need only the latest), and at the cap **disconnect with a "please resync" hint**; normal reconnect-and-resume then restores durable messages safely.
 
-The sequence below shows how resuming works after a dropped connection:
+Resume after a dropped connection:
 
 *Reconnect and resume via history*
 ```mermaid
@@ -813,38 +775,38 @@ sequenceDiagram
     Note over C: drop 134, 135 as duplicates by seq
 ```
 
-The last sequence the client saw was 120. After it reconnects (with jitter, and logging in again), it asks history for everything after 120, and it gets back 121–135. Then it rejoins the live stream and receives 134, 135, 136. It throws out 134 and 135 as duplicates, and ends up with a complete conversation with no gaps.
+The overlap (134, 135) is dropped by sequence number, leaving a gap-free conversation.
 
 ### Walkthrough with numbers
-- **One million connected users** at ~**50,000 sockets per async gateway** → **20 gateways**. Adding more gateways adds connection capacity without changing where rooms live.
-- **Message path:** two internal hops (gateway → backplane → gateway), which is a few tens of ms from end to end. A 50-member room costs **one publish** (delivered to whichever gateways hold members), rather than 50 separate sends from Alice's server.
-- **Typing indicators** can create **50x** more traffic than real messages if every keystroke goes out to every member. Throttle them to **at most 2 updates/s per typer**, with the newest one winning. The gateway handles this, and they're never stored.
-- **Deploy drill:** stop the gateway from taking new connections (the load balancer sends them elsewhere), send current clients a "going away" notice, and let them reconnect somewhere else after randomized delays (jitter prevents a reconnect stampede). They resume by sequence number from history.
-- **Slow consumer:** a subway rider's buffer reaches its **1 MB cap**. The gateway disconnects them with a resync hint instead of hoarding data. Roughly **30 s** later, the client reconnects and fetches the messages it missed from history. The stream never served as storage.
+- **One million connected users** at ~**50,000 sockets per async gateway** → **20 gateways**; adding gateways adds connection capacity without changing where rooms live.
+- **Message path:** two internal hops (gateway → backplane → gateway), a few tens of ms end to end. A 50-member room costs **one publish**, not 50 sends from Alice's server.
+- **Typing indicators** can generate **50x** the traffic of real messages if every keystroke goes to every member. Throttle to **at most 2 updates/s per typer**, latest wins, in the gateway, never stored.
+- **Deploy drill:** stop new connections to the gateway (load balancer routes elsewhere), send clients a "going away" notice, let them reconnect elsewhere with jittered delays (avoiding a stampede), resuming by sequence number from history.
+- **Slow consumer:** a subway rider's buffer hits its **1 MB cap**; the gateway disconnects with a resync hint instead of hoarding. ~**30 s** later the client reconnects and fetches missed messages from history. The stream never served as storage.
 
 ### Trade-offs
 **You gain:**
-- A real conversation: both sides can send at any moment over one connection, with almost no overhead per message.
-- The lowest interactive latency anywhere in the HTTP family.
-- A single channel for an entire session: messages, **presence** (who's online), and signals.
+- A real conversation: both sides send any time over one connection with minimal per-message overhead.
+- The lowest interactive latency in the HTTP family.
+- One channel per session for messages, **presence** (who's online) and signals.
 
 **You pay:**
-- **You own the protocol:** framing, sequencing, heartbeats, resume and versioning, including the failures HTTP and SSE already took care of.
-- **A stateful edge.** Gateways hold connection state, so they need socket limits, planned draining, and load balancing that respects held connections (least-connections *and* stickiness).
-- **Your HTTP tools can't see messages anymore.** After the upgrade, your usual auth, rate-limiting and tracing middleware can't see individual messages, so you need versions of them that understand sockets.
-- **You must design backpressure**, because any buffer without a limit will eventually eat all the memory.
-- **The backplane is yet another system**, and its throughput limits **fan-out** (how many recipients one message can reach). Load-test big rooms (one message to 100,000 recipients) apart from total volume (100,000 private messages). Measure backplane delay, gateway write queues and history writes separately, so you can see which stage is the bottleneck.
+- **You own the protocol:** framing, sequencing, heartbeats, resume, versioning — including failures HTTP and SSE handled for you.
+- **A stateful edge:** gateways need socket limits, planned draining, and connection-aware balancing (least-connections *and* stickiness).
+- **HTTP tooling goes blind:** after the upgrade, auth, rate-limiting and tracing middleware can't see individual messages, so you need socket-aware versions.
+- **Backpressure must be designed**, since any unbounded buffer eventually eats all memory.
+- **The backplane is another system** whose throughput limits **fan-out** (recipients one message can reach). Load-test big rooms (one message to 100,000) separately from total volume (100,000 private messages), and measure backplane delay, gateway write queues and history writes separately to locate the bottleneck.
 
 ### When not to use it
-- **The client hardly ever sends.** Use SSE going down plus ordinary POSTs going up. Sockets are worth it for *frequent, latency-sensitive* two-way data (typing, cursors), not for a Like button.
-- **Request-response over a socket.** Sending `{"method": "getUser"}` and waiting for a reply rebuilds HTTP, but without status codes, caching or standard tools. Calls that have responses should stay calls.
-- **Between your own backend services.** Native gRPC streams give you typing, **multiplexing** (many streams sharing one connection) and service-mesh support. Use a queue when work has to survive restarts.
-- **Media.** WebRTC is designed for low-latency audio/video that can tolerate some loss (its setup may use a WebSocket).
+- **The client rarely sends:** SSE down plus ordinary POSTs up. Sockets pay off for *frequent, latency-sensitive* two-way data (typing, cursors), not a Like button.
+- **Request-response over a socket:** `{"method": "getUser"}` and wait rebuilds HTTP without status codes, caching or standard tools. Calls with responses stay calls.
+- **Between your own backends:** native gRPC streams bring typing, **multiplexing** (many streams over one connection) and service-mesh support; use a queue when work must survive restarts.
+- **Media:** WebRTC is built for low-latency, loss-tolerant audio/video (its setup may use a WebSocket).
 
-Once a socket is in place, teams get tempted to send forms, uploads and fetches through it too. That creates a private protocol that lacks HTTP's tools. Save the socket for continuous two-way traffic only.
+Once a socket exists, teams are tempted to route forms, uploads and fetches through it, creating a private protocol without HTTP's tools. Keep the socket for continuous two-way traffic.
 
 ### WebSocket vs gRPC bidirectional stream
-They have the same communication shape but live in different places:
+Same communication shape, different homes:
 
 | | WebSocket | gRPC bidirectional stream |
 |---|---|---|
@@ -854,42 +816,39 @@ They have the same communication shape but live in different places:
 | Tooling | Needs special handling everywhere | Fully supported in gRPC and service meshes |
 | Best for | Chat, collaboration, multiplayer | Internal control planes, live links between services |
 
-A simple rule: **WebSocket faces users; gRPC streams face services.** **Envoy's xDS** is a typical gRPC stream. It pushes configuration to proxies in a **service mesh** (a layer of small proxies next to every service that handles networking, retries and security for them) over long-lived, typed connections. **WebRTC** is a third option, used for peer-to-peer media, and it only uses these transports for setup. Failure handling is different too. Mobile and browser clients switch networks, go to sleep, and sit behind infrastructure you don't control, so WebSocket designs need explicit reconnect and history recovery. Backend gRPC clients run on networks you control, but they still need deadlines, **flow control** (the stream-level version of backpressure), and a clear policy for resuming after a service restarts.
+Rule: **WebSocket faces users; gRPC streams face services.** **Envoy's xDS** is a typical gRPC stream, pushing configuration over long-lived typed connections to proxies in a **service mesh** (small proxies beside every service handling networking, retries and security). **WebRTC** is a third option for peer-to-peer media, using these transports only for setup. Failure handling differs: mobile and browser clients switch networks, sleep and sit behind infrastructure you don't control, so WebSocket designs need explicit reconnect and history recovery; backend gRPC clients run on networks you control but still need deadlines, **flow control** (stream-level backpressure) and a clear resume policy after service restarts.
 
 ### Real-world examples
-- **Slack:** uses exactly this two-tier design, with WebSocket gateways plus a backplane. Its write-ups on draining and reconnect stampedes read much like this lesson's walkthrough.
-- **Figma:** multiplayer editing is WebSocket transport with **CRDTs** on top (conflict-free replicated data types, which are structures that merge edits made at the same time in a predictable way). A line worth using in interviews: *the transport delivers; the data structure resolves concurrent edits.*
-- **Discord:** millions of sockets open at once on a small gateway tier, where gateways are treated as completely disposable.
-- **Envoy xDS and Kubernetes watch APIs:** long-lived streams used to push **control-plane** updates (configuration and coordination messages, as opposed to user data; Kubernetes is the most common system for running containers across many machines), entirely machine to machine.
-- **For AI engineers:** realtime voice sends audio in both directions over a single WebSocket. That makes **barge-in** possible (cutting the model off while it's speaking). Barge-in can't work on a one-way channel, because the client has to send while the server is still streaming. The same concerns apply: number the audio frames, apply backpressure when generation runs ahead of playback, and resume when a phone switches networks. Output that's only tokens stays on SSE; an interactive conversation is what justifies the socket.
+- **Slack:** this exact two-tier design (WebSocket gateways plus backplane); its write-ups on draining and reconnect stampedes mirror this lesson's walkthrough.
+- **Figma:** multiplayer editing is WebSocket transport with **CRDTs** on top (conflict-free replicated data types: structures that merge concurrent edits deterministically). Interview line: *the transport delivers; the data structure resolves concurrent edits.*
+- **Discord:** millions of concurrent sockets on a small, fully disposable gateway tier.
+- **Envoy xDS and Kubernetes watch APIs:** long-lived machine-to-machine streams pushing **control-plane** updates (configuration and coordination, not user data; Kubernetes is the dominant system for running containers across machines).
+- **For AI engineers:** realtime voice sends audio both ways over one WebSocket, enabling **barge-in** (interrupting the model mid-speech), impossible on a one-way channel since the client must send while the server streams. Same concerns apply: number audio frames, apply backpressure when generation outruns playback, resume when a phone switches networks. Token-only output stays on SSE; interactive conversation justifies the socket.
 
 ### In the interview
-Questions about Slack, collaborative editors and multiplayer games often begin with "use WebSockets" and then dig into the topology. The key question: **"how does Alice on server A reach Bob on server B?"** Another one: **"what happens to a slow consumer?"** (buffers without limits can take a gateway down).
+Slack, collaborative editor and multiplayer questions often start with "use WebSockets" and then probe topology: **"how does Alice on server A reach Bob on server B?"** and **"what happens to a slow consumer?"** (unbounded buffers can kill a gateway).
 
-**30-second answer:** "Two-way needs two layers. Gateways hold WebSocket connections and nothing authoritative. Behind them a pub/sub backplane, one topic per room, routes each message to whichever gateways hold recipients. Presence is in a shared store and history in a database, so the stream is transport, never the source of truth. On top of the socket I own a small protocol: sequence numbers, heartbeats, and reconnect-and-resume that fetches missed messages from history and dedupes by sequence. Each connection's send buffer is capped, ephemeral signals like typing are merged latest-wins, and past the cap I disconnect with a resync hint rather than burn memory. So gateways are disposable: drain, deploy, reconnect with jitter."
+**30-second answer:** "Two layers. Gateways hold WebSocket connections and nothing authoritative; a pub/sub backplane, one topic per room, routes each message to the gateways holding recipients. Presence is in a shared store and history in a database, so the stream is never the source of truth. My protocol on the socket: sequence numbers, heartbeats, and resume from history with dedupe by sequence. Send buffers are capped, ephemeral signals merged latest-wins, and past the cap I disconnect with a resync hint. Gateways are disposable: drain, deploy, reconnect with jitter."
 
 **Likely follow-ups:**
-- *"Walk Alice's message to Bob on a different server."* Alice sends through Gateway A, which publishes to the room's topic. Gateway B is subscribed (because it holds Bob), so it gets the event and writes it to Bob's socket. Gateway A also delivers to its own local members. The message is saved to history at publish time, so resuming has one official source.
-- *"A client receives at 1 KB/s in a room producing 50 KB/s. What happens?"* First, coalesce the ephemeral updates. If the capped buffer still fills up, disconnect the client with a resync signal. When the client reconnects, it fetches the durable history and rejoins. The gateway's memory stays safe instead of buffering with no limit.
+- *"Walk Alice's message to Bob on a different server."* Gateway A publishes to the room topic; Gateway B (subscribed because it holds Bob) writes to Bob's socket; A serves its local members. History is written at publish, giving resume one source.
+- *"A client receives at 1 KB/s in a room producing 50 KB/s. What happens?"* Coalesce ephemeral updates; if the capped buffer still fills, disconnect with a resync signal and let resume restore history. Gateway memory stays safe.
 
-**Mistake that fails candidates:** storing room membership only in gateway memory, skipping reconnect-and-resume, or using WebSockets for a stream where the client never sends anything.
+**Mistake that fails candidates:** room membership only in gateway memory, no reconnect-and-resume, or WebSockets for a stream where the client never sends.
 
 ### Self-check
-- **Q1: What must you build above a raw socket that SSE's EventSource gave you free, and where does truth live?** → Randomized reconnect, resume based on sequence numbers, framing and versioning, acks where you need them, heartbeats, auth when the socket opens plus later re-checks, and a backpressure policy. The history store owns the truth about messages, and a shared store owns presence. Sockets and the backplane only move data around.
-- **Q2: Why gateways plus a backplane rather than gateways messaging each other directly? Which state lives where?** → Direct routing would need every server to keep a global table, always correct, of where each room's members are, through connects, disconnects and failures. That's the same fragility as the in-memory buffer from the queue lesson. The backplane handles subscriptions in one place, and each gateway knows only its own sockets and topics. Gateways: sockets + capped buffers. Backplane: routing subscriptions. Shared store: presence and sessions. History DB: messages.
-- **Q3: Mobile users lose messages after elevators and tunnels; connections do come back, but conversations have gaps. Design the fix end to end.** → Reconnecting without resuming skips everything published during the outage. Number messages when they're published. Store them in history (before publishing, or atomically with it). Have clients save the last sequence number for each room. After reconnecting, fetch everything newer through request-response, apply it, then rejoin live and drop any overlapping sequence numbers. It's SSE's `Last-Event-ID`, rebuilt for a two-way protocol.
+- **Q1: What must you build above a raw socket that SSE's EventSource gave you free, and where does truth live?** → Jittered reconnect, sequence-based resume, framing and versioning, acks where needed, heartbeats, auth at open plus rechecks, and a backpressure policy. The history store owns messages and a shared store owns presence; sockets and backplane only move data.
+- **Q2: Why gateways plus a backplane rather than gateways messaging each other directly? Which state lives where?** → Direct routing needs every server to keep an always-correct global table of room members' locations through connects, disconnects and failures — the same fragility as the queue lesson's in-memory buffer. The backplane centralizes subscriptions; each gateway knows only its sockets and topics. Gateways: sockets + capped buffers. Backplane: routing subscriptions. Shared store: presence and sessions. History DB: messages.
+- **Q3: Mobile users lose messages after elevators and tunnels; connections do come back, but conversations have gaps. Design the fix end to end.** → Reconnect without resume skips everything published during the outage. Number messages at publish, store them in history (before publishing or atomically with it), have clients save the last sequence per room, and after reconnecting fetch newer messages via request-response, apply them, rejoin live and drop overlapping sequences. It's SSE's `Last-Event-ID` rebuilt for a two-way protocol.
 
 ### Related patterns
-- **Publish-Subscribe:** the backplane is one; rooms are topics and gateways are subscribers.
-- **Server-Sent Events:** the simpler one-way choice. Only move up from it when the client streams, and borrow its resume design.
-- **Load Balancing:** stickiness, least-connections and draining are what make a stateful edge possible to deploy.
-- **Idempotency:** resuming makes delivery at-least-once, and sequence numbers are the dedupe key.
+Publish-Subscribe (the backplane is one) · Server-Sent Events (the simpler one-way option whose resume design this borrows) · Load Balancing (stickiness, least-connections, draining) · Idempotency (sequence numbers are the dedupe key).
 
 ### TL;DR
-- **Problem:** a conversation is shared state across connections sitting on different machines. Once you have more than one server, "send to the room" turns into a routing problem. The socket was never the hard part.
-- **Mechanism:** gateways hold only sockets; a pub/sub backplane routes by room; presence lives in a shared store; the truth lives in a history DB; and you write your own protocol of sequences, heartbeats, resume, and backpressure with capped buffers.
-- **Costs:** you own the protocol, a stateful edge with draining and stampedes, HTTP middleware that can't see anything after the upgrade, and a backplane that limits fan-out.
-- **Skip it when:** the client seldom sends (SSE + POST), it's request-response in disguise, it's service-to-service (gRPC), or it's media (WebRTC).
+- **Problem:** a conversation is shared state across connections on different machines; past one server, "send to the room" becomes routing. The socket was never the hard part.
+- **Mechanism:** gateways hold only sockets; a pub/sub backplane routes by room; presence in a shared store; truth in a history DB; your own protocol of sequences, heartbeats, resume and capped-buffer backpressure.
+- **Costs:** you own the protocol, a stateful edge with draining and stampedes, HTTP middleware blind after upgrade, a backplane limiting fan-out.
+- **Skip it when:** the client rarely sends (SSE + POST), it's request-response in disguise, it's service-to-service (gRPC), or it's media (WebRTC).
 
 ---
 
@@ -898,74 +857,74 @@ Questions about Slack, collaborative editors and multiplayer games often begin w
 
 
 ### How this capstone works
-The last seven lessons gave you seven ways to move data, and this capstone puts them together. The main idea: communication patterns aren't a list of steps to follow in order. Instead, you **pick one for each arrow**. A notification system uses every direction covered in this module. Facts flow in, jobs travel through queues, calls go out to outside providers, webhooks bring delivery status back, streams update browsers, and enterprise deliveries cross company boundaries. At every decision, ask four questions: **who has the information, is anyone waiting, is this a job or a fact, and who controls the destination?**
+You **pick one pattern per arrow**, and a notification system uses every direction in this module. At each decision ask: **who has the information, is anyone waiting, is this a job or a fact, and who controls the destination?**
 
 ### The brief
-The same store has grown to **5 million registered users** and needs a single notification platform.
-- **Triggers:** order updates, shipping events, security alerts, marketing campaigns, and anything future teams come up with.
-- **Channels:** an in-app feed with an unread badge, mobile push, email, SMS, and, for enterprise customers, delivery directly into their own systems.
-- **Scale:** a flash sale creates **600,000 order events in 2 minutes**; a marketing campaign sends one message to **5 million** users; roughly **300,000** users are online at any given moment.
-- **Constraints:** the email provider limits you to **10,000 sends/s**; users have preferences and **quiet hours** (times they don't want to be disturbed); and regulators have rules covering all of it.
+The store now has **5 million registered users** and needs one notification platform.
+- **Triggers:** order updates, shipping events, security alerts, marketing campaigns, and whatever future teams invent.
+- **Channels:** in-app feed with unread badge, mobile push, email, SMS, and for enterprise customers, delivery into their own systems.
+- **Scale:** a flash sale creates **600,000 order events in 2 minutes**; a campaign sends one message to **5 million** users; ~**300,000** users are online at any moment.
+- **Constraints:** the email provider allows **10,000 sends/s**; users have preferences and **quiet hours** (times not to be disturbed); regulators have rules on all of it.
 
 ### Decision 1 — Getting events in: pub/sub + full-state events
-**The tempting design:** a `POST /notifications/send` API that each of six product teams calls whenever something happens. For example, checkout would call it inline for every order.
+**The tempting design:** a `POST /notifications/send` API that six product teams call inline, e.g. checkout per order.
 
-**Why not:** that's the pub/sub incident all over again, just seen from the consumer's side. Every producer gets tied to the notification service. Its latency ends up inside critical paths like checkout. And changes to its API could force producers to redeploy.
+**Why not:** the pub/sub incident in reverse — every producer coupled to the service, its latency inside checkout, its API changes forcing producer redeploys.
 
-**Chosen design:** flip the direction. The notification platform becomes just **another subscriber** to topics that already exist: `order.placed`, `shipment.updated`, `login.suspicious`. Those topics carry **full-state events** (event-carried state transfer), so each event already contains everything needed to render a notification, with no callback to the producer. The platform reads additive schemas and ignores fields that don't matter for rendering. It also benefits from sensitive data being kept out of general events, since that means fewer stores and queues to clean up after a deletion request.
+**Chosen design:** flip it. The platform is **another subscriber** to existing topics (`order.placed`, `shipment.updated`, `login.suspicious`) carrying **full-state events**, so each event has everything needed to render a notification without a producer callback. The platform reads additive schemas and ignores irrelevant fields, and benefits from sensitive data staying out of general events (fewer stores and queues to clean after a deletion request).
 
-**A direct API only for intentions that have no event:** marketing campaigns and support messages aren't domain events. For these, the API checks and stores the request, then returns **`202 Accepted`** within milliseconds. That's request-response confirming *acceptance*, not delivery, because no caller should sit waiting for 5 million emails.
+**A direct API only for intentions without an event:** marketing campaigns and support messages aren't domain events. The API validates and stores the request, then returns **`202 Accepted`** in milliseconds — request-response confirming *acceptance*, not delivery, since no caller should wait for 5 million emails.
 
-**Rule:** subscribe wherever facts already exist; only offer an API for intentions that have no event.
+**Rule:** subscribe where facts already exist; offer an API only for intentions with no event.
 
 ### Decision 2 — The pipeline: message queue
-**The work:** load preferences and quiet hours, pick channels, render templates, **deduplicate** (three events about one order must not turn into three notifications), and optionally group them into digests. Arrivals come in bursts (600k in 2 min). Workers keep up ~**2,000/s**. Nobody is waiting for the result.
+**The work:** load preferences and quiet hours, choose channels, render templates, **deduplicate** (three events about one order mustn't become three notifications), optionally group into digests. Arrivals burst (600k in 2 min); workers sustain ~**2,000/s**; nobody waits.
 
-**Chosen design:** an ordinary message queue. Each notification is one job, which may finish minutes later. The flash sale turns into a **~5-minute backlog** (600,000 / 2,000 = 300 s) rather than an outage. The queue's must-follow rules come along with it:
-- **Dedupe on (event ID, user) before causing any side effect**, because delivery is at-least-once.
-- **A monitored DLQ**, so messages that keep failing don't hold up healthy ones.
-- **Alert on how *old* the backlog is, not only how deep**, because a notification that's three hours late can do harm ("your table is ready").
-- **Dedupe and preference checks happen once, in one central place**, not separately for each channel. Separate decisions lead to inconsistencies, like sending the email but not the push, or contacting a user who turned both off.
-- **Quiet hours are a scheduled state, not retries.** Save the rendered notification along with its **earliest allowed send time**, and put it on the channel queue when that time comes.
-- **Check preferences again right before the final send**, because the user might unsubscribe while the work is waiting.
+**Chosen design:** an ordinary message queue, one job per notification. The flash sale becomes a **~5-minute backlog** (600,000 / 2,000 = 300 s), not an outage. The queue's rules come along:
+- **Dedupe on (event ID, user) before any side effect** (at-least-once delivery).
+- **A monitored DLQ** so persistently failing messages don't block healthy ones.
+- **Alert on backlog *age*, not only depth:** a notification three hours late can do harm ("your table is ready").
+- **Dedupe and preference checks happen once, centrally**, not per channel; separate decisions cause inconsistencies like sending the email but not the push, or contacting a user who opted out of both.
+- **Quiet hours are a scheduled state, not retries:** store the rendered notification with its **earliest allowed send time** and enqueue it on the channel queue then.
+- **Recheck preferences right before the final send**, since the user may unsubscribe while work waits.
 
 ### Decision 3 — Delivering out (SES, Twilio, APNs): one queue per channel
-**The problem:** there are three outside providers (AWS SES for email, Twilio for SMS, Apple's APNs for push). They have different speeds, limits and ways of failing, and all of them are fed from the same pipeline. How do you keep a Twilio outage from delaying email?
+**The problem:** three providers (AWS SES email, Twilio SMS, Apple APNs push) with different speeds, limits and failure modes, fed by one pipeline. How does a Twilio outage not delay email?
 
-**Chosen design:** give **every channel its own queue and its own pool of workers**. Then an SMS backlog only affects SMS, while email keeps flowing at its 10,000/s limit. This isolation is the **bulkhead** pattern, and it falls out naturally from having one queue per dependency. Every call to a provider is request-response across a network, so it's wrapped in protections: a **timeout** (a deadline), **retries** of temporary failures that carry a **unique message key** (so the provider can dedupe), and a **circuit breaker** (stop calling a provider that's unavailable).
-- **Rate limits apply per channel as a whole**, enforced across all the workers together rather than per process (all the email workers combined stay under 10,000/s; SMS and push follow their own providers' limits).
-- **Each channel gets its own backlog-age threshold:** a late security alert is urgent, but a late marketing message isn't.
+**Chosen design:** **each channel gets its own queue and worker pool**, so an SMS backlog affects only SMS while email flows at its 10,000/s limit. That isolation is the **bulkhead** pattern, falling out of one queue per dependency. Each provider call is cross-network request-response, wrapped in a **timeout**, **retries** of transient failures carrying a **unique message key** (for provider dedupe), and a **circuit breaker** (stop calling an unavailable provider).
+- **Rate limits apply per channel as a whole**, enforced across all workers rather than per process (all email workers together under 10,000/s; SMS and push follow their providers' limits).
+- **Per-channel backlog-age thresholds:** a late security alert is urgent; a late marketing message isn't.
 
 ### Decision 4 — Provider status back in: webhooks (receiver side)
-Delivery receipts, bounces, complaints and unsubscribes come back from the providers as webhooks. Follow the receiver rules: verify the signature, save the raw event, ack within milliseconds, process behind a queue, dedupe by event ID, and reconcile through the provider's API to catch any that went missing. **Hard bounces** (addresses that reject mail permanently) have to **update the preference store**. If you keep sending to them, you hurt your **sender reputation**, which is how mail providers decide whether to trust your email.
+Delivery receipts, bounces, complaints and unsubscribes return as webhooks. Apply the receiver rules: verify signature, save raw, ack in milliseconds, process behind a queue, dedupe by event ID, reconcile via the provider's API. **Hard bounces** (addresses that permanently reject mail) must **update the preference store**; continuing to send damages your **sender reputation** (how mail providers decide whether to trust your email).
 
-**Rule:** protect outgoing request-response calls, and apply all five receiver rules to incoming webhooks. A single integration has both directions in it.
+**Rule:** protect outgoing request-response calls and apply all five receiver rules to incoming webhooks; one integration contains both directions.
 
 ### Decision 5 — In-app feed and badge: SSE over a database of record
-**The problem:** ~300,000 users are online, and their feed and badge should update without a refresh. The server has the news, and this part of the client only *reads*.
+**The problem:** ~300,000 online users whose feed and badge should update without refresh. The server has the news; this part of the client only *reads*.
 
-**Why not polling:** 300,000 users every 5 s = **60,000 requests/s**, almost all of them "no change." **Why not WebSocket:** it's a two-way protocol for a client that has nothing to send upstream.
+**Why not polling:** 300,000 users every 5 s = **60,000 requests/s**, nearly all "no change." **Why not WebSocket:** a two-way protocol for a client with nothing to send.
 
-**Chosen design: SSE.** Each session opens one `EventSource`, and events update the badge within milliseconds.
-- **The database is the truth.** Loading the page fetches the current feed through request-response, and SSE only carries live updates. After a short disconnect, `Last-Event-ID` replays the missed events; longer gaps cause a full refetch.
-- **Multiple devices** just hold separate streams for the same user.
-- **Mark-as-read** is an ordinary POST. It publishes an event that updates the badges on the user's other devices. Still no WebSocket required.
-- **The badge count comes from the database**, not from adding up stream events. Otherwise, a single missed event would leave the number wrong forever. Any reconnect, or any detected gap in the replay, refetches the official unread count.
+**Chosen design: SSE.** One `EventSource` per session; events update the badge within milliseconds.
+- **The database is the truth.** Page load fetches the current feed via request-response; SSE carries only live updates. Short disconnects replay via `Last-Event-ID`; longer gaps trigger a full refetch.
+- **Multiple devices** hold separate streams for the same user.
+- **Mark-as-read** is an ordinary POST that publishes an event updating badges on the user's other devices — still no WebSocket.
+- **The badge count comes from the database**, not from summing stream events, or one missed event leaves it wrong forever. Any reconnect or detected replay gap refetches the official unread count.
 
 ### Decision 6 — Enterprise delivery: webhooks (sender side)
-Enterprise customers want order and security events POSTed to URLs inside their own infrastructure. Now **you're the provider**, and you owe them the sender duties. Sign every payload with **rotatable secrets**. Include unique event IDs so they can dedupe. Retry from a **durable queue per endpoint** on a published backoff schedule (so one dead customer can't hold up the others). Keep timeouts short. Automatically disable endpoints that keep failing. And give them a dashboard showing delivery status, with a redeliver button. The receiver and sender checklists are mirror images: whatever you expect from providers in Decision 4, you should provide to customers here.
+Enterprise customers want order and security events POSTed into their infrastructure, so **you're the provider** with the sender duties: sign with **rotatable secrets**, include unique event IDs for their dedupe, retry from a **durable queue per endpoint** on a published backoff schedule (one dead customer can't block others), keep timeouts short, auto-disable persistently failing endpoints, and offer a delivery-status dashboard with redeliver. The checklists mirror each other: what you expect from providers in Decision 4, you provide here.
 
 ### Decision 7 — The escalation question: decline the WebSocket
-**The request:** the product team wants users to reply to support notifications right from the feed, and suggests swapping SSE for WebSockets.
+**The request:** product wants users to reply to support notifications from the feed and suggests replacing SSE with WebSockets.
 
-**Why decline:** yes, the client would now send, but only *once in a while*. Send each reply as an ordinary POST, and use SSE to update the user's other devices (just the shape the SSE lesson recommends). Bidirectional streaming is meant for **frequent, latency-sensitive traffic in both directions** (typing, live cursors, voice). A reply box doesn't need sequencing, resume, backpressure (slowing a fast sender down to match a slow receiver), or a stateful gateway tier. If the product later turns into **live support chat** with nonstop activity on both sides, give *just that feature* its own gateway-and-backplane system. Only add complex transport to the feature that actually needs it.
+**Why decline:** the client sends only *occasionally*, so each reply is an ordinary POST and SSE updates the user's other devices. Bidirectional streaming is for **frequent, latency-sensitive two-way traffic** (typing, cursors, voice); a reply box needs no sequencing, resume, backpressure (slowing a fast sender to a slow receiver) or stateful gateway tier. If it becomes **live support chat**, give *only that feature* its own gateway-and-backplane system.
 
 ### The final architecture
 
 ![Notification System Architecture](images/capstone-designing-a-notification-system-1.png)
 *Figure — Notification System Architecture (course diagram)*
 
-The figure above shows every arrow with its route. Across the top are the **facts coming in**: `order.placed`, `shipment.updated`, `login.suspicious` (the subscribed topics), plus `POST /send → 202 accepted` for one-off sends. All of them feed the central **preference + routing + dedupe workers**. Those workers fan out into lanes for each channel. There's the **email queue → SES**, the **SMS queue → Twilio** and the **push queue → APNs**, each wrapped in deadline/retry/stop-calling protection. There's a **feed writer → Feed DB (the truth) → SSE fan-out** (300k streams, Last-Event-ID). And there are **partner queues per endpoint → enterprise endpoints** (signed, event IDs, backoff, disable + dashboard). Provider **status webhooks** come back into a **webhook receiver** (verify, persist, ack, queue), which loops back into the workers (for example, hard bounces updating preferences).
+Subscribed topics and `POST /send → 202` feed the central **preference + routing + dedupe workers**, which fan out to per-channel lanes (**email queue → SES**, **SMS queue → Twilio**, **push queue → APNs**, each protected), a **feed writer → Feed DB (the truth) → SSE fan-out** (300k streams), and **partner queues per endpoint → enterprise endpoints**. Provider **status webhooks** return through a **webhook receiver** into the workers (e.g. hard bounces updating preferences).
 
 ### Debrief: one question per arrow
 
@@ -980,16 +939,16 @@ The figure above shows every arrow with its route. Across the top are the **fact
 | Platform → enterprise systems | Push across the company boundary; your duties | Webhooks, sender rules |
 | "Make it conversational" | The client sends, but rarely | Declined the socket: POST + SSE |
 
-If you read the middle column from top to bottom, it's the module's opening question asked eight times over. The result: **no WebSocket, one API, and seven asynchronous relationships**. Each one has a stated reason, and none was picked just for being new.
+The middle column is the module's opening question asked eight times. Result: **no WebSocket, one API, seven asynchronous relationships**, each with a stated reason, none chosen for novelty.
 
-**Two sources of truth:** the **notification database** owns feed entries, unread state, preferences and delivery status. The **external providers** own their own delivery records, which are brought in through reconciliation. Queues, topics, SSE streams and webhook attempts only *carry* information; they never take the place of these durable records.
+**Two sources of truth:** the **notification database** owns feed entries, unread state, preferences and delivery status; **external providers** own their delivery records, brought in by reconciliation. Queues, topics, SSE streams and webhook attempts only *carry* information and never replace these records.
 
-**Left for later (Module 5):** the defensive controls wrapped around every arrow: timeouts, limited retries, idempotent operations, monitored DLQs, and separate lanes for each dependency (bulkheads). This capstone decides *where data moves*; those patterns make sure each path survives failure.
+**Left for later (Module 5):** the defensive controls around every arrow — timeouts, bounded retries, idempotent operations, monitored DLQs, per-dependency lanes (bulkheads). This capstone decides *where data moves*; those make each path survive failure.
 
 ### Extend it yourself
-- **Digests** ("bundle my marketing notifications into one daily email"): where does batching go relative to dedupe? What data model holds a digest that's still pending? What happens to digest state when a user changes timezone?
-- **Multi-region:** users and their SSE connections now stretch across two continents, but the feed database and topics exist in one region only. Which arrows change? Which replication patterns (primary-replica, to begin with) do you need?
-- **For AI engineers:** add an **LLM** stage that sums up each user's unread notifications into a morning brief. Route its arrows: batch inference through your own queue, or a provider batch API that reports completion with webhooks? If you stream the brief token by token in the app, which transport do you use (SSE)? And there's the **semantic cache** question (a cache that reuses an answer when a new request *means* nearly the same thing, not just when it's identical): should two users with almost the same unread lists share one generation?
+- **Digests** ("bundle my marketing notifications into one daily email"): where does batching sit relative to dedupe? What data model holds a pending digest? What happens to it when a user changes timezone?
+- **Multi-region:** users and SSE connections span two continents, but the feed database and topics are in one region. Which arrows change? Which replication patterns (primary-replica, to start) do you need?
+- **For AI engineers:** add an **LLM** stage summarizing each user's unread notifications into a morning brief. Route its arrows: batch inference via your own queue, or a provider batch API reporting completion by webhook? Stream the brief token by token in-app with which transport (SSE)? And the **semantic cache** question (reusing an answer when a new request *means* nearly the same thing, not just when identical): should two users with near-identical unread lists share one generation?
 
 ### Interview one-liner
 "I route each arrow on its own. Producers publish facts the platform subscribes to; ad-hoc sends get a 202 into a queue. A deduping queue pipeline feeds per-channel, bulkheaded queues calling providers with timeout, retry and breaker. Provider status returns as verified, reconciled webhooks. Browsers get SSE over a database of record, and enterprises get signed, retried webhooks. There's no WebSocket anywhere, because nothing here streams both ways."
